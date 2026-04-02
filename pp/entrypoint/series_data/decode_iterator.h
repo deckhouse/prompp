@@ -100,11 +100,16 @@ class DecodeIterator {
   IteratorVariant iterator_;
 };
 
+struct SelectHints {
+  std::string func;
+  ::series_data::decoder::decorator::WindowFunctionParameters function_parameters;
+};
+
 constexpr uint32_t promql_function_name_hash(std::string_view str) {
   return PromPP::Prometheus::promql::FunctionNamesHash::hash(str.data(), str.length());
 }
 
-PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const PromPP::Prometheus::SelectHints& select_hints, PromPP::Primitives::Timestamp downsampling_ms) {
+PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& select_hints, PromPP::Primitives::Timestamp downsampling_ms) {
   if (downsampling_ms != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
     return DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, downsampling_ms);
   }
@@ -112,12 +117,12 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const PromPP::Prometh
     return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
   }
 
-#define CASE(function_name, iterator_type)                                                                                        \
-  case promql_function_name_hash(function_name): {                                                                                \
-    if (select_hints.func != function_name) [[unlikely]] {                                                                        \
-      break;                                                                                                                      \
-    }                                                                                                                             \
-    return DecodeIterator(std::in_place_type<iterator_type>, select_hints.interval, select_hints.step_ms, select_hints.range_ms); \
+#define CASE(function_name, iterator_type)                                                      \
+  case promql_function_name_hash(function_name): {                                              \
+    if (select_hints.func != function_name) [[unlikely]] {                                      \
+      break;                                                                                    \
+    }                                                                                           \
+    return DecodeIterator(std::in_place_type<iterator_type>, select_hints.function_parameters); \
   }
 
   switch (promql_function_name_hash(select_hints.func)) {

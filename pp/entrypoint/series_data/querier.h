@@ -67,10 +67,15 @@ class RangeQuerierWithArgumentsWrapperV2 {
  public:
   RangeQuerierWithArgumentsWrapperV2(DataStorage& storage,
                                      const Query& query,
-                                     const GoSelectHints& select_hints,
+                                     const GoSelectHints& hints,
                                      SerializedDataPtr* serialized_data,
                                      PromPP::Primitives::Timestamp downsampling_ms)
-      : select_hints_(select_hints), querier_(storage), query_(&query), serialized_data_(serialized_data), downsampling_ms_(downsampling_ms) {}
+      : select_hints_{.func = std::string(static_cast<std::string_view>(hints.func)),
+                      .function_parameters = {.interval = hints.interval, .step_ms = hints.step_ms, .range_ms = hints.range_ms}},
+        querier_(storage),
+        query_(&query),
+        serialized_data_(serialized_data),
+        downsampling_ms_(downsampling_ms) {}
 
   void query() noexcept {
     querier_.query(*query_);
@@ -86,7 +91,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
   [[nodiscard]] DataStorage& storage() noexcept { return querier_.get_storage(); }
 
  private:
-  PromPP::Prometheus::SelectHints select_hints_;
+  SelectHints select_hints_;
   ::series_data::querier::Querier querier_;
   const Query* query_;
   SerializedDataPtr* serialized_data_;

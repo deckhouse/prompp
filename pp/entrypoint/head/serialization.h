@@ -14,7 +14,7 @@ class SerializedDataGo {
  public:
   explicit SerializedDataGo(const ::series_data::DataStorage& storage,
                             const ::series_data::querier::QueriedChunkList& queried_chunks,
-                            PromPP::Prometheus::SelectHints&& select_hints,
+                            SelectHints&& select_hints,
                             PromPP::Primitives::Timestamp downsampling_ms)
       : data_{::series_data::serialization::DataSerializer{storage}.serialize(queried_chunks)},
         select_hints_(std::move(select_hints)),
@@ -31,7 +31,7 @@ class SerializedDataGo {
  private:
   ::series_data::serialization::SerializedData data_;
   ::series_data::serialization::SerializedDataView data_view_{data_};
-  const PromPP::Prometheus::SelectHints select_hints_;
+  const SelectHints select_hints_;
   PromPP::Primitives::Timestamp downsampling_ms_{};
 };
 
