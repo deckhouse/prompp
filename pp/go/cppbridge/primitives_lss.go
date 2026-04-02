@@ -142,24 +142,9 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 
 // CreateLabelSetSnapshot create LabelSetSnapshot from lss.
 func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
-	res := newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
+	res := newLabelSetSnapshot(primitivesLSSCreateSnapshotLSS(lss.pointer))
 	runtime.KeepAlive(lss)
 	return res
-}
-
-// RangeLabelSet serialize to slice labels from lss and calls f on each label.
-func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := labelSetSerialize(lss.pointer, lsID)
-	for i := range labelSet {
-		if err := do(labelSet[i]); err != nil {
-			labelSetFree(labelSet)
-			return err
-		}
-	}
-	runtime.KeepAlive(lss)
-	labelSetFree(labelSet)
-
-	return nil
 }
 
 //
@@ -222,7 +207,7 @@ func (r *LabelSetStorageGetLabelSetsResult) LabelsSets() []Labels {
 
 // CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
 type CppLabelSetBuilder struct {
-	ReadonlyLss uintptr
+	SnapshotPtr uintptr
 	LsId        uint32
 	SortedAdd   []Label
 	SortedDel   []string
