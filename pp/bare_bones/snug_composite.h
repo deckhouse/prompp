@@ -491,8 +491,8 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
 
   using Base::checkpoint;
   using Base::load;
-  using Base::next_item_index;
   using Base::max_item_index;
+  using Base::next_item_index;
   using Base::remainder_size;
   using Base::save;
   using Base::save_size;
