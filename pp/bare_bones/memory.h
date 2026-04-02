@@ -181,6 +181,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
     std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
   }
@@ -288,6 +289,7 @@ class SharedPtr {
       if (old_size > 0) [[likely]] {
         PRAGMA_DIAGNOSTIC(push)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_STRINGOP_OVERREAD)
         std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
         PRAGMA_DIAGNOSTIC(pop)
       }

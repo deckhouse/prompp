@@ -23,5 +23,6 @@ std::chrono::nanoseconds load_gorilla_from_wal_and_calculate_hash_over_label_set
 }
 
 void load_gorilla_from_wal_and_calculate_hash_over_label_set_names::write_metrics(Metrics& metrics) const {
-  metrics << (Metric() << "wal_loading_from_file_and_calculation_hash_over_label_set_names_duration_microseconds" << (period_.count() / 1000.0));
+  metrics << (Metric() << "wal_loading_from_file_and_calculation_hash_over_label_set_names_duration_microseconds"
+                       << static_cast<double>(period_.count()) / 1000.0);
 }

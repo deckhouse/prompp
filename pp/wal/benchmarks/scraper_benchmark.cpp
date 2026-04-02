@@ -60,7 +60,8 @@ void BenchmarkScraperParse(benchmark::State& state) {
     PrometheusScraper scraper;
     auto tmp_str = str;
     std::ignore = scraper.parse(tmp_str, 0);
-    state.counters["Alloc"] = benchmark::Counter(scraper.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["Alloc"] =
+        benchmark::Counter(static_cast<double>(scraper.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 

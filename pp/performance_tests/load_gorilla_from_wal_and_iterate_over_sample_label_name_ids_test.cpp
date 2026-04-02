@@ -30,5 +30,6 @@ std::chrono::nanoseconds load_gorilla_from_wal_and_iterate_over_sample_label_nam
 }
 
 void load_gorilla_from_wal_and_iterate_over_sample_label_name_ids::write_metrics(Metrics& metrics) const {
-  metrics << (Metric() << "wal_loading_from_file_and_iterating_over_sample_label_name_ids_duration_microseconds" << (period_.count() / 1000.0));
+  metrics << (Metric() << "wal_loading_from_file_and_iterating_over_sample_label_name_ids_duration_microseconds"
+                       << (static_cast<double>(period_.count()) / 1000.0));
 }

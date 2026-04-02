@@ -23,7 +23,7 @@ void full_load_lss::execute(const Config& config, Metrics& metrics) const {
     auto now = std::chrono::steady_clock::now();
 
     metrics << (Metric() << "decoding_table_load_from_file_duration_microseconds"
-                         << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
+                         << static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
   }
 
   // test load time: EncodingBimap
@@ -41,6 +41,6 @@ void full_load_lss::execute(const Config& config, Metrics& metrics) const {
     auto now = std::chrono::steady_clock::now();
 
     metrics << (Metric() << "encoding_bimap_load_from_file_duration_microseconds"
-                         << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
+                         << static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
   }
 }

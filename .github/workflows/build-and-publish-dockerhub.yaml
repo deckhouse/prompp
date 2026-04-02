@@ -46,18 +46,20 @@ jobs:
           fetch-depth: 0
 
       - name: Login to Dockerhub registry
-        uses: deckhouse/modules-actions/setup@v2
+        uses: ./.github/actions/setup-werf
         with:
           registry: docker.io
           registry_login: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}"
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Login to mirror registry
-        uses: deckhouse/modules-actions/setup@v2
+        uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DECKHOUSE_REGISTRY }}
           registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Login to GHCR
         uses: deckhouse/modules-actions/setup@v2
