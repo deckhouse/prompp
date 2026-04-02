@@ -100,9 +100,9 @@ TEST_F(LZ4IStreamFixture, ResetPointersOnSetStream) {
   lz4ostream_ << "abcdef" << std::flush;
   lz4ostream_.set_stream(nullptr);
 
-  lz4istream_.read(&buffer1[0], buffer1.length());
+  lz4istream_.read(&buffer1[0], static_cast<std::streamsize>(buffer1.length()));
   lz4istream_.set_stream(&string_stream2);
-  lz4istream_.read(&buffer2[0], buffer2.length());
+  lz4istream_.read(&buffer2[0], static_cast<std::streamsize>(buffer2.length()));
 
   // Assert
   EXPECT_EQ("123", buffer1);
@@ -123,7 +123,7 @@ TEST_F(LZ4IStreamFixture, ResetStateOnSetStream) {
 
   EXPECT_THROW(lz4istream_.read(&buffer1[0], buffer1.length()), std::runtime_error);
   lz4istream_.set_stream(&string_stream2);
-  lz4istream_.read(&buffer2[0], buffer2.length());
+  lz4istream_.read(&buffer2[0], static_cast<std::streamsize>(buffer2.length()));
 
   // Assert
   EXPECT_FALSE(lz4istream_.eof());
@@ -229,7 +229,7 @@ TEST_F(LZ4StreamUsageFixture, EncodeDecodeWithoutCompression) {
 
   // Act
   lz4ostream_ << data << std::flush;
-  lz4istream_.read(&decoded[0], decoded.size());
+  lz4istream_.read(&decoded[0], static_cast<std::streamsize>(decoded.size()));
 
   // Assert
   EXPECT_EQ(data, decoded);
@@ -246,7 +246,7 @@ TEST_F(LZ4StreamUsageFixture, ReadTwoOfThreeDataBlocks) {
   lz4ostream_ << data << std::flush;
   const auto third_data_block_offset = string_stream_.view().size();
   lz4ostream_ << data << std::flush;
-  lz4istream_.read(&decoded[0], decoded.size());
+  lz4istream_.read(&decoded[0], static_cast<std::streamsize>(decoded.size()));
 
   // Assert
   EXPECT_EQ(std::string(data_size * 2, 'a'), decoded);

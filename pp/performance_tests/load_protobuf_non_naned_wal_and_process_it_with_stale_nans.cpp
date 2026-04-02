@@ -86,9 +86,10 @@ void run_bench(BenchParams& benchmark_params, const std::string& path, const Con
 
   log() << "Total messages processed: " << processed_messages_count << std::endl;
   if (benchmark_params.need_processed_messages_count()) {
-    metrics << (Metric() << benchmark_params.total_processed_metrics_name() << processed_messages_count);
+    metrics << (Metric() << benchmark_params.total_processed_metrics_name() << static_cast<double>(processed_messages_count));
   }
-  metrics << (Metric() << benchmark_params.avg_size_metrics_name() << (writer_time_ns.count() / processed_messages_count));
+  metrics << (Metric() << benchmark_params.avg_size_metrics_name()
+                       << static_cast<double>(writer_time_ns.count()) / static_cast<double>(processed_messages_count));
 }
 
 struct WriterAddCbBenchmark : BenchParams {

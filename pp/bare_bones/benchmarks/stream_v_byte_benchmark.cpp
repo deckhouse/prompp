@@ -8,11 +8,6 @@
 
 namespace {
 
-template <class Codec, size_t kPreAllocationElementsCount>
-using CompactSequence = BareBones::StreamVByte::CompactSequence<Codec, BareBones::MemoryWithItemCount, kPreAllocationElementsCount>;
-
-using BareBones::StreamVByte::Sequence;
-
 uint32_t values_count() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
     const auto& values_str = context->operator[]("values");
@@ -22,20 +17,23 @@ uint32_t values_count() {
   return {};
 }
 
-template <template <class, size_t> class Sequence>
+using Sequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124, 8>;
+using CompactSequence = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 8>;
+
+template <class Sequence>
 void BenchmarkSequencePushBack(benchmark::State& state) {
   ZoneScoped;
   const auto kValuesCount = values_count();
 
   for ([[maybe_unused]] auto _ : state) {
-    Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;
+    Sequence sequence;
     for (const auto value : std::views::iota(0U, kValuesCount)) {
       sequence.push_back(value);
     }
   }
 
   state.counters["Memory"] = [kValuesCount] {
-    Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;
+    Sequence sequence;
     for (const auto value : std::views::iota(0U, kValuesCount)) {
       sequence.push_back(value);
     }
@@ -43,12 +41,12 @@ void BenchmarkSequencePushBack(benchmark::State& state) {
   }();
 }
 
-template <template <class, size_t> class Sequence>
+template <class Sequence>
 void BenchmarkSequenceDecode(benchmark::State& state) {
   ZoneScoped;
   const auto kValuesCount = values_count();
 
-  Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;
+  Sequence sequence;
   for (const auto value : std::views::iota(0U, kValuesCount)) {
     sequence.push_back(value);
   }
