@@ -14,29 +14,33 @@
 #include "series_data/decoder/decorator/rate_iterator.h"
 #include "series_data/decoder/decorator/resets_iterator.h"
 #include "series_data/decoder/decorator/sum_over_time.h"
+#include "series_data/decoder/decorator/window_function_iterator.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 
 namespace entrypoint::series_data {
 
 template <class Iterator>
 concept invalidatable = requires(Iterator iterator) {
-  { iterator.invalidate() };
+  { iterator.invalidate_sample() };
 };
 
 class DecodeIterator {
  public:
+  using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
   using UniversalDecodeIterator = ::series_data::decoder::UniversalDecodeIterator;
   using DownsamplingIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<UniversalDecodeIterator>;
-  using MinOverTimeIterator = ::series_data::decoder::decorator::MinOverTimeIterator;
-  using MaxOverTimeIterator = ::series_data::decoder::decorator::MaxOverTimeIterator;
-  using LastOverTimeIterator = ::series_data::decoder::decorator::LastOverTimeIterator;
-  using SumOverTimeIterator = ::series_data::decoder::decorator::SumOverTimeIterator;
-  using RateIterator = ::series_data::decoder::decorator::RateIterator;
-  using IRateIterator = ::series_data::decoder::decorator::IRateIterator;
-  using ChangesIterator = ::series_data::decoder::decorator::ChangesIterator;
-  using DeltaIterator = ::series_data::decoder::decorator::DeltaIterator;
-  using ResetsIterator = ::series_data::decoder::decorator::ResetsIterator;
-  using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
+
+  template <class Iterator>
+  using WindowFunctionIterator = ::series_data::decoder::decorator::WindowFunctionIterator<Iterator>;
+  using MinOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MinOverTimeIterator>;
+  using MaxOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MaxOverTimeIterator>;
+  using LastOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverTimeIterator>;
+  using SumOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::SumOverTimeIterator>;
+  using RateIterator = WindowFunctionIterator<::series_data::decoder::decorator::RateIterator>;
+  using IRateIterator = WindowFunctionIterator<::series_data::decoder::decorator::IRateIterator>;
+  using ChangesIterator = WindowFunctionIterator<::series_data::decoder::decorator::ChangesIterator>;
+  using DeltaIterator = WindowFunctionIterator<::series_data::decoder::decorator::DeltaIterator>;
+  using ResetsIterator = WindowFunctionIterator<::series_data::decoder::decorator::ResetsIterator>;
 
   using IteratorVariant = std::variant<UniversalDecodeIterator,
                                        DownsamplingIterator,
@@ -78,7 +82,7 @@ class DecodeIterator {
 
           if constexpr (invalidatable<Iterator>) {
             if (iterator == DecodeIteratorSentinel{}) [[unlikely]] {
-              iterator.invalidate();
+              iterator.invalidate_sample();
             }
           }
         },
@@ -108,12 +112,12 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const PromPP::Prometh
     return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
   }
 
-#define CASE(function_name, iterator_type)                                           \
-  case promql_function_name_hash(function_name): {                                   \
-    if (select_hints.func != function_name) [[unlikely]] {                           \
-      break;                                                                         \
-    }                                                                                \
-    return DecodeIterator(std::in_place_type<iterator_type>, select_hints.interval); \
+#define CASE(function_name, iterator_type)                                                                                        \
+  case promql_function_name_hash(function_name): {                                                                                \
+    if (select_hints.func != function_name) [[unlikely]] {                                                                        \
+      break;                                                                                                                      \
+    }                                                                                                                             \
+    return DecodeIterator(std::in_place_type<iterator_type>, select_hints.interval, select_hints.step_ms, select_hints.range_ms); \
   }
 
   switch (promql_function_name_hash(select_hints.func)) {

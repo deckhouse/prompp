@@ -21,6 +21,20 @@ class IRateIterator {
     return *this;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
+  PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
+    interval_ = interval;
+    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp};
+    find_last_2samples();
+  }
+
+  PROMPP_ALWAYS_INLINE void reset(UniversalDecodeIterator&& iterator, const PromPP::Primitives::TimeInterval& interval) {
+    iterator_ = std::move(iterator);
+    interval_ = interval;
+    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp};
+    find_last_2samples();
+  }
+
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
 
