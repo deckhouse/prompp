@@ -135,7 +135,7 @@ class QuerierLoaderUnloaderTestFixture : public ::testing::Test {
     }
   }
 
-  static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return 10 * ls_id + timestamp; }
+  static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return static_cast<double>(10ll * ls_id + timestamp); }
 
   DataStorage storage_;
   Encoder<> encoder_{storage_};

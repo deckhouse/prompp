@@ -66,35 +66,35 @@ void BM_CopyAllStepsWithTiming(benchmark::State& state) {
       auto start = steady_clock::now();
       copier.copy_added_series();
       auto end = steady_clock::now();
-      copy_added_series_times.push_back(duration_cast<nanoseconds>(end - start).count());
+      copy_added_series_times.push_back(static_cast<double>(duration_cast<nanoseconds>(end - start).count()));
     }
 
     {
       auto start = steady_clock::now();
       copier.copy_ls_id_set();
       auto end = steady_clock::now();
-      copy_ls_id_set_times.push_back(duration_cast<nanoseconds>(end - start).count());
+      copy_ls_id_set_times.push_back(static_cast<double>(duration_cast<nanoseconds>(end - start).count()));
     }
 
     {
       auto start = steady_clock::now();
       copier.build_trie_index();
       auto end = steady_clock::now();
-      build_trie_index_times.push_back(duration_cast<nanoseconds>(end - start).count());
+      build_trie_index_times.push_back(static_cast<double>(duration_cast<nanoseconds>(end - start).count()));
     }
 
     {
       auto start = steady_clock::now();
       copier.build_ls_id_hashset();
       auto end = steady_clock::now();
-      build_ls_id_hashset_times.push_back(duration_cast<nanoseconds>(end - start).count());
+      build_ls_id_hashset_times.push_back(static_cast<double>(duration_cast<nanoseconds>(end - start).count()));
     }
 
     {
       auto start = steady_clock::now();
       copier.build_reverse_index();
       auto end = steady_clock::now();
-      build_reverse_index_times.push_back(duration_cast<nanoseconds>(end - start).count());
+      build_reverse_index_times.push_back(static_cast<double>(duration_cast<nanoseconds>(end - start).count()));
     }
   }
 

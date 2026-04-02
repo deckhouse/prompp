@@ -416,7 +416,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
 
-func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutSnapshot() {
 	// Arrange
 
 	// Act

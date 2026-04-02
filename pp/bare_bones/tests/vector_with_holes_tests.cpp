@@ -177,7 +177,9 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
 TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {
   class MockDestroyBehavior {
    public:
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     MOCK_METHOD(void, destroy, (int), ());
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     MOCK_METHOD(void, destroy, (), ());
   };
 

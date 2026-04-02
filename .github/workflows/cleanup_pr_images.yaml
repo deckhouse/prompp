@@ -1,0 +1,33 @@
+name: Cleanup PR CI images from dev registry
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - Dockerfile.ci
+
+jobs:
+  cleanup:
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Install regctl
+        run: |
+          curl -sL "https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64" -o ./regctl
+          chmod +x ./regctl
+
+      - name: Login to dev registry
+        run: |
+          ./regctl registry login "${{ secrets.DEV_REGISTRY }}" \
+            -u "${{ secrets.DEV_REGISTRY_LOGIN_CLEANUP }}" \
+            -p "${{ secrets.DEV_REGISTRY_PASSWORD_CLEANUP }}"
+
+      - name: Delete PR-specific CI images
+        run: |
+          REPO="${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image"
+          PR_NUM="${{ github.event.pull_request.number }}"
+
+          for ARCH in amd64 arm64; do
+            TAG="gcc-tools-${ARCH}-pr${PR_NUM}"
+            echo "Deleting ${REPO}:${TAG}..."
+            ./regctl tag delete "${REPO}:${TAG}" 2>&1 || echo "Tag ${TAG} not found or already deleted"
+          done

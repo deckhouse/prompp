@@ -22,14 +22,14 @@ class IndexWriter {
   explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {}
 
   PROMPP_ALWAYS_INLINE void write_header(Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     writer_.write_uint32(PromPP::Prometheus::tsdb::index::kMagic);
     writer_.write(PromPP::Prometheus::tsdb::index::kFormatVersion);
   }
 
   PROMPP_ALWAYS_INLINE void write_symbols(Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     toc_.symbols = writer_.position();
     index_write_context_.rebuild();
@@ -39,7 +39,7 @@ class IndexWriter {
 
   template <class ChunkMetadataContainer>
   PROMPP_ALWAYS_INLINE void write_series(PromPP::Primitives::LabelSetID ls_id, const ChunkMetadataContainer& chunks, Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     if (toc_.series == 0) [[unlikely]] {
       toc_.series = writer_.position();
@@ -48,14 +48,14 @@ class IndexWriter {
   }
 
   PROMPP_ALWAYS_INLINE void write_label_indices(Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     toc_.label_indices = writer_.position();
     label_indices_writer_.write_label_indices();
   }
 
   PROMPP_ALWAYS_INLINE void write_postings(Stream& stream, uint32_t max_batch_size) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     if (toc_.postings == 0) [[unlikely]] {
       toc_.postings = writer_.position();
@@ -64,21 +64,21 @@ class IndexWriter {
   }
 
   PROMPP_ALWAYS_INLINE void write_label_indices_table(Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     toc_.label_indices_table = writer_.position();
     label_indices_writer_.write_label_indices_table();
   }
 
   PROMPP_ALWAYS_INLINE void write_postings_table_offsets(Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     toc_.postings_offset_table = writer_.position();
     postings_writer_.write_postings_table_offsets();
   }
 
   PROMPP_ALWAYS_INLINE void write_toc(Stream& stream) {
-    writer_.writer().set_stream(&stream);
+    const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     PromPP::Prometheus::tsdb::index::TocWriter{toc_, writer_}.write();
   }

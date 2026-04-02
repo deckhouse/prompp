@@ -22,6 +22,21 @@ concept WriterInterface = requires(Writer& writer, const Writer& const_writer, c
 template <class Stream>
 class StreamWriterImpl {
  public:
+  class StreamSetter {
+   public:
+    StreamSetter() = delete;
+    StreamSetter(const StreamSetter&) = delete;
+    StreamSetter(StreamSetter&&) noexcept = delete;
+    PROMPP_ALWAYS_INLINE StreamSetter(StreamWriterImpl& writer, Stream* stream) : writer_(writer) { writer_.set_stream(stream); }
+    PROMPP_ALWAYS_INLINE ~StreamSetter() { writer_.set_stream(nullptr); }
+
+    StreamSetter& operator=(const StreamSetter&) = delete;
+    StreamSetter& operator=(StreamSetter&&) noexcept = delete;
+
+   private:
+    StreamWriterImpl& writer_;
+  };
+
   explicit StreamWriterImpl(Stream* stream = nullptr) : stream_(stream) {}
 
   PROMPP_ALWAYS_INLINE void reserve(uint32_t size) noexcept {
@@ -31,6 +46,8 @@ class StreamWriterImpl {
       stream_->reserve(size_ + size);
     }
   }
+
+  PROMPP_ALWAYS_INLINE StreamSetter stream_setter(Stream* stream) noexcept { return StreamSetter(*this, stream); }
 
   PROMPP_ALWAYS_INLINE void set_stream(Stream* stream) noexcept {
     stream_ = stream;

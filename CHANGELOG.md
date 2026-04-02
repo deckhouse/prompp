@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.8
+
+### Fixes
+1. **Jemalloc VmPTE growth.** Tuned jemalloc configuration to prevent unbounded virtual address space growth when using custom arenas (create/destroy pattern). Added `retain:false`, `abort_conf:true`, and set `muzzy_decay_ms:0`, eliminating multi-GB page table overhead.
+2. **gRPC authorization bypass CVE.** Updated `google.golang.org/grpc` from v1.78.0 to v1.79.3 to fix an authorization bypass via missing leading slash in `:path` (GO-2026-4762).
+3. **npm dependency security update.** Updated `picomatch` to fix a high-severity ReDoS and method injection vulnerability.
+
 ## v0.7.7
 
 ### Features
