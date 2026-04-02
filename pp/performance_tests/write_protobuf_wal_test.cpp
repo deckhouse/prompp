@@ -62,7 +62,7 @@ void write_protobuf_wal::execute(const Config& config, Metrics& metrics) const {
     out.write(reinterpret_cast<const char*>(&segment_size), sizeof(segment_size));
 
     // write message
-    out.write(buffer.data(), buffer.size());
+    out.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
 
     encoded_size += buffer.size();
 
@@ -72,6 +72,7 @@ void write_protobuf_wal::execute(const Config& config, Metrics& metrics) const {
   auto now = std::chrono::steady_clock::now();
 
   metrics << (Metric() << "protobuf_wal_add_sample_avg_duration_nanoseconds"
-                       << std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / dummy_wal.cnt());
-  metrics << (Metric() << "protobuf_wal_overall_size_megabytes" << (encoded_size >> 20));
+                       << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) /
+                              static_cast<double>(dummy_wal.cnt()));
+  metrics << (Metric() << "protobuf_wal_overall_size_megabytes" << static_cast<double>(encoded_size >> 20));
 }

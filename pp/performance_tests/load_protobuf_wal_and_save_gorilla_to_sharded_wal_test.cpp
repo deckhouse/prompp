@@ -65,7 +65,7 @@ void load_protobuf_wal_and_save_gorilla_to_sharded_wal::execute(const Config& co
       }
 
       auto now = std::chrono::steady_clock::now();
-      total_shards_time += std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count();
+      total_shards_time += static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count());
       total_stream_buffer_size += stream_buffer.str().size();
 
       stream_buffer.str(std::string());
@@ -73,12 +73,14 @@ void load_protobuf_wal_and_save_gorilla_to_sharded_wal::execute(const Config& co
     }
 
     log() << "total_stream_buffer_size_" << number_of_shards << ": " << total_stream_buffer_size << std::endl;
-    log() << "avg_sharded_processing_sample_nanoseconds_per_sample_" << number_of_shards << ": " << (total_shards_time / samples) << std::endl;
-    log() << "avg_sharded_processing_sample_nanoseconds_per_sample_parallel_" << number_of_shards << ": " << (total_shards_time / (number_of_shards * samples))
+    log() << "avg_sharded_processing_sample_nanoseconds_per_sample_" << number_of_shards << ": " << total_shards_time / static_cast<double>(samples)
           << std::endl;
-    metrics << (Metric() << "avg_sharded_processing_sample_nanoseconds_per_sample_" + std::to_string(number_of_shards) << (total_shards_time / samples));
+    log() << "avg_sharded_processing_sample_nanoseconds_per_sample_parallel_" << number_of_shards << ": "
+          << total_shards_time / static_cast<double>(number_of_shards * samples) << std::endl;
+    metrics << (Metric() << "avg_sharded_processing_sample_nanoseconds_per_sample_" + std::to_string(number_of_shards)
+                         << (total_shards_time / static_cast<double>(samples)));
     metrics << (Metric() << "avg_sharded_processing_sample_nanoseconds_per_sample_parallel_" + std::to_string(number_of_shards)
-                         << (total_shards_time / (number_of_shards * samples)));
+                         << total_shards_time / static_cast<double>(number_of_shards * samples));
 
     wal_shards.clear();
     infile.close();

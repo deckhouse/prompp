@@ -26,11 +26,13 @@ const BareBones::Vector<uint32_t>& values() {
   return values;
 }
 
-template <template <class, size_t> class Sequence>
+using EncodedSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
+using EncodedCompactSequence = BareBones::EncodedSequence<DeltaRLE<CompactSequence<Codec0124, 8>>>;
+
+template <class EncodingSequence>
 void EncodingSequencePushBack(benchmark::State& state) {
   ZoneScoped;
   const auto& kValues = values();
-  using EncodingSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
 
   for ([[maybe_unused]] auto _ : state) {
     EncodingSequence sequence;
@@ -48,11 +50,10 @@ void EncodingSequencePushBack(benchmark::State& state) {
   }();
 }
 
-template <template <class, size_t> class Sequence>
+template <class EncodingSequence>
 void EncodingSequenceDecode(benchmark::State& state) {
   ZoneScoped;
   const auto& kValues = values();
-  using EncodingSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
 
   EncodingSequence sequence;
   for (const auto value : kValues) {
@@ -68,10 +69,10 @@ double min_value(const std::vector<double>& v) noexcept {
   return *std::ranges::min_element(v);
 }
 
-BENCHMARK(EncodingSequencePushBack<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(EncodingSequencePushBack<CompactSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(EncodingSequencePushBack<EncodedSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(EncodingSequencePushBack<EncodedCompactSequence>)->ComputeStatistics("min", min_value);
 
-BENCHMARK(EncodingSequenceDecode<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(EncodingSequenceDecode<CompactSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(EncodingSequenceDecode<EncodedSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(EncodingSequenceDecode<EncodedCompactSequence>)->ComputeStatistics("min", min_value);
 
 }  // namespace
