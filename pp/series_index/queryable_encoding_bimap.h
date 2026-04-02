@@ -84,21 +84,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     prune_hidden_series_from_hashset_in_fixed_state();
   }
 
-  void fill_added_series_mapping(uint32_t shrink_boundary,
-                                 QueryableEncodingBimap& copy,
-                                 BareBones::Vector<uint32_t>& old_to_new_mapping,
-                                 const BareBones::Bitset& added_series) {
-    assert(shrink_boundary <= next_item_index_impl() && old_to_new_mapping.size() >= shrink_boundary);
-
-    for (uint32_t old_id = 0; old_id < shrink_boundary; ++old_id) {
-      if (old_id < added_series.size() && added_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
-        const auto label_set = (*this)[old_id];
-        const auto new_id = copy.find_or_emplace(label_set);
-        old_to_new_mapping[old_id] = new_id;
-      }
-    }
-  }
-
   template <class Snapshot>
   void finalize_copy_and_shrink(const Snapshot& snapshot, BareBones::Vector<uint32_t>& old_to_new_mapping) {
     finalize_copy_and_shrink(make_post_shrink_snapshot_access(snapshot), old_to_new_mapping);
@@ -252,8 +237,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void update_indexes(uint32_t ls_id, const LabelSet& label_set) {
-    const uint32_t ls_id_for_sorting = is_shrunk() ? ls_id - shift_ : ls_id;
-    auto ls_id_set_iterator = ls_id_set_.emplace(ls_id_for_sorting).first;
+    // All index structures use logical ids in every state.
+    auto ls_id_set_iterator = ls_id_set_.emplace(ls_id).first;
 
     for (auto label = label_set.begin(); label != label_set.end(); ++label) {
       if (!is_valid_label((*label).second)) [[unlikely]] {
@@ -298,9 +283,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept {
-    return shift_ == 0 && pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet;
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept { return shift_ == 0 && pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shift_ > 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shift_ == 0 && pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet; }
 
@@ -333,8 +316,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t emplace_series_and_update_indexes(const LabelSetLike& label_set, size_t mixed_hash) {
     const auto new_storage_id = Base::storage_.emplace_back(label_set);
     const auto composite_label_set = Base::operator[](new_storage_id);
-    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_storage_id));
     const auto new_logical_id = shift_ + new_storage_id;
+    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_logical_id));
     update_indexes(new_logical_id, composite_label_set);
     return new_logical_id;
   }
@@ -378,7 +361,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSetLike>
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_in_shrunk_state(const LabelSetLike& label_set, size_t mixed_hash) {
     if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
-      return shift_ + static_cast<uint32_t>(*existing_it);
+      return static_cast<uint32_t>(*existing_it);
     }
 
     uint32_t mapped_logical_id = Base::kInvalidId;
@@ -411,7 +394,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class Class>
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> find_in_shrunk_state(const Class& c, size_t mixed_hash) const {
     if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
-      return std::optional<uint32_t>{shift_ + static_cast<uint32_t>(*i)};
+      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
     }
 
     uint32_t mapped_logical_id = Base::kInvalidId;
@@ -479,11 +462,27 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     sorting_index_.clear();
 
     const auto hasher = Base::hasher();
-    const auto storage_count = Base::storage_.count();
+    // Rebuild by logical ids:
+    // - [0, shift_) are mapped ids resolved via snapshot mapping.
+    // - [shift_, shift_ + storage_count) are tail ids from current storage.
+    const uint32_t mapping_boundary = std::min<uint32_t>(shift_, post_shrink_mapping_.size());
+    assert(post_shrink_snapshot_access_.composite_resolve);
+    for (uint32_t logical_id = 0; logical_id < mapping_boundary; ++logical_id) {
+      const auto mapped_id = post_shrink_mapping_[logical_id];
+      if (mapped_id == Base::kInvalidId) [[likely]] {
+        continue;
+      }
+      const auto label_set = post_shrink_snapshot_access_.composite_resolve(mapped_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(logical_id));
+      ls_id_set_.emplace(logical_id);
+    }
+
+    const uint32_t storage_count = Base::storage_.count();
     for (uint32_t storage_id = 0; storage_id < storage_count; ++storage_id) {
+      const uint32_t logical_id = shift_ + storage_id;
       const auto label_set = Base::operator[](storage_id);
-      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(storage_id));
-      ls_id_set_.emplace(storage_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(logical_id));
+      ls_id_set_.emplace(logical_id);
     }
     sorting_index_.build();
   }
