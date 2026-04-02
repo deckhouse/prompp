@@ -15,8 +15,8 @@ concept WindowFunctionIteratorInterface = requires(Iterator iterator, const Iter
 
 struct WindowFunctionParameters {
   PromPP::Primitives::TimeInterval interval;
-  PromPP::Primitives::Timestamp step_ms;
-  PromPP::Primitives::Timestamp range_ms;
+  PromPP::Primitives::Timestamp step;
+  PromPP::Primitives::Timestamp range;
 };
 
 template <WindowFunctionIteratorInterface FunctionIterator>
@@ -76,11 +76,11 @@ class WindowFunctionIterator {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE TimeInterval advance_interval() const noexcept {
     auto interval = iterator_.interval();
-    if (interval.difference() == parameters_->step_ms) {
+    if (interval.difference() == parameters_->step) {
       interval.min = interval.max;
 
-      const auto diff = parameters_->range_ms - parameters_->step_ms;
-      interval.max += (diff == 0) ? parameters_->step_ms : diff;
+      const auto diff = parameters_->range - parameters_->step;
+      interval.max += (diff == 0) ? parameters_->step : diff;
     } else {
       interval.min = std::exchange(interval.max, next_interval_boundary(interval.min));
     }
@@ -91,18 +91,18 @@ class WindowFunctionIterator {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE TimeInterval initial_interval() const noexcept { return initial_interval(*parameters_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static TimeInterval initial_interval(const WindowFunctionParameters& parameters) noexcept {
-    if (parameters.step_ms == 0) {
+    if (parameters.step == 0) {
       return parameters.interval;
     }
 
     return {
         .min = parameters.interval.min,
-        .max = std::min(next_interval_boundary(parameters.interval.min, parameters.step_ms, parameters.range_ms), parameters.interval.max),
+        .max = std::min(next_interval_boundary(parameters.interval.min, parameters.step, parameters.range), parameters.interval.max),
     };
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Timestamp next_interval_boundary(Timestamp start) const noexcept {
-    return next_interval_boundary(start, parameters_->step_ms, parameters_->range_ms);
+    return next_interval_boundary(start, parameters_->step, parameters_->range);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static Timestamp next_interval_boundary(Timestamp start, Timestamp step_ms, Timestamp range_ms) noexcept {

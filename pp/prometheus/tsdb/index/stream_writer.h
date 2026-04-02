@@ -24,8 +24,14 @@ class StreamWriterImpl {
  public:
   class StreamSetter {
    public:
+    StreamSetter() = delete;
+    StreamSetter(const StreamSetter&) = delete;
+    StreamSetter(StreamSetter&&) noexcept = delete;
     PROMPP_ALWAYS_INLINE StreamSetter(StreamWriterImpl& writer, Stream* stream) : writer_(writer) { writer_.set_stream(stream); }
     PROMPP_ALWAYS_INLINE ~StreamSetter() { writer_.set_stream(nullptr); }
+
+    StreamSetter& operator=(const StreamSetter&) = delete;
+    StreamSetter& operator=(StreamSetter&&) noexcept = delete;
 
    private:
     StreamWriterImpl& writer_;

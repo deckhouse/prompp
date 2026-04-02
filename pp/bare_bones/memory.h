@@ -289,6 +289,7 @@ class SharedPtr {
       if (old_size > 0) [[likely]] {
         PRAGMA_DIAGNOSTIC(push)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_STRINGOP_OVERREAD)
         std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
         PRAGMA_DIAGNOSTIC(pop)
       }

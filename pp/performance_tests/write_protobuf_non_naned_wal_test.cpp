@@ -19,7 +19,7 @@ using namespace PromPP;  // NOLINT
 using source_id = std::pair<std::string_view, std::string_view>;
 constexpr size_t SOURCE_ID_JOB = 0;
 constexpr size_t SOURCE_ID_INSTANCE = 1;
-constexpr int64_t TIMESTAMP_WINDOW_STEP = 30ull * 1000;  // 30s
+constexpr int64_t TIMESTAMP_WINDOW_STEP = 30ll * 1000;  // 30s
 
 using source_uid = uint32_t;
 using source_ls_pair_id_to_uid_map = std::map<source_id, source_uid>;

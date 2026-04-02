@@ -27,7 +27,7 @@ const BareBones::Vector<uint32_t>& values() {
 }
 
 using EncodedSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
-using EncodedCompactSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
+using EncodedCompactSequence = BareBones::EncodedSequence<DeltaRLE<CompactSequence<Codec0124, 8>>>;
 
 template <class EncodingSequence>
 void EncodingSequencePushBack(benchmark::State& state) {

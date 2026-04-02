@@ -71,7 +71,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
                                      SerializedDataPtr* serialized_data,
                                      PromPP::Primitives::Timestamp downsampling_ms)
       : select_hints_{.func = std::string(static_cast<std::string_view>(hints.func)),
-                      .function_parameters = {.interval = hints.interval, .step_ms = hints.step_ms, .range_ms = hints.range_ms}},
+                      .function_parameters = {.interval = hints.interval, .step = hints.step_ms, .range = hints.range_ms}},
         querier_(storage),
         query_(&query),
         serialized_data_(serialized_data),
