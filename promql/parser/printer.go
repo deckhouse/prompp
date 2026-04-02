@@ -16,6 +16,7 @@ package parser
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,14 +63,35 @@ func (es Expressions) String() (s string) {
 }
 
 func (node *AggregateExpr) String() string {
-	aggrString := node.getAggOpStr()
-	aggrString += "("
-	if node.Op.IsAggregatorWithParam() {
-		aggrString += fmt.Sprintf("%s, ", node.Param)
-	}
-	aggrString += fmt.Sprintf("%s)", node.Expr)
+	var aggrString strings.Builder
+	if node.Op.IsOPTop() {
+		_, _ = aggrString.WriteString(node.Op.String()) // aggrString == op_top
+		_, _ = aggrString.WriteString("(")              // aggrString == op_top(
 
-	return aggrString
+		// op_top(limit, arg1, ..., expr) — Param is the limit, Grouping holds middle args
+		_, _ = aggrString.WriteString(node.Param.String())
+		for _, g := range node.Grouping {
+			_, _ = aggrString.WriteString(", ")
+			_, _ = aggrString.WriteString(g)
+		}
+
+		_, _ = aggrString.WriteString(", ")
+		_, _ = aggrString.WriteString(node.Expr.String())
+		_, _ = aggrString.WriteString(")")
+
+		return aggrString.String()
+	}
+
+	_, _ = aggrString.WriteString(node.getAggOpStr())
+	_, _ = aggrString.WriteString("(")
+	if node.Op.IsAggregatorWithParam() {
+		_, _ = aggrString.WriteString(node.Param.String())
+		_, _ = aggrString.WriteString(", ")
+	}
+	_, _ = aggrString.WriteString(node.Expr.String())
+	_, _ = aggrString.WriteString(")")
+
+	return aggrString.String()
 }
 
 func (node *AggregateExpr) ShortString() string {
@@ -78,16 +100,21 @@ func (node *AggregateExpr) ShortString() string {
 }
 
 func (node *AggregateExpr) getAggOpStr() string {
-	aggrString := node.Op.String()
+	var aggrString strings.Builder
+	_, _ = aggrString.WriteString(node.Op.String())
 
 	switch {
 	case node.Without:
-		aggrString += fmt.Sprintf(" without (%s) ", joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(" without (")
+		_, _ = aggrString.WriteString(joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(") ")
 	case len(node.Grouping) > 0:
-		aggrString += fmt.Sprintf(" by (%s) ", joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(" by (")
+		_, _ = aggrString.WriteString(joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(") ")
 	}
 
-	return aggrString
+	return aggrString.String()
 }
 
 func joinLabels(ss []string) string {
@@ -223,7 +250,7 @@ func (node *SubqueryExpr) getSubqueryTimeSuffix() string {
 }
 
 func (node *NumberLiteral) String() string {
-	return fmt.Sprint(node.Val)
+	return strconv.FormatFloat(node.Val, 'g', -1, 64)
 }
 
 func (node *ParenExpr) String() string {
