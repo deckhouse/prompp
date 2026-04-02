@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <iterator>
 #include <limits>
 
 #include "bare_bones/preprocess.h"
@@ -64,14 +63,10 @@ class SortingIndexBuilder {
       return;
     }
 
-    const auto ls_id = static_cast<uint32_t>(*ls_id_iterator);
     const uint64_t previous = get_previous(ls_id_iterator);
     const uint64_t next = get_next(ls_id_iterator);
     if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
-      if (ls_id >= index_.index.size()) {
-        index_.index.resize(ls_id + 1);
-      }
-      index_.index[ls_id] = value;
+      index_.index.emplace_back(value);
     } else {
       // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
       // Index will be built on demand in sort method
@@ -92,13 +87,7 @@ class SortingIndexBuilder {
   Index index_;
 
   void rebuild() {
-    if (ls_id_set_.empty()) {
-      index_.index = Vector<uint32_t>{};
-      return;
-    }
-
-    const auto max_ls_id = static_cast<uint32_t>(*std::prev(ls_id_set_.end()));
-    index_.index.resize(max_ls_id + 1);
+    index_.index.resize(ls_id_set_.size());
 
     const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
     uint32_t index_value = 0;

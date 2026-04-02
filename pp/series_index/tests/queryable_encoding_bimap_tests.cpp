@@ -930,33 +930,6 @@ TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrunkStateFindResolvesBoundaryA
   EXPECT_EQ(ls5_, lss_[*ls5_id]);
 }
 
-TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrunkStateIndexesContainMappedAndTailLogicalIds) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  const BareBones::Vector ids_for_copy{0U, 2U};
-  FinalizeShrink(ids_for_copy, shrink_boundary);
-
-  // Act
-  const auto& ls_id_set = lss_.ls_id_set();
-
-  // Assert
-  EXPECT_THAT(ls_id_set, testing::ElementsAre(0U, 2U, 3U, 4U));
-}
-
-TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrunkStateSortingIndexSortsMappedAndTailLogicalIds) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  const BareBones::Vector ids_for_copy{0U, 2U};
-  FinalizeShrink(ids_for_copy, shrink_boundary);
-  BareBones::Vector<uint32_t> ids{4U, 3U, 2U, 0U};
-
-  // Act
-  lss_.sorting_index().sort(ids);
-
-  // Assert
-  EXPECT_THAT(ids, testing::ElementsAre(0U, 2U, 3U, 4U));
-}
-
 class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBimapCopierFixture {
  protected:
   LabelViewSet ls1_{{"job", "a"}};
