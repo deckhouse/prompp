@@ -494,7 +494,6 @@ func (s *RotateLSSSuite) TestCopyOnRotate() {
 	shrinkBoundary := slices.Max(s.labelSetIDs) + 1
 
 	// Act
-	s.T().Log("Rotate LSS")
 	result := s.rotate(shrinkBoundary, s.lss, newLSS)
 
 	// Assert
@@ -784,6 +783,7 @@ type rotateResult struct {
 
 // rotate performs a rotate operation on the old LSS and returns a rotateResult.
 func (s *RotateLSSSuite) rotate(shrinkBoundary uint32, oldLSS, newLSS *cppbridge.LabelSetStorage) *rotateResult {
+	s.T().Log("Rotate LSS")
 	snapshot := oldLSS.CreateLabelSetSnapshot()
 	oldLSS.SetPendingShrinkBoundary(shrinkBoundary)
 	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(oldLSS.BitsetSeries(), newLSS)
