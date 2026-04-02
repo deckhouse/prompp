@@ -159,21 +159,6 @@ func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
 	return res
 }
 
-// RangeLabelSet serialize to slice labels from lss and calls f on each label.
-func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := labelSetSerialize(lss.pointer, lsID)
-	for i := range labelSet {
-		if err := do(labelSet[i]); err != nil {
-			labelSetFree(labelSet)
-			return err
-		}
-	}
-	runtime.KeepAlive(lss)
-	labelSetFree(labelSet)
-
-	return nil
-}
-
 // SetPendingShrinkBoundary sets pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
 // Attention: works only with QueryableEncodingBimap type of LSS.
 func (lss *LabelSetStorage) SetPendingShrinkBoundary(shrinkBoundary uint32) {

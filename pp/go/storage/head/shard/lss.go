@@ -59,8 +59,8 @@ func (l *LSS) FinalizeCopyAndShrink() {
 // FreezeAndCopyAddedSeries freeze the lss by shrink boundary and copy the added series to the destination lss.
 func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) {
 	l.locker.Lock()
-	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 	snapshot := l.getSnapshot()
+	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 	bitsetSeries := l.target.BitsetSeries()
 	l.locker.Unlock()
 

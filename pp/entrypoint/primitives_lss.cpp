@@ -154,11 +154,12 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());
-  std::visit([&out](const auto& snapshot) {
-    std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
-                           [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
-  },
-             snapshot_variant);
+  std::visit(
+      [&out](const auto& snapshot) {
+        std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
+                               [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
+      },
+      snapshot_variant);
 }
 
 extern "C" void prompp_primitives_lss_query_result_free(void* args) {
