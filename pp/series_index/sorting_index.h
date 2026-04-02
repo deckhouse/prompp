@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 
@@ -66,7 +67,11 @@ class SortingIndexBuilder {
     const uint64_t previous = get_previous(ls_id_iterator);
     const uint64_t next = get_next(ls_id_iterator);
     if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
-      index_.index.emplace_back(value);
+      const auto ls_id = static_cast<uint32_t>(*ls_id_iterator);
+      if (ls_id >= index_.index.size()) {
+        index_.index.resize(ls_id + 1);
+      }
+      index_.index[ls_id] = value;
     } else {
       // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
       // Index will be built on demand in sort method
@@ -87,19 +92,28 @@ class SortingIndexBuilder {
   Index index_;
 
   void rebuild() {
-    index_.index.resize(ls_id_set_.size());
+    if (ls_id_set_.empty()) {
+      index_.index.clear();
+      return;
+    }
+
+    uint32_t max_ls_id = 0;
+    for (auto ls_id : ls_id_set_) {
+      max_ls_id = std::max(max_ls_id, static_cast<uint32_t>(ls_id));
+    }
+    index_.index.resize(max_ls_id + 1);
 
     const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
     uint32_t index_value = 0;
     for (auto ls_id : ls_id_set_) {
       index_value += step;
-      index_.index[ls_id] = index_value;
+      index_.index[static_cast<uint32_t>(ls_id)] = index_value;
     }
   }
 
   PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {
-      return index_.index[*--ls_id_iterator];
+      return index_.index[static_cast<uint32_t>(*--ls_id_iterator)];
     }
 
     return 0;
@@ -107,7 +121,7 @@ class SortingIndexBuilder {
 
   PROMPP_ALWAYS_INLINE uint32_t get_next(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (++ls_id_iterator != ls_id_set_.end()) {
-      return index_.index[*ls_id_iterator];
+      return index_.index[static_cast<uint32_t>(*ls_id_iterator)];
     }
 
     return kMaxIndexValue;

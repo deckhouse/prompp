@@ -69,13 +69,15 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type operator[](uint32_t id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
+    assert(id < max_item_index_impl());
     if (is_normal()) [[likely]] {
-      return Base::operator[](id);
+      return Base::storage_composite(id);
     }
     if (is_fixed()) [[unlikely]] {
-      return is_hidden_in_fixed_state(id) ? empty_composite() : Base::operator[](id);
+      return is_hidden_in_fixed_state(id) ? empty_composite() : Base::storage_composite(id);
     }
+    assert(is_shrunk());
     return resolve_shrunk_series(id);
   }
 
@@ -164,7 +166,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     if (is_fixed()) [[unlikely]] {
       return find_or_emplace_in_fixed_state(label_set, hash);
     }
-
+    assert(is_shrunk());
     return find_or_emplace_in_shrunk_state(label_set, hash);
   }
 
@@ -184,7 +186,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     if (is_fixed()) [[unlikely]] {
       return find_in_fixed_state(c, hashval);
     }
-
+    assert(is_shrunk());
     return find_in_shrunk_state(c, hashval);
   }
 
@@ -310,7 +312,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Class>
   [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE bool find_mapped_logical_id_in_shrunk_state(const Class& c, uint32_t& out_logical_id) const noexcept {
-    if (!is_shrunk() || post_shrink_mapping_.empty() || !post_shrink_snapshot_access_.composite_resolve) [[likely]] {
+    assert(is_shrunk());
+    if (post_shrink_mapping_.empty() || !post_shrink_snapshot_access_.composite_resolve) [[likely]] {
       return false;
     }
 
@@ -332,22 +335,23 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSetLike>
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t emplace_series_and_update_indexes(const LabelSetLike& label_set, size_t mixed_hash) {
     const auto new_storage_id = Base::storage_.emplace_back(label_set);
-    const auto composite_label_set = Base::operator[](new_storage_id);
-    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_storage_id));
+    const auto composite_label_set = Base::storage_composite(new_storage_id);
     const auto new_logical_id = shift_ + new_storage_id;
+    // Keep logical ids in hash/index structures across all states.
+    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_logical_id));
     update_indexes(new_logical_id, composite_label_set);
     return new_logical_id;
   }
 
   template <class LabelSetLike>
   [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE uint32_t emplace_visible_in_fixed_state(const LabelSetLike& label_set, size_t mixed_hash) {
-    auto logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
-    while (is_hidden_in_fixed_state(logical_id)) [[unlikely]] {
-      auto it = ls_id_hash_set_.find(label_set, mixed_hash);
-      assert(it != ls_id_hash_set_.end());
-      ls_id_hash_set_.erase(it);
-      logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
+    assert(is_fixed());
+    const auto target_visible_id = pending_shrink_boundary_;
+    for (uint32_t id = next_item_index_impl(); id < target_visible_id; ++id) {
+      Base::storage_.emplace_back(empty_composite());
     }
+    const auto logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
+    assert(logical_id >= target_visible_id);
     return logical_id;
   }
 
@@ -377,8 +381,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class LabelSetLike>
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_in_shrunk_state(const LabelSetLike& label_set, size_t mixed_hash) {
+    assert(is_shrunk());
     if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
-      return shift_ + static_cast<uint32_t>(*existing_it);
+      return static_cast<uint32_t>(*existing_it);
     }
 
     uint32_t mapped_logical_id = Base::kInvalidId;
@@ -410,8 +415,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Class>
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> find_in_shrunk_state(const Class& c, size_t mixed_hash) const {
+    assert(is_shrunk());
     if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
-      return std::optional<uint32_t>{shift_ + static_cast<uint32_t>(*i)};
+      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
     }
 
     uint32_t mapped_logical_id = Base::kInvalidId;
@@ -422,8 +428,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {
+    assert(is_shrunk());
     if (ls_id >= shift_) [[likely]] {
-      return Base::operator[](ls_id - shift_);
+      return Base::storage_composite(ls_id - shift_);
     }
     assert(!post_shrink_mapping_.empty() && post_shrink_snapshot_access_.composite_resolve);
     const auto mapped_id = post_shrink_mapping_[ls_id];
@@ -460,31 +467,45 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 
   void prune_hidden_series_from_hashset_in_fixed_state() noexcept {
-    if (!is_fixed()) [[unlikely]] {
-      return;
-    }
+    assert(is_fixed());
 
     const uint32_t max_visible_id = std::min(pending_shrink_boundary_, next_item_index_impl());
-    for (uint32_t logical_id = 0; logical_id < max_visible_id; ++logical_id) {
-      if (logical_id < added_series_.size() && added_series_[logical_id]) [[likely]] {
+    const uint32_t added_size = added_series_.size();
+    const uint32_t guarded_id = std::min(max_visible_id, added_size);
+
+    for (uint32_t logical_id = 0; logical_id < guarded_id; ++logical_id) {
+      if (added_series_[logical_id]) [[likely]] {
         continue;
       }
+      ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
+    }
+
+    for (uint32_t logical_id = guarded_id; logical_id < max_visible_id; ++logical_id) {
       ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
     }
   }
 
   void rebuild_indexes_after_shrink() {
+    assert(is_shrunk());
     ls_id_set_.clear();
-    ls_id_hash_set_.clear();
-    sorting_index_.clear();
-
-    const auto hasher = Base::hasher();
-    const auto storage_count = Base::storage_.count();
-    for (uint32_t storage_id = 0; storage_id < storage_count; ++storage_id) {
-      const auto label_set = Base::operator[](storage_id);
-      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(storage_id));
-      ls_id_set_.emplace(storage_id);
+    BareBones::Vector<uint32_t> stale_logical_ids;
+    stale_logical_ids.reserve(ls_id_hash_set_.size());
+    const uint32_t mapping_size = post_shrink_mapping_.size();
+    const uint32_t max_logical_id = max_item_index_impl();
+    for (const auto& logical_id_proxy : ls_id_hash_set_) {
+      const auto logical_id = static_cast<uint32_t>(logical_id_proxy);
+      const bool is_visible = logical_id < shift_ ? (logical_id < mapping_size && post_shrink_mapping_[logical_id] != Base::kInvalidId)
+                                                  : (logical_id < max_logical_id);
+      if (!is_visible) [[unlikely]] {
+        stale_logical_ids.emplace_back(logical_id);
+        continue;
+      }
+      ls_id_set_.emplace(logical_id);
     }
+    for (const auto logical_id : stale_logical_ids) {
+      ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
+    }
+    sorting_index_.clear();
     sorting_index_.build();
   }
 };
@@ -632,7 +653,7 @@ PROMPP_ALWAYS_INLINE void invert_copy_mapping(const NewToOldContainer& new_to_ol
 
   for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
     const uint32_t old_id = static_cast<uint32_t>(new_to_old[new_id]);
-    if (old_id < max_lsid) [[likely]] {
+    if (old_id < old_to_new_out.size()) [[likely]] {
       old_to_new_out[old_id] = static_cast<uint32_t>(new_id);
     }
   }

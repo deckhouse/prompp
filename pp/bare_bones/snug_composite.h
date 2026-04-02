@@ -61,6 +61,11 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
 
+template <class Derived, class ValueType>
+concept has_resolve = requires(const Derived& derived, uint32_t id) {
+  { derived.resolve_impl(id) } -> std::same_as<ValueType>;
+};
+
 constexpr uint32_t kInvalidLsId = std::numeric_limits<uint32_t>::max();
 
 // Symbol table view type, independent from any specific storage type
@@ -306,7 +311,15 @@ class GenericDecodingTable {
   GenericDecodingTable(GenericDecodingTable&& other) noexcept = delete;
   GenericDecodingTable& operator=(GenericDecodingTable&& other) noexcept = delete;
 
-  PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return storage_.composite(id); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type storage_composite(uint32_t id) const noexcept { return storage_.composite(id); }
+
+  PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept {
+    if constexpr (has_resolve<Derived, value_type>) {
+      return static_cast<const Derived*>(this)->resolve_impl(id);
+    } else {
+      return storage_composite(id);
+    }
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count() const noexcept {

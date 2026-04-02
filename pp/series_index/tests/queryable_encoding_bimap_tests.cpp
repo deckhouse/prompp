@@ -650,6 +650,25 @@ TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkMiddlePartialCopyHidesUnma
   EXPECT_FALSE(hidden_from_find.has_value());
 }
 
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkMiddlePartialCopyRebuildsLsIdSetWithLogicalIds) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  const BareBones::Vector ids_for_copy{0U, 2U};
+
+  // Act
+  FinalizeShrink(ids_for_copy, shrink_boundary);
+
+  // Assert
+  const auto& ls_ids = lss_.ls_id_set();
+  using LsIdProxy = typename Lss::LsIdSet::value_type;
+  EXPECT_EQ(4U, ls_ids.size());
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{0U}));
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{1U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{2U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{3U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
+}
+
 TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkMiddlePartialCopyReinsertAllocatesNewId) {
   // Arrange
   constexpr uint32_t shrink_boundary = 3U;
@@ -699,6 +718,25 @@ TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkAllPartialCopyHidesUnmappe
   EXPECT_EQ(0U, lss_[3].size());
   EXPECT_EQ(ls5_, lss_[4]);
   EXPECT_FALSE(hidden_from_find.has_value());
+}
+
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkAllPartialCopyRebuildsLsIdSetWithMappedLogicalIds) {
+  // Arrange
+  const uint32_t shrink_boundary = lss_.max_item_index();
+  const BareBones::Vector ids_for_copy{0U, 2U, 4U};
+
+  // Act
+  FinalizeShrink(ids_for_copy, shrink_boundary);
+
+  // Assert
+  const auto& ls_ids = lss_.ls_id_set();
+  using LsIdProxy = typename Lss::LsIdSet::value_type;
+  EXPECT_EQ(3U, ls_ids.size());
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{0U}));
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{1U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{2U}));
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{3U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
 }
 
 TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkAllPartialCopyReinsertAllocatesNewId) {
