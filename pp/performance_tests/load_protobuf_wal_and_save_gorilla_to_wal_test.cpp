@@ -59,5 +59,6 @@ void load_protobuf_wal_and_save_gorilla_to_wal::execute(const Config& config, Me
   auto now = std::chrono::steady_clock::now();
 
   metrics << (Metric() << "protobuf_wal_loading_sample_avg_duration_nanoseconds"
-                       << std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / number_of_samples);
+                       << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) /
+                              static_cast<double>(number_of_samples));
 }

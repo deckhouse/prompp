@@ -17,7 +17,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-ci-image:
+    uses: ./.github/workflows/build-ci-image.yaml
+    with:
+      pr_number: ${{ github.event_name == 'pull_request' && format('{0}', github.event.number) || '' }}
+      pr_base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+    secrets: inherit
+
   cpp-tests:
+    needs: build-ci-image
     strategy:
       max-parallel: 2
       matrix:
@@ -50,7 +58,7 @@ jobs:
         if: matrix.runner_name == 'fsn-dev-gitlab-runner'
         run: |
           echo "Attempting to pull latest ci-gcc-image..."
-          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || \
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} || \
             echo "Pull failed, continuing with cached image"
 
       - name: Run Unit Tests
@@ -60,7 +68,7 @@ jobs:
             -w /workspace \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -81,8 +89,11 @@ jobs:
           path: pp/testlogs/*.xml
           retention-days: 7
 
+      - name: Clean test artifacts
+        run: rm -rf pp/testlogs
+
   build-go-bindings:
-    needs: cpp-tests
+    needs: [build-ci-image, cpp-tests]
     strategy:
       max-parallel: 4
       matrix:
@@ -118,7 +129,7 @@ jobs:
             -w /workspace \
             -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
             -e ASAN=${{ matrix.ASAN }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -137,7 +148,7 @@ jobs:
         run: rm -rf pp/go/cppbridge/${{ matrix.arch }}_*
 
   go-tests:
-    needs: build-go-bindings
+    needs: [build-ci-image, build-go-bindings]
     strategy:
       max-parallel: 4
       matrix:
@@ -196,7 +207,7 @@ jobs:
             -e CGO_ENABLED="1" \
             -e GOPATH="${{ github.workspace }}/.cache" \
             -e GOBIN="/usr/local/go/bin" \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 

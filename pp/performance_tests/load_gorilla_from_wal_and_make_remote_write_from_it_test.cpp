@@ -29,5 +29,5 @@ std::chrono::nanoseconds load_gorilla_from_wal_and_make_remote_write_from_it::pr
 }
 
 void load_gorilla_from_wal_and_make_remote_write_from_it::write_metrics(Metrics& metrics) const {
-  metrics << (Metric() << "wal_loading_from_file_and_make_remote_write_duration_microseconds" << (period_.count() / 1000.0));
+  metrics << (Metric() << "wal_loading_from_file_and_make_remote_write_duration_microseconds" << static_cast<double>(period_.count()) / 1000.0);
 }

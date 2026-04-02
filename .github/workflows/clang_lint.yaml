@@ -21,7 +21,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-ci-image:
+    uses: ./.github/workflows/build-ci-image.yaml
+    with:
+      pr_number: ${{ github.event_name == 'pull_request' && format('{0}', github.event.number) || '' }}
+      pr_base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+    secrets: inherit
+
   clang-lint:
+    needs: build-ci-image
     runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
@@ -44,7 +52,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -56,7 +64,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
