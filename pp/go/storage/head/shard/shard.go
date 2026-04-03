@@ -136,9 +136,7 @@ func (s *Shard) ShardID() uint16 {
 
 // WalCommit finalize segment from encoder and write to wal.
 func (s *Shard) WalCommit() error {
-	return s.lss.WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
-		return s.wal.Commit()
-	})
+	return s.wal.Commit()
 }
 
 // WalCurrentSize returns current [Wal] size.

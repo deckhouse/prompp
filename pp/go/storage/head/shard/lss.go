@@ -149,6 +149,16 @@ func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
 	l.locker.RUnlock()
 }
 
+// RLock locks the resource for reading.
+func (l *LSS) RLock() {
+	l.locker.RLock()
+}
+
+// RUnlock unlocks the resource for reading.
+func (l *LSS) RUnlock() {
+	l.locker.RUnlock()
+}
+
 // ResetSnapshot resets the current snapshot. Use only WithLock.
 func (l *LSS) ResetSnapshot() {
 	l.snapshot = nil
