@@ -156,7 +156,7 @@ func (s *RotatorSuite) TestRotate() {
 		mediator,
 		cfg,
 		headInformer,
-		head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyAddedSeries),
+		head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyLSSWithShrink),
 		rotatedTrigger,
 		nil,
 	)
@@ -270,7 +270,7 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 		mediator,
 		cfg,
 		headInformer,
-		head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyAddedSeries),
+		head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyLSSWithShrink),
 		rotatedTrigger,
 		nil,
 	)

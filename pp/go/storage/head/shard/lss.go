@@ -52,7 +52,7 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 func (l *LSS) FinalizeCopyAndShrink() {
 	l.locker.Lock()
 	l.target.FinalizeCopyAndShrink(l.mappedSnapshot, l.oldToNewLsIdsMapping)
-	// TODO: Reset snapshot
+	l.ResetSnapshot()
 	l.locker.Unlock()
 }
 
@@ -65,8 +65,8 @@ func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) 
 	l.locker.Unlock()
 
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
-	destination.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
-	destination.oldToNewLsIdsMapping = cppbridge.LSSInvertCopyMapping(destination.dstSrcLsIdsMapping, shrinkBoundary)
+	l.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
+	l.oldToNewLsIdsMapping = cppbridge.LSSInvertCopyMapping(destination.dstSrcLsIdsMapping, shrinkBoundary)
 }
 
 // Input returns input lss.

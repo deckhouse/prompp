@@ -270,8 +270,9 @@ func CopyAddedSeries(source, destination *Shard) {
 	source.lss.CopyAddedSeriesTo(destination.lss)
 }
 
-// CopyLSS freeze the lss by shrink boundary and copy the added series to the destination lss.
-func CopyLSS(source, destination *Shard) {
+// CopyLSSWithShrink freeze the lss by shrink boundary and copy the added series to the destination lss.
+// Finalize copy and shrink the lss.
+func CopyLSSWithShrink(source, destination *Shard) {
 	source.lss.FreezeAndCopyAddedSeries(destination.lss, source.wal.MaxItemIndex())
 	source.lss.FinalizeCopyAndShrink()
 }
