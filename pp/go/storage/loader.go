@@ -451,7 +451,7 @@ func (l *ShardDataLoader) createShardWal(
 	}
 
 	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-	l.shardData.wal = wal.NewWal(walEncoder, sw, l.maxSegmentSize, l.shardID, l.registerer)
+	l.shardData.wal = wal.NewWal(walEncoder, sw, l.shardData.lss, l.maxSegmentSize, l.shardID, l.registerer)
 
 	return nil
 }
