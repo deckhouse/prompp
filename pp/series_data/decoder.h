@@ -141,7 +141,7 @@ class Decoder {
   }
 
   template <chunk::DataChunk::Type chunk_type, class Callback>
-  static void create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
+  static void create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) {
     using enum EncodingType;
     using decoder::DecodeIteratorSentinel;
 
@@ -194,7 +194,7 @@ class Decoder {
   }
 
   template <class Callback>
-  static void create_decode_iterator(const DataStorage::SeriesChunkIterator::Data& chunk_data, Callback&& callback) noexcept {
+  static void create_decode_iterator(const DataStorage::SeriesChunkIterator::Data& chunk_data, Callback&& callback) {
     using enum chunk::DataChunk::Type;
 
     if (chunk_data.chunk_type() == kOpen) {
@@ -205,7 +205,7 @@ class Decoder {
   }
 
   template <class Callback>
-  static void create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk, Callback&& callback) noexcept {
+  static void create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk, Callback&& callback) {
     using enum EncodingType;
     using BitSequenceWithItemsCount = DataStorage::BitSequenceWithItemsCount;
     using decoder::DecodeIteratorSentinel;
@@ -301,7 +301,7 @@ class Decoder {
   }
 
   template <class Callback>
-  PROMPP_ALWAYS_INLINE static void create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk, Callback&& callback) noexcept {
+  PROMPP_ALWAYS_INLINE static void create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk, Callback&& callback) {
     create_decode_iterator(chunk.buffer(), chunk.chunk(), std::forward<Callback>(callback));
   }
 
