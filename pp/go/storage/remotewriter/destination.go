@@ -261,6 +261,8 @@ type DestinationMetrics struct {
 }
 
 // newDestinationMetrics creates a new [DestinationMetrics].
+//
+//revive:disable-next-line:function-length // constructor
 func newDestinationMetrics(name, ep string) *DestinationMetrics {
 	constLabels := prometheus.Labels{
 		remoteName: name,

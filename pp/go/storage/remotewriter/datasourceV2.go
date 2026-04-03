@@ -31,7 +31,6 @@ type dataSourceActive struct {
 	corruptMarker       CorruptMarker
 	headReleaseFunc     func()
 	shards              []*shard
-	lsses               []*cppbridge.LabelSetStorage
 	nextSegmentID       uint32
 	closed              bool
 
@@ -62,7 +61,6 @@ func newDataSourceActive(
 		corruptMarker:       corruptMarker,
 		headReleaseFunc:     headRecord.Acquire(),
 		shards:              make([]*shard, 0, numberOfShards),
-		lsses:               make([]*cppbridge.LabelSetStorage, 0, numberOfShards),
 		caches:              newCaches[*shard](),
 	}
 
@@ -85,7 +83,6 @@ func newDataSourceActive(
 
 		ds.caches.append(s.decoderStateFile, shardID)
 		ds.shards = append(ds.shards, s)
-		ds.lsses = append(ds.lsses, s.LSS())
 	}
 
 	return ds, nil
@@ -145,9 +142,15 @@ func (ds *dataSourceActive) Init(ctx context.Context, targetSegmentID uint32) er
 	return nil
 }
 
-// LSSes returns the label set storages of the shards.
-func (ds *dataSourceActive) LSSes() []*cppbridge.LabelSetStorage {
-	return ds.lsses
+// LSSSnapshots returns the snapshots of the label set storages,
+// it's used to create message encoders, creating from shard decoder lss snapshots.
+func (ds *dataSourceActive) LSSSnapshots() []*cppbridge.LabelSetSnapshot {
+	snapshots := make([]*cppbridge.LabelSetSnapshot, len(ds.shards))
+	for shardID := range ds.shards {
+		snapshots[shardID] = ds.shards[shardID].LSSSnapshot()
+	}
+
+	return snapshots
 }
 
 // Next checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
@@ -180,7 +183,7 @@ func (ds *dataSourceActive) Next(
 
 // NumberOfLSSes returns the number of label set storages.
 func (ds *dataSourceActive) NumberOfLSSes() int {
-	return len(ds.lsses)
+	return len(ds.shards) // each shard has its own lss
 }
 
 // WriteCaches writes caches to the buffer and sends the signal to write the caches.
@@ -333,7 +336,6 @@ type dataSourceRotated struct {
 	corruptMarker   CorruptMarker
 	headReleaseFunc func()
 	shards          []*shardRotated
-	lsses           []*cppbridge.LabelSetStorage
 	closed          bool
 
 	caches *caches[*shardRotated]
@@ -361,7 +363,6 @@ func newDataSourceRotated(
 		corruptMarker:   corruptMarker,
 		headReleaseFunc: headRecord.Acquire(),
 		shards:          make([]*shardRotated, 0, numberOfShards),
-		lsses:           make([]*cppbridge.LabelSetStorage, 0, numberOfShards),
 		caches:          newCaches[*shardRotated](),
 	}
 
@@ -383,7 +384,6 @@ func newDataSourceRotated(
 		}
 
 		ds.shards = append(ds.shards, s)
-		ds.lsses = append(ds.lsses, s.LSS())
 		ds.caches.append(s.decoderStateFile, shardID)
 	}
 
@@ -438,9 +438,15 @@ func (ds *dataSourceRotated) Init(ctx context.Context, targetSegmentID uint32) e
 	return nil
 }
 
-// LSSes returns the label set storages of the shards.
-func (ds *dataSourceRotated) LSSes() []*cppbridge.LabelSetStorage {
-	return ds.lsses
+// LSSSnapshots returns the snapshots of the label set storages,
+// it's used to create message encoders, creating from shard decoder lss snapshots.
+func (ds *dataSourceRotated) LSSSnapshots() []*cppbridge.LabelSetSnapshot {
+	snapshots := make([]*cppbridge.LabelSetSnapshot, len(ds.shards))
+	for shardID := range ds.shards {
+		snapshots[shardID] = ds.shards[shardID].LSSSnapshot()
+	}
+
+	return snapshots
 }
 
 // Next checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
@@ -473,7 +479,7 @@ func (ds *dataSourceRotated) Next(
 
 // NumberOfLSSes returns the number of label set storages.
 func (ds *dataSourceRotated) NumberOfLSSes() int {
-	return len(ds.lsses)
+	return len(ds.shards) // each shard has its own lss
 }
 
 // WriteCaches writes caches to the buffer and sends the signal to write the caches.

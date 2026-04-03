@@ -240,13 +240,13 @@ func (s *shard) IsCorrupted() bool {
 	return s.corrupted
 }
 
-// LSS returns the [cppbridge.LabelSetStorage] of the [shard].
-func (s *shard) LSS() *cppbridge.LabelSetStorage {
+// LSSSnapshot returns the snapshot of the [cppbridge.LabelSetStorage] of the [shard].
+func (s *shard) LSSSnapshot() *cppbridge.LabelSetSnapshot {
 	if s.decoder == nil {
-		return cppbridge.NewLssStorage()
+		return cppbridge.NewLssStorage().CreateLabelSetSnapshot()
 	}
 
-	return s.decoder.lss
+	return s.decoder.lss.CreateLabelSetSnapshot()
 }
 
 // Read [Segment] from WAL and decode to [DecodedSegment].
@@ -516,13 +516,13 @@ func (s *shardRotated) IsCorrupted() bool {
 	return s.corrupted
 }
 
-// LSS returns the [cppbridge.LabelSetStorage] of the [shardRotated].
-func (s *shardRotated) LSS() *cppbridge.LabelSetStorage {
+// LSSSnapshot returns the snapshot of the [cppbridge.LabelSetStorage] of the [shardRotated].
+func (s *shardRotated) LSSSnapshot() *cppbridge.LabelSetSnapshot {
 	if s.decoder == nil {
-		return cppbridge.NewLssStorage()
+		return cppbridge.NewLssStorage().CreateLabelSetSnapshot()
 	}
 
-	return s.decoder.lss
+	return s.decoder.lss.CreateLabelSetSnapshot()
 }
 
 // ReadSegment reads [DecodedSegment] from wal.

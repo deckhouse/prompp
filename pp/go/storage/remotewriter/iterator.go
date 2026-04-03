@@ -35,8 +35,9 @@ type DataSourceV2 interface {
 	// Init it initializes the data source by reading segments from shards until the required number is reached.
 	Init(ctx context.Context, targetSegmentID uint32) error
 
-	// LSSes returns the label set storages of the shards.
-	LSSes() []*cppbridge.LabelSetStorage
+	// LSSSnapshots returns the snapshots of the label set storages,
+	// it's used to create message encoders, creating from shard decoder lss snapshots.
+	LSSSnapshots() []*cppbridge.LabelSetSnapshot
 
 	// Next checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
 	Next(
@@ -44,9 +45,6 @@ type DataSourceV2 interface {
 		minTimestamp int64,
 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 	) ([]*DecodedSegment, error)
-
-	// LSSSnapshots returns the snapshots of the label set storages.
-	LSSSnapshots() []*cppbridge.LabelSetSnapshot
 
 	// NumberOfLSSes returns the number of label set storages.
 	NumberOfLSSes() int
@@ -184,7 +182,7 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) (*batch, error) {
+func (i *Iterator) Next(ctx context.Context) (*batch, error) { //revive:disable-line:unexported-return
 	if i.endOfBlockReached {
 		return nil, i.wrapError(nil)
 	}
@@ -282,8 +280,14 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 	}(i.clock.Now())
 
 	encodersCount := b.numberOfShards
-	messages := b.segmentSampleStorages.SplitMessages(uint32(b.maxNumberOfSamplesPerShard), b.targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), b.snapshots)
+	messages := b.segmentSampleStorages.SplitMessages(
+		uint32(b.maxNumberOfSamplesPerShard), // #nosec G115 // no overflow
+		b.TargetSegmentID(),
+	)
+	encoders := cppbridge.NewMessageEncoders(
+		uint64(encodersCount), // #nosec G115 // no overflow
+		b.snapshots,
+	)
 
 	messagesCount := len(messages.Messages)
 	messagesPerEncoder := messagesCount / encodersCount
@@ -304,7 +308,12 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 		go func(encoderIndex, messageIndex, encodeCount int) {
 			defer wg.Done()
 
-			encoders.Encode(encoderIndex, uint64(messageIndex), uint64(encodeCount), messages.Messages)
+			encoders.Encode(
+				encoderIndex,
+				uint64(messageIndex), // #nosec G115 // no overflow
+				uint64(encodeCount),  // #nosec G115 // no overflow
+				messages.Messages,
+			)
 		}(encoderIndex, messageIndex, encodeCount)
 
 		messageIndex += encodeCount
@@ -452,7 +461,6 @@ func (i *Iterator) Close() error {
 
 // batch is a accumulate samples from decoded segments.
 type batch struct {
-	segments                   []*DecodedSegment
 	snapshots                  []*cppbridge.LabelSetSnapshot
 	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
@@ -535,4 +543,9 @@ func (b *batch) MaxNumberOfSamplesPerShard() int {
 // NumberOfShards the number of shards.
 func (b *batch) NumberOfShards() int {
 	return b.numberOfShards
+}
+
+// TargetSegmentID the target segment id.
+func (b *batch) TargetSegmentID() uint32 {
+	return b.targetSegmentID
 }

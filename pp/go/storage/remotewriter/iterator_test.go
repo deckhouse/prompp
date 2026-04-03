@@ -123,11 +123,16 @@ func (s *IteratorSuite) TestHappyPathV1() {
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(it.Close()) }()
 
-	msg, err := it.Next(baseCtx)
+	b, err := it.Next(baseCtx)
 	s.Require().NoError(err)
+	s.Require().NotNil(b)
+	s.Require().Equal(int(numberOfSegments), b.NumberOfSamples())
+	s.Require().Equal(numberOfSegments/2, b.TargetSegmentID())
+
+	msg := it.EncodeBatch(b)
 	s.Require().NotNil(msg)
-	s.Require().Equal(startTimestamp+int64(numberOfSegments-1), msg.MaxTimestamp)
 	s.Require().Equal(uint64(numberOfSegments), msg.NumberOfSamples())
+	s.Require().Equal(startTimestamp+int64(numberOfSegments-1), msg.MaxTimestamp)
 	s.Require().Equal(numberOfSegments/2, msg.TargetSegmentID)
 
 	err = it.SendMessage(baseCtx, msg)
@@ -226,12 +231,17 @@ func (s *IteratorSuite) TestHappyPathV2() {
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(it.Close()) }()
 
-	msg, err := it.Next(baseCtx)
+	b, err := it.Next(baseCtx)
 	s.Require().NoError(err)
+	s.Require().NotNil(b)
+	s.Require().Equal(uint64(numberOfSegments), b.NumberOfSamples())
+	s.Require().Equal(numberOfSegments/2, b.TargetSegmentID())
+
+	msg := it.EncodeBatch(b)
 	s.Require().NotNil(msg)
-	s.Require().Equal(startTimestamp+int64(numberOfSegments-1), msg.MaxTimestamp)
 	s.Require().Equal(uint64(numberOfSegments), msg.NumberOfSamples())
-	s.Require().Equal(numberOfSegments, msg.TargetSegmentID)
+	s.Require().Equal(startTimestamp+int64(numberOfSegments-1), msg.MaxTimestamp)
+	s.Require().Equal(numberOfSegments/2, msg.TargetSegmentID)
 
 	err = it.SendMessage(baseCtx, msg)
 	s.Require().NoError(err)
