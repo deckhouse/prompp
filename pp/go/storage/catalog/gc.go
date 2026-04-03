@@ -11,6 +11,7 @@ import (
 )
 
 // defaultCorruptedHeadRetentionPeriod is the default retention period for corrupted heads.
+// Used only when maxRetentionPeriod is zero.
 const defaultCorruptedHeadRetentionPeriod = 15 * 24 * time.Hour
 
 //
@@ -111,7 +112,7 @@ func (gc *GC) Iterate() {
 		}
 
 		if err := os.RemoveAll(filepath.Join(gc.dataDir, record.Dir())); err != nil {
-			logger.Errorf("failed to remote head dir: %w", err)
+			logger.Errorf("failed to remove head dir: %w", err)
 			return
 		}
 
