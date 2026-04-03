@@ -141,6 +141,9 @@ func LoadFile(filename string, agentMode, expandExternalLabels bool, logger log.
 	return cfg, nil
 }
 
+// DefaultGoGC is the default Go garbage collection target percentage.
+const DefaultGoGC = 30
+
 // The defaults applied before parsing the respective config sections.
 var (
 	// DefaultConfig is the default top-level configuration.
@@ -161,7 +164,7 @@ var (
 
 	DefaultRuntimeConfig = RuntimeConfig{
 		// Go runtime tuning.
-		GoGC: 75,
+		GoGC: DefaultGoGC,
 	}
 
 	// DefaultScrapeConfig is the default scrape configuration.
