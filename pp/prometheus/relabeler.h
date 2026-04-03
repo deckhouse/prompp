@@ -446,8 +446,8 @@ class PerShardRelabeler {
         }
 
         if (inner_serie.ls_id >= lss.max_item_index()) [[unlikely]] {
-          throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d max_item_index: %d shard_id: %d", inner_serie.ls_id,
-                                     lss.max_item_index(), shard_id_);
+          throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d max_item_index: %d shard_id: %d", inner_serie.ls_id, lss.max_item_index(),
+                                     shard_id_);
         }
         builder_.reset(lss[inner_serie.ls_id]);
         process_external_labels(builder_, external_labels_);

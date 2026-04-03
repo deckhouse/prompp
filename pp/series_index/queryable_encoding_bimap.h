@@ -300,9 +300,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept {
-    return shift_ == 0 && pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet;
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept { return shift_ == 0 && pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shift_ > 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shift_ == 0 && pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet; }
 
@@ -494,8 +492,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     const uint32_t max_logical_id = max_item_index_impl();
     for (const auto& logical_id_proxy : ls_id_hash_set_) {
       const auto logical_id = static_cast<uint32_t>(logical_id_proxy);
-      const bool is_visible = logical_id < shift_ ? (logical_id < mapping_size && post_shrink_mapping_[logical_id] != Base::kInvalidId)
-                                                  : (logical_id < max_logical_id);
+      const bool is_visible =
+          logical_id < shift_ ? (logical_id < mapping_size && post_shrink_mapping_[logical_id] != Base::kInvalidId) : (logical_id < max_logical_id);
       if (!is_visible) [[unlikely]] {
         stale_logical_ids.emplace_back(logical_id);
         continue;
