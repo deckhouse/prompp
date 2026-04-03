@@ -2,8 +2,7 @@
 
 #include <variant>
 
-#include "prometheus/promql/function_names_hash.h"
-#include "prometheus/query.h"
+#include "prometheus/promql/window_function.h"
 #include "series_data/decoder/decorator/changes_iterator.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
@@ -101,54 +100,50 @@ class DecodeIterator {
 };
 
 struct SelectHints {
-  std::string func;
   ::series_data::decoder::decorator::WindowFunctionParameters function_parameters;
+  PromPP::Prometheus::promql::WindowFunction window_function{PromPP::Prometheus::promql::WindowFunction::kNone};
 };
-
-constexpr uint32_t promql_function_name_hash(std::string_view str) {
-  return PromPP::Prometheus::promql::FunctionNamesHash::hash(str.data(), str.length());
-}
 
 PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& select_hints, PromPP::Primitives::Timestamp downsampling_ms) {
   if (downsampling_ms != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
     return DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, downsampling_ms);
   }
-  if (select_hints.func.empty()) [[likely]] {
-    return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
+
+  switch (select_hints.window_function) {
+    using enum PromPP::Prometheus::promql::WindowFunction;
+
+    case kRate:
+    case kIncrease:
+      return DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, select_hints.function_parameters);
+
+    case kIrate:
+    case kIdelta:
+      return DecodeIterator(std::in_place_type<DecodeIterator::IRateIterator>, select_hints.function_parameters);
+
+    case kMinOverTime:
+      return DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, select_hints.function_parameters);
+
+    case kMaxOverTime:
+      return DecodeIterator(std::in_place_type<DecodeIterator::MaxOverTimeIterator>, select_hints.function_parameters);
+
+    case kLastOverTime:
+      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, select_hints.function_parameters);
+
+    case kSumOverTime:
+      return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, select_hints.function_parameters);
+
+    case kDelta:
+      return DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, select_hints.function_parameters);
+
+    case kResets:
+      return DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, select_hints.function_parameters);
+
+    case kChanges:
+      return DecodeIterator(std::in_place_type<DecodeIterator::ChangesIterator>, select_hints.function_parameters);
+
+    default:
+      return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
   }
-
-#define CASE(function_name, iterator_type)                                                      \
-  case promql_function_name_hash(function_name): {                                              \
-    if (select_hints.func != function_name) [[unlikely]] {                                      \
-      break;                                                                                    \
-    }                                                                                           \
-    return DecodeIterator(std::in_place_type<iterator_type>, select_hints.function_parameters); \
-  }
-
-  switch (promql_function_name_hash(select_hints.func)) {
-    CASE("rate", DecodeIterator::RateIterator)
-    CASE("increase", DecodeIterator::RateIterator)
-
-    CASE("irate", DecodeIterator::IRateIterator)
-    CASE("idelta", DecodeIterator::IRateIterator)
-
-    CASE("min_over_time", DecodeIterator::MinOverTimeIterator)
-    CASE("max_over_time", DecodeIterator::MaxOverTimeIterator)
-    CASE("last_over_time", DecodeIterator::LastOverTimeIterator)
-    CASE("sum_over_time", DecodeIterator::SumOverTimeIterator)
-
-    CASE("delta", DecodeIterator::DeltaIterator)
-
-    CASE("resets", DecodeIterator::ResetsIterator)
-
-    CASE("changes", DecodeIterator::ChangesIterator)
-
-    default:;
-  }
-
-#undef CASE
-
-  return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
 }
 
 }  // namespace entrypoint::series_data

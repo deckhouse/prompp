@@ -2,6 +2,7 @@
 
 #include "bare_bones/bitset.h"
 #include "entrypoint/go_constants.h"
+#include "entrypoint/series_data/decode_iterator.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "series_data/querier/instant_querier.h"
@@ -70,8 +71,10 @@ class RangeQuerierWithArgumentsWrapperV2 {
                                      const GoSelectHints& hints,
                                      SerializedDataPtr* serialized_data,
                                      PromPP::Primitives::Timestamp downsampling_ms)
-      : select_hints_{.func = std::string(static_cast<std::string_view>(hints.func)),
-                      .function_parameters = {.interval = hints.interval, .step = hints.step_ms, .range = hints.range_ms}},
+      : select_hints_{
+            .function_parameters = {.interval = hints.interval, .step = hints.step_ms, .range = hints.range_ms},
+            .window_function = PromPP::Prometheus::promql::window_function_from_string(static_cast<std::string_view>(hints.func)),
+        },
         querier_(storage),
         query_(&query),
         serialized_data_(serialized_data),
