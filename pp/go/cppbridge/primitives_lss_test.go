@@ -540,12 +540,11 @@ func (s *RotateLSSSuite) TestCopyOnRotateCheckQueryOnOldSnapshot() {
 	s.lss.SetPendingShrinkBoundary(shrinkBoundary)
 	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(s.lss.BitsetSeries(), newLSS)
 	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
-	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
 
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 
-	s.lss.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+	s.lss.FinalizeCopyAndShrink(mappedSnapshot, dstSrcLsIdsMapping)
 
 	// Assert
 	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
@@ -559,7 +558,6 @@ func (s *RotateLSSSuite) TestCopyOnRotateCheckQueryOnOldSnapshot() {
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(dstSrcLsIdsMapping)
 	runtime.KeepAlive(mappedSnapshot)
-	runtime.KeepAlive(oldToNewLsIdsMapping)
 }
 
 func (s *RotateLSSSuite) TestCheckQueryOnFreezeLSS() {
@@ -783,13 +781,12 @@ func (s *RotateLSSSuite) TestCopyOnRotateShrinkAndEmplacePart() {
 	rLSS.oldLSS.SetPendingShrinkBoundary(shrinkBoundary)
 	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(rLSS.oldLSS.BitsetSeries(), newLSS)
 	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
-	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
 
 	// add ls before finalize copy and shrink
 	lsNew1 := model.LabelSetFromPairs("__name__", "kek1")
 	lsIDNew1 := rLSS.oldLSS.FindOrEmplace(lsNew1).LabelSetID
 
-	rLSS.oldLSS.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+	rLSS.oldLSS.FinalizeCopyAndShrink(mappedSnapshot, dstSrcLsIdsMapping)
 
 	lsNew2 := model.LabelSetFromPairs("__name__", "kek2")
 	lsIDNew2 := rLSS.oldLSS.FindOrEmplace(lsNew2).LabelSetID
@@ -817,15 +814,13 @@ func (s *RotateLSSSuite) TestCopyOnRotateShrinkAndEmplacePart() {
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(dstSrcLsIdsMapping)
 	runtime.KeepAlive(mappedSnapshot)
-	runtime.KeepAlive(oldToNewLsIdsMapping)
 }
 
 // rotateResult is a helper struct for testing rotated LSS.
-// It contains the dstSrcLsIdsMapping, the mappedSnapshot, and the oldToNewLsIdsMapping.
+// It contains the dstSrcLsIdsMapping and the mappedSnapshot.
 type rotateResult struct {
-	dstSrcLsIdsMapping   *cppbridge.IdsMapping
-	mappedSnapshot       *cppbridge.LabelSetSnapshot
-	oldToNewLsIdsMapping *cppbridge.IdsMapping
+	dstSrcLsIdsMapping *cppbridge.IdsMapping
+	mappedSnapshot     *cppbridge.LabelSetSnapshot
 }
 
 // rotate performs a rotate operation on the old LSS and returns a rotateResult.
@@ -835,13 +830,11 @@ func (s *RotateLSSSuite) rotate(shrinkBoundary uint32, oldLSS, newLSS *cppbridge
 	oldLSS.SetPendingShrinkBoundary(shrinkBoundary)
 	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(oldLSS.BitsetSeries(), newLSS)
 	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
-	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
-	oldLSS.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+	oldLSS.FinalizeCopyAndShrink(mappedSnapshot, dstSrcLsIdsMapping)
 
 	return &rotateResult{
-		dstSrcLsIdsMapping:   dstSrcLsIdsMapping,
-		mappedSnapshot:       mappedSnapshot,
-		oldToNewLsIdsMapping: oldToNewLsIdsMapping,
+		dstSrcLsIdsMapping: dstSrcLsIdsMapping,
+		mappedSnapshot:     mappedSnapshot,
 	}
 }
 

@@ -304,21 +304,6 @@ extern "C" void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source
   copier.copy_added_series_and_build_indexes();
 }
 
-extern "C" void prompp_primitives_lss_invert_copy_mapping(void* args, void* res) {
-  struct Arguments {
-    LsIdsSlicePtr new_to_old;
-    uint32_t shrink_boundary;
-  };
-  struct Result {
-    LsIdsSlicePtr old_to_new_out;
-  };
-
-  const auto* in = static_cast<const Arguments*>(args);
-  auto out = new (res) Result{.old_to_new_out = std::make_unique<LsIdsSlice>()};
-
-  series_index::invert_copy_mapping(*in->new_to_old, in->shrink_boundary, *out->old_to_new_out);
-}
-
 extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {
   struct Arguments {
     LssVariantPtr lss;
@@ -333,12 +318,12 @@ extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
   struct Arguments {
     LssVariantPtr lss;
     SnapshotLSSVariantPtr resolve_snapshot;
-    LsIdsSlicePtr old_to_new_mapping;
+    LsIdsSlicePtr new_to_old_mapping;
   };
   const auto* in = static_cast<const Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
   auto& resolve_snapshot = std::get<entrypoint::head::SnapshotLSS>(*in->resolve_snapshot);
-  lss.finalize_copy_and_shrink(resolve_snapshot, *in->old_to_new_mapping);
+  lss.finalize_copy_and_shrink(resolve_snapshot, *in->new_to_old_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {

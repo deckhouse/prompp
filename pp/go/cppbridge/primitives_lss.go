@@ -75,14 +75,12 @@ func (lss *LabelSetStorage) BitsetSeries() *BitsetSeries {
 
 // FinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
 // Attention: works only with QueryableEncodingBimap type of LSS.
-// Attention: resolveSnapshot is readonly snapshot to resolve ids with mapping,
-// oldToNewMapping is mapping of old (lss) ids to new (resolve_snapshot) ids
-// - they must be kept in the go along with the LSS.
-func (lss *LabelSetStorage) FinalizeCopyAndShrink(resolveSnapshot *LabelSetSnapshot, oldToNewMapping *IdsMapping) {
-	primitivesLSSFinalizeCopyAndShrink(lss.pointer, resolveSnapshot.pointer, oldToNewMapping.pointer)
+// newToOldMapping is the copier output (new id in copy -> old id in source); C++ inverts it and stores old->new in the LSS.
+func (lss *LabelSetStorage) FinalizeCopyAndShrink(resolveSnapshot *LabelSetSnapshot, newToOldMapping *IdsMapping) {
+	primitivesLSSFinalizeCopyAndShrink(lss.pointer, resolveSnapshot.pointer, newToOldMapping.pointer)
 	runtime.KeepAlive(lss)
 	runtime.KeepAlive(resolveSnapshot)
-	runtime.KeepAlive(oldToNewMapping)
+	runtime.KeepAlive(newToOldMapping)
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
@@ -250,20 +248,4 @@ func newBitsetSeriesFromPointer(bitsetSeriesPointer uintptr) *BitsetSeries {
 	})
 
 	return bitsetSeries
-}
-
-// LSSInvertCopyMapping builds old_id -> new_id mapping from copier new_to_old output.
-func LSSInvertCopyMapping(newToOld *IdsMapping, shrinkBoundary uint32) *IdsMapping {
-	idsMapping := &IdsMapping{
-		pointer:           primitivesLSSInvertCopyMapping(newToOld.pointer, shrinkBoundary),
-		gcDestroyDetector: &gcDestroyDetector,
-	}
-
-	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
-		primitivesFreeLsIdsMapping(idsMapping.pointer)
-	})
-
-	runtime.KeepAlive(newToOld)
-
-	return idsMapping
 }

@@ -229,20 +229,6 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
- * @brief Build old_id -> new_id mapping from copier new_to_old output.
- *
- * @param args {
- *     new_to_old       uintptr   // ls id `new -> old` mapping
- *     shrink_boundary  uint32_t  //  boundary
- * }
- *
- * @param res {
- *     old_to_new_out   uintptr   // ls id `old -> new` mapping to fill
- * }
- */
-void prompp_primitives_lss_invert_copy_mapping(void* args, void* res);
-
-/**
  * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
  *
  * @param args {
@@ -258,7 +244,7 @@ void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
  * @param args {
  *     lss                uintptr  // pointer to source queryable lss;
  *     resolve_snapshot   uintptr  // pointer to snapshot lss for resolving ids with mapping;
- *     old_to_new_mapping uintptr  // pointer to ls id `old (lss) -> new (resolve_snapshot)` mapping
+ *     new_to_old_mapping uintptr  // pointer to ls id `new (copy) -> old (source)` mapping from copier
  * }
  */
 void prompp_primitives_lss_finalize_copy_and_shrink(void* args);

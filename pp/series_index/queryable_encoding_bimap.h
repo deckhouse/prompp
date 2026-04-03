@@ -64,7 +64,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return trie_index_.allocated_memory() + reverse_index_.allocated_memory() + ls_id_set_allocated_memory_ + ls_id_hash_set_allocated_memory_ +
-           sorting_index_.allocated_memory() + Base::allocated_memory();
+           sorting_index_.allocated_memory() + post_shrink_mapping_.allocated_memory() + Base::allocated_memory();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
@@ -102,8 +102,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   template <class Snapshot>
-  void finalize_copy_and_shrink(const Snapshot& snapshot, BareBones::Vector<uint32_t>& old_to_new_mapping) {
-    finalize_copy_and_shrink(make_post_shrink_snapshot_access(snapshot), old_to_new_mapping);
+  void finalize_copy_and_shrink(const Snapshot& snapshot, const BareBones::Vector<uint32_t>& new_to_old_mapping) {
+    finalize_copy_and_shrink(make_post_shrink_snapshot_access(snapshot), new_to_old_mapping);
   }
 
   template <class Callback>
@@ -118,7 +118,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed_for_export() const noexcept { return is_fixed(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t shift_for_export() const noexcept { return shift_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t pending_shrink_boundary_for_export() const noexcept { return pending_shrink_boundary_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint32_t> post_shrink_mapping_for_export() const noexcept { return post_shrink_mapping_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint32_t> post_shrink_mapping_for_export() const noexcept {
+    return std::span<const uint32_t>(post_shrink_mapping_.data(), post_shrink_mapping_.size());
+  }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const PostShrinkSnapshotAccess& post_shrink_snapshot_access_for_export() const noexcept {
     return post_shrink_snapshot_access_;
   }
@@ -219,14 +221,28 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   BareBones::Bitset added_series_;
 
-  void finalize_copy_and_shrink(PostShrinkSnapshotAccess snapshot_access, BareBones::Vector<uint32_t>& old_to_new_mapping) {
-    // old_to_new_mapping must outlive the shrunk state because post_shrink_mapping_ is a non-owning view.
+  void finalize_copy_and_shrink(PostShrinkSnapshotAccess snapshot_access, const BareBones::Vector<uint32_t>& new_to_old_mapping) {
     assert(snapshot_access.composite_resolve && snapshot_access.symbol_resolve);
-    assert(pending_shrink_boundary_ <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
+    assert(pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet);
+    assert(pending_shrink_boundary_ <= next_item_index_impl());
 
-    post_shrink_mapping_ = std::span<const uint32_t>(old_to_new_mapping.data(), old_to_new_mapping.size());
+    invert_copy_mapping(new_to_old_mapping);
     post_shrink_snapshot_access_ = std::move(snapshot_access);
     shrink_to_boundary(pending_shrink_boundary_);
+  }
+
+  void invert_copy_mapping(const BareBones::Vector<uint32_t>& new_to_old) {
+    post_shrink_mapping_.clear();
+    post_shrink_mapping_.resize(pending_shrink_boundary_);
+
+    std::fill(post_shrink_mapping_.begin(), post_shrink_mapping_.end(), BareBones::SnugComposite::kInvalidLsId);
+
+    for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
+      const uint32_t old_id = new_to_old[new_id];
+      if (old_id < post_shrink_mapping_.size()) [[likely]] {
+        post_shrink_mapping_[old_id] = static_cast<uint32_t>(new_id);
+      }
+    }
   }
 
   template <class Snapshot>
@@ -461,7 +477,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   uint32_t shift_{0};
   uint32_t pending_shrink_boundary_{kPendingShrinkBoundaryNotSet};
-  std::span<const uint32_t> post_shrink_mapping_{};
+  BareBones::Vector<uint32_t> post_shrink_mapping_{};
   PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 
   void prune_hidden_series_from_hashset_in_fixed_state() noexcept {
@@ -641,20 +657,5 @@ class QueryableEncodingBimapCopier {
   QueryableEncodingBimap& destination_;
   LsIdVector& dst_src_ids_mapping_;
 };
-
-template <class NewToOldContainer>
-PROMPP_ALWAYS_INLINE void invert_copy_mapping(const NewToOldContainer& new_to_old, uint32_t max_lsid, BareBones::Vector<uint32_t>& old_to_new_out) {
-  old_to_new_out.clear();
-  old_to_new_out.resize(max_lsid);
-
-  std::fill(old_to_new_out.begin(), old_to_new_out.end(), BareBones::SnugComposite::kInvalidLsId);
-
-  for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
-    const uint32_t old_id = static_cast<uint32_t>(new_to_old[new_id]);
-    if (old_id < old_to_new_out.size()) [[likely]] {
-      old_to_new_out[old_id] = static_cast<uint32_t>(new_id);
-    }
-  }
-}
 
 }  // namespace series_index

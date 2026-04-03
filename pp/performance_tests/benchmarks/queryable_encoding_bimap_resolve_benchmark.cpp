@@ -71,7 +71,6 @@ std::shared_ptr<Lss> get_lss_fixed_state() {
 struct ShrunkState {
   std::shared_ptr<Lss> lss;
   std::unique_ptr<Lss> copy;
-  BareBones::Vector<uint32_t> old_to_new;
 };
 
 std::shared_ptr<Lss> get_lss_after_shrink() {
@@ -97,9 +96,8 @@ std::shared_ptr<Lss> get_lss_after_shrink() {
     LssCopier copier(lss, lss.sorting_index(), lss.added_series(), *s->copy, dst_src_ids_mapping);
     copier.copy_added_series_and_build_indexes();
 
-    series_index::invert_copy_mapping(dst_src_ids_mapping, copy_count, s->old_to_new);
     lss.set_pending_shrink_boundary(shrink_boundary);
-    lss.finalize_copy_and_shrink(*s->copy, s->old_to_new);
+    lss.finalize_copy_and_shrink(*s->copy, dst_src_ids_mapping);
     return s;
   }();
   return state->lss;

@@ -15,7 +15,6 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
-using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::IndexWriter;
@@ -33,7 +32,6 @@ class IndexWriterShrunkFixture : public testing::Test {
   Lss normal_lss_;
   Lss shrunk_lss_;
   std::unique_ptr<Lss> snapshot_copy_;
-  BareBones::Vector<uint32_t> old_to_new_;
 
   void SetUp() override {
     normal_lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "localhost"}});
@@ -54,9 +52,8 @@ class IndexWriterShrunkFixture : public testing::Test {
         shrunk_lss_, shrunk_lss_.sorting_index(), shrunk_lss_.added_series(), *snapshot_copy_, dst_src_ids_mapping);
     copier.copy_added_series_and_build_indexes();
 
-    invert_copy_mapping(dst_src_ids_mapping, shrink_boundary, old_to_new_);
     shrunk_lss_.set_pending_shrink_boundary(shrink_boundary);
-    shrunk_lss_.finalize_copy_and_shrink(*snapshot_copy_, old_to_new_);
+    shrunk_lss_.finalize_copy_and_shrink(*snapshot_copy_, dst_src_ids_mapping);
   }
 
   static std::string write_index(const Lss& lss) {

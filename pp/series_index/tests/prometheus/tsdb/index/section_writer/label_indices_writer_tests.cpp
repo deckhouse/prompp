@@ -14,7 +14,6 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
-using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::section_writer::LabelIndicesWriter;
@@ -136,10 +135,8 @@ TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   Copier<Lss, decltype(lss_.sorting_index()), decltype(lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(
       lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping, shrink_boundary, old_to_new);
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping);
   const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
   LabelIndicesWriter<Lss, decltype(stream_)> label_indices_writer{lss_, stream_writer_};
   label_indices_writer.set_index_write_context(&index_write_context);

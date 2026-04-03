@@ -15,7 +15,7 @@ type LSS struct {
 	target               *cppbridge.LabelSetStorage
 	snapshot             *cppbridge.LabelSetSnapshot
 	dstSrcLsIdsMapping   *cppbridge.IdsMapping
-	oldToNewLsIdsMapping *cppbridge.IdsMapping
+	newToOldLsIdsMapping *cppbridge.IdsMapping
 	mappedSnapshot       *cppbridge.LabelSetSnapshot
 	locker               sync.RWMutex
 	once                 sync.Once
@@ -51,7 +51,8 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 // FinalizeCopyAndShrink finalize copy and shrink the lss.
 func (l *LSS) FinalizeCopyAndShrink() {
 	l.locker.Lock()
-	l.target.FinalizeCopyAndShrink(l.mappedSnapshot, l.oldToNewLsIdsMapping)
+	l.target.FinalizeCopyAndShrink(l.mappedSnapshot, l.newToOldLsIdsMapping)
+	l.newToOldLsIdsMapping = nil
 	l.ResetSnapshot()
 	l.locker.Unlock()
 }
@@ -66,7 +67,7 @@ func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) 
 
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
 	l.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
-	l.oldToNewLsIdsMapping = cppbridge.LSSInvertCopyMapping(destination.dstSrcLsIdsMapping, shrinkBoundary)
+	l.newToOldLsIdsMapping = destination.dstSrcLsIdsMapping
 }
 
 // Input returns input lss.

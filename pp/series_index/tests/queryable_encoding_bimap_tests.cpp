@@ -9,7 +9,6 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
-using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
@@ -415,48 +414,16 @@ TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopyInsertAfterCopyBuildsIndex
   EXPECT_TRUE(lss_copy_of_copy.trie_index().names_trie().lookup("server"));
 }
 
-TEST_F(QueryableEncodingBimapCopierFixture, CopyMappingSize) {
-  // Arrange
-  lss_.find_or_emplace(LabelViewSet{{"job", "a"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "b"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "c"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "d"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "e"}});
-  lss_.build_deferred_indexes();
-
-  const uint32_t max_lsid = lss_.max_item_index();
-  Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
-  copier.copy_added_series_and_build_indexes();
-
-  BareBones::Vector<uint32_t> old_to_new;
-
-  // Act
-  invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
-
-  // Assert
-  EXPECT_EQ(max_lsid, old_to_new.size());
-  EXPECT_EQ(0U, old_to_new[dst_src_ids_mapping_[0]]);
-  EXPECT_EQ(1U, old_to_new[dst_src_ids_mapping_[1]]);
-  EXPECT_EQ(2U, old_to_new[dst_src_ids_mapping_[2]]);
-  EXPECT_EQ(3U, old_to_new[dst_src_ids_mapping_[3]]);
-  EXPECT_EQ(4U, old_to_new[dst_src_ids_mapping_[4]]);
-}
-
 TEST_F(QueryableEncodingBimapShrinkFixture, ShrinkResolveViaMapping) {
   // Arrange
   const uint32_t shrink_boundary = lss_.max_item_index();
-  const uint32_t max_lsid = shrink_boundary;
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
 
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
-
   // Act
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
 
   // Assert
   EXPECT_EQ(ls1_, lss_[0]);
@@ -471,12 +438,10 @@ TEST_F(QueryableEncodingBimapShrinkFixture, ShrunkStateSeriesCountIncludesMapped
   const BareBones::Vector ids_for_copy{0U, 2U};
   Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
 
   // Act
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
 
   // Assert
   EXPECT_EQ(2U, lss_.series_count());
@@ -496,12 +461,9 @@ TEST_F(QueryableEncodingBimapCopierFixture, IndicesKeptAfterShrink) {
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
 
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
-
   // Act
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
 
   // Assert
   EXPECT_TRUE(lss_.trie_index().names_trie().lookup("job"));
@@ -513,18 +475,14 @@ TEST_F(QueryableEncodingBimapCopierFixture, IndicesKeptAfterShrink) {
 TEST_F(QueryableEncodingBimapShrinkFixture, FinalizeReturnsEmptyForUnmappedSeries) {
   // Arrange
   const uint32_t shrink_boundary = lss_.max_item_index();
-  const uint32_t max_lsid = shrink_boundary;
   Lss lss_copy;
   const BareBones::Vector ids_for_copy{0U, 2U};
   Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
 
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
-
   // Act
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
 
   // Assert
   EXPECT_EQ(ls1_, lss_[0]);
@@ -591,8 +549,6 @@ class QueryableEncodingBimapFiveSeriesFixture : public QueryableEncodingBimapCop
   LabelViewSet ls5_{{"job", "e"}};
   LabelViewSet ls6_{{"job", "f"}};
   Lss lss_copy_;
-  // finalize_copy_and_shrink stores a non-owning view, so mapping must outlive shrunk-state usage.
-  BareBones::Vector<uint32_t> old_to_new_;
 
   void SetUp() override {
     QueryableEncodingBimapCopierFixture::SetUp();
@@ -610,9 +566,8 @@ class QueryableEncodingBimapFiveSeriesFixture : public QueryableEncodingBimapCop
     Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
     copier.copy_added_series_and_build_indexes();
 
-    invert_copy_mapping(dst_src_ids_mapping_, lss_.max_item_index(), old_to_new_);
     lss_.set_pending_shrink_boundary(shrink_boundary);
-    lss_.finalize_copy_and_shrink(lss_copy_, old_to_new_);
+    lss_.finalize_copy_and_shrink(lss_copy_, dst_src_ids_mapping_);
   }
 };
 
@@ -973,8 +928,6 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
   LabelViewSet ls1_{{"job", "a"}};
   LabelViewSet ls2_{{"job", "b"}};
   Lss lss_copy_;
-  // Keep mapping in fixture lifetime because QEB references it via std::span after finalize_copy_and_shrink.
-  BareBones::Vector<uint32_t> old_to_new_;
 
   void SetUp() override {
     QueryableEncodingBimapCopierFixture::SetUp();
@@ -987,9 +940,8 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
     const uint32_t shrink_boundary = lss_.max_item_index();
     Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
     copier.copy_added_series_and_build_indexes();
-    invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new_);
     lss_.set_pending_shrink_boundary(shrink_boundary);
-    lss_.finalize_copy_and_shrink(lss_copy_, old_to_new_);
+    lss_.finalize_copy_and_shrink(lss_copy_, dst_src_ids_mapping_);
   }
 };
 
@@ -1004,7 +956,7 @@ TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshotP
   EXPECT_TRUE(std::ranges::equal(ls2_, lss_[1]));
 }
 
-TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkMappingOwnedByFixtureRemainsResolvable) {
+TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkMappedSeriesRemainResolvable) {
   // Arrange
   RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
 
@@ -1059,10 +1011,8 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextDeduplicatesSymbols
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
 
   // Act
   const auto ctx = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
@@ -1079,10 +1029,8 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextResolvesSeriesRefsW
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
-  BareBones::Vector<uint32_t> old_to_new;
-  invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, old_to_new);
+  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
   const auto ctx = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
 
   // Act
