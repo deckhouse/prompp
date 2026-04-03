@@ -439,7 +439,7 @@ func (s *HeadLoadSuite) TestLoadWalV2() {
 	).Load(rec, 0)
 	s.Require().NoError(err)
 	s.Require().NoError(h.Close())
-	s.Require().Equal(uint16(0), rec.GetShardBySegmentID(encodedSegment.ID()))
+	s.Require().Equal(uint16(math.MaxUint16), rec.GetShardBySegmentID(encodedSegment.ID()))
 }
 
 type EnsureSameErrorTypesTestSuite struct {
