@@ -30,9 +30,9 @@ type CGOGC struct {
 	done        chan struct{}
 	// stat
 	memoryThreshold prometheus.Gauge
-	memoryInUse       prometheus.Gauge
-	memoryAllocated   prometheus.Gauge
-	memoryResident    prometheus.Gauge
+	memoryInUse     prometheus.Gauge
+	memoryAllocated prometheus.Gauge
+	memoryResident  prometheus.Gauge
 	cGoGCCount      prometheus.Counter
 }
 
