@@ -1418,15 +1418,15 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-func primitivesLSSQuery(lss uintptr, selector uintptr) (
+func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
 ) {
 	args := struct {
-		lss      uintptr
+		snapshot uintptr
 		selector uintptr
-	}{lss, selector}
+	}{snapshot, selector}
 
 	var res struct {
 		matches         []uint32
@@ -1436,7 +1436,7 @@ func primitivesLSSQuery(lss uintptr, selector uintptr) (
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_query,
+		C.prompp_primitives_snapshot_query,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -1524,22 +1524,35 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
-func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
+func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
 	args := struct {
 		lss uintptr
 	}{lss}
 	var res struct {
-		lss uintptr
+		snapshot uintptr
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_create_readonly_lss,
+		C.prompp_create_snapshot_lss,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.lss
+	return res.snapshot
+}
+
+// primitivesSnapshotDtor - wrapper for destructor C-SnapshotLSS.
+func primitivesSnapshotDtor(snapshot uintptr) {
+	args := struct {
+		snapshot uintptr
+	}{snapshot}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_snapshot_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 // primitivesLSSBitsetSeries returns a copy of the bitset of added series from the lss.
@@ -1574,12 +1587,12 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 	)
 }
 
-// primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
+// primitivesSnapshotLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
+func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
-	C.prompp_primitives_readonly_lss_copy_added_series(
+	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
@@ -3170,18 +3183,18 @@ func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	return res.length
 }
 
-func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerializeFromSnapshot(snapshot uintptr, labelSetID uint32) []Label {
 	args := struct {
-		lss        uintptr
+		snapshot   uintptr
 		labelSetID uint32
-	}{lss, labelSetID}
+	}{snapshot, labelSetID}
 	var res struct {
 		labelSet []Label
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_label_set_serialize,
+		C.prompp_label_set_serialize_from_snapshot,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

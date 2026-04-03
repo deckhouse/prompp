@@ -17,7 +17,10 @@ using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
 enum class LssType : uint32_t {
   kEncodingBimap = 0,
   kQueryableEncodingBimap,
-  kReadonlyLss,
+};
+
+enum class SnapshotLSSType : uint32_t {
+  kSnapshotLSS = 0,
 };
 
 namespace lss_memory {
@@ -62,13 +65,13 @@ using QueryableEncodingBimap = series_index::QueryableEncodingBimap<PromPP::Prim
                                                                     SharedVectorWithChangesDetection,
                                                                     series_index::trie::CedarTrie>;
 
-class ReadonlyLss : public PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection> {
+class SnapshotLSS : public PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection> {
  public:
   using Base = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
   using SortingIndex = series_index::SortingIndex<SharedSpanWithChangesDetection>;
   using Base::Base;
 
-  explicit ReadonlyLss(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
+  explicit SnapshotLSS(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
 
@@ -98,7 +101,7 @@ class ReallocationsDetector {
   }
 };
 
-using LssVariant = std::variant<EncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
+using LssVariant = std::variant<EncodingBimap, QueryableEncodingBimap>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
 
 static_assert(sizeof(LssVariantPtr) == sizeof(void*));
@@ -119,20 +122,25 @@ inline LssVariantPtr create_lss(LssType type) {
   }
 }
 
-inline LssVariantPtr create_readonly_lss(LssVariant& lss_variant) {
+using SnapshotLSSVariant = std::variant<SnapshotLSS>;
+using SnapshotLSSVariantPtr = std::unique_ptr<SnapshotLSSVariant>;
+
+static_assert(sizeof(SnapshotLSSVariantPtr) == sizeof(void*));
+
+inline SnapshotLSSVariantPtr create_snapshot_lss(LssVariant& lss_variant) {
   switch (static_cast<LssType>(lss_variant.index())) {
     case LssType::kEncodingBimap: {
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, std::get<EncodingBimap>(lss_variant));
+      return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kSnapshotLSS)>, std::get<EncodingBimap>(lss_variant));
     }
 
     case LssType::kQueryableEncodingBimap: {
       auto& lss = std::get<QueryableEncodingBimap>(lss_variant);
       lss.build_deferred_indexes();
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, lss);
+      return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kSnapshotLSS)>, lss);
     }
 
     default: {
-      throw BareBones::Exception(0x8e6a06385b011215, "Readonly lss can't be created");
+      throw BareBones::Exception(0x8e6a06385b011215, "Snapshot lss can't be created");
     }
   }
 }

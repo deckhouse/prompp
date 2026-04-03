@@ -82,15 +82,21 @@ jobs:
               done
             "
 
+      - name: Fix test artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            chown -R "$(id -u):$(id -g)" /workspace/testlogs || true
+
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
           name: unit-tests-${{ matrix.arch }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: pp/testlogs/*.xml
+          path: testlogs/*.xml
           retention-days: 7
 
       - name: Clean test artifacts
-        run: rm -rf pp/testlogs
+        run: rm -rf testlogs
 
   build-go-bindings:
     needs: [build-ci-image, cpp-tests]
@@ -137,6 +143,13 @@ jobs:
               echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
+
+      - name: Fix build artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            chown -R "$(id -u):$(id -g)" /workspace/pp/go/cppbridge || true
+
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
@@ -228,6 +241,12 @@ jobs:
               gocov convert coverage.txt | gocov-xml > coverage.xml
               go tool cover -func=coverage.txt | tail -n 1 | awk '{print \"Total coverage:\", \$3;}'
             "
+
+      - name: Fix test artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            sh -c "chown -R $(id -u):$(id -g) /workspace/pp/report.xml /workspace/pp/coverage.xml /workspace/pp/report.txt /workspace/pp/coverage.txt /workspace/.cache" || true
 
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4

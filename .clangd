@@ -4,4 +4,3 @@ CompileFlags:
 Diagnostics:
   ClangTidy:
     FastCheckFilter: None
-  MissingIncludes: Strict

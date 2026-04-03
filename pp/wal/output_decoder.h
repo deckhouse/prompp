@@ -438,15 +438,15 @@ struct ProtobufEncoderStats {
 
 class ProtobufEncoder {
  public:
-  template <class LssGetter>
-  void encode(const LssGetter& lss_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
+  template <class SnapshotGetter>
+  void encode(const SnapshotGetter& snapshot_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
     assert(message_index + messages_count <= messages.size());
 
     for (const auto last_index = message_index + messages_count; message_index < last_index; ++message_index) {
       protobuf_.clear();
 
       auto& message = messages[message_index];
-      create_protobuf_message(lss_getter, message);
+      create_protobuf_message(snapshot_getter, message);
       snappy_compress(message.buffer);
     }
   }
@@ -456,15 +456,15 @@ class ProtobufEncoder {
 
   std::string protobuf_;
 
-  template <class LssGetter>
-  PROMPP_ALWAYS_INLINE void create_protobuf_message(const LssGetter& lss_getter, GoMessage& message) {
+  template <class SnapshotGetter>
+  PROMPP_ALWAYS_INLINE void create_protobuf_message(const SnapshotGetter& snapshot_getter, GoMessage& message) {
     message.max_timestamp = 0;
 
     protozero::pbf_writer pb_writer(protobuf_);
     protozero::basic_pbf_writer pb_timeseries(protobuf_);
     uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
     uint32_t storage_index = std::numeric_limits<uint32_t>::max();
-    const std::remove_reference_t<decltype(lss_getter(0))>* lss = nullptr;
+    const std::remove_reference_t<decltype(snapshot_getter(0))>* snapshot = nullptr;
     uint32_t processed_samples_count{};
 
     for (auto it = message.samples_iterator; it != SegmentSamplesStorageList::end(); ++it) {
@@ -472,7 +472,7 @@ class ProtobufEncoder {
       if (storage_index != it.storage_index()) [[unlikely]] {
         storage_index = it.storage_index();
         last_ls_id = Primitives::kInvalidLabelSetID;
-        lss = &lss_getter(storage_index);
+        snapshot = &snapshot_getter(storage_index);
       }
 
       const auto write_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
@@ -489,7 +489,7 @@ class ProtobufEncoder {
         // clang-tidy give false-positive warning on this line because lss always set in the storage_index != it.storage_index() branch
         // before the first use.
         // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
-        Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss->operator[](ls_id));
+        Prometheus::RemoteWrite::write_label_set(pb_timeseries, snapshot->operator[](ls_id));
         last_ls_id = ls_id;
       }
 
