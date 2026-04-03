@@ -225,7 +225,7 @@ readLoop:
 		}
 
 		b.add(decodedSegments)
-		i.targetSegmentID++
+		i.setTargetSegmentID(decodedSegments)
 
 		if b.IsFilled() {
 			break readLoop
@@ -431,6 +431,13 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 	}
 
 	return nil
+}
+
+// setTargetSegmentID sets the target segment id.
+func (i *Iterator) setTargetSegmentID(decodedSegments []*DecodedSegment) {
+	for _, segment := range decodedSegments {
+		i.targetSegmentID = max(i.targetSegmentID, segment.ID+1)
+	}
 }
 
 func (i *Iterator) writeCaches() {
