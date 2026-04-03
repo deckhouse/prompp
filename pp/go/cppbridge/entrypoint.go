@@ -12,8 +12,8 @@ package cppbridge
 // #cgo amd64,!asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
 // #cgo amd64,asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
 // #cgo amd64,asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++_libbacktrace
-// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++_libbacktrace.a
+// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -lstdc++exp
+// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:libstdc++exp.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
@@ -28,13 +28,14 @@ import (
 )
 
 type (
-	CppStdVector                 = [C.Sizeof_StdVector]byte
-	CppBareBonesVector           = [C.Sizeof_BareBonesVector]byte
-	CppRoaringBitset             = [C.Sizeof_RoaringBitset]byte
-	CppSerializedDataIterator    = [C.Sizeof_SerializedDataIterator]byte
-	CppMetricsIterator           = [C.Sizeof_MetricsIterator]byte
-	CppSegmentSamplesStorage     = [C.Sizeof_SegmentSamplesStorage]byte
-	CppRemoteWriteMessageEncoder = [C.Sizeof_RemoteWriteMessageEncoder]byte
+	CppStdVector                         = [C.Sizeof_StdVector]byte
+	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
+	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
+	CppSerializedDataIterator            = [C.Sizeof_SerializedDataIterator]byte
+	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
+	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
+	CppRemoteWriteMessageEncoder         = [C.Sizeof_RemoteWriteMessageEncoder]byte
+	CppSegmentSamplesStorageListIterator = [C.Sizeof_SegmentSamplesStorageListIterator]byte
 )
 
 const (
@@ -1041,22 +1042,17 @@ func walDecoderDtor(decoder uintptr) {
 	)
 }
 
-func walSegmentSamplesStorageListCtor(count uint64) []CppSegmentSamplesStorage {
+func walSegmentSamplesStorageListCtor(count uint64, storages *SegmentSamplesStorageList) {
 	args := struct {
-		count uint64
-	}{count}
-	var res struct {
-		storages []CppSegmentSamplesStorage
-	}
+		count    uint64
+		storages uintptr
+	}{count, uintptr(unsafe.Pointer(storages))}
 
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_ctor,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.storages
 }
 
 func walSegmentSamplesStorageAdd(
@@ -1091,16 +1087,36 @@ func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
 	)
 }
 
-func walSegmentSamplesStorageListDtor(storages []CppSegmentSamplesStorage) {
+func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
 	args := struct {
-		storages []CppSegmentSamplesStorage
-	}{storages}
+		storages uintptr
+	}{uintptr(unsafe.Pointer(s))}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func walSegmentSamplesStorageListSplitMessages(
+	s *SegmentSamplesStorageList,
+	messageSamplesThreshold uint32,
+) []RWMessage {
+	args := struct {
+		storageList             uintptr
+		messageSamplesThreshold uint32
+		messages                []RWMessage
+	}{uintptr(unsafe.Pointer(s)), messageSamplesThreshold, nil}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_samples_storage_list_split_messages,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(s)
+
+	return args.messages
 }
 
 //
@@ -1218,24 +1234,6 @@ func walOutputDecoderDecode(
 // ProtobufEncoder
 //
 
-func walRemoteWriteCreateMessages(messagesCount uint64) []RWMessage {
-	args := struct {
-		messagesCount uint64
-	}{messagesCount}
-	var res struct {
-		messages []RWMessage
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_remote_write_message_list_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.messages
-}
-
 func walRemoteWriteDestroyMessages(messages []RWMessage) {
 	args := struct {
 		messages []RWMessage
@@ -1281,24 +1279,25 @@ func walRemoteWriteDestroyMessageEncoders(encoders []CppRemoteWriteMessageEncode
 func walRemoteWriteEncodeMessage(
 	encoder *CppRemoteWriteMessageEncoder,
 	lssList []uintptr,
-	segmentStorageList []CppSegmentSamplesStorage,
 	messageIndex, messagesCount uint64,
-	message *RWMessage,
+	messages []RWMessage,
 ) {
 	args := struct {
-		encoder            uintptr
-		lssList            []uintptr
-		segmentStorageList []CppSegmentSamplesStorage
-		messageIndex       uint64
-		messagesCount      uint64
-		message            uintptr
-	}{uintptr(unsafe.Pointer(encoder)), lssList, segmentStorageList, messageIndex, messagesCount, uintptr(unsafe.Pointer(message))}
+		encoder       uintptr
+		lssList       []uintptr
+		messageIndex  uint64
+		messagesCount uint64
+		messages      []RWMessage
+	}{uintptr(unsafe.Pointer(encoder)), lssList, messageIndex, messagesCount, messages}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_remote_write_encode_message,
 		uintptr(unsafe.Pointer(&args)),
 	)
+
+	runtime.KeepAlive(messages)
+	runtime.KeepAlive(encoder)
 }
 
 //
@@ -1419,15 +1418,15 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-func primitivesLSSQuery(lss uintptr, selector uintptr) (
+func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
 ) {
 	args := struct {
-		lss      uintptr
+		snapshot uintptr
 		selector uintptr
-	}{lss, selector}
+	}{snapshot, selector}
 
 	var res struct {
 		matches         []uint32
@@ -1437,7 +1436,7 @@ func primitivesLSSQuery(lss uintptr, selector uintptr) (
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_query,
+		C.prompp_primitives_snapshot_query,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -1525,22 +1524,35 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
-func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
+func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
 	args := struct {
 		lss uintptr
 	}{lss}
 	var res struct {
-		lss uintptr
+		snapshot uintptr
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_create_readonly_lss,
+		C.prompp_create_snapshot_lss,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.lss
+	return res.snapshot
+}
+
+// primitivesSnapshotDtor - wrapper for destructor C-SnapshotLSS.
+func primitivesSnapshotDtor(snapshot uintptr) {
+	args := struct {
+		snapshot uintptr
+	}{snapshot}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_snapshot_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 // primitivesLSSBitsetSeries returns a copy of the bitset of added series from the lss.
@@ -1575,12 +1587,12 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 	)
 }
 
-// primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
+// primitivesSnapshotLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
+func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
-	C.prompp_primitives_readonly_lss_copy_added_series(
+	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
@@ -3162,18 +3174,18 @@ func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	return res.length
 }
 
-func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerializeFromSnapshot(snapshot uintptr, labelSetID uint32) []Label {
 	args := struct {
-		lss        uintptr
+		snapshot   uintptr
 		labelSetID uint32
-	}{lss, labelSetID}
+	}{snapshot, labelSetID}
 	var res struct {
 		labelSet []Label
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_label_set_serialize,
+		C.prompp_label_set_serialize_from_snapshot,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

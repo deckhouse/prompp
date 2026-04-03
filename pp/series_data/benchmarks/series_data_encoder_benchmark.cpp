@@ -43,6 +43,7 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
 
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
+  const auto arena_guard = storage.thread_arena_guard();
 
   for ([[maybe_unused]] auto _ : state) {
     for (const auto& sample : samples) {

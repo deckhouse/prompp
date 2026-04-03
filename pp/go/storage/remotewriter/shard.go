@@ -53,7 +53,7 @@ func (e ShardError) ShardID() uint16 {
 	return e.shardID
 }
 
-// Unwrap retruns source error.
+// Unwrap returns source error.
 func (e ShardError) Unwrap() error {
 	return e.err
 }
@@ -62,7 +62,7 @@ func (e ShardError) Unwrap() error {
 // ShardWalReader
 //
 
-// ShardWalReader a shard wall reader.
+// ShardWalReader a shard WAL reader.
 type ShardWalReader interface {
 	// Close wal file.
 	Close() error
@@ -74,15 +74,6 @@ type ShardWalReader interface {
 	// It may return a non-nil error if some error condition is known, such as EOF.
 	Read(s Segment) error
 }
-
-// NoOpShardWalReader a shard wall reader, do nothing.
-type NoOpShardWalReader struct{}
-
-// Close implementation [ShardWalReader], do nothing.
-func (NoOpShardWalReader) Close() error { return nil }
-
-// Read implementation [ShardWalReader], do nothing.
-func (NoOpShardWalReader) Read() (segment Segment, err error) { return segment, io.EOF }
 
 //
 // shard

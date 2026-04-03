@@ -38,10 +38,6 @@ linters-settings:
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
-      # shadow:
-      #     # Whether to be strict about shadowing; can be noisy.
-      #     # Default: false
-      #     strict: true
   gofmt:
     # simplify code: gofmt with `-s` option, true by default
     simplify: true

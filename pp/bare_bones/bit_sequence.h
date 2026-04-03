@@ -173,14 +173,14 @@ class BitSequenceReader {
 
 #pragma pack(push, 1)
 
-template <std::array kAllocationSizesTable, uint32_t kReservedSizeBits>
+template <std::array kAllocationSizesTable, uint32_t kReservedSizeBits, ReallocatorInterface Reallocator = DefaultReallocator>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, AllocationSize>
 class CompactBitSequenceBase {
  public:
   static_assert(std::size(kAllocationSizesTable) > 0);
   static_assert(kAllocationSizesTable[0].bytes() == 0);
 
-  using SharedPtr = BareBones::SharedPtr<uint8_t, SharedPtrControlBlock, DefaultReallocator>;
+  using SharedPtr = BareBones::SharedPtr<uint8_t, SharedPtrControlBlock, Reallocator>;
 
   CompactBitSequenceBase() = default;
   PROMPP_ALWAYS_INLINE CompactBitSequenceBase(const CompactBitSequenceBase& other)
@@ -252,7 +252,7 @@ class CompactBitSequenceBase {
   [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr shared_memory() const noexcept { return memory_; }
 
   PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept {
-    const auto size = Bit::to_bytes(size_in_bits()) + Bit::to_bytes(kReservedSizeBits);
+    const auto size = Bit::to_ceil_bytes(size_in_bits() + kReservedSizeBits);
     memory_.reallocate(size, size);
     allocation_size_index_ = kNoAllocationIndex;
   }
@@ -335,11 +335,11 @@ consteval std::array<AllocationSize, size> prepare_allocation_sizes_table(const 
   return new_table;
 }
 
-template <const std::array kAllocationSizesTable>
+template <const std::array kAllocationSizesTable, ReallocatorInterface Reallocator = DefaultReallocator>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, AllocationSize>
-class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)> {
+class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1), Reallocator> {
  public:
-  using Base = CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)>;
+  using Base = CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1), Reallocator>;
   using Base::size_in_bits;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceReader reader() const noexcept { return {Base::memory_.get(), size_in_bits()}; };

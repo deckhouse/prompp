@@ -3,6 +3,7 @@ package storage_test
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -428,7 +429,7 @@ func (s *HeadLoadSuite) TestLoadWalV2() {
 
 	s.Require().NoError(shardFile.Close())
 
-	s.Require().NotEqual(uint16(0), rec.GetShardBySegmentID(encodedSegment.ID()))
+	s.Require().Equal(uint16(math.MaxUint16), rec.GetShardBySegmentID(encodedSegment.ID()))
 
 	h, err := storage.NewLoader(
 		s.dataDir,

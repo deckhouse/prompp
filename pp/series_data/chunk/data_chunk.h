@@ -23,13 +23,13 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
   };
 
   EncoderData encoder{.external_index = 0};
-  encoder::timestamp::State::Id timestamp_encoder_state_id{encoder::timestamp::State::kInvalidId};
-  EncodingState encoding_state{EncodingType::kUnknown, false};
+  encoder::timestamp::StateId timestamp_encoder_state_id{encoder::timestamp::kInvalidStateId};
+  EncodingState encoding_state{.encoding_type = EncodingType::kUnknown, .has_last_stalenan = false};
 
   DataChunk() = default;
   DataChunk(const DataChunk&) noexcept = default;
 
-  DataChunk(uint32_t encoder_id, encoder::timestamp::State::Id _timestamp_encoder_state_id, EncodingState _encoding_state)
+  DataChunk(uint32_t encoder_id, encoder::timestamp::StateId _timestamp_encoder_state_id, EncodingState _encoding_state)
       : encoder{.external_index = encoder_id}, timestamp_encoder_state_id(_timestamp_encoder_state_id), encoding_state(_encoding_state) {}
 
   DataChunk& operator=(const DataChunk& other) noexcept {
@@ -48,8 +48,8 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
 
   PROMPP_ALWAYS_INLINE void reset() noexcept {
     encoder.external_index = 0;
-    timestamp_encoder_state_id = encoder::timestamp::State::kInvalidId;
-    encoding_state = EncodingState{EncodingType::kUnknown, false};
+    timestamp_encoder_state_id = encoder::timestamp::kInvalidStateId;
+    encoding_state = EncodingState{.encoding_type = EncodingType::kUnknown, .has_last_stalenan = false};
   }
 
   PROMPP_ALWAYS_INLINE void mark_last_stalenan() noexcept { encoding_state.has_last_stalenan = true; }

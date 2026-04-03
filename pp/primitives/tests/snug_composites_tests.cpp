@@ -3,10 +3,29 @@
 #include "gtest/gtest.h"
 
 #include "bare_bones/streams.h"
+#include "bare_bones/vector.h"
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 
 namespace {
+
+template <class T>
+using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<BareBones::Vector>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelNameSet::EncodingBimap<BareBones::Vector>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>::value_type>);
+
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::Symbol::DecodingTable<SharedSpan>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<SharedSpan>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>::value_type>);
+
 using BareBones::Vector;
 using PromPP::Primitives::LabelViewSet;
 using std::operator""sv;
@@ -210,6 +229,36 @@ TEST_F(SharedDataFixture, CopySymbol) {
   EXPECT_EQ(symbol, decoding_table[0]);
 }
 
+TEST_F(SharedDataFixture, SymbolCompositeTypeSameAcrossTablesAndComparable) {
+  // Arrange
+  SymbolEncodingBimap encoding_bimap;
+  encoding_bimap.find_or_emplace("a"sv);
+  encoding_bimap.find_or_emplace("b"sv);
+
+  // Act
+  const SymbolDecodingTable decoding_table(encoding_bimap);
+  const auto from_encoding = encoding_bimap[0];
+  const auto from_decoding = decoding_table[0];
+
+  // Assert
+  EXPECT_EQ(from_encoding, from_decoding);
+}
+
+TEST_F(SharedDataFixture, LabelNameSetCompositeTypeSameAcrossTablesAndComparable) {
+  // Arrange
+  LabelNameSetEncodingBimap encoding_bimap;
+  const LabelViewSet names{{"n1", "v1"}, {"n2", "v2"}};
+  encoding_bimap.find_or_emplace(names.names());
+
+  // Act
+  const LabelNameSetDecodingTable decoding_table(encoding_bimap);
+  const auto from_encoding = encoding_bimap[0];
+  const auto from_decoding = decoding_table[0];
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(from_encoding, from_decoding));
+}
+
 TEST_F(SharedDataFixture, CopyLabelNameSet) {
   // Arrange
   LabelNameSetEncodingBimap encoding_bimap;
@@ -253,6 +302,22 @@ TEST_F(SharedDataFixture, UseCopyLabelSetAfterFreeSourceLabelSet) {
   // Assert
   EXPECT_EQ(1U, decoding_table.size());
   EXPECT_TRUE(std::ranges::equal(label_set, decoding_table[0]));
+}
+
+TEST_F(SharedDataFixture, LabelSetCompositeHashMatchesOriginalLabelSet) {
+  // Arrange
+  LabelSetEncodingBimap encoding_bimap;
+  const LabelViewSet label_set{{"k1", "v1"}, {"k2", "v2"}};
+  encoding_bimap.find_or_emplace(label_set);
+
+  // Act
+  const LabelSetDecodingTable decoding_table(encoding_bimap);
+  const auto composite = decoding_table[0];
+  const auto original_hash = PromPP::Primitives::hash::hash_of_label_set(label_set);
+  const auto composite_hash = hash_value(composite);
+
+  // Assert
+  EXPECT_EQ(original_hash, composite_hash);
 }
 
 }  // namespace

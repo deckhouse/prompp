@@ -98,6 +98,9 @@ func (wl *writeLoop) run(ctx context.Context) {
 
 		if err = wl.write(ctx, i); err != nil {
 			logger.Errorf("iterator write: %v", err)
+			if errors.Is(err, context.Canceled) {
+				return
+			}
 			delay = defaultDelay
 			continue
 		}
@@ -122,47 +125,69 @@ func (wl *writeLoop) run(ctx context.Context) {
 }
 
 // write writes data from iterator to the remote write storage.
-func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
-	msgChannel := make(chan *cppbridge.RWMessageList)
+// It runs a 3-stage pipeline on 3 goroutines: Next (accumulate batch) -> Encode -> SendMessage.
+func (*writeLoop) write(ctx context.Context, it *Iterator) (err error) {
+	batchCh := make(chan *batch)
+	msgCh := make(chan *cppbridge.RWMessageList)
 
+	// Stage 1: accumulate batches via Next()
 	go func() {
-		defer close(msgChannel)
+		defer close(batchCh)
 
 		for {
-			var msg *cppbridge.RWMessageList
-			msg, err = iterator.Next(ctx)
-			if errors.Is(err, ErrEndOfBlock) {
+			var b *batch
+			b, err = it.Next(ctx)
+			switch {
+			case errors.Is(err, ErrEndOfBlock):
 				err = nil
 				return
+			case ctx.Err() != nil:
+				err = ctx.Err()
+				return
+			case err != nil:
+				logger.Errorf("next batch failed: %v", err)
 			}
-			if err != nil {
-				logger.Errorf("iteration failed: %v", err)
+
+			if b == nil {
+				continue
 			}
 
 			select {
 			case <-ctx.Done():
-				// fast exit if ctx done
 				err = ctx.Err()
 				return
 
-			default:
-				select {
-				case <-ctx.Done():
-					err = ctx.Err()
-					return
-
-				case msgChannel <- msg:
-				}
+			case batchCh <- b:
 			}
 		}
 	}()
 
-	for msg := range msgChannel {
-		if msg == nil {
+	// Stage 2: encode batches
+	go func() {
+		defer close(msgCh)
+
+		for b := range batchCh {
+			if ctx.Err() != nil {
+				continue
+			}
+
+			msg := it.EncodeBatch(b)
+			select {
+			case <-ctx.Done():
+				// drain batchCh
+				continue
+			case msgCh <- msg:
+			}
+		}
+	}()
+
+	// Stage 3: send messages
+	for msg := range msgCh {
+		if ctx.Err() != nil {
 			continue
 		}
 
-		if errSend := iterator.SendMessage(ctx, msg); errSend != nil {
+		if errSend := it.SendMessage(ctx, msg); errSend != nil {
 			logger.Errorf("send message: %v", errSend)
 		}
 	}

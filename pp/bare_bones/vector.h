@@ -116,6 +116,7 @@ class GenericVector {
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
     std::memmove(first, last, (end() - last) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
@@ -154,6 +155,7 @@ class GenericVector {
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
     std::memmove(memory + idx + 1, memory + idx, (size() - idx) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
@@ -297,10 +299,10 @@ class GenericVector {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
-template <template <class> class MemoryControlBlock, class T>
-class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBlock, T>, typename MemoryControlBlock<T>::SizeType, T> {
+template <template <class> class MemoryControlBlock, class T, ReallocatorInterface Reallocator>
+class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBlock, T, Reallocator>, typename MemoryControlBlock<T>::SizeType, T> {
  public:
-  using MemoryType = Memory<MemoryControlBlock, T>;
+  using MemoryType = Memory<MemoryControlBlock, T, Reallocator>;
   using SizeType = typename MemoryType::SizeType;
   using Base = GenericVector<MemoryBasedVector, SizeType, T>;
 
@@ -347,8 +349,8 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
   }
 };
 
-template <class T>
-using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T>;
+template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T, Reallocator>;
 
 template <class T, ReallocatorInterface Reallocator>
 class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {

@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.7.8
+
+### Fixes
+1. **Jemalloc VmPTE growth.** Tuned jemalloc configuration to prevent unbounded virtual address space growth when using custom arenas (create/destroy pattern). Added `retain:false`, `abort_conf:true`, and set `muzzy_decay_ms:0`, eliminating multi-GB page table overhead.
+2. **gRPC authorization bypass CVE.** Updated `google.golang.org/grpc` from v1.78.0 to v1.79.3 to fix an authorization bypass via missing leading slash in `:path` (GO-2026-4762).
+3. **npm dependency security update.** Updated `picomatch` to fix a high-severity ReDoS and method injection vulnerability.
+
+## v0.7.7
+
+### Features
+1. **Custom PromQL functions.** Added `op_defined`, `op_replace_nan`, `op_smoothie`, `op_zero_if_none` window functions and `op_top` aggregation operator for operational monitoring — checking metric freshness, replacing NaN values, smoothing time series, and top-K aggregation.
+
+### Performance
+1. **Three-stage remote write parallelization.** Remote write pipeline now uses a three-stage parallel architecture, improving throughput for high-volume metric delivery.
+2. **Reworked remote write encoding.** Remote write protobuf encoding redesigned with message boundary tracking and improved segment iteration, reducing encoding overhead.
+3. **Jemalloc arena allocators.** DataStorage now uses jemalloc arena-based allocators with size class awareness, improving memory allocation patterns and reducing fragmentation.
+4. **Composite type independence.** Refactored internal composite types (Symbol, LabelNameSet, LabelSet) to be independent of underlying filament storage, improving data access patterns.
+5. **Removed unnecessary indirections.** Eliminated `std::unique_ptr` overhead from LabelSet storage and simplified the scrape adapter interface by removing the redundant `AppendScraperHashdex` method.
+
+### Fixes
+1. **OpenTelemetry PATH hijacking CVE.** Upgraded OpenTelemetry SDK to v1.40.0 to address a high-severity arbitrary code execution vulnerability via PATH hijacking.
+2. **Go 1.25.8.** Updated Go from 1.25.7 to 1.25.8; the release includes security fixes for `html/template`, `os`, and `net/url`.
+3. **npm dependency security updates.** Updated vulnerable npm packages in the web UI, including `immutable` (prototype pollution).
+
 ## v0.7.6
 
 ### Fixes

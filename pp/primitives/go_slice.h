@@ -93,7 +93,7 @@ struct SliceControlBlock {
 };
 
 template <class T>
-using Slice = BareBones::MemoryBasedVector<SliceControlBlock, T>;
+using Slice = BareBones::MemoryBasedVector<SliceControlBlock, T, BareBones::DefaultReallocator>;
 
 template <class T>
 class SliceView {

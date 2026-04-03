@@ -1,13 +1,16 @@
 FROM ubuntu:24.04
 
-# Base + g++ + git for perf_tests
-RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg wget gcc g++ libunwind-dev jq bash nodejs npm bzip2 \
+# Base + g++-14 + git for perf_tests
+RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg wget gcc-14 g++-14 libunwind-14-dev jq bash nodejs npm bzip2 \
     git autoconf make iproute2 jq curl ca-certificates libtool pkg-config cmake lcov && \
-    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-19 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 && \
+    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100 && \
+    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
     wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    apt-get update && apt-get install -y clang-format-19 clang-tidy-19 && \
-    ln -s /usr/lib/llvm-19/bin/clang-tidy /usr/bin/clang-tidy && \
-    ln -s /usr/lib/llvm-19/bin/clang-format /usr/bin/clang-format
+    apt-get update && apt-get install -y clang-format-21 clang-tidy-21 && \
+    ln -s /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy && \
+    ln -s /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format
 
 # Bazel
 ARG BAZEL_VERSION=7.4.1
@@ -16,7 +19,7 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-ARG GO_VERSION=1.25.7
+ARG GO_VERSION=1.25.8
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"

@@ -14,7 +14,7 @@ using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
 using Querier = series_index::querier::Querier<BareBones::Vector>;
 
-std::string_view get_lss_file() {
+std::string get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
     return context->operator[]("lss_file");
   }
@@ -25,7 +25,7 @@ std::string_view get_lss_file() {
 const QueryableEncodingBimap& get_lss() {
   static QueryableEncodingBimap lss;
   if (lss.size() == 0) {
-    std::ifstream infile(get_lss_file().data(), std::ios_base::binary);
+    std::ifstream infile(get_lss_file(), std::ios_base::binary);
     infile >> lss;
   }
 

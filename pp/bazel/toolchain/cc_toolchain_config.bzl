@@ -97,6 +97,34 @@ def _impl(ctx):
     if profiling_flags:
         profiling_flag_groups.append(flag_group(flags = profiling_flags))
 
+    gost_flags = [
+        "-D_FORTIFY_SOURCE=2",
+
+        "-Wdiv-by-zero",
+        "-Wnull-dereference",
+        "-Wshift-count-negative",
+        "-Wshift-count-overflow",
+        "-fno-builtin",
+        "-fno-strict-aliasing",
+        "-fno-delete-null-pointer-checks",
+        "-ftrivial-auto-var-init=zero",
+        "-fstack-protector-strong",
+
+        "-fPIC",
+        "-fpic",
+        "-fPIE",
+
+        "-fwrapv",
+    ]
+
+    if not ctx.attr.clang_tidy[BuildSettingInfo].value:
+        gost_flags.extend([
+            "-Wclobbered",
+            "-Warray-bounds=2",
+
+            "-fwrapv-pointer"
+        ])
+
     features = [
         feature(
             name = "dbg",
@@ -114,12 +142,11 @@ def _impl(ctx):
                         flag_group(
                             flags = [
                                 # Common compile flags here
-                                "-fPIC",
                                 "-Wall",
                                 "-Wextra",
                                 "-Werror",
                                 "-march=" + ctx.attr.march[BuildSettingInfo].value,
-                            ],
+                            ] + gost_flags,
                         ),
                     ],
                 ),
@@ -207,7 +234,7 @@ def _impl(ctx):
                                 "-l:libstdc++.a",
                                 "-lm",
                                 "-lunwind",
-                                "-lstdc++_libbacktrace"
+                                "-lstdc++exp"
                             ],
                         ),
                     ]),
@@ -289,6 +316,7 @@ cc_toolchain_config = rule(
     attrs = {
         "builtin_include_directories": attr.string_list(),
         "march": attr.label(),
+        "clang_tidy": attr.label(),
         "with_asan": attr.label(),
         "with_profiling": attr.label(),
         "profiling_opts": attr.label(),

@@ -23,7 +23,7 @@ struct BareBones::IsTriviallyReallocatable<GoTimeSeries> : std::true_type {};
 namespace {
 
 template <class Labels>
-void make_timeseries(Labels& labels, uint64_t timestamp, double value, PromPP::Primitives::TimeseriesSemiview& timeseries) {
+void make_timeseries(Labels& labels, int64_t timestamp, double value, PromPP::Primitives::TimeseriesSemiview& timeseries) {
   auto& label_set = timeseries.label_set();
   for (size_t i = 0; i < labels.size(); i += 2) {
     typename PromPP::Primitives::TimeseriesSemiview::label_set_type::label_type label;
@@ -62,21 +62,21 @@ void timeseries_to_go_time_series(Timeseries& timeseries, GoTimeSeries& go_time_
 
 TEST(GoModelHashdexTest, HappyPath) {
   std::vector<std::string> label_set_a = {"name", "value", "cluster", "THECLUSTER", "__replica__", "rplc"};
-  std::tuple<std::vector<std::string>, uint64_t, double> input_a = std::make_tuple(label_set_a, 25, 42);
+  std::tuple<std::vector<std::string>, int64_t, double> input_a = std::make_tuple(label_set_a, 25, 42);
 
   std::vector<std::string> label_set_b = {"abra", "kadabra"};
-  std::tuple<std::vector<std::string>, uint64_t, double> input_b = std::make_tuple(label_set_b, 33, 66);
+  std::tuple<std::vector<std::string>, int64_t, double> input_b = std::make_tuple(label_set_b, 33, 66);
 
   std::vector<std::string> label_set_c = {"yet", "another", "awesome", "labelset"};
-  std::tuple<std::vector<std::string>, uint64_t, double> input_c = std::make_tuple(label_set_c, 42, 25);
+  std::tuple<std::vector<std::string>, int64_t, double> input_c = std::make_tuple(label_set_c, 42, 25);
 
-  std::vector<std::tuple<std::vector<std::string>, uint64_t, double>> input = {input_a, input_b, input_c};
+  std::vector input = {input_a, input_b, input_c};
 
   std::vector<PromPP::Primitives::TimeseriesSemiview> timeseries_vector;
   for (auto& tuple : input) {
     PromPP::Primitives::TimeseriesSemiview timeseries;
     std::vector<std::string>& labels = std::get<0>(tuple);
-    uint64_t timestamp = std::get<1>(tuple);
+    int64_t timestamp = std::get<1>(tuple);
     double value = std::get<2>(tuple);
     make_timeseries(labels, timestamp, value, timeseries);
     timeseries_vector.push_back(timeseries);

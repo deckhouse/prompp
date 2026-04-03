@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 
@@ -43,6 +44,9 @@ type DataSourceV2 interface {
 		minTimestamp int64,
 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 	) ([]*DecodedSegment, error)
+
+	// LSSSnapshots returns the snapshots of the label set storages.
+	LSSSnapshots() []*cppbridge.LabelSetSnapshot
 
 	// NumberOfLSSes returns the number of label set storages.
 	NumberOfLSSes() int
@@ -180,7 +184,7 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) (*cppbridge.RWMessageList, error) {
+func (i *Iterator) Next(ctx context.Context) (*batch, error) {
 	if i.endOfBlockReached {
 		return nil, i.wrapError(nil)
 	}
@@ -265,12 +269,55 @@ readLoop:
 
 	i.writeCaches()
 
-	msg := i.encode(b, int(numberOfMessages), i.targetSegmentID) // #nosec G115 // no overflow
+	b.snapshots = i.dataSource.LSSSnapshots()
+	b.targetSegmentID = i.targetSegmentID
+	return b, nil
+}
 
-	return msg, nil
+// EncodeBatch encodes the batch into a message list and records encode duration metric.
+// It is intended to be called from the encode stage of the write pipeline.
+func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
+	defer func(encodeStartTime time.Time) {
+		i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
+	}(i.clock.Now())
+
+	encodersCount := b.numberOfShards
+	messages := b.segmentSampleStorages.SplitMessages(uint32(b.maxNumberOfSamplesPerShard), b.targetSegmentID)
+	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), b.snapshots)
+
+	messagesCount := len(messages.Messages)
+	messagesPerEncoder := messagesCount / encodersCount
+	if messagesPerEncoder == 0 {
+		messagesPerEncoder = 1
+	}
+
+	wg := sync.WaitGroup{}
+	for messageIndex, encoderIndex := 0, 0; messageIndex < messagesCount; encoderIndex++ {
+		var encodeCount int
+		if encoderIndex+1 == encodersCount {
+			encodeCount = messagesCount - messageIndex
+		} else {
+			encodeCount = messagesPerEncoder
+		}
+
+		wg.Add(1)
+		go func(encoderIndex, messageIndex, encodeCount int) {
+			defer wg.Done()
+
+			encoders.Encode(encoderIndex, uint64(messageIndex), uint64(encodeCount), messages.Messages)
+		}(encoderIndex, messageIndex, encodeCount)
+
+		messageIndex += encodeCount
+	}
+	wg.Wait()
+
+	runtime.KeepAlive(b)
+	messages.UpdateStats()
+	return messages
 }
 
 // SendMessage sends the message to the remote storage.
+// It is intended to be called from the send stage of the write pipeline.
 func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 	i.metrics.numberOfMsg.Observe(float64(len(msg.Messages)))
@@ -330,7 +377,7 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 				}
 				// delivered on this iteration
 				shrd.PostProcessed = true
-				retriedSamplesTotal += shrd.SampleCount
+				retriedSamplesTotal += uint64(shrd.SampleCount)
 				sentBytesTotal += uint64(len(shrd.Buffer))
 				if highestSentTimestamp < shrd.MaxTimestamp {
 					highestSentTimestamp = shrd.MaxTimestamp
@@ -338,8 +385,8 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 				continue
 			}
 			// delivery failed bool
-			retriedSamplesTotal += shrd.SampleCount
-			failedSamplesTotal += shrd.SampleCount
+			retriedSamplesTotal += uint64(shrd.SampleCount)
+			failedSamplesTotal += uint64(shrd.SampleCount)
 		}
 
 		i.metrics.failedSamplesTotal.Add(float64(failedSamplesTotal))
@@ -381,53 +428,6 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
-	defer func(encodeStartTime time.Time) {
-		i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
-	}(i.clock.Now())
-
-	encodersCount := batch.numberOfShards
-
-	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)     // #nosec G115 // no overflow
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes()) // #nosec G115 // no overflow
-	messagesPerEncoder := numberOfMessages / encodersCount
-	if messagesPerEncoder == 0 {
-		messagesPerEncoder = 1
-	}
-
-	wg := sync.WaitGroup{}
-	for messageIndex, encoderIndex := 0, 0; messageIndex < numberOfMessages; encoderIndex++ {
-		var encodeCount int
-		if encoderIndex+1 == encodersCount {
-			encodeCount = numberOfMessages - messageIndex
-		} else {
-			encodeCount = messagesPerEncoder
-		}
-
-		wg.Add(1)
-		go func(encoderIndex, messageIndex, encodeCount int) {
-			defer wg.Done()
-
-			for ; encodeCount > 0; messageIndex++ {
-				encoders.Encode(
-					encoderIndex,
-					batch.segmentSampleStorages,
-					uint64(messageIndex),     // #nosec G115 // no overflow
-					uint64(numberOfMessages), // #nosec G115 // no overflow
-					&messages.Messages[messageIndex],
-				)
-				encodeCount--
-			}
-		}(encoderIndex, messageIndex, encodeCount)
-
-		messageIndex += encodeCount
-	}
-	wg.Wait()
-
-	messages.UpdateStats()
-	return messages
-}
-
 func (i *Iterator) tryAck(targetSegmentID uint32) error {
 	if targetSegmentID == 0 {
 		return nil
@@ -452,14 +452,17 @@ func (i *Iterator) Close() error {
 
 // batch is a accumulate samples from decoded segments.
 type batch struct {
+	segments                   []*DecodedSegment
+	snapshots                  []*cppbridge.LabelSetSnapshot
 	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
 	numberOfSamples            int
+	maxNumberOfSamplesPerShard int
 	outdatedSamplesCount       uint32
 	droppedSamplesCount        uint32
 	addSeriesCount             uint32
 	droppedSeriesCount         uint32
-	maxNumberOfSamplesPerShard int
+	targetSegmentID            uint32
 }
 
 // newBatch creates a new [batch].

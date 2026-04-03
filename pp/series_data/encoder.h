@@ -17,6 +17,8 @@ namespace series_data {
 template <uint8_t kSamplesPerChunk = kSamplesPerChunkDefault>
 class Encoder {
  public:
+  using Reallocator = DataStorage::Reallocator;
+
   Encoder(DataStorage& storage) : storage_(storage) {}
 
   DataStorage& storage() noexcept { return storage_; }
@@ -60,7 +62,7 @@ class Encoder {
       return process_gorilla_encoding(ls_id, timestamp, value, chunk);
     }
 
-    if (chunk.timestamp_encoder_state_id != encoder::timestamp::State::kInvalidId) {
+    if (chunk.timestamp_encoder_state_id != encoder::timestamp::kInvalidStateId) {
       return process_value_timestamp_encoding(ls_id, timestamp, value, chunk);
     }
 
@@ -104,7 +106,7 @@ class Encoder {
     if (timestamp < last_timestamp) {
       ++storage_.outdated_samples_count;
 
-      if (auto it = storage_.outdated_chunks.try_emplace(ls_id, timestamp, value); !it.second) {
+      if (const auto it = storage_.outdated_chunks.try_emplace(ls_id, timestamp, value); !it.second) {
         it.first->second.encode(timestamp, value);
       } else {
         ++storage_.outdated_chunks_count;
@@ -257,7 +259,7 @@ class Encoder {
                                  const encoder::value::ConstantValue& v3) const {
     if (!v3.has_value()) [[likely]] {
       switch_to_two_constant_encoder(chunk, v1, v2.value);
-    } else if (encoder::value::AscIntegerEncoder::can_be_encoded(v1.value, v1.count, v2.value, v3.value)) {
+    } else if (encoder::value::AscIntegerEncoder<Reallocator>::can_be_encoded(v1.value, v1.count, v2.value, v3.value)) {
       switch_to_asc_integer(chunk, v1, v2, v3);
     } else if (!storage_.timestamp_encoder.is_unique_state(chunk.timestamp_encoder_state_id)) {
       switch_to_values_gorilla(chunk, v1, v2, v3);
@@ -302,7 +304,7 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_asc_integer_then_values_gorilla(chunk::DataChunk& chunk,
-                                                                      encoder::value::AscIntegerEncoder&& asc_int_encoder,
+                                                                      encoder::value::AscIntegerEncoder<Reallocator>&& asc_int_encoder,
                                                                       double value) const {
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kAscIntegerThenValuesGorilla>(std::move(asc_int_encoder), value);
