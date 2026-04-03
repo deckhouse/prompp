@@ -10,6 +10,10 @@ import (
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
+// defaultCorruptedHeadRetentionPeriod is the default retention period for corrupted heads.
+// Used only when maxRetentionPeriod is zero.
+const defaultCorruptedHeadRetentionPeriod = 15 * 24 * time.Hour
+
 //
 // HeadsCatalog
 //
@@ -102,13 +106,13 @@ func (gc *GC) Iterate() {
 			return
 		}
 
-		if record.Corrupted() {
+		if record.Corrupted() && !gc.isOutdatedCorruptedHead(record) {
 			logger.Debugf("catalog gc iteration: head: %s: %s", record.ID(), "corrupted")
 			continue
 		}
 
 		if err := os.RemoveAll(filepath.Join(gc.dataDir, record.Dir())); err != nil {
-			logger.Errorf("failed to remote head dir: %w", err)
+			logger.Errorf("failed to remove head dir: %w", err)
 			return
 		}
 
@@ -152,6 +156,15 @@ func (gc *GC) Run(ctx context.Context) error {
 func (gc *GC) Stop() {
 	close(gc.stop)
 	<-gc.stopped
+}
+
+// isOutdatedCorruptedHead checks if the corrupted head is outdated.
+func (gc *GC) isOutdatedCorruptedHead(record *Record) bool {
+	if gc.maxRetentionPeriod == 0 {
+		return gc.clock.Since(time.UnixMilli(record.CreatedAt())) >= defaultCorruptedHeadRetentionPeriod
+	}
+
+	return gc.clock.Since(time.UnixMilli(record.CreatedAt())) >= gc.maxRetentionPeriod
 }
 
 // possibleRemoval a filter to remove unwanted wals.
