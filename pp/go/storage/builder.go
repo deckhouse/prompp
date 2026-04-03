@@ -194,7 +194,7 @@ func (b *Builder) createShardOnDisk(
 		shard.NewDataStorage(),
 		unloadedDataStorage,
 		queriedSeriesStorage,
-		wal.NewWal(shardWalEncoder, sw, b.maxSegmentSize, shardID, b.registerer),
+		wal.NewWal(shardWalEncoder, sw, lss, b.maxSegmentSize, shardID, b.registerer),
 		shardID,
 	), nil
 }
