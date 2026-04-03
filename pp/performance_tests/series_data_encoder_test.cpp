@@ -184,8 +184,8 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
   print_chunks_info("opened chunks", chunks_info);
   print_chunks_info("finalized chunks", finalized_chunks_info);
 
-  metrics << (Metric() << "gorilla_prometheus_stream_encoder_allocated_memory" << allocated_memory);
-  metrics << (Metric() << "gorilla_prometheus_stream_encoder_nanoseconds" << (encode_time.count() / (samples_count)));
+  metrics << (Metric() << "gorilla_prometheus_stream_encoder_allocated_memory" << static_cast<double>(allocated_memory));
+  metrics << (Metric() << "gorilla_prometheus_stream_encoder_nanoseconds" << static_cast<double>(encode_time.count()) / static_cast<double>(samples_count));
 
   std::cout << "gorilla_prometheus_stream_encoder_nanoseconds: " << (encode_time.count() / (samples_count)) << std::endl;
 

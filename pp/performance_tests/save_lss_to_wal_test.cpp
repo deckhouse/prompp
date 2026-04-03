@@ -36,7 +36,7 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
 
     auto new_checkpoint = lss.checkpoint();
     auto delta = new_checkpoint - checkpoint;
-    if (lss.save_size(delta) > 1024 * 1024) {
+    if (lss.save_size(delta) > 1024ULL * 1024ULL) {
       log() << "WAL size: " << lss.save_size(delta) << std::endl;
       lss.save(out, delta);
       checkpoint = new_checkpoint;
@@ -53,5 +53,6 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
   auto now = std::chrono::steady_clock::now();
 
   metrics << (Metric() << "parallel_encoding_bimap_add_label_set_avg_duration_nanoseconds"
-                       << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / dummy_wal.cnt()));
+                       << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) /
+                              static_cast<double>(dummy_wal.cnt()));
 }

@@ -52,6 +52,7 @@ class RegexpMatchAnalyzer {
  private:
   [[nodiscard]] PROMPP_ALWAYS_INLINE static re2::Regexp* get_significant_sub_regexp(re2::Regexp* regexp) noexcept {
     if (const auto i = skip_begin_text_anchor(regexp); i == skip_end_text_anchor(regexp, i)) {
+      // NOLINTNEXTLINE(clang-analyzer-security.ArrayBound)
       return regexp->sub()[i];
     }
 
@@ -98,6 +99,7 @@ class RegexpMatchAnalyzer {
           return true;
         }
       } else {
+        // NOLINTNEXTLINE(clang-analyzer-security.ArrayBound)
         if (const auto start = skip_begin_text_anchor(alternative); start == alternative->nsub() || alternative->sub()[start]->op() == kRegexpEndText) {
           return true;
         }
