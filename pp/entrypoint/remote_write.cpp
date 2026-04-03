@@ -35,7 +35,7 @@ extern "C" void prompp_remote_write_message_encoders_dtor(void* args) {
 extern "C" void prompp_remote_write_encode_message(void* args) {
   struct Arguments {
     MessageEncoder* encoder;
-    PromPP::Primitives::Go::SliceView<entrypoint::head::LssVariantPtr> lss_list;
+    PromPP::Primitives::Go::SliceView<entrypoint::head::SnapshotLSSVariantPtr> snapshot_list;
     uint64_t message_index;
     uint64_t messages_count;
     PromPP::Primitives::Go::SliceView<PromPP::WAL::GoMessage> messages;
@@ -43,9 +43,9 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
 
   const auto in = static_cast<Arguments*>(args);
 
-  const auto lss_getter = [in](uint32_t shard_id) -> const entrypoint::head::ReadonlyLss& {
-    return std::get<entrypoint::head::ReadonlyLss>(*in->lss_list[shard_id]);
+  const auto snapshot_getter = [in](uint32_t shard_id) -> const entrypoint::head::SnapshotLSS& {
+    return std::get<entrypoint::head::SnapshotLSS>(*in->snapshot_list[shard_id]);
   };
 
-  in->encoder->encode(lss_getter, in->message_index, in->messages_count, in->messages);
+  in->encoder->encode(snapshot_getter, in->message_index, in->messages_count, in->messages);
 }

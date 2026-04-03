@@ -26,6 +26,7 @@ configure_make(
         "--enable-prof",
         "--enable-shared=\"no\"",
         "--enable-prof-libunwind=\"1\"",
+        "--with-malloc-conf=\"abort_conf:true,background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:0,retain:false\"",
     ] + select({
         "@//bazel/toolchain:arm64": ["--with-lg-page=\"16\""],
         "//conditions:default": ["--with-lg-page=\"12\""],

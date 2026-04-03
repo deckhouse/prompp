@@ -37,10 +37,10 @@ type LabelSetSnapshot struct {
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
-func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: lsstPtr, gcDestroyDetector: &gcDestroyDetector}
+func newLabelSetSnapshot(snapshotPtr uintptr) *LabelSetSnapshot {
+	lsst := &LabelSetSnapshot{pointer: snapshotPtr, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
-		primitivesLSSDtor(l.pointer)
+		primitivesSnapshotDtor(l.pointer)
 
 		snapshotFinalize.Inc()
 	})
@@ -57,7 +57,7 @@ func (lss *LabelSetSnapshot) Pointer() uintptr {
 
 // RangeLabelSet serialize to slice labels from snapshot and calls f on each label.
 func (lss *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := labelSetSerialize(lss.pointer, lsID)
+	labelSet := labelSetSerializeFromSnapshot(lss.pointer, lsID)
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
 			labelSetFree(labelSet)
@@ -72,7 +72,7 @@ func (lss *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) 
 
 // Query returns a LSSQueryResult that matches the given selector.
 func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
-	result := newLSSQueryResult(primitivesLSSQuery(lss.pointer, selector))
+	result := newLSSQueryResult(primitivesSnapshotQuery(lss.pointer, selector))
 	runtime.KeepAlive(lss)
 	return result
 }
@@ -90,7 +90,7 @@ func (m *IdsMapping) IsEmpty() bool {
 // that were added source lss.
 func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) *IdsMapping {
 	idsMapping := &IdsMapping{
-		pointer:           primitivesReadonlyLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
+		pointer:           primitivesSnapshotLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
 		gcDestroyDetector: &gcDestroyDetector,
 	}
 	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
