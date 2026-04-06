@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.9
+
+### Features
+1. **WAL v2 and remote write encoding.** Introduces a new WAL read/write path (v2) with refactored segment sample storage and remote-write protobuf encoding, version-aware segment handling when switching between WAL file formats, and related metrics and Go bindings updates.
+
+### Fixes
+1. **`op_top` in query strings.** Fixed PromQL string serialization for the `op_top` aggregator so expressions round-trip correctly in rules and anywhere queries are printed.
+2. **Outdated corrupted head on GC.** Catalog garbage collection now removes stale corrupted head directories instead of leaving them on disk indefinitely.
+
+### Enhancements
+1. **Environment-driven defaults in configuration.** Settings that were only applied via environment variables are now folded into default configuration, aligning operator defaults with the main configuration model.
+
 ## v0.7.8
 
 ### Fixes
