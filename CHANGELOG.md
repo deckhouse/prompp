@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.0
+
+### Enhancements
+1. **Snapshot LSS type separation.** Decoupled the read-only label set snapshot into a dedicated `SnapshotLSS` type with its own variant, reducing the active head's variant footprint and improving type safety.
+2. **GOST-compliant build hardening.** Enabled `FORTIFY_SOURCE=2`, stack protector, position-independent code, and additional compiler warnings (null-dereference, division-by-zero, array-bounds) across all C++ code including third-party libraries.
+3. **GCC 14 and clang-tidy 21.** Upgraded the C++ toolchain to GCC 14.2.0 and clang-tidy 21.1.8 with new `bugprone-*` diagnostics enabled; all findings resolved.
+
+### Fixes
+1. **npm dependency security update.** Updated `lodash` to 4.18.1 to fix prototype pollution and code injection vulnerabilities.
+
 ## v0.7.9
 
 ### Features
