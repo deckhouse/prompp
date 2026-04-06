@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer/mock"
 )
 
 func TestWriteSegment(t *testing.T) {
@@ -17,7 +18,7 @@ func TestWriteSegment(t *testing.T) {
 	segmentCrc32 := uint32(0)
 	segmentSamples := uint32(42)
 
-	segment := &EncodedSegmentMock{
+	segment := &mock.EncodedSegmentMock{
 		CRC32Func: func() uint32 {
 			return segmentCrc32
 		},
@@ -40,6 +41,44 @@ func TestWriteSegment(t *testing.T) {
 	expected = append(expected, data...)
 
 	_, err := writer.WriteSegment(buf, segment)
+	require.NoError(t, err)
+
+	require.Equal(t, expected, buf.Bytes())
+}
+
+func TestWriteSegmentV2(t *testing.T) {
+	data := []byte(faker.Paragraph())
+	segmentID := uint32(10)
+	segmentCrc32 := uint32(0)
+	segmentSamples := uint32(42)
+
+	segment := &mock.EncodedSegmentV2Mock{
+		CRC32Func: func() uint32 {
+			return segmentCrc32
+		},
+		IDFunc: func() uint32 {
+			return segmentID
+		},
+		SamplesFunc: func() uint32 {
+			return segmentSamples
+		},
+		SizeFunc: func() int64 {
+			return int64(len(data))
+		},
+		WriteToFunc: func(w io.Writer) (int64, error) {
+			n, err := w.Write(data)
+			return int64(n), err
+		},
+	}
+
+	buf := &bytes.Buffer{}
+	expected := []byte{}
+	expected = append(expected, byte(segmentID))
+	expected = append(expected, binary.AppendUvarint(nil, uint64(len(data)))...)
+	expected = append(expected, byte(segmentCrc32), byte(segmentSamples))
+	expected = append(expected, data...)
+
+	_, err := writer.WriteSegmentV2(buf, segment)
 	require.NoError(t, err)
 
 	require.Equal(t, expected, buf.Bytes())
