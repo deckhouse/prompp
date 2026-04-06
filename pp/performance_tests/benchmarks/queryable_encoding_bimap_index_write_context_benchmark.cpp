@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 
 #include <algorithm>
+#include <cassert>
 #include <fstream>
 #include <memory>
 #include <vector>
@@ -21,6 +22,16 @@ std::string get_lss_file() {
     return ctx->operator[]("lss_file");
   }
   return {};
+}
+
+void assert_added_series_suffix_marked(const Lss& lss, uint32_t begin_id) {
+  const auto& added = lss.added_series();
+  const uint32_t end_id = static_cast<uint32_t>(lss.max_item_index());
+  assert(begin_id <= end_id);
+  for (uint32_t id = begin_id; id < end_id; ++id) {
+    assert(id < added.size());
+    assert(added[id]);
+  }
 }
 
 void mark_all_series_as_added(const std::shared_ptr<Lss>& lss) {
@@ -73,8 +84,10 @@ std::shared_ptr<Lss> get_lss_after_shrink() {
     LssCopier copier(lss, lss.sorting_index(), lss.added_series(), *s->snapshot_copy, dst_src_ids_mapping);
     copier.copy_added_series_and_build_indexes();
 
+    assert_added_series_suffix_marked(lss, shrink_boundary);
     lss.set_pending_shrink_boundary(shrink_boundary);
     lss.finalize_copy_and_shrink(*s->snapshot_copy, dst_src_ids_mapping);
+    assert_added_series_suffix_marked(lss, shrink_boundary);
     return s;
   }();
   return state->lss;
