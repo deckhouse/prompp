@@ -64,22 +64,22 @@ func migrateTo(
 		return nil, nil, nil, errors.Join(err, sourceFile.Close())
 	}
 
-	records := make([]*Record, 0, 10) //revive:disable-line:add-constant it's average value of records
+	srecords := make([]*SerializedRecord, 0, 10) //revive:disable-line:add-constant it's average value of records
 	for {
-		record := &Record{}
-		if err = sourceDecoder.DecodeFrom(sourceFile, record); err != nil {
+		sr := &SerializedRecord{}
+		if err = sourceDecoder.DecodeFrom(sourceFile, sr); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			logger.Errorf("failed to decode record: %v", err)
 			break
 		}
-		records = append(records, record)
+		srecords = append(srecords, sr)
 	}
 
 	migration := getMigration(sourceVersion, targetVersion)
-	migratedRecords := make([]*Record, 0, len(records))
-	for _, record := range records {
+	migratedRecords := make([]*SerializedRecord, 0, len(srecords))
+	for _, record := range srecords {
 		migratedRecords = append(migratedRecords, migration.Migrate(record))
 	}
 
@@ -166,15 +166,15 @@ func codecsByVersion(version uint64) (e Encoder, d Decoder, err error) {
 
 // Migration migrates record interface.
 type Migration interface {
-	Migrate(record *Record) *Record
+	Migrate(sr *SerializedRecord) *SerializedRecord
 }
 
 // MigrationFunc is Migration interface function wrapper.
-type MigrationFunc func(record *Record) *Record
+type MigrationFunc func(sr *SerializedRecord) *SerializedRecord
 
 // Migrate reacord version.
-func (fn MigrationFunc) Migrate(record *Record) *Record {
-	return fn(record)
+func (fn MigrationFunc) Migrate(sr *SerializedRecord) *SerializedRecord {
+	return fn(sr)
 }
 
 //
@@ -185,20 +185,20 @@ func (fn MigrationFunc) Migrate(record *Record) *Record {
 type MigrationV2 struct{}
 
 // Up migrates from v1 to v2.
-func (MigrationV2) Up(record *Record) *Record {
-	if record.status == StatusCorrupted {
-		record.corrupted = true
-		record.status = StatusRotated
+func (MigrationV2) Up(sr *SerializedRecord) *SerializedRecord {
+	if sr.status == StatusCorrupted {
+		sr.corrupted = true
+		sr.status = StatusRotated
 	}
-	return record
+	return sr
 }
 
 // Down migrates from v2 to v1.
-func (MigrationV2) Down(record *Record) *Record {
-	if record.status == StatusRotated && record.corrupted {
-		record.status = StatusCorrupted
+func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
+	if sr.status == StatusRotated && sr.corrupted {
+		sr.status = StatusCorrupted
 	}
-	return record
+	return sr
 }
 
 //
@@ -209,22 +209,22 @@ func (MigrationV2) Down(record *Record) *Record {
 type MigrationV3 struct{}
 
 // Up migrates from v2 to v3.
-func (MigrationV3) Up(record *Record) *Record {
-	record.numberOfSegments = 0
-	if !record.lastAppendedSegmentID.IsNil() {
-		record.numberOfSegments = record.lastAppendedSegmentID.Value() + 1
+func (MigrationV3) Up(sr *SerializedRecord) *SerializedRecord {
+	sr.numberOfSegments = 0
+	if !sr.lastAppendedSegmentID.IsNil() {
+		sr.numberOfSegments = sr.lastAppendedSegmentID.Value() + 1
 	}
-	return record
+	return sr
 }
 
 // Down migrates from v3 to v2.
-func (MigrationV3) Down(record *Record) *Record {
-	if record.numberOfSegments > 0 {
-		record.lastAppendedSegmentID.Set(record.numberOfSegments - 1)
+func (MigrationV3) Down(sr *SerializedRecord) *SerializedRecord {
+	if sr.numberOfSegments > 0 {
+		sr.lastAppendedSegmentID.Set(sr.numberOfSegments - 1)
 	} else {
-		record.lastAppendedSegmentID = optional.WithRawValue[uint32](nil)
+		sr.lastAppendedSegmentID = optional.WithRawValue[uint32](nil)
 	}
-	return record
+	return sr
 }
 
 //
@@ -242,11 +242,11 @@ func NewChainedMigration(migrations ...Migration) *ChainedMigration {
 }
 
 // Migrate is an Migration interface implementation.
-func (c *ChainedMigration) Migrate(record *Record) *Record {
+func (c *ChainedMigration) Migrate(sr *SerializedRecord) *SerializedRecord {
 	for _, migration := range c.migrations {
-		record = migration.Migrate(record)
+		sr = migration.Migrate(sr)
 	}
-	return record
+	return sr
 }
 
 // getMigration create [Migration] from version to version.

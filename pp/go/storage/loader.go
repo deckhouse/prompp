@@ -26,6 +26,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
+// ErrNonContinuableHead error when head is not continuable.
 var ErrNonContinuableHead = errors.New("head is not continuable")
 
 // Loader loads [Head] or [shard.Shard] from [Wal].
@@ -51,7 +52,8 @@ func NewLoader(
 	}
 }
 
-func (l *Loader) load(
+//revive:disable-next-line:flag-parameter this is not a flag, but a parameter
+func (l *Loader) loadHead(
 	headRecord *catalog.Record,
 	generation uint64,
 	readOnly bool,
@@ -72,6 +74,7 @@ func (l *Loader) load(
 				headDir,
 				l.maxSegmentSize,
 				swn,
+				headRecord,
 				l.registerer,
 				l.unloadDataStorageInterval,
 				readOnly,
@@ -86,11 +89,18 @@ func (l *Loader) load(
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
 		errs[shardID] = res.err
+		headRecord.SetLastSegmentID(res.maxSegmentID)
 
 		if numberOfSegmentsRead.IsNil() {
 			numberOfSegmentsRead.Set(res.numberOfSegments)
 		} else if numberOfSegmentsRead.Value() != res.numberOfSegments {
-			errs = append(errs, fmt.Errorf("corrupted shard %d: segment count mismatch, expected: %d, got: %d", shardID, numberOfSegmentsRead.Value(), res.numberOfSegments))
+			errs = append(errs,
+				fmt.Errorf(
+					"corrupted shard %d: segment count mismatch, expected: %d, got: %d",
+					shardID,
+					numberOfSegmentsRead.Value(),
+					res.numberOfSegments,
+				))
 			// calculating maximum number of segments (critical for remote write).
 			if numberOfSegmentsRead.Value() < res.numberOfSegments {
 				numberOfSegmentsRead.Set(res.numberOfSegments)
@@ -98,29 +108,13 @@ func (l *Loader) load(
 		}
 	}
 
-	switch {
-	case headRecord.Status() == catalog.StatusActive:
-		// numberOfSegments here is actual number of segments.
-		if numberOfSegmentsRead.Value() > 0 {
-			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+	switch checkWalVersion(shardLoadResults) {
+	case wal.FileFormatVersion:
+		setLastAppendedSegmentID(headRecord, numberOfSegmentsRead)
+	case wal.FileFormatVersionV2:
+		if headRecord.IsMissingSegmentsByShard() {
+			errs = append(errs, fmt.Errorf("missing segments by shard"))
 		}
-	case isNumberOfSegmentsMismatched(headRecord, numberOfSegmentsRead.Value()):
-		// numberOfSegments here is actual number of segments.
-		if numberOfSegmentsRead.Value() > 0 {
-			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
-		}
-
-		lastAppendedSegmentID := uint32(0)
-		if headRecord.LastAppendedSegmentID() != nil {
-			lastAppendedSegmentID = *headRecord.LastAppendedSegmentID()
-		}
-
-		logger.Errorf(
-			"head: %s number of segments mismatched: last appended=%d, number of segments read=%d",
-			headRecord.ID(),
-			lastAppendedSegmentID,
-			numberOfSegmentsRead.Value(),
-		)
 	}
 
 	h := head.NewHead(
@@ -136,7 +130,7 @@ func (l *Loader) load(
 		errs = append(errs, err)
 	}
 
-	if readOnly || errs != nil {
+	if readOnly || errors.Join(errs...) != nil {
 		h.SetReadOnly()
 	}
 
@@ -144,7 +138,11 @@ func (l *Loader) load(
 	// otherwise it is corruption error.
 	err := EnsureSameErrorTypes(errs, cppbridge.ErrInvalidEncoderVersion)
 
-	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), err != nil && !errors.Is(err, cppbridge.ErrInvalidEncoderVersion))
+	logger.Debugf(
+		"[Loader] loaded head: %s, corrupted: %t",
+		headRecord.ID(),
+		err != nil && !errors.Is(err, cppbridge.ErrInvalidEncoderVersion),
+	)
 
 	return h, err
 }
@@ -187,7 +185,7 @@ func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
 ) (*Head, error) {
-	return l.load(headRecord, generation, false)
+	return l.loadHead(headRecord, generation, false)
 }
 
 // LoadReadOnly [Head] from [Wal] by head ID. Head is read only, and there is corrupted wal in each shard,
@@ -202,7 +200,7 @@ func (l *Loader) LoadReadOnly(
 	headRecord *catalog.Record,
 	generation uint64,
 ) (*Head, error) {
-	return l.load(headRecord, generation, true)
+	return l.loadHead(headRecord, generation, true)
 }
 
 func (*Loader) loadShard(
@@ -210,15 +208,22 @@ func (*Loader) loadShard(
 	dir string,
 	maxSegmentSize uint32,
 	notifier *writer.SegmentWriteNotifier,
+	headRecord *catalog.Record,
 	registerer prometheus.Registerer,
 	unloadDataStorageInterval time.Duration,
 	readOnly bool,
 ) ShardLoadResult {
-	shardDataLoader := NewShardDataLoader(shardID, dir, maxSegmentSize, notifier, registerer, unloadDataStorageInterval)
+	shardDataLoader := NewShardDataLoader(
+		shardID,
+		dir,
+		maxSegmentSize,
+		notifier,
+		headRecord,
+		registerer,
+		unloadDataStorageInterval,
+	)
 	err := shardDataLoader.Load(readOnly)
 	return ShardLoadResult{
-		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
-		err:              err,
 		shard: shard.NewShard(
 			shardDataLoader.shardData.lss,
 			shardDataLoader.shardData.dataStorage,
@@ -227,6 +232,10 @@ func (*Loader) loadShard(
 			shardDataLoader.shardData.wal,
 			shardID,
 		),
+		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
+		maxSegmentID:     shardDataLoader.shardData.maxSegmentID,
+		err:              err,
+		walVersion:       shardDataLoader.shardData.walVersion,
 	}
 }
 
@@ -234,7 +243,10 @@ func (*Loader) loadShard(
 type ShardLoadResult struct {
 	shard            *shard.Shard
 	numberOfSegments uint32
-	err              error
+	// maximum through ID of a segment read from WAL
+	maxSegmentID uint32
+	err          error
+	walVersion   uint8
 }
 
 // ShardData data for creating a shard.
@@ -244,18 +256,55 @@ type ShardData struct {
 	wal                  *Wal
 	unloadedDataStorage  *shard.UnloadedDataStorage
 	queriedSeriesStorage *shard.QueriedSeriesStorage
+	writeSegment         func(io.Writer, *cppbridge.HeadEncodedSegment) (int, error)
 	numberOfSegments     uint32
+	maxSegmentID         uint32
+	walVersion           uint8
 }
+
+//
+// SegmentWriteNotifier
+//
+
+// SegmentWriteNotifier notifies that the segment has been written.
+type SegmentWriteNotifier interface {
+	// NotifySegmentIsWritten notify that the segment has been flushed for shard.
+	NotifySegmentIsWritten(shardID uint16)
+
+	// NotifySegmentWrite notify that the segment is being written for shard.
+	NotifySegmentWrite(shardID uint16)
+
+	// Set for shard number of segments.
+	Set(shardID uint16, numberOfSegments uint32)
+}
+
+// NoopSegmentWriteNotifier notify when new segment write. [SegmentWriteNotifier] of the implementation.
+type NoopSegmentWriteNotifier struct{}
+
+// NotifySegmentIsWritten notify that the segment has been flushed for shard.
+// [SegmentWriteNotifier] of the implementation.
+func (NoopSegmentWriteNotifier) NotifySegmentIsWritten(uint16) {}
+
+// NotifySegmentWrite notify that the segment is being written for shard. [SegmentWriteNotifier] of the implementation.
+func (NoopSegmentWriteNotifier) NotifySegmentWrite(uint16) {}
+
+// Set for shard number of segments. [SegmentWriteNotifier] of the implementation.
+func (NoopSegmentWriteNotifier) Set(uint16, uint32) {}
+
+//
+// ShardDataLoader
+//
 
 // ShardDataLoader loads shard data from a file and creates a shard.
 type ShardDataLoader struct {
-	shardID                   uint16
 	dir                       string
-	maxSegmentSize            uint32
-	shardData                 ShardData
-	notifier                  *writer.SegmentWriteNotifier
+	notifier                  SegmentWriteNotifier
+	segmentMarkup             writer.SegmentMarkup
 	registerer                prometheus.Registerer
 	unloadDataStorageInterval time.Duration
+	shardData                 ShardData
+	maxSegmentSize            uint32
+	shardID                   uint16
 }
 
 // NewShardDataLoader init new [ShardDataLoader].
@@ -264,16 +313,18 @@ func NewShardDataLoader(
 	dir string,
 	maxSegmentSize uint32,
 	notifier *writer.SegmentWriteNotifier,
+	headRecord *catalog.Record,
 	registerer prometheus.Registerer,
 	unloadDataStorageInterval time.Duration,
 ) ShardDataLoader {
 	return ShardDataLoader{
-		shardID:                   shardID,
 		dir:                       dir,
-		maxSegmentSize:            maxSegmentSize,
 		notifier:                  notifier,
+		segmentMarkup:             headRecord,
 		registerer:                registerer,
 		unloadDataStorageInterval: unloadDataStorageInterval,
+		maxSegmentSize:            maxSegmentSize,
+		shardID:                   shardID,
 	}
 }
 
@@ -331,7 +382,7 @@ func (l *ShardDataLoader) loadWalFile(
 	rd io.Reader,
 	queriedSeriesStorageIsEmpty bool,
 ) (*cppbridge.HeadWalDecoder, error) {
-	_, encoderVersion, _, err := reader.ReadHeader(rd)
+	walVersion, encoderVersion, _, err := reader.ReadHeader(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
 	}
@@ -347,18 +398,40 @@ func (l *ShardDataLoader) loadWalFile(
 	}
 
 	decoder := cppbridge.NewHeadWalDecoder(l.shardData.lss.Target(), encoderVersion)
-	l.shardData.numberOfSegments, err = l.loadSegments(
-		rd,
-		decoder,
-		l.shardData.dataStorage,
-		unloader,
-	)
+
+	switch walVersion {
+	case wal.FileFormatVersion:
+		l.segmentMarkup = writer.NoopSegmentMarkup{}
+		l.shardData.writeSegment = writer.WriteSegment[*cppbridge.HeadEncodedSegment]
+		l.shardData.walVersion = walVersion
+		l.shardData.numberOfSegments, err = l.loadSegments(
+			rd,
+			decoder,
+			l.shardData.dataStorage,
+			unloader,
+		)
+	case wal.FileFormatVersionV2:
+		l.notifier = NoopSegmentWriteNotifier{}
+		l.shardData.writeSegment = writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment]
+		l.shardData.walVersion = walVersion
+		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
+			rd,
+			decoder,
+			l.shardData.dataStorage,
+			unloader,
+		)
+	default:
+		return decoder, fmt.Errorf("unknown wal file format: %d", walVersion)
+	}
 
 	return decoder, err
 }
 
 // createShardWal creates a wal for a shard.
-func (l *ShardDataLoader) createShardWal(fileName string, walEncoder *cppbridge.HeadWalEncoder) error {
+func (l *ShardDataLoader) createShardWal(
+	fileName string,
+	walEncoder *cppbridge.HeadWalEncoder,
+) error {
 	//revive:disable-next-line:add-constant // file permissions simple readable as octa-number
 	shardWalFile, err := util.OpenFileAppender(fileName, 0o666)
 	if err != nil {
@@ -368,8 +441,9 @@ func (l *ShardDataLoader) createShardWal(fileName string, walEncoder *cppbridge.
 	sw, err := writer.NewBuffered(
 		l.shardID,
 		shardWalFile,
-		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
+		l.shardData.writeSegment,
 		l.notifier,
+		l.segmentMarkup,
 	)
 	if err != nil {
 		_ = shardWalFile.Close()
@@ -445,6 +519,39 @@ func (*ShardDataLoader) loadSegments(
 	return numberOfSegments, nil
 }
 
+func (l *ShardDataLoader) loadSegmentsV2(
+	rd io.Reader,
+	walDecoder *cppbridge.HeadWalDecoder,
+	dataStorage *shard.DataStorage,
+	unloader *dataUnloader,
+) (uint32, error) {
+	numberOfSegments := uint32(0)
+
+	if err := wal.NewSegmentWalReader(rd, reader.NewSegmentV2).ForEachSegment(func(segment *reader.SegmentV2) error {
+		createTs, encodeTs, decodeErr := dataStorage.DecodeSegment(walDecoder, segment.Bytes())
+		if decodeErr != nil {
+			return fmt.Errorf("failed to decode segment: %w", decodeErr)
+		}
+
+		numberOfSegments++
+		l.segmentMarkup.SetSegmentIDByShard(segment.ID(), l.shardID)
+		l.shardData.maxSegmentID = segment.ID()
+
+		if createTs != 0 && unloader != nil {
+			if err := unloader.Unload(time.Duration(createTs), time.Duration(encodeTs)); err != nil {
+				return fmt.Errorf("failed to unload data: %w", err)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		logger.Debugf(err.Error())
+		return 0, err
+	}
+
+	return numberOfSegments, nil
+}
+
 func (l *ShardDataLoader) loadQueriedSeries() (bool, error) {
 	file1 := shard.NewFileStorage(GetQueriedSeriesStorageFilename(l.dir, l.shardID, 0))
 	file2 := shard.NewFileStorage(GetQueriedSeriesStorageFilename(l.dir, l.shardID, 1))
@@ -486,4 +593,57 @@ func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32)
 	}
 
 	return *record.LastAppendedSegmentID()+1 != loadedSegments
+}
+
+// checkWalVersion checks wal version of all shards.
+func checkWalVersion(shardLoadResults []ShardLoadResult) uint8 {
+	walVersion := uint8(0)
+
+	for i := range shardLoadResults {
+		// wal version is the same
+		if walVersion != 0 && walVersion == shardLoadResults[i].walVersion {
+			continue
+		}
+
+		// wal version is not set
+		if walVersion == 0 {
+			walVersion = shardLoadResults[i].walVersion
+			continue
+		}
+
+		// wal version is different, unlikely
+		logger.Warnf("wal version mismatch: %d != %d", walVersion, shardLoadResults[i].walVersion)
+		walVersion = shardLoadResults[i].walVersion
+	}
+
+	return walVersion
+}
+
+// setLastAppendedSegmentID sets last appended segment id to record.
+func setLastAppendedSegmentID(rec *catalog.Record, numberOfSegmentsRead optional.Optional[uint32]) {
+	// wal format v1
+	switch {
+	case rec.Status() == catalog.StatusActive:
+		// numberOfSegments here is actual number of segments.
+		if numberOfSegmentsRead.Value() > 0 {
+			rec.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+		}
+	case isNumberOfSegmentsMismatched(rec, numberOfSegmentsRead.Value()):
+		// numberOfSegments here is actual number of segments.
+		if numberOfSegmentsRead.Value() > 0 {
+			rec.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+		}
+
+		lastAppendedSegmentID := uint32(0)
+		if rec.LastAppendedSegmentID() != nil {
+			lastAppendedSegmentID = *rec.LastAppendedSegmentID()
+		}
+
+		logger.Errorf(
+			"head: %s number of segments mismatched: last appended=%d, number of segments read=%d",
+			rec.ID(),
+			lastAppendedSegmentID,
+			numberOfSegmentsRead.Value(),
+		)
+	}
 }

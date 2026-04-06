@@ -40,7 +40,7 @@ func (s *FileLogTestSuite) TestMigrateV1ToV2() {
 	s.Require().NoError(err)
 
 	for _, record := range s.records {
-		s.Require().NoError(logFileV1.Write(record))
+		s.Require().NoError(logFileV1.Write(&record.SerializedRecord))
 	}
 	s.Require().NoError(logFileV1.Close())
 
