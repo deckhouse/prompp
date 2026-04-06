@@ -5,7 +5,6 @@ package mock
 
 import (
 	"context"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"sync"
 )
 
@@ -15,7 +14,7 @@ import (
 //
 //		// make and configure a mocked remotewriter.ProtobufWriter
 //		mockedProtobufWriter := &ProtobufWriterMock{
-//			WriteFunc: func(ctx context.Context, data *cppbridge.SnappyProtobufEncodedData) error {
+//			WriteFunc: func(ctx context.Context, data []byte) error {
 //				panic("mock out the Write method")
 //			},
 //		}
@@ -26,7 +25,7 @@ import (
 //	}
 type ProtobufWriterMock struct {
 	// WriteFunc mocks the Write method.
-	WriteFunc func(ctx context.Context, data *cppbridge.SnappyProtobufEncodedData) error
+	WriteFunc func(ctx context.Context, data []byte) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -35,20 +34,20 @@ type ProtobufWriterMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Data is the data argument value.
-			Data *cppbridge.SnappyProtobufEncodedData
+			Data []byte
 		}
 	}
 	lockWrite sync.RWMutex
 }
 
 // Write calls WriteFunc.
-func (mock *ProtobufWriterMock) Write(ctx context.Context, data *cppbridge.SnappyProtobufEncodedData) error {
+func (mock *ProtobufWriterMock) Write(ctx context.Context, data []byte) error {
 	if mock.WriteFunc == nil {
 		panic("ProtobufWriterMock.WriteFunc: method is nil but ProtobufWriter.Write was just called")
 	}
 	callInfo := struct {
 		Ctx  context.Context
-		Data *cppbridge.SnappyProtobufEncodedData
+		Data []byte
 	}{
 		Ctx:  ctx,
 		Data: data,
@@ -65,11 +64,11 @@ func (mock *ProtobufWriterMock) Write(ctx context.Context, data *cppbridge.Snapp
 //	len(mockedProtobufWriter.WriteCalls())
 func (mock *ProtobufWriterMock) WriteCalls() []struct {
 	Ctx  context.Context
-	Data *cppbridge.SnappyProtobufEncodedData
+	Data []byte
 } {
 	var calls []struct {
 		Ctx  context.Context
-		Data *cppbridge.SnappyProtobufEncodedData
+		Data []byte
 	}
 	mock.lockWrite.RLock()
 	calls = mock.calls.Write

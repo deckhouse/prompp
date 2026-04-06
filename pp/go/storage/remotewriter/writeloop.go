@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -442,10 +443,8 @@ func scanHeadForDestination(dirPath, destinationName string) (bool, error) {
 		return false, fmt.Errorf("read dir names: %w", err)
 	}
 
-	for _, fileName := range fileNames {
-		if fileName == fmt.Sprintf("%s.cursor", destinationName) {
-			return true, nil
-		}
+	if slices.Contains(fileNames, fmt.Sprintf("%s.cursor", destinationName)) {
+		return true, nil
 	}
 
 	return false, nil

@@ -2,6 +2,11 @@ package storage_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -11,19 +16,12 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
-var (
-	defaultSortCatalogRecordsFunc = func(lhs, rhs *catalog.Record) bool {
-		return lhs.CreatedAt() < rhs.CreatedAt()
-	}
-)
+var defaultSortCatalogRecordsFunc = func(lhs, rhs *catalog.Record) bool {
+	return lhs.CreatedAt() < rhs.CreatedAt()
+}
 
 type UploadOrBuildHeadSuite struct {
 	suite.Suite
@@ -41,7 +39,7 @@ func TestUploadOrBuildHeadSuite(t *testing.T) {
 
 func (s *UploadOrBuildHeadSuite) SetupTest() {
 	dataDir, err := storagetest.CreateDataDirectory(s.T().TempDir())
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 	s.dataDir = dataDir
 
 	s.clock = clockwork.NewFakeClockAt(time.Now())
@@ -54,11 +52,11 @@ func (s *UploadOrBuildHeadSuite) SetupTest() {
 func (s *UploadOrBuildHeadSuite) createCatalog() {
 	var err error
 	s.catalog, err = storagetest.CreateCatalog(s.clock, filepath.Join(s.dataDir, "catalog.log"), s.headIdGenerator)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 }
 
-func createBuilder(catalog *catalog.Catalog, dataDir string, unloadDataStorageInterval time.Duration) *storage.Builder {
-	return storage.NewBuilder(catalog, dataDir, storagetest.MaxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval)
+func createBuilder(cg *catalog.Catalog, dataDir string, unloadDataStorageInterval time.Duration) *storage.Builder {
+	return storage.NewBuilder(cg, dataDir, storagetest.MaxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval)
 }
 
 func (s *UploadOrBuildHeadSuite) createBuilder() {
@@ -76,29 +74,29 @@ func (s *UploadOrBuildHeadSuite) createHead() (*storage.Head, error) {
 func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadSuccess() {
 	// Arrange
 	createdHead, err := s.createHead()
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	// Act
 	loadedHead, err := storage.UploadOrBuildHead(s.clock, s.catalog, s.builder, s.loader, block.DefaultBlockDuration, storagetest.NumberOfShards)
 	headRecords := s.catalog.List(nil, defaultSortCatalogRecordsFunc)
 
 	// Assert
-	require.NoError(s.T(), err)
-	require.Equal(s.T(), createdHead.ID(), loadedHead.ID())
-	require.Equal(s.T(), uint64(0), loadedHead.Generation())
-	require.NoError(s.T(), createdHead.Close())
-	require.NoError(s.T(), loadedHead.Close())
+	s.Require().NoError(err)
+	s.Require().Equal(createdHead.ID(), loadedHead.ID())
+	s.Require().Equal(uint64(0), loadedHead.Generation())
+	s.Require().NoError(createdHead.Close())
+	s.Require().NoError(loadedHead.Close())
 
-	require.Len(s.T(), headRecords, 1)
+	s.Require().Len(headRecords, 1)
 }
 
 func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadCorrupted() {
 	// Arrange
 	createdHead, err := s.createHead()
-	require.NoError(s.T(), err)
-	require.NoError(s.T(), createdHead.Close())
+	s.Require().NoError(err)
+	s.Require().NoError(createdHead.Close())
 	createdHeadDir := filepath.Join(s.dataDir, createdHead.ID())
-	require.NoError(s.T(), os.RemoveAll(createdHeadDir))
+	s.Require().NoError(os.RemoveAll(createdHeadDir))
 	s.clock.Advance(time.Hour)
 
 	// Act
@@ -106,30 +104,30 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadCorrupted() {
 	headRecords := s.catalog.List(nil, defaultSortCatalogRecordsFunc)
 
 	// Assert
-	require.Nil(s.T(), err)
-	require.NotEqual(s.T(), builtHead.ID(), createdHead.ID())
-	require.Equal(s.T(), uint64(1), builtHead.Generation())
-	require.NoError(s.T(), builtHead.Close())
+	s.Require().NoError(err)
+	s.Require().NotEqual(builtHead.ID(), createdHead.ID())
+	s.Require().Equal(uint64(1), builtHead.Generation())
+	s.Require().NoError(builtHead.Close())
 
-	require.Len(s.T(), headRecords, 2)
-	require.True(s.T(), headRecords[0].Corrupted())
+	s.Require().Len(headRecords, 2)
+	s.Require().True(headRecords[0].Corrupted())
 }
 
 func (s *UploadOrBuildHeadSuite) fixWalEncoderVersion(headDir string, numberOfShards uint16, encoderVersion uint8) {
 	for i := uint16(0); i < numberOfShards; i++ {
-		file, err := os.OpenFile(filepath.Join(headDir, fmt.Sprintf("shard_%d.wal", i)), os.O_RDWR|os.O_TRUNC, 0666)
-		require.NoError(s.T(), err)
+		file, err := os.OpenFile(filepath.Join(headDir, fmt.Sprintf("shard_%d.wal", i)), os.O_RDWR|os.O_TRUNC, 0o666)
+		s.Require().NoError(err)
 		_, err = writer.WriteHeader(file, wal.FileFormatVersion, encoderVersion)
-		require.NoError(s.T(), err)
-		require.NoError(s.T(), file.Close())
+		s.Require().NoError(err)
+		s.Require().NoError(file.Close())
 	}
 }
 
 func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadOutdatedEncoderVersion() {
 	// Arrange
 	createdHead, err := s.createHead()
-	require.NoError(s.T(), err)
-	require.NoError(s.T(), createdHead.Close())
+	s.Require().NoError(err)
+	s.Require().NoError(createdHead.Close())
 	createdHeadDir := filepath.Join(s.dataDir, createdHead.ID())
 	s.fixWalEncoderVersion(createdHeadDir, storagetest.NumberOfShards, cppbridge.EncodersVersion()-1)
 	s.clock.Advance(time.Hour)
@@ -139,11 +137,11 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadOutdatedEncoderVersion() {
 	headRecords := s.catalog.List(nil, defaultSortCatalogRecordsFunc)
 
 	// Assert
-	require.Nil(s.T(), err)
-	require.NotEqual(s.T(), builtHead.ID(), createdHead.ID())
-	require.Equal(s.T(), uint64(1), builtHead.Generation())
-	require.NoError(s.T(), builtHead.Close())
+	s.Require().NoError(err)
+	s.Require().NotEqual(builtHead.ID(), createdHead.ID())
+	s.Require().Equal(uint64(1), builtHead.Generation())
+	s.Require().NoError(builtHead.Close())
 
-	require.Len(s.T(), headRecords, 2)
-	require.False(s.T(), headRecords[0].Corrupted())
+	s.Require().Len(headRecords, 2)
+	s.Require().False(headRecords[0].Corrupted())
 }

@@ -9,16 +9,62 @@ import (
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg writer_test --out
-//go:generate moq buffered_moq_test.go . FileInfo SegmentIsWrittenNotifier FileWriter
+//go:generate moq buffered_moq_test.go . FileInfo SegmentIsWrittenNotifier FileWriter SegmentMarkup
 
 // FileInfo alias for [os.FileInfo].
 type FileInfo = os.FileInfo
 
+//
+// SegmentIsWrittenNotifier
+//
+
 // SegmentIsWrittenNotifier notify when new segment write.
 type SegmentIsWrittenNotifier interface {
+	// NotifySegmentIsWritten notify that the segment has been flushed for shard.
 	NotifySegmentIsWritten(shardID uint16)
+
+	// NotifySegmentWrite notify that the segment is being written for shard.
 	NotifySegmentWrite(shardID uint16)
 }
+
+//
+// SegmentMarkup
+//
+
+// SegmentMarkup marking up through segment IDs by shards.
+type SegmentMarkup interface {
+	// NextSegmentID returns the next through ID for the segment.
+	NextSegmentID() uint32
+
+	// SetSegmentIDByShard sets the matching of through segment ID and shard.
+	SetSegmentIDByShard(sid uint32, shardID uint16)
+}
+
+// NoopSegmentMarkup marking up through segment IDs by shards. [SegmentMarkup] of the implementation.
+type NoopSegmentMarkup struct{}
+
+// NextSegmentID returns the next through ID for the segment. [SegmentMarkup] of the implementation.
+func (NoopSegmentMarkup) NextSegmentID() uint32 { return 0 }
+
+// SetSegmentIDByShard sets the matching of through segment ID and shard. [SegmentMarkup] of the implementation.
+func (NoopSegmentMarkup) SetSegmentIDByShard(uint32, uint16) {}
+
+//
+// SegmentToWrite
+//
+
+// SegmentToWrite the minimum required segment implementation for writing.
+type SegmentToWrite interface {
+	// ID returns the segment ID, filled in from the outside.
+	ID() uint32
+
+	// SetSegmentID sets the segment ID.
+	SetSegmentID(sid uint32)
+}
+
+//
+// FileWriter
+//
 
 // FileWriter writer implementation [os.File].
 type FileWriter interface {
@@ -27,15 +73,25 @@ type FileWriter interface {
 	Stat() (FileInfo, error)
 }
 
+//
+// SegmentWriterFN
+//
+
 // SegmentWriterFN encode to slice byte and write to [io.Writer].
-type SegmentWriterFN[TSegment any] func(writer io.Writer, segment TSegment) (n int, err error)
+type SegmentWriterFN[TSegment SegmentToWrite] func(writer io.Writer, segment TSegment) (n int, err error)
+
+//
+// Buffered
+//
 
 // Buffered writer for segments.
-type Buffered[TSegment any] struct {
+type Buffered[TSegment SegmentToWrite] struct {
 	shardID        uint16
 	segments       []TSegment
+	segmentIDs     []uint32
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
+	segmentMarkup  SegmentMarkup
 	swriter        SegmentWriterFN[TSegment]
 	writer         FileWriter
 	currentSize    int64
@@ -43,11 +99,12 @@ type Buffered[TSegment any] struct {
 }
 
 // NewBuffered init new [Buffered].
-func NewBuffered[TSegment any](
+func NewBuffered[TSegment SegmentToWrite](
 	shardID uint16,
 	writer FileWriter,
 	swriter SegmentWriterFN[TSegment],
 	notifier SegmentIsWrittenNotifier,
+	segmentMarkup SegmentMarkup,
 ) (*Buffered[TSegment], error) {
 	info, err := writer.Stat()
 	if err != nil {
@@ -58,6 +115,7 @@ func NewBuffered[TSegment any](
 		shardID:        shardID,
 		buffer:         bytes.NewBuffer(nil),
 		notifier:       notifier,
+		segmentMarkup:  segmentMarkup,
 		swriter:        swriter,
 		writer:         writer,
 		currentSize:    info.Size(),
@@ -113,12 +171,26 @@ func (w *Buffered[TSegment]) Sync() error {
 
 	w.notifier.NotifySegmentIsWritten(w.shardID)
 	w.writeCompleted = true
+
+	for i := range w.segmentIDs {
+		w.segmentMarkup.SetSegmentIDByShard(w.segmentIDs[i], w.shardID)
+	}
+
+	if len(w.segmentIDs) != 0 && cap(w.segmentIDs) >= len(w.segmentIDs)*2 { //revive:disable-line:add-constant // x2
+		w.segmentIDs = make([]uint32, 0, len(w.segmentIDs))
+	} else {
+		clear(w.segmentIDs)
+		w.segmentIDs = w.segmentIDs[:0]
+	}
+
 	return nil
 }
 
-// Write to buffer [Buffered] incoming [Segment].
+// Write to buffer [Buffered] incoming [SegmentToWrite].
 func (w *Buffered[TSegment]) Write(segment TSegment) error {
+	segment.SetSegmentID(w.segmentMarkup.NextSegmentID())
 	w.segments = append(w.segments, segment)
+
 	return nil
 }
 
@@ -133,7 +205,7 @@ func (w *Buffered[TSegment]) flushBuffer() error {
 	return nil
 }
 
-// writeToBufferAndFlush write [Segment] as slice byte to buffer and flush to [FileWriter].
+// writeToBufferAndFlush write [SegmentToWrite] as slice byte to buffer and flush to [WriteSyncCloser].
 func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bool, err error) {
 	if _, err := w.swriter(w.buffer, segment); err != nil {
 		w.buffer.Reset()
@@ -142,6 +214,7 @@ func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bo
 
 	w.writeCompleted = false
 	w.notifier.NotifySegmentWrite(w.shardID)
+	w.segmentIDs = append(w.segmentIDs, segment.ID())
 
 	if err := w.flushBuffer(); err != nil {
 		return true, err
