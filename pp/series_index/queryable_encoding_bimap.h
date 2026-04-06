@@ -82,23 +82,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept {
+    assert(boundary <= max_item_index_impl());
     pending_shrink_boundary_ = boundary;
     prune_hidden_series_from_hashset_in_fixed_state();
-  }
-
-  void fill_added_series_mapping(uint32_t shrink_boundary,
-                                 QueryableEncodingBimap& copy,
-                                 BareBones::Vector<uint32_t>& old_to_new_mapping,
-                                 const BareBones::Bitset& added_series) {
-    assert(shrink_boundary <= next_item_index_impl() && old_to_new_mapping.size() >= shrink_boundary);
-
-    for (uint32_t old_id = 0; old_id < shrink_boundary; ++old_id) {
-      if (old_id < added_series.size() && added_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
-        const auto label_set = (*this)[old_id];
-        const auto new_id = copy.find_or_emplace(label_set);
-        old_to_new_mapping[old_id] = new_id;
-      }
-    }
   }
 
   template <class Snapshot>
@@ -149,7 +135,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     Base::storage_.drop_front(drop_count);
     rebuild_indexes_after_shrink();
 
-    added_series_.clear();
     pending_shrink_boundary_ = kPendingShrinkBoundaryNotSet;
   }
 
@@ -161,15 +146,21 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
-    if (is_normal()) [[likely]] {
-      return find_or_emplace_in_normal_state(label_set, hash);
+    if (const auto existing_it = ls_id_hash_set_.find(label_set, hash); existing_it != ls_id_hash_set_.end()) {
+      const auto logical_id = static_cast<uint32_t>(*existing_it);
+      mark_series_as_added(logical_id);
+      return logical_id;
     }
 
     if (is_fixed()) [[unlikely]] {
-      return find_or_emplace_in_fixed_state(label_set, hash);
+      const auto logical_id = emplace_visible_in_fixed_state(label_set, hash);
+      mark_series_as_added(logical_id);
+      return logical_id;
     }
-    assert(is_shrunk());
-    return find_or_emplace_in_shrunk_state(label_set, hash);
+
+    const auto logical_id = emplace_series_and_update_indexes(label_set, hash);
+    mark_series_as_added(logical_id);
+    return logical_id;
   }
 
   template <class Class>
@@ -180,16 +171,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
     hashval = phmap_hash(hashval);
-
-    if (is_normal()) [[likely]] {
-      return find_in_normal_state(c, hashval);
+    if (const auto i = ls_id_hash_set_.find(c, hashval); i != ls_id_hash_set_.end()) {
+      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
     }
-
-    if (is_fixed()) [[unlikely]] {
-      return find_in_fixed_state(c, hashval);
-    }
-    assert(is_shrunk());
-    return find_in_shrunk_state(c, hashval);
+    return std::optional<uint32_t>{};
   }
 
   using Base::reserve;
@@ -270,8 +255,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void update_indexes(uint32_t ls_id, const LabelSet& label_set) {
-    const uint32_t ls_id_for_sorting = is_shrunk() ? ls_id - shift_ : ls_id;
-    auto ls_id_set_iterator = ls_id_set_.emplace(ls_id_for_sorting).first;
+    auto ls_id_set_iterator = ls_id_set_.emplace(ls_id).first;
 
     for (auto label = label_set.begin(); label != label_set.end(); ++label) {
       if (!is_valid_label((*label).second)) [[unlikely]] {
@@ -321,29 +305,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shift_ == 0 && pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t ls_id) const noexcept {
-    return is_fixed() && ls_id < pending_shrink_boundary_ && (ls_id >= added_series_.size() || !added_series_[ls_id]);
-  }
-
-  template <class Class>
-  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE bool find_mapped_logical_id_in_shrunk_state(const Class& c, uint32_t& out_logical_id) const noexcept {
-    assert(is_shrunk());
-    if (post_shrink_mapping_.empty() || !post_shrink_snapshot_access_.composite_resolve) [[likely]] {
-      return false;
-    }
-
-    const uint32_t mapping_boundary = std::min<uint32_t>(shift_, post_shrink_mapping_.size());
-    for (uint32_t logical_id = 0; logical_id < mapping_boundary; ++logical_id) {
-      const auto mapped_id = post_shrink_mapping_[logical_id];
-      if (mapped_id == Base::kInvalidId) [[likely]] {
-        continue;
-      }
-      const auto mapped_label_set = post_shrink_snapshot_access_.composite_resolve(mapped_id);
-      if (std::ranges::equal(c, mapped_label_set)) [[unlikely]] {
-        out_logical_id = logical_id;
-        return true;
-      }
-    }
-    return false;
+    assert(is_fixed());
+    assert(ls_id < added_series_.size());
+    return ls_id < pending_shrink_boundary_ && !is_series_alive(ls_id);
   }
 
   template <class LabelSetLike>
@@ -351,7 +315,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     const auto new_storage_id = Base::storage_.emplace_back(label_set);
     const auto composite_label_set = Base::storage_composite(new_storage_id);
     const auto new_logical_id = shift_ + new_storage_id;
-    // Keep logical ids in hash/index structures across all states.
+
     ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_logical_id));
     update_indexes(new_logical_id, composite_label_set);
     return new_logical_id;
@@ -360,85 +324,15 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSetLike>
   [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE uint32_t emplace_visible_in_fixed_state(const LabelSetLike& label_set, size_t mixed_hash) {
     assert(is_fixed());
-    const auto target_visible_id = pending_shrink_boundary_;
-    for (uint32_t id = next_item_index_impl(); id < target_visible_id; ++id) {
-      Base::storage_.emplace_back(empty_composite());
-    }
-    const auto logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
-    assert(logical_id >= target_visible_id);
-    return logical_id;
-  }
+    const auto new_storage_id = Base::storage_.emplace_back(label_set);
+    const auto logical_id = shift_ + new_storage_id;
+    assert(logical_id >= pending_shrink_boundary_);
 
-  template <class LabelSetLike>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_in_normal_state(const LabelSetLike& label_set, size_t mixed_hash) {
-    if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
-      const auto logical_id = static_cast<uint32_t>(*existing_it);
-      mark_series_as_added(logical_id);
-      return logical_id;
-    }
-
-    const auto logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
     mark_series_as_added(logical_id);
+    const auto composite_label_set = Base::storage_composite(new_storage_id);
+    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(logical_id));
+    update_indexes(logical_id, composite_label_set);
     return logical_id;
-  }
-
-  template <class LabelSetLike>
-  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE uint32_t find_or_emplace_in_fixed_state(const LabelSetLike& label_set, size_t mixed_hash) {
-    if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
-      const auto logical_id = static_cast<uint32_t>(*existing_it);
-      if (!is_hidden_in_fixed_state(logical_id)) [[likely]] {
-        return logical_id;
-      }
-    }
-    return emplace_visible_in_fixed_state(label_set, mixed_hash);
-  }
-
-  template <class LabelSetLike>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_in_shrunk_state(const LabelSetLike& label_set, size_t mixed_hash) {
-    assert(is_shrunk());
-    if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
-      return static_cast<uint32_t>(*existing_it);
-    }
-
-    uint32_t mapped_logical_id = Base::kInvalidId;
-    if (find_mapped_logical_id_in_shrunk_state(label_set, mapped_logical_id)) [[unlikely]] {
-      return mapped_logical_id;
-    }
-
-    return emplace_series_and_update_indexes(label_set, mixed_hash);
-  }
-
-  template <class Class>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> find_in_normal_state(const Class& c, size_t mixed_hash) const {
-    if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
-      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
-    }
-    return std::optional<uint32_t>{};
-  }
-
-  template <class Class>
-  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE std::optional<uint32_t> find_in_fixed_state(const Class& c, size_t mixed_hash) const {
-    if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
-      const auto logical_id = static_cast<uint32_t>(*i);
-      if (!is_hidden_in_fixed_state(logical_id)) [[likely]] {
-        return std::optional<uint32_t>{logical_id};
-      }
-    }
-    return std::optional<uint32_t>{};
-  }
-
-  template <class Class>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> find_in_shrunk_state(const Class& c, size_t mixed_hash) const {
-    assert(is_shrunk());
-    if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
-      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
-    }
-
-    uint32_t mapped_logical_id = Base::kInvalidId;
-    if (find_mapped_logical_id_in_shrunk_state(c, mapped_logical_id)) [[unlikely]] {
-      return std::optional<uint32_t>{mapped_logical_id};
-    }
-    return std::optional<uint32_t>{};
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {
@@ -480,44 +374,32 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   BareBones::Vector<uint32_t> post_shrink_mapping_{};
   PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_series_alive(uint32_t logical_id) const noexcept {
+    assert(logical_id < added_series_.size());
+    return added_series_[logical_id];
+  }
+
   void prune_hidden_series_from_hashset_in_fixed_state() noexcept {
     assert(is_fixed());
-
-    const uint32_t max_visible_id = std::min(pending_shrink_boundary_, next_item_index_impl());
-    const uint32_t added_size = added_series_.size();
-    const uint32_t guarded_id = std::min(max_visible_id, added_size);
-
-    for (uint32_t logical_id = 0; logical_id < guarded_id; ++logical_id) {
-      if (added_series_[logical_id]) [[likely]] {
+    for (auto it = ls_id_hash_set_.begin(); it != ls_id_hash_set_.end();) {
+      const auto logical_id = static_cast<uint32_t>(*it);
+      if (is_hidden_in_fixed_state(logical_id)) [[unlikely]] {
+        it = ls_id_hash_set_.erase(it);
         continue;
       }
-      ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
-    }
-
-    for (uint32_t logical_id = guarded_id; logical_id < max_visible_id; ++logical_id) {
-      ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
+      ++it;
     }
   }
 
   void rebuild_indexes_after_shrink() {
     assert(is_shrunk());
-    ls_id_set_.clear();
-    BareBones::Vector<uint32_t> stale_logical_ids;
-    stale_logical_ids.reserve(ls_id_hash_set_.size());
-    const uint32_t mapping_size = post_shrink_mapping_.size();
-    const uint32_t max_logical_id = max_item_index_impl();
-    for (const auto& logical_id_proxy : ls_id_hash_set_) {
-      const auto logical_id = static_cast<uint32_t>(logical_id_proxy);
-      const bool is_visible =
-          logical_id < shift_ ? (logical_id < mapping_size && post_shrink_mapping_[logical_id] != Base::kInvalidId) : (logical_id < max_logical_id);
-      if (!is_visible) [[unlikely]] {
-        stale_logical_ids.emplace_back(logical_id);
+    for (auto it = ls_id_set_.begin(); it != ls_id_set_.end();) {
+      const auto logical_id = static_cast<uint32_t>(*it);
+      if (!is_series_alive(logical_id)) [[unlikely]] {
+        it = ls_id_set_.erase(it);
         continue;
       }
-      ls_id_set_.emplace(logical_id);
-    }
-    for (const auto logical_id : stale_logical_ids) {
-      ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
+      ++it;
     }
     sorting_index_.clear();
     sorting_index_.build();
