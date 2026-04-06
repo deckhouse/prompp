@@ -3,6 +3,7 @@ package remotewriter
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/jonboulle/clockwork"
@@ -92,6 +93,8 @@ func (s *DataSourceActiveSuite) TestNextV1() {
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
+
+	runtime.KeepAlive(segmentSampleStorages)
 }
 
 func (s *DataSourceActiveSuite) TestNextV2() {
@@ -157,6 +160,8 @@ func (s *DataSourceActiveSuite) TestNextV2() {
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
+
+	runtime.KeepAlive(segmentSampleStorages)
 }
 
 func (s *DataSourceActiveSuite) TestRestoreReadV1() {
@@ -217,6 +222,8 @@ func (s *DataSourceActiveSuite) TestRestoreReadV1() {
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
+
+	runtime.KeepAlive(segmentSampleStorages)
 }
 
 func (s *DataSourceActiveSuite) TestRestoreReadV2() {
@@ -276,6 +283,8 @@ func (s *DataSourceActiveSuite) TestRestoreReadV2() {
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
+
+	runtime.KeepAlive(segmentSampleStorages)
 }
 
 func (s *DataSourceActiveSuite) TestSkipByMinTimeV1() {
@@ -338,6 +347,8 @@ func (s *DataSourceActiveSuite) TestSkipByMinTimeV1() {
 	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
+
+	runtime.KeepAlive(segmentSampleStorages)
 }
 
 func (s *DataSourceActiveSuite) TestSkipByMinTimeV2() {
@@ -400,6 +411,8 @@ func (s *DataSourceActiveSuite) TestSkipByMinTimeV2() {
 	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
+
+	runtime.KeepAlive(segmentSampleStorages)
 }
 
 func (s *DataSourceActiveSuite) TestFileNotExistsV1() {
