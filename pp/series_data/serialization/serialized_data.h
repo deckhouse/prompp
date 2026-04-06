@@ -275,9 +275,7 @@ class SerializedDataView {
           series_id_(chunk_iter_->label_set_id),
           buffer_(buffer),
           chunks_(chunks) {
-      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
-        decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
-      });
+      reset_decode_iterator();
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return *decode_iter_; }
@@ -287,9 +285,7 @@ class SerializedDataView {
       if (++decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
         if (std::next(chunk_iter_) != chunks_.end() && series_id_ == std::next(chunk_iter_)->label_set_id) {
           ++chunk_iter_;
-          Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
-            decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
-          });
+          reset_decode_iterator();
         }
       }
       return *this;
@@ -312,9 +308,7 @@ class SerializedDataView {
 
       chunk_iter_ = chunks_.begin() + chunk_id;
       series_id_ = chunk_iter_->label_set_id;
-      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
-        decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
-      });
+      reset_decode_iterator();
     }
 
    private:
@@ -324,6 +318,12 @@ class SerializedDataView {
 
     std::span<const unsigned char> buffer_;
     chunk::SerializedChunkSpan chunks_;
+
+    PROMPP_ALWAYS_INLINE void reset_decode_iterator() {
+      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+        decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+      });
+    }
   };
 
   explicit SerializedDataView(const SerializedData& serialized_data) : data_(serialized_data) {}
