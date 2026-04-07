@@ -70,7 +70,7 @@ func (*RotatorSuite) createShardOnMemory(
 		shard.NewDataStorage(),
 		nil,
 		nil,
-		wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil),
+		&testWal{Wal: wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil), maxItemIndex: 1},
 		shardID,
 	)
 }
@@ -79,12 +79,16 @@ func (*RotatorSuite) nameIDGenerator(n uint64) string {
 	return fmt.Sprintf("test-head-id-%d", n)
 }
 
-func (*RotatorSuite) addLabelSetToHead(h *storage.Head) {
+func (s *RotatorSuite) addLabelSetToHead(h *storage.Head) {
 	for sd := range h.RangeShards() {
 		sd.LSSWithRLock(func(target, _ *cppbridge.LabelSetStorage) error {
 			target.FindOrEmplace(model.LabelSetFromMap(map[string]string{"_name__": fmt.Sprintf("test0%d", sd.ShardID())}))
 			return nil
 		})
+
+		s.Require().NoError(sd.WalCommit())
+		s.Require().NoError(sd.WalFlush())
+		s.Require().NoError(sd.WalSync())
 	}
 }
 
@@ -193,13 +197,13 @@ func (s *RotatorSuite) TestRotate() {
 		s.Equal(uint32(2), actualNumSeries)
 
 		for _, segmentWriter := range segmentWriters {
-			if !s.Len(segmentWriter.WriteCalls(), 1) {
+			if !s.Len(segmentWriter.WriteCalls(), 2) {
 				return
 			}
-			if !s.Len(segmentWriter.FlushCalls(), 1) {
+			if !s.Len(segmentWriter.FlushCalls(), 2) {
 				return
 			}
-			if !s.Len(segmentWriter.SyncCalls(), 1) {
+			if !s.Len(segmentWriter.SyncCalls(), 2) {
 				return
 			}
 
@@ -308,13 +312,13 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 		s.Equal(expectedNumSeries, actualNumSeries)
 
 		for _, segmentWriter := range segmentWriters {
-			if !s.Len(segmentWriter.WriteCalls(), 1) {
+			if !s.Len(segmentWriter.WriteCalls(), 2) {
 				return
 			}
-			if !s.Len(segmentWriter.FlushCalls(), 1) {
+			if !s.Len(segmentWriter.FlushCalls(), 2) {
 				return
 			}
-			if !s.Len(segmentWriter.SyncCalls(), 1) {
+			if !s.Len(segmentWriter.SyncCalls(), 2) {
 				return
 			}
 
@@ -329,4 +333,19 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 		s.Equal(headInformer.SetRotatedStatusCalls()[0].HeadID, rHeads[0].ID())
 		s.True(rHeads[0].IsReadOnly())
 	})
+}
+
+//
+// testWal
+//
+
+// testWal is a mock implementation of wal.Wal.
+type testWal struct {
+	*wal.Wal[*cppbridge.HeadEncodedSegment, *mock.SegmentWriterMock]
+	maxItemIndex uint32
+}
+
+// MaxItemIndex returns the max item index written to the wal.
+func (w *testWal) MaxItemIndex() uint32 {
+	return w.maxItemIndex
 }
