@@ -1236,12 +1236,8 @@ struct LabelSet {
 
       if (drop_count == count()) [[likely]] {
         shrinked_size_ += symbols_ids_sequences_.size();
-
-        symbols_ids_sequences_.clear();
-        items_.clear();
-
-        symbols_ids_sequences_.shrink_to_fit();
-        items_.shrink_to_fit();
+        symbols_ids_sequences_ = std::move(symbols_ids_sequences_type{});
+        items_ = std::move(Vector<item_type>{});
         return;
       }
 
