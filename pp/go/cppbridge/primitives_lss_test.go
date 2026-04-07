@@ -933,5 +933,7 @@ func (s *RotateLSSSuite) checkQuery(snapshot *cppbridge.LabelSetSnapshot, select
 		actualLabelSets = append(actualLabelSets, ls)
 	}
 
+	runtime.KeepAlive(res)
+
 	return actualLabelSets
 }
