@@ -2233,6 +2233,10 @@ func readPromPPFeatures(logger log.Logger) {
 			)
 
 			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
+
+		case "shrink_shard_copier":
+			pp_storage.ShrinkShardCopier = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is enabled.")
 		}
 	}
 }

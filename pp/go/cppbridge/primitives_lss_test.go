@@ -630,7 +630,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLS() {
 	)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	s.Equal(
-		labelSetToCppBridgeLabels(append([]model.LabelSet{lsNew}, s.labelSets[:3]...)),
+		labelSetToCppBridgeLabels(append(s.labelSets[:3], lsNew)),
 		s.checkQuery(snapshot, selector),
 	)
 

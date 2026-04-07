@@ -75,7 +75,8 @@ func (lss *LabelSetStorage) BitsetSeries() *BitsetSeries {
 
 // FinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
 // Attention: works only with QueryableEncodingBimap type of LSS.
-// newToOldMapping is the copier output (new id in copy -> old id in source); C++ inverts it and stores old->new in the LSS.
+// newToOldMapping is the copier output (new id in copy -> old id in source);
+// C++ inverts it and stores old->new in the LSS.
 func (lss *LabelSetStorage) FinalizeCopyAndShrink(resolveSnapshot *LabelSetSnapshot, newToOldMapping *IdsMapping) {
 	primitivesLSSFinalizeCopyAndShrink(lss.pointer, resolveSnapshot.pointer, newToOldMapping.pointer)
 	runtime.KeepAlive(lss)

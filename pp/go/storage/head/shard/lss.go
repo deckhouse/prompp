@@ -61,8 +61,8 @@ func (l *LSS) FinalizeCopyAndShrink() {
 func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) {
 	l.locker.Lock()
 	snapshot := l.getSnapshot()
-	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 	bitsetSeries := l.target.BitsetSeries()
+	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 	l.locker.Unlock()
 
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)

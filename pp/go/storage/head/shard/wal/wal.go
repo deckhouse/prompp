@@ -215,8 +215,8 @@ func (w *Wal[TSegment, TWriter]) MaxItemIndex() uint32 {
 		return 0
 	}
 
-	w.locker.Lock()
-	defer w.locker.Unlock()
+	w.encLocker.Lock()
+	defer w.encLocker.Unlock()
 
 	return w.encoder.MaxItemIndex()
 }
