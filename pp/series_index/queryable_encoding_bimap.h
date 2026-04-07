@@ -133,9 +133,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
     shift_ += drop_count;
     Base::storage_.drop_front(drop_count);
-    rebuild_indexes_after_shrink();
-
     pending_shrink_boundary_ = kPendingShrinkBoundaryNotSet;
+
+    rebuild_indexes_after_shrink();
   }
 
   template <class LabelSet>
@@ -381,13 +381,13 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   void prune_hidden_series_from_hashset_in_fixed_state() noexcept {
     assert(is_fixed());
-    for (auto it = ls_id_hash_set_.begin(); it != ls_id_hash_set_.end();) {
-      const auto logical_id = static_cast<uint32_t>(*it);
-      if (is_hidden_in_fixed_state(logical_id)) [[unlikely]] {
-        it = ls_id_hash_set_.erase(it);
-        continue;
+    const uint32_t boundary = pending_shrink_boundary_;
+    assert(boundary <= added_series_.size());
+    for (auto zero_it = added_series_.zbegin(); zero_it != added_series_.zend(); ++zero_it) {
+      if (*zero_it >= boundary) {
+        break;
       }
-      ++it;
+      ls_id_hash_set_.erase(typename Base::Proxy(*zero_it));
     }
   }
 

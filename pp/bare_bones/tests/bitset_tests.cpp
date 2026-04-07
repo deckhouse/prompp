@@ -299,6 +299,55 @@ TEST_F(BitsetFixture, IterateOverEmptyBitset) {
   EXPECT_EQ(0U, std::ranges::distance(bs_));
 }
 
+TEST_F(BitsetFixture, ZeroIteratorReturnsAllUnsetIdsInBitset) {
+  // Arrange
+  bs_.resize(8);
+  bs_.set({1, 3, 6});
+  const std::vector<uint32_t> expected{0, 2, 4, 5, 7};
+
+  // Act
+  std::vector<uint32_t> actual;
+  for (auto it = bs_.zbegin(); it != bs_.zend(); ++it) {
+    actual.push_back(*it);
+  }
+
+  // Assert
+  EXPECT_EQ(expected, actual);
+}
+
+TEST_F(BitsetFixture, ZeroIteratorSupportsExternalBoundaryFiltering) {
+  // Arrange
+  bs_.resize(10);
+  bs_.set({0, 3, 4, 7, 9});
+  const std::vector<uint32_t> expected{5, 6, 8};
+
+  // Act
+  std::vector<uint32_t> actual;
+  for (auto it = bs_.zbegin(); it != bs_.zend(); ++it) {
+    if (*it >= 9) {
+      break;
+    }
+    if (*it >= 5) {
+      actual.push_back(*it);
+    }
+  }
+
+  // Assert
+  EXPECT_EQ(expected, actual);
+}
+
+TEST_F(BitsetFixture, ZeroCountMatchesUnsetBitsInBitset) {
+  // Arrange
+  bs_.resize(10);
+  bs_.set({0, 1, 4, 8});
+
+  // Act
+  const auto zero_count_full = bs_.zerocount();
+
+  // Assert
+  EXPECT_EQ(6U, zero_count_full);
+}
+
 class BitsetCreateIteratorFixture : public testing::Test {
  protected:
   std::vector<uint8_t> bytes_data_;
