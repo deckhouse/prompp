@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"slices"
 	"testing"
+	"unique"
 
 	"github.com/prometheus/prometheus/pp/go/model"
 
@@ -920,9 +921,13 @@ func (s *RotateLSSSuite) checkQuery(snapshot *cppbridge.LabelSetSnapshot, select
 
 	actualLabelSets := make([]cppbridge.Labels, 0, len(res.IDs()))
 	for _, lsid := range res.IDs() {
+
 		ls := cppbridge.Labels{}
 		snapshot.RangeLabelSet(lsid, func(l cppbridge.Label) error {
-			ls = append(ls, l)
+			ls = append(ls, cppbridge.Label{
+				Name:  unique.Make(l.Name).Value(),
+				Value: unique.Make(l.Value).Value(),
+			})
 			return nil
 		})
 		actualLabelSets = append(actualLabelSets, ls)
