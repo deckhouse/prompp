@@ -24,11 +24,11 @@ func (s *DecoderSuite) TestDecoderV3Decode() {
 	record := catalog.NewRecordWithDataV3(uuid.New(), 5, 25, 26, 27, true, catalog.StatusActive, 25, 2, 3)
 
 	encoder := catalog.NewEncoderV3()
-	s.Require().NoError(encoder.EncodeTo(buffer, record))
+	s.Require().NoError(encoder.EncodeTo(buffer, &record.SerializedRecord))
 
 	decoder := catalog.NewDecoderV3()
 	decodedRecord := &catalog.Record{}
-	s.Require().NoError(decoder.DecodeFrom(buffer, decodedRecord))
+	s.Require().NoError(decoder.DecodeFrom(buffer, &decodedRecord.SerializedRecord))
 
 	s.Require().Equal(record.ID(), decodedRecord.ID())
 	s.Require().Equal(record.NumberOfShards(), decodedRecord.NumberOfShards())
@@ -53,10 +53,10 @@ func BenchmarkDecodeV3(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		buffer.Reset()
 		encoder = catalog.NewEncoderV3()
-		require.NoError(b, encoder.EncodeTo(buffer, record))
+		require.NoError(b, encoder.EncodeTo(buffer, &record.SerializedRecord))
 		decoder := catalog.NewDecoderV3()
 		b.StartTimer()
-		require.NoError(b, decoder.DecodeFrom(buffer, decodedRecord))
+		require.NoError(b, decoder.DecodeFrom(buffer, &decodedRecord.SerializedRecord))
 		b.StopTimer()
 	}
 }
@@ -72,9 +72,9 @@ func BenchmarkDecodeV3_State(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		buffer.Reset()
-		require.NoError(b, encoder.EncodeTo(buffer, record))
+		require.NoError(b, encoder.EncodeTo(buffer, &record.SerializedRecord))
 		b.StartTimer()
-		require.NoError(b, decoder.DecodeFrom(buffer, decodedRecord))
+		require.NoError(b, decoder.DecodeFrom(buffer, &decodedRecord.SerializedRecord))
 		b.StopTimer()
 	}
 }

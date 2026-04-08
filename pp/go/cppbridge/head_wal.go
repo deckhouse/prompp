@@ -14,8 +14,9 @@ import (
 
 // HeadEncodedSegment the encoded segment from the head wal.
 type HeadEncodedSegment struct {
-	buf     []byte
-	samples uint32
+	buf       []byte
+	samples   uint32
+	segmentID uint32
 }
 
 // NewHeadEncodedSegment init new [HeadEncodedSegment].
@@ -30,6 +31,16 @@ func NewHeadEncodedSegment(b []byte, samples uint32) *HeadEncodedSegment {
 	})
 
 	return s
+}
+
+// ID returns the segment ID, filled in from the outside.
+func (s *HeadEncodedSegment) ID() uint32 {
+	return s.segmentID
+}
+
+// SetSegmentID sets the segment ID.
+func (s *HeadEncodedSegment) SetSegmentID(sid uint32) {
+	s.segmentID = sid
 }
 
 // Samples returns count of samples in segment.

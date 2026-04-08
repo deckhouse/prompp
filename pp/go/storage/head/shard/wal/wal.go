@@ -3,7 +3,6 @@ package wal
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
 
@@ -19,13 +18,16 @@ import (
 const (
 	// FileFormatVersion wal file version.
 	FileFormatVersion = 1
+
+	// FileFormatVersionV2 wal file version 2.
+	FileFormatVersionV2 = 2
 )
 
 // ErrWalIsCorrupted errror when wal is corrupted.
 var ErrWalIsCorrupted = errors.New("wal is corrupted")
 
 // SegmentWriter writer for wal segments.
-type SegmentWriter[TSegment EncodedSegment] interface {
+type SegmentWriter[TSegment any] interface {
 	// CurrentSize return current shard wal size.
 	CurrentSize() int64
 
@@ -56,17 +58,8 @@ type Encoder[TSegment EncodedSegment] interface {
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
 type EncodedSegment interface {
-	// Size returns the size of the segment.
-	Size() int64
-
-	// CRC32 returns the CRC32 of the segment.
-	CRC32() uint32
-
 	// Samples returns the number of samples in the segment.
 	Samples() uint32
-
-	// WriteTo implements [io.WriterTo] interface.
-	io.WriterTo
 }
 
 // Wal write-ahead log for [Shard].
@@ -96,6 +89,7 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	registerer prometheus.Registerer,
 ) *Wal[TSegment, TWriter] {
 	factory := util.NewUnconflictRegisterer(registerer)
+	//revive:disable-next-line:add-constant it's base 10
 	ls := prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)}
 	w := &Wal[TSegment, TWriter]{
 		encoder:        encoder,
