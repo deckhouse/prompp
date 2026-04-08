@@ -509,16 +509,14 @@ func (s *RotateLSSSuite) TestCopyOnRotate() {
 	s.Equal(expectedLabelSets, s.lss.GetLabelSets(s.labelSetIDs).LabelsSets())
 
 	// QueryLabelNames
-	s.Equal(
-		newLSS.QueryLabelNames([]model.LabelMatcher{}).Names(),
-		s.lss.QueryLabelNames([]model.LabelMatcher{}).Names(),
-	)
+	namesNew := newLSS.QueryLabelNames([]model.LabelMatcher{})
+	namesOld := s.lss.QueryLabelNames([]model.LabelMatcher{})
+	s.Equal(namesNew.Names(), namesOld.Names())
 
 	// QueryLabelValues
-	s.Equal(
-		newLSS.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
-		s.lss.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
-	)
+	valuesNew := newLSS.QueryLabelValues("foo", []model.LabelMatcher{})
+	valuesOld := s.lss.QueryLabelValues("foo", []model.LabelMatcher{})
+	s.Equal(valuesNew.Values(), valuesOld.Values())
 
 	s.T().Log("Checking query on snapshot")
 	selector, status := s.lss.QuerySelector(s.matchers)
@@ -684,26 +682,18 @@ func (s *RotateLSSSuite) TestCopyOnRotatePart() {
 	s.Equal(expectedLabelSets, rLSS.oldLSS.GetLabelSets(rLSS.oldLabelSetIDs).LabelsSets())
 
 	// QueryLabelNames
-	s.Equal(
-		rLSS.oldNames,
-		rLSS.oldLSS.QueryLabelNames([]model.LabelMatcher{}).Names(),
-	)
+	oldNames := rLSS.oldLSS.QueryLabelNames([]model.LabelMatcher{})
+	s.Equal(rLSS.oldNames, oldNames.Names())
 
-	s.Equal(
-		rLSS.newNames,
-		newLSS.QueryLabelNames([]model.LabelMatcher{}).Names(),
-	)
+	newNames := newLSS.QueryLabelNames([]model.LabelMatcher{})
+	s.Equal(rLSS.newNames, newNames.Names())
 
 	// QueryLabelValues
-	s.Equal(
-		rLSS.oldValues,
-		rLSS.oldLSS.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
-	)
+	oldValues := rLSS.oldLSS.QueryLabelValues("foo", []model.LabelMatcher{})
+	s.Equal(rLSS.oldValues, oldValues.Values())
 
-	s.Equal(
-		rLSS.newValues,
-		newLSS.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
-	)
+	newValues := newLSS.QueryLabelValues("foo", []model.LabelMatcher{})
+	s.Equal(rLSS.newValues, newValues.Values())
 
 	s.T().Log("Checking query on snapshot")
 	selector, status := s.lss.QuerySelector(s.matchers)
