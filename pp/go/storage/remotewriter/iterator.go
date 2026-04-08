@@ -447,8 +447,10 @@ type batch struct {
 // newBatch creates a new [batch].
 func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int) *batch {
 	return &batch{
-		numberOfShards:             numberOfShards,
-		segmentSampleStorages:      cppbridge.NewSegmentSamplesStorage(uint64(numberOfHeadShards)),
+		numberOfShards: numberOfShards,
+		segmentSampleStorages: cppbridge.NewSegmentSamplesStorage(
+			uint64(numberOfHeadShards), // #nosec G115 // no overflow
+		),
 		maxNumberOfSamplesPerShard: maxNumberOfSamplesPerShard,
 	}
 }

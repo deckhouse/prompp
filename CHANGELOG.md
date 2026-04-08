@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.8.0
+
+### Enhancements
+1. **Snapshot LSS type separation.** Decoupled the read-only label set snapshot into a dedicated `SnapshotLSS` type with its own variant, reducing the active head's variant footprint and improving type safety.
+2. **GOST-compliant build hardening.** Enabled `FORTIFY_SOURCE=2`, stack protector, position-independent code, and additional compiler warnings (null-dereference, division-by-zero, array-bounds) across all C++ code including third-party libraries.
+3. **GCC 14 and clang-tidy 21.** Upgraded the C++ toolchain to GCC 14.2.0 and clang-tidy 21.1.8 with new `bugprone-*` diagnostics enabled; all findings resolved.
+
+### Fixes
+1. **npm dependency security update.** Updated `lodash` to 4.18.1 to fix prototype pollution and code injection vulnerabilities.
+
+## v0.7.9
+
+### Features
+1. **WAL v2 and remote write encoding.** Introduces a new WAL read/write path (v2) with refactored segment sample storage and remote-write protobuf encoding, version-aware segment handling when switching between WAL file formats, and related metrics and Go bindings updates.
+
+### Fixes
+1. **`op_top` in query strings.** Fixed PromQL string serialization for the `op_top` aggregator so expressions round-trip correctly in rules and anywhere queries are printed.
+2. **Outdated corrupted head on GC.** Catalog garbage collection now removes stale corrupted head directories instead of leaving them on disk indefinitely.
+
+### Enhancements
+1. **Environment-driven defaults in configuration.** Settings that were only applied via environment variables are now folded into default configuration, aligning operator defaults with the main configuration model.
+
 ## v0.7.8
 
 ### Fixes

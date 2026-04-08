@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"math"
 	"path/filepath"
 	"sync"
 
@@ -17,7 +17,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
 //
@@ -31,200 +30,13 @@ type CorruptMarker interface {
 }
 
 //
-// ShardError
-//
-
-// ShardError error reading the shard.
-type ShardError struct {
-	shardID     int
-	processable bool
-	err         error
-}
-
-// NewShardError init new [ShardError].
-func NewShardError(shardID int, processable bool, err error) ShardError {
-	return ShardError{
-		shardID:     shardID,
-		processable: processable,
-		err:         err,
-	}
-}
-
-// Error returns error as string, implementation error.
-func (e ShardError) Error() string {
-	return e.err.Error()
-}
-
-// ShardID returns shard ID.
-func (e ShardError) ShardID() int {
-	return e.shardID
-}
-
-// Unwrap retruns source error.
-func (e ShardError) Unwrap() error {
-	return e.err
-}
-
-//
-// ShardWalReader
-//
-
-// ShardWalReader a shard wall reader.
-type ShardWalReader interface {
-	// Close wal file.
-	Close() error
-
-	// Read [Segment] from wal and return.
-	Read() (segment Segment, err error)
-}
-
-// NoOpShardWalReader a shard wall reader, do nothing.
-type NoOpShardWalReader struct{}
-
-// Close implementation [ShardWalReader], do nothing.
-func (NoOpShardWalReader) Close() error { return nil }
-
-// Read implementation [ShardWalReader], do nothing.
-func (NoOpShardWalReader) Read() (segment Segment, err error) { return segment, io.EOF }
-
-//
-// shard
-//
-
-type shard struct {
-	headID             string
-	shardID            uint16
-	corrupted          bool
-	lastReadSegmentID  optional.Optional[uint32]
-	walReader          ShardWalReader
-	decoder            *Decoder
-	decoderStateFile   io.WriteCloser
-	unexpectedEOFCount prometheus.Counter
-	segmentSize        prometheus.Histogram
-}
-
-// newShard init new [shard].
-//
-//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func newShard(
-	headID string,
-	shardID uint16,
-	shardFileName, decoderStateFileName string,
-	resetDecoderState bool,
-	externalLabels labels.Labels,
-	relabelConfigs []*cppbridge.RelabelConfig,
-	unexpectedEOFCount prometheus.Counter,
-	segmentSize prometheus.Histogram,
-) (*shard, error) {
-	wr, encoderVersion, err := newWalReader(shardFileName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create wal file reader: %w", err)
-	}
-
-	decoder, err := NewDecoder(
-		externalLabels,
-		relabelConfigs,
-		shardID,
-		encoderVersion,
-	)
-	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to create decoder: %w", err), wr.Close())
-	}
-
-	decoderStateFileFlags := os.O_CREATE | os.O_RDWR
-	if resetDecoderState {
-		decoderStateFileFlags |= os.O_TRUNC
-	}
-	decoderStateFile, err := os.OpenFile( // #nosec G304 // it's meant to be that way
-		decoderStateFileName,
-		decoderStateFileFlags,
-		0o600, //revive:disable-line:add-constant // file permissions simple readable as octa-number
-	)
-	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to open decoder state file: %w", err), wr.Close())
-	}
-
-	// create new shard
-	s := &shard{
-		headID:             headID,
-		shardID:            shardID,
-		walReader:          wr,
-		decoder:            decoder,
-		decoderStateFile:   decoderStateFile,
-		unexpectedEOFCount: unexpectedEOFCount,
-		segmentSize:        segmentSize,
-	}
-
-	if !resetDecoderState {
-		if err = decoder.LoadFrom(decoderStateFile); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to restore from cache: %w", err), s.Close())
-		}
-	} else {
-		if err = decoderStateFile.Truncate(0); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to truncate decoder state file: %w", err), s.Close())
-		}
-	}
-
-	return s, nil
-}
-
-func (s *shard) Close() error {
-	return errors.Join(s.walReader.Close(), s.decoderStateFile.Close())
-}
-
-func (s *shard) Read(ctx context.Context, targetSegmentID uint32, minTimestamp int64, samplesStorage *cppbridge.CppSegmentSamplesStorage) (*DecodedSegment, error) {
-	if s.corrupted {
-		return nil, ErrShardIsCorrupted
-	}
-
-	if !s.lastReadSegmentID.IsNil() && s.lastReadSegmentID.Value() >= targetSegmentID {
-		return nil, nil
-	}
-
-	for {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-
-		segment, err := s.walReader.Read()
-		if err != nil {
-			s.corrupted = true
-			logger.Errorf("remotewritedebug shard %s/%d is corrupted by read: %v", s.headID, s.shardID, err)
-			return nil, errors.Join(err, ErrShardIsCorrupted)
-		}
-
-		s.segmentSize.Observe(float64(segment.Length()))
-
-		decodedSegment, err := s.decoder.Decode(segment.Bytes(), minTimestamp, samplesStorage)
-		if err != nil {
-			s.corrupted = true
-			logger.Errorf("remotewritedebug shard %s/%d is corrupted by decode: %v", s.headID, s.shardID, err)
-			return nil, errors.Join(err, ErrShardIsCorrupted)
-		}
-
-		s.lastReadSegmentID.Set(segment.ID)
-
-		if segment.ID == targetSegmentID {
-			decodedSegment.ID = segment.ID
-			return decodedSegment, nil
-		}
-
-		cppbridge.ClearSegmentSamplesStorage(samplesStorage)
-	}
-}
-
-func (s *shard) SetCorrupted() {
-	s.corrupted = true
-}
-
-//
 // SegmentReadyChecker
 //
 
 // SegmentReadyChecker is a segment ready checker.
 type SegmentReadyChecker interface {
 	// SegmentIsReady checks if the segment is ready.
-	SegmentIsReady(segmentID uint32) (ready bool, outOfRange bool)
+	SegmentIsReady(segmentID uint32) (shards []uint16, ready, outOfRange bool)
 }
 
 //
@@ -233,18 +45,44 @@ type SegmentReadyChecker interface {
 
 type segmentReadyChecker struct {
 	headRecord *catalog.Record
+	shards     []uint16
 }
 
 func newSegmentReadyChecker(headRecord *catalog.Record) *segmentReadyChecker {
-	return &segmentReadyChecker{headRecord: headRecord}
+	return &segmentReadyChecker{
+		headRecord: headRecord,
+		shards:     make([]uint16, 0, headRecord.NumberOfShards()),
+	}
 }
 
-func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (ready, outOfRange bool) {
-	ready = src.headRecord.LastAppendedSegmentID() != nil && *src.headRecord.LastAppendedSegmentID() >= segmentID
+func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (shards []uint16, ready, outOfRange bool) {
+	sourceShard := src.headRecord.GetShardBySegmentID(segmentID)
+
+	readyV1 := src.headRecord.LastAppendedSegmentID() != nil && *src.headRecord.LastAppendedSegmentID() >= segmentID
+	readyV2 := sourceShard != math.MaxUint16
+	ready = readyV1 || readyV2
+
 	outOfRange = (src.headRecord.Status() != catalog.StatusNew &&
 		src.headRecord.Status() != catalog.StatusActive) &&
 		!ready
-	return ready, outOfRange
+
+	if !ready {
+		return nil, ready, outOfRange
+	}
+
+	if readyV1 && !readyV2 {
+		src.shards = src.shards[:0]
+		for i := uint16(0); i < src.headRecord.NumberOfShards(); i++ {
+			src.shards = append(src.shards, i)
+		}
+
+		return src.shards, ready, outOfRange
+	}
+
+	src.shards = src.shards[:0]
+	src.shards = append(src.shards, sourceShard)
+
+	return src.shards, ready, outOfRange
 }
 
 //
@@ -269,7 +107,6 @@ type dataSource struct {
 	corruptMarker       CorruptMarker
 	closed              bool
 	completed           bool
-	corrupted           bool
 	headReleaseFunc     func()
 
 	cacheMtx             sync.Mutex
@@ -433,12 +270,20 @@ type readShardResult struct {
 	err     error
 }
 
-func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp int64, segmentSamplesStorages *cppbridge.SegmentSamplesStorageList) ([]*DecodedSegment, error) {
+// Read checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
+func (ds *dataSource) Read(
+	ctx context.Context,
+	segmentID uint32,
+	minTimestamp int64,
+	segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
+) ([]*DecodedSegment, error) {
 	if ds.completed {
 		return nil, ErrEndOfBlock
 	}
 
-	segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(segmentID)
+	// shardIDs are needed for V2 to read only recorded segments,
+	// otherwise there will be an attempt to read the sync data
+	shardIDs, segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(segmentID)
 	if !segmentIsReady {
 		if segmentIsOutOfRange {
 			return nil, ErrEndOfBlock
@@ -447,40 +292,77 @@ func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp i
 		return nil, ErrEmptyReadResult
 	}
 
-	wg := &sync.WaitGroup{}
-	readShardResults := make([]readShardResult, len(ds.shards))
-	for shardID := 0; shardID < len(ds.shards); shardID++ {
-		if ds.shards[shardID].corrupted {
-			readShardResults[shardID] = readShardResult{
-				segment: nil,
-				err:     NewShardError(shardID, false, ErrShardIsCorrupted),
-			}
-			continue
-		}
-		wg.Add(1)
-		go func(shardID int) {
-			defer wg.Done()
-			segment, err := ds.shards[shardID].Read(ctx, segmentID, minTimestamp, segmentSamplesStorages.Get(uint64(shardID)))
-			if err != nil {
-				err = NewShardError(shardID, true, err)
-			}
-			readShardResults[shardID] = readShardResult{segment: segment, err: err}
-		}(shardID)
-	}
-	wg.Wait()
-
-	segments := make([]*DecodedSegment, 0, len(ds.shards))
-	errs := make([]error, 0, len(ds.shards))
+	readShardResults := ds.readFromShards(ctx, shardIDs, minTimestamp, segmentSamplesStorages, segmentID)
+	segments := make([]*DecodedSegment, 0, len(shardIDs))
+	errs := make([]error, 0, len(shardIDs))
 	for _, result := range readShardResults {
 		if result.segment != nil {
 			segments = append(segments, result.segment)
 		}
-		if result.err != nil {
+		if result.err != nil && !errors.Is(result.err, context.Canceled) {
 			errs = append(errs, result.err)
 		}
 	}
 
 	return segments, ds.handleReadErrors(errs)
+}
+
+// readFromShards parallel reading of [DecodedSegment] from shards.
+func (ds *dataSource) readFromShards(
+	ctx context.Context,
+	shardIDs []uint16,
+	minTimestamp int64,
+	segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
+	targetSegmentID uint32,
+) []readShardResult {
+	readShardResults := make([]readShardResult, len(shardIDs))
+	if len(shardIDs) == 1 {
+		if ds.shards[shardIDs[0]].corrupted {
+			readShardResults[0] = readShardResult{
+				segment: nil,
+				err:     NewShardError(shardIDs[0], false, ErrShardIsCorrupted),
+			}
+			return readShardResults
+		}
+
+		segment, err := ds.shards[shardIDs[0]].Read(
+			ctx,
+			targetSegmentID,
+			minTimestamp,
+			segmentSamplesStorages.Get(uint64(shardIDs[0])),
+		)
+		if err != nil {
+			err = NewShardError(shardIDs[0], true, err)
+		}
+		readShardResults[0] = readShardResult{segment: segment, err: err}
+
+		return readShardResults
+	}
+
+	wg := sync.WaitGroup{}
+	for i, shardID := range shardIDs {
+		if ds.shards[shardID].corrupted {
+			readShardResults[i] = readShardResult{segment: nil, err: NewShardError(shardID, false, ErrShardIsCorrupted)}
+			continue
+		}
+		wg.Add(1)
+		go func(id int, shardID uint16) {
+			defer wg.Done()
+			segment, err := ds.shards[shardID].Read(
+				ctx,
+				targetSegmentID,
+				minTimestamp,
+				segmentSamplesStorages.Get(uint64(shardID)),
+			)
+			if err != nil {
+				err = NewShardError(shardID, true, err)
+			}
+			readShardResults[id] = readShardResult{segment: segment, err: err}
+		}(i, shardID)
+	}
+	wg.Wait()
+
+	return readShardResults
 }
 
 func (ds *dataSource) handleReadErrors(errs []error) error {
@@ -489,7 +371,6 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 	}
 
 	if len(errs) == len(ds.shards) {
-		ds.corrupted = true
 		if ds.corruptMarker != nil {
 			logger.Warnf("head %s is corrupted by read errors: %v", ds.ID, errs)
 			if err := ds.corruptMarker.MarkCorrupted(ds.ID); err != nil {
@@ -501,7 +382,6 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 		return ErrEndOfBlock
 	}
 
-	ds.corrupted = true
 	if ds.corruptMarker != nil {
 		logger.Warnf("head %s is corrupted by read errors: %v", ds.ID, errs)
 		if err := ds.corruptMarker.MarkCorrupted(ds.ID); err != nil {
@@ -510,13 +390,37 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 		ds.corruptMarker = nil
 	}
 
+	ds.printErrorIfNeed(errs)
+
+	return ds.checkFullCorrupted()
+}
+
+// printErrorIfNeed logs errors if necessary.
+func (ds *dataSource) printErrorIfNeed(errs []error) {
 	for _, err := range errs {
-		var shardErr ShardError
-		if errors.As(err, &shardErr) {
-			if shardErr.processable {
-				logger.Errorf("shard %s/%d is corrupted", ds.ID, shardErr.ShardID())
-			}
+		if errors.Is(err, context.Canceled) {
+			continue
 		}
+
+		var shardErr ShardError
+		if errors.As(err, &shardErr) && shardErr.processable {
+			logger.Errorf("shard %s/%d is corrupted: %s", ds.ID, shardErr.ShardID(), shardErr.Error())
+		}
+	}
+}
+
+// checkFullCorrupted checks if all the shards are corrupted, if all the shards are corrupted,
+// there is no point in continuing to read the shards, we return an error.
+func (ds *dataSource) checkFullCorrupted() error {
+	corruptedShards := 0
+	for _, s := range ds.shards {
+		if s.corrupted {
+			corruptedShards++
+		}
+	}
+
+	if corruptedShards == len(ds.shards) {
+		return ErrEndOfBlock
 	}
 
 	return nil
@@ -562,12 +466,11 @@ func (ds *dataSource) WriteCaches() {
 // cacheWriteLoop loop that writes caches to the buffer and sends the signal to write the caches.
 func (ds *dataSource) cacheWriteLoop() {
 	defer close(ds.cacheWriteLoopClosed)
-	var closed bool
 	var writeRequested bool
 	var writeResultc chan struct{}
 
 	for {
-		if writeRequested && !closed && writeResultc == nil {
+		if writeRequested && writeResultc == nil {
 			writeResultc = make(chan struct{})
 			go func() {
 				defer close(writeResultc)
@@ -576,13 +479,13 @@ func (ds *dataSource) cacheWriteLoop() {
 			writeRequested = false
 		}
 
-		if closed && writeResultc == nil {
-			return
-		}
-
 		select {
 		case _, ok := <-ds.cacheWriteSignal:
 			if !ok {
+				if writeResultc != nil {
+					<-writeResultc
+				}
+
 				return
 			}
 			writeRequested = true
