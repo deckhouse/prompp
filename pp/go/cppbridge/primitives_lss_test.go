@@ -526,6 +526,7 @@ func (s *RotateLSSSuite) TestCopyOnRotate() {
 	snapshot := s.lss.CreateLabelSetSnapshot()
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
 
+	runtime.KeepAlive(newLSS)
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
 }
@@ -556,6 +557,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateCheckQueryOnOldSnapshot() {
 	s.T().Log("Checking query on snapshot")
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
 
+	runtime.KeepAlive(newLSS)
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(dstSrcLsIdsMapping)
 	runtime.KeepAlive(mappedSnapshot)
@@ -635,6 +637,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLS() {
 		s.checkQuery(snapshot, selector),
 	)
 
+	runtime.KeepAlive(newLSS)
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
 }
@@ -760,6 +763,33 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceExistingLSPart() {
 	s.Equal(expectedLabelSets, newLSS.GetLabelSets(rLSS.newLabelSetIDs).LabelsSets())
 	s.Equal(expectedLabelSets, rLSS.oldLSS.GetLabelSets(rLSS.oldLabelSetIDs).LabelsSets())
 	s.Equal(rLSS.oldLabelSetIDs[0], lsIDExisting)
+
+	s.T().Log("Checking query on snapshot")
+	selector, status := s.lss.QuerySelector(s.matchers)
+	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+
+	runtime.KeepAlive(snapshot)
+	runtime.KeepAlive(result)
+}
+
+func (s *RotateLSSSuite) TestCopyOnRotateEmplaceAfterBoundaryLS() {
+	// Arrange
+	rLSS := s.makeRotatedLSS("")
+	newLSS := cppbridge.NewQueryableLssStorage()
+	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) + 1
+
+	// Act
+	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
+	lsIDExisting := rLSS.oldLSS.FindOrEmplace(s.labelSets[len(s.labelSets)-1]).LabelSetID
+
+	// Assert
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	expectedLabelSets := labelSetToCppBridgeLabels(rLSS.expectedLSes)
+	s.Equal(expectedLabelSets, newLSS.GetLabelSets(rLSS.newLabelSetIDs).LabelsSets())
+	s.Equal(expectedLabelSets, rLSS.oldLSS.GetLabelSets(rLSS.oldLabelSetIDs).LabelsSets())
+	s.Equal(s.labelSetIDs[len(s.labelSetIDs)-1], lsIDExisting)
 
 	s.T().Log("Checking query on snapshot")
 	selector, status := s.lss.QuerySelector(s.matchers)
