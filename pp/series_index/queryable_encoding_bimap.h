@@ -395,6 +395,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     assert(is_shrunk());
     for (auto it = ls_id_set_.begin(); it != ls_id_set_.end();) {
       const auto logical_id = static_cast<uint32_t>(*it);
+      if (logical_id >= shift_) [[likely]] {
+        ++it;
+        continue;
+      }
       if (!is_series_alive(logical_id)) [[unlikely]] {
         it = ls_id_set_.erase(it);
         continue;
