@@ -707,6 +707,20 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
 void prompp_primitives_lss_query_label_values(void* args, void* res);
 
 /**
+ * @brief Resolve label name strings to ids for a queryable LSS.
+ *
+ * @param args {
+ *     lss    uintptr    // pointer to constructed queryable lss
+ *     names  []string   // label names
+ * }
+ *
+ * @param res {
+ *     ids []uint32  // snapshot of lss
+ * }
+ */
+void prompp_primitives_lss_get_label_name_ids(void* args, void* res);
+
+/**
  * @brief return size of allocated memory for label sets.
  *
  * @param args {
