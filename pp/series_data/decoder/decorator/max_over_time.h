@@ -4,7 +4,7 @@
 
 namespace series_data::decoder::decorator {
 
-class FindMaxElement {
+class FindMaxElementInIterator {
  public:
   PROMPP_ALWAYS_INLINE SeekResult operator()(PromPP::Primitives::Timestamp, double value) noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(max_value_) || value > max_value_) {
@@ -25,6 +25,26 @@ class FindMaxElement {
   double max_value_{BareBones::Encoding::Gorilla::STALE_NAN};
 };
 
-using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElement>;
+class FindMaxElement {
+public:
+  explicit FindMaxElement(encoder::Sample& result) : min_(result) { min_.value = BareBones::Encoding::Gorilla::STALE_NAN; }
+
+  PROMPP_ALWAYS_INLINE void operator()(const encoder::Sample& sample) const noexcept {
+    if (BareBones::Encoding::Gorilla::isstalenan(min_.value) || sample.value > min_.value) {
+      min_ = sample;
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void set_result() const {
+    if (BareBones::Encoding::Gorilla::isstalenan(min_.value)) [[unlikely]] {
+      min_.timestamp = kInvalidTimestamp;
+    }
+  }
+
+private:
+  encoder::Sample& min_;
+};
+
+using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElementInIterator>;
 
 }  // namespace series_data::decoder::decorator
