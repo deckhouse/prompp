@@ -1444,6 +1444,39 @@ func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	return res.matches, res.labelSetLengths, res.status
 }
 
+type groupSeriesByLabelNamesResult struct {
+	groups [][]uint32
+}
+
+func primitivesGroupSeriesByLabelNames(snapshot uintptr, seriesIDs []uint32, labelNameIDs []uint32) [][]uint32 {
+	args := struct {
+		snapshot     uintptr
+		seriesIDs    []uint32
+		labelNameIDs []uint32
+	}{snapshot, seriesIDs, labelNameIDs}
+
+	var res struct {
+		groups [][]uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_group_series_by_label_names,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.groups
+}
+
+func primitivesGroupSeriesByLabelNamesFree(res [][]uint32) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_group_series_by_label_names_result_free,
+		uintptr(unsafe.Pointer(&res)),
+	)
+}
+
 func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
 	testGC()
 	fastcgo.UnsafeCall1(

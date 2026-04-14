@@ -37,13 +37,12 @@ class XXHash3 {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE static uint64_t hash(const char* data, size_t size) noexcept {
+  PROMPP_ALWAYS_INLINE static uint64_t hash(const void* data, size_t size) noexcept {
     XXHash3 hasher;
     hasher.extend(data, size);
     return hasher.hash();
   }
-
-  PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept { return hash(str.data(), str.size()); }
+ PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept { return hash(str.data(), str.size()); }
   PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string& str) noexcept { return hash(str.data(), str.size()); }
 
  private:
