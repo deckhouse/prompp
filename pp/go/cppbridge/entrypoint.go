@@ -385,6 +385,22 @@ var (
 			ConstLabels: prometheus.Labels{"object": "chunk_recoder", "method": "recode_next_chunk"},
 		},
 	)
+
+	// lss allocated_memory
+	lssAllocatedMemorySum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "lss", "method": "allocated_memory"},
+		},
+	)
+	lssAllocatedMemoryCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "lss", "method": "allocated_memory"},
+		},
+	)
 )
 
 func freeBytes(b []byte) {
@@ -1345,12 +1361,15 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 		allocatedMemory uint64
 	}
 
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_allocated_memory,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+	lssAllocatedMemorySum.Add(float64(time.Since(start).Nanoseconds()))
+	lssAllocatedMemoryCount.Inc()
 
 	return res.allocatedMemory
 }
@@ -3032,14 +3051,14 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 		samples   uint32
 	}
 
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_finalize,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	headWalEncoderFinalizeSum.Add(float64(time.Now().UnixNano() - start))
+	headWalEncoderFinalizeSum.Add(float64(time.Since(start).Nanoseconds()))
 	headWalEncoderFinalizeCount.Inc()
 
 	return res.samples, res.segment, handleException(res.exception)

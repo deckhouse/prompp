@@ -234,7 +234,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		return storage.ErrSeriesSet(err)
 	}
 
-	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+	return NewMergeShardSeriesSet(seriesSets)
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
@@ -290,7 +290,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		seriesSets[shardID] = &SeriesSet{}
 	}
 
-	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+	return NewMergeShardSeriesSet(seriesSets)
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
