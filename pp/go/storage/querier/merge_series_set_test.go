@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	"github.com/prometheus/prometheus/storage"
 )
 
 func BenchmarkMergeSeriesSet(b *testing.B) {
@@ -31,8 +32,7 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 	} {
 		end := int64(bm.numSamples)
 		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
-		// seriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-		seriesSets := make([]*querier.SeriesSet, 0, bm.numShards)
+		seriesSets := make([]storage.SeriesSet, 0, bm.numShards)
 
 		b.Run(fmt.Sprintf("%d_%d_%d", bm.numShards, bm.numSeries, bm.numSamples), func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
@@ -43,23 +43,12 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 				}
 				b.StartTimer()
 
-				// seriesSet := storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
-				// seriesSet := querier.NewMergeShardSeriesSet(seriesSets)
-				seriesSet := querier.NewMergeShardSeriesSetGeneric(seriesSets)
+				seriesSet := querier.NewMergeShardSeriesSet(seriesSets)
 
 				seriesSet.Next()
 
 				// for seriesSet.Next() {
 				// 	_ = 0
-				// }
-
-				// var iter chunkenc.Iterator
-				// for seriesSet.Next() {
-				// 	iter = seriesSet.At().Iterator(iter)
-				// 	for iter.Next() == chunkenc.ValFloat {
-				// 		ts, v := iter.At()
-				// 		_, _ = ts, v
-				// 	}
 				// }
 			}
 		})
@@ -80,7 +69,7 @@ type testHead struct {
 func makeHead(numShards, numSeries, numSamples int) *testHead {
 	lsses := make([]*shard.LSS, 0, numShards)
 	dss := make([]*shard.DataStorage, 0, numShards)
-	for shardID := 0; shardID < numShards; shardID++ {
+	for shardID := range numShards {
 		lss := shard.NewLSS()
 		ds := shard.NewDataStorage()
 		appendSeries(lss, ds, numSeries, numSamples, shardID)
@@ -94,16 +83,18 @@ func makeHead(numShards, numSeries, numSamples int) *testHead {
 // appendSeries appends a series to the given LSS and DataStorage.
 func appendSeries(lss *shard.LSS, ds *shard.DataStorage, numSeries, numSamples, shardID int) {
 	timeSeries := make([]storagetest.TimeSeries, 0, numSeries)
-	for j := 0; j < numSeries; j++ {
+	for j := range numSeries {
 		ls := labels.FromStrings(
 			"__name__", "metric",
 			"foo", fmt.Sprintf("bar%d", j),
 			"shard_id", fmt.Sprintf("id_%d", shardID),
 		)
+
 		samples := make([]cppbridge.Sample, 0, numSamples)
-		for k := 0; k < numSamples; k++ {
+		for k := range numSamples {
 			samples = append(samples, cppbridge.Sample{Timestamp: int64(k), Value: float64(k)})
 		}
+
 		timeSeries = append(timeSeries, storagetest.TimeSeries{Labels: ls, Samples: samples})
 	}
 
