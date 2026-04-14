@@ -24,7 +24,7 @@ func NewMergeShardSeriesSet(sets []storage.SeriesSet) storage.SeriesSet {
 		heap: make(seriesSetHeap, 0, len(sets)),
 	}
 	for _, set := range sets {
-		// shard series dont have errors and not nil, so we can safely call Next
+		// shard series don't have errors and not nil, so we can safely call Next
 		if set.Next() {
 			heap.Push(&s.heap, set)
 		}
@@ -55,14 +55,15 @@ func (s *mergeShardSeriesSet) Next() bool {
 		return false
 	}
 
-	// Now, pop items of the heap that have equal label sets.
+	// Now, pop items of the heap, and since there are always different series in the shards,
+	// there is no need to check them for Equal.
 	s.currentSet = heap.Pop(&s.heap).(storage.SeriesSet)
 
 	return true
 }
 
 // Warnings returns the warnings of the current SeriesSet, implement [storage.SeriesSet] interface.
-// Always returns empty [annotations.Annotations], because shards should not have any warnings.
+// Always returns empty(nil) [annotations.Annotations], because shards should not have any warnings.
 func (*mergeShardSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
@@ -105,6 +106,7 @@ func (h seriesSetHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 //
 
 // mergeShardChunkSeriesSet merges many [storage.ChunkSeriesSet] together from different shards.
+// Since there are always different series in the shards, there is no need to check them for Equal.
 type mergeShardChunkSeriesSet struct {
 	heap       chunkSeriesSetHeap
 	currentSet storage.ChunkSeriesSet
@@ -121,7 +123,7 @@ func NewMergeShardChunkSeriesSet(sets []storage.ChunkSeriesSet) storage.ChunkSer
 		heap: make(chunkSeriesSetHeap, 0, len(sets)),
 	}
 	for _, set := range sets {
-		// shard series dont have errors and not nil, so we can safely call Next
+		// shard series don't have errors and not nil, so we can safely call Next
 		if set.Next() {
 			heap.Push(&s.heap, set)
 		}
@@ -152,14 +154,15 @@ func (s *mergeShardChunkSeriesSet) Next() bool {
 		return false
 	}
 
-	// Now, pop items of the heap that have equal label sets.
+	// Now, pop items of the heap, and since there are always different series in the shards,
+	// there is no need to check them for Equal.
 	s.currentSet = heap.Pop(&s.heap).(storage.ChunkSeriesSet)
 
 	return true
 }
 
 // Warnings returns the warnings of the current [ChunkSeries], implement [storage.ChunkSeriesSet] interface.
-// Always returns empty [annotations.Annotations], because shards should not have any warnings.
+// Always returns empty(nil) [annotations.Annotations], because shards should not have any warnings.
 func (*mergeShardChunkSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }

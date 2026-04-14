@@ -45,11 +45,9 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 
 				seriesSet := querier.NewMergeShardSeriesSet(seriesSets)
 
-				seriesSet.Next()
-
-				// for seriesSet.Next() {
-				// 	_ = 0
-				// }
+				for seriesSet.Next() {
+					_ = 0
+				}
 			}
 		})
 	}
