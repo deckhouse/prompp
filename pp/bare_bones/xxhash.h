@@ -42,7 +42,7 @@ class XXHash3 {
     hasher.extend(data, size);
     return hasher.hash();
   }
- PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept { return hash(str.data(), str.size()); }
+  PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept { return hash(str.data(), str.size()); }
   PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string& str) noexcept { return hash(str.data(), str.size()); }
 
  private:
