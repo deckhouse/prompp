@@ -16,9 +16,9 @@ bazel_skylib_workspace()
 http_archive(
     name = "rules_foreign_cc",
     # sha256 = "a4a7c3a39e90677c78663a07e6d2a4a7ce8529393464f9c0ba51d2ebe5dd8be5",
-    sha256 = "2d4a7a935226cf9c01bda163bec54192bc6ffa4a68452794fbea918312c563f4",
-    strip_prefix = "rules_foreign_cc-51152aac9d6d8b887802a47ec08a1a37ef2c4885",
-    url = "https://github.com/bazelbuild/rules_foreign_cc/archive/51152aac9d6d8b887802a47ec08a1a37ef2c4885.zip",
+    sha256 = "1baffee72810f79592de27bb3b69a6cc22dfdf2cf541faebd85704131946690c",
+    strip_prefix = "rules_foreign_cc-006ae82d9b4953a9b1c170827aef660f9f0f9ec0",
+    url = "https://github.com/bazelbuild/rules_foreign_cc/archive/006ae82d9b4953a9b1c170827aef660f9f0f9ec0.zip",
 )
 
 load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_dependencies")
