@@ -9,6 +9,7 @@ import (
 )
 
 // mergeShardSeriesSet merges many [storage.SeriesSet] together from different shards.
+// Since there are always different series in the shards, there is no need to check them for Equal.
 type mergeShardSeriesSet struct {
 	heap       seriesSetHeap
 	currentSet storage.SeriesSet
