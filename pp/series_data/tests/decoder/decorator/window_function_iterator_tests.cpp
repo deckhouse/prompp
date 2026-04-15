@@ -113,12 +113,14 @@ TEST_F(MaxOverTimeWindowFunctionIteratorFixture, TestContinueAfterReset) {
       .step = 60,
       .range = 70,
   };
+  // NOLINTNEXTLINE(performance-move-const-arg)
   WindowFunctionIterator<MaxOverTimeIterator> iterator(std::move(it0), parameters);
 
   std::vector<Sample> actual_samples;
 
   // Act
   std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
+  // NOLINTNEXTLINE(performance-move-const-arg)
   iterator = std::move(it1);
   std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
 
