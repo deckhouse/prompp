@@ -219,3 +219,131 @@ func (s *HeadSuite) TestInstantQuery() {
 	s.Equal(series[5].Sample, cppbridge.Sample{Timestamp: instantSeries[2].Timestamp, Value: instantSeries[2].Value})
 	s.Equal(series[6].Sample, cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value})
 }
+
+type DataStorageSerializedDataMultiSeriesIteratorSuite struct {
+	suite.Suite
+	lss *cppbridge.LabelSetStorage
+	ds  *cppbridge.DataStorage
+	enc *cppbridge.HeadEncoder
+}
+
+func TestDataStorageSerializedDataMultiSeriesIteratorSuite(t *testing.T) {
+	suite.Run(t, new(DataStorageSerializedDataMultiSeriesIteratorSuite))
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
+	s.lss = cppbridge.NewQueryableLssStorage()
+	s.ds = cppbridge.NewDataStorage()
+	s.enc = cppbridge.NewHeadEncoderWithDataStorage(s.ds)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
+	hints storage.SelectHints,
+	seriesToSerialize []uint32,
+	series []uint32,
+) []cppbridge.Sample {
+	result := s.ds.Query(cppbridge.DataStorageQuery{
+		StartTimestampMs: hints.Start,
+		EndTimestampMs:   hints.End,
+		LabelSetIDs:      seriesToSerialize,
+	}, cppbridge.NoDownsampling, unsafe.Pointer(&hints))
+
+	it := cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(result.SerializedData, series)
+	defer it.Close()
+
+	out := make([]cppbridge.Sample, 0)
+	for it.HasData() {
+		out = append(out, cppbridge.Sample{Timestamp: it.Timestamp(), Value: it.Value()})
+		it.Next()
+	}
+	return out
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
+	s.enc.Encode(0, 50, 10.0)
+	s.enc.Encode(1, 80, 20.0)
+	s.enc.Encode(0, 150, 20.0)
+	s.enc.Encode(1, 180, 30.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Step:  100,
+		Range: 100,
+		Func:  "sum",
+	}, []uint32{0, 1}, []uint32{0, 1})
+
+	// Assert
+	s.Equal([]cppbridge.Sample{{Timestamp: 80, Value: 30.0}, {Timestamp: 180, Value: 50.0}}, samples)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
+	s.enc.Encode(0, 50, 10.0)
+	s.enc.Encode(1, 80, 20.0)
+	s.enc.Encode(0, 150, 30.0)
+	s.enc.Encode(1, 180, 20.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Step:  100,
+		Range: 100,
+		Func:  "min",
+	}, []uint32{0, 1}, []uint32{0, 1})
+
+	// Assert
+	s.Equal([]cppbridge.Sample{{Timestamp: 50, Value: 10.0}, {Timestamp: 180, Value: 20.0}}, samples)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
+	s.enc.Encode(0, 50, 20.0)
+	s.enc.Encode(1, 80, 10.0)
+	s.enc.Encode(0, 150, 20.0)
+	s.enc.Encode(1, 180, 30.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Step:  100,
+		Range: 100,
+		Func:  "max",
+	}, []uint32{0, 1}, []uint32{0, 1})
+
+	// Assert
+	s.Equal([]cppbridge.Sample{{Timestamp: 50, Value: 20.0}, {Timestamp: 180, Value: 30.0}}, samples)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestNoSeries() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
+	s.enc.Encode(0, 50, 20.0)
+	s.enc.Encode(1, 80, 10.0)
+	s.enc.Encode(0, 150, 20.0)
+	s.enc.Encode(1, 180, 30.0)
+	s.enc.Encode(2, 180, 30.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Step:  100,
+		Range: 100,
+		Func:  "max",
+	}, []uint32{0, 1}, []uint32{2})
+
+	// Assert
+	s.Equal([]cppbridge.Sample{}, samples)
+}
