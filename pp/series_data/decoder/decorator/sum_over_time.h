@@ -4,6 +4,19 @@
 
 namespace series_data::decoder::decorator {
 
+PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
+  const auto t = sum + inc;
+  if (std::isinf(t)) {
+    c = 0;
+  } else if (std::abs(sum) >= std::abs(inc)) {
+    c += sum - t + inc;
+  } else {
+    c += inc - t + sum;
+  }
+
+  sum = t;
+}
+
 class SumOfElements {
  public:
   PROMPP_ALWAYS_INLINE SeekResult operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
@@ -16,10 +29,13 @@ class SumOfElements {
     return SeekResult::kNext;
   }
 
-  PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) const {
+  PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
       iterator.invalidate_sample();
     } else {
+      if (!std::isinf(sum_.value)) [[likely]] {
+        sum_.value += c_;
+      }
       iterator.set(sum_);
     }
   }
@@ -27,19 +43,6 @@ class SumOfElements {
  private:
   encoder::Sample sum_{.value = BareBones::Encoding::Gorilla::STALE_NAN};
   double c_{};
-
-  PROMPP_ALWAYS_INLINE static void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
-    const auto t = sum + inc;
-    if (std::isinf(t)) {
-      c = 0;
-    } else if (std::abs(sum) >= std::abs(inc)) {
-      c += sum - t + inc;
-    } else {
-      c += inc - t + sum;
-    }
-
-    sum = t;
-  }
 };
 
 using SumOverTimeIterator = OverTimeFuncIterator<SumOfElements>;

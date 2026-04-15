@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
 #include "series_data/decoder/decorator/sum_over_time.h"
@@ -114,5 +116,37 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                  },
                                                                  .interval{.min = 100, .max = 200},
                                                                  .expected{Sample{.timestamp = 180, .value = 3.3}}}));
+
+INSTANTIATE_TEST_SUITE_P(KahanSummation,
+                         SumOverTimeFixture,
+                         testing::Values(SumOverTimeIteratorCase{
+                             .samples{
+                                 Sample{.timestamp = 100, .value = 1e16},
+                                 Sample{.timestamp = 110, .value = 1.0},
+                                 Sample{.timestamp = 120, .value = -1e16},
+                             },
+                             .interval{.min = 100, .max = 200},
+                             .expected{Sample{.timestamp = 120, .value = 1.0}},
+                         }));
+
+INSTANTIATE_TEST_SUITE_P(SumOverflowsToInfinity,
+                         SumOverTimeFixture,
+                         testing::Values(
+                             SumOverTimeIteratorCase{
+                                 .samples{
+                                     Sample{.timestamp = 100, .value = std::numeric_limits<double>::max()},
+                                     Sample{.timestamp = 110, .value = std::numeric_limits<double>::max()},
+                                 },
+                                 .interval{.min = 100, .max = 200},
+                                 .expected{Sample{.timestamp = 110, .value = std::numeric_limits<double>::infinity()}},
+                             },
+                             SumOverTimeIteratorCase{
+                                 .samples{
+                                     Sample{.timestamp = 100, .value = -std::numeric_limits<double>::max()},
+                                     Sample{.timestamp = 110, .value = -std::numeric_limits<double>::max()},
+                                 },
+                                 .interval{.min = 100, .max = 200},
+                                 .expected{Sample{.timestamp = 110, .value = -std::numeric_limits<double>::infinity()}},
+                             }));
 
 }  // namespace
