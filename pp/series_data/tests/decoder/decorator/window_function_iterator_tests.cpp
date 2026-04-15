@@ -33,16 +33,17 @@ template <class FunctionIterator>
 class WindowFunctionIteratorFixture : public testing::TestWithParam<WindowFunctionIteratorCase> {
  protected:
   DataStorage storage_;
+  Encoder<> encoder_{storage_};
 
-  void SetUp() override {
-    Encoder encoder(storage_);
+  void encode_samples() {
     for (const auto& sample : GetParam().samples) {
-      encoder.encode(0, sample.timestamp, sample.value);
+      encoder_.encode(0, sample.timestamp, sample.value);
     }
   }
 
   void test() {
     // Arrange
+    encode_samples();
     std::vector<Sample> actual_samples;
 
     // Act
@@ -58,6 +59,7 @@ class WindowFunctionIteratorFixture : public testing::TestWithParam<WindowFuncti
 
   void test_reset() {
     // Arrange
+    encode_samples();
     std::vector<Sample> actual_samples;
 
     // Act
@@ -84,6 +86,46 @@ TEST_P(MaxOverTimeWindowFunctionIteratorFixture, Test) {
 
 TEST_P(MaxOverTimeWindowFunctionIteratorFixture, TestReset) {
   test_reset();
+}
+
+TEST_F(MaxOverTimeWindowFunctionIteratorFixture, TestContinueAfterReset) {
+  // Arrange
+  encoder_.encode(0, 130, 1.0);
+  encoder_.encode(0, 160, 2.0);
+  encoder_.encode(0, 190, 3.0);
+  encoder_.encode(0, 220, 4.0);
+  encoder_.encode(1, 250, 5.0);
+  encoder_.encode(1, 280, 5.0);
+  encoder_.encode(1, 310, 6.0);
+
+  UniversalDecodeIterator it0;
+  Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&it0]<typename Iterator>(Iterator&& begin, auto&&) {
+    it0 = UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+  });
+
+  UniversalDecodeIterator it1;
+  Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[1], [&it1]<typename Iterator>(Iterator&& begin, auto&&) {
+    it1 = UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+  });
+
+  constexpr WindowFunctionParameters parameters{
+      .interval{.min = 80, .max = 310},
+      .step = 60,
+      .range = 70,
+  };
+  WindowFunctionIterator<MaxOverTimeIterator> iterator(std::move(it0), parameters);
+
+  std::vector<Sample> actual_samples;
+
+  // Act
+  std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
+  iterator = std::move(it1);
+  std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
+
+  // Assert
+  EXPECT_EQ((std::vector{Sample{.timestamp = 130, .value = 1.0}, Sample{.timestamp = 190, .value = 3.0}, Sample{.timestamp = 220, .value = 4.0},
+                         Sample{.timestamp = 250, .value = 5.0}, Sample{.timestamp = 310, .value = 6.0}}),
+            actual_samples);
 }
 
 INSTANTIATE_TEST_SUITE_P(NoStep,
