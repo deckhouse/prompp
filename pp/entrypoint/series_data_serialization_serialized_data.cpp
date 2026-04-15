@@ -27,8 +27,6 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(v
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator) {
-  using series_data::decoder::DecodeIteratorSentinel;
-
   ++(*static_cast<entrypoint::series_data::SerializedDataIterator*>(iterator));
 }
 
@@ -56,6 +54,25 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(
 
   const Arguments* in = static_cast<Arguments*>(args);
   in->iterator->reset(in->serialized_data->get_buffer_view(), in->serialized_data->get_chunks_view(), in->chunk_ref);
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args) {
+  struct Arguments {
+    entrypoint::series_data::MultiSeriesDecodeIterator* iterator;
+    entrypoint::series_data::SerializedDataPtr serialized_data;
+    PromPP::Primitives::Go::SliceView<uint32_t> series_ids;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (in->iterator) entrypoint::series_data::MultiSeriesDecodeIterator(in->serialized_data->multi_series_iterator(in->series_ids.span()));
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_next(void* iterator) {
+  ++(*static_cast<entrypoint::series_data::MultiSeriesDecodeIterator*>(iterator));
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor(void* iterator) {
+  static_cast<entrypoint::series_data::MultiSeriesDecodeIterator*>(iterator)->~MultiSeriesDecodeIterator();
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_dtor(void* args) {

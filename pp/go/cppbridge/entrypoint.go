@@ -32,6 +32,7 @@ type (
 	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
 	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
 	CppSerializedDataIterator            = [C.Sizeof_SerializedDataIterator]byte
+	CppSerializedDataMultiSeriesIterator = [C.Sizeof_MultiSeriesDecodeIterator]byte
 	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
 	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
 	CppRemoteWriteMessageEncoder         = [C.Sizeof_RemoteWriteMessageEncoder]byte
@@ -2147,6 +2148,41 @@ func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIt
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_serialization_serialized_data_iterator_reset,
 		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataMultiSeriesIteratorCtor(
+	iterator *DataStorageSerializedDataMultiSeriesIterator,
+	serializedData uintptr,
+	seriesIDs []uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		seriesIDs      []uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, seriesIDs}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(seriesIDs)
+}
+
+func seriesDataSerializedDataMultiSeriesIteratorNext(iterator *DataStorageSerializedDataMultiSeriesIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_next,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+}
+
+func seriesDataSerializedDataMultiSeriesIteratorDtor(iterator *DataStorageSerializedDataMultiSeriesIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor,
+		uintptr(unsafe.Pointer(iterator)),
 	)
 }
 

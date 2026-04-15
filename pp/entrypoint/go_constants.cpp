@@ -15,6 +15,7 @@ static_assert(sizeof(roaring::Roaring) == Sizeof_RoaringBitset);
 static_assert(sizeof(PromPP::Prometheus::Relabel::InnerSeries) == Sizeof_InnerSeries);
 
 static_assert(sizeof(entrypoint::series_data::SerializedDataIterator) == Sizeof_SerializedDataIterator);
+static_assert(sizeof(entrypoint::series_data::MultiSeriesDecodeIterator) == Sizeof_MultiSeriesDecodeIterator);
 
 static_assert(sizeof(metrics::Storage::Iterator) == Sizeof_MetricsIterator);
 
