@@ -1,6 +1,6 @@
 /* C++ code produced by gperf version 3.1 */
 /* Command-line: gperf -L C++ function_names.gperf  */
-/* Computed positions: -k'2-4,$' */
+/* Computed positions: -k'1-4,$' */
 #pragma once
 
 #include <cstddef>
@@ -19,12 +19,12 @@
 #error "gperf generated tables don't work with this execution character set. Please report a bug to <bug-gperf@gnu.org>."
 #endif
 
-#define TOTAL_KEYWORDS 81
+#define TOTAL_KEYWORDS 84
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 18
-#define MIN_HASH_VALUE 2
-#define MAX_HASH_VALUE 198
-/* maximum key range = 197, duplicates = 0 */
+#define MIN_HASH_VALUE 9
+#define MAX_HASH_VALUE 233
+/* maximum key range = 225, duplicates = 0 */
 
 namespace PromPP::Prometheus::promql {
 class FunctionNamesHash {
@@ -34,38 +34,29 @@ class FunctionNamesHash {
 
 constexpr inline unsigned int FunctionNamesHash::hash(const char* str, size_t len) {
   constexpr static unsigned char asso_values[] = {
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 5,   5,   0,   199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 0,   199, 25,  45,  60,  20,  15,  75,  90,  5,   5,   199, 5,   45,  45,  0,   0,   60,  20,  0,   0,
-      0,   30,  55,  199, 45,  10,  10,  199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
-      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199};
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 0,   0,   0,   234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 5,   234, 0,   90,  0,   30,  20,  5,   90,  0,   5,   234, 0,   25,  50,  5,   25,  10,  90,  15,  5,
+      0,   50,  20,  234, 50,  85,  0,   234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234,
+      234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 234};
   unsigned int hval = len;
 
   switch (hval) {
     default:
       hval += asso_values[static_cast<unsigned char>(str[3])];
-#if (defined __cplusplus && (__cplusplus >= 201703L || (__cplusplus >= 201103L && defined __clang__ && __clang_major__ + (__clang_minor__ >= 9) > 3))) || \
-    (defined __STDC_VERSION__ && __STDC_VERSION__ >= 202000L && ((defined __GNUC__ && __GNUC__ >= 10) || (defined __clang__ && __clang_major__ >= 9)))
       [[fallthrough]];
-#elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)
-      __attribute__((__fallthrough__));
-#endif
-      /*FALLTHROUGH*/
     case 3:
       hval += asso_values[static_cast<unsigned char>(str[2])];
-#if (defined __cplusplus && (__cplusplus >= 201703L || (__cplusplus >= 201103L && defined __clang__ && __clang_major__ + (__clang_minor__ >= 9) > 3))) || \
-    (defined __STDC_VERSION__ && __STDC_VERSION__ >= 202000L && ((defined __GNUC__ && __GNUC__ >= 10) || (defined __clang__ && __clang_major__ >= 9)))
       [[fallthrough]];
-#elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)
-      __attribute__((__fallthrough__));
-#endif
-      /*FALLTHROUGH*/
     case 2:
       hval += asso_values[static_cast<unsigned char>(str[1])];
+      [[fallthrough]];
+    case 1:
+      hval += asso_values[static_cast<unsigned char>(str[0])];
       break;
   }
   return hval + asso_values[static_cast<unsigned char>(str[len - 1])];

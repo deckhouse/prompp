@@ -21,6 +21,9 @@ enum class WindowFunction : uint8_t {
   kDelta,
   kResets,
   kChanges,
+  kSum,
+  kMin,
+  kMax,
 };
 
 constexpr uint32_t function_name_hash(std::string_view str) {
@@ -54,6 +57,9 @@ constexpr uint32_t function_name_hash(std::string_view str) {
     PROMQL_WINDOW_FUNC_CASE("delta", kDelta)
     PROMQL_WINDOW_FUNC_CASE("resets", kResets)
     PROMQL_WINDOW_FUNC_CASE("changes", kChanges)
+    PROMQL_WINDOW_FUNC_CASE("sum", kSum)
+    PROMQL_WINDOW_FUNC_CASE("max", kMax)
+    PROMQL_WINDOW_FUNC_CASE("min", kMin)
     default:
       return WindowFunction::kNone;
   }

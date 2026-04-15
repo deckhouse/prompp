@@ -2,7 +2,7 @@
 
 #include <variant>
 
-#include "prometheus/promql/window_function.h"
+#include "select_hints.h"
 #include "series_data/decoder/decorator/changes_iterator.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
@@ -97,11 +97,6 @@ class DecodeIterator {
 
  private:
   IteratorVariant iterator_;
-};
-
-struct SelectHints {
-  ::series_data::decoder::decorator::WindowFunctionParameters function_parameters;
-  PromPP::Prometheus::promql::WindowFunction window_function{PromPP::Prometheus::promql::WindowFunction::kNone};
 };
 
 PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& select_hints, PromPP::Primitives::Timestamp downsampling_ms) {

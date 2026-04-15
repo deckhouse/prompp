@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bare_bones/gorilla.h"
+#include "series_data/decoder/traits.h"
 
 namespace series_data::decoder::decorator {
 

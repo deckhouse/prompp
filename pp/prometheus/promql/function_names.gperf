@@ -45,7 +45,9 @@ ln
 log10
 log2
 mad_over_time
+max
 max_over_time
+min
 min_over_time
 minute
 month
@@ -72,6 +74,7 @@ sort_desc
 sqrt
 stddev_over_time
 stdvar_over_time
+sum
 sum_over_time
 tan
 tanh
