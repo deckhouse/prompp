@@ -162,6 +162,10 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 
+	if err = CloseWals(oldHead); err != nil {
+		logger.Warnf("failed close wals: %s", err)
+	}
+
 	if err = s.headInformer.SetRotatedStatus(oldHead.ID()); err != nil {
 		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
 	}

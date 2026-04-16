@@ -192,6 +192,9 @@ type ProxyHead[
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
+	// CloseWal closes the wal segmentWriter and sets the wal to nil.
+	CloseWal() error
+
 	// DSAllocatedMemory return size of allocated memory for [DataStorage].
 	DSAllocatedMemory() uint64
 

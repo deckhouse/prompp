@@ -72,8 +72,10 @@ func (s *Shard) AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.InnerSeries)
 }
 
 // Close closes the wal segmentWriter.
-func (s *Shard) Close() error {
-	err := s.wal.Close()
+func (s *Shard) Close() (err error) {
+	if s.wal != nil {
+		err = s.wal.Close()
+	}
 
 	if s.unloadedDataStorage != nil {
 		err = errors.Join(err, s.unloadedDataStorage.Close())
@@ -82,6 +84,18 @@ func (s *Shard) Close() error {
 	if s.queriedSeriesStorage != nil {
 		err = errors.Join(err, s.queriedSeriesStorage.Close())
 	}
+
+	return err
+}
+
+// CloseWal closes the wal segmentWriter and sets the wal to nil.
+func (s *Shard) CloseWal() error {
+	if s.wal == nil {
+		return nil
+	}
+
+	err := s.wal.Close()
+	s.wal = nil
 
 	return err
 }
@@ -143,6 +157,10 @@ func (s *Shard) WalCurrentSize() int64 {
 
 // WalFlush flush all contetnt into wal.
 func (s *Shard) WalFlush() error {
+	if s.wal == nil {
+		return nil
+	}
+
 	return s.wal.Flush()
 }
 
