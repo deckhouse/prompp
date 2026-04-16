@@ -26,23 +26,23 @@ class FindMaxElementInIterator {
 };
 
 class FindMaxElement {
-public:
-  explicit FindMaxElement(encoder::Sample& result) : min_(result) { min_.value = BareBones::Encoding::Gorilla::STALE_NAN; }
+ public:
+  explicit FindMaxElement(encoder::Sample& result) : max_(result) { max_.value = BareBones::Encoding::Gorilla::STALE_NAN; }
 
   PROMPP_ALWAYS_INLINE void operator()(const encoder::Sample& sample) const noexcept {
-    if (BareBones::Encoding::Gorilla::isstalenan(min_.value) || sample.value > min_.value) {
-      min_ = sample;
+    if (BareBones::Encoding::Gorilla::isstalenan(max_.value) || sample.value > max_.value) {
+      max_ = sample;
     }
   }
 
   PROMPP_ALWAYS_INLINE void set_result() const {
-    if (BareBones::Encoding::Gorilla::isstalenan(min_.value)) [[unlikely]] {
-      min_.timestamp = kInvalidTimestamp;
+    if (BareBones::Encoding::Gorilla::isstalenan(max_.value)) [[unlikely]] {
+      max_.timestamp = kInvalidTimestamp;
     }
   }
 
-private:
-  encoder::Sample& min_;
+ private:
+  encoder::Sample& max_;
 };
 
 using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElementInIterator>;
