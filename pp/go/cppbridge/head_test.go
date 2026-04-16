@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -256,6 +257,8 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 		out = append(out, cppbridge.Sample{Timestamp: it.Timestamp(), Value: it.Value()})
 		it.Next()
 	}
+
+	runtime.KeepAlive(result.SerializedData)
 	return out
 }
 
