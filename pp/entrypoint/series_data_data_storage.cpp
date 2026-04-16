@@ -211,10 +211,8 @@ extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* arg
   assert(in->series_ids.size() == out->timestamps.size());
   const auto& storage = *in->data_storage;
 
-  auto timestamps_it = out->timestamps.begin();
-  for (const auto series_id : in->series_ids) {
-    *timestamps_it++ = Decoder::get_series_min_timestamp(storage, series_id);
-  }
+  std::ranges::transform(in->series_ids, out->timestamps.begin(),
+                         [&storage](uint32_t series_id) { return Decoder::get_series_min_timestamp(storage, series_id); });
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
