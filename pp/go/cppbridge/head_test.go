@@ -1,10 +1,10 @@
 package cppbridge_test
 
 import (
-	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"testing"
 	"unsafe"
 
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -217,4 +217,21 @@ func (s *HeadSuite) TestInstantQuery() {
 	s.Equal(series[2].Sample, cppbridge.Sample{Timestamp: instantSeries[1].Timestamp, Value: instantSeries[1].Value})
 	s.Equal(series[5].Sample, cppbridge.Sample{Timestamp: instantSeries[2].Timestamp, Value: instantSeries[2].Value})
 	s.Equal(series[6].Sample, cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value})
+}
+
+func (s *HeadSuite) TestQueryFirstTimestamps() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
+
+	s.encoder.Encode(0, 5, 1.0)
+	s.encoder.Encode(0, 9, 1.0)
+	s.encoder.Encode(1, 2, 2.0)
+	s.encoder.Encode(1, 7, 2.0)
+
+	// Act
+	timestamps := s.dataStorage.QueryFirstTimestamps([]uint32{1, 0})
+
+	// Assert
+	s.Equal([]int64{2, 5}, timestamps)
 }

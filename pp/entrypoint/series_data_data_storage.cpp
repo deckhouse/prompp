@@ -1,5 +1,6 @@
 #include "series_data_data_storage.h"
 
+#include <cassert>
 #include <spanstream>
 
 #include "head/chunk_recoder.h"
@@ -8,6 +9,7 @@
 #include "head/serialization.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
+#include "series_data/decoder.h"
 #include "series_data/loader.h"
 #include "series_data/querier.h"
 #include "series_data/querier/instant_querier.h"
@@ -187,6 +189,31 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   for (auto& querier_ptr : in->queriers) {
     std::visit([](auto& querier) { querier.query_finalize(); }, *querier_ptr);
     querier_ptr.reset();
+  }
+}
+
+extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res) {
+  using PromPP::Primitives::Timestamp;
+  using series_data::Decoder;
+
+  struct Arguments {
+    DataStoragePtr data_storage;
+    SliceView<LabelSetID> series_ids;
+  };
+
+  struct Result {
+    Slice<Timestamp> timestamps;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = static_cast<Result*>(res);
+
+  assert(in->series_ids.size() == out->timestamps.size());
+  const auto& storage = *in->data_storage;
+
+  auto timestamps_it = out->timestamps.begin();
+  for (const auto series_id : in->series_ids) {
+    *timestamps_it++ = Decoder::get_series_min_timestamp(storage, series_id);
   }
 }
 

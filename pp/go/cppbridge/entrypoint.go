@@ -2047,6 +2047,25 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	return res
 }
 
+func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32) []int64 {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+	}{dataStorage, seriesIDs}
+	res := struct {
+		timestamps []int64
+	}{make([]int64, len(seriesIDs))}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_query_first_timestamps,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.timestamps
+}
+
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {
 	args := struct {
 		queriers []uintptr
