@@ -930,6 +930,59 @@ class BimapPartialAddedFixture : public BimapCopierFixture {
   }
 };
 
+TEST_F(BimapPartialAddedFixture, FixedStatePrunesHiddenPreBoundaryFromLsIdSet) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  LabelViewSet ls6_{{"job", "f"}};
+
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
+  const auto new_id = lss_.find_or_emplace(ls6_);
+
+  // Assert
+  using LsIdProxy = typename Lss::LsIdSet::value_type;
+  const auto& ls_ids = lss_.ls_id_set();
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));
+  EXPECT_GE(ls_ids.size(), 4U);
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{new_id}));
+}
+
+TEST_F(BimapPartialAddedFixture, FixedStateLsIdSetOrderStaysSortedByCurrentResolve) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
+  std::vector<uint32_t> ids_in_tree_order;
+  ids_in_tree_order.reserve(lss_.ls_id_set().size());
+  for (const auto id : lss_.ls_id_set()) {
+    ids_in_tree_order.emplace_back(static_cast<uint32_t>(id));
+  }
+
+  // Assert
+  // btree order must stay consistent with current resolve logic in fixed state.
+  EXPECT_TRUE(std::ranges::is_sorted(ids_in_tree_order, [this](uint32_t lhs, uint32_t rhs) {
+    return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]);
+  }));
+}
+
+TEST_F(BimapPartialAddedFixture, FixedStateSortingIndexSortKeepsCurrentResolveOrder) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+  std::vector<uint32_t> ids{4U, 3U, 2U, 1U, 0U};
+
+  // Act
+  lss_.sorting_index().sort(ids);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::is_sorted(ids, [this](uint32_t lhs, uint32_t rhs) {
+    return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]);
+  }));
+}
+
 TEST_F(BimapPartialAddedFixture, PartialAddedFindOmitsDeadPreBoundary) {
   // Arrange
   constexpr uint32_t shrink_boundary = 3U;
