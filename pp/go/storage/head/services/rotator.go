@@ -163,7 +163,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	}
 
 	if err = CloseWals(oldHead); err != nil {
-		logger.Warnf("failed close wals: %s", err)
+		logger.Warnf("failed close WALs: %s", err)
 	}
 
 	if err = s.headInformer.SetRotatedStatus(oldHead.ID()); err != nil {

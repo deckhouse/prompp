@@ -66,7 +66,7 @@ func CFSViaRange[
 	return errors.Join(errs...)
 }
 
-// CloseWals closes all wals of the [Head].
+// CloseWals closes all WALs of the [Head].
 func CloseWals[
 	TShard Shard,
 	THead RangeHead[TShard],

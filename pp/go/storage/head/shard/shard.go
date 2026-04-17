@@ -147,11 +147,19 @@ func (s *Shard) ShardID() uint16 {
 
 // WalCommit finalize segment from encoder and write to wal.
 func (s *Shard) WalCommit() error {
+	if s.wal == nil {
+		return nil
+	}
+
 	return s.wal.Commit()
 }
 
 // WalCurrentSize returns current [Wal] size.
 func (s *Shard) WalCurrentSize() int64 {
+	if s.wal == nil {
+		return 0
+	}
+
 	return s.wal.CurrentSize()
 }
 
@@ -166,11 +174,19 @@ func (s *Shard) WalFlush() error {
 
 // WalSync commits the current contents of the [Wal].
 func (s *Shard) WalSync() error {
+	if s.wal == nil {
+		return nil
+	}
+
 	return s.wal.Sync()
 }
 
 // WalWrite append the incoming inner series to wal encoder.
 func (s *Shard) WalWrite(innerSeriesSlice []cppbridge.InnerSeries) (bool, error) {
+	if s.wal == nil {
+		return false, nil
+	}
+
 	return s.wal.Write(innerSeriesSlice)
 }
 
