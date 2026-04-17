@@ -114,6 +114,7 @@ func (s *Weighted) Resize(n int64) {
 
 //revive:disable-next-line:function-length from base.
 //revive:disable-next-line:cyclomatic from base.
+//revive:disable-next-line:cognitive-complexity function is not complicated.
 func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter func(waiter) *list.Element) error {
 	done := ctx.Done()
 
@@ -163,6 +164,13 @@ func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter fu
 			s.notifyWaiters()
 		default:
 			isFront := s.waiters.Front() == elem
+			if elem == s.lastPri {
+				if isFront {
+					s.lastPri = nil
+				} else {
+					s.lastPri = elem.Prev()
+				}
+			}
 			s.waiters.Remove(elem)
 			// If we're at the front and there're extra tokens left, notify other waiters.
 			if isFront && s.size > s.cur {

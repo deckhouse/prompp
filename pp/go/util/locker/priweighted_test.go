@@ -1,0 +1,696 @@
+package locker_test
+
+import (
+	"context"
+	"errors"
+	"math/rand/v2"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"testing/synctest"
+	"time"
+
+	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/stretchr/testify/suite"
+)
+
+type WeightedSuite struct {
+	suite.Suite
+}
+
+func TestWeightedSuite(t *testing.T) {
+	suite.Run(t, new(WeightedSuite))
+}
+
+func (s *WeightedSuite) TestWeighted() {
+	s.T().Parallel()
+
+	n := runtime.GOMAXPROCS(0)
+	loops := 1000 / n
+	l := locker.NewWeighted(int64(n))
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		rw := i%2 == 0
+		go func() {
+			defer wg.Done()
+
+			var unlock func()
+			for range loops {
+				if rw {
+					unlock, _ = l.RLock(context.Background())
+				} else {
+					unlock, _ = l.Lock(context.Background())
+				}
+
+				time.Sleep(time.Duration(rand.Int64N(int64(1*time.Millisecond/time.Nanosecond))) * time.Nanosecond)
+				unlock()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func (s *WeightedSuite) TestClose() {
+	ctx := s.T().Context()
+	l := locker.NewWeighted(1)
+	s.Require().NoError(l.Close())
+
+	_, err := l.Lock(ctx)
+	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+
+	_, err = l.RLock(ctx)
+	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+
+	_, err = l.LockWithPriority(ctx)
+	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+
+	_, err = l.RLockWithPriority(ctx)
+	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+}
+
+func (s *WeightedSuite) TestCloseLocked() {
+	synctest.Test(s.T(), func(t *testing.T) {
+		ctx := context.Background()
+		l := locker.NewWeighted(2)
+		var counter uint32
+		var closed bool
+
+		// Hold the whole semaphore exclusively so RLock waiters cannot take a slot
+		// before Close acquires the priority writer lock.
+		unlockHold, err := l.Lock(ctx)
+		s.Require().NoError(err)
+
+		for range 10 {
+			go func() {
+				unlockG, errG := l.RLock(ctx)
+				if errG != nil {
+					s.Require().ErrorIs(errG, locker.ErrSemaphoreClosed)
+					return
+				}
+				atomic.AddUint32(&counter, 1)
+				unlockG()
+			}()
+			synctest.Wait()
+		}
+
+		go func() {
+			t.Log("close")
+			s.Require().NoError(l.Close())
+			t.Log("closed")
+			closed = true
+		}()
+		synctest.Wait()
+
+		s.Require().False(closed)
+		t.Log("unlock hold")
+		unlockHold()
+		t.Log("unlocked")
+		synctest.Wait()
+
+		s.Require().True(closed)
+		s.Require().Equal(uint32(0), atomic.LoadUint32(&counter))
+	})
+}
+
+func (s *WeightedSuite) TestPriorityCancelTailUpdatesLastPri() {
+	synctest.Test(s.T(), func(t *testing.T) {
+		ctxBase := context.Background()
+		l := locker.NewWeighted(2)
+
+		unlockHold1, err := l.RLock(ctxBase)
+		s.Require().NoError(err)
+		unlockHold2, err := l.RLock(ctxBase)
+		s.Require().NoError(err)
+
+		ctx1, cancel1 := context.WithCancel(ctxBase)
+		ctx2, cancel2 := context.WithCancel(ctxBase)
+		t.Cleanup(cancel1)
+		t.Cleanup(cancel2)
+
+		unlocks := make(chan func(), 2)
+
+		go func() {
+			u, errP := l.RLockWithPriority(ctx1)
+			s.Require().NoError(errP)
+			unlocks <- u
+		}()
+		synctest.Wait()
+
+		go func() {
+			_, errP := l.RLockWithPriority(ctx2)
+			s.Require().ErrorIs(errP, context.Canceled)
+		}()
+		synctest.Wait()
+
+		go cancel2()
+		synctest.Wait()
+
+		unlockHold1()
+		synctest.Wait()
+
+		unlockHold2()
+		synctest.Wait()
+
+		go func() {
+			unlockPriority, errP := l.RLockWithPriority(ctxBase)
+			s.Require().NoError(errP)
+			unlocks <- unlockPriority
+		}()
+		synctest.Wait()
+
+		(<-unlocks)()
+		(<-unlocks)()
+
+		cancel1()
+	})
+}
+
+func (s *WeightedSuite) TestAllocCancelDoesntStarve() {
+	synctest.Test(s.T(), func(*testing.T) {
+		l := locker.NewWeighted(10)
+
+		unlock1, err := l.RLock(context.Background())
+		s.Require().NoError(err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			_, errW := l.Lock(ctx)
+			s.Require().ErrorIs(errW, context.Canceled)
+		}()
+		synctest.Wait()
+
+		go cancel()
+
+		go func() {
+			unlockW, errW := l.Lock(context.Background())
+			s.Require().NoError(errW)
+			unlockW()
+		}()
+		synctest.Wait()
+
+		unlock1()
+		unlock2, err := l.RLock(context.Background())
+		s.Require().NoError(err)
+
+		unlock2()
+	})
+}
+
+func (s *WeightedSuite) TestResizeNoOpSameNUnderExclusive() {
+	ctx := context.Background()
+	l := locker.NewWeighted(5)
+
+	unlock, err := l.Lock(ctx)
+	s.Require().NoError(err)
+
+	l.Resize(5)
+	l.Resize(5)
+
+	unlock()
+
+	unlock2, err := l.RLock(ctx)
+	s.Require().NoError(err)
+	unlock2()
+}
+
+func (s *WeightedSuite) TestResizeUnderExclusiveExpandsSlots() {
+	ctx := context.Background()
+	l := locker.NewWeighted(2)
+
+	unlock, err := l.Lock(ctx)
+	s.Require().NoError(err)
+
+	l.Resize(5)
+	unlock()
+
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() {
+			unlockR, errR := l.RLock(ctx)
+			s.Require().NoError(errR)
+			unlockR()
+		})
+	}
+	wg.Wait()
+}
+
+func (s *WeightedSuite) TestResizeUnderExclusiveShrinkSetsCurToSize() {
+	ctx := context.Background()
+	l := locker.NewWeighted(5)
+
+	unlock, err := l.Lock(ctx)
+	s.Require().NoError(err)
+
+	l.Resize(2)
+	unlock()
+
+	// After shrink under exclusive, at most two concurrent readers fit.
+	var wg sync.WaitGroup
+	started := make(chan struct{}, 2)
+	for range 2 {
+		wg.Go(func() {
+			unlockR, errR := l.RLock(ctx)
+			s.Require().NoError(errR)
+			started <- struct{}{}
+			unlockR()
+		})
+	}
+
+	for range 2 {
+		<-started
+	}
+
+	wg.Wait()
+}
+
+func (s *WeightedSuite) TestResizeWithoutExclusiveDoesNotResetCur() {
+	ctx := context.Background()
+	l := locker.NewWeighted(2)
+	unlock1, err := l.RLock(ctx)
+	s.Require().NoError(err)
+	unlock2, err := l.RLock(ctx)
+	s.Require().NoError(err)
+
+	l.Resize(1)
+
+	acquired := make(chan struct{})
+	go func() {
+		unlock3, errR := l.RLock(ctx)
+		s.Require().NoError(errR)
+		close(acquired)
+		unlock3()
+	}()
+
+	// With size=1 and cur=2, a new reader needs both slots released.
+	unlock1()
+	unlock2()
+
+	<-acquired
+}
+
+func (s *WeightedSuite) TestAcquireAlreadyCanceledContext() {
+	ctx := context.Background()
+	l := locker.NewWeighted(2)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+
+	_, err := l.RLock(canceled)
+	s.Require().ErrorIs(err, context.Canceled)
+
+	_, err = l.Lock(canceled)
+	s.Require().ErrorIs(err, context.Canceled)
+
+	_, err = l.RLockWithPriority(canceled)
+	s.Require().ErrorIs(err, context.Canceled)
+
+	_, err = l.LockWithPriority(canceled)
+	s.Require().ErrorIs(err, context.Canceled)
+}
+
+func (s *WeightedSuite) TestAcquireAlreadyCanceledDoesNotConsumeSlot() {
+	ctx := context.Background()
+	l := locker.NewWeighted(1)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+
+	_, err := l.RLock(canceled)
+	s.Require().ErrorIs(err, context.Canceled)
+
+	unlock, err := l.RLock(ctx)
+	s.Require().NoError(err)
+	unlock()
+}
+
+func (s *WeightedSuite) TestCloseTwice() {
+	l := locker.NewWeighted(1)
+	s.Require().NoError(l.Close())
+	s.Require().ErrorIs(l.Close(), locker.ErrSemaphoreClosed)
+}
+
+func (s *WeightedSuite) TestRLockWakesToErrSemaphoreClosedAfterClose() {
+	synctest.Test(s.T(), func(*testing.T) {
+		ctx := context.Background()
+		l := locker.NewWeighted(1)
+
+		unlockHold, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		waitAcquire := make(chan error, 1)
+		go func() {
+			_, errA := l.RLock(ctx)
+			waitAcquire <- errA
+		}()
+		synctest.Wait()
+
+		closeErr := make(chan error, 1)
+		go func() {
+			closeErr <- l.Close()
+		}()
+		synctest.Wait()
+
+		unlockHold()
+		synctest.Wait()
+
+		s.Require().NoError(<-closeErr)
+		s.Require().ErrorIs(<-waitAcquire, locker.ErrSemaphoreClosed)
+
+		_, err = l.RLock(ctx)
+		s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+	})
+}
+
+func (s *WeightedSuite) TestAcquireAfterReadyContextCanceledReleases() {
+	if testing.Short() {
+		s.T().Skip("timing-dependent cancellation path")
+	}
+
+	ctx := context.Background()
+	for range 600 {
+		l := locker.NewWeighted(1)
+
+		unlockHold, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		ctxW, cancelW := context.WithCancel(ctx)
+		errCh := make(chan error, 1)
+		go func() {
+			unlockR1, errW := l.RLock(ctxW)
+			if errW != nil {
+				errCh <- errW
+				return
+			}
+
+			unlockR1()
+			errCh <- nil
+		}()
+
+		for range 20 {
+			runtime.Gosched()
+		}
+
+		if rand.IntN(2) == 0 {
+			unlockHold()
+			cancelW()
+		} else {
+			cancelW()
+			unlockHold()
+		}
+
+		for range 20 {
+			runtime.Gosched()
+		}
+
+		var errW error
+		select {
+		case errW = <-errCh:
+		case <-time.After(time.Second):
+			s.FailNow("deadlock waiting for RLock waiter")
+		}
+
+		if errors.Is(errW, context.Canceled) {
+			unlockR2, err2 := l.RLock(ctx)
+			s.Require().NoError(err2)
+			unlockR2()
+			return
+		}
+
+		s.Require().NoError(errW)
+	}
+	s.FailNow("did not observe context.Canceled after acquire race within iterations")
+}
+
+func (s *WeightedSuite) TestTwoRLockWithPriorityOrder() {
+	synctest.Test(s.T(), func(*testing.T) {
+		ctx := context.Background()
+		l := locker.NewWeighted(2)
+
+		unlock1, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		unlock2, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		got := make(chan int, 2)
+
+		go func() {
+			unlockRP1, errP := l.RLockWithPriority(ctx)
+			s.Require().NoError(errP)
+			got <- 1
+			unlockRP1()
+		}()
+		synctest.Wait()
+
+		go func() {
+			unlockRP2, errP := l.RLockWithPriority(ctx)
+			s.Require().NoError(errP)
+			got <- 2
+			unlockRP2()
+		}()
+		synctest.Wait()
+
+		unlock1()
+		synctest.Wait()
+		s.Require().Equal(1, <-got)
+
+		unlock2()
+		synctest.Wait()
+		s.Require().Equal(2, <-got)
+	})
+}
+
+func (s *WeightedSuite) TestLockWithPriorityBeforeOrdinaryLockWhenBothWait() {
+	synctest.Test(s.T(), func(*testing.T) {
+		ctx := context.Background()
+		l := locker.NewWeighted(2)
+
+		unlock1, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		unlock2, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		got := make(chan string, 2)
+
+		go func() {
+			unlockOrdinary, errL := l.Lock(ctx)
+			s.Require().NoError(errL)
+			got <- "ordinary"
+			unlockOrdinary()
+		}()
+		synctest.Wait()
+
+		go func() {
+			unlockPriority, errL := l.LockWithPriority(ctx)
+			s.Require().NoError(errL)
+			got <- "priority"
+			unlockPriority()
+		}()
+		synctest.Wait()
+
+		unlock1()
+		unlock2()
+		synctest.Wait()
+		s.Require().Equal("priority", <-got)
+
+		synctest.Wait()
+		s.Require().Equal("ordinary", <-got)
+	})
+}
+
+func (s *WeightedSuite) TestPriorityCancelFrontClearsLastPri() {
+	synctest.Test(s.T(), func(t *testing.T) {
+		ctxBase := context.Background()
+		l := locker.NewWeighted(2)
+
+		unlockHold1, err := l.RLock(ctxBase)
+		s.Require().NoError(err)
+
+		unlockHold2, err := l.RLock(ctxBase)
+		s.Require().NoError(err)
+
+		ctxPri, cancelPri := context.WithCancel(ctxBase)
+		t.Cleanup(cancelPri)
+
+		go func() {
+			_, errP := l.RLockWithPriority(ctxPri)
+			s.Require().ErrorIs(errP, context.Canceled)
+		}()
+		synctest.Wait()
+
+		go cancelPri()
+		synctest.Wait()
+
+		unlocks := make(chan func(), 1)
+		go func() {
+			unlockRP, errP := l.RLockWithPriority(ctxBase)
+			s.Require().NoError(errP)
+			unlocks <- unlockRP
+		}()
+		synctest.Wait()
+
+		unlockHold1()
+		synctest.Wait()
+
+		unlockHold2()
+		synctest.Wait()
+
+		(<-unlocks)()
+	})
+}
+
+func (s *WeightedSuite) TestPriorityCancelMiddleUpdatesLastPriToPrev() {
+	synctest.Test(s.T(), func(t *testing.T) {
+		ctxBase := context.Background()
+		l := locker.NewWeighted(2)
+
+		unlockHold1, err := l.RLock(ctxBase)
+		s.Require().NoError(err)
+
+		unlockHold2, err := l.RLock(ctxBase)
+		s.Require().NoError(err)
+
+		ctxA, cancelA := context.WithCancel(ctxBase)
+		ctxB, cancelB := context.WithCancel(ctxBase)
+		t.Cleanup(cancelA)
+		t.Cleanup(cancelB)
+
+		go func() {
+			_, errP := l.RLockWithPriority(ctxA)
+			s.Require().ErrorIs(errP, context.Canceled)
+		}()
+		synctest.Wait()
+
+		go func() {
+			unlockRP, errP := l.RLockWithPriority(ctxBase)
+			s.Require().NoError(errP)
+			unlockRP()
+		}()
+		synctest.Wait()
+
+		go func() {
+			_, errP := l.RLockWithPriority(ctxB)
+			s.Require().ErrorIs(errP, context.Canceled)
+		}()
+		synctest.Wait()
+
+		go cancelA()
+		synctest.Wait()
+
+		go cancelB()
+		synctest.Wait()
+
+		unlockHold1()
+		synctest.Wait()
+
+		unlockHold2()
+		synctest.Wait()
+	})
+}
+
+func (s *WeightedSuite) TestCancelAcquireAfterReadyRollbackNotifiesNext() {
+	if testing.Short() {
+		s.T().Skip("timing-dependent rollback path")
+	}
+
+	ctx := context.Background()
+	for range 800 {
+		l := locker.NewWeighted(1)
+
+		unlockHold, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		ctxW, cancelW := context.WithCancel(ctx)
+		errCh := make(chan error, 1)
+		go func() {
+			unlockR, errW := l.RLock(ctxW)
+			if errW != nil {
+				errCh <- errW
+				return
+			}
+
+			unlockR()
+			errCh <- nil
+		}()
+
+		for range 20 {
+			runtime.Gosched()
+		}
+
+		if rand.IntN(2) == 0 {
+			cancelW()
+			unlockHold()
+		} else {
+			unlockHold()
+			cancelW()
+		}
+
+		for range 20 {
+			runtime.Gosched()
+		}
+
+		var errW error
+		select {
+		case errW = <-errCh:
+		case <-time.After(time.Second):
+			s.FailNow("deadlock waiting for RLock waiter")
+		}
+
+		if errors.Is(errW, context.Canceled) {
+			unlockR, err2 := l.RLock(ctx)
+			s.Require().NoError(err2)
+			unlockR()
+			return
+		}
+
+		s.Require().NoError(errW)
+	}
+
+	s.FailNow("did not observe cancel while acquiring path")
+}
+
+func (s *WeightedSuite) TestLargeAcquireDoesntStarve() {
+	s.T().Parallel()
+
+	ctx := s.T().Context()
+	n := int64(runtime.GOMAXPROCS(0))
+	l := locker.NewWeighted(n)
+	var running atomic.Bool
+	running.Store(true)
+
+	var wg sync.WaitGroup
+	wg.Add(int(n))
+
+	var runWG sync.WaitGroup
+	runWG.Add(int(n))
+
+	for i := n; i > 0; i-- {
+		loopUnlock, err := l.RLock(ctx)
+		s.Require().NoError(err)
+
+		go func() {
+			runWG.Done()
+			defer func() {
+				wg.Done()
+			}()
+			loopUnlock()
+
+			for running.Load() {
+				unlock, err := l.RLock(ctx)
+				s.Require().NoError(err)
+				time.Sleep(1 * time.Millisecond)
+				unlock()
+			}
+		}()
+	}
+	runWG.Wait()
+
+	unlock, err := l.Lock(ctx)
+	s.Require().NoError(err)
+	running.Store(false)
+	unlock()
+	wg.Wait()
+}
