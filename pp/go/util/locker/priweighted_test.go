@@ -11,8 +11,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
 type WeightedSuite struct {
@@ -21,35 +23,6 @@ type WeightedSuite struct {
 
 func TestWeightedSuite(t *testing.T) {
 	suite.Run(t, new(WeightedSuite))
-}
-
-func (s *WeightedSuite) TestWeighted() {
-	s.T().Parallel()
-
-	n := runtime.GOMAXPROCS(0)
-	loops := 1000 / n
-	l := locker.NewWeighted(int64(n))
-	var wg sync.WaitGroup
-	wg.Add(n)
-	for i := range n {
-		rw := i%2 == 0
-		go func() {
-			defer wg.Done()
-
-			var unlock func()
-			for range loops {
-				if rw {
-					unlock, _ = l.RLock(context.Background())
-				} else {
-					unlock, _ = l.Lock(context.Background())
-				}
-
-				time.Sleep(time.Duration(rand.Int64N(int64(1*time.Millisecond/time.Nanosecond))) * time.Nanosecond)
-				unlock()
-			}
-		}()
-	}
-	wg.Wait()
 }
 
 func (s *WeightedSuite) TestClose() {
@@ -75,7 +48,8 @@ func (s *WeightedSuite) TestCloseLocked() {
 		ctx := context.Background()
 		l := locker.NewWeighted(2)
 		var counter uint32
-		var closed bool
+		var closed atomic.Bool
+		closed.Store(false)
 
 		// Hold the whole semaphore exclusively so RLock waiters cannot take a slot
 		// before Close acquires the priority writer lock.
@@ -86,7 +60,7 @@ func (s *WeightedSuite) TestCloseLocked() {
 			go func() {
 				unlockG, errG := l.RLock(ctx)
 				if errG != nil {
-					s.Require().ErrorIs(errG, locker.ErrSemaphoreClosed)
+					require.ErrorIs(t, errG, locker.ErrSemaphoreClosed)
 					return
 				}
 				atomic.AddUint32(&counter, 1)
@@ -97,19 +71,19 @@ func (s *WeightedSuite) TestCloseLocked() {
 
 		go func() {
 			t.Log("close")
-			s.Require().NoError(l.Close())
+			require.NoError(t, l.Close())
 			t.Log("closed")
-			closed = true
+			closed.Store(true)
 		}()
 		synctest.Wait()
 
-		s.Require().False(closed)
+		s.Require().False(closed.Load())
 		t.Log("unlock hold")
 		unlockHold()
 		t.Log("unlocked")
 		synctest.Wait()
 
-		s.Require().True(closed)
+		s.Require().True(closed.Load())
 		s.Require().Equal(uint32(0), atomic.LoadUint32(&counter))
 	})
 }
@@ -132,15 +106,15 @@ func (s *WeightedSuite) TestPriorityCancelTailUpdatesLastPri() {
 		unlocks := make(chan func(), 2)
 
 		go func() {
-			u, errP := l.RLockWithPriority(ctx1)
-			s.Require().NoError(errP)
-			unlocks <- u
+			unlockRP, errP := l.RLockWithPriority(ctx1)
+			require.NoError(t, errP)
+			unlocks <- unlockRP
 		}()
 		synctest.Wait()
 
 		go func() {
 			_, errP := l.RLockWithPriority(ctx2)
-			s.Require().ErrorIs(errP, context.Canceled)
+			require.ErrorIs(t, errP, context.Canceled)
 		}()
 		synctest.Wait()
 
@@ -424,21 +398,21 @@ func (s *WeightedSuite) TestAcquireAfterReadyContextCanceledReleases() {
 }
 
 func (s *WeightedSuite) TestTwoRLockWithPriorityOrder() {
-	synctest.Test(s.T(), func(*testing.T) {
+	synctest.Test(s.T(), func(t *testing.T) {
 		ctx := context.Background()
 		l := locker.NewWeighted(2)
 
 		unlock1, err := l.RLock(ctx)
-		s.Require().NoError(err)
+		require.NoError(t, err)
 
 		unlock2, err := l.RLock(ctx)
-		s.Require().NoError(err)
+		require.NoError(t, err)
 
 		got := make(chan int, 2)
 
 		go func() {
 			unlockRP1, errP := l.RLockWithPriority(ctx)
-			s.Require().NoError(errP)
+			require.NoError(t, errP)
 			got <- 1
 			unlockRP1()
 		}()
@@ -446,7 +420,7 @@ func (s *WeightedSuite) TestTwoRLockWithPriorityOrder() {
 
 		go func() {
 			unlockRP2, errP := l.RLockWithPriority(ctx)
-			s.Require().NoError(errP)
+			require.NoError(t, errP)
 			got <- 2
 			unlockRP2()
 		}()
@@ -463,7 +437,7 @@ func (s *WeightedSuite) TestTwoRLockWithPriorityOrder() {
 }
 
 func (s *WeightedSuite) TestLockWithPriorityBeforeOrdinaryLockWhenBothWait() {
-	synctest.Test(s.T(), func(*testing.T) {
+	synctest.Test(s.T(), func(t *testing.T) {
 		ctx := context.Background()
 		l := locker.NewWeighted(2)
 
@@ -477,7 +451,7 @@ func (s *WeightedSuite) TestLockWithPriorityBeforeOrdinaryLockWhenBothWait() {
 
 		go func() {
 			unlockOrdinary, errL := l.Lock(ctx)
-			s.Require().NoError(errL)
+			require.NoError(t, errL)
 			got <- "ordinary"
 			unlockOrdinary()
 		}()
@@ -485,7 +459,7 @@ func (s *WeightedSuite) TestLockWithPriorityBeforeOrdinaryLockWhenBothWait() {
 
 		go func() {
 			unlockPriority, errL := l.LockWithPriority(ctx)
-			s.Require().NoError(errL)
+			require.NoError(t, errL)
 			got <- "priority"
 			unlockPriority()
 		}()
@@ -652,10 +626,42 @@ func (s *WeightedSuite) TestCancelAcquireAfterReadyRollbackNotifiesNext() {
 	s.FailNow("did not observe cancel while acquiring path")
 }
 
-func (s *WeightedSuite) TestLargeAcquireDoesntStarve() {
-	s.T().Parallel()
+func TestWeighted(t *testing.T) {
+	// testify v1 does not support suite's parallel tests and subtests
+	t.Parallel()
 
-	ctx := s.T().Context()
+	ctx := t.Context()
+	n := runtime.GOMAXPROCS(0)
+	loops := 1000 / n
+	l := locker.NewWeighted(int64(n))
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		rw := i%2 == 0
+		go func() {
+			defer wg.Done()
+
+			var unlock func()
+			for range loops {
+				if rw {
+					unlock, _ = l.RLock(ctx)
+				} else {
+					unlock, _ = l.Lock(ctx)
+				}
+
+				time.Sleep(time.Duration(rand.Int64N(int64(1*time.Millisecond/time.Nanosecond))) * time.Nanosecond)
+				unlock()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestLargeAcquireDoesntStarve(t *testing.T) {
+	// testify v1 does not support suite's parallel tests and subtests
+	t.Parallel()
+
+	ctx := context.Background()
 	n := int64(runtime.GOMAXPROCS(0))
 	l := locker.NewWeighted(n)
 	var running atomic.Bool
@@ -669,27 +675,27 @@ func (s *WeightedSuite) TestLargeAcquireDoesntStarve() {
 
 	for i := n; i > 0; i-- {
 		loopUnlock, err := l.RLock(ctx)
-		s.Require().NoError(err)
+		require.NoError(t, err)
 
-		go func() {
+		go func(lUnlock func()) {
 			runWG.Done()
 			defer func() {
 				wg.Done()
 			}()
-			loopUnlock()
+			lUnlock()
 
 			for running.Load() {
 				unlock, err := l.RLock(ctx)
-				s.Require().NoError(err)
+				require.NoError(t, err)
 				time.Sleep(1 * time.Millisecond)
 				unlock()
 			}
-		}()
+		}(loopUnlock)
 	}
 	runWG.Wait()
 
 	unlock, err := l.Lock(ctx)
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	running.Store(false)
 	unlock()
 	wg.Wait()
