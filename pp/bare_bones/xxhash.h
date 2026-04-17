@@ -1,5 +1,6 @@
 #pragma once
 
+#include <span>
 #include <string>
 
 #include "bare_bones/compiler.h"
@@ -44,6 +45,10 @@ class XXHash3 {
   }
   PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept { return hash(str.data(), str.size()); }
   PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string& str) noexcept { return hash(str.data(), str.size()); }
+  template <class T>
+  PROMPP_ALWAYS_INLINE static uint64_t hash(std::span<T> data) noexcept {
+    return hash(data.data(), data.size() * sizeof(data[0]));
+  }
 
  private:
   uint64_t hash_{};

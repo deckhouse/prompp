@@ -31,7 +31,7 @@ void group_series_by_label_names(const Lss& lss,
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const BareBones::Vector<uint32_t>& values_ids) const noexcept {
-      return BareBones::XXHash3::hash(values_ids.data(), values_ids.size());
+      return BareBones::XXHash3::hash(std::span(values_ids));
     }
   };
 
