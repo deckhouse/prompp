@@ -12,8 +12,8 @@ PROMPP_ALWAYS_INLINE void write_bits(uint8_t* memory, uint64_t value, uint8_t nb
 }
 
 PROMPP_ALWAYS_INLINE void write_byte(uint8_t* memory, uint8_t byt, uint8_t unfilled_bits_in_byte, uint8_t rest_of_bits_in_byte) noexcept {
-  *memory++ |= byt >> unfilled_bits_in_byte;
-  *memory |= byt << rest_of_bits_in_byte;
+  const uint16_t value = ((byt << rest_of_bits_in_byte) << 8) | byt >> unfilled_bits_in_byte;
+  *reinterpret_cast<uint16_t*>(memory) |= value;
 }
 
 PROMPP_ALWAYS_INLINE void write_single_bit(uint8_t* memory, uint8_t rest_of_bits_in_byte) noexcept {
