@@ -317,9 +317,12 @@ func (c *Catalog) compactIfNeeded() error {
 func (c *Catalog) compactLog() error {
 	srecords := make([]*SerializedRecord, 0, len(c.records))
 	for _, record := range c.records {
-		if record.deletedAt == 0 {
-			srecords = append(srecords, &record.SerializedRecord)
+		if record.deletedAt != 0 {
+			delete(c.records, record.id.String())
+			continue
 		}
+
+		srecords = append(srecords, &record.SerializedRecord)
 	}
 
 	sort.Slice(srecords, func(i, j int) bool {
