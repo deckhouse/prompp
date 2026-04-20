@@ -6,8 +6,10 @@
 namespace series_data::decoder::decorator {
 
 template <class DecodeIterator, class DecodeIteratorSentinel>
-class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
+class IntervalDecodeIterator {
  public:
+  DECODE_ITERATOR_TYPE_TRAITS();
+
   using Timestamp = PromPP::Primitives::Timestamp;
 
   IntervalDecodeIterator(DecodeIterator&& iterator, DecodeIteratorSentinel&& end, Timestamp interval, Timestamp lookback)
