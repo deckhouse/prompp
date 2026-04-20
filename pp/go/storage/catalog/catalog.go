@@ -16,6 +16,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg catalog_test --out
+
 const (
 	// DefaultMaxLogFileSize default size of log file.
 	DefaultMaxLogFileSize = 4 << 20
@@ -33,6 +35,8 @@ const (
 //
 
 // Log head-log file, contains [Record]s of heads.
+//
+//go:generate moq catalog_moq_test.go . Log
 type Log interface {
 	// ReWrite rewrite [FileLog] with [SerializedRecord]s.
 	ReWrite(srecords ...*SerializedRecord) error
