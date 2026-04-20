@@ -135,6 +135,9 @@ func (s *CatalogSuite) TestDeleteReopenFileLog() {
 
 	r2, err := c.Create(4)
 	s.Require().NoError(err)
+
+	_, err = c.SetStatus(r1.ID(), catalog.StatusPersisted)
+	s.Require().NoError(err)
 	s.Require().NoError(c.Delete(r1.ID()))
 
 	s.Require().NoError(l.Close())
@@ -152,6 +155,10 @@ func (s *CatalogSuite) TestDeleteReopenFileLog() {
 
 	_, err = c.Get(r1.ID())
 	s.Require().Error(err)
+	s.Require().ErrorContains(err, "not found: "+r1.ID())
+
+	_, err = c.Get(r2.ID())
+	s.Require().NoError(err)
 
 	records := c.List(nil, nil)
 	s.Require().Len(records, 1)
