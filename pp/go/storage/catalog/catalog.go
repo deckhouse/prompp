@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"sync"
 
@@ -330,6 +331,12 @@ func (c *Catalog) compactLog() error {
 
 // sync catalog with [Log].
 func (c *Catalog) sync() error {
+	defer func() {
+		maps.DeleteFunc(c.records, func(_ string, value *Record) bool {
+			return value.DeletedAt() != 0
+		})
+	}()
+
 	for {
 		r := NewEmptyRecord()
 		if err := c.log.Read(&r.SerializedRecord); err != nil {
@@ -340,10 +347,6 @@ func (c *Catalog) sync() error {
 			logger.Errorf("catalog is corrupted: %v", err)
 
 			return c.compactLog()
-		}
-
-		if r.deletedAt != 0 {
-			continue
 		}
 
 		c.records[r.id.String()] = r
