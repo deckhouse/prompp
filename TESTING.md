@@ -2,7 +2,7 @@
 
 ## Environment
 
-Since the project's build relies on specific versions of the compiler and libraries, it is convenient to use a pre-configured container based on `Dockerfile.ci`. You can build it locally with the following command:
+Since the project's build relies on specific versions of the compiler and libraries, it is convenient to use a pre-configured container based on `Dockerfile.ci` (Debian Trixie, GCC 14, LLVM 21 toolchain). You can build it locally with the following command:
 ```bash
 docker build -t prompp-build -f Dockerfile.ci --build-arg BAZEL_ARCH=arm64 --build-arg GO_ARCH=arm64 .
 ```
