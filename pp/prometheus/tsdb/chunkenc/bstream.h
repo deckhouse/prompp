@@ -6,6 +6,7 @@ namespace PromPP::Prometheus::tsdb::chunkenc {
 
 PROMPP_ALWAYS_INLINE void write_bits(uint8_t* memory, uint64_t value, uint8_t nbits, uint8_t rest_of_bits_in_byte) noexcept {
   value <<= BareBones::Bit::kUint64Bits - nbits;
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   *memory++ |= static_cast<uint8_t>(value >> (BareBones::Bit::kUint64Bits - rest_of_bits_in_byte));
   value <<= rest_of_bits_in_byte;
   *reinterpret_cast<uint64_t*>(memory) |= BareBones::Bit::be(value);
