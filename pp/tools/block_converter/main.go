@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -18,6 +19,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"go.uber.org/zap"
 )
@@ -285,12 +287,20 @@ func getSortedSamples(
 			extraLSHash = append(extraLSHash, lset.Hash())
 		}
 		for _, chks := range (*series)[i].chunks {
-			ch, errC := chksReader.Chunk(chks.Ref)
+			ch, iterable, errC := chksReader.ChunkOrIterable(chks)
 			if errC != nil {
 				logger.Fatal("failed get chunk", zap.Error(errC))
 			}
-			it := ch.Iterator(nil)
-			for it.Next() {
+			var it chunkenc.Iterator
+			switch {
+			case ch != nil:
+				it = ch.Iterator(nil)
+			case iterable != nil:
+				it = iterable.Iterator(nil)
+			default:
+				logger.Fatal("chunk reader returned neither chunk nor iterable")
+			}
+			for it.Next() != chunkenc.ValNone {
 				ts, v := it.At()
 				tsDelta := int32(ts - firstTS)
 
@@ -365,21 +375,22 @@ func getLabelsSets(
 	var series []seriesStruct
 	seriesIndex := make(map[uint64]struct{})
 	var skipLabelset bool
+	builder := labels.NewScratchBuilder(0)
 	for s := range seriesRefs {
 		skipLabelset = false
-		var lset labels.Labels
 		var chks []chunks.Meta
-		err := indexReader.Series(s, &lset, &chks)
+		err := indexReader.Series(s, &builder, &chks)
 		if err != nil {
 			return nil, err
 		}
+		lset := builder.Labels()
 		// if exist white list for value of job label, skip label sets not from white list
 		if len(whiteJobLabelValue) > 0 {
-			for i := range lset {
-				if _, ok := whiteJobLabelValue[lset[i].Value]; !ok && lset[i].Name == "job" {
+			lset.Range(func(l labels.Label) {
+				if _, ok := whiteJobLabelValue[l.Value]; !ok && l.Name == "job" {
 					skipLabelset = true
 				}
-			}
+			})
 		}
 
 		if _, ok := seriesIndex[lset.Hash()]; !ok && !skipLabelset {
@@ -392,13 +403,14 @@ func getLabelsSets(
 }
 
 func getSeriesRef(block *tsdb.Block, indexReader tsdb.IndexReader) map[storage.SeriesRef]struct{} {
-	lns, _ := block.LabelNames()
+	ctx := context.Background()
+	lns, _ := block.LabelNames(ctx)
 	seriesRefs := make(map[storage.SeriesRef]struct{})
 	for _, ln := range lns {
-		lvs, _ := indexReader.LabelValues(ln)
+		lvs, _ := indexReader.LabelValues(ctx, ln)
 
 		for _, lv := range lvs {
-			postingReader, errP := indexReader.Postings(ln, lv)
+			postingReader, errP := indexReader.Postings(ctx, ln, lv)
 			if errP != nil {
 				fmt.Println(errP)
 				os.Exit(1)
