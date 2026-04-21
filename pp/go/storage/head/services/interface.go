@@ -192,7 +192,10 @@ type ProxyHead[
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
-	// CloseWal closes the wal segmentWriter and sets the wal to nil.
+	// CloseWal closes the WAL. After this call any data-handling method
+	// (WalCommit/WalFlush/WalSync/WalWrite) reports a "wal is closed" error,
+	// WalCurrentSize returns 0, and CloseWal itself becomes an idempotent
+	// no-op.
 	CloseWal() error
 
 	// DSAllocatedMemory return size of allocated memory for [DataStorage].
