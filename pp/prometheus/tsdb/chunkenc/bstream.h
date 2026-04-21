@@ -24,7 +24,7 @@ template <std::array kAllocationSizesTable>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, BareBones::AllocationSize>
 class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, BareBones::Bit::to_bits(sizeof(uint64_t) + 1)> {
  public:
-  void write_bits(uint64_t value, uint8_t nbits) noexcept {
+  PROMPP_ALWAYS_INLINE void write_bits(uint64_t value, uint8_t nbits) noexcept {
     reserve_enough_memory_if_needed(nbits);
     chunkenc::write_bits(Base::template unfilled_memory<uint8_t>(), value, nbits, rest_of_bits_in_byte());
     size_in_bits_ += nbits;
@@ -67,7 +67,7 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
  public:
   explicit FixedSizeBStream(uint32_t bits) { reserve_enough_memory_if_needed(bits); }
 
-  void write_bits(uint64_t value, uint8_t nbits) noexcept {
+  PROMPP_ALWAYS_INLINE void write_bits(uint64_t value, uint8_t nbits) noexcept {
     chunkenc::write_bits(Base::template unfilled_memory<uint8_t>(), value, nbits, rest_of_bits_in_byte());
     size_in_bits_ += nbits;
   }
