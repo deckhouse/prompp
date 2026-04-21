@@ -247,7 +247,6 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 }
 
 type DataStorageSerializedDataIteratorControlBlock struct {
-	decoderVariant   uint64
 	Timestamp        int64
 	Value            float64
 	remainingSamples uint8
