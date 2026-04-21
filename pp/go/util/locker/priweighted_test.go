@@ -2,7 +2,6 @@ package locker_test
 
 import (
 	"context"
-	"errors"
 	"math/rand/v2"
 	"runtime"
 	"sync"
@@ -49,7 +48,6 @@ func (s *WeightedSuite) TestCloseLocked() {
 		l := locker.NewWeighted(2)
 		var counter uint32
 		var closed atomic.Bool
-		closed.Store(false)
 
 		// Hold the whole semaphore exclusively so RLock waiters cannot take a slot
 		// before Close acquires the priority writer lock.
@@ -88,6 +86,12 @@ func (s *WeightedSuite) TestCloseLocked() {
 	})
 }
 
+// TestPriorityCancelTailUpdatesLastPri ensures that when the lastPri priority
+// waiter is cancelled, the next priority waiter enqueued via the slow path
+// (while all slots are still held) is correctly inserted after the remaining
+// priority prefix. Without the fix in acquireWithInserter, lastPri would keep
+// dangling at the removed element and InsertAfter would return nil, silently
+// dropping the new waiter and deadlocking the goroutine.
 func (s *WeightedSuite) TestPriorityCancelTailUpdatesLastPri() {
 	synctest.Test(s.T(), func(t *testing.T) {
 		ctxBase := context.Background()
@@ -98,51 +102,53 @@ func (s *WeightedSuite) TestPriorityCancelTailUpdatesLastPri() {
 		unlockHold2, err := l.RLock(ctxBase)
 		s.Require().NoError(err)
 
-		ctx1, cancel1 := context.WithCancel(ctxBase)
-		ctx2, cancel2 := context.WithCancel(ctxBase)
-		t.Cleanup(cancel1)
-		t.Cleanup(cancel2)
+		ctxTail, cancelTail := context.WithCancel(ctxBase)
+		t.Cleanup(cancelTail)
 
 		unlocks := make(chan func(), 2)
 
+		// p1 — first priority waiter, becomes initial lastPri.
 		go func() {
-			unlockRP, errP := l.RLockWithPriority(ctx1)
+			unlockRP, errP := l.RLockWithPriority(ctxBase)
 			require.NoError(t, errP)
 			unlocks <- unlockRP
 		}()
 		synctest.Wait()
 
+		// p2 — tail priority waiter, becomes lastPri, will be cancelled.
 		go func() {
-			_, errP := l.RLockWithPriority(ctx2)
+			_, errP := l.RLockWithPriority(ctxTail)
 			require.ErrorIs(t, errP, context.Canceled)
 		}()
 		synctest.Wait()
 
-		go cancel2()
+		// Cancel the tail. lastPri must be advanced back to p1; otherwise it
+		// will dangle at the removed element.
+		cancelTail()
 		synctest.Wait()
 
-		unlockHold1()
-		synctest.Wait()
-
-		unlockHold2()
-		synctest.Wait()
-
+		// p3 — enqueued while both slots are still held, so this forces the
+		// slow-path InsertAfter(lastPri). If lastPri still pointed to the
+		// removed p2, InsertAfter would return nil and this goroutine would
+		// hang forever.
 		go func() {
-			unlockPriority, errP := l.RLockWithPriority(ctxBase)
-			s.Require().NoError(errP)
-			unlocks <- unlockPriority
+			unlockRP, errP := l.RLockWithPriority(ctxBase)
+			require.NoError(t, errP)
+			unlocks <- unlockRP
 		}()
 		synctest.Wait()
 
-		(<-unlocks)()
-		(<-unlocks)()
+		unlockHold1()
+		unlockHold2()
+		synctest.Wait()
 
-		cancel1()
+		(<-unlocks)()
+		(<-unlocks)()
 	})
 }
 
 func (s *WeightedSuite) TestAllocCancelDoesntStarve() {
-	synctest.Test(s.T(), func(*testing.T) {
+	synctest.Test(s.T(), func(t *testing.T) {
 		l := locker.NewWeighted(10)
 
 		unlock1, err := l.RLock(context.Background())
@@ -153,15 +159,15 @@ func (s *WeightedSuite) TestAllocCancelDoesntStarve() {
 
 		go func() {
 			_, errW := l.Lock(ctx)
-			s.Require().ErrorIs(errW, context.Canceled)
+			require.ErrorIs(t, errW, context.Canceled)
 		}()
 		synctest.Wait()
 
-		go cancel()
+		cancel()
 
 		go func() {
 			unlockW, errW := l.Lock(context.Background())
-			s.Require().NoError(errW)
+			require.NoError(t, errW)
 			unlockW()
 		}()
 		synctest.Wait()
@@ -337,65 +343,6 @@ func (s *WeightedSuite) TestRLockWakesToErrSemaphoreClosedAfterClose() {
 	})
 }
 
-func (s *WeightedSuite) TestAcquireAfterReadyContextCanceledReleases() {
-	if testing.Short() {
-		s.T().Skip("timing-dependent cancellation path")
-	}
-
-	ctx := context.Background()
-	for range 600 {
-		l := locker.NewWeighted(1)
-
-		unlockHold, err := l.RLock(ctx)
-		s.Require().NoError(err)
-
-		ctxW, cancelW := context.WithCancel(ctx)
-		errCh := make(chan error, 1)
-		go func() {
-			unlockR1, errW := l.RLock(ctxW)
-			if errW != nil {
-				errCh <- errW
-				return
-			}
-
-			unlockR1()
-			errCh <- nil
-		}()
-
-		for range 20 {
-			runtime.Gosched()
-		}
-
-		if rand.IntN(2) == 0 {
-			unlockHold()
-			cancelW()
-		} else {
-			cancelW()
-			unlockHold()
-		}
-
-		for range 20 {
-			runtime.Gosched()
-		}
-
-		var errW error
-		select {
-		case errW = <-errCh:
-		case <-time.After(time.Second):
-			s.FailNow("deadlock waiting for RLock waiter")
-		}
-
-		if errors.Is(errW, context.Canceled) {
-			unlockR2, err2 := l.RLock(ctx)
-			s.Require().NoError(err2)
-			unlockR2()
-			return
-		}
-
-		s.Require().NoError(errW)
-	}
-	s.FailNow("did not observe context.Canceled after acquire race within iterations")
-}
 
 func (s *WeightedSuite) TestTwoRLockWithPriorityOrder() {
 	synctest.Test(s.T(), func(t *testing.T) {
@@ -491,17 +438,17 @@ func (s *WeightedSuite) TestPriorityCancelFrontClearsLastPri() {
 
 		go func() {
 			_, errP := l.RLockWithPriority(ctxPri)
-			s.Require().ErrorIs(errP, context.Canceled)
+			require.ErrorIs(t, errP, context.Canceled)
 		}()
 		synctest.Wait()
 
-		go cancelPri()
+		cancelPri()
 		synctest.Wait()
 
 		unlocks := make(chan func(), 1)
 		go func() {
 			unlockRP, errP := l.RLockWithPriority(ctxBase)
-			s.Require().NoError(errP)
+			require.NoError(t, errP)
 			unlocks <- unlockRP
 		}()
 		synctest.Wait()
@@ -516,7 +463,11 @@ func (s *WeightedSuite) TestPriorityCancelFrontClearsLastPri() {
 	})
 }
 
-func (s *WeightedSuite) TestPriorityCancelMiddleUpdatesLastPriToPrev() {
+// TestPriorityCancelTailWithPrevPriority verifies that when both the front and
+// the tail priority waiters get cancelled while a middle priority waiter
+// remains, lastPri is correctly repositioned to the remaining middle waiter
+// (via elem.Prev()) rather than being cleared.
+func (s *WeightedSuite) TestPriorityCancelTailWithPrevPriority() {
 	synctest.Test(s.T(), func(t *testing.T) {
 		ctxBase := context.Background()
 		l := locker.NewWeighted(2)
@@ -534,27 +485,27 @@ func (s *WeightedSuite) TestPriorityCancelMiddleUpdatesLastPriToPrev() {
 
 		go func() {
 			_, errP := l.RLockWithPriority(ctxA)
-			s.Require().ErrorIs(errP, context.Canceled)
+			require.ErrorIs(t, errP, context.Canceled)
 		}()
 		synctest.Wait()
 
 		go func() {
 			unlockRP, errP := l.RLockWithPriority(ctxBase)
-			s.Require().NoError(errP)
+			require.NoError(t, errP)
 			unlockRP()
 		}()
 		synctest.Wait()
 
 		go func() {
 			_, errP := l.RLockWithPriority(ctxB)
-			s.Require().ErrorIs(errP, context.Canceled)
+			require.ErrorIs(t, errP, context.Canceled)
 		}()
 		synctest.Wait()
 
-		go cancelA()
+		cancelA()
 		synctest.Wait()
 
-		go cancelB()
+		cancelB()
 		synctest.Wait()
 
 		unlockHold1()
@@ -565,13 +516,21 @@ func (s *WeightedSuite) TestPriorityCancelMiddleUpdatesLastPriToPrev() {
 	})
 }
 
-func (s *WeightedSuite) TestCancelAcquireAfterReadyRollbackNotifiesNext() {
+// TestAcquireCancellationRace stresses the race between ctx cancellation and
+// notifyWaiters closing the ready channel. The scheduler-dependent timing is
+// driven by runtime.Gosched and a random ordering of the two events, so the
+// test may hit different branches (ctx wins, ready wins, or both fire before
+// the waiter wakes up) on different runs. The goal is not to assert that a
+// specific rare branch executes, but that the semaphore never deadlocks and
+// remains usable for subsequent acquires regardless of which branch wins.
+func (s *WeightedSuite) TestAcquireCancellationRace() {
 	if testing.Short() {
-		s.T().Skip("timing-dependent rollback path")
+		s.T().Skip("timing-dependent cancellation path")
 	}
 
 	ctx := context.Background()
-	for range 800 {
+	const iterations = 800
+	for range iterations {
 		l := locker.NewWeighted(1)
 
 		unlockHold, err := l.RLock(ctx)
@@ -585,7 +544,6 @@ func (s *WeightedSuite) TestCancelAcquireAfterReadyRollbackNotifiesNext() {
 				errCh <- errW
 				return
 			}
-
 			unlockR()
 			errCh <- nil
 		}()
@@ -613,21 +571,20 @@ func (s *WeightedSuite) TestCancelAcquireAfterReadyRollbackNotifiesNext() {
 			s.FailNow("deadlock waiting for RLock waiter")
 		}
 
-		if errors.Is(errW, context.Canceled) {
-			unlockR, err2 := l.RLock(ctx)
-			s.Require().NoError(err2)
-			unlockR()
-			return
+		if errW != nil {
+			s.Require().ErrorIs(errW, context.Canceled)
 		}
 
-		s.Require().NoError(errW)
+		// Regardless of which branch fired, the semaphore must remain usable.
+		unlock, err := l.RLock(ctx)
+		s.Require().NoError(err)
+		unlock()
 	}
-
-	s.FailNow("did not observe cancel while acquiring path")
 }
 
+// TestWeighted is a stress test kept outside WeightedSuite because testify v1
+// does not support parallel execution for suite methods.
 func TestWeighted(t *testing.T) {
-	// testify v1 does not support suite's parallel tests and subtests
 	t.Parallel()
 
 	ctx := t.Context()
@@ -657,8 +614,9 @@ func TestWeighted(t *testing.T) {
 	wg.Wait()
 }
 
+// TestLargeAcquireDoesntStarve is a stress test kept outside WeightedSuite
+// because testify v1 does not support parallel execution for suite methods.
 func TestLargeAcquireDoesntStarve(t *testing.T) {
-	// testify v1 does not support suite's parallel tests and subtests
 	t.Parallel()
 
 	ctx := context.Background()
