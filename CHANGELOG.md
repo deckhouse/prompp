@@ -6,6 +6,7 @@
 1. **Snapshot LSS type separation.** Decoupled the read-only label set snapshot into a dedicated `SnapshotLSS` type with its own variant, reducing the active head's variant footprint and improving type safety.
 2. **GOST-compliant build hardening.** Enabled `FORTIFY_SOURCE=2`, stack protector, position-independent code, and additional compiler warnings (null-dereference, division-by-zero, array-bounds) across all C++ code including third-party libraries.
 3. **GCC 14 and clang-tidy 21.** Upgraded the C++ toolchain to GCC 14.2.0 and clang-tidy 21.1.8 with new `bugprone-*` diagnostics enabled; all findings resolved.
+4. **Go `/sync/*` runtime metrics.** The Prometheus Go collector now exports mutex and semaphore contention statistics from `runtime/metrics` (`/sync/*`) alongside the existing GC and scheduler metrics, making locker contention observable in production.
 
 ## v0.7.10
 

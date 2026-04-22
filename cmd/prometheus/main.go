@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	stdregexp "regexp"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -295,6 +296,7 @@ func main() {
 				collectors.WithGoCollectorRuntimeMetrics(
 					collectors.MetricsGC,
 					collectors.MetricsScheduler,
+					collectors.GoRuntimeMetricsRule{stdregexp.MustCompile(`^/sync/.*`)},
 				),
 			),
 		)
