@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.10
+
+### Fixes
+1. **`highestSentTimestamp` reported in milliseconds.** The `prometheus_remote_storage_queue_highest_sent_timestamp_seconds` metric was emitted in milliseconds, causing the shard controller to compute a huge lag and falsely trigger the `PrometheusRemoteWriteDesiredShards` alert.
+2. **Catalog sync with deleted records.** When reading the catalog and compacting the log, records with `deletedAt != 0` are now dropped eagerly instead of lingering in memory until the next cleanup pass.
+3. **`lastPri` in the priority-weighted locker.** Fixed the `lastPri` pointer update in `util/locker/priweighted` when the tail waiter is cancelled — the priority-prefix invariant could previously be violated, leading to potential hangs.
+4. **Go 1.25.9.** Bumped Go from 1.25.8 to 1.25.9, pulling in stdlib security fixes for `crypto/x509` (chain building and policy validation DoS), `crypto/tls` (TLS 1.3 KeyUpdate DoS), `html/template` (XSS via JS template literal context tracking), `archive/tar` (unbounded allocation on GNU sparse), and `os` (TOCTOU in `Root.Chmod` on Linux).
+5. **npm dependency security updates.** Updated `follow-redirects` (auth header leak on cross-domain redirect) and `lodash` (prototype pollution and code injection in `_.template`) in the web UI.
+
 ## v0.7.9
 
 ### Features

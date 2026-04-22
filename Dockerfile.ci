@@ -16,7 +16,7 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-ARG GO_VERSION=1.25.8
+ARG GO_VERSION=1.25.9
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"
