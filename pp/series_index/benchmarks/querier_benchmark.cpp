@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 
+#include "benchmark/statistic.h"
 #include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/querier/querier.h"
@@ -62,10 +63,6 @@ void BenchmarkQuery(benchmark::State& state) {
   }
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
-
-BENCHMARK(BenchmarkQuery)->DenseRange(0, kBenchmarkCases.size() - 1, 1)->ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkQuery)->DenseRange(0, kBenchmarkCases.size() - 1, 1)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

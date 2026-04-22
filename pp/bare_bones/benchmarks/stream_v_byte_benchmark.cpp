@@ -5,16 +5,21 @@
 
 #include "bare_bones/stream_v_byte.h"
 #include "profiling/profiling.h"
+#include "benchmark/statistic.h"
 
 namespace {
+
+constexpr uint32_t kDefaultValuesCount = 1000;
 
 uint32_t values_count() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
     const auto& values_str = context->operator[]("values");
-    return std::strtoul(values_str.data(), nullptr, 10);
+    if (!values_str.empty()) {
+      return std::strtoul(values_str.data(), nullptr, 10);
+    }
   }
 
-  return {};
+  return kDefaultValuesCount;
 }
 
 using Sequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124, 8>;
@@ -56,14 +61,10 @@ void BenchmarkSequenceDecode(benchmark::State& state) {
   }
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
+BENCHMARK(BenchmarkSequencePushBack<Sequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BenchmarkSequencePushBack<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
-BENCHMARK(BenchmarkSequencePushBack<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(BenchmarkSequencePushBack<CompactSequence>)->ComputeStatistics("min", min_value);
-
-BENCHMARK(BenchmarkSequenceDecode<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(BenchmarkSequenceDecode<CompactSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkSequenceDecode<Sequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BenchmarkSequenceDecode<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

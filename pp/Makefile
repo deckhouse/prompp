@@ -73,14 +73,28 @@ bench: ## Run benchmark
 	@$(call bazel_build_march,native) //$(package)/benchmarks:$(project)
 	@cat $(package)/benchmarks/$(project).flags | ./bazel-bin/$(package)/benchmarks/$(project) `xargs`
 
-# wal, scraper
-
-# ARCH="native" \
-# PACKAGE="bare_bones" && \
-# PROJECT="stream_v_byte_sequence" && \
-# bazel build -c opt --march=$ARCH //$PACKAGE/benchmarks:$PROJECT && \
-# ./bazel-bin/$PACKAGE/benchmarks/$PROJECT \
-#   --benchmark_repetitions=1 \
-#   --benchmark_time_unit=us \
-#   --benchmark_context=values=5000
-
+.PHONY: bench_all
+repetitions ?= 10
+filter ?= .*
+encoded_sequence_values_file ?= performance_tests/test_data/new/values_for_encoder_test
+lss_file ?= performance_tests/test_data/new/lss_for_test
+compact_samples_file ?= performance_tests/test_data/sde_data
+compact_samples_ts_offset ?= 1698395400012
+prom_scraper_file ?= head/promlex/extended-monitoring-exporter.metrics
+# min: set to 1/true/yes to pipe output through grep _min (default: off)
+bench_all_only_min := $(if $(filter 1 y Y on ON true TRUE yes YES,$(min)),| grep _min,)
+# list: set to 1/true/yes to print benchmarks list (default: off)
+bench_all_print_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),true,false)
+bench_all: ## Run all benchmarks (optional: min=1 for _min lines only)
+	@$(call bazel_build_march,native) benchmarks_all
+	@./bazel-bin/benchmarks_all \
+		--benchmark_repetitions=$(repetitions) \
+		--benchmark_filter=$(filter) \
+		--benchmark_list_tests=$(bench_all_print_list) \
+		--benchmark_counters_tabular=true \
+		--benchmark_context=encoded_sequence_values_file=$(encoded_sequence_values_file) \
+		--benchmark_context=lss_file=$(lss_file) \
+		--benchmark_context=compact_samples_file=$(compact_samples_file) \
+		--benchmark_context=compact_samples_ts_offset=$(compact_samples_ts_offset) \
+		--benchmark_context=prom_scraper_file=$(prom_scraper_file) \
+		$(bench_all_only_min)

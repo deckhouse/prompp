@@ -2,6 +2,7 @@
 
 #include <benchmark/benchmark.h>
 
+#include "benchmark/statistic.h"
 #include "primitives/timeseries.h"
 #include "profiling/profiling.h"
 #include "wal/hashdex/scraper/scraper.h"
@@ -11,18 +12,18 @@ namespace {
 using PromPP::WAL::hashdex::scraper::PrometheusParser;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;
 
+std::string get_file_content() {
+  if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
+    std::ifstream t(context->operator[]("prom_scraper_file"));
+    return std::string((std::istreambuf_iterator(t)), std::istreambuf_iterator<char>());
+  }
+
+  return {};
+};
+
 void BenchmarkParser(benchmark::State& state) {
   ZoneScoped;
-  constexpr auto get_file_name = [] -> std::string {
-    if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-      return context->operator[]("scraper_file");
-    }
-
-    return {};
-  };
-
-  std::ifstream t(get_file_name());
-  std::string str((std::istreambuf_iterator(t)), std::istreambuf_iterator<char>());
+  const auto str = get_file_content();
 
   PrometheusParser parser;
 
@@ -36,16 +37,7 @@ void BenchmarkParser(benchmark::State& state) {
 
 void BenchmarkScraperParse(benchmark::State& state) {
   ZoneScoped;
-  constexpr auto get_file_name = [] -> std::string {
-    if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-      return context->operator[]("scraper_file");
-    }
-
-    return {};
-  };
-
-  std::ifstream t(get_file_name());
-  std::string str((std::istreambuf_iterator(t)), std::istreambuf_iterator<char>());
+  const auto str = get_file_content();
 
   std::string tmp_str;
   tmp_str.resize(str.size());
@@ -58,8 +50,8 @@ void BenchmarkScraperParse(benchmark::State& state) {
 
   {
     PrometheusScraper scraper;
-    auto tmp_str = str;
-    std::ignore = scraper.parse(tmp_str, 0);
+    auto tmp_str2 = str;
+    std::ignore = scraper.parse(tmp_str2, 0);
     state.counters["Alloc"] =
         benchmark::Counter(static_cast<double>(scraper.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
@@ -67,16 +59,7 @@ void BenchmarkScraperParse(benchmark::State& state) {
 
 void BenchmarkScraperRead(benchmark::State& state) {
   ZoneScoped;
-  constexpr auto get_file_name = [] -> std::string {
-    if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-      return context->operator[]("scraper_file");
-    }
-
-    return {};
-  };
-
-  std::ifstream t(get_file_name());
-  std::string str((std::istreambuf_iterator(t)), std::istreambuf_iterator<char>());
+  auto str = get_file_content();
 
   PrometheusScraper scraper;
   std::ignore = scraper.parse(str, 0);
@@ -93,8 +76,8 @@ void BenchmarkScraperRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkParser)->ComputeStatistics("min", [](const std::vector<double>& v) { return *std::ranges::min_element(v); });
-BENCHMARK(BenchmarkScraperParse)->ComputeStatistics("min", [](const std::vector<double>& v) { return *std::ranges::min_element(v); });
-BENCHMARK(BenchmarkScraperRead)->ComputeStatistics("min", [](const std::vector<double>& v) { return *std::ranges::min_element(v); });
+BENCHMARK(BenchmarkParser)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BenchmarkScraperParse)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BenchmarkScraperRead)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace
