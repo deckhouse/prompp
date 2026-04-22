@@ -1,16 +1,16 @@
 #include <benchmark/benchmark.h>
 
-#include <numeric>
-
-#include "performance_tests/dummy_wal.h"
+#include "benchmark/statistic.h"
+#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/reverse_index.h"
-#include "wal/wal.h"
 
 namespace {
 
 using BareBones::StreamVByte::CompactSequence;
 using BareBones::StreamVByte::Sequence;
+
+using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>;
 
 struct Label {
   uint32_t ls_id_;
@@ -21,35 +21,30 @@ struct Label {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return name_id_; }
 };
 
-std::string_view get_wal_file() {
+std::string get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-    return context->operator[]("wal_file");
+    return context->operator[]("lss_file");
   }
 
   return {};
 }
 
 BareBones::Vector<Label> get_labels() {
-  BareBones::Vector<Label> labels;
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> label_set_bitmap;
+  static BareBones::Vector<Label> labels;
+  if (labels.empty()) {
+    EncodingBimap lss;
+    if (lss.size() == 0) {
+      std::ifstream infile(get_lss_file(), std::ios_base::binary);
+      infile >> lss;
+    }
 
-  DummyWal::Timeseries tmsr;
-  DummyWal dummy_wal{std::string{get_wal_file()}};
-  uint32_t previous_label_id = std::numeric_limits<uint32_t>::max();
-
-  while (dummy_wal.read_next_segment()) {
-    while (dummy_wal.read_next(tmsr)) {
-      const auto ls_id = label_set_bitmap.find_or_emplace(tmsr.label_set());
-      if (previous_label_id != std::numeric_limits<uint32_t>::max() && ls_id <= previous_label_id) {
-        continue;
+    uint32_t series_id{};
+    for (auto label_set : lss) {
+      for (auto i = label_set.begin(); i != label_set.end(); ++i) {
+        labels.emplace_back(Label{.ls_id_ = series_id, .name_id_ = i.name_id(), .value_id_ = i.value_id()});
       }
 
-      previous_label_id = ls_id;
-
-      auto ls = label_set_bitmap[ls_id];
-      for (auto i = ls.begin(); i != ls.end(); ++i) {
-        labels.emplace_back(Label{.ls_id_ = ls_id, .name_id_ = i.name_id(), .value_id_ = i.value_id()});
-      }
+      ++series_id;
     }
   }
 
@@ -81,10 +76,6 @@ void BenchmarkGenerateReverseIndex(benchmark::State& state) {
   state.counters["Memory"] = benchmark::Counter(static_cast<double>(allocated_memory), benchmark::Counter::kDefaults, benchmark::Counter::kIs1024);
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
-
-BENCHMARK(BenchmarkGenerateReverseIndex)->ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkGenerateReverseIndex)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

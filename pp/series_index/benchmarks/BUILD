@@ -15,3 +15,13 @@ cc_binary(
         "//:benchmark",
     ],
 )
+
+cc_binary(
+    name = "generate_reverse_index",
+    srcs = ["generate_reverse_index_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:series_index",
+        "//:benchmark",
+    ],
+)
