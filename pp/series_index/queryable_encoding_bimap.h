@@ -83,8 +83,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept {
     assert(boundary <= max_item_index_impl());
+    prune_hidden_series_before_fixed_state(boundary);
     pending_shrink_boundary_ = boundary;
-    prune_hidden_series_from_hashset_in_fixed_state();
   }
 
   template <class Snapshot>
@@ -134,8 +134,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     shift_ += drop_count;
     Base::storage_.drop_front(drop_count);
     pending_shrink_boundary_ = kPendingShrinkBoundaryNotSet;
-
-    rebuild_indexes_after_shrink();
   }
 
   template <class LabelSet>
@@ -379,32 +377,17 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     return added_series_[logical_id];
   }
 
-  void prune_hidden_series_from_hashset_in_fixed_state() noexcept {
-    assert(is_fixed());
-    const uint32_t boundary = pending_shrink_boundary_;
+  void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
     assert(boundary <= added_series_.size());
     for (auto zero_it = added_series_.zbegin(); zero_it != added_series_.zend(); ++zero_it) {
       if (*zero_it >= boundary) {
         break;
       }
-      ls_id_hash_set_.erase(typename Base::Proxy(*zero_it));
+      const auto proxy = typename Base::Proxy(*zero_it);
+      ls_id_hash_set_.erase(proxy);
+      ls_id_set_.erase(proxy);
     }
-  }
 
-  void rebuild_indexes_after_shrink() {
-    assert(is_shrunk());
-    for (auto it = ls_id_set_.begin(); it != ls_id_set_.end();) {
-      const auto logical_id = static_cast<uint32_t>(*it);
-      if (logical_id >= shift_) [[likely]] {
-        ++it;
-        continue;
-      }
-      if (!is_series_alive(logical_id)) [[unlikely]] {
-        it = ls_id_set_.erase(it);
-        continue;
-      }
-      ++it;
-    }
     sorting_index_.clear();
     sorting_index_.build();
   }

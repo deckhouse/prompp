@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 
 #include "bare_bones/preprocess.h"
@@ -102,6 +103,7 @@ class SortingIndexBuilder {
       max_ls_id = std::max(max_ls_id, static_cast<uint32_t>(ls_id));
     }
     index_.index.resize(max_ls_id + 1);
+    std::memset(index_.index.data(), 0, index_.index.size() * sizeof(uint32_t));
 
     const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
     uint32_t index_value = 0;
