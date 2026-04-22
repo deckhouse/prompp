@@ -963,9 +963,8 @@ TEST_F(BimapPartialAddedFixture, FixedStateLsIdSetOrderStaysSortedByCurrentResol
 
   // Assert
   // btree order must stay consistent with current resolve logic in fixed state.
-  EXPECT_TRUE(std::ranges::is_sorted(ids_in_tree_order, [this](uint32_t lhs, uint32_t rhs) {
-    return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]);
-  }));
+  EXPECT_TRUE(
+      std::ranges::is_sorted(ids_in_tree_order, [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
 }
 
 TEST_F(BimapPartialAddedFixture, FixedStateSortingIndexSortKeepsCurrentResolveOrder) {
@@ -978,9 +977,7 @@ TEST_F(BimapPartialAddedFixture, FixedStateSortingIndexSortKeepsCurrentResolveOr
   lss_.sorting_index().sort(ids);
 
   // Assert
-  EXPECT_TRUE(std::ranges::is_sorted(ids, [this](uint32_t lhs, uint32_t rhs) {
-    return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]);
-  }));
+  EXPECT_TRUE(std::ranges::is_sorted(ids, [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
 }
 
 TEST_F(BimapPartialAddedFixture, PartialAddedFindOmitsDeadPreBoundary) {
