@@ -15,6 +15,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg catalog_test --out
+
 const (
 	// DefaultMaxLogFileSize default size of log file.
 	DefaultMaxLogFileSize = 4 << 20
@@ -32,6 +34,8 @@ const (
 //
 
 // Log head-log file, contains [Record]s of heads.
+//
+//go:generate moq catalog_moq_test.go . Log
 type Log interface {
 	// ReWrite rewrite [FileLog] with [SerializedRecord]s.
 	ReWrite(srecords ...*SerializedRecord) error
@@ -312,13 +316,11 @@ func (c *Catalog) compactIfNeeded() error {
 	return c.compactLog()
 }
 
-// compactLog delete old(deleted [Record]s).
+// compactLog rewrite [Log] with current in-memory [Record]s.
 func (c *Catalog) compactLog() error {
 	srecords := make([]*SerializedRecord, 0, len(c.records))
 	for _, record := range c.records {
-		if record.deletedAt == 0 {
-			srecords = append(srecords, &record.SerializedRecord)
-		}
+		srecords = append(srecords, &record.SerializedRecord)
 	}
 
 	sort.Slice(srecords, func(i, j int) bool {
@@ -343,6 +345,7 @@ func (c *Catalog) sync() error {
 		}
 
 		if r.deletedAt != 0 {
+			delete(c.records, r.id.String())
 			continue
 		}
 
