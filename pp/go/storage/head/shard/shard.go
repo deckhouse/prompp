@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 )
 
 // Wal the minimum required Wal implementation for a [Shard].
@@ -85,6 +86,27 @@ func (s *Shard) Close() error {
 	if s.queriedSeriesStorage != nil {
 		err = errors.Join(err, s.queriedSeriesStorage.Close())
 	}
+
+	return err
+}
+
+// CloseWal closes the WAL and swaps it for [wal.ClosedWal]. After this call
+// all Wal* methods on the shard are safe to call: WalCommit/WalFlush/WalSync
+// and WalWrite return [wal.ErrWalClosed], WalCurrentSize returns 0, and
+// CloseWal itself becomes a no-op. CloseWal is idempotent.
+//
+// The wal field is mutated without synchronization, so callers must ensure
+// that no other goroutine reads or writes the WAL while CloseWal runs. In
+// practice the rotator calls CloseWal while the head is still !IsReadOnly()
+// and has already been swapped out of the active slot, which is sufficient
+// to exclude all known readers (writers, Persistener, MetricsUpdater).
+func (s *Shard) CloseWal() error {
+	if _, ok := s.wal.(wal.ClosedWal); ok {
+		return nil
+	}
+
+	err := s.wal.Close()
+	s.wal = wal.ClosedWal{}
 
 	return err
 }

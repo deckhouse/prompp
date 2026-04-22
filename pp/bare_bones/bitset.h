@@ -13,6 +13,7 @@
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <ranges>
 
 #include "bit.h"
 #include "concepts.h"
@@ -356,3 +357,12 @@ template <ReallocatorInterface Reallocator>
 struct IsZeroInitializable<GenericBitset<Reallocator>> : std::true_type {};
 
 }  // namespace BareBones
+
+// GenericBitset::size() is the allocated bit width, not ranges::distance(begin, end) (set-bit
+// count). GCC 14+ libstdc++ uses sized-range fast paths in std::ranges::equal; disable them.
+namespace std::ranges {
+
+template <BareBones::ReallocatorInterface R>
+inline constexpr bool disable_sized_range<BareBones::GenericBitset<R>> = true;
+
+}  // namespace std::ranges

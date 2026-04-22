@@ -34,7 +34,7 @@ shell:
 ---
 image: prompp-src-artifact
 fromCacheVersion: "2025-03-31-12"
-from: golang:1.25.8-alpine3.22
+from: golang:1.25.9-alpine3.22
 final: false
 git:
   - add: /
@@ -44,7 +44,7 @@ git:
     tag: v0.17.0
 ---
 image: promu-artifact
-from: golang:1.25.8-alpine3.22
+from: golang:1.25.9-alpine3.22
 final: false
 git:
   - url: https://github.com/prometheus/promu.git

@@ -1,16 +1,44 @@
-FROM ubuntu:24.04
+FROM debian:trixie-slim
 
-# Base + g++-14 + git for perf_tests
-RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg wget gcc-14 g++-14 libunwind-14-dev jq bash nodejs npm bzip2 \
-    git autoconf make iproute2 jq curl ca-certificates libtool pkg-config cmake lcov && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 && \
-    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100 && \
-    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
-    wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    apt-get update && apt-get install -y clang-format-21 clang-tidy-21 && \
-    ln -s /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy && \
-    ln -s /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format
+# Align with Deckhouse module (debian-trixie) and libunwind+lzma static link expectations.
+# LLVM 21 from apt.llvm.org (trixie toolchain).
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        wget \
+        gnupg \
+        gcc-14 \
+        g++-14 \
+        libunwind-dev \
+        liblzma-dev \
+        libstdc++-14-dev \
+        jq \
+        bash \
+        nodejs \
+        npm \
+        bzip2 \
+        git \
+        autoconf \
+        make \
+        iproute2 \
+        libtool \
+        pkg-config \
+        cmake \
+        lcov; \
+    wget -qO /tmp/llvm-snapshot.gpg.key https://apt.llvm.org/llvm-snapshot.gpg.key; \
+    gpg --dearmor -o /usr/share/keyrings/apt-llvm-org.gpg /tmp/llvm-snapshot.gpg.key; \
+    rm -f /tmp/llvm-snapshot.gpg.key; \
+    echo "deb [signed-by=/usr/share/keyrings/apt-llvm-org.gpg] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-21 main" > /etc/apt/sources.list.d/llvm.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21; \
+    ln -sf /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy; \
+    ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100; \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100; \
+    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100; \
+    rm -rf /var/lib/apt/lists/*
 
 # Bazel
 ARG BAZEL_VERSION=7.4.1
@@ -19,7 +47,7 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-ARG GO_VERSION=1.25.8
+ARG GO_VERSION=1.25.9
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"
@@ -31,5 +59,4 @@ ARG GOYACC_VERSION=v0.6.0
 RUN go install golang.org/x/tools/cmd/goyacc@${GOYACC_VERSION}
 
 # minio for getting perf test data
-RUN wget -O /usr/local/bin/mcli https://dl.min.io/client/mc/release/linux-amd64/mc
-RUN chmod +x /usr/local/bin/mcli
+RUN wget -O /usr/local/bin/mcli "https://dl.min.io/client/mc/release/linux-${GO_ARCH}/mc" && chmod +x /usr/local/bin/mcli
