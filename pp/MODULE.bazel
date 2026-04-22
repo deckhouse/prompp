@@ -1,21 +1,73 @@
-###############################################################################
-# Bazel now uses Bzlmod by default to manage external dependencies.
-# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
-#
-# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
-###############################################################################
+"""prompp C++ module.
+
+All external dependencies are managed via Bzlmod. Third-party C/C++ libraries
+with custom BUILD files and patches live in //third_party:deps.bzl as a module
+extension. Bazel rule sets come from the Bazel Central Registry.
+"""
+
+module(
+    name = "prompp",
+    version = "0",
+)
+
+# --- Bazel rule sets (from BCR) -----------------------------------------------
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
+
+# --- Tools not published to BCR (use git_override) ----------------------------
+bazel_dep(name = "bazel_clang_tidy")
+git_override(
+    module_name = "bazel_clang_tidy",
+    commit = "c4d35e0d0b838309358e57a2efed831780f85cd0",
+    patch_strip = 1,
+    patches = [
+        "//third_party/patches/bazel_clang_tidy:0001-preserve-old-behavior.patch",
+    ],
+    remote = "https://github.com/erenon/bazel_clang_tidy.git",
+)
+
+# Hedron's Compile Commands Extractor (dev-only).
+bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
+git_override(
+    module_name = "hedron_compile_commands",
+    commit = "abb61a688167623088f8768cc9264798df6a9d10",
+    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
+)
+
+# --- Toolchains ---------------------------------------------------------------
+# rules_foreign_cc under Bzlmod builds pkg-config (and its glib dependency) from
+# source by default, which fails in minimal Linux environments. We prefer the
+# system-installed pkg-config by registering the preinstalled toolchain here,
+# before rules_foreign_cc registers its built-from-source alternative.
 register_toolchains(
+    "@rules_foreign_cc//toolchains:preinstalled_pkgconfig_toolchain",
     "//bazel/toolchain:cc_toolchain_for_g++-14_toolchain_aarch64",
     "//bazel/toolchain:cc_toolchain_for_g++-14_toolchain_x86_64",
 )
 
-# Hedron's Compile Commands Extractor for Bazel
-# https://github.com/hedronvision/bazel-compile-commands-extractor
-bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
-git_override(
-    module_name = "hedron_compile_commands",
-    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
-    commit = "abb61a688167623088f8768cc9264798df6a9d10",
-    # Replace the commit hash (above) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main).
-    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
+# --- Third-party C/C++ libraries (local module extension) ---------------------
+# These libraries are not consumed from BCR because we maintain custom BUILD
+# files and/or local patches for them. The extension below mirrors the former
+# WORKSPACE declarations.
+third_party = use_extension("//third_party:deps.bzl", "third_party_deps")
+use_repo(
+    third_party,
+    "cedar",
+    "com_google_absl",
+    "fastfloat_header",
+    "google_benchmark",
+    "gtest",
+    "jemalloc",
+    "lz4",
+    "parallel_hashmap",
+    "quasis_crypto",
+    "re2",
+    "roaring",
+    "scope_exit",
+    "simdutf",
+    "snappy",
+    "tracy",
+    "xxHash",
 )
