@@ -26,7 +26,7 @@ QueryableEncodingBimap& get_lss() {
   return lss;
 }
 
-void BenchmarkFindOrEmplaceWithEmplace(benchmark::State& state) {
+void FindOrEmplaceWithEmplace(benchmark::State& state) {
   ZoneScoped;
   const auto& lss = get_lss();
 
@@ -38,7 +38,7 @@ void BenchmarkFindOrEmplaceWithEmplace(benchmark::State& state) {
   }
 }
 
-void BenchmarkFindOrEmplaceWithFind(benchmark::State& state) {
+void FindOrEmplaceWithFind(benchmark::State& state) {
   ZoneScoped;
   auto& lss = get_lss();
 
@@ -49,7 +49,7 @@ void BenchmarkFindOrEmplaceWithFind(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkFindOrEmplaceWithEmplace)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(BenchmarkFindOrEmplaceWithFind)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(FindOrEmplaceWithEmplace)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(FindOrEmplaceWithFind)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

@@ -52,7 +52,7 @@ const std::array kBenchmarkCases{
     },
 };
 
-void BenchmarkQuery(benchmark::State& state) {
+void LssQuery(benchmark::State& state) {
   ZoneScoped;
   const auto& lss = get_lss();
 
@@ -63,6 +63,6 @@ void BenchmarkQuery(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkQuery)->DenseRange(0, kBenchmarkCases.size() - 1, 1)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(LssQuery)->DenseRange(0, kBenchmarkCases.size() - 1, 1)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

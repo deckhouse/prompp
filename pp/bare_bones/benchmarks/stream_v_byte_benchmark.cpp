@@ -4,8 +4,8 @@
 #include <ranges>
 
 #include "bare_bones/stream_v_byte.h"
-#include "profiling/profiling.h"
 #include "benchmark/statistic.h"
+#include "profiling/profiling.h"
 
 namespace {
 
@@ -26,7 +26,7 @@ using Sequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0
 using CompactSequence = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 8>;
 
 template <class Sequence>
-void BenchmarkSequencePushBack(benchmark::State& state) {
+void SequencePushBack(benchmark::State& state) {
   ZoneScoped;
   const auto kValuesCount = values_count();
 
@@ -47,7 +47,7 @@ void BenchmarkSequencePushBack(benchmark::State& state) {
 }
 
 template <class Sequence>
-void BenchmarkSequenceDecode(benchmark::State& state) {
+void SequenceDecode(benchmark::State& state) {
   ZoneScoped;
   const auto kValuesCount = values_count();
 
@@ -61,10 +61,10 @@ void BenchmarkSequenceDecode(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkSequencePushBack<Sequence>)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(BenchmarkSequencePushBack<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SequencePushBack<Sequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SequencePushBack<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
-BENCHMARK(BenchmarkSequenceDecode<Sequence>)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(BenchmarkSequenceDecode<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SequenceDecode<Sequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SequenceDecode<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

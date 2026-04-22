@@ -21,7 +21,7 @@ std::string get_file_content() {
   return {};
 };
 
-void BenchmarkParser(benchmark::State& state) {
+void Parser(benchmark::State& state) {
   ZoneScoped;
   const auto str = get_file_content();
 
@@ -35,7 +35,7 @@ void BenchmarkParser(benchmark::State& state) {
   }
 }
 
-void BenchmarkScraperParse(benchmark::State& state) {
+void ScraperParse(benchmark::State& state) {
   ZoneScoped;
   const auto str = get_file_content();
 
@@ -57,7 +57,7 @@ void BenchmarkScraperParse(benchmark::State& state) {
   }
 }
 
-void BenchmarkScraperRead(benchmark::State& state) {
+void ScraperRead(benchmark::State& state) {
   ZoneScoped;
   auto str = get_file_content();
 
@@ -76,8 +76,8 @@ void BenchmarkScraperRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkParser)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(BenchmarkScraperParse)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(BenchmarkScraperRead)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(Parser)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(ScraperParse)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(ScraperRead)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

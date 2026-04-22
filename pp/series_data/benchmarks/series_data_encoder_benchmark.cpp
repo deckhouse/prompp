@@ -7,7 +7,7 @@
 
 namespace {
 
-void BenchmarkSeriesDataEncoder(benchmark::State& state) {
+void SeriesDataEncoder(benchmark::State& state) {
   ZoneScoped;
   const auto& samples = benchmark::get_compact_samples();
 
@@ -28,6 +28,6 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
       benchmark::Counter(static_cast<double>(storage.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
 }
 
-BENCHMARK(BenchmarkSeriesDataEncoder)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SeriesDataEncoder)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

@@ -51,7 +51,7 @@ BareBones::Vector<Label> get_labels() {
   return labels;
 }
 
-void BenchmarkGenerateReverseIndex(benchmark::State& state) {
+void GenerateReverseIndex(benchmark::State& state) {
   ZoneScoped;
   static const auto& labels = get_labels();
   static size_t allocated_memory = 0;
@@ -76,6 +76,6 @@ void BenchmarkGenerateReverseIndex(benchmark::State& state) {
   state.counters["Memory"] = benchmark::Counter(static_cast<double>(allocated_memory), benchmark::Counter::kDefaults, benchmark::Counter::kIs1024);
 }
 
-BENCHMARK(BenchmarkGenerateReverseIndex)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(GenerateReverseIndex)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

@@ -39,7 +39,7 @@ series_data::querier::QueriedChunkList generate_query(uint32_t size) {
   return chunk_list;
 }
 
-void BenchmarkWalSerializedData(benchmark::State& state) {
+void WalSerializedData(benchmark::State& state) {
   ZoneScoped;
   const auto& samples = benchmark::get_compact_samples();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
@@ -70,7 +70,7 @@ void BenchmarkWalSerializedData(benchmark::State& state) {
   }
 }
 
-void BenchmarkWalConstantSerializedData(benchmark::State& state) {
+void WalConstantSerializedData(benchmark::State& state) {
   ZoneScoped;
   const auto& samples = benchmark::get_compact_samples();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
@@ -101,7 +101,7 @@ void BenchmarkWalConstantSerializedData(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkWalSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(BenchmarkWalConstantSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(WalSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(WalConstantSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace
