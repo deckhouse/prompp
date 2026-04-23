@@ -76,16 +76,16 @@ bench: ## Run benchmark
 .PHONY: bench_all
 repetitions ?= 10
 filter ?= .*
-encoded_sequence_values_file ?= performance_tests/test_data/new/values_for_encoder_test
-lss_file ?= performance_tests/test_data/new/lss_for_test
-compact_samples_file ?= performance_tests/test_data/sde_data
+encoded_sequence_values_file ?= performance_tests/test_data/values_for_encoder_test
+lss_file ?= performance_tests/test_data/lss
+compact_samples_file ?= performance_tests/test_data/compact_samples
 compact_samples_ts_offset ?= 1698395400012
-prom_scraper_file ?= head/promlex/extended-monitoring-exporter.metrics
+prom_scraper_file ?= performance_tests/test_data/extended-monitoring-exporter.metrics
 # min: set to 1/true/yes to pipe output through grep _min (default: off)
 bench_all_only_min := $(if $(filter 1 y Y on ON true TRUE yes YES,$(min)),| grep _min,)
 # list: set to 1/true/yes to print benchmarks list (default: off)
 bench_all_print_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),true,false)
-bench_all: ## Run all benchmarks (optional: min=1 for _min lines only)
+bench_all: ## Run all benchmarks (optional: min=1 for best times only)
 	@$(call bazel_build_march,native) benchmarks_all
 	@./bazel-bin/benchmarks_all \
 		--benchmark_repetitions=$(repetitions) \
