@@ -81,14 +81,18 @@ lss_file ?= performance_tests/test_data/lss
 compact_samples_file ?= performance_tests/test_data/compact_samples
 compact_samples_ts_offset ?= 1698395400012
 prom_scraper_file ?= performance_tests/test_data/extended-monitoring-exporter.metrics
+# time_unit: ns | us | ms | s (default: ns)
+time_unit ?= ns
+bench_all_time_unit := $(if $(filter ns us ms s,$(time_unit)),$(time_unit),ns)
 # min: set to 1/true/yes to pipe output through grep _min (default: off)
 bench_all_only_min := $(if $(filter 1 y Y on ON true TRUE yes YES,$(min)),| grep _min,)
 # list: set to 1/true/yes to print benchmarks list (default: off)
 bench_all_print_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),true,false)
-bench_all: ## Run all benchmarks (optional: min=1 for best times only)
+bench_all: ## Run all benchmarks (optional: min=1, time_unit=ns|us|ms|s)
 	@$(call bazel_build_march,native) benchmarks_all
 	@./bazel-bin/benchmarks_all \
 		--benchmark_repetitions=$(repetitions) \
+		--benchmark_time_unit=$(bench_all_time_unit) \
 		--benchmark_filter=$(filter) \
 		--benchmark_list_tests=$(bench_all_print_list) \
 		--benchmark_counters_tabular=true \
