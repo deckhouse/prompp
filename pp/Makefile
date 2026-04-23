@@ -88,7 +88,7 @@ bench_all_time_unit := $(if $(filter ns us ms s,$(time_unit)),$(time_unit),ns)
 bench_all_only_min := $(if $(filter 1 y Y on ON true TRUE yes YES,$(min)),| grep _min,)
 # list: set to 1/true/yes to print benchmarks list (default: off)
 bench_all_print_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),true,false)
-bench_all: ## Run all benchmarks (optional: min=1, time_unit=ns|us|ms|s)
+bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, time_unit=ns|us|ms|s, list=false)
 	@$(call bazel_build_march,native) benchmarks_all
 	@./bazel-bin/benchmarks_all \
 		--benchmark_repetitions=$(repetitions) \
