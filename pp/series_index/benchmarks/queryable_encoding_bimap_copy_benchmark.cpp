@@ -13,6 +13,7 @@
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
+
 using Lss =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
 
@@ -26,20 +27,23 @@ std::string GetWalFileName() {
   return {};
 }
 
-void mark_all_series_as_added(const std::shared_ptr<Lss>& lss) {
-  for (auto label_set : *lss) {
-    lss->find_or_emplace(label_set);
+void mark_all_series_as_added(Lss& lss) {
+  for (auto label_set : lss) {
+    lss.find_or_emplace(label_set);
   }
 }
 
-std::shared_ptr<Lss> LoadLssFromFile() {
-  const auto file_name = GetWalFileName();
-  auto lss = std::make_shared<Lss>();
+const Lss& LoadLssFromFile() {
+  static Lss lss;
+  if (lss.size() == 0) [[unlikely]] {
+    const auto file_name = GetWalFileName();
 
-  std::ifstream istrm(file_name, std::ios::binary);
-  istrm >> *lss;
-  mark_all_series_as_added(lss);
-  lss->build_deferred_indexes();
+    std::ifstream istrm(file_name, std::ios::binary);
+    istrm >> lss;
+    mark_all_series_as_added(lss);
+    lss.build_deferred_indexes();
+  }
+
   return lss;
 }
 
@@ -62,14 +66,14 @@ void CopyAllStepsWithTiming(benchmark::State& state) {
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 
-  static auto lss = LoadLssFromFile();
+  auto& lss = LoadLssFromFile();
 
   auto& timings = copy_parts_timings.emplace_back();
 
   for ([[maybe_unused]] auto _ : state) {
     Lss lss_copy;
     BareBones::Vector<uint32_t> dst_src_ids_mapping;
-    LssCopier copier(*lss, lss->sorting_index(), lss->added_series(), lss_copy, dst_src_ids_mapping);
+    LssCopier copier(lss, lss.sorting_index(), lss.added_series(), lss_copy, dst_src_ids_mapping);
 
     {
       auto start = steady_clock::now();
