@@ -73,14 +73,42 @@ bench: ## Run benchmark
 	@$(call bazel_build_march,native) //$(package)/benchmarks:$(project)
 	@cat $(package)/benchmarks/$(project).flags | ./bazel-bin/$(package)/benchmarks/$(project) `xargs`
 
-# wal, scraper
-
-# ARCH="native" \
-# PACKAGE="bare_bones" && \
-# PROJECT="stream_v_byte_sequence" && \
-# bazel build -c opt --march=$ARCH //$PACKAGE/benchmarks:$PROJECT && \
-# ./bazel-bin/$PACKAGE/benchmarks/$PROJECT \
-#   --benchmark_repetitions=1 \
-#   --benchmark_time_unit=us \
-#   --benchmark_context=values=5000
-
+.PHONY: bench_all
+# repetitions: number of runs per benchmark (Google Benchmark --benchmark_repetitions)
+repetitions ?= 10
+# filter: regex for benchmark names (--benchmark_filter, default matches all)
+filter ?= .*
+# encoded_sequence_values_file: binary fixture for encoding / encoded-sequence benchmarks
+encoded_sequence_values_file ?= performance_tests/test_data/values_for_encoder_test
+# lss_file: binary serialized label-set file for benchmarks with lss
+lss_file ?= performance_tests/test_data/lss
+# compact_samples_file: compact samples file for benchmarks with DataStorage
+compact_samples_file ?= performance_tests/test_data/compact_samples
+# compact_samples_ts_offset: base timestamp (ms) applied for timestamp when loading compact_samples_file
+compact_samples_ts_offset ?= 1698395400012
+# prom_scraper_file: Prometheus text scrape file for scraper-related benchmarks
+prom_scraper_file ?= performance_tests/test_data/extended-monitoring-exporter.metrics
+# stream_v_byte_values_count: how many values to generate for stream_v_byte benchmarks
+stream_v_byte_values_count ?= 1000
+# time_unit: ns | us | ms | s (default: ns)
+time_unit ?= ns
+bench_all_time_unit := $(if $(filter ns us ms s,$(time_unit)),$(time_unit),ns)
+# min: set to 1/true/yes to pipe output through grep _min (default: off)
+bench_all_only_min := $(if $(filter 1 y Y on ON true TRUE yes YES,$(min)),| grep _min,)
+# list: set to 1/true/yes to print benchmarks list (default: off)
+bench_all_print_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),true,false)
+bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, time_unit=ns|us|ms|s, list=false)
+	@$(call bazel_build_march,native) benchmarks_all
+	@./bazel-bin/benchmarks_all \
+		--benchmark_repetitions=$(repetitions) \
+		--benchmark_time_unit=$(bench_all_time_unit) \
+		--benchmark_filter=$(filter) \
+		--benchmark_list_tests=$(bench_all_print_list) \
+		--benchmark_counters_tabular=true \
+		--benchmark_context=encoded_sequence_values_file=$(encoded_sequence_values_file) \
+		--benchmark_context=lss_file=$(lss_file) \
+		--benchmark_context=compact_samples_file=$(compact_samples_file) \
+		--benchmark_context=compact_samples_ts_offset=$(compact_samples_ts_offset) \
+		--benchmark_context=prom_scraper_file=$(prom_scraper_file) \
+		--benchmark_context=stream_v_byte_values_count=$(stream_v_byte_values_count) \
+		$(bench_all_only_min)
