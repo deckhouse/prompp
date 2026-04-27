@@ -118,7 +118,7 @@ cc_library(
         ":primitives",
         ":prometheus",
         ":series_data",
-        "@fastfloat",
+        "//third_party/fastfloat",
         "@roaring",
         "@simdutf",
         "@snappy",
