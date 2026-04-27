@@ -2,6 +2,17 @@ FROM debian:trixie-slim
 
 # Align with Deckhouse module (debian-trixie) and libunwind+lzma static link expectations.
 # LLVM 21 from apt.llvm.org (trixie toolchain).
+# binutils-gold: needed only on linux/arm64 because every currently released Go
+# (1.25.x with x<=9 and 1.26.x with x<=2) unconditionally forces `-fuse-ld=gold`
+# for cgo dynamic/PIE links and aborts with "ARM64 external linker must be gold"
+# otherwise (see https://github.com/golang/go/issues/15696 and
+# https://github.com/golang/go/issues/22040). The underlying GNU bfd bug was
+# fixed in binutils 2.36 (we ship 2.44), but Go itself only learned to detect
+# that and fall back to bfd in CL 740480; the backports landed in
+# release-branch.go1.{25,26} on 2026-04-17, *after* the cut of go1.26.2
+# (2026-04-15), so the fix will first ship in Go 1.25.10 / Go 1.26.3.
+# Once GO_VERSION below is bumped to >=1.25.10 or >=1.26.3, this package can
+# be dropped (see https://github.com/golang/go/issues/78405).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -11,6 +22,7 @@ RUN set -eux; \
         gnupg \
         gcc-14 \
         g++-14 \
+        binutils-gold \
         libunwind-dev \
         liblzma-dev \
         libstdc++-14-dev \
@@ -47,7 +59,11 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-ARG GO_VERSION=1.25.9
+# TODO: when bumping GO_VERSION to >=1.25.10 or >=1.26.3, drop the
+# `binutils-gold` package above — those Go releases no longer require gold on
+# linux/arm64 when GNU ld is 2.36+. See the comment near `binutils-gold` and
+# https://github.com/golang/go/issues/22040 (issue #78405 for the 1.25 backport).
+ARG GO_VERSION=1.26.2
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"
