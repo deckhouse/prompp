@@ -74,13 +74,22 @@ bench: ## Run benchmark
 	@cat $(package)/benchmarks/$(project).flags | ./bazel-bin/$(package)/benchmarks/$(project) `xargs`
 
 .PHONY: bench_all
+# repetitions: number of runs per benchmark (Google Benchmark --benchmark_repetitions)
 repetitions ?= 10
+# filter: regex for benchmark names (--benchmark_filter, default matches all)
 filter ?= .*
+# encoded_sequence_values_file: binary fixture for encoding / encoded-sequence benchmarks
 encoded_sequence_values_file ?= performance_tests/test_data/values_for_encoder_test
+# lss_file: binary serialized label-set file for benchmarks with lss
 lss_file ?= performance_tests/test_data/lss
+# compact_samples_file: compact samples file for benchmarks with DataStorage
 compact_samples_file ?= performance_tests/test_data/compact_samples
+# compact_samples_ts_offset: base timestamp (ms) applied for timestamp when loading compact_samples_file
 compact_samples_ts_offset ?= 1698395400012
+# prom_scraper_file: Prometheus text scrape file for scraper-related benchmarks
 prom_scraper_file ?= performance_tests/test_data/extended-monitoring-exporter.metrics
+# stream_v_byte_values_count: how many values to generate for stream_v_byte benchmarks
+stream_v_byte_values_count ?= 1000
 # time_unit: ns | us | ms | s (default: ns)
 time_unit ?= ns
 bench_all_time_unit := $(if $(filter ns us ms s,$(time_unit)),$(time_unit),ns)
@@ -101,4 +110,5 @@ bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, ti
 		--benchmark_context=compact_samples_file=$(compact_samples_file) \
 		--benchmark_context=compact_samples_ts_offset=$(compact_samples_ts_offset) \
 		--benchmark_context=prom_scraper_file=$(prom_scraper_file) \
+		--benchmark_context=stream_v_byte_values_count=$(stream_v_byte_values_count) \
 		$(bench_all_only_min)

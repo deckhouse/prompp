@@ -1,8 +1,8 @@
 #include <benchmark/benchmark.h>
 
+#include "benchmark/statistic.h"
 #include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
-#include "benchmark/statistic.h"
 
 namespace {
 

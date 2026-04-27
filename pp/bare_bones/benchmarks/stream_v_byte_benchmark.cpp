@@ -9,17 +9,15 @@
 
 namespace {
 
-constexpr uint32_t kDefaultValuesCount = 1000;
-
 uint32_t values_count() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-    const auto& values_str = context->operator[]("values");
+    const auto& values_str = context->operator[]("stream_v_byte_values_count");
     if (!values_str.empty()) {
       return std::strtoul(values_str.data(), nullptr, 10);
     }
   }
 
-  return kDefaultValuesCount;
+  return {};
 }
 
 using Sequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124, 8>;

@@ -20,7 +20,7 @@ using Lss =
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using LssCopier = series_index::QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
-std::string GetWalFileName() {
+std::string get_lss_file_name() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
     return context->operator[]("lss_file");
   }
@@ -33,10 +33,10 @@ void mark_all_series_as_added(Lss& lss) {
   }
 }
 
-const Lss& LoadLssFromFile() {
+const Lss& load_lff_from_file() {
   static Lss lss;
   if (lss.size() == 0) [[unlikely]] {
-    const auto file_name = GetWalFileName();
+    const auto file_name = get_lss_file_name();
 
     std::ifstream istrm(file_name, std::ios::binary);
     istrm >> lss;
@@ -66,7 +66,7 @@ void CopyAllStepsWithTiming(benchmark::State& state) {
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 
-  auto& lss = LoadLssFromFile();
+  auto& lss = load_lff_from_file();
 
   auto& timings = copy_parts_timings.emplace_back();
 
@@ -114,6 +114,7 @@ void CopyAllStepsWithTiming(benchmark::State& state) {
   }
 
 BENCHMARK(CopyAllStepsWithTiming)
+    // We explicitly set Iterations(1) for the correct calculation benchmark times
     ->Iterations(1)
     ->ComputeStatistics("min_copy_added_series", MIN_BY_FIELD(copy_added_series))
     ->ComputeStatistics("min_copy_ls_id_set", MIN_BY_FIELD(copy_ls_id_set))

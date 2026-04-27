@@ -84,7 +84,7 @@ void WalConstantSerializedData(benchmark::State& state) {
 
   for (const auto& sample : samples) {
     if (sample.timestamp() <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
-      encoder.encode(sample.series_id(), sample.timestamp(), sample.value());
+      encoder.encode(sample.series_id(), sample.timestamp(), sample.series_id());
     }
   }
 
