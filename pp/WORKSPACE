@@ -1,8 +1,0 @@
-# External dependencies have been migrated to Bzlmod. All `http_archive`,
-# `git_repository`, and similar declarations now live in:
-#   - pp/MODULE.bazel             (Bazel rule sets + git_override modules)
-#   - pp/third_party/deps.bzl     (third-party C/C++ libraries)
-#
-# The `common --noenable_workspace` flag in pp/.bazelrc makes Bazel ignore
-# this file. It is kept as a historical stub; do not add declarations here.
-workspace(name = "prompp")

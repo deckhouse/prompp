@@ -1,11 +1,11 @@
 """Module extension declaring third-party C/C++ dependencies with custom BUILD
 files and/or local patches.
 
-Historically these were declared as http_archive/git_repository calls in
-pp/WORKSPACE. They are migrated here unchanged so that Bzlmod can own the full
-dependency graph. For each repository we preserve the same name so that
-existing `@name//:target` references in BUILD files and patches keep working
-after `use_repo(third_party_deps, "name")` in MODULE.bazel.
+These declarations live here (rather than in BCR) because we maintain custom
+BUILD files and/or local patches per repository. For each repository we keep
+its canonical name so that existing `@name//:target` references in BUILD files
+and patches resolve correctly after `use_repo(third_party_deps, "name")` in
+MODULE.bazel.
 """
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")

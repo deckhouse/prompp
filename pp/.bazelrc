@@ -1,6 +1,6 @@
 # External dependencies are managed exclusively via Bzlmod (MODULE.bazel).
-# --noenable_workspace ensures the legacy pp/WORKSPACE file (kept as a
-# historical stub) is ignored even on Bazel versions that still accept it.
+# --noenable_workspace makes Bazel ignore any WORKSPACE/WORKSPACE.bazel files
+# entirely; we keep it explicit so the build mode is unambiguous.
 common --noenable_workspace
 
 # This flag fixed bazel build error (tested on 7.* versions)
