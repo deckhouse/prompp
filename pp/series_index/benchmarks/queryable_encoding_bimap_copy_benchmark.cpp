@@ -33,7 +33,7 @@ void mark_all_series_as_added(Lss& lss) {
   }
 }
 
-const Lss& load_lff_from_file() {
+const Lss& load_lss_from_file() {
   static Lss lss;
   if (lss.size() == 0) [[unlikely]] {
     const auto file_name = get_lss_file_name();
@@ -66,7 +66,7 @@ void CopyAllStepsWithTiming(benchmark::State& state) {
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 
-  auto& lss = load_lff_from_file();
+  auto& lss = load_lss_from_file();
 
   auto& timings = copy_parts_timings.emplace_back();
 
