@@ -39,6 +39,11 @@ func (ClosedWal) CurrentSize() int64 {
 	return 0
 }
 
+// MaxItemIndex implementation of [ClosedWal], always returns 0.
+func (ClosedWal) MaxItemIndex() uint32 {
+	return 0
+}
+
 // Flush implementation of [ClosedWal], returns [ErrWalClosed].
 func (ClosedWal) Flush() error {
 	return ErrWalClosed
