@@ -253,33 +253,22 @@ class GenericBitset {
     PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return j_ == 64; }
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ZeroIterator zbegin() const noexcept { return ZeroIterator(data_, static_cast<uint32_t>(size())); }
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE auto zend() noexcept { return IteratorSentinel(); }
+  struct Zeroes {
+    const uint64_t* data{};
+    uint32_t size{};
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return ZeroIterator(data, size); }
+    [[nodiscard]] static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
+  };
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Zeroes zeroes() const noexcept { return Zeroes{.data = data_, .size = static_cast<uint32_t>(size())}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t zerocount() const noexcept { return static_cast<uint32_t>(size()) - popcount(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return data_.allocated_memory(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t popcount() const noexcept {
-    const uint32_t bit_size = static_cast<uint32_t>(size());
-    if (bit_size == 0) {
-      return 0;
-    }
-
-    const uint32_t full_blocks = bit_size >> 6;
-    const uint32_t tail_bits = bit_size & 0x3F;
-    uint32_t ones = 0;
-
-    for (uint32_t i = 0; i < full_blocks; ++i) {
-      ones += std::popcount(data_[i]);
-    }
-
-    if (tail_bits != 0) {
-      const uint64_t tail_mask = (uint64_t{1} << tail_bits) - 1;
-      ones += std::popcount(data_[full_blocks] & tail_mask);
-    }
-
-    return ones;
+    return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t count, uint64_t word) { return count + std::popcount(word); });
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {

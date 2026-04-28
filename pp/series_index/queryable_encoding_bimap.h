@@ -373,11 +373,11 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
     assert(boundary <= added_series_.size());
     bool pruned_anything = false;
-    for (auto zero_it = added_series_.zbegin(); zero_it != added_series_.zend(); ++zero_it) {
-      if (*zero_it >= boundary) {
+    for (const auto zero_id : added_series_.zeroes()) {
+      if (zero_id >= boundary) {
         break;
       }
-      const auto proxy = typename Base::Proxy(*zero_it);
+      const auto proxy = typename Base::Proxy(zero_id);
       ls_id_hash_set_.erase(proxy);
       ls_id_set_.erase(proxy);
       pruned_anything = true;

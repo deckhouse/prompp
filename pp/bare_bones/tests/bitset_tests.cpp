@@ -307,8 +307,24 @@ TEST_F(BitsetFixture, ZeroIteratorReturnsAllUnsetIdsInBitset) {
 
   // Act
   std::vector<uint32_t> actual;
-  for (auto it = bs_.zbegin(); it != bs_.zend(); ++it) {
-    actual.push_back(*it);
+  for (const auto bit : bs_.zeroes()) {
+    actual.push_back(bit);
+  }
+
+  // Assert
+  EXPECT_EQ(expected, actual);
+}
+
+TEST_F(BitsetFixture, ZeroesRangeSupportsRangeFor) {
+  // Arrange
+  bs_.resize(8);
+  bs_.set({1, 3, 6});
+  const std::vector<uint32_t> expected{0, 2, 4, 5, 7};
+
+  // Act
+  std::vector<uint32_t> actual;
+  for (const auto bit : bs_.zeroes()) {
+    actual.push_back(bit);
   }
 
   // Assert
@@ -323,12 +339,12 @@ TEST_F(BitsetFixture, ZeroIteratorSupportsExternalBoundaryFiltering) {
 
   // Act
   std::vector<uint32_t> actual;
-  for (auto it = bs_.zbegin(); it != bs_.zend(); ++it) {
-    if (*it >= 9) {
+  for (const auto bit : bs_.zeroes()) {
+    if (bit >= 9) {
       break;
     }
-    if (*it >= 5) {
-      actual.push_back(*it);
+    if (bit >= 5) {
+      actual.push_back(bit);
     }
   }
 
