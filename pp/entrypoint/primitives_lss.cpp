@@ -1,5 +1,7 @@
 #include "primitives_lss.h"
 
+#include <limits>
+
 #include "bare_bones/xxhash.h"
 #include "hashdex.hpp"
 #include "head/lss.h"
@@ -9,6 +11,7 @@
 
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
 using GoSliceOfString = PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::String>;
+using GoSliceViewString = PromPP::Primitives::Go::SliceView<PromPP::Primitives::Go::String>;
 using entrypoint::head::LsIdsSlice;
 using entrypoint::head::LsIdsSlicePtr;
 using entrypoint::head::LssType;
@@ -240,6 +243,30 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
   out->status = static_cast<uint32_t>(LabelValuesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
       static_cast<std::string_view>(in->label_name), in->label_matchers,
       [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
+}
+
+extern "C" void prompp_primitives_lss_get_label_name_ids(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    GoSliceViewString names;
+  };
+  struct Result {
+    PromPP::Primitives::Go::SliceView<uint32_t> ids;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = static_cast<Result*>(res);
+
+  const auto& names_trie = std::get<QueryableEncodingBimap>(*in->lss).trie_index().names_trie();
+  constexpr auto kMissingId = std::numeric_limits<uint32_t>::max();
+
+  for (size_t i = 0; i < in->names.size(); ++i) {
+    if (const auto id = names_trie.lookup(static_cast<std::string_view>(in->names[i]))) {
+      out->ids[i] = *id;
+    } else {
+      out->ids[i] = kMissingId;
+    }
+  }
 }
 
 extern "C" void prompp_create_snapshot_lss(void* args, void* res) {
