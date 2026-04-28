@@ -26,7 +26,7 @@ std::string get_lss_file() {
 }
 
 void assert_added_series_suffix_marked(const Lss& lss, uint32_t begin_id) {
-  const auto& added = lss.added_series();
+  [[maybe_unused]] const auto& added = lss.added_series();
   const uint32_t end_id = static_cast<uint32_t>(lss.max_item_index());
   assert(begin_id <= end_id);
   for (uint32_t id = begin_id; id < end_id; ++id) {
