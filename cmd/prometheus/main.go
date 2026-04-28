@@ -27,7 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	stdregexp "regexp"
+	stdregexp "regexp" //nolint:depguard // PP_CHANGES.md: required by collectors.GoRuntimeMetricsRule which accepts only stdlib *regexp.Regexp; github.com/grafana/regexp is type-incompatible here.
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -296,7 +296,10 @@ func main() {
 				collectors.WithGoCollectorRuntimeMetrics(
 					collectors.MetricsGC,
 					collectors.MetricsScheduler,
-					collectors.GoRuntimeMetricsRule{stdregexp.MustCompile(`^/sync/.*`)},
+					collectors.GoRuntimeMetricsRule{
+						// stdregexp is intentionally used: GoRuntimeMetricsRule requires stdlib *regexp.Regexp.
+						Matcher: stdregexp.MustCompile(`^/sync/.*`),
+					},
 				),
 			),
 		)

@@ -714,10 +714,17 @@ func (s *CatalogSuite) TestCompact_SortsTwoRecordsByCreatedAt() {
 	s.Require().Less(t1, t2)
 
 	s.Require().NoError(c.Compact())
-	records := c.List(nil, nil)
-	s.Require().Len(records, 2)
-	s.Require().Equal(t1, records[0].CreatedAt())
-	s.Require().Equal(t2, records[1].CreatedAt())
+
+	// Verify Compact rewrote the log with records sorted by createdAt by
+	// inspecting the slice passed to Log.ReWrite. We can't rely on
+	// catalog.List(nil, nil) here because the catalog backs records with a
+	// Go map and List preserves map iteration order when no sortLess is
+	// given — that order is intentionally randomized.
+	calls := l.ReWriteCalls()
+	s.Require().Len(calls, 1)
+	s.Require().Len(calls[0].Srecords, 2)
+	s.Require().Same(&r1.SerializedRecord, calls[0].Srecords[0])
+	s.Require().Same(&r2.SerializedRecord, calls[0].Srecords[1])
 }
 
 func (s *CatalogSuite) TestCompact_ReWriteError() {

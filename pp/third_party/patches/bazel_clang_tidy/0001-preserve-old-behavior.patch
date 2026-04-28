@@ -1,0 +1,53 @@
+Subject: [PATCH] Preserve pre-c4d35e0 behavior for clang-tidy aspect
+
+Upstream commit c4d35e0 introduced two behavioral changes that don't fit
+this project's setup. This patch reverts both:
+
+1. Header files are now linted by default (the aspect treats every public
+   header as a main translation unit). For this repository that would
+   require fixing a large number of pre-existing IWYU and enum-size
+   findings that have never been visible before. Gate the new behavior
+   behind the explicit `clang-tidy-headers` tag so header linting stays
+   off by default and we can opt-in per-target later.
+
+2. The aspect now injects one `-isystem` flag per entry in
+   `cc_toolchain.built_in_include_directories`. For this project's
+   GCC-based toolchain those directories include
+   `/usr/lib/gcc/<triple>/<ver>`, which Clang normally discovers on its
+   own via GCC install-dir auto-detection. Forcing the directory through
+   `-isystem` instead bypasses that logic and breaks `include_next`
+   lookups, producing errors such as:
+
+     /usr/include/c++/14/cstdlib:79:15: error: 'stdlib.h' file not found
+        79 | #include_next <stdlib.h>
+
+   Drop the extra `-isystem` injection so Clang's own auto-detection
+   keeps working for our system GCC toolchain.
+
+---
+ clang_tidy/clang_tidy.bzl | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/clang_tidy/clang_tidy.bzl b/clang_tidy/clang_tidy.bzl
+--- a/clang_tidy/clang_tidy.bzl
++++ b/clang_tidy/clang_tidy.bzl
+@@ -219,9 +219,8 @@ def _clang_tidy_aspect_impl(target, ctx):
+     cc_toolchain = find_cpp_toolchain(ctx)
+     c_flags = safe_flags(toolchain_flags(ctx, cc_toolchain, ACTION_NAMES.c_compile) + rule_flags) + ["-xc"]
+     cxx_flags = safe_flags(toolchain_flags(ctx, cc_toolchain, ACTION_NAMES.cpp_compile) + rule_flags) + ["-xc++"]
+-    builtin_flags = builtin_include_flags(cc_toolchain)
+ 
+-    include_headers = "no-clang-tidy-headers" not in ctx.rule.attr.tags
++    include_headers = "clang-tidy-headers" in ctx.rule.attr.tags
+     srcs = rule_sources(ctx.rule.attr, include_headers)
+ 
+     outputs = [
+@@ -233,7 +232,7 @@ def _clang_tidy_aspect_impl(target, ctx):
+             resource_dir,
+             additional_deps,
+             config,
+-            (c_flags if is_c_translation_unit(src, ctx.rule.attr.tags) else cxx_flags) + builtin_flags,
++            c_flags if is_c_translation_unit(src, ctx.rule.attr.tags) else cxx_flags,
+             src,
+             target.label.name,
+             additional_files,

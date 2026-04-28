@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 
+#include "benchmark/statistic.h"
 #include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 
@@ -25,7 +26,7 @@ QueryableEncodingBimap& get_lss() {
   return lss;
 }
 
-void BenchmarkFindOrEmplaceWithEmplace(benchmark::State& state) {
+void FindOrEmplaceWithEmplace(benchmark::State& state) {
   ZoneScoped;
   const auto& lss = get_lss();
 
@@ -37,7 +38,7 @@ void BenchmarkFindOrEmplaceWithEmplace(benchmark::State& state) {
   }
 }
 
-void BenchmarkFindOrEmplaceWithFind(benchmark::State& state) {
+void FindOrEmplaceWithFind(benchmark::State& state) {
   ZoneScoped;
   auto& lss = get_lss();
 
@@ -48,11 +49,7 @@ void BenchmarkFindOrEmplaceWithFind(benchmark::State& state) {
   }
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
-
-BENCHMARK(BenchmarkFindOrEmplaceWithEmplace)->ComputeStatistics("min", min_value);
-BENCHMARK(BenchmarkFindOrEmplaceWithFind)->ComputeStatistics("min", min_value);
+BENCHMARK(FindOrEmplaceWithEmplace)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(FindOrEmplaceWithFind)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace
