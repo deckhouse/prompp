@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "bare_bones/vector.h"
+#include "benchmark/statistic.h"
 #include "profiling/profiling.h"
 #include "series_index/queryable_encoding_bimap.h"
 
@@ -22,7 +23,7 @@ std::string get_lss_file() {
 }
 
 void assert_added_series_suffix_marked(const Lss& lss, uint32_t begin_id) {
-  const auto& added = lss.added_series();
+  [[maybe_unused]] const auto& added = lss.added_series();
   const uint32_t end_id = static_cast<uint32_t>(lss.max_item_index());
   assert(begin_id <= end_id);
   for (uint32_t id = begin_id; id < end_id; ++id) {
@@ -143,12 +144,8 @@ void BM_ResolveFixedState(benchmark::State& state) {
   run_resolve_loop(get_lss_fixed_state(), state);
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return v.empty() ? 0.0 : *std::ranges::min_element(v);
-}
-
 }  // namespace
 
-BENCHMARK(BM_ResolveNoShrink)->ComputeStatistics("min", min_value);
-BENCHMARK(BM_ResolveFixedState)->ComputeStatistics("min", min_value);
-BENCHMARK(BM_ResolveAfterShrink)->ComputeStatistics("min", min_value);
+BENCHMARK(BM_ResolveNoShrink)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BM_ResolveFixedState)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BM_ResolveAfterShrink)->ComputeStatistics("min", benchmark::min_time);

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "bare_bones/vector.h"
+#include "benchmark/statistic.h"
 #include "profiling/profiling.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -113,11 +114,7 @@ void BM_IndexWriteContextAfterShrink(benchmark::State& state) {
   state.SetItemsProcessed(static_cast<int64_t>(lss->max_item_index()) * state.iterations());
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return v.empty() ? 0.0 : *std::ranges::min_element(v);
-}
-
 }  // namespace
 
-BENCHMARK(BM_IndexWriteContextNoShrink)->ComputeStatistics("min", min_value);
-BENCHMARK(BM_IndexWriteContextAfterShrink)->ComputeStatistics("min", min_value);
+BENCHMARK(BM_IndexWriteContextNoShrink)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(BM_IndexWriteContextAfterShrink)->ComputeStatistics("min", benchmark::min_time);
