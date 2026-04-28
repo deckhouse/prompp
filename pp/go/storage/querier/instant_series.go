@@ -118,7 +118,7 @@ func (s *InstantSeries) Labels() labels.Labels {
 // InstantSeriesChunkIterator
 //
 
-// InstantSeriesChunkIterator  iterates over the samples of a instant time series, that can only get the next value.
+// InstantSeriesChunkIterator iterates over the samples of a instant time series, that can only get the next value.
 type InstantSeriesChunkIterator struct {
 	i int
 	t int64
