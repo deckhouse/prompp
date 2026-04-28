@@ -19,7 +19,6 @@ CheckOptions:
   cert-dcl16-c.NewSuffixes: 'L;LL;LU;LLU'
   modernize-loop-convert.MaxCopySize: '16'
   google-readability-namespace-comments.SpacesBeforeComments: '2'
-  google-build-namespaces.HeaderFileExtensions: ';h;hh;hpp;hxx'
   google-readability-function-size.VariableThreshold: '4294967295'
   google-readability-function-size.LineThreshold: '4294967295'
   llvm-qualified-auto.AddConstToQualified: 'false'
@@ -36,7 +35,6 @@ CheckOptions:
   google-readability-braces-around-statements.ShortStatementLines: '1'
   google-readability-function-size.ParameterThreshold: '4294967295'
   google-runtime-int.TypeSuffix: ''
-  google-global-names-in-headers.HeaderFileExtensions: ';h;hh;hpp;hxx'
   modernize-use-nullptr.NullMacros: 'NULL'
   llvm-else-after-return.WarnOnUnfixable: 'false'
 

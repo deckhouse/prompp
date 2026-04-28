@@ -118,7 +118,7 @@ cc_library(
         ":primitives",
         ":prometheus",
         ":series_data",
-        "@fastfloat",
+        "//third_party/fastfloat",
         "@roaring",
         "@simdutf",
         "@snappy",
@@ -271,9 +271,11 @@ cc_library(
 
 cc_library(
     name = "benchmark",
+    hdrs = glob(["benchmark/**/*.h"]),
     deps = [
         "@google_benchmark//:benchmark_main",
-        "//:profiling",
+        ":bare_bones",
+        ":profiling",
     ],
 )
 
@@ -335,5 +337,26 @@ cc_test(
     deps = [
         ":series_data",
         "@gtest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "benchmarks_all",
+    srcs = [
+        "//bare_bones/benchmarks:sources",
+        "//primitives/benchmarks:sources",
+        "//series_data/benchmarks:sources",
+        "//series_index/benchmarks:sources",
+        "//wal/benchmarks:sources",
+    ],
+    malloc = "@jemalloc",
+    deps = [
+        ":bare_bones",
+        ":benchmark",
+        ":primitives",
+        ":profiling",
+        ":series_data",
+        ":series_index",
+        ":wal",
     ],
 )
