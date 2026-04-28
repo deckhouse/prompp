@@ -38,7 +38,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
 
     if (dod == 0) [[likely]] {
       stream.write_zero_bit();
-    } else if (bit_range(dod, kDodSignificantLengths[0])) [[likely]] {
+    } else if (bit_range(dod, kDodSignificantLengths[0])) {
       stream.write_bits((0b10ULL << kDodSignificantLengths[0]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[0])),
                         2 + kDodSignificantLengths[0]);
     } else if (bit_range(dod, kDodSignificantLengths[1])) {

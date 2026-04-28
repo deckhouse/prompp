@@ -168,7 +168,7 @@ class ChunkRecoder {
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
     series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
-      begin.seek([&](int64_t timestamp, double value) {
+      begin.template seek<series_data::decoder::SeekKind::kNextStop>([&](int64_t timestamp, double value) {
         if (timestamp > time_interval_.max) [[unlikely]] {
           return series_data::decoder::SeekResult::kStop;
         }

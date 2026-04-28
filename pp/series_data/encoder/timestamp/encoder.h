@@ -23,7 +23,7 @@ class TimestampEncoder {
 
 class TimestampDecoder {
  public:
-  explicit TimestampDecoder(const BareBones::BitSequenceReader& reader) : reader_(reader) {}
+  explicit constexpr TimestampDecoder(const BareBones::BitSequenceReader& reader) : reader_(reader) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t decode() noexcept {
     if (gorilla_state_ == GorillaState::kFirstPoint) [[unlikely]] {
