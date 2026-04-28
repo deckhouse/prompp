@@ -1,12 +1,9 @@
-#include <fstream>
-
 #include <benchmark/benchmark.h>
 
-#include "profiling/profiling.h"
-
-#include "bare_bones/preprocess.h"
+#include "benchmark/compact_sample.h"
+#include "benchmark/statistic.h"
 #include "head/chunk_recoder.h"
-#include "primitives/sample.h"
+#include "profiling/profiling.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
 
@@ -16,37 +13,19 @@ using DataStorage = series_data::DataStorage;
 using PromPP::Primitives::TimeInterval;
 
 const DataStorage& get_data_storage_for_benchmark() {
-  struct PROMPP_ATTRIBUTE_PACKED sample_with_lsid {
-    PromPP::Primitives::Sample::value_type sample_value;
-    uint32_t sample_ts;
-    uint32_t labelset_id;
-  };
-
-  constexpr auto get_file_name = [] -> std::string {
-    if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-      return context->operator[]("sde_file");
-    }
-
-    return {};
-  };
-
   static series_data::DataStorage storage;
   if (storage.open_chunks.empty()) [[unlikely]] {
-    BareBones::Vector<sample_with_lsid> samples_from_file;
-    {
-      std::ifstream istrm(get_file_name(), std::ios::binary);
-      istrm >> samples_from_file;
-    }
+    const auto& samples = benchmark::get_compact_samples();
     series_data::Encoder encoder{storage};
-    for (const auto& sample : samples_from_file) {
-      encoder.encode(sample.labelset_id, sample.sample_ts, sample.sample_value);
+    for (const auto& sample : samples) {
+      encoder.encode(sample.series_id(), sample.timestamp(), sample.value());
     }
   }
 
   return storage;
 }
 
-void BenchmarkChunkRecoder(benchmark::State& state) {
+void ChunkRecoder(benchmark::State& state) {
   ZoneScoped;
   const auto& storage = get_data_storage_for_benchmark();
 
@@ -68,6 +47,6 @@ void BenchmarkChunkRecoder(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkChunkRecoder)->ComputeStatistics("min", [](const std::vector<double>& v) { return *std::ranges::min_element(v); });
+BENCHMARK(ChunkRecoder)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

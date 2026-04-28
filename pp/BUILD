@@ -344,6 +344,7 @@ cc_binary(
     name = "benchmarks_all",
     srcs = [
         "//bare_bones/benchmarks:sources",
+        "//head/benchmarks:sources",
         "//primitives/benchmarks:sources",
         "//series_data/benchmarks:sources",
         "//series_index/benchmarks:sources",
@@ -353,6 +354,7 @@ cc_binary(
     deps = [
         ":bare_bones",
         ":benchmark",
+        ":head",
         ":primitives",
         ":profiling",
         ":series_data",
