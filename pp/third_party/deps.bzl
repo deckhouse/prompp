@@ -71,9 +71,9 @@ def _third_party_deps_impl(_ctx):
     http_archive(
         name = "scope_exit",
         build_file = Label("//third_party:scope_exit.BUILD"),
-        sha256 = "f5d812f3668cf53e7317213fc68b740a6abe4fd3ddbad7e08c6ed80c51b28828",
-        strip_prefix = "SC22WG21_Papers-ae297346379655dc6ffe306a3f8b133fa0b052c4/workspace/P0052_scope_exit/src",
-        url = "https://github.com/PeterSommerlad/SC22WG21_Papers/archive/ae297346379655dc6ffe306a3f8b133fa0b052c4.zip",
+        sha256 = "9428fcdf00714e25fc7c67c28faf0821787b3234165b542a7f2223f464747d83",
+        strip_prefix = "SC22WG21_Papers-7f9c58dabea6872f86f7960157e2ca38880e14cb/workspace/P0052_scope_exit/src",
+        url = "https://github.com/PeterSommerlad/SC22WG21_Papers/archive/7f9c58dabea6872f86f7960157e2ca38880e14cb.zip",
     )
 
     http_archive(
