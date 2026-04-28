@@ -29,8 +29,7 @@ class IndexWriteContext {
 
   struct ExportSymbolIdHasher {
     [[nodiscard]] size_t operator()(const ExportSymbolId& id) const noexcept {
-      const uint64_t composite =
-          (static_cast<uint64_t>(id.source) << 62U) ^ (static_cast<uint64_t>(id.name_id) << 31U) ^ static_cast<uint64_t>(id.value_id);
+      const uint64_t composite = (static_cast<uint64_t>(id.source) << 62U) ^ (static_cast<uint64_t>(id.name_id) << 31U) ^ static_cast<uint64_t>(id.value_id);
       return phmap::phmap_mix<sizeof(size_t)>()(static_cast<size_t>(composite));
     }
   };
