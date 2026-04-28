@@ -219,6 +219,16 @@ func (s *HeadSuite) TestInstantQuery() {
 	s.Equal(series[6].Sample, cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value})
 }
 
+func (s *HeadSuite) TestQueryFirstTimestampsWithEmptySeriesIds() {
+	// Arrange
+
+	// Act
+	timestamps := s.dataStorage.QueryFirstTimestamps([]uint32{})
+
+	// Assert
+	s.Equal([]int64{}, timestamps)
+}
+
 func (s *HeadSuite) TestQueryFirstTimestamps() {
 	// Arrange
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
@@ -234,4 +244,20 @@ func (s *HeadSuite) TestQueryFirstTimestamps() {
 
 	// Assert
 	s.Equal([]int64{2, 5}, timestamps)
+}
+
+func (s *HeadSuite) TestQueryFirstTimestampsInFinalizedChunk() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
+
+	s.encoder.Encode(0, 9, 1.0)
+	s.encoder.Encode(0, 5, 1.0)
+
+	s.encoder.MergeOutOfOrderChunks()
+
+	// Act
+	timestamps := s.dataStorage.QueryFirstTimestamps([]uint32{0})
+
+	// Assert
+	s.Equal([]int64{5}, timestamps)
 }
