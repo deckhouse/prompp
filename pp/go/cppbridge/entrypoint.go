@@ -1524,6 +1524,26 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
+func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
+	args := struct {
+		lss   uintptr
+		names []string
+	}{lss, names}
+
+	res := struct {
+		outIDs []uint32
+	}{make([]uint32, len(names))}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_get_label_name_ids,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.outIDs
+}
+
 func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
 	args := struct {
 		lss uintptr
@@ -2076,6 +2096,23 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	)
 
 	return res
+}
+
+func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32, timestamps []int64) {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+	}{dataStorage, seriesIDs}
+	res := struct {
+		timestamps []int64
+	}{timestamps}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_query_first_timestamps,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
 }
 
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {

@@ -135,6 +135,13 @@ func (lss *LabelSetStorage) QueryLabelValues(
 	return result
 }
 
+// GetLabelNameIDs - returns label name ids
+func (lss *LabelSetStorage) GetLabelNameIDs(names []string) []uint32 {
+	out := primitivesLSSGetLabelNameIDs(lss.pointer, names)
+	runtime.KeepAlive(lss)
+	return out
+}
+
 // GetLabelSets - returns copy of lss data.
 func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageGetLabelSetsResult {
 	result := &LabelSetStorageGetLabelSetsResult{labelSets: primitivesLSSGetLabelSets(lss.pointer, labelSetIDs)}
