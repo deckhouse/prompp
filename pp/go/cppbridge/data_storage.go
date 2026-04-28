@@ -118,12 +118,10 @@ func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32,
 	return seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
-// QueryFirstTimestamps returns the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-// The returned slice has the same length as seriesIDs.
-func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32) []int64 {
-	res := seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs)
+// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs
+func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64) {
+	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs, timestamps)
 	runtime.KeepAlive(ds)
-	return res
 }
 
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {

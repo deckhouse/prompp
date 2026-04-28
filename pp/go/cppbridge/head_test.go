@@ -223,10 +223,9 @@ func (s *HeadSuite) TestQueryFirstTimestampsWithEmptySeriesIds() {
 	// Arrange
 
 	// Act
-	timestamps := s.dataStorage.QueryFirstTimestamps([]uint32{})
+	s.dataStorage.QueryFirstTimestamps(nil, nil)
 
 	// Assert
-	s.Equal([]int64{}, timestamps)
 }
 
 func (s *HeadSuite) TestQueryFirstTimestamps() {
@@ -240,7 +239,8 @@ func (s *HeadSuite) TestQueryFirstTimestamps() {
 	s.encoder.Encode(1, 7, 2.0)
 
 	// Act
-	timestamps := s.dataStorage.QueryFirstTimestamps([]uint32{1, 0})
+	timestamps := make([]int64, 2)
+	s.dataStorage.QueryFirstTimestamps([]uint32{1, 0}, timestamps)
 
 	// Assert
 	s.Equal([]int64{2, 5}, timestamps)
@@ -256,7 +256,8 @@ func (s *HeadSuite) TestQueryFirstTimestampsInFinalizedChunk() {
 	s.encoder.MergeOutOfOrderChunks()
 
 	// Act
-	timestamps := s.dataStorage.QueryFirstTimestamps([]uint32{0})
+	timestamps := make([]int64, 1)
+	s.dataStorage.QueryFirstTimestamps([]uint32{0}, timestamps)
 
 	// Assert
 	s.Equal([]int64{5}, timestamps)

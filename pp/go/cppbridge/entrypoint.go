@@ -2047,14 +2047,14 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	return res
 }
 
-func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32) []int64 {
+func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32, timestamps []int64) {
 	args := struct {
 		dataStorage uintptr
 		seriesIDs   []uint32
 	}{dataStorage, seriesIDs}
 	res := struct {
 		timestamps []int64
-	}{make([]int64, len(seriesIDs))}
+	}{timestamps}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -2062,8 +2062,6 @@ func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.timestamps
 }
 
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {
