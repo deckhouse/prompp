@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type StalenanSeriesSetTestSuite struct {
+type StaleNaNSeriesSetTestSuite struct {
 	suite.Suite
 
 	lss                         *shard.LSS
@@ -21,11 +21,11 @@ type StalenanSeriesSetTestSuite struct {
 	valueNotFoundTimestampValue int64
 }
 
-func TestStalenanSeriesSetTestSuite(t *testing.T) {
-	suite.Run(t, new(StalenanSeriesSetTestSuite))
+func TestStaleNaNSeriesSetTestSuite(t *testing.T) {
+	suite.Run(t, new(StaleNaNSeriesSetTestSuite))
 }
 
-func (s *StalenanSeriesSetTestSuite) SetupTest() {
+func (s *StaleNaNSeriesSetTestSuite) SetupTest() {
 	s.lss = shard.NewLSS()
 	s.ds = shard.NewDataStorage()
 	s.valueNotFoundTimestampValue = 0
@@ -60,7 +60,7 @@ func (s *StalenanSeriesSetTestSuite) SetupTest() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.data...)
 }
 
-func (s *StalenanSeriesSetTestSuite) TestSuccess() {
+func (s *StaleNaNSeriesSetTestSuite) TestSuccess() {
 	// Arrange
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
