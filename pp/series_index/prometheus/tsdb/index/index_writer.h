@@ -85,17 +85,6 @@ class IndexWriter {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_postings_data() const noexcept { return postings_writer_.has_more_data(); }
 
-  void write(Stream& stream) {
-    write_header(stream);
-    write_symbols(stream);
-    write_series(stream, SeriesWriter::kAllSeries);
-    write_label_indices(stream);
-    write_postings(stream, PostingsWriter::kUnlimitedBatchSize);
-    write_label_indices_table(stream);
-    write_postings_table_offsets(stream);
-    write_toc(stream);
-  }
-
  private:
   const QueryableEncodingBimap& lss_;
 
