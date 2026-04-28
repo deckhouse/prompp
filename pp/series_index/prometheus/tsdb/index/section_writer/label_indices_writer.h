@@ -13,12 +13,10 @@ class LabelIndicesWriter {
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
   using IndexWriteContext = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>;
 
-  LabelIndicesWriter(const Lss& lss, StreamWriter& writer) : lss_(lss), writer_(writer) {}
-
-  void set_index_write_context(const IndexWriteContext* index_write_context) noexcept { index_write_context_ = index_write_context; }
+  LabelIndicesWriter(const Lss& lss, const IndexWriteContext& index_write_context, StreamWriter& writer)
+      : lss_(lss), index_write_context_(index_write_context), writer_(writer) {}
 
   void write_label_indices() {
-    assert(index_write_context_ != nullptr);
     indices_table_writer_.write_uint32<NoCrc32>(lss_.reverse_index().names_count());
 
     for (auto name_it = lss_.trie_index().names_trie().make_enumerative_iterator(); name_it.is_valid(); name_it.next()) {
@@ -41,7 +39,7 @@ class LabelIndicesWriter {
   StringWriter indices_table_writer_;
 
   const Lss& lss_;
-  const IndexWriteContext* index_write_context_{};
+  const IndexWriteContext& index_write_context_;
   StreamWriter& writer_;
 
   void add_label_indices_table_item(std::string_view name) {
@@ -65,7 +63,7 @@ class LabelIndicesWriter {
       writer_.write_uint32(values_count);
 
       for (auto value_it = values_trie.make_enumerative_iterator(); value_it.is_valid(); value_it.next()) {
-        writer_.write_uint32(index_write_context_->symbol_ref_for_label_index_value(name_id, value_it.value()));
+        writer_.write_uint32(index_write_context_.symbol_ref_for_label_index_value(name_id, value_it.value()));
       }
     });
   }

@@ -14,12 +14,12 @@ namespace entrypoint::head {
 using LsIdsSlice = BareBones::Vector<PromPP::Primitives::LabelSetID>;
 using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
 
-enum class LssType : uint32_t {
+enum class LssType : uint8_t {
   kEncodingBimap = 0,
   kQueryableEncodingBimap,
 };
 
-enum class SnapshotLSSType : uint32_t {
+enum class SnapshotLSSType : uint8_t {
   kSnapshotLSS = 0,
   kShrinkAwareSnapshotLSS,
 };
@@ -83,27 +83,14 @@ class SnapshotLSS : public PromPP::Primitives::SnugComposites::LabelSet::Decodin
 class ShrinkAwareSnapshotLSS : public SnapshotLSS {
  public:
   explicit ShrinkAwareSnapshotLSS(const QueryableEncodingBimap& lss)
-      : SnapshotLSS(lss),
-        is_fixed_(lss.is_fixed_for_export()),
-        is_shrunk_(lss.is_shrunk_for_export()),
-        shift_(lss.shift_for_export()),
-        pending_shrink_boundary_(lss.pending_shrink_boundary_for_export()),
-        added_series_(lss.added_series()),
-        post_shrink_snapshot_access_(lss.post_shrink_snapshot_access_for_export()) {
-    if (const auto mapping = lss.post_shrink_mapping_for_export(); !mapping.empty()) {
-      post_shrink_mapping_.reserve(mapping.size());
-      for (const auto id : mapping) {
-        post_shrink_mapping_.emplace_back(id);
-      }
-    }
-  }
+      : SnapshotLSS(lss), shrink_state_(lss.shrink_state().clone_for_snapshot()), added_series_(lss.added_series()) {}
 
   [[nodiscard]] value_type operator[](uint32_t id) const noexcept {
-    if (is_shrunk_) [[likely]] {
+    if (shrink_state_.is_shrunk()) {
       return resolve_shrunk_series(id);
     }
 
-    if (is_fixed_ && is_hidden_in_fixed_state(id)) [[unlikely]] {
+    if (shrink_state_.is_fixed() && is_hidden_in_fixed_state(id)) {
       return value_type{};
     }
 
@@ -112,30 +99,16 @@ class ShrinkAwareSnapshotLSS : public SnapshotLSS {
 
  private:
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t id) const noexcept {
-    return id < pending_shrink_boundary_ && (id >= added_series_.size() || !added_series_[id]);
+    return shrink_state_.is_hidden_in_fixed_state(id, added_series_);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE value_type resolve_shrunk_series(uint32_t id) const noexcept {
-    if (id >= shift_) [[likely]] {
-      return SnapshotLSS::operator[](id - shift_);
-    }
-    if (id >= post_shrink_mapping_.size() || !post_shrink_snapshot_access_.composite_resolve) [[unlikely]] {
-      return value_type{};
-    }
-    const auto mapped_id = post_shrink_mapping_[id];
-    if (mapped_id == Base::kInvalidId) [[unlikely]] {
-      return value_type{};
-    }
-    return post_shrink_snapshot_access_.composite_resolve(mapped_id);
+    return shrink_state_.template resolve_shrunk_series<value_type>(
+        id, [this](uint32_t storage_id) { return SnapshotLSS::operator[](storage_id); }, Base::kInvalidId);
   }
 
-  bool is_fixed_{};
-  bool is_shrunk_{};
-  uint32_t shift_{};
-  uint32_t pending_shrink_boundary_{QueryableEncodingBimap::kPendingShrinkBoundaryNotSet};
+  QueryableEncodingBimap::ShrinkState shrink_state_{};
   BareBones::Bitset added_series_{};
-  BareBones::Vector<uint32_t> post_shrink_mapping_{};
-  QueryableEncodingBimap::PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 };
 
 template <class Lss>
@@ -195,10 +168,9 @@ inline SnapshotLSSVariantPtr create_snapshot_lss(LssVariant& lss_variant) {
     case LssType::kQueryableEncodingBimap: {
       auto& lss = std::get<QueryableEncodingBimap>(lss_variant);
       lss.build_deferred_indexes();
-      if (lss.is_fixed_for_export() || lss.is_shrunk_for_export()) {
+      if (!lss.shrink_state().is_normal()) {
         return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kShrinkAwareSnapshotLSS)>, lss);
       }
-      assert(!lss.is_fixed_for_export() && !lss.is_shrunk_for_export());
       return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kSnapshotLSS)>, lss);
     }
 

@@ -45,7 +45,7 @@ class LabelIndicesWriterFixture : public testing::TestWithParam<LabelIndicesWrit
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
   std::optional<series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>> index_write_context_;
-  LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)> label_indices_writer{lss_, stream_writer_};
+  std::optional<LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)>> label_indices_writer_;
 
   void SetUp() final {
     for (auto& label_set : GetParam().label_sets) {
@@ -55,7 +55,7 @@ class LabelIndicesWriterFixture : public testing::TestWithParam<LabelIndicesWrit
     std::ostringstream stream;
     StreamWriter<decltype(stream_)> stream_writer{&stream};
     index_write_context_.emplace(lss_);
-    label_indices_writer.set_index_write_context(&*index_write_context_);
+    label_indices_writer_.emplace(lss_, *index_write_context_, stream_writer_);
     SymbolsWriter<QueryableEncodingBimap, decltype(stream_)>{*index_write_context_, stream_writer}.write();
   }
 };
@@ -64,8 +64,8 @@ TEST_P(LabelIndicesWriterFixture, Test) {
   // Arrange
 
   // Act
-  label_indices_writer.write_label_indices();
-  label_indices_writer.write_label_indices_table();
+  label_indices_writer_->write_label_indices();
+  label_indices_writer_->write_label_indices_table();
 
   // Assert
   EXPECT_EQ(GetParam().expected, stream_.view());
@@ -129,17 +129,20 @@ TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "localhost"}});
   lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "127.0.0.1"}});
   lss_.build_deferred_indexes();
+
   const uint32_t shrink_boundary = lss_.max_item_index();
+
   Lss lss_copy;
   BareBones::Vector<uint32_t> dst_src_ids_mapping;
   Copier<Lss, decltype(lss_.sorting_index()), decltype(lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(
       lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
+
   lss_.set_pending_shrink_boundary(shrink_boundary);
   lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping);
+
   const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
-  LabelIndicesWriter<Lss, decltype(stream_)> label_indices_writer{lss_, stream_writer_};
-  label_indices_writer.set_index_write_context(&index_write_context);
+  LabelIndicesWriter<Lss, decltype(stream_)> label_indices_writer{lss_, index_write_context, stream_writer_};
 
   // Act
   label_indices_writer.write_label_indices();

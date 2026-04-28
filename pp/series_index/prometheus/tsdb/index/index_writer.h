@@ -33,7 +33,6 @@ class IndexWriter {
 
     toc_.symbols = writer_.position();
     index_write_context_.rebuild();
-    label_indices_writer_.set_index_write_context(&index_write_context_);
     section_writer::SymbolsWriter<QueryableEncodingBimap, Stream>{index_write_context_, writer_}.write();
   }
 
@@ -93,7 +92,7 @@ class IndexWriter {
 
   StreamWriter writer_;
 
-  LabelIndicesWriter label_indices_writer_{lss_, writer_};
+  LabelIndicesWriter label_indices_writer_{lss_, index_write_context_, writer_};
   PostingsWriter postings_writer_{lss_, series_references_, writer_};
 
   PromPP::Prometheus::tsdb::index::Toc toc_;
