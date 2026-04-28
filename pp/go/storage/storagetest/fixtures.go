@@ -238,26 +238,26 @@ func StaleNaNQuery(
 	ds *shard.DataStorage,
 	valueNotFoundTimestampValue int64,
 	matchers ...model.LabelMatcher,
-) (*querier.StalenanSeriesSet, error) {
+) (*querier.StaleNaNSeriesSet, error) {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	if err != nil {
 		return nil, err
 	}
 
 	if selector == 0 || snapshot == nil {
-		return &querier.StalenanSeriesSet{}, nil
+		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
 	lssQueryResult := snapshot.Query(selector)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-		return &querier.StalenanSeriesSet{}, nil
+		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
 	timestamps := querier.MakeTimestampsSliceWithDefault(lssQueryResult.Len(), valueNotFoundTimestampValue)
 	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps)
 
-	return querier.NewStalenanSeriesSet(
-		querier.NewStalenanSeriesSliceFromTimestamps(timestamps),
+	return querier.NewStaleNaNSeriesSet(
+		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
 		lssQueryResult,
 		snapshot,
 		valueNotFoundTimestampValue,

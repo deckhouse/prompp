@@ -25,9 +25,9 @@ func MakeTimestampsSliceWithDefault(size int, defaultTimestamp int64) []int64 {
 	return timestamps
 }
 
-// NewStalenanSeriesSliceFromTimestamps creates StalenanSeries slice from timestamps.
-func NewStalenanSeriesSliceFromTimestamps(timestamps []int64) []StalenanSeries {
-	seriesSlice := make([]StalenanSeries, len(timestamps))
+// NewStaleNaNSeriesSliceFromTimestamps creates [StaleNaNSeries] slice from timestamps.
+func NewStaleNaNSeriesSliceFromTimestamps(timestamps []int64) []StaleNaNSeries {
+	seriesSlice := make([]StaleNaNSeries, len(timestamps))
 	for i := range seriesSlice {
 		seriesSlice[i].timestamp = timestamps[i]
 	}
@@ -36,26 +36,26 @@ func NewStalenanSeriesSliceFromTimestamps(timestamps []int64) []StalenanSeries {
 }
 
 //
-// StalenanSeriesSet
+// StaleNaNSeriesSet
 //
 
-// StalenanSeriesSet contains a set of series that always return the staleNaN value for the specified timestamps.
-type StalenanSeriesSet struct {
-	series                      []StalenanSeries
+// StaleNaNSeriesSet contains a set of series that always return the staleNaN value for the specified timestamps.
+type StaleNaNSeriesSet struct {
+	series                      []StaleNaNSeries
 	lssQueryResult              *cppbridge.LSSQueryResult
 	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	valueNotFoundTimestampValue int64
 	nextSeriesIndex             int
 }
 
-// NewStalenanSeriesSet creates a new [StalenanSeriesSet].
-func NewStalenanSeriesSet(
-	series []StalenanSeries,
+// NewStaleNaNSeriesSet creates a new [StaleNaNSeriesSet].
+func NewStaleNaNSeriesSet(
+	series []StaleNaNSeries,
 	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
-) *StalenanSeriesSet {
-	return &StalenanSeriesSet{
+) *StaleNaNSeriesSet {
+	return &StaleNaNSeriesSet{
 		series:                      series,
 		lssQueryResult:              lssQueryResult,
 		labelSetSnapshot:            labelSetSnapshot,
@@ -63,21 +63,21 @@ func NewStalenanSeriesSet(
 	}
 }
 
-// At returns the current [StalenanSeries], should be iterable even after Next is called.
+// At returns the current [StaleNaNSeries], should be iterable even after Next is called.
 // [storage.SeriesSet] interface implementation.
-func (ss *StalenanSeriesSet) At() storage.Series {
+func (ss *StaleNaNSeriesSet) At() storage.Series {
 	return &ss.series[ss.nextSeriesIndex-1]
 }
 
 // Err the error that iteration as failed with - always nil.
 // [storage.SeriesSet] interface implementation.
-func (*StalenanSeriesSet) Err() error {
+func (*StaleNaNSeriesSet) Err() error {
 	return nil
 }
 
 // Next advances the iterator by one and returns false if there are no more values.
 // [storage.SeriesSet] interface implementation.
-func (ss *StalenanSeriesSet) Next() bool {
+func (ss *StaleNaNSeriesSet) Next() bool {
 	for {
 		if ss.nextSeriesIndex >= len(ss.series) {
 			return false
@@ -106,51 +106,51 @@ func (ss *StalenanSeriesSet) Next() bool {
 
 // Warnings a collection of warnings for the whole set - always nil.
 // [storage.SeriesSet] interface implementation.
-func (*StalenanSeriesSet) Warnings() annotations.Annotations {
+func (*StaleNaNSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
 
 //
-// StalenanSeries
+// StaleNaNSeries
 //
 
-// StalenanSeries is a series that always returns the staleNaN value for the specified timestamps.
-type StalenanSeries struct {
+// StaleNaNSeries is a series that always returns the staleNaN value for the specified timestamps.
+type StaleNaNSeries struct {
 	timestamp int64
 	labelSet  labels.Labels
 }
 
 // Iterator returns an iterator that iterates over the samples of the series.
 // [storage.Series] interface implementation.
-func (s *StalenanSeries) Iterator(iterator chunkenc.Iterator) chunkenc.Iterator {
-	if i, ok := iterator.(*StalenanSeriesChunkIterator); ok {
+func (s *StaleNaNSeries) Iterator(iterator chunkenc.Iterator) chunkenc.Iterator {
+	if i, ok := iterator.(*StaleNaNSeriesChunkIterator); ok {
 		i.ResetTo(s.timestamp)
 		return i
 	}
 
-	return NewStalenanSeriesChunkIterator(s.timestamp)
+	return NewStaleNaNSeriesChunkIterator(s.timestamp)
 }
 
 // Labels returns the complete set of labels. For series it means all labels identifying the series.
 // [storage.Series] interface implementation.
-func (s *StalenanSeries) Labels() labels.Labels {
+func (s *StaleNaNSeries) Labels() labels.Labels {
 	return s.labelSet
 }
 
 //
-// StalenanSeriesChunkIterator
+// StaleNaNSeriesChunkIterator
 //
 
-// StalenanSeriesChunkIterator iterates over the samples time series,
-// which always returns the stalenan value for the specified timestamps.
-type StalenanSeriesChunkIterator struct {
+// StaleNaNSeriesChunkIterator iterates over the samples time series,
+// which always returns the staleNaN value for the specified timestamps.
+type StaleNaNSeriesChunkIterator struct {
 	i int
 	t int64
 }
 
-// NewStalenanSeriesChunkIterator init new [StalenanSeriesChunkIterator].
-func NewStalenanSeriesChunkIterator(t int64) *StalenanSeriesChunkIterator {
-	return &StalenanSeriesChunkIterator{
+// NewStaleNaNSeriesChunkIterator init new [StaleNaNSeriesChunkIterator].
+func NewStaleNaNSeriesChunkIterator(t int64) *StaleNaNSeriesChunkIterator {
+	return &StaleNaNSeriesChunkIterator{
 		i: -1,
 		t: t,
 	}
@@ -161,37 +161,37 @@ func NewStalenanSeriesChunkIterator(t int64) *StalenanSeriesChunkIterator {
 // [chunkenc.Iterator] interface implementation.
 //
 //nolint:gocritic // unnamedResult not need
-func (i *StalenanSeriesChunkIterator) At() (int64, float64) {
+func (i *StaleNaNSeriesChunkIterator) At() (int64, float64) {
 	return i.t, floatStaleNaN
 }
 
 // AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
 // [chunkenc.Iterator] interface implementation.
-func (*StalenanSeriesChunkIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+func (*StaleNaNSeriesChunkIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
 	return 0, nil
 }
 
 // AtHistogram returns the current timestamp/value pair if the value is a histogram with integer counts.
 // [chunkenc.Iterator] interface implementation.
-func (*StalenanSeriesChunkIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
+func (*StaleNaNSeriesChunkIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
 	return 0, nil
 }
 
 // AtT returns the current timestamp.
 // [chunkenc.Iterator] interface implementation.
-func (i *StalenanSeriesChunkIterator) AtT() int64 {
+func (i *StaleNaNSeriesChunkIterator) AtT() int64 {
 	return i.t
 }
 
 // Err returns the current error. Always nil.
 // [chunkenc.Iterator] interface implementation.
-func (*StalenanSeriesChunkIterator) Err() error {
+func (*StaleNaNSeriesChunkIterator) Err() error {
 	return nil
 }
 
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
-func (i *StalenanSeriesChunkIterator) Next() chunkenc.ValueType {
+func (i *StaleNaNSeriesChunkIterator) Next() chunkenc.ValueType {
 	if i.i < 1 {
 		i.i++
 	}
@@ -201,14 +201,14 @@ func (i *StalenanSeriesChunkIterator) Next() chunkenc.ValueType {
 
 // ResetTo reset state to timestamp.
 // [chunkenc.Iterator] interface implementation.
-func (i *StalenanSeriesChunkIterator) ResetTo(t int64) {
+func (i *StaleNaNSeriesChunkIterator) ResetTo(t int64) {
 	i.i = -1
 	i.t = t
 }
 
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
 // [chunkenc.Iterator] interface implementation.
-func (i *StalenanSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
+func (i *StaleNaNSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
 	if i.valueType() == chunkenc.ValFloat && i.t >= t {
 		return chunkenc.ValFloat
 	}
@@ -225,7 +225,7 @@ func (i *StalenanSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
 }
 
 // valueType returns the type of the value at the current position.
-func (i *StalenanSeriesChunkIterator) valueType() chunkenc.ValueType {
+func (i *StaleNaNSeriesChunkIterator) valueType() chunkenc.ValueType {
 	if i.i == 0 {
 		return chunkenc.ValFloat
 	}
