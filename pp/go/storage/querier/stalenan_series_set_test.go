@@ -8,7 +8,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -87,4 +89,142 @@ func (s *StaleNaNSeriesSetTestSuite) TestSuccess() {
 			s.Require().True(value.IsStaleNaN(actual[i].Samples[j].Value))
 		}
 	}
+}
+
+//
+// StaleNaNSeriesChunkIteratorSuite
+//
+
+type StaleNaNSeriesChunkIteratorSuite struct {
+	suite.Suite
+}
+
+func TestStaleNaNSeriesChunkIteratorSuite(t *testing.T) {
+	suite.Run(t, new(StaleNaNSeriesChunkIteratorSuite))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorAt() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorNext() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Next()
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorNext2() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Next()
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	vt = it.Next()
+	s.Require().Equal(chunkenc.ValNone, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorSeek() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Seek(expectTimestamp)
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorSeekNext() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Next()
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	vt = it.Seek(expectTimestamp)
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorSeekGreater() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Seek(expectTimestamp + 1)
+	s.Require().Equal(chunkenc.ValNone, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorSeekGreaterNext() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Next()
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	vt = it.Seek(expectTimestamp + 1)
+	s.Require().Equal(chunkenc.ValNone, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorSeekLess() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Seek(expectTimestamp - 1)
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
+}
+
+func (s *StaleNaNSeriesChunkIteratorSuite) TestIteratorSeekLessNext() {
+	expectTimestamp := int64(42)
+	it := querier.NewStaleNaNSeriesChunkIterator(expectTimestamp)
+
+	vt := it.Next()
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	vt = it.Seek(expectTimestamp - 1)
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	t, v := it.At()
+	s.Require().Equal(expectTimestamp, t)
+	s.Require().Equal(expectTimestamp, it.AtT())
+	s.Require().True(value.IsStaleNaN(v))
 }

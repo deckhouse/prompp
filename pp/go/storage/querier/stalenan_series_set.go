@@ -200,7 +200,6 @@ func (i *StaleNaNSeriesChunkIterator) Next() chunkenc.ValueType {
 }
 
 // ResetTo reset state to timestamp.
-// [chunkenc.Iterator] interface implementation.
 func (i *StaleNaNSeriesChunkIterator) ResetTo(t int64) {
 	i.i = -1
 	i.t = t
@@ -213,15 +212,15 @@ func (i *StaleNaNSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
 		return chunkenc.ValFloat
 	}
 
-	for {
-		if i.Next() == chunkenc.ValNone {
-			return chunkenc.ValNone
-		}
-
-		if i.t >= t {
-			return chunkenc.ValFloat
-		}
+	if i.Next() == chunkenc.ValNone {
+		return chunkenc.ValNone
 	}
+
+	if i.t >= t {
+		return chunkenc.ValFloat
+	}
+
+	return chunkenc.ValNone
 }
 
 // valueType returns the type of the value at the current position.
