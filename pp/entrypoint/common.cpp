@@ -25,6 +25,7 @@ extern "C" void prompp_mem_info(void* res) {
   struct Result {
     int64_t in_use;
     int64_t allocated;
+    int64_t resident;
   };
 
   const auto out = static_cast<Result*>(res);
@@ -38,8 +39,11 @@ extern "C" void prompp_mem_info(void* res) {
   out->in_use = static_cast<int64_t>(size);
   mallctl("stats.allocated", &size, &size_len, NULL, 0);
   out->allocated = static_cast<int64_t>(size);
+  mallctl("stats.resident", &size, &size_len, NULL, 0);
+  out->resident = static_cast<int64_t>(size);
 #else
   out->in_use = mallinfo2().uordblks;
+  out->resident = 0;
 #endif
 }
 

@@ -6,7 +6,8 @@
 #include <iostream>
 #include <random>
 
-#include "bare_bones/preprocess.h"
+#include "benchmark/compact_sample.h"
+#include "benchmark/statistic.h"
 #include "profiling/profiling.h"
 #include "series_data/encoder.h"
 #include "series_data/querier/query.h"
@@ -19,30 +20,6 @@ using BareBones::StreamVByte::Sequence;
 using series_data::serialization::DataSerializer;
 using series_data::serialization::SerializedData;
 using series_data::serialization::SerializedDataView;
-
-struct PROMPP_ATTRIBUTE_PACKED SeriesSample {
-  uint32_t series_id;
-  int64_t timestamp;
-  double value;
-};
-
-const BareBones::Vector<SeriesSample>& get_samples_for_benchmark() {
-  constexpr auto get_file_name = [] -> std::string {
-    if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-      return context->operator[]("wal_file");
-    }
-
-    return {};
-  };
-
-  static BareBones::Vector<SeriesSample> samples_from_file;
-  if (samples_from_file.empty()) [[likely]] {
-    std::ifstream istrm(get_file_name(), std::ios::binary);
-    istrm >> samples_from_file;
-  }
-
-  return samples_from_file;
-}
 
 series_data::querier::QueriedChunkList generate_query(uint32_t size) {
   series_data::querier::QueriedChunkList chunk_list;
@@ -62,21 +39,21 @@ series_data::querier::QueriedChunkList generate_query(uint32_t size) {
   return chunk_list;
 }
 
-void BenchmarkWalSerializedData(benchmark::State& state) {
+void WalSerializedData(benchmark::State& state) {
   ZoneScoped;
-  const auto& samples = get_samples_for_benchmark();
+  const auto& samples = benchmark::get_compact_samples();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
-  const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
-  const auto min_ts = min->timestamp;
-  const auto max_ts = max->timestamp;
+  const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp() < b.timestamp(); });
+  const auto min_ts = min->timestamp();
+  const auto max_ts = max->timestamp();
   const auto delta_ts = max_ts - min_ts;
 
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
-    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
-      encoder.encode(sample.series_id, sample.timestamp, sample.value);
+    if (sample.timestamp() <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
+      encoder.encode(sample.series_id(), sample.timestamp(), sample.value());
     }
   }
 
@@ -93,21 +70,21 @@ void BenchmarkWalSerializedData(benchmark::State& state) {
   }
 }
 
-void BenchmarkWalConstantSerializedData(benchmark::State& state) {
+void WalConstantSerializedData(benchmark::State& state) {
   ZoneScoped;
-  const auto& samples = get_samples_for_benchmark();
+  const auto& samples = benchmark::get_compact_samples();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
-  const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
-  const auto min_ts = min->timestamp;
-  const auto max_ts = max->timestamp;
+  const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp() < b.timestamp(); });
+  const auto min_ts = min->timestamp();
+  const auto max_ts = max->timestamp();
   const auto delta_ts = max_ts - min_ts;
 
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
-    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
-      encoder.encode(sample.series_id, sample.timestamp, sample.series_id);
+    if (sample.timestamp() <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
+      encoder.encode(sample.series_id(), sample.timestamp(), sample.series_id());
     }
   }
 
@@ -124,7 +101,7 @@ void BenchmarkWalConstantSerializedData(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkWalSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
-BENCHMARK(BenchmarkWalConstantSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
+BENCHMARK(WalSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(WalConstantSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

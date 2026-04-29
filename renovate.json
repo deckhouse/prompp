@@ -1,3 +1,10 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "description": "Pin github.com/prometheus/prometheus to the v2.x line (Go module versions < v0.300.0). v3.x releases are published as v0.300.0+ and require major migration work, so we stay on the latest v2.x until migration is planned.",
+      "matchPackageNames": ["github.com/prometheus/prometheus"],
+      "allowedVersions": "<0.300.0"
+    }
+  ]
 }
