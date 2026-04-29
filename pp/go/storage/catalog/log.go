@@ -27,27 +27,27 @@ const (
 // Encoder
 //
 
-// Encoder encodes [Record].
+// Encoder encodes [SerializedRecord].
 type Encoder interface {
-	// EncodeTo encode [Record] to [io.Writer].
-	EncodeTo(writer io.Writer, r *Record) error
+	// EncodeTo encode [SerializedRecord] to [io.Writer].
+	EncodeTo(writer io.Writer, sr *SerializedRecord) error
 }
 
 //
 // Decoder
 //
 
-// Decoder decodes [Record].
+// Decoder decodes [SerializedRecord].
 type Decoder interface {
-	// DecodeFrom decode [Record] from [io.Reader].
-	DecodeFrom(reader io.Reader, r *Record) error
+	// DecodeFrom decode [SerializedRecord] from [io.Reader].
+	DecodeFrom(reader io.Reader, sr *SerializedRecord) error
 }
 
 //
 // FileLog
 //
 
-// FileLog head-log file, contains [Record]s of heads.
+// FileLog head-log file, contains [SerializedRecord]s of heads.
 type FileLog struct {
 	version  uint64
 	file     *FileHandler
@@ -176,11 +176,11 @@ func (fl *FileLog) Close() error {
 	return fl.file.Close()
 }
 
-// ReWrite rewrite [FileLog] with [Record]s.
-func (fl *FileLog) ReWrite(records ...*Record) error {
+// ReWrite rewrite [FileLog] with [SerializedRecord]s.
+func (fl *FileLog) ReWrite(srecords ...*SerializedRecord) error {
 	oldFile := fl.file
 	swapFilePath := fmt.Sprintf("%s.compacted", strings.TrimSuffix(fl.filePath, ".compacted"))
-	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.version, fl.encoder, records...)
+	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.version, fl.encoder, srecords...)
 	if err != nil {
 		return fmt.Errorf("write log file: %w", err)
 	}
@@ -193,9 +193,9 @@ func (fl *FileLog) ReWrite(records ...*Record) error {
 	return nil
 }
 
-// Read [Record] from [FileLog].
-func (fl *FileLog) Read(r *Record) error {
-	return fl.decoder.DecodeFrom(fl.file, r)
+// Read [SerializedRecord] from [FileLog].
+func (fl *FileLog) Read(sr *SerializedRecord) error {
+	return fl.decoder.DecodeFrom(fl.file, sr)
 }
 
 // Size return current size of [FileHandler].
@@ -203,18 +203,18 @@ func (fl *FileLog) Size() int {
 	return fl.file.Size()
 }
 
-// Write [Record] to [FileLog].
-func (fl *FileLog) Write(r *Record) error {
-	return fl.encoder.EncodeTo(fl.file, r)
+// Write [SerializedRecord] to [FileLog].
+func (fl *FileLog) Write(sr *SerializedRecord) error {
+	return fl.encoder.EncodeTo(fl.file, sr)
 }
 
 func writeSwapAndSwitchAtFilePath(
 	targetFilePath, swapFilePath string,
 	version uint64,
 	encoder Encoder,
-	records ...*Record,
+	srecords ...*SerializedRecord,
 ) (*FileHandler, error) {
-	swapFile, err := createSwapFile(swapFilePath, version, encoder, records...)
+	swapFile, err := createSwapFile(swapFilePath, version, encoder, srecords...)
 	if err != nil {
 		return nil, fmt.Errorf("create swap file: %w", err)
 	}
@@ -233,7 +233,7 @@ func writeSwapAndSwitchAtFilePath(
 }
 
 // creates swap file, writes records & sets read offset at first record.
-func createSwapFile(fileName string, version uint64, encoder Encoder, records ...*Record) (*FileHandler, error) {
+func createSwapFile(fileName string, version uint64, encoder Encoder, srs ...*SerializedRecord) (*FileHandler, error) {
 	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, fmt.Errorf("new file handler: %w", err)
@@ -250,8 +250,8 @@ func createSwapFile(fileName string, version uint64, encoder Encoder, records ..
 		return nil, fmt.Errorf("write log file version: %w", err)
 	}
 
-	for _, record := range records {
-		if err = encoder.EncodeTo(swapFile, record); err != nil {
+	for _, srecord := range srs {
+		if err = encoder.EncodeTo(swapFile, srecord); err != nil {
 			return nil, fmt.Errorf("encode record: %w", err)
 		}
 	}

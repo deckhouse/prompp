@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.8.0
+
+### Enhancements
+1. **Snapshot LSS type separation.** Decoupled the read-only label set snapshot into a dedicated `SnapshotLSS` type with its own variant, reducing the active head's variant footprint and improving type safety.
+2. **GOST-compliant build hardening.** Enabled `FORTIFY_SOURCE=2`, stack protector, position-independent code, and additional compiler warnings (null-dereference, division-by-zero, array-bounds) across all C++ code including third-party libraries.
+3. **GCC 14 and clang-tidy 21.** Upgraded the C++ toolchain to GCC 14.2.0 and clang-tidy 21.1.8 with new `bugprone-*` diagnostics enabled; all findings resolved.
+4. **Go `/sync/*` runtime metrics.** The Prometheus Go collector now exports mutex and semaphore contention statistics from `runtime/metrics` (`/sync/*`) alongside the existing GC and scheduler metrics, making locker contention observable in production.
+5. **Jemalloc resident memory metric.** Exposed jemalloc's resident set size as a new metric alongside the existing allocated/mapped stats, giving operators clearer visibility into the C++ allocator's memory footprint.
+
+### Fixes
+1. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
+2. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
+
+## v0.7.10
+
+### Fixes
+1. **`highestSentTimestamp` reported in milliseconds.** The `prometheus_remote_storage_queue_highest_sent_timestamp_seconds` metric was emitted in milliseconds, causing the shard controller to compute a huge lag and falsely trigger the `PrometheusRemoteWriteDesiredShards` alert.
+2. **Catalog sync with deleted records.** When reading the catalog and compacting the log, records with `deletedAt != 0` are now dropped eagerly instead of lingering in memory until the next cleanup pass.
+3. **`lastPri` in the priority-weighted locker.** Fixed the `lastPri` pointer update in `util/locker/priweighted` when the tail waiter is cancelled — the priority-prefix invariant could previously be violated, leading to potential hangs.
+4. **Go 1.25.9.** Bumped Go from 1.25.8 to 1.25.9, pulling in stdlib security fixes for `crypto/x509` (chain building and policy validation DoS), `crypto/tls` (TLS 1.3 KeyUpdate DoS), `html/template` (XSS via JS template literal context tracking), `archive/tar` (unbounded allocation on GNU sparse), and `os` (TOCTOU in `Root.Chmod` on Linux).
+5. **npm dependency security updates.** Updated `follow-redirects` (auth header leak on cross-domain redirect) and `lodash` (prototype pollution and code injection in `_.template`) in the web UI.
+
+## v0.7.9
+
+### Features
+1. **WAL v2 and remote write encoding.** Introduces a new WAL read/write path (v2) with refactored segment sample storage and remote-write protobuf encoding, version-aware segment handling when switching between WAL file formats, and related metrics and Go bindings updates.
+
+### Fixes
+1. **`op_top` in query strings.** Fixed PromQL string serialization for the `op_top` aggregator so expressions round-trip correctly in rules and anywhere queries are printed.
+2. **Outdated corrupted head on GC.** Catalog garbage collection now removes stale corrupted head directories instead of leaving them on disk indefinitely.
+
+### Enhancements
+1. **Environment-driven defaults in configuration.** Settings that were only applied via environment variables are now folded into default configuration, aligning operator defaults with the main configuration model.
+
+## v0.7.8
+
+### Fixes
+1. **Jemalloc VmPTE growth.** Tuned jemalloc configuration to prevent unbounded virtual address space growth when using custom arenas (create/destroy pattern). Added `retain:false`, `abort_conf:true`, and set `muzzy_decay_ms:0`, eliminating multi-GB page table overhead.
+2. **gRPC authorization bypass CVE.** Updated `google.golang.org/grpc` from v1.78.0 to v1.79.3 to fix an authorization bypass via missing leading slash in `:path` (GO-2026-4762).
+3. **npm dependency security update.** Updated `picomatch` to fix a high-severity ReDoS and method injection vulnerability.
+
 ## v0.7.7
 
 ### Features

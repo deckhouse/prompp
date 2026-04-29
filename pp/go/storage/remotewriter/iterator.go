@@ -371,7 +371,7 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 
 		i.metrics.failedSamplesTotal.Add(float64(failedSamplesTotal))
 		i.metrics.sentBytesTotal.Add(float64(sentBytesTotal))
-		i.metrics.highestSentTimestamp.Set(float64(highestSentTimestamp))
+		i.metrics.highestSentTimestamp.Set(float64(highestSentTimestamp) / 1000)
 
 		if sendIteration > 0 {
 			i.metrics.retriedSamplesTotal.Add(float64(retriedSamplesTotal))
@@ -447,8 +447,10 @@ type batch struct {
 // newBatch creates a new [batch].
 func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int) *batch {
 	return &batch{
-		numberOfShards:             numberOfShards,
-		segmentSampleStorages:      cppbridge.NewSegmentSamplesStorage(uint64(numberOfHeadShards)),
+		numberOfShards: numberOfShards,
+		segmentSampleStorages: cppbridge.NewSegmentSamplesStorage(
+			uint64(numberOfHeadShards), // #nosec G115 // no overflow
+		),
 		maxNumberOfSamplesPerShard: maxNumberOfSamplesPerShard,
 	}
 }

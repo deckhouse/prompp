@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 
+#include "benchmark/statistic.h"
 #include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/querier/querier.h"
@@ -14,7 +15,7 @@ using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
 using Querier = series_index::querier::Querier<BareBones::Vector>;
 
-std::string_view get_lss_file() {
+std::string get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
     return context->operator[]("lss_file");
   }
@@ -25,7 +26,7 @@ std::string_view get_lss_file() {
 const QueryableEncodingBimap& get_lss() {
   static QueryableEncodingBimap lss;
   if (lss.size() == 0) {
-    std::ifstream infile(get_lss_file().data(), std::ios_base::binary);
+    std::ifstream infile(get_lss_file(), std::ios_base::binary);
     infile >> lss;
   }
 
@@ -51,7 +52,7 @@ const std::array kBenchmarkCases{
     },
 };
 
-void BenchmarkQuery(benchmark::State& state) {
+void LssQuery(benchmark::State& state) {
   ZoneScoped;
   const auto& lss = get_lss();
 
@@ -62,10 +63,6 @@ void BenchmarkQuery(benchmark::State& state) {
   }
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
-
-BENCHMARK(BenchmarkQuery)->DenseRange(0, kBenchmarkCases.size() - 1, 1)->ComputeStatistics("min", min_value);
+BENCHMARK(LssQuery)->DenseRange(0, kBenchmarkCases.size() - 1, 1)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

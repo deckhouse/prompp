@@ -1,0 +1,70 @@
+--- absl/strings/internal/cord_rep_btree.cc
++++ absl/strings/internal/cord_rep_btree.cc
+@@ -526,7 +526,7 @@
+ template <EdgeType edge_type>
+ CordRepBtree* CordRepBtree::AddCordRep(CordRepBtree* tree, CordRep* rep) {
+   const int depth = tree->height();
+-  const size_t length = rep->length;
++  const size_t length = rep ? rep->length : 0;
+   StackOperations<edge_type> ops;
+   CordRepBtree* leaf = ops.BuildStack(tree, depth);
+   const OpResult result =
+
+--- absl/strings/internal/cord_rep_btree.h
++++ absl/strings/internal/cord_rep_btree.h
+@@ -648,8 +648,11 @@
+ 
+ inline CordRepBtree* CordRepBtree::New(CordRep* rep) {
+   CordRepBtree* tree = new CordRepBtree;
+-  int height = rep->IsBtree() ? rep->btree()->height() + 1 : 0;
+-  tree->length = rep->length;
++  int height = 0;
++  if (rep != nullptr) [[likely]] {
++    height = rep->IsBtree() ? rep->btree()->height() + 1 : 0;
++    tree->length = rep->length;
++  }
+   tree->InitInstance(height, /*begin=*/0, /*end=*/1);
+   tree->edges_[0] = rep;
+   return tree;
+
+--- absl/strings/internal/cord_rep_btree_reader.h
++++ absl/strings/internal/cord_rep_btree_reader.h
+@@ -175,7 +175,9 @@
+   if (remaining_ == 0) return {};
+   const CordRep* edge = navigator_.Next();
+   assert(edge != nullptr);
+-  remaining_ -= edge->length;
++  if (edge != nullptr) [[likely]] {
++    remaining_ -= edge->length;
++  }
+   return EdgeData(edge);
+ }
+ 
+
+--- absl/strings/internal/cord_rep_crc.h
++++ absl/strings/internal/cord_rep_crc.h
+@@ -53,6 +53,10 @@
+ // unref an outer CordRepCrc node.
+ inline CordRep* RemoveCrcNode(CordRep* rep) {
+   assert(rep != nullptr);
++  if (rep == nullptr) [[unlikely]] {
++    return rep;
++  }
++
+   if (ABSL_PREDICT_FALSE(rep->IsCrc())) {
+     CordRep* child = rep->crc()->child;
+     if (rep->refcount.IsOne()) {
+
+--- absl/strings/internal/cordz_info.cc
++++ absl/strings/internal/cordz_info.cc
+@@ -206,6 +206,10 @@
+     statistics_.node_counts.btree++;
+     memory_usage_.Add(sizeof(CordRepBtree), rep.refcount);
+     const CordRepBtree* tree = rep.rep->btree();
++    if (tree == nullptr) [[unlikely]] {
++      return;
++    }
++
+     if (tree->height() > 0) {
+       for (CordRep* edge : tree->Edges()) {
+         AnalyzeBtree(rep.Child(edge));

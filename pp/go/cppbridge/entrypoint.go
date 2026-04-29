@@ -12,8 +12,8 @@ package cppbridge
 // #cgo amd64,!asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
 // #cgo amd64,asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
 // #cgo amd64,asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++_libbacktrace
-// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++_libbacktrace.a
+// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++exp
+// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
@@ -1418,15 +1418,15 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-func primitivesLSSQuery(lss uintptr, selector uintptr) (
+func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
 ) {
 	args := struct {
-		lss      uintptr
+		snapshot uintptr
 		selector uintptr
-	}{lss, selector}
+	}{snapshot, selector}
 
 	var res struct {
 		matches         []uint32
@@ -1436,7 +1436,7 @@ func primitivesLSSQuery(lss uintptr, selector uintptr) (
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_query,
+		C.prompp_primitives_snapshot_query,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -1524,22 +1524,55 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
-func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
+func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 	args := struct {
-		lss uintptr
-	}{lss}
-	var res struct {
-		lss uintptr
-	}
+		lss   uintptr
+		names []string
+	}{lss, names}
+
+	res := struct {
+		outIDs []uint32
+	}{make([]uint32, len(names))}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_create_readonly_lss,
+		C.prompp_primitives_lss_get_label_name_ids,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.lss
+	return res.outIDs
+}
+
+func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
+	args := struct {
+		lss uintptr
+	}{lss}
+	var res struct {
+		snapshot uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_create_snapshot_lss,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.snapshot
+}
+
+// primitivesSnapshotDtor - wrapper for destructor C-SnapshotLSS.
+func primitivesSnapshotDtor(snapshot uintptr) {
+	args := struct {
+		snapshot uintptr
+	}{snapshot}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_snapshot_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 // primitivesLSSBitsetSeries returns a copy of the bitset of added series from the lss.
@@ -1574,12 +1607,12 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 	)
 }
 
-// primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
+// primitivesSnapshotLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
+func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
-	C.prompp_primitives_readonly_lss_copy_added_series(
+	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
@@ -2032,6 +2065,23 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	)
 
 	return res
+}
+
+func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32, timestamps []int64) {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+	}{dataStorage, seriesIDs}
+	res := struct {
+		timestamps []int64
+	}{timestamps}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_query_first_timestamps,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
 }
 
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {
@@ -3161,18 +3211,18 @@ func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	return res.length
 }
 
-func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerializeFromSnapshot(snapshot uintptr, labelSetID uint32) []Label {
 	args := struct {
-		lss        uintptr
+		snapshot   uintptr
 		labelSetID uint32
-	}{lss, labelSetID}
+	}{snapshot, labelSetID}
 	var res struct {
 		labelSet []Label
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_label_set_serialize,
+		C.prompp_label_set_serialize_from_snapshot,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

@@ -24,15 +24,15 @@ const (
 // DecoderV1
 //
 
-// DecoderV1 decodes [Record], version 1.
+// DecoderV1 decodes [SerializedRecord], version 1.
 //
 //	Deprecated: For backward compatibility.
 type DecoderV1 struct{}
 
-// DecodeFrom decode [Record] from [io.Reader].
+// DecodeFrom decode [SerializedRecord] from [io.Reader].
 //
 //revive:disable-next-line:cyclomatic this is decode.
-func (DecoderV1) DecodeFrom(reader io.Reader, r *Record) (err error) {
+func (DecoderV1) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) {
 	var size uint64
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
 		return fmt.Errorf("read id size: %w", err)
@@ -48,7 +48,7 @@ func (DecoderV1) DecodeFrom(reader io.Reader, r *Record) (err error) {
 	if _, err = reader.Read(buf); err != nil {
 		return fmt.Errorf("read id: %w", err)
 	}
-	r.id = uuid.MustParse(string(buf))
+	sr.id = uuid.MustParse(string(buf))
 
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
 		return fmt.Errorf("read dir size: %w", err)
@@ -59,23 +59,23 @@ func (DecoderV1) DecodeFrom(reader io.Reader, r *Record) (err error) {
 		return fmt.Errorf("read dir: %w", err)
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.numberOfShards); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &sr.numberOfShards); err != nil {
 		return fmt.Errorf("read number of shards: %w", err)
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.createdAt); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &sr.createdAt); err != nil {
 		return fmt.Errorf("read created at: %w", err)
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.updatedAt); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &sr.updatedAt); err != nil {
 		return fmt.Errorf("read updated at: %w", err)
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.deletedAt); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &sr.deletedAt); err != nil {
 		return fmt.Errorf("read deleted at: %w", err)
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.status); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &sr.status); err != nil {
 		return fmt.Errorf("read status: %w", err)
 	}
 
@@ -86,14 +86,14 @@ func (DecoderV1) DecodeFrom(reader io.Reader, r *Record) (err error) {
 // DecoderV2
 //
 
-// DecoderV2 decodes [Record], version 2.
+// DecoderV2 decodes [SerializedRecord], version 2.
 type DecoderV2 struct{}
 
-// DecodeFrom decode [Record] from [io.Reader].
+// DecodeFrom decode [SerializedRecord] from [io.Reader].
 //
 //revive:disable-next-line:cyclomatic this is decode.
 //revive:disable-next-line:function-length long but this is decode.
-func (DecoderV2) DecodeFrom(reader io.Reader, r *Record) (err error) {
+func (DecoderV2) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) {
 	var size uint8
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
 		return fmt.Errorf("read record size: %w", err)
@@ -110,35 +110,35 @@ func (DecoderV2) DecodeFrom(reader io.Reader, r *Record) (err error) {
 		}
 	}()
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.id); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.id); err != nil {
 		return fmt.Errorf("read record id: %w", err)
 	}
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.numberOfShards); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.numberOfShards); err != nil {
 		return fmt.Errorf("read number of shards: %w", err)
 	}
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.createdAt); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.createdAt); err != nil {
 		return fmt.Errorf("read created at: %w", err)
 	}
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.updatedAt); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.updatedAt); err != nil {
 		return fmt.Errorf("read updated at: %w", err)
 	}
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.deletedAt); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.deletedAt); err != nil {
 		return fmt.Errorf("read deleted at: %w", err)
 	}
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.corrupted); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.corrupted); err != nil {
 		return fmt.Errorf("read currupted: %w", err)
 	}
 
-	if err = binary.Read(rReader, binary.LittleEndian, &r.status); err != nil {
+	if err = binary.Read(rReader, binary.LittleEndian, &sr.status); err != nil {
 		return fmt.Errorf("read status: %w", err)
 	}
 
-	if err = decodeOptionalValue(rReader, binary.LittleEndian, &r.lastAppendedSegmentID); err != nil {
+	if err = decodeOptionalValue(rReader, binary.LittleEndian, &sr.lastAppendedSegmentID); err != nil {
 		return fmt.Errorf("read last written segment id: %w", err)
 	}
 
@@ -194,7 +194,7 @@ func decodeOptionalValue[T any](
 // DecoderV3
 //
 
-// DecoderV3 decodes [Record], version 3.
+// DecoderV3 decodes [SerializedRecord], version 3.
 type DecoderV3 struct {
 	offset int
 	size   uint8
@@ -209,11 +209,11 @@ func NewDecoderV3() *DecoderV3 {
 	}
 }
 
-// DecodeFrom decode [Record] from [io.Reader].
+// DecodeFrom decode [SerializedRecord] from [io.Reader].
 //
 //revive:disable-next-line:cyclomatic this is decode.
 //revive:disable-next-line:function-length long but this is decode.
-func (d *DecoderV3) DecodeFrom(reader io.Reader, r *Record) (err error) {
+func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) {
 	d.reset()
 
 	if err = d.readSize(reader); err != nil {
@@ -235,34 +235,34 @@ func (d *DecoderV3) DecodeFrom(reader io.Reader, r *Record) (err error) {
 	}
 
 	targetOffset := d.offset + 16 //revive:disable-line:add-constant it's size of UUID
-	r.id = uuid.UUID(d.buffer[d.offset:targetOffset])
+	sr.id = uuid.UUID(d.buffer[d.offset:targetOffset])
 	d.offset = targetOffset
 
-	r.numberOfShards = binary.LittleEndian.Uint16(d.buffer[d.offset:])
+	sr.numberOfShards = binary.LittleEndian.Uint16(d.buffer[d.offset:])
 	d.offset += 2 //revive:disable-line:add-constant it's size of uint16
 
-	r.createdAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
+	sr.createdAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
 	d.offset += sizeOf64
 
-	r.updatedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
+	sr.updatedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
 	d.offset += sizeOf64
 
-	r.deletedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
+	sr.deletedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
 	d.offset += sizeOf64
 
-	r.corrupted = d.buffer[d.offset] > 0
+	sr.corrupted = d.buffer[d.offset] > 0
 	d.offset++
 
-	r.status = Status(d.buffer[d.offset])
+	sr.status = Status(d.buffer[d.offset])
 	d.offset++
 
-	r.numberOfSegments = binary.LittleEndian.Uint32(d.buffer[d.offset:])
+	sr.numberOfSegments = binary.LittleEndian.Uint32(d.buffer[d.offset:])
 	d.offset += sizeOfUint32
 
-	r.mint = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
+	sr.mint = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
 	d.offset += sizeOf64
 
-	r.maxt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
+	sr.maxt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
 	d.offset += sizeOf64
 
 	return nil
@@ -289,7 +289,7 @@ func (d *DecoderV3) readSize(reader io.Reader) error {
 	return nil
 }
 
-// readRecord read [Record] from [io.Reader].
+// readRecord read [SerializedRecord] from [io.Reader].
 func (d *DecoderV3) readRecord(reader io.Reader) error {
 	if _, err := reader.Read(d.buffer[:d.size]); err != nil {
 		return fmt.Errorf("read whole record: %w", err)
@@ -297,7 +297,7 @@ func (d *DecoderV3) readRecord(reader io.Reader) error {
 	return nil
 }
 
-// validateCRC32 validate [Record] on CRC32.
+// validateCRC32 validate [SerializedRecord] on CRC32.
 func (d *DecoderV3) validateCRC32() (err error) {
 	expectedCRC32Hash := binary.LittleEndian.Uint32(d.buffer[d.offset:])
 	d.offset += sizeOfUint32

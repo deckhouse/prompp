@@ -15,6 +15,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg catalog_test --out
+
 const (
 	// DefaultMaxLogFileSize default size of log file.
 	DefaultMaxLogFileSize = 4 << 20
@@ -32,18 +34,20 @@ const (
 //
 
 // Log head-log file, contains [Record]s of heads.
+//
+//go:generate moq catalog_moq_test.go . Log
 type Log interface {
-	// ReWrite rewrite [FileLog] with [Record]s.
-	ReWrite(records ...*Record) error
+	// ReWrite rewrite [FileLog] with [SerializedRecord]s.
+	ReWrite(srecords ...*SerializedRecord) error
 
-	// Read [Record] from [FileLog].
-	Read(record *Record) error
+	// Read [SerializedRecord] from [FileLog].
+	Read(sr *SerializedRecord) error
 
 	// Size return current size of [FileHandler].
 	Size() int
 
 	// Write [Record] to [FileLog].
-	Write(record *Record) error
+	Write(srecord *SerializedRecord) error
 }
 
 //
@@ -134,17 +138,19 @@ func (c *Catalog) Create(numberOfShards uint16) (*Record, error) {
 
 	id := c.idGenerator.Generate()
 	now := c.clock.Now().UnixMilli()
-	r := &Record{
-		id:             id,
-		numberOfShards: numberOfShards,
-		createdAt:      now,
-		updatedAt:      now,
-		deletedAt:      0,
-		referenceCount: 0,
-		status:         StatusNew,
-	}
+	r := NewRecordWithData(
+		id,
+		numberOfShards,
+		now,
+		now,
+		0,
+		false,
+		0,
+		StatusNew,
+		nil,
+	)
 
-	if err := c.log.Write(r); err != nil {
+	if err := c.log.Write(&r.SerializedRecord); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
 	}
 	c.records[id.String()] = r
@@ -166,7 +172,7 @@ func (c *Catalog) Delete(id string) error {
 		return nil
 	}
 
-	changed := createRecordCopy(r)
+	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.deletedAt = c.clock.Now().UnixMilli()
 	changed.updatedAt = r.deletedAt
 
@@ -245,7 +251,7 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 		return r, nil
 	}
 
-	changed := createRecordCopy(r)
+	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.corrupted = true
 	changed.updatedAt = c.clock.Now().UnixMilli()
 
@@ -283,7 +289,7 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 		return r, nil
 	}
 
-	changed := createRecordCopy(r)
+	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.status = status
 	changed.updatedAt = c.clock.Now().UnixMilli()
 
@@ -310,27 +316,25 @@ func (c *Catalog) compactIfNeeded() error {
 	return c.compactLog()
 }
 
-// compactLog delete old(deleted [Record]s).
+// compactLog rewrite [Log] with current in-memory [Record]s.
 func (c *Catalog) compactLog() error {
-	records := make([]*Record, 0, len(c.records))
+	srecords := make([]*SerializedRecord, 0, len(c.records))
 	for _, record := range c.records {
-		if record.deletedAt == 0 {
-			records = append(records, record)
-		}
+		srecords = append(srecords, &record.SerializedRecord)
 	}
 
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].createdAt < records[j].createdAt
+	sort.Slice(srecords, func(i, j int) bool {
+		return srecords[i].createdAt < srecords[j].createdAt
 	})
 
-	return c.log.ReWrite(records...)
+	return c.log.ReWrite(srecords...)
 }
 
 // sync catalog with [Log].
 func (c *Catalog) sync() error {
 	for {
 		r := NewEmptyRecord()
-		if err := c.log.Read(r); err != nil {
+		if err := c.log.Read(&r.SerializedRecord); err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
@@ -339,6 +343,12 @@ func (c *Catalog) sync() error {
 
 			return c.compactLog()
 		}
+
+		if r.deletedAt != 0 {
+			delete(c.records, r.id.String())
+			continue
+		}
+
 		c.records[r.id.String()] = r
 	}
 }

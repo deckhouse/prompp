@@ -29,5 +29,6 @@ void full_save_lss::execute(const Config& config, Metrics& metrics) const {
   out << lss;
   auto now = std::chrono::steady_clock::now();
 
-  metrics << (Metric() << "decoding_table_save_to_file_duration_microseconds" << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
+  metrics << (Metric() << "decoding_table_save_to_file_duration_microseconds"
+                       << static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
 }

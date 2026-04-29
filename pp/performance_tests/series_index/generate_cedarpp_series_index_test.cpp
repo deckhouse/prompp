@@ -46,13 +46,13 @@ void GenerateCedarppSeriesIndex::execute([[maybe_unused]] const Config& config, 
   }
 
   if (previous_label_id != std::numeric_limits<uint32_t>::max()) {
-    metrics << (Metric() << "cedarpp_series_index_add_nanoseconds" << (add_index_time.count() / (previous_label_id + 1)));
+    metrics << (Metric() << "cedarpp_series_index_add_nanoseconds" << static_cast<double>(add_index_time.count()) / (previous_label_id + 1));
   }
 
-  size_t allocated_memory =
+  const size_t allocated_memory =
       names_trie.allocated_memory() + std::accumulate(labels_trie_vector.begin(), labels_trie_vector.end(), 0ULL,
                                                       [](size_t sum, const auto& label_trie) { return sum + label_trie->allocated_memory(); });
-  metrics << (Metric() << "cedarpp_series_index_allocated_memory_kb" << allocated_memory / 1024);
+  metrics << (Metric() << "cedarpp_series_index_allocated_memory_kb" << static_cast<double>(allocated_memory) / 1024);
 }
 
 }  // namespace performance_tests::series_index

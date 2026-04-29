@@ -83,7 +83,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 	shards := make([]*shard.Shard, numberOfShards)
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, headRecord.SetLastAppendedSegmentID)
 	for shardID := range numberOfShards {
-		s, err := b.createShardOnDisk(headDir, swn, shardID)
+		s, err := b.createShardOnDisk(headDir, swn, headRecord, shardID)
 		if err != nil {
 			return nil, err
 		}
@@ -134,6 +134,7 @@ func (b *Builder) BuildTransactionHead() *TransactionHead {
 func (b *Builder) createShardOnDisk(
 	headDir string,
 	swn *writer.SegmentWriteNotifier,
+	_ *catalog.Record, // headRecord
 	shardID uint16,
 ) (*shard.Shard, error) {
 	headDir = filepath.Clean(headDir)
@@ -155,12 +156,22 @@ func (b *Builder) createShardOnDisk(
 	// logShards is 0 for single encoder
 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
 
+	// V2: wal.FileFormatVersionV2
 	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, shardWalEncoder.Version())
 	if err != nil {
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
-	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.HeadEncodedSegment], swn)
+	sw, err := writer.NewBuffered(
+		shardID,
+		shardFile,
+		writer.WriteSegment[*cppbridge.HeadEncodedSegment], // V2: writer.WriteSegmentV2
+		swn,                        // V2: NoopSegmentWriteNotifier{}
+		writer.NoopSegmentMarkup{}, // V2: headRecord
+		// writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
+		// NoopSegmentWriteNotifier{},
+		// headRecord,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
 	}
@@ -183,7 +194,7 @@ func (b *Builder) createShardOnDisk(
 		shard.NewDataStorage(),
 		unloadedDataStorage,
 		queriedSeriesStorage,
-		wal.NewWal(shardWalEncoder, sw, b.maxSegmentSize, shardID, b.registerer),
+		wal.NewWal(shardWalEncoder, sw, lss, b.maxSegmentSize, shardID, b.registerer),
 		shardID,
 	), nil
 }

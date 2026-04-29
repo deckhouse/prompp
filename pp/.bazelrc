@@ -1,3 +1,8 @@
+# External dependencies are managed exclusively via Bzlmod (MODULE.bazel).
+# --noenable_workspace makes Bazel ignore any WORKSPACE/WORKSPACE.bazel files
+# entirely; we keep it explicit so the build mode is unambiguous.
+common --noenable_workspace
+
 # This flag fixed bazel build error (tested on 7.* versions)
 build --noreuse_sandbox_directories
 build --fission=yes
@@ -7,3 +12,6 @@ build --flag_alias=asan=//bazel/toolchain:asan
 # Profiling specific flags
 build --flag_alias=profiling=//bazel/toolchain:profiling
 build --flag_alias=profiling_opts=//bazel/toolchain:profiling_opts
+
+# clang-tidy specific flags
+build:clang-tidy --//bazel/toolchain:clang_tidy

@@ -3,13 +3,13 @@ package wal
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
@@ -18,13 +18,16 @@ import (
 const (
 	// FileFormatVersion wal file version.
 	FileFormatVersion = 1
+
+	// FileFormatVersionV2 wal file version 2.
+	FileFormatVersionV2 = 2
 )
 
 // ErrWalIsCorrupted errror when wal is corrupted.
 var ErrWalIsCorrupted = errors.New("wal is corrupted")
 
 // SegmentWriter writer for wal segments.
-type SegmentWriter[TSegment EncodedSegment] interface {
+type SegmentWriter[TSegment any] interface {
 	// CurrentSize return current shard wal size.
 	CurrentSize() int64
 
@@ -52,24 +55,17 @@ type Encoder[TSegment EncodedSegment] interface {
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
 type EncodedSegment interface {
-	// Size returns the size of the segment.
-	Size() int64
-
-	// CRC32 returns the CRC32 of the segment.
-	CRC32() uint32
-
 	// Samples returns the number of samples in the segment.
 	Samples() uint32
-
-	// WriteTo implements [io.WriterTo] interface.
-	io.WriterTo
 }
 
 // Wal write-ahead log for [Shard].
 type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 	encoder        Encoder[TSegment] // *cppbridge.HeadWalEncoder
 	segmentWriter  TWriter
-	locker         sync.Mutex
+	lssLocker      locker.RLockable
+	encLocker      sync.Mutex
+	swLocker       sync.Mutex
 	maxSegmentSize uint32
 	corrupted      bool
 	limitExhausted bool
@@ -80,19 +76,24 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 }
 
 // NewWal init new [Wal].
+// lssLocker needs to be locked for reading from LSS for the commit.
 func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	encoder Encoder[TSegment],
 	segmentWriter TWriter,
+	lssLocker locker.RLockable,
 	maxSegmentSize uint32,
 	shardID uint16,
 	registerer prometheus.Registerer,
 ) *Wal[TSegment, TWriter] {
 	factory := util.NewUnconflictRegisterer(registerer)
+	//revive:disable-next-line:add-constant it's base 10
 	ls := prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)}
 	w := &Wal[TSegment, TWriter]{
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
-		locker:         sync.Mutex{},
+		lssLocker:      lssLocker,
+		encLocker:      sync.Mutex{},
+		swLocker:       sync.Mutex{},
 		maxSegmentSize: maxSegmentSize,
 		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
 			Name:        "prompp_shard_wal_samples_per_segment_sum",
@@ -117,7 +118,9 @@ func NewCorruptedWal[
 	TWriter SegmentWriter[TSegment],
 ]() *Wal[TSegment, TWriter] {
 	return &Wal[TSegment, TWriter]{
-		locker:    sync.Mutex{},
+		lssLocker: locker.NoopLocker{},
+		encLocker: sync.Mutex{},
+		swLocker:  sync.Mutex{},
 		corrupted: true,
 	}
 }
@@ -128,8 +131,8 @@ func (w *Wal[TSegment, TWriter]) Close() error {
 		return nil
 	}
 
-	w.locker.Lock()
-	defer w.locker.Unlock()
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
 
 	if w.closed {
 		return nil
@@ -151,16 +154,23 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 		return ErrWalIsCorrupted
 	}
 
-	w.locker.Lock()
-	defer w.locker.Unlock()
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
 
+	w.encLocker.Lock()
+	w.lssLocker.RLock()
 	segment, err := w.encoder.Finalize()
+	w.lssLocker.RUnlock()
 	if err != nil {
+		w.encLocker.Unlock()
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
+
+	w.limitExhausted = false
+	w.encLocker.Unlock()
+
 	w.samplesPerSegment.Add(float64(segment.Samples()))
 	w.segments.Inc()
-	w.limitExhausted = false
 
 	if err = w.segmentWriter.Write(segment); err != nil {
 		return fmt.Errorf("failed to write segment: %w", err)
@@ -184,8 +194,8 @@ func (w *Wal[TSegment, TWriter]) Flush() error {
 		return nil
 	}
 
-	w.locker.Lock()
-	defer w.locker.Unlock()
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
 
 	return w.segmentWriter.Flush()
 }
@@ -196,8 +206,8 @@ func (w *Wal[TSegment, TWriter]) Sync() error {
 		return ErrWalIsCorrupted
 	}
 
-	w.locker.Lock()
-	defer w.locker.Unlock()
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
 
 	return w.segmentWriter.Sync()
 }
@@ -208,8 +218,8 @@ func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []cppbridge.InnerSeries)
 		return false, ErrWalIsCorrupted
 	}
 
-	w.locker.Lock()
-	defer w.locker.Unlock()
+	w.encLocker.Lock()
+	defer w.encLocker.Unlock()
 
 	samples, err := w.encoder.Encode(innerSeriesSlice)
 	if err != nil {

@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "bare_bones/encoding.h"
+#include "benchmark/statistic.h"
 #include "profiling/profiling.h"
 
 namespace {
@@ -18,7 +19,7 @@ const BareBones::Vector<uint32_t>& values() {
   static BareBones::Vector<uint32_t> values;
   if (values.empty()) {
     if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-      std::ifstream infile(context->operator[]("values_file").data(), std::ios_base::binary);
+      std::ifstream infile(context->operator[]("encoded_sequence_values_file").data(), std::ios_base::binary);
       infile >> values;
     }
   }
@@ -26,11 +27,13 @@ const BareBones::Vector<uint32_t>& values() {
   return values;
 }
 
-template <template <class, size_t> class Sequence>
+using EncodedSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
+using EncodedCompactSequence = BareBones::EncodedSequence<DeltaRLE<CompactSequence<Codec0124, 8>>>;
+
+template <class EncodingSequence>
 void EncodingSequencePushBack(benchmark::State& state) {
   ZoneScoped;
   const auto& kValues = values();
-  using EncodingSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
 
   for ([[maybe_unused]] auto _ : state) {
     EncodingSequence sequence;
@@ -48,11 +51,10 @@ void EncodingSequencePushBack(benchmark::State& state) {
   }();
 }
 
-template <template <class, size_t> class Sequence>
+template <class EncodingSequence>
 void EncodingSequenceDecode(benchmark::State& state) {
   ZoneScoped;
   const auto& kValues = values();
-  using EncodingSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
 
   EncodingSequence sequence;
   for (const auto value : kValues) {
@@ -64,14 +66,10 @@ void EncodingSequenceDecode(benchmark::State& state) {
   }
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
+BENCHMARK(EncodingSequencePushBack<EncodedSequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(EncodingSequencePushBack<EncodedCompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
-BENCHMARK(EncodingSequencePushBack<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(EncodingSequencePushBack<CompactSequence>)->ComputeStatistics("min", min_value);
-
-BENCHMARK(EncodingSequenceDecode<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(EncodingSequenceDecode<CompactSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(EncodingSequenceDecode<EncodedSequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(EncodingSequenceDecode<EncodedCompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

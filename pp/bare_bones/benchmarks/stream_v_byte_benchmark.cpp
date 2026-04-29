@@ -4,38 +4,39 @@
 #include <ranges>
 
 #include "bare_bones/stream_v_byte.h"
+#include "benchmark/statistic.h"
 #include "profiling/profiling.h"
 
 namespace {
 
-template <class Codec, size_t kPreAllocationElementsCount>
-using CompactSequence = BareBones::StreamVByte::CompactSequence<Codec, BareBones::MemoryWithItemCount, kPreAllocationElementsCount>;
-
-using BareBones::StreamVByte::Sequence;
-
 uint32_t values_count() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
-    const auto& values_str = context->operator[]("values");
-    return std::strtoul(values_str.data(), nullptr, 10);
+    const auto& values_str = context->operator[]("stream_v_byte_values_count");
+    if (!values_str.empty()) {
+      return std::strtoul(values_str.data(), nullptr, 10);
+    }
   }
 
   return {};
 }
 
-template <template <class, size_t> class Sequence>
-void BenchmarkSequencePushBack(benchmark::State& state) {
+using Sequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124, 8>;
+using CompactSequence = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 8>;
+
+template <class Sequence>
+void SequencePushBack(benchmark::State& state) {
   ZoneScoped;
   const auto kValuesCount = values_count();
 
   for ([[maybe_unused]] auto _ : state) {
-    Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;
+    Sequence sequence;
     for (const auto value : std::views::iota(0U, kValuesCount)) {
       sequence.push_back(value);
     }
   }
 
   state.counters["Memory"] = [kValuesCount] {
-    Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;
+    Sequence sequence;
     for (const auto value : std::views::iota(0U, kValuesCount)) {
       sequence.push_back(value);
     }
@@ -43,12 +44,12 @@ void BenchmarkSequencePushBack(benchmark::State& state) {
   }();
 }
 
-template <template <class, size_t> class Sequence>
-void BenchmarkSequenceDecode(benchmark::State& state) {
+template <class Sequence>
+void SequenceDecode(benchmark::State& state) {
   ZoneScoped;
   const auto kValuesCount = values_count();
 
-  Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;
+  Sequence sequence;
   for (const auto value : std::views::iota(0U, kValuesCount)) {
     sequence.push_back(value);
   }
@@ -58,14 +59,10 @@ void BenchmarkSequenceDecode(benchmark::State& state) {
   }
 }
 
-double min_value(const std::vector<double>& v) noexcept {
-  return *std::ranges::min_element(v);
-}
+BENCHMARK(SequencePushBack<Sequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SequencePushBack<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
-BENCHMARK(BenchmarkSequencePushBack<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(BenchmarkSequencePushBack<CompactSequence>)->ComputeStatistics("min", min_value);
-
-BENCHMARK(BenchmarkSequenceDecode<Sequence>)->ComputeStatistics("min", min_value);
-BENCHMARK(BenchmarkSequenceDecode<CompactSequence>)->ComputeStatistics("min", min_value);
+BENCHMARK(SequenceDecode<Sequence>)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(SequenceDecode<CompactSequence>)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

@@ -83,6 +83,7 @@ TEST(ExceptionDeathTest, DISABLED_CoreDumpTest) {
     }
   } catch (...) {
     // mask exception, as intended.
+    std::ignore = 0;
   }
 
   EXPECT_TRUE(std::filesystem::exists(coredump_file_path));
