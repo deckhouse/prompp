@@ -9,7 +9,7 @@ class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait
   template <class BitSequenceWithItemsCount>
   ConstantDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, double value, bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream, value, is_last_stalenan) {}
-  ConstantDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool is_last_stalenan)
+  constexpr ConstantDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, value, is_last_stalenan) {}
 
   PROMPP_ALWAYS_INLINE ConstantDecodeIterator& operator++() noexcept {

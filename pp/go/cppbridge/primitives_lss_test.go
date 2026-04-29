@@ -2,6 +2,7 @@ package cppbridge_test
 
 import (
 	"context"
+	"math"
 	"runtime"
 	"testing"
 
@@ -357,6 +358,16 @@ func (s *QueryableLSSSuite) TestQueryLabelValues() {
 	for _, testCase := range queryLabelValuesCases {
 		s.testQueryLabelValuesImpl(testCase)
 	}
+}
+
+func (s *QueryableLSSSuite) TestGetLabelNameIDs() {
+	// Arrange
+
+	// Act
+	out := s.lss.GetLabelNameIDs([]string{"lol", "foo", "nope", "lol"})
+
+	// Assert
+	s.Equal([]uint32{0, 3, math.MaxUint32, 0}, out)
 }
 
 func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {

@@ -12,8 +12,8 @@ package cppbridge
 // #cgo amd64,!asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
 // #cgo amd64,asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
 // #cgo amd64,asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -lstdc++exp
-// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:libstdc++exp.a
+// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++exp
+// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
@@ -1524,6 +1524,26 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
+func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
+	args := struct {
+		lss   uintptr
+		names []string
+	}{lss, names}
+
+	res := struct {
+		outIDs []uint32
+	}{make([]uint32, len(names))}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_get_label_name_ids,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.outIDs
+}
+
 func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
 	args := struct {
 		lss uintptr
@@ -2053,6 +2073,23 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	)
 
 	return res
+}
+
+func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32, timestamps []int64) {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+	}{dataStorage, seriesIDs}
+	res := struct {
+		timestamps []int64
+	}{timestamps}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_query_first_timestamps,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
 }
 
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {

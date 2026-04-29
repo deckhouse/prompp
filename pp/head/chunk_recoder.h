@@ -169,43 +169,44 @@ class ChunkRecoder {
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
+
+    //series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+    //  if (downsampling_ms_ == series_data::decoder::decorator::kNoDownsampling) [[likely]] {
+    //    recode_chunk(std::forward<Iterator>(begin), encoder, info);
+    //  } else {
+    //    recode_chunk(series_data::decoder::decorator::DownsamplingDecodeIterator(std::forward<Iterator>(begin), downsampling_ms_), encoder, info);
+    //  }
+    //});
+
     series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
-      if (downsampling_ms_ == series_data::decoder::decorator::kNoDownsampling) [[likely]] {
-        recode_chunk(std::forward<Iterator>(begin), encoder, info);
-      } else {
-        recode_chunk(series_data::decoder::decorator::DownsamplingDecodeIterator(std::forward<Iterator>(begin), downsampling_ms_), encoder, info);
-      }
+      begin.template seek<series_data::decoder::SeekKind::kNextStop>([&](int64_t timestamp, double value) {
+        if (timestamp > time_interval_.max) [[unlikely]] {
+          return series_data::decoder::SeekResult::kStop;
+        }
+
+        if (timestamp < time_interval_.min) [[unlikely]] {
+          return series_data::decoder::SeekResult::kNext;
+        }
+
+        if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
+          info.interval.min = timestamp;
+        }
+
+        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator> ||
+                      std::is_same_v<Iterator, series_data::decoder::TwoDoubleConstantDecodeIterator>) {
+          encoder.encode_constant_value(timestamp, value, stream_, stream_);
+        } else {
+          encoder.encode(timestamp, value, stream_, stream_);
+        }
+
+        ++info.samples_count;
+        return series_data::decoder::SeekResult::kNext;
+      });
     });
 
     if (info.samples_count > 0) [[likely]] {
       info.interval.max = encoder.last_timestamp();
       info.series_id = iterator_->series_id();
-    }
-  }
-
-  template <class Iterator>
-  void recode_chunk(Iterator&& it, Encoder& encoder, ChunkInfoInterface auto& info) {
-    for (; it != series_data::decoder::DecodeIteratorSentinel{}; ++it) {
-      const auto& sample = *it;
-      if (sample.timestamp > time_interval_.max) [[unlikely]] {
-        return;
-      }
-      if (sample.timestamp < time_interval_.min) [[unlikely]] {
-        continue;
-      }
-
-      if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
-        info.interval.min = sample.timestamp;
-      }
-
-      if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator> ||
-                    std::is_same_v<Iterator, series_data::decoder::TwoDoubleConstantDecodeIterator>) {
-        encoder.encode_constant_value(sample.timestamp, sample.value, stream_, stream_);
-      } else {
-        encoder.encode(sample.timestamp, sample.value, stream_, stream_);
-      }
-
-      ++info.samples_count;
     }
   }
 };
