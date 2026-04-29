@@ -42,7 +42,7 @@ class ChunkRecoderFixture : public ::testing::Test {
   }
 
   template <class Recoder>
-  static RecodeInfo recode(Recoder& recoder) noexcept {
+  static RecodeInfo recode(Recoder& recoder) {
     RecodeInfo info;
     recoder.recode_next_chunk(info);
     info.has_more_data = recoder.has_more_data();

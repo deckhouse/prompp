@@ -21,7 +21,7 @@ class SerializedDataGo {
 };
 
 using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
-using SerializedDataIterator = series_data::serialization::SerializedDataView::SeriesIterator;
+using SerializedDataIterator = series_data::serialization::SerializedDataView::SeriesIterator<series_data::decoder::UniversalDecodeIterator>;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 
