@@ -5,7 +5,7 @@
 
 namespace series_data::decoder {
 
-class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
+class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<TwoDoubleConstantDecodeIterator> {
  public:
   template <class BitSequenceWithItemsCount>
   TwoDoubleConstantDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream,
@@ -26,14 +26,8 @@ class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIter
         value1_count_(encoder.value1_count()) {}
 
   PROMPP_ALWAYS_INLINE TwoDoubleConstantDecodeIterator& operator++() noexcept {
-    if (decode_timestamp()) {
-      ++count_;
-
-      if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
-        sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
-      } else [[likely]] {
-        sample_.value = count_ <= value1_count_ ? value1_ : value2_;
-      }
+    if (decode()) [[likely]] {
+      update_sample();
     }
     return *this;
   }
@@ -44,11 +38,31 @@ class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIter
     return result;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
+      return BareBones::Encoding::Gorilla::STALE_NAN;
+    }
+
+    return count_ <= value1_count_ ? value1_ : value2_;
+  }
+
  private:
+  friend Base;
+
   double value1_;
   double value2_;
   uint8_t value1_count_;
   uint8_t count_{1};
+
+  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+    ++count_;
+    return decode_timestamp();
+  }
+
+  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+    sample_.timestamp = decoded_timestamp();
+    sample_.value = decoded_value();
+  }
 };
 
 }  // namespace series_data::decoder
