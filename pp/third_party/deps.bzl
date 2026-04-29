@@ -27,9 +27,9 @@ def _third_party_deps_impl(_ctx):
         patches = [
             Label("//third_party/patches/google_benchmark:0001-BUILD.bazel.patch"),
         ],
-        sha256 = "35a77f46cc782b16fac8d3b107fbfbb37dcd645f7c28eee19f3b8e0758b48994",
-        strip_prefix = "benchmark-1.9.0/",
-        url = "https://github.com/google/benchmark/archive/refs/tags/v1.9.0.tar.gz",
+        sha256 = "9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340",
+        strip_prefix = "benchmark-1.9.5/",
+        url = "https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz",
     )
 
     http_archive(
