@@ -66,6 +66,21 @@ func CFSViaRange[
 	return errors.Join(errs...)
 }
 
+// CloseWals closes all WALs of the [Head].
+func CloseWals[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) error {
+	var errs []error
+	for _, shard := range h.Shards() {
+		if err := shard.CloseWal(); err != nil {
+			errs = append(errs, fmt.Errorf("close wal shard id %d: %w", shard.ShardID(), err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
 //
 // UnloadUnusedSeriesDataWithHead
 //

@@ -40,7 +40,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 #define Sizeof_GoLabels 16
 
-#define Sizeof_SerializedDataIterator 192
+#define Sizeof_SerializedDataIterator 184
 
 #define Sizeof_MetricsIterator 24
 
@@ -705,6 +705,20 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
+
+/**
+ * @brief Resolve label name strings to ids for a queryable LSS.
+ *
+ * @param args {
+ *     lss    uintptr    // pointer to constructed queryable lss
+ *     names  []string   // label names
+ * }
+ *
+ * @param res {
+ *     ids []uint32  // snapshot of lss
+ * }
+ */
+void prompp_primitives_lss_get_label_name_ids(void* args, void* res);
 
 /**
  * @brief return size of allocated memory for label sets.
@@ -1443,6 +1457,19 @@ void prompp_series_data_data_storage_query_v2(void* args, void* res);
  * }
  */
 void prompp_series_data_data_storage_instant_query(void* args, void* res);
+
+/**
+ * @brief Get the first sample timestamp per series
+ *
+ * @param args {
+ *        dataStorage uintptr  // pointer to constructed data storage
+ *        seriesIds   []uint32 // series ids
+ * }
+ * @param res {
+ *        timestamps []int64  // same length as seriesIds; filled from storage
+ * }
+ */
+void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res);
 
 /**
  * @brief finishes all Queriers after data load.
