@@ -57,7 +57,7 @@ class OverTimeFuncIterator {
     iterator_.seek_to(interval_.min);
 
     SampleHandler handler;
-    iterator_.seek([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.seek<SeekKind::kAll>([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp > interval_.max) {
         return SeekResult::kStop;
       }

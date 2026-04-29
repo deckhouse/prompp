@@ -26,7 +26,8 @@ enum class SeekResult : uint8_t {
 };
 
 enum class SeekKind : uint8_t {
-  kNextStop = static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop),
+  kUpdateSample_Stop = static_cast<uint8_t>(SeekResult::kUpdateSample) | static_cast<uint8_t>(SeekResult::kStop),
+  kNext_Stop = static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop),
   kAll = static_cast<uint8_t>(SeekResult::kUpdateSample) | static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop) |
          static_cast<uint8_t>(SeekResult::kUpdateSampleNextAndStop),
 };
