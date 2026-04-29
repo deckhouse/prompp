@@ -21,6 +21,20 @@ class BimapFixture : public testing::Test {
 
   Lss lss_;
 
+  static void load_lss_with_single_series(const LabelViewSet& label_set, Lss& loaded, uint32_t& loaded_id) {
+    Lss source;
+    source.find_or_emplace(label_set);
+
+    std::stringstream stream;
+    stream << source;
+
+    stream >> loaded;
+
+    const auto from_find = loaded.find(label_set);
+    assert(from_find.has_value());
+    loaded_id = *from_find;
+  }
+
   static LabelViewSet LabelSetWithInvalidMiddle() {
     LabelViewSet ls{{"job", "cron"}, {"key", "value"}, {"process", "php"}};
     for (auto& label : ls) {
@@ -261,6 +275,41 @@ TEST_F(BimapFixture, FixedStateFindOrEmplaceMarksAddedSlot) {
   // Assert
   ASSERT_LT(new_id, lss_.added_series().size());
   EXPECT_TRUE(lss_.added_series()[new_id]);
+}
+
+TEST_F(BimapFixture, MarkActive_SetsBitWithoutFindOrEmplace) {
+  // Arrange
+  const auto ls = LabelViewSet{{"job", "manual-active"}};
+  uint32_t target_id = std::numeric_limits<uint32_t>::max();
+  Lss loaded;
+  load_lss_with_single_series(ls, loaded, target_id);
+  const bool was_active_before = target_id < loaded.added_series().size() && loaded.added_series()[target_id];
+  EXPECT_FALSE(was_active_before);
+
+  // Act
+  loaded.mark_active(target_id);
+
+  // Assert
+  ASSERT_LT(target_id, loaded.added_series().size());
+  EXPECT_TRUE(loaded.added_series()[target_id]);
+}
+
+TEST_F(BimapFixture, MarkActive_IsIdempotent) {
+  // Arrange
+  const auto ls = LabelViewSet{{"job", "manual-active-idempotent"}};
+  uint32_t target_id = std::numeric_limits<uint32_t>::max();
+  Lss loaded;
+  load_lss_with_single_series(ls, loaded, target_id);
+
+  // Act
+  loaded.mark_active(target_id);
+  const auto size_after_first_mark = loaded.added_series().size();
+  loaded.mark_active(target_id);
+
+  // Assert
+  ASSERT_LT(target_id, loaded.added_series().size());
+  EXPECT_TRUE(loaded.added_series()[target_id]);
+  EXPECT_EQ(size_after_first_mark, loaded.added_series().size());
 }
 
 class BimapCopierFixture : public BimapFixture {
