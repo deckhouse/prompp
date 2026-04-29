@@ -1444,10 +1444,6 @@ func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	return res.matches, res.labelSetLengths, res.status
 }
 
-type groupSeriesByLabelNamesResult struct {
-	groups [][]uint32
-}
-
 func primitivesGroupSeriesByLabelNames(snapshot uintptr, seriesIDs []uint32, labelNameIDs []uint32) [][]uint32 {
 	args := struct {
 		snapshot     uintptr
