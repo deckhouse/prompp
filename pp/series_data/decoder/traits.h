@@ -19,10 +19,17 @@ class DecodeIteratorSentinel {};
   using reference = value_type&
 
 enum class SeekResult : uint8_t {
-  kUpdateSample = 0,
+  kUpdateSample = 1,
   kNext,
   kStop,
   kUpdateSampleNextAndStop,
+};
+
+enum class SeekKind : uint8_t {
+  kUpdateSample_Stop = static_cast<uint8_t>(SeekResult::kUpdateSample) | static_cast<uint8_t>(SeekResult::kStop),
+  kNext_Stop = static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop),
+  kAll = static_cast<uint8_t>(SeekResult::kUpdateSample) | static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop) |
+         static_cast<uint8_t>(SeekResult::kUpdateSampleNextAndStop),
 };
 
 template <class Iterator>
@@ -41,9 +48,9 @@ class DecodeIteratorTrait {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  explicit DecodeIteratorTrait(SampleCountType count) : remaining_samples_{count} {}
-  explicit DecodeIteratorTrait(double value, SampleCountType count) : sample_{.value = value}, remaining_samples_{count} {}
-  explicit DecodeIteratorTrait(double value, SampleCountType count, bool last_stalenan)
+  explicit constexpr DecodeIteratorTrait(SampleCountType count) : remaining_samples_{count} {}
+  explicit constexpr DecodeIteratorTrait(double value, SampleCountType count) : sample_{.value = value}, remaining_samples_{count} {}
+  explicit constexpr DecodeIteratorTrait(double value, SampleCountType count, bool last_stalenan)
       : sample_{.value = value}, remaining_samples_{count}, last_stalenan_{last_stalenan} {}
 
   const encoder::Sample& operator*() const noexcept { return sample_; }
@@ -52,9 +59,11 @@ class DecodeIteratorTrait {
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return remaining_samples_ == 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE SampleCountType remaining_samples() const noexcept { return remaining_samples_; }
 
-  template <class SeekHandler>
+  template <SeekKind Kind, class SeekHandler>
     requires Seekable<Derived>
   PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+    static constexpr auto has_kind = [](SeekResult operation) { return static_cast<uint8_t>(Kind) & static_cast<uint8_t>(operation); };
+
     if (remaining_samples_ == 0) [[unlikely]] {
       return;
     }
@@ -67,11 +76,13 @@ class DecodeIteratorTrait {
         result = handler(derived()->decoded_timestamp());
       }
 
-      if (result == SeekResult::kUpdateSample) [[likely]] {
+      assert(has_kind(result));
+
+      if (has_kind(SeekResult::kUpdateSample) && result == SeekResult::kUpdateSample) [[likely]] {
         derived()->update_sample();
-      } else if (result == SeekResult::kStop) {
+      } else if (has_kind(SeekResult::kStop) && result == SeekResult::kStop) {
         break;
-      } else if (result == SeekResult::kUpdateSampleNextAndStop) {
+      } else if (has_kind(SeekResult::kUpdateSampleNextAndStop) && result == SeekResult::kUpdateSampleNextAndStop) {
         derived()->update_sample();
         derived()->decode();
         break;
@@ -111,7 +122,10 @@ class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<De
  public:
   using Base = DecodeIteratorTrait<Derived, uint8_t>;
 
-  SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool last_stalenan)
+  constexpr SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count,
+                                                       const BareBones::BitSequenceReader& timestamp_reader,
+                                                       double value,
+                                                       bool last_stalenan)
       : Base(value, samples_count, last_stalenan), timestamp_decoder_(timestamp_reader) {
     if (Base::remaining_samples_ > 0) [[likely]] {
       Base::sample_.timestamp = timestamp_decoder_.decode();

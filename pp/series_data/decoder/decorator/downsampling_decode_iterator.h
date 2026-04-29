@@ -41,6 +41,15 @@ class DownsamplingDecodeIterator {
     return result;
   }
 
+  template <SeekKind, class SeekHandler>
+  PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+    for (; *this != DecodeIteratorSentinel{}; ++*this) {
+      if (handler(iterator_->timestamp, iterator_->value) == SeekResult::kStop) [[unlikely]] {
+        return;
+      }
+    }
+  }
+
  private:
   DecodeIterator iterator_;
   Timestamp interval_;
@@ -53,7 +62,7 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {
     Timestamp sample_timestamp = kInvalidTimestamp;
 
-    iterator_.seek([this, &sample_timestamp](Timestamp timestamp) noexcept {
+    iterator_.template seek<SeekKind::kUpdateSample_Stop>([this, &sample_timestamp](Timestamp timestamp) noexcept {
       if (timestamp > sample_timestamp) {
         if (sample_timestamp != kInvalidTimestamp) [[likely]] {
           return SeekResult::kStop;

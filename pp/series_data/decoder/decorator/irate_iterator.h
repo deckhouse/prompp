@@ -58,7 +58,7 @@ class IRateIterator {
   encoder::Sample sample_{.timestamp = kInvalidTimestamp};
 
   void find_last_2samples() {
-    iterator_.seek([this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.seek<SeekKind::kNext_Stop>([this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp < interval_.min) {
         return SeekResult::kNext;
       }

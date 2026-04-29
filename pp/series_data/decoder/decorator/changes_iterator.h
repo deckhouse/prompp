@@ -55,7 +55,7 @@ class ChangesIterator {
   void seek_to_first_sample() {
     bool has_value{};
 
-    iterator_.seek([&has_value, this](PromPP::Primitives::Timestamp timestamp) {
+    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp) {
       if (timestamp < interval_.min) {
         return SeekResult::kNext;
       }
@@ -75,7 +75,7 @@ class ChangesIterator {
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
     bool has_changes{};
 
-    iterator_.seek([&has_changes, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.seek<SeekKind::kAll>([&has_changes, this](PromPP::Primitives::Timestamp timestamp, double value) {
       using BareBones::Encoding::Gorilla::isstalenan;
 
       if (timestamp > interval_.max) {

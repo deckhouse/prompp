@@ -33,24 +33,24 @@ class UniversalDecodeIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return reinterpret_cast<const encoder::Sample&>(iterator_); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return reinterpret_cast<const encoder::Sample*>(&iterator_); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const {
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const noexcept {
     return std::visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; }, iterator_);
   }
 
-  PROMPP_ALWAYS_INLINE UniversalDecodeIterator& operator++() {
+  PROMPP_ALWAYS_INLINE UniversalDecodeIterator& operator++() noexcept {
     std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE { ++iterator; }, iterator_);
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE UniversalDecodeIterator operator++(int) {
+  PROMPP_ALWAYS_INLINE UniversalDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
-  template <class SeekHandler>
+  template <SeekKind Kind, class SeekHandler>
   PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
-    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek(std::forward<SeekHandler>(handler)); }, iterator_);
+    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.template seek<Kind>(std::forward<SeekHandler>(handler)); }, iterator_);
   }
 
   PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
@@ -87,8 +87,18 @@ class UniversalDecodeIterator {
     static constexpr bool value = (SampleIsFirstIteratorField<Iterators>::value && ...);
   };
 
-  static_assert(SampleIsFirstIteratorsField<IteratorVariant>::value, "each iterator must contains encoder::Sample at first field");
+  static_assert(SampleIsFirstIteratorsField<IteratorVariant>::value, "each iterator must contain encoder::Sample as the first field");
 #endif
+
+  union VariantLayoutAssertHelper {
+    IteratorVariant variant;
+    const ConstantDecodeIterator field;
+  };
+
+  static constexpr auto kVariantLayoutAssertHelper = VariantLayoutAssertHelper{
+      .variant = IteratorVariant(std::in_place_type<ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false),
+  };
+  static_assert(&std::get<ConstantDecodeIterator>(kVariantLayoutAssertHelper.variant) == &kVariantLayoutAssertHelper.field, "unexpected std::variant layout");
 
   IteratorVariant iterator_;
 };

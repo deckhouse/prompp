@@ -114,6 +114,7 @@ func (s *Weighted) Resize(n int64) {
 
 //revive:disable-next-line:function-length from base.
 //revive:disable-next-line:cyclomatic from base.
+//revive:disable-next-line:cognitive-complexity from base.
 func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter func(waiter) *list.Element) error {
 	done := ctx.Done()
 
@@ -163,6 +164,19 @@ func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter fu
 			s.notifyWaiters()
 		default:
 			isFront := s.waiters.Front() == elem
+			if elem == s.lastPri {
+				// Priority waiters always form a contiguous prefix of the
+				// queue (every new priority waiter is inserted either at the
+				// front or right after the current lastPri). Therefore, if the
+				// cancelled element is lastPri, its Prev() is either nil (it
+				// was the only/front priority waiter) or another priority
+				// waiter which becomes the new tail of the priority prefix.
+				if isFront {
+					s.lastPri = nil
+				} else {
+					s.lastPri = elem.Prev()
+				}
+			}
 			s.waiters.Remove(elem)
 			// If we're at the front and there're extra tokens left, notify other waiters.
 			if isFront && s.size > s.cur {

@@ -59,7 +59,7 @@ class RateIterator {
   void seek_to_first_sample() {
     bool has_value{};
 
-    iterator_.seek([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp < interval_.min) {
         return SeekResult::kNext;
       }
@@ -83,7 +83,7 @@ class RateIterator {
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
     bool has_value{};
 
-    iterator_.seek([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (counter_reset_) [[unlikely]] {
         counter_reset_ = false;
         has_value = true;

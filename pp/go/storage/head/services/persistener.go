@@ -119,11 +119,6 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 			continue
 		}
 
-		if err := p.flushHead(head); err != nil {
-			logger.Errorf("[Persistener]: failed flush head %s: %v", head.ID(), err)
-			continue
-		}
-
 		if err := p.persistHead(head); err != nil {
 			logger.Errorf("[Persistener]: failed persist head %s: %v", head.ID(), err)
 			continue
@@ -168,16 +163,6 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persiste
 	persistTimeMs int64,
 ) bool {
 	return p.clock.Since(time.UnixMilli(persistTimeMs)) >= p.retentionPeriod
-}
-
-func (*Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) flushHead(head THead) error {
-	for shard := range head.RangeShards() {
-		if err := shard.WalFlush(); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persistHead(head THead) error {
