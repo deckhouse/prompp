@@ -129,6 +129,7 @@ cc_test(
     name = "wal_test",
     srcs = glob(["wal/**/*_tests.cpp"]),
     deps = [
+        ":series_index",
         ":wal",
         "@gtest//:gtest_main",
     ],
