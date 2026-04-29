@@ -15,7 +15,13 @@ type mergeShardSeriesSet struct {
 	currentSet storage.SeriesSet
 }
 
-// NewMergeShardSeriesSet returns a new [storage.SeriesSet] that merges many [storage.SeriesSet] together.
+// NewMergeShardSeriesSet returns a implementation of [storage.SeriesSet]
+// that merges only many local SeriesSets together.
+// The implementation assumes only our shard-local sets are passed in:
+//   - always no nil sets;
+//   - always no Err()/Warnings() - because shards should not have any errors and warnings;
+//   - always sorted output sets;
+//   - always no identical label sets across shards.
 func NewMergeShardSeriesSet(sets []storage.SeriesSet) storage.SeriesSet {
 	if len(sets) == 1 {
 		return sets[0]
@@ -113,8 +119,13 @@ type mergeShardChunkSeriesSet struct {
 	currentSet storage.ChunkSeriesSet
 }
 
-// NewMergeShardChunkSeriesSet returns a new [storage.ChunkSeriesSet]
-// that merges many [storage.ChunkSeriesSet] together.
+// NewMergeShardChunkSeriesSet returns a implementation of [storage.ChunkSeriesSet]
+// that merges only many local ChunkSeriesSet together.
+// The implementation assumes only our shard-local sets are passed in:
+//   - always no nil sets;
+//   - always no Err()/Warnings() - because shards should not have any errors and warnings;
+//   - always sorted output sets;
+//   - always no identical label sets across shards.
 func NewMergeShardChunkSeriesSet(sets []storage.ChunkSeriesSet) storage.ChunkSeriesSet {
 	if len(sets) == 1 {
 		return sets[0]
