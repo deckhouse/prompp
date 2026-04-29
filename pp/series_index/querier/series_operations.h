@@ -26,9 +26,7 @@ void group_series_by_label_names(const Lss& lss,
     using is_transparent = void;
     PRAGMA_DIAGNOSTIC(pop)
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const SetItem& key) const noexcept {
-      return BareBones::XXHash3::hash(key.values_ids.data(), key.values_ids.size());
-    }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const SetItem& key) const noexcept { return BareBones::XXHash3::hash(std::span(key.values_ids)); }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const BareBones::Vector<uint32_t>& values_ids) const noexcept {
       return BareBones::XXHash3::hash(std::span(values_ids));
