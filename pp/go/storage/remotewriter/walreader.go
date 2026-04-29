@@ -40,6 +40,7 @@ func newWalReader(fileName string) (*walReader, error) {
 		fileFormatVersion: fileFormatVersion,
 		encoderVersion:    encoderVersion,
 	}
+	// used only for rotated wal reader, because we need to subtract the size of the header from the file size
 	wr.fsize -= int64(n)
 
 	return wr, nil
