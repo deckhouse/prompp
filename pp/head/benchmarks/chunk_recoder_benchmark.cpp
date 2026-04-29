@@ -25,14 +25,14 @@ const DataStorage& get_data_storage_for_benchmark() {
   return storage;
 }
 
-void ChunkRecoder(benchmark::State& state) {
+void ChunkRecoder(benchmark::State& state, PromPP::Primitives::Timestamp downsampling) {
   ZoneScoped;
   const auto& storage = get_data_storage_for_benchmark();
 
   const auto time_interval = series_data::Decoder::get_time_interval(storage);
   const std::ranges::iota_view<uint32_t, uint32_t> ls_id_set(0, storage.open_chunks.size());
-  head::ChunkRecoder recoder(head::ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), storage.open_chunks.size(), &storage, time_interval},
-                             time_interval);
+  head::ChunkRecoder recoder(head::ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), storage.open_chunks.size(), &storage, time_interval}, time_interval,
+                             downsampling);
 
   struct {
     TimeInterval interval;
@@ -47,6 +47,17 @@ void ChunkRecoder(benchmark::State& state) {
   }
 }
 
+void ChunkRecoder(benchmark::State& state) {
+  ChunkRecoder(state, series_data::decoder::decorator::kNoDownsampling);
+}
+
+void ChunkRecoderWithDownsampling(benchmark::State& state) {
+  constexpr PromPP::Primitives::Timestamp kDownsampling5Minutes = 1000 * 60 * 5;
+
+  ChunkRecoder(state, kDownsampling5Minutes);
+}
+
 BENCHMARK(ChunkRecoder)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(ChunkRecoderWithDownsampling)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace
