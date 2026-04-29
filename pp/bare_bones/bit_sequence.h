@@ -36,7 +36,7 @@ struct AllocationSize {
 
 class BitSequenceReader {
  public:
-  BitSequenceReader(const uint8_t* begin, uint64_t size) noexcept : begin_(begin), size_(size) {}
+  constexpr BitSequenceReader(const uint8_t* begin, uint64_t size) noexcept : begin_(begin), size_(size) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t read_bits_u32(uint8_t size) const noexcept {
     assert(size <= 32);

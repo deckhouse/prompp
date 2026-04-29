@@ -5,7 +5,7 @@
 
 namespace series_data::decoder {
 
-class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
+class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<AscIntegerThenValuesGorillaDecodeIterator> {
  public:
   template <class BitSequenceWithItemsCount>
   AscIntegerThenValuesGorillaDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream,
@@ -17,14 +17,15 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
                                             const BareBones::BitSequenceReader& values_reader,
                                             bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
-    if (remaining_samples_ > 0) {
+    if (remaining_samples_ > 0) [[likely]] {
       decode_value();
+      sample_.value = decoded_value();
     }
   }
 
   PROMPP_ALWAYS_INLINE AscIntegerThenValuesGorillaDecodeIterator& operator++() noexcept {
-    if (decode_timestamp()) {
-      decode_value();
+    if (decode()) [[likely]] {
+      update_sample();
     }
     return *this;
   }
@@ -35,7 +36,21 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
     return result;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
+      return BareBones::Encoding::Gorilla::STALE_NAN;
+    }
+
+    if (value_type_ == encoder::ValueType::kSwitchToValuesGorillaMark) [[unlikely]] {
+      return values_gorilla_.decoder.value();
+    }
+
+    return static_cast<double>(asc_integer_.decoder.timestamp());
+  }
+
  private:
+  friend Base;
+
   enum class DecoderType : uint8_t {
     kAscInteger,
     kValuesGorilla,
@@ -55,23 +70,37 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
     ValuesGorillaState values_gorilla_;
   };
   BareBones::BitSequenceReader reader_;
-  DecoderType decoder_type_{DecoderType::kAscInteger};
+  encoder::ValueType value_type_{encoder::ValueType::kValue};
+
+  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+    if (decode_timestamp()) [[likely]] {
+      decode_value();
+      return true;
+    }
+
+    return false;
+  }
+
+  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+    sample_.timestamp = decoded_timestamp();
+    sample_.value = decoded_value();
+  }
 
   PROMPP_ALWAYS_INLINE void decode_value() noexcept {
-    if (decoder_type_ == DecoderType::kAscInteger) {
-      using enum encoder::ValueType;
-      if (asc_integer_.decoder.decode(reader_, asc_integer_.gorilla_state, sample_.value) == kSwitchToValuesGorillaMark) [[unlikely]] {
+    using enum encoder::ValueType;
+
+    if (value_type_ != kSwitchToValuesGorillaMark) {
+      if (value_type_ = asc_integer_.decoder.decode(reader_, asc_integer_.gorilla_state); value_type_ == kSwitchToValuesGorillaMark) [[unlikely]] {
         switch_to_values_gorilla();
       }
     } else {
-      sample_.value = ValuesGorillaDecodeIterator::decode_value<false>(values_gorilla_.decoder, reader_);
+      ValuesGorillaDecodeIterator::decode_value<ValuesGorillaDecodeIterator::SampleType::kOther>(values_gorilla_.decoder, reader_);
     }
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_values_gorilla() noexcept {
     std::construct_at(&values_gorilla_);
-    sample_.value = ValuesGorillaDecodeIterator::decode_value<true>(values_gorilla_.decoder, reader_);
-    decoder_type_ = DecoderType::kValuesGorilla;
+    ValuesGorillaDecodeIterator::decode_value<ValuesGorillaDecodeIterator::SampleType::kFirst>(values_gorilla_.decoder, reader_);
   }
 };
 

@@ -16,7 +16,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   PROMPP_ALWAYS_INLINE void encode(int64_t ts, BStream& stream) {
     state.last_ts = ts;
 
-    uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
+    uint8_t varint_buffer[VarInt::kMaxVarIntLength];
     push_varint_buffer(varint_buffer, VarInt::write(varint_buffer, ts), stream);
   }
 
@@ -25,7 +25,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
     state.last_ts_delta = ts - state.last_ts;
     state.last_ts = ts;
 
-    uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
+    uint8_t varint_buffer[VarInt::kMaxVarIntLength];
     push_varint_buffer(varint_buffer, VarInt::write(varint_buffer, std::bit_cast<uint64_t>(state.last_ts_delta)), stream);
   }
 
@@ -36,7 +36,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
     const auto ts_delta = ts - state.last_ts;
     const int64_t dod = ts_delta - state.last_ts_delta;
 
-    if (dod == 0) {
+    if (dod == 0) [[likely]] {
       stream.write_zero_bit();
     } else if (bit_range(dod, kDodSignificantLengths[0])) {
       stream.write_bits((0b10ULL << kDodSignificantLengths[0]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[0])),
@@ -96,7 +96,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
 
     state_.last_v = v;
 
-    if (v_xor == 0) {
+    if (v_xor == 0) [[likely]] {
       stream.write_zero_bit();
       return;
     }
@@ -110,12 +110,14 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
     const uint8_t v_xor_length = BareBones::Bit::kUint64Bits - v_xor_leading_z - v_xor_trailing_z;
 
     // we need to write xor length, if it was never written
-    if (state_.last_v_xor_length == 0)
+    if (state_.last_v_xor_length == 0) [[unlikely]] {
       goto write_xor_length;
+    }
 
     // we need to write xor length, if xor doesn't fit into the same bit range
-    if (v_xor_leading_z < state_.last_v_xor_leading_z || v_xor_trailing_z < state_.last_v_xor_trailing_z)
+    if (v_xor_leading_z < state_.last_v_xor_leading_z || v_xor_trailing_z < state_.last_v_xor_trailing_z) [[unlikely]] {
       goto write_xor_length;
+    }
 
     // heuristics that optimizes gorilla size based on one-time length change or amount of unnecessary bits written
     {
@@ -136,8 +138,9 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
       state_.v_xor_waste_bits_written += v_xor_length_delta;
     }
 
-    // if we got here we don't need to write xor length
-    stream.write_bits(0b10, 2);
+    // if we got here we don't need to write xor length. Write key 0b10
+    stream.write_single_bit();
+    stream.write_zero_bit();
     stream.write_bits(v_xor >> state_.last_v_xor_trailing_z, state_.last_v_xor_length);
     return;
 
