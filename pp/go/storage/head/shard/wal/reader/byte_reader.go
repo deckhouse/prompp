@@ -4,9 +4,9 @@ import "io"
 
 // ByteReader reads from the reader 1 byte at a time.
 type ByteReader struct {
-	r   io.Reader
-	buf [1]byte
-	n   int
+	r         io.Reader
+	buf       [1]byte
+	readBytes int // bytes read via ReadByte
 }
 
 // NewByteReader init new [byteReader]
@@ -29,7 +29,7 @@ func (r *ByteReader) ReadByte() (byte, error) {
 		return 0, err
 	}
 
-	r.n += n
+	r.readBytes += n
 
 	return r.buf[0], nil
 }

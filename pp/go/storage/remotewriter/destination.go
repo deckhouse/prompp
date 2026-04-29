@@ -125,8 +125,6 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.generateBatchDuration)
 	registerer.MustRegister(d.metrics.readSegmentDuration)
 	registerer.MustRegister(d.metrics.encodeBatchDuration)
-	registerer.MustRegister(d.metrics.numberOfMsg)
-	registerer.MustRegister(d.metrics.numberOfsamples)
 }
 
 // UnregisterMetrics unregisters the metrics for the [Destination].
@@ -172,8 +170,6 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.generateBatchDuration)
 	registerer.Unregister(d.metrics.readSegmentDuration)
 	registerer.Unregister(d.metrics.encodeBatchDuration)
-	registerer.Unregister(d.metrics.numberOfMsg)
-	registerer.Unregister(d.metrics.numberOfsamples)
 }
 
 // remoteWriteConfigsAreEqual compares two remote write configs.
@@ -256,8 +252,6 @@ type DestinationMetrics struct {
 	generateBatchDuration  prometheus.Histogram
 	readSegmentDuration    prometheus.Histogram
 	encodeBatchDuration    prometheus.Histogram
-	numberOfMsg            prometheus.Histogram
-	numberOfsamples        prometheus.Histogram
 }
 
 // newDestinationMetrics creates a new [DestinationMetrics].
@@ -554,7 +548,7 @@ func newDestinationMetrics(name, ep string) *DestinationMetrics {
 			Subsystem:                       subsystem,
 			Name:                            "generate_batch_duration_seconds",
 			Help:                            "Duration of generate batch calls.",
-			Buckets:                         []float64{0},
+			Buckets:                         []float64{5, 10, 15, 30, 60},
 			ConstLabels:                     constLabels,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
@@ -565,7 +559,7 @@ func newDestinationMetrics(name, ep string) *DestinationMetrics {
 			Subsystem:                       subsystem,
 			Name:                            "read_segment_duration_seconds",
 			Help:                            "Duration of read wal segment.",
-			Buckets:                         []float64{0},
+			Buckets:                         []float64{.005, .01, .025, .05, .1, .25, .5, 1},
 			ConstLabels:                     constLabels,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
@@ -581,25 +575,6 @@ func newDestinationMetrics(name, ep string) *DestinationMetrics {
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: 1 * time.Hour,
-		}),
-		numberOfMsg: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "number_of_msg",
-			Help:      "Number of messages.",
-			Buckets: []float64{
-				10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
-				110, 120, 130, 140, 150, 160, 170, 180, 190, 200,
-			},
-			ConstLabels: constLabels,
-		}),
-		numberOfsamples: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace:   namespace,
-			Subsystem:   subsystem,
-			Name:        "number_of_samples",
-			Help:        "Number of samples.",
-			Buckets:     []float64{100, 500, 1000, 1250, 1500, 1750, 2000, 2250, 2500},
-			ConstLabels: constLabels,
 		}),
 	}
 }

@@ -48,10 +48,17 @@ func (s *DataSourceActiveSuite) TestNextV1() {
 	s.Require().NoError(err)
 
 	discardCache := true
-	rec := remotewritertest.MakeRecord(numberOfShards)
+
+	clock := clockwork.NewRealClock()
+	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	s.Require().NoError(err)
+
+	rec, err := c.Create(numberOfShards)
+	s.Require().NoError(err)
+
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
@@ -89,7 +96,9 @@ func (s *DataSourceActiveSuite) TestNextV1() {
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
 
-	rec.SetStatus(catalog.StatusRotated)
+	_, err = c.SetStatus(rec.ID(), catalog.StatusRotated)
+	s.Require().NoError(err)
+
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
@@ -105,11 +114,18 @@ func (s *DataSourceActiveSuite) TestNextV2() {
 		filepath.Join(dataDir, "shard_1.wal"),
 	}
 	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
-	rec := remotewritertest.MakeRecord(numberOfShards)
+
+	clock := clockwork.NewRealClock()
+	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	s.Require().NoError(err)
+
+	rec, err := c.Create(numberOfShards)
+	s.Require().NoError(err)
+
 	baseCtx := s.T().Context()
 	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(
+	err = remotewritertest.WriteToShardWalFileV2Multi(
 		baseCtx,
 		shardFilePaths,
 		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
@@ -120,7 +136,7 @@ func (s *DataSourceActiveSuite) TestNextV2() {
 	discardCache := true
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
@@ -156,7 +172,9 @@ func (s *DataSourceActiveSuite) TestNextV2() {
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
 
-	rec.SetStatus(catalog.StatusRotated)
+	_, err = c.SetStatus(rec.ID(), catalog.StatusRotated)
+	s.Require().NoError(err)
+
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
@@ -527,14 +545,20 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV1() {
 	s.Require().NoError(os.Truncate(shardFilePaths[0], 11))
 
 	discardCache := true
-	rec := remotewritertest.MakeRecord(numberOfShards)
+	clock := clockwork.NewRealClock()
+	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	s.Require().NoError(err)
+
+	rec, err := c.Create(numberOfShards)
+	s.Require().NoError(err)
+
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corrupt := false
 	corruptMarker := CorruptMarkerFn(func(string) error {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
@@ -570,7 +594,9 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV1() {
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
 
-	rec.SetStatus(catalog.StatusRotated)
+	_, err = c.SetStatus(rec.ID(), catalog.StatusRotated)
+	s.Require().NoError(err)
+
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
@@ -586,10 +612,17 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV2() {
 	}
 	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
 	baseCtx := s.T().Context()
-	rec := remotewritertest.MakeRecord(numberOfShards)
+
+	clock := clockwork.NewRealClock()
+	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	s.Require().NoError(err)
+
+	rec, err := c.Create(numberOfShards)
+	s.Require().NoError(err)
+
 	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(
+	err = remotewritertest.WriteToShardWalFileV2Multi(
 		baseCtx,
 		shardFilePaths,
 		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
@@ -606,7 +639,7 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV2() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
@@ -652,7 +685,9 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV2() {
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
 
-	rec.SetStatus(catalog.StatusRotated)
+	_, err = c.SetStatus(rec.ID(), catalog.StatusRotated)
+	s.Require().NoError(err)
+
 	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)

@@ -329,11 +329,6 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 // It is intended to be called from the send stage of the write pipeline.
 func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
-	i.metrics.numberOfMsg.Observe(float64(len(msg.Messages)))
-	for id := range msg.Messages {
-		i.metrics.numberOfsamples.Observe(float64(msg.Messages[id].SampleCount))
-	}
-
 	sendersCount := i.outputSharder.max
 
 	sendIteration := 0

@@ -297,11 +297,6 @@ func (r *Record) SetSegmentIDByShard(sid uint32, shardID uint16) {
 	r.segmentsByShard[sid] = shardID + 1
 }
 
-// SetStatus set status for [Head]. !!! Use only for testing purposes !!!
-func (r *Record) SetStatus(s Status) {
-	r.status = s
-}
-
 // Status returns current status of [Head].
 func (r *Record) Status() Status {
 	return r.status

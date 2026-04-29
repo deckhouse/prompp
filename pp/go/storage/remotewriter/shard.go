@@ -87,6 +87,7 @@ type shard struct {
 	walReader         ShardWalReader
 	segment           Segment
 	decoder           *Decoder
+	corruptedSnapshot *cppbridge.LabelSetSnapshot
 	unclaimedSegment  *DecodedSegment
 	decoderStateFile  io.WriteCloser
 	segmentSize       prometheus.Histogram
@@ -136,10 +137,11 @@ func newCorruptedShard(
 	segmentSize prometheus.Histogram,
 ) *shard {
 	return &shard{
-		headID:      headID,
-		shardID:     shardID,
-		corrupted:   true,
-		segmentSize: segmentSize,
+		headID:            headID,
+		shardID:           shardID,
+		corrupted:         true,
+		corruptedSnapshot: cppbridge.NewLssStorage().CreateLabelSetSnapshot(),
+		segmentSize:       segmentSize,
 	}
 }
 
@@ -243,7 +245,7 @@ func (s *shard) IsCorrupted() bool {
 // LSSSnapshot returns the snapshot of the [cppbridge.LabelSetStorage] of the [shard].
 func (s *shard) LSSSnapshot() *cppbridge.LabelSetSnapshot {
 	if s.decoder == nil {
-		return cppbridge.NewLssStorage().CreateLabelSetSnapshot()
+		return s.corruptedSnapshot
 	}
 
 	return s.decoder.lss.CreateLabelSetSnapshot()
@@ -356,15 +358,16 @@ type ShardRotatedWalReader interface {
 //
 
 type shardRotated struct {
-	headID           string
-	shardID          uint16
-	corrupted        bool
-	completed        bool
-	walReader        ShardRotatedWalReader
-	segment          Segment
-	decoder          *Decoder
-	decoderStateFile io.WriteCloser
-	segmentSize      prometheus.Histogram
+	headID            string
+	shardID           uint16
+	corrupted         bool
+	completed         bool
+	walReader         ShardRotatedWalReader
+	segment           Segment
+	decoder           *Decoder
+	corruptedSnapshot *cppbridge.LabelSetSnapshot
+	decoderStateFile  io.WriteCloser
+	segmentSize       prometheus.Histogram
 }
 
 // createShardRotated creates a new [shardRotated].
@@ -411,10 +414,11 @@ func newCorruptedShardRotated(
 	segmentSize prometheus.Histogram,
 ) *shardRotated {
 	return &shardRotated{
-		headID:      headID,
-		shardID:     shardID,
-		corrupted:   true,
-		segmentSize: segmentSize,
+		headID:            headID,
+		shardID:           shardID,
+		corrupted:         true,
+		corruptedSnapshot: cppbridge.NewLssStorage().CreateLabelSetSnapshot(),
+		segmentSize:       segmentSize,
 	}
 }
 
@@ -519,7 +523,7 @@ func (s *shardRotated) IsCorrupted() bool {
 // LSSSnapshot returns the snapshot of the [cppbridge.LabelSetStorage] of the [shardRotated].
 func (s *shardRotated) LSSSnapshot() *cppbridge.LabelSetSnapshot {
 	if s.decoder == nil {
-		return cppbridge.NewLssStorage().CreateLabelSetSnapshot()
+		return s.corruptedSnapshot
 	}
 
 	return s.decoder.lss.CreateLabelSetSnapshot()
@@ -564,6 +568,8 @@ func (s *shardRotated) SegmentID() (uint32, error) {
 		return reader.UnknownSegmentID, ErrShardIsCorrupted
 	}
 
+	// v1: set segment ID incremented nextSegmentID on walReader.ReadSegmentID
+	// v2: read segment ID from walReader.ReadSegmentID
 	if s.segment.ID() != reader.UnknownSegmentID {
 		return s.segment.ID(), nil
 	}

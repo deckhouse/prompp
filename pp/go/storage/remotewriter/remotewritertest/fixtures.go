@@ -3,9 +3,11 @@ package remotewritertest
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -48,6 +50,27 @@ func MakeRecord(numberOfShards uint16) *catalog.Record {
 	)
 
 	return rec
+}
+
+// MakeCatalog makes a new [catalog.Catalog] with the specified data directory and clock.
+func MakeCatalog(dataDir string, clock clockwork.Clock) (*catalog.Catalog, error) {
+	l, err := catalog.NewFileLogV2(filepath.Join(dataDir, "catalog.log"))
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := catalog.New(
+		clock,
+		l,
+		&catalog.DefaultIDGenerator{},
+		catalog.DefaultMaxLogFileSize,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // WriteToShardWalFileV1Single write to shard wal file v1 the specified number of segments.

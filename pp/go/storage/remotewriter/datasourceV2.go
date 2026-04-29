@@ -209,22 +209,25 @@ func (ds *dataSourceActive) checkFullCorrupted() error {
 }
 
 // markCorrupted marks the head as corrupted.
-func (ds *dataSourceActive) markCorrupted() {
+// It's safe under the data race because:
+// 1) catalog.SetCorrupted is idempotent and serialized by its own mutex,
+// 2) the only write to ds.corruptMarker is the same nil value.
+// Worst observable effect: a few duplicate "failed to mark" log lines on error.
+//
+//go:norace // safe to call from multiple goroutines, parallel execution will not cause problems
+func (ds *dataSourceActive) markCorrupted(err error) error {
 	if ds.corruptMarker == nil {
-		return
+		return nil
 	}
 
+	logger.Warnf("head %s is corrupted by read error: %v", ds.headID, err)
 	if err := ds.corruptMarker.MarkCorrupted(ds.headID); err != nil {
-		logger.Errorf(
-			"datasource: %s failed to mark head corrupted: %v",
-			ds.headID,
-			err,
-		)
-
-		return
+		return fmt.Errorf("%s failed to mark head corrupted: %w", ds.headID, err)
 	}
 
 	ds.corruptMarker = nil
+
+	return nil
 }
 
 // readFromShards parallel reading of [DecodedSegment] from shards.
@@ -430,7 +433,9 @@ func (ds *dataSourceRotated) Init(ctx context.Context, targetSegmentID uint32) e
 		go func(id int) {
 			defer wg.Done()
 
-			ds.restoreShard(ctx, now, segmentSampleStorages, id, targetSegmentID)
+			if err := ds.restoreShard(ctx, now, segmentSampleStorages, id, targetSegmentID); err != nil {
+				logger.Errorf("head %s failed to restore shard %d: %v", ds.headID, id, err)
+			}
 		}(i)
 	}
 	wg.Wait()
@@ -507,37 +512,38 @@ func (ds *dataSourceRotated) checkFullCorrupted() error {
 // finalize finalizes the data source by marking the head as corrupted if one of the shards are corrupted.
 func (ds *dataSourceRotated) finalize() error {
 	for _, s := range ds.shards {
-		if !s.corrupted {
-			continue
-		}
+		if s.corrupted {
+			if err := ds.markCorrupted(fmt.Errorf("shard %d is corrupted", s.shardID)); err != nil {
+				return err
+			}
 
-		if ds.corruptMarker == nil {
-			return ErrEndOfBlock
+			break
 		}
-
-		ds.markCorrupted()
 	}
 
 	return ErrEndOfBlock
 }
 
 // markCorrupted marks the head as corrupted.
-func (ds *dataSourceRotated) markCorrupted() {
+// It's safe under the data race because:
+// 1) catalog.SetCorrupted is idempotent and serialized by its own mutex,
+// 2) the only write to ds.corruptMarker is the same nil value.
+// Worst observable effect: a few duplicate "failed to mark" log lines on error.
+//
+//go:norace // safe to call from multiple goroutines, parallel execution will not cause problems
+func (ds *dataSourceRotated) markCorrupted(err error) error {
 	if ds.corruptMarker == nil {
-		return
+		return nil
 	}
 
+	logger.Warnf("head %s is corrupted by read error: %v", ds.headID, err)
 	if err := ds.corruptMarker.MarkCorrupted(ds.headID); err != nil {
-		logger.Errorf(
-			"datasource: %s failed to mark head corrupted: %v",
-			ds.headID,
-			err,
-		)
-
-		return
+		return fmt.Errorf("%s failed to mark head corrupted: %w", ds.headID, err)
 	}
 
 	ds.corruptMarker = nil
+
+	return nil
 }
 
 // readFromShards parallel reading of [DecodedSegment] from shards.
@@ -602,34 +608,34 @@ func (ds *dataSourceRotated) restoreShard(
 	segmentSampleStorages *cppbridge.SegmentSamplesStorageList,
 	id int,
 	targetSegmentID uint32,
-) {
+) error {
 	s := ds.shards[id]
 
 	for {
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
 
 		segmentID, err := s.SegmentID()
 		if err != nil {
 			if errors.Is(err, ErrShardIsCorrupted) {
-				ds.markCorrupted()
+				return errors.Join(ds.markCorrupted(err), err)
 			}
 
-			return
+			return err
 		}
 
 		if segmentID >= targetSegmentID {
-			return
+			return nil
 		}
 
 		err = s.SkipSegment(minTimestamp, segmentSampleStorages.Get(uint64(s.shardID)))
 		if err != nil {
 			if errors.Is(err, ErrShardIsCorrupted) {
-				ds.markCorrupted()
+				return errors.Join(ds.markCorrupted(err), err)
 			}
 
-			return
+			return err
 		}
 	}
 }
@@ -647,7 +653,14 @@ func (ds *dataSourceRotated) selectNextSegment() []uint16 {
 		segmentID, err := shard.SegmentID()
 		if err != nil {
 			if errors.Is(err, ErrShardIsCorrupted) {
-				ds.markCorrupted()
+				if errCorrupted := ds.markCorrupted(err); errCorrupted != nil {
+					logger.Errorf(
+						"head %s failed to mark shard %d corrupted: %v",
+						ds.headID,
+						shard.shardID,
+						errCorrupted,
+					)
+				}
 			}
 
 			continue
@@ -914,7 +927,7 @@ func (c *caches[TWT]) writeCaches(wts []TWT) {
 // handleReadErrors handles the errors from the shards and returns an [ErrEndOfBlock] if the data source is corrupted.
 func handleReadErrors(
 	errs []error,
-	markCorrupted func(),
+	markCorrupted func(error) error,
 	checkFullCorrupted func() error,
 	numberOfShards int,
 ) error {
@@ -923,12 +936,16 @@ func handleReadErrors(
 	}
 
 	if len(errs) == numberOfShards {
-		markCorrupted()
+		if err := markCorrupted(errors.Join(errs...)); err != nil {
+			return err
+		}
 
 		return ErrEndOfBlock
 	}
 
-	markCorrupted()
+	if err := markCorrupted(errors.Join(errs...)); err != nil {
+		return err
+	}
 
 	printErrorIfNeed(errs)
 

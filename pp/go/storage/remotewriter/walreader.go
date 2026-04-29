@@ -130,6 +130,8 @@ func (r *walReader) ReadSegmentID(s Segment) error {
 		return fmt.Errorf("failed to read segment id: %w", err)
 	}
 
+	// v1: set segment ID
+	// v2: read segment ID from wal
 	s.SetSegmentID(r.nextSegmentID)
 
 	return nil
