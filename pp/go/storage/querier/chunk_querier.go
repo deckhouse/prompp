@@ -168,5 +168,5 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		)
 	}
 
-	return storage.NewMergeChunkSeriesSet(chunkSeriesSets, storage.NewConcatenatingChunkSeriesMerger())
+	return NewMergeShardChunkSeriesSet(chunkSeriesSets)
 }
