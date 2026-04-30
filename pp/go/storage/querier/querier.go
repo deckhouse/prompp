@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"sort"
 	"time"
 	"unsafe"
@@ -211,7 +210,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 			instantSeries := NewInstantSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
-			result := s.DataStorage().InstantQuery(q.maxt, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
+			result := s.DataStorage().InstantQuery(
+				q.maxt,
+				lssQueryResult.IDs(),
+				uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))), // #nosec G103 // it's meant to be that way
+			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
@@ -235,7 +238,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		return storage.ErrSeriesSet(err)
 	}
 
-	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+	return NewMergeShardSeriesSet(seriesSets)
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
@@ -285,13 +288,19 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer poolProvider.PutSeriesSet(seriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
-			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
+			seriesSets[shardID] = NewSeriesSet(
+				q.mint,
+				q.maxt,
+				lssQueryResults[shardID],
+				snapshots[shardID],
+				serializedData,
+			)
 			continue
 		}
 		seriesSets[shardID] = &SeriesSet{}
 	}
 
-	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+	return NewMergeShardSeriesSet(seriesSets)
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
@@ -331,8 +340,7 @@ func queryDataStorage[
 				return nil
 			}
 
-			var result cppbridge.DataStorageQueryResult
-			result = s.DataStorage().Query(
+			result := s.DataStorage().Query(
 				cppbridge.DataStorageQuery{
 					StartTimestampMs: mint,
 					EndTimestampMs:   maxt,
@@ -357,7 +365,6 @@ func queryDataStorage[
 		clear(shardedSerializedData)
 		SendUnrecoverableError(err)
 	}
-	runtime.KeepAlive(hints)
 }
 
 // queryLabelValues returns label values present in the head for the specific label name.
@@ -546,11 +553,8 @@ func queryLss[
 			)
 		}
 	}
-	if err := errors.Join(errs...); err != nil {
-		return err
-	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // UnrecoverableErrorChan channel singal for [UnrecoverableError].
