@@ -77,6 +77,23 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	return result
 }
 
+type SeriesGroups struct {
+	Groups [][]uint32
+}
+
+// GroupSeriesByLabelNames group series by label names
+func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs []uint32, labelNameIDs []uint32) *SeriesGroups {
+	result := &SeriesGroups{
+		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),
+	}
+	runtime.SetFinalizer(result, func(result *SeriesGroups) {
+		primitivesGroupSeriesByLabelNamesFree(result.Groups)
+	})
+
+	runtime.KeepAlive(lss)
+	return result
+}
+
 type IdsMapping struct {
 	pointer           uintptr
 	gcDestroyDetector *uint64

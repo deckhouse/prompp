@@ -385,6 +385,22 @@ var (
 			ConstLabels: prometheus.Labels{"object": "chunk_recoder", "method": "recode_next_chunk"},
 		},
 	)
+
+	// lss allocated_memory
+	lssAllocatedMemorySum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "lss", "method": "allocated_memory"},
+		},
+	)
+	lssAllocatedMemoryCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "lss", "method": "allocated_memory"},
+		},
+	)
 )
 
 func freeBytes(b []byte) {
@@ -1345,12 +1361,15 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 		allocatedMemory uint64
 	}
 
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_allocated_memory,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+	lssAllocatedMemorySum.Add(float64(time.Since(start).Nanoseconds()))
+	lssAllocatedMemoryCount.Inc()
 
 	return res.allocatedMemory
 }
@@ -1442,6 +1461,35 @@ func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	)
 
 	return res.matches, res.labelSetLengths, res.status
+}
+
+func primitivesGroupSeriesByLabelNames(snapshot uintptr, seriesIDs []uint32, labelNameIDs []uint32) [][]uint32 {
+	args := struct {
+		snapshot     uintptr
+		seriesIDs    []uint32
+		labelNameIDs []uint32
+	}{snapshot, seriesIDs, labelNameIDs}
+
+	var res struct {
+		groups [][]uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_group_series_by_label_names,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.groups
+}
+
+func primitivesGroupSeriesByLabelNamesFree(res [][]uint32) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_group_series_by_label_names_result_free,
+		uintptr(unsafe.Pointer(&res)),
+	)
 }
 
 func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
@@ -1909,14 +1957,14 @@ func prometheusPerShardSingleRelabelerUpdateRelabelerState(
 	var res struct {
 		exception []byte
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_single_relabeler_update_relabeler_state,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Since(start).Nanoseconds()))
 	inputRelabelerUpdateRelabelerStateCount.Inc()
 
 	return res.exception
@@ -2002,14 +2050,14 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 	var res struct {
 		allocatedMemory uint64
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_allocated_memory,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	headDataStorageAllocatedMemorySum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageAllocatedMemorySum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageAllocatedMemoryCount.Inc()
 
 	return res.allocatedMemory
@@ -2036,13 +2084,13 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, s
 	}
 
 	testGC()
-	start := time.Now().UnixNano()
+	start := time.Now()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_query_v2,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageQuerySum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageQueryCount.Inc()
 
 	return res.Querier, res.Status
@@ -2090,12 +2138,12 @@ func seriesDataDataStorageQueryFinal(queriers []uintptr) {
 	}{queriers}
 
 	testGC()
-	start := time.Now().UnixNano()
+	start := time.Now()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_data_storage_query_final,
 		uintptr(unsafe.Pointer(&args)),
 	)
-	headDataStorageQueryFinalSum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageQueryFinalSum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageQueryFinalCount.Inc()
 }
 
@@ -2302,13 +2350,13 @@ func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice [
 		encoder          uintptr
 		innerSeriesSlice []InnerSeries
 	}{encoder, innerSeriesSlice}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_encode_inner_series_slice,
 		uintptr(unsafe.Pointer(&args)),
 	)
-	headDataStorageEncodeInnerSeriesSliceSum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageEncodeInnerSeriesSliceSum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageEncodeInnerSeriesSliceCount.Inc()
 }
 
@@ -2316,13 +2364,13 @@ func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
 	args := struct {
 		encoder uintptr
 	}{encoder}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_merge_out_of_order_chunks,
 		uintptr(unsafe.Pointer(&args)),
 	)
-	headDataStorageMergeOutOfOrderChunksSum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageMergeOutOfOrderChunksSum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageMergeOutOfOrderChunksCount.Inc()
 }
 
@@ -2382,14 +2430,14 @@ func seriesDataChunkRecoderRecodeNextChunk(chunkRecoder uintptr, recodedChunk *R
 	args := struct {
 		chunkRecoder uintptr
 	}{chunkRecoder}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_chunk_recoder_recode_next_chunk,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(recodedChunk)),
 	)
-	chunkRecoderRecodeNextChunkSum.Add(float64(time.Now().UnixNano() - start))
+	chunkRecoderRecodeNextChunkSum.Add(float64(time.Since(start).Nanoseconds()))
 	chunkRecoderRecodeNextChunkCount.Inc()
 }
 
@@ -2816,14 +2864,14 @@ func walPrometheusScraperHashdexParse(hashdex uintptr, buffer []byte, default_ti
 		error   uint32
 		scraped uint32
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_prometheus_scraper_hashdex_parse,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	prometheusHashdexParseSum.Add(float64(time.Now().UnixNano() - start))
+	prometheusHashdexParseSum.Add(float64(time.Since(start).Nanoseconds()))
 	prometheusHashdexParseCount.Inc()
 
 	return res.scraped, res.error
@@ -2875,14 +2923,14 @@ func walOpenMetricsScraperHashdexParse(hashdex uintptr, buffer []byte, default_t
 		error   uint32
 		scraped uint32
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_open_metrics_scraper_hashdex_parse,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	openMetricsHashdexParseSum.Add(float64(time.Now().UnixNano() - start))
+	openMetricsHashdexParseSum.Add(float64(time.Since(start).Nanoseconds()))
 	openMetricsHashdexParseCount.Inc()
 
 	return res.scraped, res.error
@@ -3001,14 +3049,14 @@ func prometheusCacheUpdate(
 	var res struct {
 		exception []byte
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_cache_update,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Since(start).Nanoseconds()))
 	inputRelabelerUpdateRelabelerStateCount.Inc()
 
 	return res.exception
@@ -3045,14 +3093,14 @@ func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []InnerSeries) (s
 		samples   uint32
 	}
 
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_add_inner_series,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	headWalEncoderAddInnerSeriesSum.Add(float64(time.Now().UnixNano() - start))
+	headWalEncoderAddInnerSeriesSum.Add(float64(time.Since(start).Nanoseconds()))
 	headWalEncoderAddInnerSeriesCount.Inc()
 
 	return res.samples, handleException(res.exception)
@@ -3069,14 +3117,14 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 		samples   uint32
 	}
 
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_finalize,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	headWalEncoderFinalizeSum.Add(float64(time.Now().UnixNano() - start))
+	headWalEncoderFinalizeSum.Add(float64(time.Since(start).Nanoseconds()))
 	headWalEncoderFinalizeCount.Inc()
 
 	return res.samples, res.segment, handleException(res.exception)
