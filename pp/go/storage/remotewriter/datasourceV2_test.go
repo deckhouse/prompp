@@ -18,6 +18,7 @@ import (
 type DataSourceActiveSuite struct {
 	suite.Suite
 
+	clock       clockwork.Clock
 	segmentSize prometheus.Histogram
 }
 
@@ -26,6 +27,7 @@ func TestDataSourceActiveSuite(t *testing.T) {
 }
 
 func (s *DataSourceActiveSuite) SetupSuite() {
+	s.clock = clockwork.NewRealClock()
 	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
@@ -49,8 +51,7 @@ func (s *DataSourceActiveSuite) TestNextV1() {
 
 	discardCache := true
 
-	clock := clockwork.NewRealClock()
-	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	c, err := remotewritertest.MakeCatalog(dataDir, s.clock)
 	s.Require().NoError(err)
 
 	rec, err := c.Create(numberOfShards)
@@ -64,7 +65,7 @@ func (s *DataSourceActiveSuite) TestNextV1() {
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -115,8 +116,7 @@ func (s *DataSourceActiveSuite) TestNextV2() {
 	}
 	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
 
-	clock := clockwork.NewRealClock()
-	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	c, err := remotewritertest.MakeCatalog(dataDir, s.clock)
 	s.Require().NoError(err)
 
 	rec, err := c.Create(numberOfShards)
@@ -142,7 +142,7 @@ func (s *DataSourceActiveSuite) TestNextV2() {
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -204,13 +204,13 @@ func (s *DataSourceActiveSuite) TestRestoreReadV1() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -267,13 +267,13 @@ func (s *DataSourceActiveSuite) TestRestoreReadV2() {
 	discardCache := true
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -327,13 +327,13 @@ func (s *DataSourceActiveSuite) TestSkipByMinTimeV1() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -392,13 +392,13 @@ func (s *DataSourceActiveSuite) TestSkipByMinTimeV2() {
 	discardCache := true
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -461,13 +461,13 @@ func (s *DataSourceActiveSuite) TestFileNotExistsV1() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -507,13 +507,13 @@ func (s *DataSourceActiveSuite) TestFileNotExistsV2() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceActive(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -545,8 +545,8 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV1() {
 	s.Require().NoError(os.Truncate(shardFilePaths[0], 11))
 
 	discardCache := true
-	clock := clockwork.NewRealClock()
-	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+
+	c, err := remotewritertest.MakeCatalog(dataDir, s.clock)
 	s.Require().NoError(err)
 
 	rec, err := c.Create(numberOfShards)
@@ -564,7 +564,7 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV1() {
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -613,8 +613,7 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV2() {
 	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
 	baseCtx := s.T().Context()
 
-	clock := clockwork.NewRealClock()
-	c, err := remotewritertest.MakeCatalog(dataDir, clock)
+	c, err := remotewritertest.MakeCatalog(dataDir, s.clock)
 	s.Require().NoError(err)
 
 	rec, err := c.Create(numberOfShards)
@@ -645,7 +644,7 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV2() {
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -701,6 +700,7 @@ func (s *DataSourceActiveSuite) TestCorruptedShardV2() {
 type DataSourceRotatedSuite struct {
 	suite.Suite
 
+	clock       clockwork.Clock
 	segmentSize prometheus.Histogram
 }
 
@@ -709,6 +709,7 @@ func TestDataSourceRotatedSuite(t *testing.T) {
 }
 
 func (s *DataSourceRotatedSuite) SetupSuite() {
+	s.clock = clockwork.NewRealClock()
 	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
@@ -734,13 +735,13 @@ func (s *DataSourceRotatedSuite) TestNextV1() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -795,13 +796,13 @@ func (s *DataSourceRotatedSuite) TestNextV2() {
 	discardCache := true
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -853,13 +854,13 @@ func (s *DataSourceRotatedSuite) TestRestoreReadV1() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -913,13 +914,13 @@ func (s *DataSourceRotatedSuite) TestRestoreReadV2() {
 	discardCache := true
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -970,13 +971,13 @@ func (s *DataSourceRotatedSuite) TestSkipByMinTimeV1() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -1032,13 +1033,13 @@ func (s *DataSourceRotatedSuite) TestSkipByMinTimeV2() {
 	discardCache := true
 	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -1098,13 +1099,13 @@ func (s *DataSourceRotatedSuite) TestFileNotExistsV1() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -1164,13 +1165,13 @@ func (s *DataSourceRotatedSuite) TestFileNotExistsV2() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -1234,13 +1235,13 @@ func (s *DataSourceRotatedSuite) TestCorruptedShardV1() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,
@@ -1300,13 +1301,13 @@ func (s *DataSourceRotatedSuite) TestCorruptedShardV2() {
 		corrupt = true
 		return nil
 	})
-	clock := clockwork.NewRealClock()
+
 	dataSource, err := newDataSourceRotated(
 		dataDir,
 		DestinationConfig{},
 		numberOfShards,
 		discardCache,
-		clock,
+		s.clock,
 		corruptMarker,
 		rec,
 		s.segmentSize,

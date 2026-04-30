@@ -323,8 +323,10 @@ func walWriteMulti(
 			return fmt.Errorf("failed to create hashdex: %w", err)
 		}
 
-		innerSeries := cppbridge.NewShardedInnerSeries(1).DataByShard(0)
-		shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(1).DataByShard(0)
+		is := cppbridge.NewShardedInnerSeries(1)
+		innerSeries := is.DataByShard(0)
+		srs := cppbridge.NewShardedRelabeledSeries(1)
+		shardsRelabeledSeries := srs.DataByShard(0)
 
 		shardID := uint64(i) % numberOfShards // #nosec G115 // no overflow
 
@@ -358,10 +360,16 @@ func walWriteMulti(
 		if err = wls[shardID].Sync(); err != nil {
 			return fmt.Errorf("failed to sync: %w", err)
 		}
+
+		runtime.KeepAlive(is)
+		runtime.KeepAlive(srs)
 	}
 
 	runtime.KeepAlive(lsses)
 	runtime.KeepAlive(wls)
+	runtime.KeepAlive(hLimits)
+	runtime.KeepAlive(relabelers)
+	runtime.KeepAlive(states)
 
 	return nil
 }
