@@ -62,7 +62,10 @@ TEST_F(BareBonesVectorAllocatedMemoryFixture, PointerWithAllocatedMemoryMethod) 
   const auto allocated_memory = vector.allocated_memory();
 
   // Assert
-  EXPECT_EQ(vector.capacity() * sizeof(Vector::value_type) + vector.size() * kObjectAllocatedMemory, allocated_memory);
+  EXPECT_EQ(
+      vector.capacity() * sizeof(Vector::value_type)  // NOLINT(bugprone-sizeof-expression): value_type is intentionally a pointer; we want the pointer size.
+          + vector.size() * kObjectAllocatedMemory,
+      allocated_memory);
 }
 
 TEST_F(BareBonesVectorAllocatedMemoryFixture, DereferencableWithAllocatedMemoryMethod) {
