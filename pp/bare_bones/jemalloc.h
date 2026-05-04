@@ -48,7 +48,7 @@ struct FreeArenas {
   }
 
   PROMPP_ALWAYS_INLINE static void add(ArenaIndex arena_index) noexcept {
-    std::scoped_lock _(free_arenas_mutex);
+    std::scoped_lock lock(free_arenas_mutex);
     free_arenas.push_back(arena_index);
   }
 };
