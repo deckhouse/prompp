@@ -114,10 +114,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
-  PROMPP_ALWAYS_INLINE void mark_active(uint32_t ls_id) noexcept {
-    assert(is_normal());
-    mark_series_as_added(ls_id);
-  }
+  PROMPP_ALWAYS_INLINE void mark_active(uint32_t ls_id) noexcept { mark_series_as_added(ls_id); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
     assert(id < max_item_index_impl());
