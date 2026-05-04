@@ -62,6 +62,26 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept { return state == State::kNormal; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return state == State::kShrunk; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return state == State::kFixed; }
+    PROMPP_ALWAYS_INLINE void enter_fixed_state(uint32_t boundary) noexcept {
+      assert(state == State::kNormal);
+      pending_shrink_boundary = boundary;
+      state = State::kFixed;
+    }
+    PROMPP_ALWAYS_INLINE void enter_shrunk_state() noexcept {
+      assert(state == State::kFixed);
+      pending_shrink_boundary = kPendingShrinkBoundaryNotSet;
+      state = State::kShrunk;
+    }
+
+    PROMPP_ALWAYS_INLINE void add_drop_count(uint32_t drop_count) noexcept { shift += drop_count; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolSource symbol_source_for_series(uint32_t ls_id) const noexcept {
+      return is_shrunk() && ls_id < shift ? SymbolSource::kSnapshot : SymbolSource::kCurrent;
+    }
+    void set_post_shrink_snapshot(PostShrinkSnapshotResolverPtr snapshot_resolver, const BareBones::Vector<uint32_t>& new_to_old, uint32_t invalid_id) {
+      post_shrink_snapshot_resolver = std::move(snapshot_resolver);
+      rebuild_post_shrink_mapping(new_to_old, invalid_id);
+    }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t ls_id, const BareBones::Bitset& added_series) const noexcept {
       assert(is_fixed());
@@ -95,6 +115,23 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       clone.state = state;
       clone.post_shrink_snapshot_resolver = post_shrink_snapshot_resolver ? post_shrink_snapshot_resolver->clone() : nullptr;
       return clone;
+    }
+
+   private:
+    void rebuild_post_shrink_mapping(const BareBones::Vector<uint32_t>& new_to_old, uint32_t invalid_id) {
+      assert(pending_shrink_boundary != kPendingShrinkBoundaryNotSet);
+      post_shrink_mapping.clear();
+      post_shrink_mapping.resize(pending_shrink_boundary);
+      std::fill(post_shrink_mapping.begin(), post_shrink_mapping.end(), invalid_id);
+      mapped_visible_count = 0;
+
+      for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
+        const uint32_t old_id = new_to_old[new_id];
+        if (old_id < post_shrink_mapping.size()) {
+          post_shrink_mapping[old_id] = static_cast<uint32_t>(new_id);
+          ++mapped_visible_count;
+        }
+      }
     }
   };
 
@@ -132,8 +169,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     assert(boundary <= max_item_index_impl());
     assert(is_normal());
     prune_hidden_series_before_fixed_state(boundary);
-    shrink_state_.pending_shrink_boundary = boundary;
-    shrink_state_.state = State::kFixed;
+    shrink_state_.enter_fixed_state(boundary);
   }
 
   template <class Snapshot>
@@ -168,10 +204,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     }
     const uint32_t drop_count = shrink_boundary;
 
-    shrink_state_.shift += drop_count;
+    shrink_state_.add_drop_count(drop_count);
     Base::storage_.drop_front(drop_count);
-    shrink_state_.pending_shrink_boundary = kPendingShrinkBoundaryNotSet;
-    shrink_state_.state = State::kShrunk;
+    shrink_state_.enter_shrunk_state();
   }
 
   template <class LabelSet>
@@ -243,25 +278,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     assert(shrink_state_.pending_shrink_boundary != kPendingShrinkBoundaryNotSet);
     assert(shrink_state_.pending_shrink_boundary <= next_item_index_impl());
 
-    invert_copy_mapping(new_to_old_mapping);
-    shrink_state_.post_shrink_snapshot_resolver = std::move(snapshot_resolver);
+    shrink_state_.set_post_shrink_snapshot(std::move(snapshot_resolver), new_to_old_mapping, Base::kInvalidId);
     shrink_to_boundary(shrink_state_.pending_shrink_boundary);
-  }
-
-  void invert_copy_mapping(const BareBones::Vector<uint32_t>& new_to_old) {
-    shrink_state_.post_shrink_mapping.clear();
-    shrink_state_.post_shrink_mapping.resize(shrink_state_.pending_shrink_boundary);
-
-    std::fill(shrink_state_.post_shrink_mapping.begin(), shrink_state_.post_shrink_mapping.end(), Base::kInvalidId);
-    shrink_state_.mapped_visible_count = 0;
-
-    for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
-      const uint32_t old_id = new_to_old[new_id];
-      if (old_id < shrink_state_.post_shrink_mapping.size()) {
-        shrink_state_.post_shrink_mapping[old_id] = static_cast<uint32_t>(new_id);
-        ++shrink_state_.mapped_visible_count;
-      }
-    }
   }
 
   template <class Snapshot>
@@ -306,12 +324,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shrink_state_.shift + Base::storage_.count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t max_item_index_impl() const noexcept { return next_item_index_impl(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count_impl() const noexcept {
-    if (!is_shrunk()) {
-      return Base::storage_.count();
-    }
-    return Base::storage_.count() + shrink_state_.mapped_visible_count;
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count_impl() const noexcept { return shrink_state_.mapped_visible_count + Base::storage_.count(); }
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
 
@@ -340,10 +353,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolSource symbol_source_for_series_impl(uint32_t ls_id) const noexcept {
-    if (!is_shrunk()) {
-      return SymbolSource::kCurrent;
-    }
-    return ls_id < shrink_state_.shift ? SymbolSource::kSnapshot : SymbolSource::kCurrent;
+    return shrink_state_.symbol_source_for_series(ls_id);
   }
 
   void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
