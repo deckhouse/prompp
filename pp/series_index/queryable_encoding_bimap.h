@@ -65,7 +65,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t ls_id, const BareBones::Bitset& added_series) const noexcept {
       assert(is_fixed());
-      return ls_id < pending_shrink_boundary && (ls_id >= added_series.size() || !added_series[ls_id]);
+      return ls_id < pending_shrink_boundary && !added_series.is_set(ls_id);
     }
 
     template <class ValueType, class CurrentStorageResolver>
@@ -191,12 +191,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       return logical_id;
     }
 
-    if (is_fixed()) {
-      const auto logical_id = emplace_visible_in_fixed_state(label_set, hash);
-      mark_series_as_added(logical_id);
-      return logical_id;
-    }
-
     const auto logical_id = emplace_series_and_update_indexes(label_set, hash);
     mark_series_as_added(logical_id);
     return logical_id;
@@ -261,7 +255,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     shrink_state_.post_shrink_mapping.clear();
     shrink_state_.post_shrink_mapping.resize(shrink_state_.pending_shrink_boundary);
 
-    std::fill(shrink_state_.post_shrink_mapping.begin(), shrink_state_.post_shrink_mapping.end(), BareBones::SnugComposite::kInvalidLsId);
+    std::fill(shrink_state_.post_shrink_mapping.begin(), shrink_state_.post_shrink_mapping.end(), Base::kInvalidId);
     shrink_state_.mapped_visible_count = 0;
 
     for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
@@ -307,13 +301,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     sorting_index_.update(ls_id_set_iterator);
   }
 
-  PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept {
-    if (added_series_.size() <= ls_id) {
-      added_series_.resize(ls_id + 1);
-    }
-
-    added_series_.set(ls_id);
-  }
+  PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept { added_series_.set(ls_id); }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
 
@@ -347,19 +335,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_logical_id));
     update_indexes(new_logical_id, composite_label_set);
     return new_logical_id;
-  }
-
-  template <class LabelSetLike>
-  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE uint32_t emplace_visible_in_fixed_state(const LabelSetLike& label_set, size_t mixed_hash) {
-    assert(is_fixed());
-    const auto new_storage_id = Base::storage_.emplace_back(label_set);
-    const auto logical_id = shrink_state_.shift + new_storage_id;
-    assert(logical_id >= shrink_state_.pending_shrink_boundary);
-
-    const auto composite_label_set = Base::storage_composite(new_storage_id);
-    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(logical_id));
-    update_indexes(logical_id, composite_label_set);
-    return logical_id;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {

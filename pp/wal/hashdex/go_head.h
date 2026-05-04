@@ -25,7 +25,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
     using reference = Iterator&;
 
     PROMPP_ALWAYS_INLINE Iterator(const Hashes* hashes, const Lss* lss, const series_data::DataStorage* data_storage)
-        : hashes_(hashes), lss_(lss), data_storage_(data_storage), max_ls_id_(lss->max_item_index()) {}
+        : hashes_(hashes), lss_(lss), data_storage_(data_storage), max_ls_id_(lss -> max_item_index()) {}
 
     PROMPP_ALWAYS_INLINE const Iterator& operator*() const noexcept { return *this; }
     PROMPP_ALWAYS_INLINE const Iterator* operator->() const noexcept { return this; }
@@ -72,7 +72,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
 
       hashes_.clear();
       hashes_.reserve(lss->max_item_index());
-      for (uint32_t ls_id = 0; ls_id < lss->max_item_index(); ++ls_id) {
+      for (uint32_t ls_id = 0, max_ls_id = lss->max_item_index(); ls_id < max_ls_id; ++ls_id) {
         hashes_.emplace_back(Primitives::hash::hash_of_label_set((*lss)[ls_id]));
       }
     }

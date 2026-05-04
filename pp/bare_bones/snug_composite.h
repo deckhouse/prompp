@@ -66,7 +66,7 @@ concept has_resolve = requires(const Derived& derived, uint32_t id) {
   { derived.resolve_impl(id) } -> std::same_as<ValueType>;
 };
 
-constexpr uint32_t kInvalidLsId = std::numeric_limits<uint32_t>::max();
+constexpr uint32_t kInvalidId = std::numeric_limits<uint32_t>::max();
 
 // Symbol table view type, independent from any specific storage type
 struct SymbolTableView {
@@ -103,7 +103,7 @@ class GenericDecodingTable {
 
   static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
-  static constexpr auto kInvalidId = kInvalidLsId;
+  static constexpr auto kInvalidId = BareBones::SnugComposite::kInvalidId;
 
  protected:
   class Proxy {
@@ -298,7 +298,7 @@ class GenericDecodingTable {
   using delta_type = typename checkpoint_type::Delta;
 
   GenericDecodingTable() noexcept = default;
-  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version) {};
+  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version){};
 
   template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
     requires kIsReadOnly
