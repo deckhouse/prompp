@@ -189,12 +189,12 @@ class GenericBitset {
     uint32_t size_{};
     uint32_t last_block_n_{};
     uint32_t block_n_{};
-    uint64_t block_{};
     uint32_t j_{64};
+    uint64_t block_{};
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t build_zero_masked_block(uint32_t block_n) const noexcept {
       uint64_t block = ~data_[block_n];
-      if (block_n == last_block_n_) {
+      if (block_n == last_block_n_) [[unlikely]] {
         const uint32_t last_bits = size_ & 0x3F;
         if (last_bits != 0) {
           block &= ((uint64_t{1} << last_bits) - 1);
@@ -206,7 +206,7 @@ class GenericBitset {
     PROMPP_ALWAYS_INLINE void next() noexcept {
       while (true) {
         if (!block_) {
-          if (block_n_ == last_block_n_) {
+          if (block_n_ == last_block_n_) [[unlikely]] {
             j_ = 64;
             return;
           }
@@ -229,11 +229,9 @@ class GenericBitset {
     ZeroIterator() = default;
     PROMPP_ALWAYS_INLINE explicit ZeroIterator(const uint64_t* data, uint32_t size) noexcept : data_(data), size_(size) {
       if (size_ == 0 || !data_) {
-        j_ = 64;
         return;
       }
 
-      block_n_ = 0;
       last_block_n_ = (size_ - 1) >> 6;
       block_ = build_zero_masked_block(block_n_);
       next();

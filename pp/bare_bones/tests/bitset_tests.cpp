@@ -299,69 +299,64 @@ TEST_F(BitsetFixture, IterateOverEmptyBitset) {
   EXPECT_EQ(0U, std::ranges::distance(bs_));
 }
 
-TEST_F(BitsetFixture, ZeroIteratorReturnsAllUnsetIdsInBitset) {
+TEST_F(BitsetFixture, ZeroRangeFull) {
   // Arrange
-  bs_.resize(8);
-  bs_.set({1, 3, 6});
+  bs_.set({0, 1, 2});
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(0U, std::ranges::distance(bs_.zeroes()));
+}
+
+TEST_F(BitsetFixture, ZeroRangeFilled) {
+  // Arrange
+  bs_.set({1, 3, 6, 8});
   const std::vector<uint32_t> expected{0, 2, 4, 5, 7};
 
   // Act
-  std::vector<uint32_t> actual;
-  for (const auto bit : bs_.zeroes()) {
-    actual.push_back(bit);
-  }
 
   // Assert
-  EXPECT_EQ(expected, actual);
+  EXPECT_TRUE(std::ranges::equal(expected, bs_.zeroes()));
 }
 
-TEST_F(BitsetFixture, ZeroesRangeSupportsRangeFor) {
+TEST_F(BitsetFixture, ZeroRangeEmpty) {
   // Arrange
   bs_.resize(8);
-  bs_.set({1, 3, 6});
-  const std::vector<uint32_t> expected{0, 2, 4, 5, 7};
 
   // Act
-  std::vector<uint32_t> actual;
-  for (const auto bit : bs_.zeroes()) {
-    actual.push_back(bit);
-  }
 
   // Assert
-  EXPECT_EQ(expected, actual);
+  EXPECT_EQ(8U, std::ranges::distance(bs_.zeroes()));
 }
 
-TEST_F(BitsetFixture, ZeroIteratorSupportsExternalBoundaryFiltering) {
+TEST_F(BitsetFixture, ZerocountOnEmptyBitset) {
   // Arrange
-  bs_.resize(10);
-  bs_.set({0, 3, 4, 7, 9});
-  const std::vector<uint32_t> expected{5, 6, 8};
 
   // Act
-  std::vector<uint32_t> actual;
-  for (const auto bit : bs_.zeroes()) {
-    if (bit >= 9) {
-      break;
-    }
-    if (bit >= 5) {
-      actual.push_back(bit);
-    }
-  }
 
   // Assert
-  EXPECT_EQ(expected, actual);
+  EXPECT_EQ(0U, bs_.zerocount());
 }
 
-TEST_F(BitsetFixture, ZeroCountMatchesUnsetBitsInBitset) {
+TEST_F(BitsetFixture, ZerocountOnNonEmptyBitset) {
   // Arrange
-  bs_.resize(10);
-  bs_.set({0, 1, 4, 8});
 
   // Act
-  const auto zero_count_full = bs_.zerocount();
+  bs_.set({0, 4, 8});
 
   // Assert
-  EXPECT_EQ(6U, zero_count_full);
+  EXPECT_EQ(6U, bs_.zerocount());
+}
+
+TEST_F(BitsetFixture, ZerocountFullBitset) {
+  // Arrange
+
+  // Act
+  bs_.set({0, 1, 2, 3, 4, 5, 6, 7, 8});
+
+  // Assert
+  EXPECT_EQ(0U, bs_.zerocount());
 }
 
 class BitsetCreateIteratorFixture : public testing::Test {
