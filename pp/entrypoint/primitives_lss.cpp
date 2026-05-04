@@ -9,6 +9,7 @@
 #include "primitives/go_slice.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
+#include "series_index/querier/series_operations.h"
 #include "series_index/queryable_encoding_bimap.h"
 
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
@@ -163,6 +164,28 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
                                [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
       },
       snapshot_variant);
+}
+
+struct GroupSeriesByLabelNamesResult {
+  PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::Slice<uint32_t>> groups;
+};
+
+extern "C" void prompp_primitives_group_series_by_label_names(void* args, void* res) {
+  struct Arguments {
+    SnapshotLSSVariantPtr snapshot;
+    PromPP::Primitives::Go::SliceView<uint32_t> series_ids;
+    PromPP::Primitives::Go::SliceView<uint32_t> label_name_ids;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) GroupSeriesByLabelNamesResult();
+
+  series_index::querier::group_series_by_label_names<entrypoint::head::SnapshotLSS, PromPP::Primitives::Go::Slice>(
+      std::get<entrypoint::head::SnapshotLSS>(*in->snapshot), in->series_ids.span(), in->label_name_ids.span(), out->groups);
+}
+
+extern "C" void prompp_primitives_group_series_by_label_names_result_free(void* args) {
+  static_cast<GroupSeriesByLabelNamesResult*>(args)->~GroupSeriesByLabelNamesResult();
 }
 
 extern "C" void prompp_primitives_lss_query_result_free(void* args) {
