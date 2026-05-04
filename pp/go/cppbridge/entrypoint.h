@@ -643,6 +643,30 @@ void prompp_primitives_lss_query_selector(void* args, void* res);
 void prompp_primitives_snapshot_query(void* args, void* res);
 
 /**
+ * @brief group series by label name ids
+ *
+ * @param args {
+ *     snapshot       uintptr  // pointer to snapshot
+ *     series_ids     []uint32 // series_ids for grouping
+ *     label_name_ids []uint32 // label names ids for grouping
+ * }
+ *
+ * @param res {
+ *     groups [][]uint32 // grouped series
+ * }
+ */
+void prompp_primitives_group_series_by_label_names(void* args, void* res);
+
+/**
+ * @brief free groups returned by prompp_primitives_group_series_by_label_names
+ *
+ * @param args {
+ *     groups [][]uint32 // grouped series (same layout as Result.groups)
+ * }
+ */
+void prompp_primitives_group_series_by_label_names_result_free(void* args);
+
+/**
  * @brief free label set matches returned by prompp_primitives_snapshot_query
  *
  * @param args {
