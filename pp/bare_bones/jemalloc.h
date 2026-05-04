@@ -2,6 +2,7 @@
 
 #include <mutex>
 #include <utility>
+#include <vector>
 
 #include "allocator.h"
 
