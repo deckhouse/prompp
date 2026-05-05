@@ -49,8 +49,8 @@ func (s *MergeShardSeriesSetSuite) TestHappyPath() {
 			eseriesSets = eseriesSets[:0]
 			aseriesSets = aseriesSets[:0]
 			for i := 0; i < bm.numShards; i++ {
-				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 			}
 
 			expectedSeriesSet := storage.NewMergeSeriesSet(eseriesSets, storage.ChainedSeriesMerge)
@@ -96,8 +96,8 @@ func (s *MergeShardSeriesSetSuite) TestEmptySeriesSets() {
 					aseriesSets = append(aseriesSets, &querier.SeriesSet{})
 				}
 
-				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 			}
 
 			expectedSeriesSet := storage.NewMergeSeriesSet(eseriesSets, storage.ChainedSeriesMerge)
@@ -138,11 +138,11 @@ func (s *MergeShardSeriesSetSuite) TestAcrossShardsSeriesSets() {
 			eseriesSets = eseriesSets[:0]
 			aseriesSets = aseriesSets[:0]
 			for i := 0; i < bm.numShards; i++ {
-				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 			}
 
 			for i := bm.numShards - 1; i >= 0; i-- {
-				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 			}
 
 			expectedSeriesSet := storage.NewMergeSeriesSet(eseriesSets, storage.ChainedSeriesMerge)
@@ -186,7 +186,7 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 				b.StopTimer()
 				seriesSets = seriesSets[:0]
 				for i := 0; i < bm.numShards; i++ {
-					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, matcher))
+					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				b.StartTimer()
 

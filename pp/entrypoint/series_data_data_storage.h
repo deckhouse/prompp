@@ -94,11 +94,13 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 
 /**
  * @brief Queries data storage and serializes result (new serialization model).
+ * If args.downsamplingMs != 0 than DownsamplingIterator will be created regardless of the args.hints
  *
  * @param args {
- *     dataStorage    uintptr          // pointer to constructed data storage
- *     query          DataStorageQuery // query
- *     downsamplingMs int64            // downsampling interval in milliseconds (0 - downsampling is disabled)
+ *     dataStorage    uintptr              // pointer to constructed data storage
+ *     query          DataStorageQuery     // query
+ *     downsamplingMs int64                // downsampling interval in milliseconds (0 - downsampling is disabled)
+ *     hints          *storage.SelectHints // select hints
  * }
  *
  * @param res {

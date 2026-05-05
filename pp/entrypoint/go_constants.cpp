@@ -1,8 +1,8 @@
 #include "go_constants.h"
 
-#include "head/serialization.h"
 #include "metrics/storage.h"
 #include "prometheus/relabeler.h"
+#include "series_data/serialization.h"
 #include "wal/output_decoder.h"
 #include "wal/segment_samples_storage.h"
 
