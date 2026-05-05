@@ -5,7 +5,7 @@ package(default_visibility = ["//visibility:public"])
 
 config_setting(
     name = "arm64",
-    values = {"cpu": "arm"},
+    values = {"cpu": "aarch64"},
 )
 
 config_setting(
