@@ -533,7 +533,7 @@ func (s *RotateLSSSuite) TestCopyOnRotate() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(newLSS)
 	runtime.KeepAlive(snapshot)
@@ -564,7 +564,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateCheckQueryOnOldSnapshot() {
 	s.Equal(expectedLabelSets, s.lss.GetLabelSets(s.labelSetIDs).LabelsSets())
 
 	s.T().Log("Checking query on snapshot")
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(newLSS)
 	runtime.KeepAlive(snapshot)
@@ -585,7 +585,7 @@ func (s *RotateLSSSuite) TestCheckQueryOnFreezeLSS() {
 
 	// Assert
 	s.T().Log("Checking query on snapshot")
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 }
@@ -604,7 +604,7 @@ func (s *RotateLSSSuite) TestCheckQueryOnFreezeLSS2() {
 
 	// Assert
 	s.T().Log("Checking query on snapshot")
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 }
@@ -634,7 +634,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLS() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	s.T().Log("Checking query on snapshot with new ls")
 	selector, status = s.lss.QuerySelector(
@@ -643,7 +643,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLS() {
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	s.Equal(
 		labelSetToCppBridgeLabels(append(s.labelSets[:3], lsNew)),
-		s.checkQuery(snapshot, selector),
+		s.convertQueryResultToLabelSets(snapshot, selector),
 	)
 
 	runtime.KeepAlive(newLSS)
@@ -671,7 +671,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceExistingLS() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
@@ -710,7 +710,7 @@ func (s *RotateLSSSuite) TestCopyOnRotatePart() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
@@ -742,7 +742,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLSPart() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
@@ -769,7 +769,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceExistingLSPart() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
@@ -796,7 +796,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceAfterBoundaryLS() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot := s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(result)
@@ -841,7 +841,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateShrinkAndEmplacePart() {
 	selector, status := s.lss.QuerySelector(s.matchers)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 	snapshot = s.lss.CreateLabelSetSnapshot()
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.checkQuery(snapshot, selector))
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
 
 	runtime.KeepAlive(snapshot)
 	runtime.KeepAlive(dstSrcLsIdsMapping)
@@ -945,8 +945,11 @@ func (s *RotateLSSSuite) makeRotatedLSS(lName string) *rotatedLSS {
 	return rLSS
 }
 
-// checkQuery checks the query result on the snapshot.
-func (s *RotateLSSSuite) checkQuery(snapshot *cppbridge.LabelSetSnapshot, selector uintptr) []cppbridge.Labels {
+// convertQueryResultToLabelSets converts the query result to slice of [cppbridge.Labels].
+func (s *RotateLSSSuite) convertQueryResultToLabelSets(
+	snapshot *cppbridge.LabelSetSnapshot,
+	selector uintptr,
+) []cppbridge.Labels {
 	res := snapshot.Query(selector)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, res.Status())
 
