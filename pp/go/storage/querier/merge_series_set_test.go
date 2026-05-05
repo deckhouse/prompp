@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -286,8 +287,10 @@ func makeHead(numShards, numSeries, numSamples int) *testHead {
 func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries {
 	timeSeries := make([]storagetest.TimeSeries, 0, numSeries)
 	for j := range numSeries {
+		evenNumbered := j%2 == 0
 		ls := labels.FromStrings(
 			"__name__", "metric",
+			"even_numbered", fmt.Sprintf("%t", evenNumbered),
 			"foo", fmt.Sprintf("bar%d", j),
 			"shard_id", fmt.Sprintf("id_%d", shardID),
 		)
@@ -301,4 +304,35 @@ func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries
 	}
 
 	return timeSeries
+}
+
+func TestAGGSS(t *testing.T) {
+	head := makeHead(2, 10, 5)
+	names := []string{
+		"even_numbered",
+		"shard_id",
+	}
+	nameIDs := make([]uint32, len(names))
+
+	selector, snapshot, err := head.lsses[0].QuerySelector(
+		0,
+		[]model.LabelMatcher{{
+			Name:        "__name__",
+			Value:       "metric",
+			MatcherType: model.MatcherTypeExactMatch,
+		}},
+	)
+	require.NoError(t, err)
+
+	lssQueryResult := snapshot.Query(selector)
+	require.Equal(t, cppbridge.LSSQueryStatusMatch, lssQueryResult.Status())
+	seriesIDs := lssQueryResult.IDs()
+	t.Log("seriesIDs", seriesIDs)
+
+	t.Log("nameIDs 1", nameIDs)
+	head.lsses[0].LabelNameToIDs(names, nameIDs)
+	t.Log("nameIDs 2", nameIDs)
+
+	seriesGroups := head.lsses[0].GroupSeriesByLabelNames(seriesIDs, nameIDs)
+	t.Log("seriesGroups", seriesGroups)
 }

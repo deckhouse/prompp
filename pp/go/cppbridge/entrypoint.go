@@ -1573,7 +1573,7 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
-func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
+func primitivesLSSGetLabelNameIDs(lss uintptr, names []string, nameIDs []uint32) {
 	args := struct {
 		lss   uintptr
 		names []string
@@ -1581,7 +1581,7 @@ func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 
 	res := struct {
 		outIDs []uint32
-	}{make([]uint32, len(names))}
+	}{nameIDs}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -1589,8 +1589,6 @@ func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.outIDs
 }
 
 func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {

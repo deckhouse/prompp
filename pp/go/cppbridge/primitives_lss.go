@@ -1,6 +1,7 @@
 package cppbridge
 
 import (
+	"fmt"
 	"runtime"
 	"unsafe"
 
@@ -124,11 +125,14 @@ func (lss *LabelSetStorage) QueryLabelValues(
 	return result
 }
 
-// GetLabelNameIDs - returns label name ids
-func (lss *LabelSetStorage) GetLabelNameIDs(names []string) []uint32 {
-	out := primitivesLSSGetLabelNameIDs(lss.pointer, names)
+// LabelNameToIDs get label name ids from lss.
+func (lss *LabelSetStorage) LabelNameToIDs(names []string, namesIDs []uint32) {
+	if len(names) != len(namesIDs) {
+		panic(fmt.Sprintf("names and namesIDs must have the same length: %d != %d", len(names), len(namesIDs)))
+	}
+
+	primitivesLSSGetLabelNameIDs(lss.pointer, names, namesIDs)
 	runtime.KeepAlive(lss)
-	return out
 }
 
 // GetLabelSets - returns copy of lss data.

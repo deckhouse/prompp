@@ -77,12 +77,13 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	return result
 }
 
+// SeriesGroups group series by label names.
 type SeriesGroups struct {
 	Groups [][]uint32
 }
 
 // GroupSeriesByLabelNames group series by label names
-func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs []uint32, labelNameIDs []uint32) *SeriesGroups {
+func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *SeriesGroups {
 	result := &SeriesGroups{
 		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),
 	}

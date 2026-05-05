@@ -362,12 +362,14 @@ func (s *QueryableLSSSuite) TestQueryLabelValues() {
 
 func (s *QueryableLSSSuite) TestGetLabelNameIDs() {
 	// Arrange
+	names := []string{"lol", "foo", "nope", "lol"}
+	nameIDs := make([]uint32, len(names))
 
 	// Act
-	out := s.lss.GetLabelNameIDs([]string{"lol", "foo", "nope", "lol"})
+	s.lss.LabelNameToIDs(names, nameIDs)
 
 	// Assert
-	s.Equal([]uint32{0, 3, math.MaxUint32, 0}, out)
+	s.Equal([]uint32{0, 3, math.MaxUint32, 0}, nameIDs)
 }
 
 func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {

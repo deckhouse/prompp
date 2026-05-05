@@ -46,9 +46,25 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
 }
 
+// GroupSeriesByLabelNames group series by label names.
+func (l *LSS) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups {
+	l.locker.RLock()
+	snapshot := l.getSnapshot()
+	l.locker.RUnlock()
+
+	return snapshot.GroupSeriesByLabelNames(seriesIDs, labelNameIDs)
+}
+
 // Input returns input lss.
 func (l *LSS) Input() *cppbridge.LabelSetStorage {
 	return l.input
+}
+
+// LabelNameToIDs get label name ids from lss.
+func (l *LSS) LabelNameToIDs(names []string, namesIDs []uint32) {
+	l.locker.RLock()
+	l.target.LabelNameToIDs(names, namesIDs)
+	l.locker.RUnlock()
 }
 
 // QueryLabelNames add to dedup all the unique label names present in lss in sorted order.
