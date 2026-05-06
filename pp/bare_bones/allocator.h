@@ -26,7 +26,7 @@ static constexpr ArenaIndex kInvalidArenaIndex = std::numeric_limits<ArenaIndex>
 template <class ArenaReallocator>
 concept ArenaAllocatorInterface = requires(ArenaReallocator reallocator) {
   { ArenaReallocator::create_arena() } -> std::same_as<ArenaIndex>;
-  { ArenaReallocator::destroy_arena(ArenaIndex()) };
+  { ArenaReallocator::release_arena(ArenaIndex()) };
   { ArenaReallocator::thread_arena_guard(ArenaIndex()) };
   { ArenaReallocator::arena_allocated_memory(ArenaIndex()) } -> std::convertible_to<size_t>;
 };

@@ -37,7 +37,7 @@ struct FreeArenas {
   template <class Object>
   friend struct ArenaReallocator;
 
-  PROMPP_ALWAYS_INLINE static ArenaIndex get() noexcept {
+  static ArenaIndex get() noexcept {
     std::scoped_lock lock(free_arenas_mutex);
     if (!free_arenas.empty()) {
       const auto result = free_arenas.back();
@@ -48,7 +48,7 @@ struct FreeArenas {
     return kInvalidArenaIndex;
   }
 
-  PROMPP_ALWAYS_INLINE static void add(ArenaIndex arena_index) noexcept {
+  static void add(ArenaIndex arena_index) noexcept {
     std::scoped_lock lock(free_arenas_mutex);
     free_arenas.push_back(arena_index);
   }
@@ -98,7 +98,7 @@ struct ArenaReallocator {
     return arena_index;
   }
 
-  PROMPP_ALWAYS_INLINE static void destroy_arena(ArenaIndex arena_index) noexcept {
+  PROMPP_ALWAYS_INLINE static void release_arena(ArenaIndex arena_index) noexcept {
     mallctl(create_command("arena.%u.reset", arena_index).data(), nullptr, nullptr, nullptr, 0);
     mallctl(create_command("arena.%u.purge", arena_index).data(), nullptr, nullptr, nullptr, 0);
     FreeArenas::add(arena_index);
