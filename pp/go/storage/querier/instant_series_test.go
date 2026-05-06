@@ -1,14 +1,15 @@
 package querier_test
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 type InstantSeriesTestSuite struct {
@@ -84,8 +85,8 @@ func (s *InstantSeriesTestSuite) TestSuccess() {
 	seriesSet, err := storagetest.InstantQuery(s.lss, s.ds, targetTimestamp, s.valueNotFoundTimestampValue, matcher)
 
 	// Assert
-	require.NoError(s.T(), err)
-	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
+	s.Require().NoError(err)
+	s.Require().Equal(expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *InstantSeriesTestSuite) TestEmptyResult() {
@@ -103,8 +104,8 @@ func (s *InstantSeriesTestSuite) TestEmptyResult() {
 	seriesSet, err := storagetest.InstantQuery(s.lss, s.ds, targetTimestamp, s.valueNotFoundTimestampValue, matcher)
 
 	// Assert
-	require.NoError(s.T(), err)
-	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
+	s.Require().NoError(err)
+	s.Require().Equal(expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *InstantSeriesTestSuite) TestBigTargetTimestamp() {
@@ -122,6 +123,6 @@ func (s *InstantSeriesTestSuite) TestBigTargetTimestamp() {
 	seriesSet, err := storagetest.InstantQuery(s.lss, s.ds, targetTimestamp, s.valueNotFoundTimestampValue, matcher)
 
 	// Assert
-	require.NoError(s.T(), err)
-	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
+	s.Require().NoError(err)
+	s.Require().Equal(expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }

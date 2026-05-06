@@ -1,14 +1,15 @@
-Subject: [PATCH] Preserve pre-c4d35e0 behavior for clang-tidy aspect
+Subject: [PATCH] Adjust clang-tidy aspect: opt-in header lint, skip builtin -isystem
 
-Upstream commit c4d35e0 introduced two behavioral changes that don't fit
-this project's setup. This patch reverts both:
+Upstream commit c4d35e0 introduced two behavioral changes in the
+`clang_tidy_aspect` that don't fit this project's setup. This patch
+keeps both changes off:
 
-1. Header files are now linted by default (the aspect treats every public
-   header as a main translation unit). For this repository that would
-   require fixing a large number of pre-existing IWYU and enum-size
-   findings that have never been visible before. Gate the new behavior
-   behind the explicit `clang-tidy-headers` tag so header linting stays
-   off by default and we can opt-in per-target later.
+1. Header files are now linted by default (the aspect treats every
+   public header as a main translation unit). For this repository that
+   would require fixing a large number of pre-existing IWYU and
+   enum-size findings that have never been visible before. Gate the new
+   behavior behind an explicit `clang-tidy-headers` tag so header
+   linting stays off by default and we can opt-in per-target later.
 
 2. The aspect now injects one `-isystem` flag per entry in
    `cc_toolchain.built_in_include_directories`. For this project's

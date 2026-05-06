@@ -167,29 +167,30 @@ class ChunkRecoder {
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
-    series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
-      for (; begin != end; ++begin) {
-        const auto& sample = *begin;
-        if (sample.timestamp > time_interval_.max) [[unlikely]] {
-          return;
+    series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+      begin.template seek<series_data::decoder::SeekKind::kNextStop>([&](int64_t timestamp, double value) {
+        if (timestamp > time_interval_.max) [[unlikely]] {
+          return series_data::decoder::SeekResult::kStop;
         }
-        if (sample.timestamp < time_interval_.min) [[unlikely]] {
-          continue;
+
+        if (timestamp < time_interval_.min) [[unlikely]] {
+          return series_data::decoder::SeekResult::kNext;
         }
 
         if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
-          info.interval.min = sample.timestamp;
+          info.interval.min = timestamp;
         }
 
         if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator> ||
                       std::is_same_v<Iterator, series_data::decoder::TwoDoubleConstantDecodeIterator>) {
-          encoder.encode_constant_value(sample.timestamp, sample.value, stream_, stream_);
+          encoder.encode_constant_value(timestamp, value, stream_, stream_);
         } else {
-          encoder.encode(sample.timestamp, sample.value, stream_, stream_);
+          encoder.encode(timestamp, value, stream_, stream_);
         }
 
         ++info.samples_count;
-      }
+        return series_data::decoder::SeekResult::kNext;
+      });
     });
 
     if (info.samples_count > 0) [[likely]] {
