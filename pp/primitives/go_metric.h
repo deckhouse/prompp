@@ -96,7 +96,7 @@ struct MetricDescriptor {
     for (const auto& label_pair : labels) {
       const_label_pairs.emplace_back(&label_pair);
     }
-    std::ranges::sort(const_label_pairs, [](const LabelPair* a, const LabelPair* b) { return a->name < b->name; });
+    std::ranges::sort(const_label_pairs, [](const LabelPair* a, const LabelPair* b) { return *a->name < *b->name; });
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t calculate_id() const noexcept {
