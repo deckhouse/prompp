@@ -85,12 +85,14 @@ using CounterRef = GenericCounterRef<double*>;
 using AtomicCounter = GenericCounter<std::atomic<double>>;
 using AtomicCounterRef = GenericCounterRef<std::atomic_ref<double>>;
 
-class Gauge final : public Metric {
+template <class Type>
+  requires std::same_as<Type, double> || std::same_as<Type, std::atomic<double>>
+class GenericGauge final : public Metric {
  public:
   using Metric::Metric;
 
   template <class LabelSet, BareBones::concepts::arithmetic ValueType = double>
-  explicit Gauge(LabelSet&& labels, std::string_view name, ValueType value = {})
+  explicit GenericGauge(LabelSet&& labels, std::string_view name, ValueType value = {})
       : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), value_(value) {}
 
   PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
@@ -100,5 +102,24 @@ class Gauge final : public Metric {
   double value_{};
   PromPP::Primitives::Go::dto::Gauge gauge_{&value_};
 };
+
+template <class Type>
+  requires std::same_as<Type, double*> || std::same_as<Type, std::atomic_ref<double>>
+class GenericGaugeRef final : public Metric {
+ public:
+  using Metric::Metric;
+
+  template <class LabelSet>
+  explicit GenericGaugeRef(LabelSet&& labels, std::string_view name, Type value)
+      : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), gauge_(value) {}
+
+ protected:
+  PromPP::Primitives::Go::dto::Gauge gauge_;
+};
+
+using Gauge = GenericGauge<double>;
+using GaugeRef = GenericGaugeRef<double*>;
+using AtomicGauge = GenericGauge<std::atomic<double>>;
+using AtomicGaugeRef = GenericGaugeRef<std::atomic_ref<double>>;
 
 }  // namespace metrics
