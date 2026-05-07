@@ -16,8 +16,12 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
+	"github.com/prometheus/prometheus/pp/go/storage/head/task"
+	"github.com/prometheus/prometheus/pp/go/storage/head/transactionhead"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -95,13 +99,59 @@ func NewIncomingData(s *suite.Suite, timeSeries []model.TimeSeries) *appender.In
 	return &appender.IncomingData{Hashdex: hx, Data: &tsd}
 }
 
+// MustAppendTimeSeriesToLSSAndDataStorage adds timeSeries to the given lss and ds in a single
+// batch via a one-shard [transactionhead.Head] driven by the regular [appender]. This collapses
+// what used to be 2*N cgo calls per sample (FindOrEmplace + Encode) into a single
+// hashdex-based Append, which materially speeds up tests on slow toolchains (ASAN, ARM CI).
 func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStorage, timeSeries ...TimeSeries) {
+	if len(timeSeries) == 0 {
+		return
+	}
+
+	totalSamples := 0
 	for i := range timeSeries {
-		modelTimeSeries := timeSeries[i].toModelTimeSeries()
-		for j := range modelTimeSeries {
-			foeResult := lss.Target().FindOrEmplace(modelTimeSeries[j].LabelSet)
-			ds.Encode(foeResult.LabelSetID, int64(modelTimeSeries[j].Timestamp), modelTimeSeries[j].Value)
-		}
+		totalSamples += len(timeSeries[i].Samples)
+	}
+	flat := make([]model.TimeSeries, 0, totalSamples)
+	for i := range timeSeries {
+		flat = append(flat, timeSeries[i].toModelTimeSeries()...)
+	}
+
+	hx, err := (cppbridge.HashdexFactory{}).GoModel(flat, cppbridge.DefaultWALHashdexLimits())
+	if err != nil {
+		panic(fmt.Errorf("storagetest: build hashdex: %w", err))
+	}
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(nil)
+	if err != nil {
+		panic(fmt.Errorf("storagetest: stateless relabeler: %w", err))
+	}
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetStatelessRelabeler(statelessRelabeler)
+
+	sd := shard.NewShard(lss, ds, nil, nil, wal.NewNoopWal(), 0)
+	pools := poolprovider.NewHeadPool[*shard.PerGoroutineShard](1)
+	th := transactionhead.NewHead[*shard.Shard, *shard.PerGoroutineShard](
+		"storagetest",
+		sd,
+		shard.NewPerGoroutineShard[wal.NoopWal](sd, 1),
+		pools,
+	)
+
+	app := appender.New[
+		*task.Generic[*shard.PerGoroutineShard],
+		*shard.Shard,
+		*shard.PerGoroutineShard,
+		*storage.TransactionHead,
+	](th, func(*storage.TransactionHead) error { return nil })
+
+	if _, err = app.Append(
+		context.Background(),
+		&appender.IncomingData{Hashdex: hx, Data: &timeSeriesDataSlice{timeSeries: flat}},
+		state,
+		false,
+	); err != nil {
+		panic(fmt.Errorf("storagetest: append: %w", err))
 	}
 }
 
