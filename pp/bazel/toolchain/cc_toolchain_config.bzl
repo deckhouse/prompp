@@ -204,7 +204,7 @@ def _impl(ctx):
                             flags = [
                                 "-static-libgcc",
                                 "-static-libstdc++",
-                                "-l:libstdc++.a",
+                                "-lstdc++",
                                 "-lm",
                                 "-lunwind",
                                 "-lstdc++_libbacktrace"
