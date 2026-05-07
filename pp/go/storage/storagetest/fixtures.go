@@ -6,10 +6,13 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 	"unsafe"
 
 	"github.com/jonboulle/clockwork"
+	"golang.org/x/sync/semaphore"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -181,15 +184,50 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 	return result
 }
 
-// TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
+// TimeSeriesFromSeriesSet converts a [promstorage.SeriesSet] to a slice of [TimeSeries] preserving
+// the iteration order. Sample reading is parallelised with a GOMAXPROCS-sized
+// [semaphore.Weighted]: the SeriesSet itself is drained sequentially (cheap; one cgo Next per
+// series), then each Series is iterated in its own goroutine via a fresh chunk iterator. Under
+// ASAN/ARM the per-sample cgo reads dominate and parallelisation gives a noticeable speedup.
+//
+// The same semaphore replaces a WaitGroup: after all goroutines are launched the caller waits by
+// acquiring all `workers` slots, which only succeeds once every Release has fired.
 func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool) []TimeSeries {
-	var chunkIterator chunkenc.Iterator
-	timeSeries := make([]TimeSeries, 0)
+	var allSeries []promstorage.Series
 	for seriesSet.Next() {
-		series := seriesSet.At()
-		timeSeries = append(timeSeries, TimeSeriesFromSeries(series, chunkIterator, groupSamples)...)
+		allSeries = append(allSeries, seriesSet.At())
+	}
+	if len(allSeries) == 0 {
+		return []TimeSeries{}
 	}
 
+	perSeries := make([][]TimeSeries, len(allSeries))
+	workers := runtime.GOMAXPROCS(0)
+	if workers > len(allSeries) {
+		workers = len(allSeries)
+	}
+
+	ctx := context.Background()
+	sem := semaphore.NewWeighted(int64(workers))
+	for i := range allSeries {
+		// Acquire blocks until a worker slot is free; with context.Background it never errors.
+		_ = sem.Acquire(ctx, 1)
+		go func(i int) {
+			defer sem.Release(1)
+			perSeries[i] = TimeSeriesFromSeries(allSeries[i], nil, groupSamples)
+		}(i)
+	}
+	// Wait for every in-flight goroutine by reserving all worker slots.
+	_ = sem.Acquire(ctx, int64(workers))
+
+	total := 0
+	for _, p := range perSeries {
+		total += len(p)
+	}
+	timeSeries := make([]TimeSeries, 0, total)
+	for _, p := range perSeries {
+		timeSeries = append(timeSeries, p...)
+	}
 	return timeSeries
 }
 
