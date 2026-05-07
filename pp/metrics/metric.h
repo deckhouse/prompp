@@ -66,8 +66,24 @@ class GenericCounter final : public Metric {
   PromPP::Primitives::Go::dto::Counter counter_{reinterpret_cast<double*>(&value_)};
 };
 
+template <class Type>
+  requires std::same_as<Type, double*> || std::same_as<Type, std::atomic_ref<double>>
+class GenericCounterRef final : public Metric {
+ public:
+  using Metric::Metric;
+
+  template <class LabelSet>
+  explicit GenericCounterRef(LabelSet&& labels, std::string_view name, Type value)
+      : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), counter_(reinterpret_cast<double*>(value)) {}
+
+ protected:
+  PromPP::Primitives::Go::dto::Counter counter_;
+};
+
 using Counter = GenericCounter<double>;
+using CounterRef = GenericCounterRef<double*>;
 using AtomicCounter = GenericCounter<std::atomic<double>>;
+using AtomicCounterRef = GenericCounterRef<std::atomic_ref<double>>;
 
 class Gauge final : public Metric {
  public:

@@ -1,5 +1,6 @@
 #include "metrics.h"
 
+#include "metrics/jemalloc_metrics.h"
 #include "metrics/storage.h"
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
@@ -7,6 +8,13 @@
 using PromPP::Primitives::Go::Label;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::Go::String;
+
+extern "C" void prompp_metrics_register() {
+  [[maybe_unused]] static auto _ = [] {
+    metrics::CreateMetricsPage<metrics::JemallocMetrics>();
+    return 0;
+  }();
+}
 
 extern "C" void prompp_metrics_iterator_ctor(void* args) {
   metrics::storage().remove_unused_pages();
