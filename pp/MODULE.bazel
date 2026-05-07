@@ -23,7 +23,7 @@ git_override(
     commit = "c4d35e0d0b838309358e57a2efed831780f85cd0",
     patch_strip = 1,
     patches = [
-        "//third_party/patches/bazel_clang_tidy:0001-preserve-old-behavior.patch",
+        "//third_party/patches/bazel_clang_tidy:0001-clang-tidy-aspect-tweaks.patch",
     ],
     remote = "https://github.com/erenon/bazel_clang_tidy.git",
 )

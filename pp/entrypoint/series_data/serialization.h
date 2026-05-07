@@ -1,6 +1,6 @@
 #pragma once
 
-#include "entrypoint/series_data/decode_iterator.h"
+#include "decode_iterator.h"
 #include "entrypoint/series_data/multiseries_decode_iterator.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
