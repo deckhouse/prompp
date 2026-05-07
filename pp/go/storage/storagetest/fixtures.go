@@ -6,18 +6,25 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 	"unsafe"
 
 	"github.com/jonboulle/clockwork"
+	"golang.org/x/sync/semaphore"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
+	"github.com/prometheus/prometheus/pp/go/storage/head/task"
+	"github.com/prometheus/prometheus/pp/go/storage/head/transactionhead"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -95,13 +102,59 @@ func NewIncomingData(s *suite.Suite, timeSeries []model.TimeSeries) *appender.In
 	return &appender.IncomingData{Hashdex: hx, Data: &tsd}
 }
 
+// MustAppendTimeSeriesToLSSAndDataStorage adds timeSeries to the given lss and ds in a single
+// batch via a one-shard [transactionhead.Head] driven by the regular [appender]. This collapses
+// what used to be 2*N cgo calls per sample (FindOrEmplace + Encode) into a single
+// hashdex-based Append, which materially speeds up tests on slow toolchains (ASAN, ARM CI).
 func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStorage, timeSeries ...TimeSeries) {
+	if len(timeSeries) == 0 {
+		return
+	}
+
+	totalSamples := 0
 	for i := range timeSeries {
-		modelTimeSeries := timeSeries[i].toModelTimeSeries()
-		for j := range modelTimeSeries {
-			foeResult := lss.Target().FindOrEmplace(modelTimeSeries[j].LabelSet)
-			ds.Encode(foeResult.LabelSetID, int64(modelTimeSeries[j].Timestamp), modelTimeSeries[j].Value)
-		}
+		totalSamples += len(timeSeries[i].Samples)
+	}
+	flat := make([]model.TimeSeries, 0, totalSamples)
+	for i := range timeSeries {
+		flat = append(flat, timeSeries[i].toModelTimeSeries()...)
+	}
+
+	hx, err := (cppbridge.HashdexFactory{}).GoModel(flat, cppbridge.DefaultWALHashdexLimits())
+	if err != nil {
+		panic(fmt.Errorf("storagetest: build hashdex: %w", err))
+	}
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(nil)
+	if err != nil {
+		panic(fmt.Errorf("storagetest: stateless relabeler: %w", err))
+	}
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetStatelessRelabeler(statelessRelabeler)
+
+	sd := shard.NewShard(lss, ds, nil, nil, wal.NewNoopWal(), 0)
+	pools := poolprovider.NewHeadPool[*shard.PerGoroutineShard](1)
+	th := transactionhead.NewHead[*shard.Shard, *shard.PerGoroutineShard](
+		"storagetest",
+		sd,
+		shard.NewPerGoroutineShard[wal.NoopWal](sd, 1),
+		pools,
+	)
+
+	app := appender.New[
+		*task.Generic[*shard.PerGoroutineShard],
+		*shard.Shard,
+		*shard.PerGoroutineShard,
+		*storage.TransactionHead,
+	](th, func(*storage.TransactionHead) error { return nil })
+
+	if _, err = app.Append(
+		context.Background(),
+		&appender.IncomingData{Hashdex: hx, Data: &timeSeriesDataSlice{timeSeries: flat}},
+		state,
+		false,
+	); err != nil {
+		panic(fmt.Errorf("storagetest: append: %w", err))
 	}
 }
 
@@ -131,15 +184,50 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 	return result
 }
 
-// TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
+// TimeSeriesFromSeriesSet converts a [promstorage.SeriesSet] to a slice of [TimeSeries] preserving
+// the iteration order. Sample reading is parallelised with a GOMAXPROCS-sized
+// [semaphore.Weighted]: the SeriesSet itself is drained sequentially (cheap; one cgo Next per
+// series), then each Series is iterated in its own goroutine via a fresh chunk iterator. Under
+// ASAN/ARM the per-sample cgo reads dominate and parallelisation gives a noticeable speedup.
+//
+// The same semaphore replaces a WaitGroup: after all goroutines are launched the caller waits by
+// acquiring all `workers` slots, which only succeeds once every Release has fired.
 func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool) []TimeSeries {
-	var chunkIterator chunkenc.Iterator
-	timeSeries := make([]TimeSeries, 0)
+	var allSeries []promstorage.Series
 	for seriesSet.Next() {
-		series := seriesSet.At()
-		timeSeries = append(timeSeries, TimeSeriesFromSeries(series, chunkIterator, groupSamples)...)
+		allSeries = append(allSeries, seriesSet.At())
+	}
+	if len(allSeries) == 0 {
+		return []TimeSeries{}
 	}
 
+	perSeries := make([][]TimeSeries, len(allSeries))
+	workers := runtime.GOMAXPROCS(0)
+	if workers > len(allSeries) {
+		workers = len(allSeries)
+	}
+
+	ctx := context.Background()
+	sem := semaphore.NewWeighted(int64(workers))
+	for i := range allSeries {
+		// Acquire blocks until a worker slot is free; with context.Background it never errors.
+		_ = sem.Acquire(ctx, 1)
+		go func(i int) {
+			defer sem.Release(1)
+			perSeries[i] = TimeSeriesFromSeries(allSeries[i], nil, groupSamples)
+		}(i)
+	}
+	// Wait for every in-flight goroutine by reserving all worker slots.
+	_ = sem.Acquire(ctx, int64(workers))
+
+	total := 0
+	for _, p := range perSeries {
+		total += len(p)
+	}
+	timeSeries := make([]TimeSeries, 0, total)
+	for _, p := range perSeries {
+		timeSeries = append(timeSeries, p...)
+	}
 	return timeSeries
 }
 
