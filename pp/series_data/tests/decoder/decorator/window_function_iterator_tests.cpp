@@ -2,6 +2,7 @@
 
 #include "series_data/data_storage.h"
 #include "series_data/decoder/decorator/max_over_time.h"
+#include "series_data/decoder/decorator/sum_over_time.h"
 #include "series_data/decoder/decorator/window_function_iterator.h"
 #include "series_data/encoder.h"
 
@@ -19,6 +20,7 @@ using series_data::decoder::kInvalidTimestamp;
 using series_data::decoder::SeekResult;
 using series_data::decoder::UniversalDecodeIterator;
 using series_data::decoder::decorator::MaxOverTimeIterator;
+using series_data::decoder::decorator::SumOverTimeIterator;
 using series_data::decoder::decorator::WindowFunctionIterator;
 using series_data::decoder::decorator::WindowFunctionParameters;
 using series_data::encoder::Sample;
@@ -259,5 +261,27 @@ INSTANTIATE_TEST_SUITE_P(StaleNanSkipped,
                                                                             .range = 100,
                                                                         },
                                                                     .expected{Sample{.timestamp = 150, .value = 2.0}}}));
+
+using SumOverTimeWindowFunctionIteratorFixture = WindowFunctionIteratorFixture<SumOverTimeIterator>;
+
+TEST_P(SumOverTimeWindowFunctionIteratorFixture, Test) {
+  test();
+}
+
+TEST_P(SumOverTimeWindowFunctionIteratorFixture, TestReset) {
+  test_reset();
+}
+
+INSTANTIATE_TEST_SUITE_P(DoesNotDoubleCountBoundarySample,
+                         SumOverTimeWindowFunctionIteratorFixture,
+                         testing::Values(WindowFunctionIteratorCase{
+                             .samples{Sample{.timestamp = 100, .value = 10.0}, Sample{.timestamp = 150, .value = 1.0}, Sample{.timestamp = 200, .value = 2.0}},
+                             .parameters =
+                                 {
+                                     .interval{.min = 0, .max = 200},
+                                     .step = 100,
+                                     .range = 1000,
+                                 },
+                             .expected{Sample{.timestamp = 100, .value = 10.0}, Sample{.timestamp = 200, .value = 3.0}}}));
 
 }  // namespace
