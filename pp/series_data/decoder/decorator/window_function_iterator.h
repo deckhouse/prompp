@@ -107,7 +107,7 @@ class WindowFunctionIterator {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static Timestamp next_interval_boundary(Timestamp start, Timestamp step_ms, Timestamp range_ms) noexcept {
     if (range_ms <= step_ms) [[likely]] {
-      return start + range_ms;
+      return start + (range_ms == 0 ? step_ms : range_ms);
     }
 
     return start + range_ms - (range_ms - step_ms);

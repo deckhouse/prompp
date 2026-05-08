@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -58,6 +59,7 @@ func TestMergeShardSeriesSetSuite(t *testing.T) {
 	suite.Run(t, new(MergeShardSeriesSetSuite))
 }
 
+//revive:disable-next-line:cognitive-complexity // this is a test.
 func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 	var start int64
 	matcher := model.LabelMatcher{
@@ -259,16 +261,30 @@ func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries
 	return timeSeries
 }
 
-func TestAGGSS(t *testing.T) {
-	head := makeHead(2, 10, 5)
-	names := []string{
-		"even_numbered",
-		"shard_id",
-	}
-	nameIDs := make([]uint32, len(names))
+//
+//
+//
 
-	selector, snapshot, err := head.lsses[0].QuerySelector(
-		0,
+func TestAGGSS(t *testing.T) {
+	hints := &storage.SelectHints{
+		Start: 0,
+		End:   6,
+		Step:  1,
+		Func:  "sum",
+		Range: 1,
+		Grouping: []string{
+			// "shard_id",
+			// "even_numbered",
+			"head_id",
+		},
+		By: true,
+	}
+
+	shardID := uint16(0)
+	head := makeHead(2, 10, 5)
+
+	selector, snapshot, err := head.lsses[shardID].QuerySelector(
+		shardID,
 		[]model.LabelMatcher{{
 			Name:        "__name__",
 			Value:       "metric",
@@ -282,10 +298,74 @@ func TestAGGSS(t *testing.T) {
 	seriesIDs := lssQueryResult.IDs()
 	t.Log("seriesIDs", seriesIDs)
 
-	t.Log("nameIDs 1", nameIDs)
-	head.lsses[0].LabelNameToIDs(names, nameIDs)
-	t.Log("nameIDs 2", nameIDs)
+	nameIDs := make([]uint32, len(hints.Grouping))
+	t.Log("nameIDs empty", nameIDs)
+	head.lsses[0].LabelNameToIDs(hints.Grouping, nameIDs)
+	t.Log("nameIDs filled", nameIDs)
 
 	seriesGroups := head.lsses[0].GroupSeriesByLabelNames(seriesIDs, nameIDs)
-	t.Log("seriesGroups", seriesGroups)
+	t.Log("seriesGroups", seriesGroups.Groups)
+
+	// t.Log("createLabelSet", aggLabelSetCtor(snapshot, hints.Grouping, "headID", seriesGroups.Groups[0][0], shardID))
+	// t.Log("createLabelSet", aggLabelSetCtor(snapshot, hints.Grouping, "headID", seriesGroups.Groups[1][0], shardID))
+
+	result := head.dss[shardID].Query(
+		cppbridge.DataStorageQuery{
+			StartTimestampMs: hints.Start,
+			EndTimestampMs:   hints.End,
+			LabelSetIDs:      seriesIDs,
+		},
+		cppbridge.NoDownsampling,
+		hints,
+	)
+
+	ss := querier.NewAggSeriesSet(
+		result.SerializedData,
+		snapshot,
+		seriesGroups,
+		hints.Start,
+		hints.End,
+		hints.Grouping,
+		"headID",
+		shardID,
+	)
+
+	var it chunkenc.Iterator
+	for ss.Next() {
+		s := ss.At()
+		t.Log(s.Labels())
+		it = s.Iterator(it)
+		t.Log(it.Next())
+		for it.Next() != chunkenc.ValNone {
+			ts, v := it.At()
+			t.Log(ts, v)
+		}
+	}
+}
+
+type el struct {
+	a int
+	b string
+}
+
+func (e *el) String() string {
+	return fmt.Sprintf("el{a: %d, b: %s}", e.a, e.b)
+}
+
+type elem struct {
+	value el
+}
+
+func (e *elem) Get() *el {
+	return &e.value
+}
+
+func TestXxx(t *testing.T) {
+	e := elem{value: el{a: 1, b: "2"}}
+	el1 := e.Get()
+	t.Log(el1)
+
+	e.value = el{a: 3, b: "4"}
+	el2 := e.Get()
+	t.Log(el1, el2)
 }

@@ -182,8 +182,7 @@ type SeriesSet struct {
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	serializedData   *cppbridge.DataStorageSerializedData
 
-	lastIndexFromLSSQueryResult int
-	series                      []Series
+	series []Series
 }
 
 func NewSeriesSet(

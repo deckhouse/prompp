@@ -66,6 +66,12 @@ type DataStorage interface {
 
 // LSS the minimum required [LSS] implementation.
 type LSS interface {
+	// GroupSeriesByLabelNames group series by label names.
+	GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups
+
+	// LabelNameToIDs get label name ids from lss.
+	LabelNameToIDs(names []string, namesIDs []uint32)
+
 	// QueryLabelNames returns all the unique label names present in lss in sorted order.
 	QueryLabelNames(
 		shardID uint16,
@@ -133,6 +139,9 @@ type Head[
 
 	// EnqueueOnShard the task to be executed on head on specific shard.
 	EnqueueOnShard(t TTask, shardID uint16)
+
+	// ID returns the [Head] ID.
+	ID() string
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16

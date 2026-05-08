@@ -183,7 +183,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	var series = []struct {
+	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
 	}{
@@ -320,7 +320,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
 		Start: 0,
 		End:   200,
 		Step:  100,
-		Range: 100,
+		Range: 0,
 		Func:  "sum",
 	}, []uint32{0, 1}, []uint32{0, 1})
 

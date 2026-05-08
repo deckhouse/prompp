@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
+	"github.com/prometheus/prometheus/util/loopbackctx"
 )
 
 const (
@@ -28,6 +29,9 @@ const (
 	// lssLabelNamesQuerier name of task.
 	lssLabelNamesQuerier = "lss_label_names_querier"
 
+	// lssGroupSeriesByLabelNames name of task.
+	lssGroupSeriesByLabelNames = "lss_group_series_by_label_names"
+
 	// dsQueryInstantQuerier name of task.
 	dsQueryInstantQuerier = "data_storage_query_instant_querier"
 	// dsQueryRangeQuerier name of task.
@@ -36,6 +40,9 @@ const (
 	// DefaultInstantQueryValueNotFoundTimestampValue default value for not found timestamp value.
 	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
 )
+
+// emptySeriesSet is an empty series set.
+var emptySeriesSet = &SeriesSet{}
 
 //
 // Querier
@@ -146,6 +153,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	if q.mint == q.maxt {
 		return q.selectInstant(ctx, sortSeries, hints, matchers...)
 	}
+
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
@@ -163,7 +171,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
-			return &SeriesSet{}
+			return emptySeriesSet
 		}
 
 		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
@@ -253,7 +261,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
-			return &SeriesSet{}
+			return emptySeriesSet
 		}
 
 		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
@@ -280,9 +288,27 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	loopbackDuration := loopbackctx.LoopbackFromContext(ctx)
+	_ = loopbackDuration
+
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
+
+	if isAggSeriesSet(hints) {
+		return q.makeAggSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
+	}
+
+	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+}
+
+// makeSeriesSet makes the series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
 
 	seriesSets := poolProvider.GetSeriesSet()
 	defer poolProvider.PutSeriesSet(seriesSets)
@@ -297,10 +323,83 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 			)
 			continue
 		}
-		seriesSets[shardID] = &SeriesSet{}
+
+		seriesSets[shardID] = emptySeriesSet
 	}
 
 	return NewMergeShardSeriesSet(seriesSets)
+}
+
+// makeAggSeriesSet queries the aggregated series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+	hints *storage.SelectHints,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
+
+	seriesGroups := poolProvider.GetSeriesGroups()
+	defer poolProvider.PutSeriesGroups(seriesGroups)
+	t := q.head.CreateTask(
+		lssGroupSeriesByLabelNames,
+		func(shard TShard) error {
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
+			if lssQueryResult == nil {
+				return nil
+			}
+
+			nameIDs := poolProvider.GetNameIDs(len(hints.Grouping))
+			shard.LSS().LabelNameToIDs(hints.Grouping, nameIDs)
+			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(lssQueryResults[shardID].IDs(), nameIDs)
+			poolProvider.PutNameIDs(nameIDs)
+
+			return nil
+		},
+	)
+	defer q.head.PutTask(t)
+	q.head.Enqueue(t)
+	_ = t.Wait()
+
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData == nil {
+			seriesSets[shardID] = emptySeriesSet
+			continue
+		}
+
+		seriesSets[shardID] = NewAggSeriesSet(
+			serializedData,
+			snapshots[shardID],
+			seriesGroups[shardID],
+			q.mint,
+			q.maxt,
+			hints.Grouping,
+			q.head.ID(),
+			uint16(shardID), // #nosec G115 // no overflow
+		)
+	}
+
+	return NewMergeShardSeriesSet(seriesSets)
+}
+
+// isAggSeriesSet checks if the series set is an aggregated series set.
+func isAggSeriesSet(hints *storage.SelectHints) bool {
+	for _, group := range hints.Grouping {
+		if group == labelHeadID || group == labelShardID {
+			logger.Infof(
+				"[QUERIER]: isAggSeriesSet: head_id or shard_id is in the grouping, it will be ignored: %s",
+				group,
+			)
+			return false
+		}
+	}
+
+	return hints.Func == "sum" ||
+		hints.Func == "max" ||
+		hints.Func == "min"
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
