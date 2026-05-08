@@ -158,6 +158,18 @@ INSTANTIATE_TEST_SUITE_P(NoStep,
                                                                         },
                                                                     .expected{Sample{.timestamp = 500, .value = 2.0}}}));
 
+INSTANTIATE_TEST_SUITE_P(NoRange,
+                         MaxOverTimeWindowFunctionIteratorFixture,
+                         testing::Values(WindowFunctionIteratorCase{
+                             .samples{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 1000, .value = 2.0}},
+                             .parameters =
+                                 {
+                                     .interval{.min = 0, .max = 1000},
+                                     .step = 100,
+                                     .range = 0,
+                                 },
+                             .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 1000, .value = 2.0}}}));
+
 INSTANTIATE_TEST_SUITE_P(StepGreaterThanRange,
                          MaxOverTimeWindowFunctionIteratorFixture,
                          testing::Values(WindowFunctionIteratorCase{
