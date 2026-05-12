@@ -44,11 +44,11 @@ const (
 	// NoneOpt is the option without any optimization.
 	NoneOpt uint8 = iota
 
-	// AggrOpt is the option for aggregated functions optimization.
-	AggrOpt
+	// AggrFuncOpt is the option for aggregated functions optimization.
+	AggrFuncOpt
 
-	// CrossSeriesOpt is the option for cross series functions optimization.
-	CrossSeriesOpt
+	// CrossSeriesFuncOpt is the option for cross series functions optimization.
+	CrossSeriesFuncOpt
 
 	// AllOpt is the option for aggregated and cross functions optimization.
 	AllOpt
@@ -60,9 +60,9 @@ func ParseSelectFuncOpt(opt string) (uint8, error) {
 	case "none":
 		return NoneOpt, nil
 	case "aggr":
-		return AggrOpt, nil
+		return AggrFuncOpt, nil
 	case "cross":
-		return CrossSeriesOpt, nil
+		return CrossSeriesFuncOpt, nil
 	case "all":
 		return AllOpt, nil
 	default:
@@ -325,13 +325,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = selectOpt(hints)
+	hints = selectFuncOpt(hints)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
-	if isCrossSeriesSet(hints) {
-		return q.makeCrossSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
+	if isCrossSeriesFunc(hints.Func) && isAllowedGroupingForCrossSeriesFunc(hints.Grouping) {
+		return q.makeAggSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
 	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
@@ -365,8 +365,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// makeCrossSeriesSet queries the cross series set.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
+// makeAggSeriesSet queries the aggregated cross series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
@@ -420,20 +420,20 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// selectOpt selects the optimization option.
-func selectOpt(hints *storage.SelectHints) *storage.SelectHints {
+// selectFuncOpt selects the function optimization hints.
+func selectFuncOpt(hints *storage.SelectHints) *storage.SelectHints {
 	switch SelectFuncOpt {
 	case NoneOpt:
 		return emptySelectHints
 
-	case AggrOpt:
+	case AggrFuncOpt:
 		if isCrossSeriesFunc(hints.Func) {
 			return emptySelectHints
 		}
 
 		return hints
 
-	case CrossSeriesOpt:
+	case CrossSeriesFuncOpt:
 		if !isCrossSeriesFunc(hints.Func) {
 			return emptySelectHints
 		}
@@ -444,19 +444,19 @@ func selectOpt(hints *storage.SelectHints) *storage.SelectHints {
 	return hints
 }
 
-// isCrossSeriesSet checks if the series set is an cross series set.
-func isCrossSeriesSet(hints *storage.SelectHints) bool {
-	for _, group := range hints.Grouping {
+// isAllowedGroupingForCrossSeriesFunc checks if the series set is an cross series set.
+func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
+	for _, group := range grouping {
 		if group == labelHeadID || group == labelShardID {
 			logger.Infof(
-				"[QUERIER]: isCrossSeriesSet: head_id or shard_id is in the grouping, it will be ignored: %s",
+				"[QUERIER]: head_id or shard_id is in the grouping, it will be ignored: %s",
 				group,
 			)
 			return false
 		}
 	}
 
-	return isCrossSeriesFunc(hints.Func)
+	return true
 }
 
 // isCrossSeriesFunc checks if the function is a cross series function.
