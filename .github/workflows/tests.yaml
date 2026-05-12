@@ -328,9 +328,10 @@ jobs:
               go install github.com/AlekSi/gocov-xml@latest
 
               # All-packages run; pkgs override = filtered list from scripts/list-test-packages.sh.
+              # -timeout 20m: per-package timeout (default 10m) — heavy upstream tsdb suite needs more under -race+coverage.
               FLAGS=\$(./pp/scripts/ci_get_go_test_flags.sh)
               PKGS=\$(./scripts/list-test-packages.sh | tr '\n' ' ')
-              make test GO_ONLY=1 pkgs=\"\$PKGS\" args=\"\$FLAGS -cover -count=1 -coverprofile=coverage.txt -covermode=atomic\" 2>&1 | tee report.txt
+              make test GO_ONLY=1 pkgs=\"\$PKGS\" args=\"\$FLAGS -cover -count=1 -coverprofile=coverage.txt -covermode=atomic -timeout 20m\" 2>&1 | tee report.txt
 
               # reports
               cat report.txt | go-junit-report > report.xml
