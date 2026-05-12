@@ -178,7 +178,6 @@ func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 
 type SeriesSet struct {
 	mint, maxt       int64
-	lssQueryResult   *cppbridge.LSSQueryResult
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	serializedData   *cppbridge.DataStorageSerializedData
 
@@ -194,7 +193,6 @@ func NewSeriesSet(
 	return &SeriesSet{
 		mint:             mint,
 		maxt:             maxt,
-		lssQueryResult:   lssQueryResult,
 		labelSetSnapshot: labelSetSnapshot,
 		serializedData:   serializedData,
 		series:           make([]Series, 0, lssQueryResult.Len()),

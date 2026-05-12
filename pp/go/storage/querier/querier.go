@@ -16,7 +16,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
-	"github.com/prometheus/prometheus/util/loopbackctx"
 )
 
 const (
@@ -287,9 +286,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
-
-	loopbackDuration := loopbackctx.LoopbackFromContext(ctx)
-	_ = loopbackDuration
 
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)

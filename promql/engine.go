@@ -46,7 +46,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
-	"github.com/prometheus/prometheus/util/loopbackctx"
 	"github.com/prometheus/prometheus/util/stats"
 	"github.com/prometheus/prometheus/util/zeropool"
 )
@@ -715,9 +714,6 @@ func durationMilliseconds(d time.Duration) int64 {
 
 // execEvalStmt evaluates the expression of an evaluation statement for the given time range.
 func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.EvalStmt) (parser.Value, annotations.Annotations, error) {
-	// add loopback duration to context for query evaluation from c++
-	ctx = loopbackctx.ContextWithLoopback(ctx, s.LookbackDelta)
-
 	prepareSpanTimer, ctxPrepare := query.stats.GetSpanTimer(ctx, stats.QueryPreparationTime, ng.metrics.queryPrepareTime)
 	mint, maxt := FindMinMaxTime(s)
 	querier, err := query.queryable.Querier(mint, maxt)
@@ -977,11 +973,12 @@ func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s
 				interval = s.Interval
 			}
 			hints := &storage.SelectHints{
-				Start: start,
-				End:   end,
-				Step:  durationMilliseconds(interval),
-				Range: durationMilliseconds(evalRange),
-				Func:  extractFuncFromPath(path),
+				Start:         start,
+				End:           end,
+				Step:          durationMilliseconds(interval),
+				Range:         durationMilliseconds(evalRange),
+				Func:          extractFuncFromPath(path),
+				LookbackDelta: durationMilliseconds(s.LookbackDelta),
 			}
 			evalRange = 0
 			hints.By, hints.Grouping = extractGroupsFromPath(path)

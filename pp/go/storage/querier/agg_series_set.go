@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
+	"github.com/prometheus/prometheus/util/pool"
 )
 
 //
@@ -28,7 +29,6 @@ type AggSeriesSet struct {
 	headID           string
 	shardID          uint16
 
-	// TODO: slice to
 	series         []AggSeries
 	nextGroupIndex int
 }
@@ -314,6 +314,14 @@ const (
 	labelShardID = "__shard_id"
 )
 
+var (
+	// groupingPool is a pool of slices for sorted grouping.
+	groupingPool = pool.NewSlicePool[string]([]int{2, 3, 5})
+
+	// errGroupingLabelsIsEnough is the error returned when the grouping labels is enough.
+	errGroupingLabelsIsEnough = errors.New("grouping labels is enough")
+)
+
 // aggLabelSetCtor constructs the label set for an aggregated series.
 func aggLabelSetCtor(
 	sb *labels.ScratchBuilder,
@@ -335,7 +343,10 @@ func aggLabelSetCtor(
 	if len(grouping) == 1 {
 		sortedGrouping = grouping
 	} else {
-		sortedGrouping = append(make([]string, 0, len(grouping)), grouping...)
+		sortedGrouping = groupingPool.Get(len(grouping))
+		defer groupingPool.Put(sortedGrouping)
+
+		copy(sortedGrouping, grouping)
 		slices.Sort(sortedGrouping)
 	}
 
@@ -343,7 +354,7 @@ func aggLabelSetCtor(
 	_ = snapshot.RangeLabelSet(seriesID, func(l cppbridge.Label) error {
 		if i >= len(sortedGrouping) {
 			// fast exit if the grouping labels is enough
-			return errors.New("grouping labels is enough")
+			return errGroupingLabelsIsEnough
 		}
 
 		if l.Name > sortedGrouping[i] {
@@ -351,7 +362,7 @@ func aggLabelSetCtor(
 
 			if i >= len(sortedGrouping) {
 				// fast exit if the grouping labels is enough
-				return errors.New("grouping labels is enough")
+				return errGroupingLabelsIsEnough
 			}
 		}
 
@@ -362,7 +373,6 @@ func aggLabelSetCtor(
 
 		return nil
 	})
-
 	sb.Sort()
 
 	return sb.Labels()
