@@ -570,7 +570,7 @@ func newDestinationMetrics(name, ep string) *DestinationMetrics {
 			Subsystem:                       subsystem,
 			Name:                            "encode_batch_duration_seconds",
 			Help:                            "Duration of encode batch.",
-			Buckets:                         []float64{0},
+			Buckets:                         []float64{.005, .01, .025, .05, .1, .25, .5, 1},
 			ConstLabels:                     constLabels,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
