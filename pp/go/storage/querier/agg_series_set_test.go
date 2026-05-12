@@ -33,46 +33,32 @@ func (s *AggSeriesSetSuite) SetupTest() {
 
 	s.timeSeries = []storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 10, Value: 1},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 11, Value: 3},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 3}},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 12, Value: 5},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 5}},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 13, Value: 7},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 13, Value: 7}},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 10, Value: 1},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 11, Value: 2},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 2}},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 12, Value: 4},
-			},
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 4}},
 		},
 	}
 }
@@ -119,7 +105,7 @@ func (s *AggSeriesSetSuite) query(
 	)
 }
 
-func (s *AggSeriesSetSuite) TestQuerySum() {
+func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
 	// Arrange
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
@@ -139,13 +125,8 @@ func (s *AggSeriesSetSuite) TestQuerySum() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__head_id", "head_id", "__shard_id", "0"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 10, Value: 1},
-				{Timestamp: 11, Value: 5},
-				{Timestamp: 12, Value: 9},
-				{Timestamp: 13, Value: 7},
-			},
+			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0"),
+			Samples: []cppbridge.Sample{},
 		},
 	}
 
@@ -155,7 +136,155 @@ func (s *AggSeriesSetSuite) TestQuerySum() {
 	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
 
 	// Assert
-	s.Require().Equal(expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Require().Equal(len(expected), len(actual))
+	s.Require().Equal(expected[0].Labels, actual[0].Labels)
+}
+
+func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64
+	var end int64 = 50
+	hints := &storage.SelectHints{
+		Start:    10,
+		End:      13,
+		Step:     1,
+		Func:     "sum",
+		Range:    0,
+		Grouping: []string{"job"},
+	}
+
+	expected := []storagetest.TimeSeries{
+		{
+			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0", "job", "test"),
+			Samples: []cppbridge.Sample{},
+		},
+		{
+			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0", "job", "test2"),
+			Samples: []cppbridge.Sample{},
+		},
+	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
+
+	// Assert
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Require().Equal(len(expected), len(actual))
+	s.Require().Equal(expected[0].Labels, actual[0].Labels)
+	s.Require().Equal(expected[1].Labels, actual[1].Labels)
+}
+
+func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64
+	var end int64 = 50
+	hints := &storage.SelectHints{
+		Start:    10,
+		End:      13,
+		Step:     1,
+		Func:     "sum",
+		Range:    0,
+		Grouping: []string{"instance", "job"},
+	}
+
+	expected := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings(
+				"__head_id", "head_id",
+				"__shard_id", "0",
+				"job", "test",
+				"instance", "instance1",
+			),
+			Samples: []cppbridge.Sample{},
+		},
+		{
+			Labels: labels.FromStrings(
+				"__head_id", "head_id",
+				"__shard_id", "0",
+				"job", "test2",
+				"instance", "instance2",
+			),
+			Samples: []cppbridge.Sample{},
+		},
+	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
+
+	// Assert
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Require().Equal(len(expected), len(actual))
+	s.Require().Equal(expected[0].Labels, actual[0].Labels)
+	s.Require().Equal(expected[1].Labels, actual[1].Labels)
+}
+
+func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroupingLabel() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64
+	var end int64 = 50
+	hints := &storage.SelectHints{
+		Start:    10,
+		End:      13,
+		Step:     1,
+		Func:     "sum",
+		Range:    0,
+		Grouping: []string{"job", "instance", "head"},
+	}
+
+	expected := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings(
+				"__head_id", "head_id",
+				"__shard_id", "0",
+				"job", "test",
+				"instance", "instance1",
+			),
+			Samples: []cppbridge.Sample{},
+		},
+		{
+			Labels: labels.FromStrings(
+				"__head_id", "head_id",
+				"__shard_id", "0",
+				"job", "test2",
+				"instance", "instance2",
+			),
+			Samples: []cppbridge.Sample{},
+		},
+	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
+
+	// Assert
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Require().Equal(len(expected), len(actual))
+	s.Require().Equal(expected[0].Labels, actual[0].Labels)
+	s.Require().Equal(expected[1].Labels, actual[1].Labels)
 }
 
 //

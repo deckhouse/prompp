@@ -20,6 +20,8 @@ import (
 //
 
 // AggSeriesSet contains a set of aggregated series.
+// If grouping is empty, it will return series with labels "__head_id" and "__shard_id".
+// If grouping is not empty, it will return series with "__head_id" and "__shard_id" and the grouping labels.
 type AggSeriesSet struct {
 	serializedData   *cppbridge.DataStorageSerializedData
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
