@@ -197,8 +197,8 @@ type SelectHints struct {
 	Func string // String representation of surrounding function or aggregation.
 
 	Grouping []string // List of label names used in aggregation.
-	By       bool     // Indicate whether it is without or by.
-	Range    int64    // Range vector selector range in milliseconds.
+
+	Range int64 // Range vector selector range in milliseconds.
 
 	// ShardCount is the total number of shards that series should be split into
 	// at query time. Then, only series in the ShardIndex shard will be returned
@@ -214,10 +214,15 @@ type SelectHints struct {
 	// Series are sharded by "labels stable hash" mod "ShardCount".
 	ShardIndex uint64
 
+	// LookbackDelta duration for the query in milliseconds.
+	LookbackDelta int64
+
 	// DisableTrimming allows to disable trimming of matching series chunks based on query Start and End time.
 	// When disabled, the result may contain samples outside the queried time range but Select() performances
 	// may be improved.
 	DisableTrimming bool
+
+	By bool // Indicate whether it is without or by.
 }
 
 // LabelHints specifies hints passed for label reads.
