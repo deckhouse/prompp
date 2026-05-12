@@ -40,6 +40,44 @@ const (
 	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
 )
 
+const (
+	// NoneOpt is the option without any optimization.
+	NoneOpt uint8 = iota
+
+	// AggrOpt is the option for aggregated functions optimization.
+	AggrOpt
+
+	// CrossSeriesOpt is the option for cross series functions optimization.
+	CrossSeriesOpt
+
+	// AllOpt is the option for aggregated and cross functions optimization.
+	AllOpt
+)
+
+// ParseSelectFuncOpt parses the select func optimization option from string.
+func ParseSelectFuncOpt(opt string) (uint8, error) {
+	switch opt {
+	case "none":
+		return NoneOpt, nil
+	case "aggr":
+		return AggrOpt, nil
+	case "cross":
+		return CrossSeriesOpt, nil
+	case "all":
+		return AllOpt, nil
+	default:
+		return 0, fmt.Errorf(
+			"invalid select func optimization option: '%s', valid options are: 'none', 'aggr', 'cross', 'all'", opt,
+		)
+	}
+}
+
+// SelectFuncOpt is the option for selecting functions optimization.
+var SelectFuncOpt = NoneOpt
+
+// emptySelectHints is an empty select hints, it's used when no optimization is needed.
+var emptySelectHints = &storage.SelectHints{}
+
 // emptySeriesSet is an empty series set.
 var emptySeriesSet = &SeriesSet{}
 
@@ -287,12 +325,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	hints = selectOpt(hints)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
-	if isAggSeriesSet(hints) {
-		return q.makeAggSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
+	if isCrossSeriesSet(hints) {
+		return q.makeCrossSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
 	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
@@ -326,8 +365,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// makeAggSeriesSet queries the aggregated series set.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
+// makeCrossSeriesSet queries the cross series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
@@ -381,21 +420,50 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// isAggSeriesSet checks if the series set is an aggregated series set.
-func isAggSeriesSet(hints *storage.SelectHints) bool {
+// selectOpt selects the optimization option.
+func selectOpt(hints *storage.SelectHints) *storage.SelectHints {
+	switch SelectFuncOpt {
+	case NoneOpt:
+		return emptySelectHints
+
+	case AggrOpt:
+		if isCrossSeriesFunc(hints.Func) {
+			return emptySelectHints
+		}
+
+		return hints
+
+	case CrossSeriesOpt:
+		if !isCrossSeriesFunc(hints.Func) {
+			return emptySelectHints
+		}
+
+		return hints
+	}
+
+	return hints
+}
+
+// isCrossSeriesSet checks if the series set is an cross series set.
+func isCrossSeriesSet(hints *storage.SelectHints) bool {
 	for _, group := range hints.Grouping {
 		if group == labelHeadID || group == labelShardID {
 			logger.Infof(
-				"[QUERIER]: isAggSeriesSet: head_id or shard_id is in the grouping, it will be ignored: %s",
+				"[QUERIER]: isCrossSeriesSet: head_id or shard_id is in the grouping, it will be ignored: %s",
 				group,
 			)
 			return false
 		}
 	}
 
-	return hints.Func == "sum" ||
-		hints.Func == "max" ||
-		hints.Func == "min"
+	return isCrossSeriesFunc(hints.Func)
+}
+
+// isCrossSeriesFunc checks if the function is a cross series function.
+func isCrossSeriesFunc(funcName string) bool {
+	return funcName == "sum" ||
+		funcName == "max" ||
+		funcName == "min"
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.

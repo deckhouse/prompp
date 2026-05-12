@@ -2238,6 +2238,22 @@ func readPromPPFeatures(logger log.Logger) {
 			)
 
 			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
+
+		case "select_func_optimization":
+			opt, err := querier.ParseSelectFuncOpt(strings.TrimSpace(fvalue))
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing select_func_optimization value",
+					"err", err,
+				)
+				continue
+			}
+
+			querier.SelectFuncOpt = opt
+			level.Info(logger).Log(
+				"msg", "[FEATURE] Select function optimization is set.",
+				"optimization", fvalue,
+			)
 		}
 	}
 }
