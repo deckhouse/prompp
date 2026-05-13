@@ -45,7 +45,7 @@
     "ts-jest": "^29.2.2",
     "typescript": "^5.0.0",
     "webpack": "5.105.3",
-    "webpack-dev-server": "5.2.1",
+    "webpack-dev-server": "5.2.4",
     "ws": "8.17.1"
   },
   "version": "0.55.1",
