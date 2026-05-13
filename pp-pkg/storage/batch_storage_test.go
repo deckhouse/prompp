@@ -18,7 +18,6 @@ import (
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
-	"github.com/prometheus/prometheus/storage"
 )
 
 const (
