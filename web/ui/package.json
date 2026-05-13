@@ -39,7 +39,7 @@
     "prettier": "^2.8.8",
     "react-scripts": "5.0.1",
     "rollup": "2.80.0",
-    "send": "0.19.0",
+    "send": "0.19.2",
     "serialize-javascript": "7.0.5",
     "serve-static": "^1.16.2",
     "ts-jest": "^29.2.2",
