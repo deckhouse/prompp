@@ -2,7 +2,6 @@
 
 #include <simdutf/simdutf.h>
 
-#include <iostream>
 #include <span>
 
 #include "bare_bones/algorithm.h"
@@ -23,9 +22,7 @@ namespace PromPP::WAL::hashdex::scraper {
 template <ParserInterface Parser>
 class Scraper {
  public:
-  [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
-    // ZoneScopedN("Scraper::parse");
-    labels_.clear();
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
     labels_.reserve(255);
     default_timestamp_ = default_timestamp;
 
@@ -56,10 +53,7 @@ class Scraper {
 
         case Token::kMetricName:
         case Token::kBraceOpen: {
-          if (const auto error = MetricParser{parser_, metric_buffer_, labels_, static_cast<uint32_t>(tokenizer.token_str().data() - tokenizer.buffer().data()),
-                                              default_timestamp}
-                                     .parse();
-              error != Error::kNoError) [[unlikely]] {
+          if (const auto error = parse_metric(); error != Error::kNoError) [[unlikely]] {
             metric_buffer_.remove_item();
             return error;
           }
@@ -173,10 +167,16 @@ class Scraper {
  public:
   class Metric {
    public:
-    using MarkedItem = MarkedMetric;
+    using MarkedT = MarkedMetric;
 
-    Metric(std::string_view buffer, const BareBones::Vector<char>& bytes_buffer, const MarkedMetric* item, Primitives::Timestamp default_timestamp)
-        : buffer_(buffer), bytes_buffer_(bytes_buffer), item_(item), default_timestamp_(default_timestamp) {}
+    struct Context {
+      std::string_view buffer;
+      const BareBones::Vector<char>& bytes_buffer;
+      Primitives::Timestamp default_timestamp;
+    };
+
+    Metric(const Context& ctx, const MarkedMetric* item)
+        : buffer_(ctx.buffer), bytes_buffer_(ctx.bytes_buffer), item_(item), default_timestamp_(ctx.default_timestamp) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const MarkedMetric* item() const noexcept { return item_; }
     PROMPP_ALWAYS_INLINE void set_item(const MarkedMetric* item) noexcept { item_ = item; }
@@ -185,7 +185,6 @@ class Scraper {
 
     template <class Timeseries>
     void read(Timeseries& ts) const {
-      // ZoneScopedN("Metric::read()");
       const char* ptr = reinterpret_cast<const char*>(bytes_buffer_.data() + item_->data_offset);
       const char* base = buffer_.data() + item_->base_offset;
 
@@ -220,13 +219,6 @@ class Scraper {
 
       Primitives::Sample sample{};
       sample.timestamp() = default_timestamp_;
-
-      if (has_ts) [[unlikely]] {
-        int64_t ts_val;
-        memcpy(&ts_val, ptr, sizeof(ts_val));
-        ptr += sizeof(ts_val);
-        sample.timestamp() = ts_val;
-      }
 
       double val;
 
@@ -278,6 +270,12 @@ class Scraper {
         default:
           val = Prometheus::kStaleNan;
           break;
+      }
+
+      if (has_ts) [[unlikely]] {
+        Primitives::Timestamp ts_val;
+        memcpy(&ts_val, ptr, sizeof(ts_val));
+        sample.timestamp() = ts_val;
       }
 
       sample.value() = val;
@@ -349,9 +347,13 @@ class Scraper {
 
   class Metadata {
    public:
-    using MarkedItem = MarkedMetadata;
+    using MarkedT = MarkedMetadata;
 
-    explicit Metadata(std::string_view buffer, const MarkedMetadata* item) : buffer_(buffer), item_(item) {}
+    struct Context {
+      std::string_view buffer;
+    };
+
+    Metadata(const Context& ctx, const MarkedMetadata* item) : buffer_(ctx.buffer), item_(item) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const MarkedMetadata* item() const noexcept { return item_; }
     PROMPP_ALWAYS_INLINE void set_item(const MarkedMetadata* item) noexcept { item_ = item; }
@@ -365,85 +367,23 @@ class Scraper {
     const MarkedMetadata* item_{};
   };
 
- private:
-  template <class Item>
+  template <typename T>
   class MarkupBuffer {
    public:
+    using MarkedT = typename T::MarkedT;
+    using Context = typename T::Context;
+
     class IteratorSentinel {};
 
     class Iterator {
      public:
       using iterator_category = std::forward_iterator_tag;
-      using value_type = Item;
-      using difference_type = ptrdiff_t;
-      using pointer = value_type*;
-      using reference = value_type&;
-      using MarkedItem = typename Item::MarkedItem;
-
-      Iterator(std::string_view buffer, const MarkupBuffer* markup_buffer)
-          : item_(buffer, reinterpret_cast<const MarkedItem*>(markup_buffer->buffer().data())), items_count_(markup_buffer->items_count()) {}
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return item_; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
-
-      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
-        item_.set_item(reinterpret_cast<const MarkedItem*>(reinterpret_cast<const char*>(item_.item()) + sizeof(*item_.item())));
-        --items_count_;
-        return *this;
-      }
-
-      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
-        const auto it = *this;
-        ++*this;
-        return it;
-      }
-
-      PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
-
-     private:
-      Item item_;
-      uint32_t items_count_;
-    };
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<char>& buffer() const noexcept { return buffer_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return items_count_; }
-
-    PROMPP_ALWAYS_INLINE void remove_item() noexcept { --items_count_; }
-
-    PROMPP_ALWAYS_INLINE void initialize(size_t reserve) noexcept {
-      buffer_.clear();
-      buffer_.reserve(reserve);
-      items_count_ = 0;
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer) const noexcept { return {buffer, this}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.size(); }
-
-   protected:
-    BareBones::Vector<char> buffer_;
-    uint32_t items_count_{};
-  };
-
-  class MetricMarkupBuffer {
-   public:
-    class IteratorSentinel {};
-
-    class Iterator {
-     public:
-      using iterator_category = std::forward_iterator_tag;
-      using value_type = Metric;
+      using value_type = T;
       using difference_type = ptrdiff_t;
       using pointer = value_type*;
       using reference = value_type&;
 
-      Iterator(std::string_view buffer,
-               const BareBones::Vector<char>& bytes_buffer,
-               const MarkedMetric* ptr,
-               uint32_t items_count,
-               Primitives::Timestamp default_timestamp)
-          : item_(buffer, bytes_buffer, ptr, default_timestamp), ptr_(ptr), buffer_(buffer), bytes_buffer_(bytes_buffer), items_count_(items_count) {}
+      Iterator(const Context& ctx, const MarkedT* ptr, uint32_t items_count) : item_(ctx, ptr), ptr_(ptr), items_count_(items_count), ctx_(ctx) {}
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return item_; }
       [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
@@ -460,38 +400,45 @@ class Scraper {
         return tmp;
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
+      PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
 
      private:
-      Metric item_;
-      const MarkedMetric* ptr_{};
-      std::string_view buffer_;
-      const BareBones::Vector<char>& bytes_buffer_;
-      uint32_t items_count_{};
+      T item_;
+      const MarkedT* ptr_;
+      uint32_t items_count_;
+      Context ctx_;
     };
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer, Primitives::Timestamp default_timestamp) const noexcept {
-      return {buffer, bytes_buffer_, metric_buffer_.data(), metric_buffer_.size(), default_timestamp};
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return buffer_.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.size() * sizeof(MarkedT); }
+
+   protected:
+    BareBones::Vector<MarkedT> buffer_;
+  };
+
+  class MetricMarkupBuffer : public MarkupBuffer<Metric> {
+   public:
+    using Base = MarkupBuffer<Metric>;
+    using Iterator = typename Base::Iterator;
+    using IteratorSentinel = typename Base::IteratorSentinel;
+
+    [[nodiscard]] Iterator begin(std::string_view buffer, Primitives::Timestamp default_ts) const noexcept {
+      return {typename Base::Context{buffer, bytes_buffer_, default_ts}, this->buffer_.data(), this->items_count()};
     }
+    [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<MarkedMetric>& metric_buffer() const noexcept { return metric_buffer_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<char>& bytes_buffer() const noexcept { return bytes_buffer_; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return metric_buffer_.size(); }
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_buffer_.size(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return metric_buffer_.size() * sizeof(MarkedMetric) + bytes_buffer_.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return this->buffer_.size() * sizeof(MarkedMetric) + bytes_buffer_.size(); }
 
     PROMPP_ALWAYS_INLINE void remove_item() noexcept {
-      bytes_buffer_.resize(metric_buffer_.back().data_offset);
-      metric_buffer_.resize(metric_buffer_.size() - 1);
+      bytes_buffer_.resize(this->buffer_.back().data_offset);
+      this->buffer_.resize(this->buffer_.size() - 1);
     }
 
-    PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { metric_buffer_.back().hash = hash; }
+    PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
     PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
-      metric_buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
+      this->buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
     }
 
     PROMPP_ALWAYS_INLINE void add_count(uint32_t count) noexcept {
@@ -534,7 +481,7 @@ class Scraper {
     }
 
     PROMPP_ALWAYS_INLINE void add_label(MarkedLabel label) noexcept {
-      const auto base_offset = metric_buffer_.back().base_offset;
+      const auto base_offset = this->buffer_.back().base_offset;
 
       if (label.name.is_reserved_name()) [[unlikely]] {
         label.name.offset = 0;
@@ -573,75 +520,57 @@ class Scraper {
       const double val = sample.sample.value();
       const bool has_ts = sample.has_ts;
 
+      constexpr uint32_t max_sample_bytes = 1 + sizeof(sample.sample);  // marker + value + timestamp
+      const uint32_t offset = bytes_count();
+      bytes_buffer_.resize(offset + max_sample_bytes);
+      char* out = bytes_buffer_.data() + offset;
+      char* start = out;
+
       if (std::isnan(val)) [[unlikely]] {
-        append_sample_marker(0b00000100, has_ts);  // NaN
-        append_timestamp_if_needed(sample);
-        return;
-      }
-
-      if (val == 0.0) [[unlikely]] {
-        append_sample_marker(0b00000000, has_ts);  // zero
-        append_timestamp_if_needed(sample);
-        return;
-      }
-
-      if (std::trunc(val) == val && val > 0.0) [[likely]] {
-        append_integer_sample(sample, val);
+        *out++ = static_cast<char>((has_ts ? 0b10000000 : 0) | 0b00000100);  // NaN
+      } else if (val == 0.0) [[unlikely]] {
+        *out++ = static_cast<char>((has_ts ? 0b10000000 : 0) | 0b00000000);  // Zero
+      } else if (std::trunc(val) == val && val > 0.0) [[likely]] {
+        const uint64_t uval = static_cast<uint64_t>(val);
+        if (uval <= std::numeric_limits<uint8_t>::max()) {
+          const auto v = static_cast<uint8_t>(uval);
+          out = write_marker_and_value(out, 0b00000001, has_ts, v);
+        } else if (uval <= std::numeric_limits<uint16_t>::max()) {
+          const auto v = static_cast<uint16_t>(uval);
+          out = write_marker_and_value(out, 0b00000010, has_ts, v);
+        } else if (uval <= std::numeric_limits<uint32_t>::max()) {
+          const auto v = static_cast<uint32_t>(uval);
+          out = write_marker_and_value(out, 0b00000011, has_ts, v);
+        } else {
+          out = write_marker_and_value(out, 0b00001001, has_ts, val);  // double
+        }
       } else {
-        append_floating_sample(sample, val);
+        float f = static_cast<float>(val);
+        if (static_cast<double>(f) == val) [[unlikely]] {
+          out = write_marker_and_value(out, 0b00001000, has_ts, f);  // float
+        } else {
+          out = write_marker_and_value(out, 0b00001001, has_ts, val);  // double
+        }
       }
+
+      if (has_ts) {
+        const auto ts = sample.sample.timestamp();
+        std::memcpy(out, &ts, sizeof(ts));
+        out += sizeof(ts);
+      }
+
+      const uint32_t written = static_cast<uint32_t>(out - start);
+      bytes_buffer_.resize(offset + written);
     }
 
    private:
-    BareBones::Vector<MarkedMetric> metric_buffer_;
     BareBones::Vector<char> bytes_buffer_;
 
-    PROMPP_ALWAYS_INLINE void append_sample_marker(uint8_t type, bool has_ts) noexcept { bytes_buffer_.push_back((has_ts ? 0b10000000 : 0) | type); }
-
-    PROMPP_ALWAYS_INLINE void append_timestamp_if_needed(const MarkedSample& sample) noexcept {
-      if (sample.has_ts) {
-        append_value(sample.sample.timestamp());
-      }
-    }
-
-    PROMPP_ALWAYS_INLINE void append_integer_sample(const MarkedSample& sample, double val) noexcept {
-      const bool has_ts = sample.has_ts;
-      const uint64_t uval = static_cast<uint64_t>(val);
-      if (uval <= std::numeric_limits<uint8_t>::max()) {
-        append_sample_marker(0b00000001, has_ts);
-        append_timestamp_if_needed(sample);
-        append_value(static_cast<uint8_t>(uval));
-      } else if (uval <= std::numeric_limits<uint16_t>::max()) {
-        append_sample_marker(0b00000010, has_ts);
-        append_timestamp_if_needed(sample);
-        append_value(static_cast<uint16_t>(uval));
-      } else if (uval <= std::numeric_limits<uint32_t>::max()) {
-        append_sample_marker(0b00000011, has_ts);
-        append_timestamp_if_needed(sample);
-        append_value(static_cast<uint32_t>(uval));
-      } else {
-        append_floating_sample(sample, val);
-      }
-    }
-
-    PROMPP_ALWAYS_INLINE void append_floating_sample(const MarkedSample& sample, double val) noexcept {
-      const bool has_ts = sample.has_ts;
-      float f = static_cast<float>(val);
-      if (static_cast<double>(f) == val) [[unlikely]] {
-        append_sample_marker(0b00001000, has_ts);  // float32
-        append_timestamp_if_needed(sample);
-        append_value(f);
-      } else {
-        append_sample_marker(0b00001001, has_ts);  // double
-        append_timestamp_if_needed(sample);
-        append_value(val);
-      }
-    }
-
     template <typename T>
-    PROMPP_ALWAYS_INLINE void append_value(T val) noexcept {
-      auto p = reinterpret_cast<const char*>(&val);
-      bytes_buffer_.push_back(p, p + sizeof(T));
+    PROMPP_ALWAYS_INLINE static char* write_marker_and_value(char* out, uint8_t marker, bool has_ts, const T& val) noexcept {
+      *out++ = static_cast<char>((has_ts ? 0b10000000 : 0) | marker);
+      std::memcpy(out, &val, sizeof(T));
+      return out + sizeof(T);
     }
 
     PROMPP_ALWAYS_INLINE static uint8_t encode_size(uint32_t v) noexcept {
@@ -652,209 +581,25 @@ class Scraper {
 
   class MetadataMarkupBuffer : public MarkupBuffer<Metadata> {
    public:
+    using Base = MarkupBuffer<Metadata>;
+    using Iterator = typename Base::Iterator;
+    using IteratorSentinel = typename Base::IteratorSentinel;
+
+    [[nodiscard]] Iterator begin(std::string_view buffer) const noexcept { return {typename Base::Context{buffer}, this->buffer_.data(), this->items_count()}; }
+    [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
+
     PROMPP_ALWAYS_INLINE void add(MarkedString metric_name, MarkedString text, Prometheus::MetadataType type) noexcept {
-      ++this->items_count_;
+      this->buffer_.emplace_back(metric_name, text, type);
+    }
 
-      const auto offset = this->buffer_.size();
-      this->buffer_.resize(offset + sizeof(MarkedMetadata));
-      new (reinterpret_cast<MarkedMetadata*>(this->buffer_.data() + offset)) MarkedMetadata{
-          .metric_name = metric_name,
-          .text = text,
-          .type = type,
-      };
+    void remove_item() noexcept { this->buffer_.pop_back(); }
+    void initialize(size_t reserve) noexcept {
+      this->buffer_.clear();
+      this->buffer_.reserve(reserve);
     }
   };
 
-  class MetricParser {
-   public:
-    MetricParser(Parser& parser,
-                 MetricMarkupBuffer& markup_buffer,
-                 BareBones::Vector<MarkedLabel>& labels,
-                 uint32_t global_offset,
-                 Primitives::Timestamp timestamp)
-        : parser_(parser), markup_buffer_(markup_buffer), labels_(labels), sample_{.sample = {timestamp, 0.0}} {
-      markup_buffer_.add_metric(global_offset);
-    }
-
-    [[nodiscard]] Error parse() noexcept {
-      // ZoneScopedN("MetricParser::parse");
-      labels_.clear();
-
-      bool have_metric_name = false;
-      auto& tokenizer = parser_.tokenizer();
-
-      if (tokenizer.token() == Token::kMetricName) [[likely]] {
-        labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
-
-        have_metric_name = true;
-        tokenizer.next_non_whitespace();
-      } else if (tokenizer.token() == Token::kWhitespace) [[likely]] {
-        tokenizer.next();
-      }
-
-      if (tokenizer.token() == Token::kBraceOpen) [[likely]] {
-        if (const auto error = tokenize_label_set(have_metric_name); error != Error::kNoError) {
-          return error;
-        }
-
-        tokenizer.next_non_whitespace();
-      } else if (!parser_.is_value_token()) [[unlikely]] {
-        return Error::kUnexpectedToken;
-      }
-
-      if (!have_metric_name) [[unlikely]] {
-        return Error::kNoMetricName;
-      }
-
-      // sort
-      {
-        const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
-        labels_.erase(it, labels_.end());
-      }
-
-      std::sort(labels_.begin(), labels_.end(), [buffer = tokenizer.buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
-        return a.name.view(buffer) < b.name.view(buffer);
-      });
-
-      // hash
-      {
-        BareBones::XXHash3 hash;
-        for (const auto& label : labels_) {
-          hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
-        }
-        markup_buffer_.add_hash(hash.hash());
-      }
-
-      // encode count
-      {
-        markup_buffer_.add_count(labels_.size());
-      }
-
-      // encode labels
-      for (const auto& label : labels_) {
-        markup_buffer_.add_label(label);
-      }
-
-      return parse_metric_suffix();
-    }
-
-   private:
-    Parser& parser_;
-    MetricMarkupBuffer& markup_buffer_;
-    BareBones::Vector<MarkedLabel>& labels_;
-    MarkedSample sample_;
-
-    [[nodiscard]] Error tokenize_label_set(bool& have_metric_name) noexcept {
-      auto& tokenizer = parser_.tokenizer();
-      tokenizer.next_non_whitespace();
-
-      while (tokenizer.token() != Token::kBraceClose) {
-        MarkedLabel label;
-        if (const auto error = get_label_name(label.name); error != Error::kNoError) [[unlikely]] {
-          return error;
-        }
-
-        if (tokenizer.next_non_whitespace() == Token::kEqual) [[likely]] {
-          if (tokenizer.next_non_whitespace() != Token::kLabelValue) [[unlikely]] {
-            return Error::kUnexpectedToken;
-          }
-
-          if (const auto error = get_quoted_value(label.value); error != Error::kNoError) [[unlikely]] {
-            return error;
-          }
-
-          labels_.push_back(label);
-
-          tokenizer.next();
-        } else {
-          if (!have_metric_name) [[unlikely]] {
-            labels_.push_back(MarkedLabel{.value = label.name});
-
-            have_metric_name = true;
-          } else {
-            return Error::kUnexpectedToken;
-          }
-        }
-
-        if (tokenizer.token() != Token::kComma && tokenizer.token() != Token::kWhitespace) {
-          break;
-        }
-
-        tokenizer.next_non_whitespace();
-      }
-
-      return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
-    }
-
-    [[nodiscard]] Error get_label_name(MarkedString& label_name) const noexcept {
-      auto& tokenizer = parser_.tokenizer();
-
-      if (tokenizer.token() == Token::kLabelName) [[likely]] {
-        label_name = MarkedString::create(tokenizer.token_str(), tokenizer.buffer());
-        return Error::kNoError;
-      }
-      if (tokenizer.token() == Token::kQuotedString) {
-        return get_quoted_value(label_name);
-      }
-
-      return Error::kUnexpectedToken;
-    }
-
-    [[nodiscard]] Error get_quoted_value(MarkedString& string) const noexcept {
-      auto& tokenizer = parser_.tokenizer();
-
-      auto value = tokenizer.token_str();
-      Prometheus::textparse::unquote(value);
-
-      auto copy_to = const_cast<char*>(value.data());
-      Prometheus::textparse::unescape_label_value(value, [&copy_to](const std::string_view& piece_of_string) {
-        if (copy_to != piece_of_string.data()) [[unlikely]] {
-          memmove(copy_to, piece_of_string.data(), piece_of_string.size());
-        }
-
-        copy_to += piece_of_string.size();
-      });
-      value.remove_suffix(value.size() - (copy_to - value.data()));
-
-      if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
-        return Error::kInvalidUtf8;
-      }
-
-      string = MarkedString::create(value, tokenizer.buffer());
-      return Error::kNoError;
-    }
-
-    [[nodiscard]] Error parse_metric_suffix() noexcept {
-      if (!parser_.is_value_token()) [[unlikely]] {
-        return Error::kUnexpectedToken;
-      }
-
-      if (const auto error = parse_sample(); error != Error::kNoError) {
-        return error;
-      }
-
-      markup_buffer_.add_sample(sample_);
-
-      return parser_.validate_parse_sample_result();
-    }
-
-    [[nodiscard]] Error parse_sample() noexcept {
-      auto& tokenizer = parser_.tokenizer();
-
-      if (!parse_numeric_value(tokenizer.token_str(), sample_.sample.value())) [[unlikely]] {
-        return Error::kInvalidValue;
-      }
-      if (std::isnan(sample_.sample.value())) [[unlikely]] {
-        sample_.sample.value() = Prometheus::kNormalNan;
-      }
-
-      tokenizer.next_non_whitespace();
-
-      return parser_.parse_timestamp(sample_.sample.timestamp(), sample_.has_ts);
-    }
-  };
-
-  [[nodiscard]] Error parse_metadata() {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metadata() {
     static constexpr auto get_metadata_type = [](Token token) PROMPP_LAMBDA_INLINE {
       if (token == Token::kHelp) {
         return Prometheus::MetadataType::kHelp;
@@ -892,6 +637,178 @@ class Scraper {
     const auto buffer = tokenizer.buffer();
     metadata_buffer_.add(MarkedString::create(metric_name, buffer), MarkedString::create(text, buffer), get_metadata_type(type));
     return Error::kNoError;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metric() {
+    labels_.clear();
+
+    bool have_metric_name = false;
+    auto& tokenizer = parser_.tokenizer();
+
+    metric_buffer_.add_metric(tokenizer.token_str().data() - tokenizer.buffer().data());
+
+    if (tokenizer.token() == Token::kMetricName) [[likely]] {
+      labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
+
+      have_metric_name = true;
+      tokenizer.next_non_whitespace();
+    } else if (tokenizer.token() == Token::kWhitespace) [[likely]] {
+      tokenizer.next();
+    }
+
+    if (tokenizer.token() == Token::kBraceOpen) [[likely]] {
+      if (const auto error = tokenize_label_set(have_metric_name); error != Error::kNoError) {
+        return error;
+      }
+
+      tokenizer.next_non_whitespace();
+    } else if (!parser_.is_value_token()) [[unlikely]] {
+      return Error::kUnexpectedToken;
+    }
+
+    if (!have_metric_name) [[unlikely]] {
+      return Error::kNoMetricName;
+    }
+
+    // sort
+    {
+      const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
+      labels_.erase(it, labels_.end());
+    }
+
+    std::sort(labels_.begin(), labels_.end(), [buffer = tokenizer.buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
+      return a.name.view(buffer) < b.name.view(buffer);
+    });
+
+    // hash
+    {
+      BareBones::XXHash3 hash;
+      for (const auto& label : labels_) {
+        hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
+      }
+      metric_buffer_.add_hash(hash.hash());
+    }
+
+    // encode count
+    {
+      metric_buffer_.add_count(labels_.size());
+    }
+
+    // encode labels
+    for (const auto& label : labels_) {
+      metric_buffer_.add_label(label);
+    }
+
+    return parse_metric_suffix();
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error tokenize_label_set(bool& have_metric_name) noexcept {
+    auto& tokenizer = parser_.tokenizer();
+    tokenizer.next_non_whitespace();
+
+    while (tokenizer.token() != Token::kBraceClose) {
+      MarkedLabel label;
+      if (const auto error = get_label_name(label.name); error != Error::kNoError) [[unlikely]] {
+        return error;
+      }
+
+      if (tokenizer.next_non_whitespace() == Token::kEqual) [[likely]] {
+        if (tokenizer.next_non_whitespace() != Token::kLabelValue) [[unlikely]] {
+          return Error::kUnexpectedToken;
+        }
+
+        if (const auto error = get_quoted_value(label.value); error != Error::kNoError) [[unlikely]] {
+          return error;
+        }
+
+        labels_.push_back(label);
+
+        tokenizer.next();
+      } else {
+        if (!have_metric_name) [[unlikely]] {
+          labels_.push_back(MarkedLabel{.value = label.name});
+
+          have_metric_name = true;
+        } else {
+          return Error::kUnexpectedToken;
+        }
+      }
+
+      if (tokenizer.token() != Token::kComma && tokenizer.token() != Token::kWhitespace) {
+        break;
+      }
+
+      tokenizer.next_non_whitespace();
+    }
+
+    return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error get_label_name(MarkedString& label_name) const noexcept {
+    auto& tokenizer = parser_.tokenizer();
+
+    if (tokenizer.token() == Token::kLabelName) [[likely]] {
+      label_name = MarkedString::create(tokenizer.token_str(), tokenizer.buffer());
+      return Error::kNoError;
+    }
+    if (tokenizer.token() == Token::kQuotedString) {
+      return get_quoted_value(label_name);
+    }
+
+    return Error::kUnexpectedToken;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error get_quoted_value(MarkedString& string) const noexcept {
+    auto& tokenizer = parser_.tokenizer();
+
+    auto value = tokenizer.token_str();
+    Prometheus::textparse::unquote(value);
+
+    auto copy_to = const_cast<char*>(value.data());
+    Prometheus::textparse::unescape_label_value(value, [&copy_to](const std::string_view& piece_of_string) {
+      if (copy_to != piece_of_string.data()) [[unlikely]] {
+        memmove(copy_to, piece_of_string.data(), piece_of_string.size());
+      }
+
+      copy_to += piece_of_string.size();
+    });
+    value.remove_suffix(value.size() - (copy_to - value.data()));
+
+    if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
+      return Error::kInvalidUtf8;
+    }
+
+    string = MarkedString::create(value, tokenizer.buffer());
+    return Error::kNoError;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metric_suffix() noexcept {
+    if (!parser_.is_value_token()) [[unlikely]] {
+      return Error::kUnexpectedToken;
+    }
+
+    MarkedSample sample{.sample = {default_timestamp_, {}}};
+    if (const auto error = parse_sample(sample); error != Error::kNoError) {
+      return error;
+    }
+    metric_buffer_.add_sample(sample);
+
+    return parser_.validate_parse_sample_result();
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_sample(MarkedSample& sample) noexcept {
+    auto& tokenizer = parser_.tokenizer();
+
+    if (!parse_numeric_value(tokenizer.token_str(), sample.sample.value())) [[unlikely]] {
+      return Error::kInvalidValue;
+    }
+    if (std::isnan(sample.sample.value())) [[unlikely]] {
+      sample.sample.value() = Prometheus::kNormalNan;
+    }
+
+    tokenizer.next_non_whitespace();
+
+    return parser_.parse_timestamp(sample.sample.timestamp(), sample.has_ts);
   }
 
   Parser parser_;
