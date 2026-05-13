@@ -236,24 +236,6 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 		discardCache = true
 	}
 
-	ds, err := newDataSource(
-		headDir,
-		nextHeadRecord.NumberOfShards(),
-		dcfg,
-		discardCache,
-		newSegmentReadyChecker(nextHeadRecord),
-		wl.makeCorruptMarker(),
-		nextHeadRecord,
-		wl.destination.metrics.unexpectedEOFCount,
-		wl.destination.metrics.segmentSizeInBytes,
-	)
-	if err != nil {
-		return nil, errors.Join(fmt.Errorf("create data source: %w", err), crw.Close())
-	}
-
-	headID := nextHeadRecord.ID()
-	ds.ID = headID
-
 	var targetSegmentID uint32
 	if cleanStart {
 		if nextHeadRecord.LastAppendedSegmentID() != nil {
@@ -263,6 +245,11 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 		}
 	} else {
 		targetSegmentID = crw.GetTargetSegmentID()
+	}
+
+	ds, err := wl.makeDataSource(ctx, headDir, dcfg, nextHeadRecord, targetSegmentID, discardCache)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("create data source: %w", err), crw.Close())
 	}
 
 	i, err := newIterator(
@@ -279,9 +266,63 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 		return nil, errors.Join(fmt.Errorf("create data source: %w", err), crw.Close(), ds.Close())
 	}
 
+	headID := nextHeadRecord.ID()
 	wl.currentHeadID = &headID
 
 	return i, nil
+}
+
+// makeDataSource creates and initializes a new data source.
+func (wl *writeLoop) makeDataSource(
+	ctx context.Context,
+	headDir string,
+	dcfg DestinationConfig, //nolint:gocritic // hugeParam // config
+	headRecord *catalog.Record,
+	targetSegmentID uint32,
+	discardCache bool,
+) (DataSourceV2, error) {
+	if headRecord.Status() == catalog.StatusActive || headRecord.Status() == catalog.StatusNew {
+		ds, err := newDataSourceActive(
+			headDir,
+			dcfg,
+			headRecord.NumberOfShards(),
+			discardCache,
+			wl.clock,
+			newSegmentReadyChecker(headRecord),
+			wl.makeCorruptMarker(),
+			headRecord,
+			wl.destination.metrics.segmentSizeInBytes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create active data source: %w", err)
+		}
+
+		if err = ds.Init(ctx, targetSegmentID); err != nil {
+			return nil, errors.Join(fmt.Errorf("init active data source: %w", err), ds.Close())
+		}
+
+		return ds, nil
+	}
+
+	ds, err := newDataSourceRotated(
+		headDir,
+		dcfg,
+		headRecord.NumberOfShards(),
+		discardCache,
+		wl.clock,
+		wl.makeCorruptMarker(),
+		headRecord,
+		wl.destination.metrics.segmentSizeInBytes,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create rotated data source: %w", err)
+	}
+
+	if err = ds.Init(ctx, targetSegmentID); err != nil {
+		return nil, errors.Join(fmt.Errorf("init rotated data source: %w", err), ds.Close())
+	}
+
+	return ds, nil
 }
 
 // makeCorruptMarker set marker on head is corrupted.

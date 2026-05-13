@@ -14,6 +14,41 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// mergeSeriesSetMatrix is exercised for happy-path, empty-set, and across-shard order scenarios.
+// A single makeHead per row avoids tripling heavy C++/DataStorage setup (same bug class as slow CI).
+func mergeSeriesSetMatrix() []struct{ numShards, numSeries, numSamples int } {
+	cases := []struct {
+		numShards, numSeries, numSamples int
+	}{
+		{1, 100, 5},
+		{2, 100, 5},
+		{4, 100, 5},
+		{6, 100, 5},
+		{8, 100, 5},
+		{10, 100, 5},
+	}
+	if testing.Short() {
+		return []struct {
+			numShards, numSeries, numSamples int
+		}{
+			{1, 100, 5},
+			{10, 100, 5},
+		}
+	}
+	return cases
+}
+
+func assertMergeShardSeriesSetsEqual(s *MergeShardSeriesSetSuite, esets, asets []storage.SeriesSet) {
+	expected := storage.NewMergeSeriesSet(esets, storage.ChainedSeriesMerge)
+	actual := querier.NewMergeShardSeriesSet(asets)
+	// groupSamples: true keeps one row per series; false expands every sample to its own row and
+	// makes testify deep-equal quadratic on large inputs (very slow under ASAN on ARM CI).
+	s.Require().Equal(
+		storagetest.TimeSeriesFromSeriesSet(expected, true),
+		storagetest.TimeSeriesFromSeriesSet(actual, true),
+	)
+}
+
 type MergeShardSeriesSetSuite struct {
 	suite.Suite
 }
@@ -22,7 +57,7 @@ func TestMergeShardSeriesSetSuite(t *testing.T) {
 	suite.Run(t, new(MergeShardSeriesSetSuite))
 }
 
-func (s *MergeShardSeriesSetSuite) TestHappyPath() {
+func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 	var start int64
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
@@ -30,128 +65,48 @@ func (s *MergeShardSeriesSetSuite) TestHappyPath() {
 		MatcherType: model.MatcherTypeExactMatch,
 	}
 
-	for _, bm := range []struct {
-		numShards, numSeries, numSamples int
-	}{
-		{1, 100, 5},
-		{2, 100, 5},
-		{4, 100, 5},
-		{6, 100, 5},
-		{8, 100, 5},
-		{10, 100, 5},
-	} {
-		end := int64(bm.numSamples)
-		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
-		eseriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-		aseriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-
+	for _, bm := range mergeSeriesSetMatrix() {
+		bm := bm
 		s.Run(fmt.Sprintf("%d_%d_%d", bm.numShards, bm.numSeries, bm.numSamples), func() {
-			eseriesSets = eseriesSets[:0]
-			aseriesSets = aseriesSets[:0]
-			for i := 0; i < bm.numShards; i++ {
-				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-			}
+			// One head for all scenarios: each scenario runs fresh SeriesSet queries on the same data.
+			head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
+			end := int64(bm.numSamples)
 
-			expectedSeriesSet := storage.NewMergeSeriesSet(eseriesSets, storage.ChainedSeriesMerge)
-			actualSeriesSet := querier.NewMergeShardSeriesSet(aseriesSets)
-
-			s.Require().Equal(
-				storagetest.TimeSeriesFromSeriesSet(expectedSeriesSet, false),
-				storagetest.TimeSeriesFromSeriesSet(actualSeriesSet, false),
-			)
-		})
-	}
-}
-
-func (s *MergeShardSeriesSetSuite) TestEmptySeriesSets() {
-	var start int64
-	matcher := model.LabelMatcher{
-		Name:        "__name__",
-		Value:       "metric",
-		MatcherType: model.MatcherTypeExactMatch,
-	}
-
-	for _, bm := range []struct {
-		numShards, numSeries, numSamples int
-	}{
-		{1, 100, 5},
-		{2, 100, 5},
-		{4, 100, 5},
-		{6, 100, 5},
-		{8, 100, 5},
-		{10, 100, 5},
-	} {
-		end := int64(bm.numSamples)
-		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
-		eseriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-		aseriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-
-		s.Run(fmt.Sprintf("%d_%d_%d", bm.numShards, bm.numSeries, bm.numSamples), func() {
-			eseriesSets = eseriesSets[:0]
-			aseriesSets = aseriesSets[:0]
-			for i := 0; i < bm.numShards; i++ {
-				if i%2 == 0 {
-					eseriesSets = append(eseriesSets, &querier.SeriesSet{})
-					aseriesSets = append(aseriesSets, &querier.SeriesSet{})
+			s.Run("happy_path", func() {
+				esets := make([]storage.SeriesSet, 0, bm.numShards)
+				asets := make([]storage.SeriesSet, 0, bm.numShards)
+				for i := 0; i < bm.numShards; i++ {
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
 				}
+				assertMergeShardSeriesSetsEqual(s, esets, asets)
+			})
 
-				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-			}
+			s.Run("empty_series_sets_interleaved", func() {
+				esets := make([]storage.SeriesSet, 0, bm.numShards*2)
+				asets := make([]storage.SeriesSet, 0, bm.numShards*2)
+				for i := 0; i < bm.numShards; i++ {
+					if i%2 == 0 {
+						esets = append(esets, &querier.SeriesSet{})
+						asets = append(asets, &querier.SeriesSet{})
+					}
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				}
+				assertMergeShardSeriesSetsEqual(s, esets, asets)
+			})
 
-			expectedSeriesSet := storage.NewMergeSeriesSet(eseriesSets, storage.ChainedSeriesMerge)
-			actualSeriesSet := querier.NewMergeShardSeriesSet(aseriesSets)
-
-			s.Require().Equal(
-				storagetest.TimeSeriesFromSeriesSet(expectedSeriesSet, false),
-				storagetest.TimeSeriesFromSeriesSet(actualSeriesSet, false),
-			)
-		})
-	}
-}
-
-func (s *MergeShardSeriesSetSuite) TestAcrossShardsSeriesSets() {
-	var start int64
-	matcher := model.LabelMatcher{
-		Name:        "__name__",
-		Value:       "metric",
-		MatcherType: model.MatcherTypeExactMatch,
-	}
-
-	for _, bm := range []struct {
-		numShards, numSeries, numSamples int
-	}{
-		{1, 100, 5},
-		{2, 100, 5},
-		{4, 100, 5},
-		{6, 100, 5},
-		{8, 100, 5},
-		{10, 100, 5},
-	} {
-		end := int64(bm.numSamples)
-		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
-		eseriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-		aseriesSets := make([]storage.SeriesSet, 0, bm.numShards)
-
-		s.Run(fmt.Sprintf("%d_%d_%d", bm.numShards, bm.numSeries, bm.numSamples), func() {
-			eseriesSets = eseriesSets[:0]
-			aseriesSets = aseriesSets[:0]
-			for i := 0; i < bm.numShards; i++ {
-				eseriesSets = append(eseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-			}
-
-			for i := bm.numShards - 1; i >= 0; i-- {
-				aseriesSets = append(aseriesSets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-			}
-
-			expectedSeriesSet := storage.NewMergeSeriesSet(eseriesSets, storage.ChainedSeriesMerge)
-			actualSeriesSet := querier.NewMergeShardSeriesSet(aseriesSets)
-
-			s.Require().Equal(
-				storagetest.TimeSeriesFromSeriesSet(expectedSeriesSet, false),
-				storagetest.TimeSeriesFromSeriesSet(actualSeriesSet, false),
-			)
+			s.Run("across_shards_reverse_order", func() {
+				esets := make([]storage.SeriesSet, 0, bm.numShards)
+				asets := make([]storage.SeriesSet, 0, bm.numShards)
+				for i := 0; i < bm.numShards; i++ {
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				}
+				for i := bm.numShards - 1; i >= 0; i-- {
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+				}
+				assertMergeShardSeriesSetsEqual(s, esets, asets)
+			})
 		})
 	}
 }
@@ -171,11 +126,11 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 	for _, bm := range []struct {
 		numShards, numSeries, numSamples int
 	}{
-		{2, 100, 5},
-		{4, 100, 5},
-		{6, 100, 5},
-		{8, 100, 5},
-		{10, 100, 5},
+		{2, 10, 5},
+		{4, 10, 5},
+		{6, 10, 5},
+		{8, 10, 5},
+		{10, 10, 5},
 	} {
 		end := int64(bm.numSamples)
 		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)

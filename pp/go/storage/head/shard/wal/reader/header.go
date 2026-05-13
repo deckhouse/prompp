@@ -16,14 +16,14 @@ func ReadHeader(reader io.Reader) (fileFormatVersion, encoderVersion uint8, n in
 		return 0, 0, n, fmt.Errorf("failed to read file format version: %w", err)
 	}
 	fileFormatVersion = uint8(fileFormatVersionU64) // #nosec G115 // no overflow
-	n = br.n
+	n = br.readBytes
 
 	encoderVersionU64, err := binary.ReadUvarint(br)
 	if err != nil {
 		return 0, 0, n, fmt.Errorf("failed to read encoder version: %w", err)
 	}
 	encoderVersion = uint8(encoderVersionU64) // #nosec G115 // no overflow
-	n = br.n
+	n = br.readBytes
 
 	return fileFormatVersion, encoderVersion, n, nil
 }

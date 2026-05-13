@@ -5,37 +5,67 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
-//go:generate moq mock/segment.go . Segment
-
+// walReader buffered reader [Segment]s from wal.
 type walReader struct {
 	file              *util.FileReader
 	reader            io.Reader
-	nextSegmentID     uint32
-	fileFormatVersion uint8
+	fsize             int64  // file wal size
+	nextSegmentID     uint32 // next segment ID to read
+	fileFormatVersion uint8  // file format version
+	encoderVersion    uint8  // encoder version used to encode the wal file, required to initialize the decoder
 }
 
-func newWalReader(fileName string) (*walReader, uint8, error) {
+// newWalReader creates a new [walReader].
+// It returns the [walReader] and an error if any.
+func newWalReader(fileName string) (*walReader, error) {
 	file, err := util.OpenFileReader(fileName)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read wal file: %w", err)
+		return nil, fmt.Errorf("failed to read wal file: %w", err)
 	}
 
-	fileFormatVersion, encoderVersion, _, err := reader.ReadHeader(file)
+	fileFormatVersion, encoderVersion, n, err := reader.ReadHeader(file)
 	if err != nil {
-		return nil, 0, errors.Join(fmt.Errorf("failed to read header: %w", err), file.Close())
+		return nil, errors.Join(fmt.Errorf("failed to read header: %w", err), file.Close())
 	}
 
-	return &walReader{
+	wr := &walReader{
 		file:              file,
 		reader:            bufio.NewReaderSize(file, 4096), //revive:disable-line:add-constant // 4kb
 		fileFormatVersion: fileFormatVersion,
-	}, encoderVersion, nil
+		encoderVersion:    encoderVersion,
+	}
+	// used only for rotated wal reader, because we need to subtract the size of the header from the file size
+	wr.fsize -= int64(n)
+
+	return wr, nil
+}
+
+// newWalReaderRotated creates a new rotated [walReader].
+// It returns the [walReader] and an error if any.
+func newWalReaderRotated(fileName string) (*walReader, error) {
+	info, err := os.Stat(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat wal file: %w", err)
+	}
+
+	fsize := info.Size()
+	if fsize == 0 {
+		return nil, fmt.Errorf("wal file is empty")
+	}
+
+	wr, err := newWalReader(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create wal file rotated reader: %w", err)
+	}
+	wr.fsize += fsize
+
+	return wr, nil
 }
 
 // Close wal file.
@@ -55,6 +85,16 @@ func (r *walReader) EmptySegment() (Segment, error) {
 	}
 }
 
+// EncoderVersion returns the encoder version.
+func (r *walReader) EncoderVersion() uint8 {
+	return r.encoderVersion
+}
+
+// IsEOF returns true if the wal file is at the end.
+func (r *walReader) IsEOF() bool {
+	return r.fsize <= 0
+}
+
 // Read reads up data into s [Segment] from wal.
 // It may return a non-nil error if some error condition is known, such as EOF.
 func (r *walReader) Read(s Segment) error {
@@ -64,6 +104,36 @@ func (r *walReader) Read(s Segment) error {
 
 	s.SetSegmentID(r.nextSegmentID)
 	r.nextSegmentID++
+
+	return nil
+}
+
+// ReadSegmentBody reads [Segment] body from wal.
+// It may return a non-nil error if some error condition is known, such as EOF.
+func (r *walReader) ReadSegmentBody(s Segment) error {
+	n, err := s.ReadBody(r.reader)
+	r.fsize -= n
+	if err != nil {
+		return fmt.Errorf("failed to read segment body: %w", err)
+	}
+
+	r.nextSegmentID++
+
+	return nil
+}
+
+// ReadSegmentID reads [Segment] ID from wal.
+// It may return a non-nil error if some error condition is known, such as EOF.
+func (r *walReader) ReadSegmentID(s Segment) error {
+	n, err := s.ReadID(r.reader)
+	r.fsize -= n
+	if err != nil {
+		return fmt.Errorf("failed to read segment id: %w", err)
+	}
+
+	// v1: set segment ID
+	// v2: read segment ID from wal
+	s.SetSegmentID(r.nextSegmentID)
 
 	return nil
 }
@@ -83,9 +153,17 @@ type Segment interface {
 	// Length returns the length of slice byte.
 	Length() int
 
+	// ReadBody reads [Segment] body from r [io.Reader]. The return value n is the number of bytes read.
+	// Any error encountered during the read is also returned.
+	ReadBody(r io.Reader) (int64, error)
+
 	// ReadFrom reads [Segment] data from r [io.Reader]. The return value n is the number of bytes read.
 	// Any error encountered during the read is also returned.
 	ReadFrom(r io.Reader) (int64, error)
+
+	// ReadID reads [Segment] ID from r [io.Reader]. The return value n is the number of bytes read.
+	// Any error encountered during the read is also returned.
+	ReadID(r io.Reader) (int64, error)
 
 	// Reset [Segment] data.
 	Reset()
@@ -109,12 +187,31 @@ type SegmentV1 struct {
 
 // EmptySegmentV1 init new empty [SegmentV1].
 func EmptySegmentV1() *SegmentV1 {
-	return &SegmentV1{}
+	return &SegmentV1{
+		id:      reader.UnknownSegmentID,
+		Segment: *reader.NewSegment(),
+	}
 }
 
 // ID returns [SegmentV1] ID.
 func (s *SegmentV1) ID() uint32 {
 	return s.id
+}
+
+// ReadBody reads [SegmentV1] body from r [io.Reader]. The return value n is the number of bytes read.
+// Any error encountered during the read is also returned.
+func (s *SegmentV1) ReadBody(r io.Reader) (int64, error) {
+	return s.ReadFrom(r)
+}
+
+// ReadID reads [SegmentV1] ID from r [io.Reader]. The return value n is the number of bytes read.
+// Any error encountered during the read is also returned. Implementation [Segment].
+func (*SegmentV1) ReadID(io.Reader) (int64, error) { return 0, nil }
+
+// Reset [SegmentV1] data.
+func (s *SegmentV1) Reset() {
+	s.id = reader.UnknownSegmentID
+	s.Segment.Reset()
 }
 
 // SetSegmentID sets the segment ID value.
@@ -133,7 +230,7 @@ type SegmentV2 struct {
 
 // EmptySegmentV2 init new empty [SegmentV2].
 func EmptySegmentV2() *SegmentV2 {
-	return &SegmentV2{}
+	return &SegmentV2{SegmentV2: *reader.NewSegmentV2()}
 }
 
 // SetSegmentID sets the segment ID value, implementation [Segment].
