@@ -13,6 +13,14 @@
 1. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
 2. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
 
+## v0.7.11
+
+### Enhancements
+1. **Jemalloc arena pool recycling.** Arenas returned to the free pool are reset and purged instead of being destroyed, with updated jemalloc build options. New metrics report arena pool releases and reclaimed bytes (`prompp_common_jemalloc_arena_pool_*`).
+
+### Other
+1. **GCC 14 C++ toolchain.** The CI/devcontainer image and Bazel configuration on this branch build the C++ core with GCC 14.
+
 ## v0.7.10
 
 ### Fixes

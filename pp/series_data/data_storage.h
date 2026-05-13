@@ -425,7 +425,7 @@ struct DataStorage {
   template <BareBones::ReallocatorInterface Reallocator>
   PROMPP_ALWAYS_INLINE void destructor_impl() noexcept {
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
-      Reallocator::destroy_arena(arena_index);
+      Reallocator::release_arena(arena_index);
     } else {
       for (const auto& chunk : open_chunks) {
         destroy_open_chunk_encoder(chunk);
