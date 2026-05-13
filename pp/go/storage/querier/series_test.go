@@ -563,7 +563,7 @@ func (s *SeriesSetTestSuite) TestMinOverTimeFunc() {
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
-				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -659,7 +659,7 @@ func (s *SeriesSetTestSuite) TestSumOverTimeFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 99,
 		End:   250,
 		Func:  "sum_over_time",
 	}
@@ -697,7 +697,7 @@ func (s *SeriesSetTestSuite) TestRateFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 99,
 		End:   250,
 		Func:  "rate",
 	}
@@ -736,7 +736,7 @@ func (s *SeriesSetTestSuite) TestIncreaseFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 99,
 		End:   250,
 		Func:  "increase",
 	}
@@ -775,7 +775,7 @@ func (s *SeriesSetTestSuite) TestChangesFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 99,
 		End:   250,
 		Func:  "changes",
 	}
@@ -814,7 +814,7 @@ func (s *SeriesSetTestSuite) TestDeltaFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 99,
 		End:   300,
 		Func:  "delta",
 	}
@@ -931,7 +931,7 @@ func (s *SeriesSetTestSuite) TestResetsFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 99,
 		End:   300,
 		Func:  "resets",
 	}
