@@ -13,10 +13,12 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/storage"
 )
 
 const (
@@ -208,4 +210,69 @@ func (s *BatchStorageSuite) TestCommit_WithSamplesAdded() {
 			{Timestamp: 5000, Value: 100.0},
 		},
 	}, storagetest.GetSamplesFromSerializedData(queryResult.SerializedData))
+}
+
+// TestEphemeralHead_IsSterileBetweenEvaluations validates the hypothesis that
+// each call to adapter.BatchStorage() produces a fresh, empty ephemeral head.
+//
+// Background: rule evaluation creates a BatchStorage per Group.Eval() iteration
+// and uses it as a primary in the FanoutQueryable used by the rule QueryFunc.
+// If the ephemeral head leaked data between evaluations, a recording rule (or
+// the ALERTS series written by alerting rules) from a previous iteration could
+// influence subsequent rules' query results — which would be a serious data
+// flow bug between rules in the same group.
+//
+// This test writes a series into one BatchStorage and confirms that a freshly
+// obtained BatchStorage from the same adapter does NOT see that series.
+func (s *BatchStorageSuite) TestEphemeralHead_IsSterileBetweenEvaluations() {
+	// Arrange: write a series into the first ephemeral head.
+	bs1 := s.adapter.BatchStorage().(*BatchStorage)
+	batch := &testTimeSeriesBatch{
+		timeSeries: []pp_model.TimeSeries{
+			{
+				LabelSet:  pp_model.NewLabelSetBuilder().Set("__name__", "leak_check").Set("job", "ephemeral").Build(),
+				Timestamp: 1_000,
+				Value:     1.0,
+			},
+		},
+	}
+	_, err := bs1.AppendTimeSeries(s.ctx, batch, s.state, false)
+	s.Require().NoError(err)
+
+	// Sanity: bs1's own querier MUST see the series we just wrote.
+	q1, err := bs1.Querier(0, 10_000)
+	s.Require().NoError(err)
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "leak_check")
+	got1 := collectLabelSets(q1.Select(s.ctx, false, nil, matcher))
+	s.Require().Len(got1, 1, "bs1 must see its own series")
+
+	// Act: obtain a brand-new BatchStorage from the SAME adapter.
+	bs2 := s.adapter.BatchStorage().(*BatchStorage)
+
+	// Assert 1: bs2's transactionHead MUST be a different instance.
+	s.Require().NotSame(bs1.transactionHead, bs2.transactionHead,
+		"each BatchStorage() call must build a brand-new TransactionHead")
+
+	// Assert 2: bs2 MUST NOT see the series written into bs1.
+	q2, err := bs2.Querier(0, 10_000)
+	s.Require().NoError(err)
+	got2 := collectLabelSets(q2.Select(s.ctx, false, nil, matcher))
+	s.Require().Empty(got2,
+		"bs2 must be sterile and not leak series from bs1 — got %v", got2)
+
+	// Assert 3: nothing reached the main (active) head either, since bs1.Commit() was not called.
+	mainQ, err := s.adapter.Querier(0, 10_000)
+	s.Require().NoError(err)
+	gotMain := collectLabelSets(mainQ.Select(s.ctx, false, nil, matcher))
+	s.Require().Empty(gotMain,
+		"main head must NOT see uncommitted ephemeral data — got %v", gotMain)
+}
+
+// collectLabelSets exhausts a SeriesSet and returns its series labels.
+func collectLabelSets(ss storage.SeriesSet) []labels.Labels {
+	var out []labels.Labels
+	for ss.Next() {
+		out = append(out, ss.At().Labels())
+	}
+	return out
 }

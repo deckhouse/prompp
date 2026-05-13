@@ -332,7 +332,6 @@ type WALOutputDecoder struct {
 	decoder        uintptr
 	relabeler      *StatelessRelabeler
 	outputLss      *LabelSetStorage
-	shardID        uint16
 }
 
 // NewWALOutputDecoder init new WALOutputDecoder.
@@ -347,7 +346,6 @@ func NewWALOutputDecoder(
 		externalLabels: externalLabels,
 		relabeler:      statelessRelabeler,
 		outputLss:      outputLss,
-		shardID:        shardID,
 	}
 
 	d.decoder = walOutputDecoderCtor(

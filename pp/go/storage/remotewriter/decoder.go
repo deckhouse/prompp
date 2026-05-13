@@ -3,6 +3,7 @@ package remotewriter
 import (
 	"fmt"
 	"io"
+	"runtime"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -69,6 +70,9 @@ func (d *Decoder) Decode(
 	if err != nil {
 		return nil, err
 	}
+
+	runtime.KeepAlive(samplesStorage)
+
 	return &DecodedSegment{
 		MaxTimestamp:         stats.MaxTimestamp(),
 		OutdatedSamplesCount: stats.OutdatedSampleCount(),
