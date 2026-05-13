@@ -532,6 +532,41 @@ func (s *SeriesSetTestSuite) TestDownsampling() {
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
+func (s *SeriesSetTestSuite) TestQueryWithoutHints() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 123, Value: 1.0},
+				{Timestamp: 152, Value: 1.0},
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 215, Value: 1.0},
+			},
+		},
+	}...)
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, nil, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 123, Value: 1.0},
+				{Timestamp: 152, Value: 1.0},
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 215, Value: 1.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
 func (s *SeriesSetTestSuite) TestMinOverTimeFunc() {
 	// Arrange
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
