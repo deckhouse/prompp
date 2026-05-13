@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 	"unsafe"
@@ -35,9 +36,14 @@ const (
 	dsQueryInstantQuerier = "data_storage_query_instant_querier"
 	// dsQueryRangeQuerier name of task.
 	dsQueryRangeQuerier = "data_storage_query_range_querier"
+	// dsQueryFirstTimestampsQuerier name of task.
+	dsQueryFirstTimestampsQuerier = "data_storage_query_first_timestamps_querier"
 
-	// DefaultInstantQueryValueNotFoundTimestampValue default value for not found timestamp value.
+	// DefaultInstantQueryValueNotFoundTimestampValue default value for not found timestamp value for instant query.
 	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
+
+	// DefaultNotFoundTimestampValue default value for not found timestamp value.
+	DefaultNotFoundTimestampValue int64 = math.MinInt64
 )
 
 const (
@@ -260,6 +266,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 				lssQueryResult.IDs(),
 				uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))), // #nosec G103 // it's meant to be that way
 			)
+
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
@@ -373,10 +380,40 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 	hints *storage.SelectHints,
 ) storage.SeriesSet {
 	poolProvider := q.head.PoolProvider()
+	timestamps := poolProvider.GetSliceOfTimestamps()
+	defer poolProvider.PutSliceOfTimestamps(timestamps)
+	for i := range timestamps {
+		if lssQueryResults[i] == nil {
+			continue
+		}
+
+		timestamps[i] = poolProvider.GetTimestamps(lssQueryResults[i].Len())
+		defer poolProvider.PutTimestamps(timestamps[i])
+	}
+
+	tds := q.head.CreateTask(
+		dsQueryFirstTimestampsQuerier,
+		func(shard TShard) error {
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
+			if lssQueryResult == nil {
+				return nil
+			}
+
+			shard.DataStorage().QueryFirstTimestamps(
+				lssQueryResult.IDs(),
+				timestamps[shardID],
+				DefaultNotFoundTimestampValue,
+			)
+
+			return nil
+		},
+	)
+	q.head.Enqueue(tds)
 
 	seriesGroups := poolProvider.GetSeriesGroups()
 	defer poolProvider.PutSeriesGroups(seriesGroups)
-	t := q.head.CreateTask(
+	tlss := q.head.CreateTask(
 		lssGroupSeriesByLabelNames,
 		func(shard TShard) error {
 			shardID := shard.ShardID()
@@ -387,23 +424,36 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 
 			nameIDs := poolProvider.GetNameIDs(len(hints.Grouping))
 			shard.LSS().LabelNameToIDs(hints.Grouping, nameIDs)
-			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(lssQueryResults[shardID].IDs(), nameIDs)
+			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(lssQueryResult.IDs(), nameIDs)
 			poolProvider.PutNameIDs(nameIDs)
 
 			return nil
 		},
 	)
-	defer q.head.PutTask(t)
-	q.head.Enqueue(t)
-	_ = t.Wait()
+	q.head.Enqueue(tlss)
+
+	_ = tds.Wait()
+	_ = tlss.Wait()
+	q.head.PutTask(tds)
+	q.head.PutTask(tlss)
 
 	seriesSets := poolProvider.GetSeriesSet()
 	defer poolProvider.PutSeriesSet(seriesSets)
+	sNaNSeriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(sNaNSeriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData == nil {
+			sNaNSeriesSets[shardID] = emptySeriesSet
 			seriesSets[shardID] = emptySeriesSet
 			continue
 		}
+
+		sNaNSeriesSets[shardID] = NewStaleNaNSeriesSet(
+			NewStaleNaNSeriesSliceFromTimestamps(timestamps[shardID]),
+			lssQueryResults[shardID],
+			snapshots[shardID],
+			DefaultNotFoundTimestampValue,
+		)
 
 		seriesSets[shardID] = NewAggSeriesSet(
 			serializedData,
@@ -417,7 +467,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 		)
 	}
 
-	return NewMergeShardSeriesSet(seriesSets)
+	return NewMergeManyShardSeriesSets(seriesSets, sNaNSeriesSets)
 }
 
 // selectFuncOpt selects the function optimization hints.

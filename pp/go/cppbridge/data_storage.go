@@ -121,8 +121,8 @@ func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32,
 }
 
 // QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs
-func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64) {
-	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs, timestamps)
+func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64, notFoundTimestampValue int64) {
+	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, notFoundTimestampValue, seriesIDs, timestamps)
 	runtime.KeepAlive(ds)
 }
 

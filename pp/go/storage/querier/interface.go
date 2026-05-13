@@ -56,6 +56,10 @@ type DataStorage interface {
 		hints *storage.SelectHints,
 	) cppbridge.DataStorageQueryResult
 
+	// QueryFirstTimestamps fills timestamps with the first sample
+	// timestamp (Prometheus ms) for each series in seriesIDs.
+	QueryFirstTimestamps(ids []uint32, timestamps []int64, notFoundTimestampValue int64)
+
 	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.
 	WithRLock(fn func(ds *cppbridge.DataStorage) error) error
 }

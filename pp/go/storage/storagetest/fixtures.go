@@ -341,8 +341,8 @@ func StaleNaNQuery(
 		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
-	timestamps := querier.MakeTimestampsSliceWithDefault(lssQueryResult.Len(), valueNotFoundTimestampValue)
-	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps)
+	timestamps := make([]int64, lssQueryResult.Len())
+	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps, valueNotFoundTimestampValue)
 
 	return querier.NewStaleNaNSeriesSet(
 		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),

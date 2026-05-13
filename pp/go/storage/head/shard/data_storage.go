@@ -90,9 +90,9 @@ func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 }
 
 // QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-func (ds *DataStorage) QueryFirstTimestamps(ids []uint32, timestamps []int64) {
+func (ds *DataStorage) QueryFirstTimestamps(ids []uint32, timestamps []int64, notFoundTimestampValue int64) {
 	ds.locker.RLock()
-	ds.dataStorage.QueryFirstTimestamps(ids, timestamps)
+	ds.dataStorage.QueryFirstTimestamps(ids, timestamps, notFoundTimestampValue)
 	ds.locker.RUnlock()
 }
 

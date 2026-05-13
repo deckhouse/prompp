@@ -250,7 +250,7 @@ func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries
 
 		samples := make([]cppbridge.Sample, 0, numSamples)
 		for k := range numSamples {
-			samples = append(samples, cppbridge.Sample{Timestamp: int64(k), Value: float64(k)})
+			samples = append(samples, cppbridge.Sample{Timestamp: int64(k + 1), Value: float64(k)})
 		}
 
 		timeSeries = append(timeSeries, storagetest.TimeSeries{Labels: ls, Samples: samples})

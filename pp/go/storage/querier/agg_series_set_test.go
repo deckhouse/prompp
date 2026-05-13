@@ -1,9 +1,11 @@
 package querier_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -69,7 +71,7 @@ func (s *AggSeriesSetSuite) query(
 	start, end, downsamplingMs int64,
 	hints *storage.SelectHints,
 	matchers ...model.LabelMatcher,
-) *querier.AggSeriesSet {
+) storage.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	s.Require().NoError(err)
 
@@ -82,6 +84,17 @@ func (s *AggSeriesSetSuite) query(
 		return &querier.AggSeriesSet{}
 	}
 
+	valueNotFoundTimestampValue := int64(0)
+	timestamps := make([]int64, lssQueryResult.Len())
+	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps, 0)
+
+	sNaNSS := querier.NewStaleNaNSeriesSet(
+		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
+		lssQueryResult,
+		snapshot,
+		valueNotFoundTimestampValue,
+	)
+
 	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
@@ -93,7 +106,8 @@ func (s *AggSeriesSetSuite) query(
 	seriesGroups := lss.GroupSeriesByLabelNames(lssQueryResult.IDs(), nameIDs)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-	return querier.NewAggSeriesSet(
+
+	aggSS := querier.NewAggSeriesSet(
 		dsQueryResult.SerializedData,
 		snapshot,
 		seriesGroups,
@@ -103,6 +117,8 @@ func (s *AggSeriesSetSuite) query(
 		"head_id",
 		0,
 	)
+
+	return querier.NewMergeShardSeriesSet([]storage.SeriesSet{sNaNSS, aggSS})
 }
 
 func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
@@ -128,6 +144,14 @@ func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
 			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0"),
 			Samples: []cppbridge.Sample{},
 		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
 	}
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
@@ -139,6 +163,8 @@ func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
 	s.Require().Equal(len(expected), len(actual))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
+	s.Require().Equal(expected[1].Labels, actual[1].Labels)
+	s.Require().Equal(expected[2].Labels, actual[2].Labels)
 }
 
 func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
@@ -169,6 +195,14 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0", "job", "test2"),
 			Samples: []cppbridge.Sample{},
 		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
 	}
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
@@ -181,6 +215,8 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 	s.Require().Equal(len(expected), len(actual))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
 	s.Require().Equal(expected[1].Labels, actual[1].Labels)
+	s.Require().Equal(expected[2].Labels, actual[2].Labels)
+	s.Require().Equal(expected[3].Labels, actual[3].Labels)
 }
 
 func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
@@ -221,6 +257,14 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 			),
 			Samples: []cppbridge.Sample{},
 		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
 	}
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
@@ -233,6 +277,8 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 	s.Require().Equal(len(expected), len(actual))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
 	s.Require().Equal(expected[1].Labels, actual[1].Labels)
+	s.Require().Equal(expected[2].Labels, actual[2].Labels)
+	s.Require().Equal(expected[3].Labels, actual[3].Labels)
 }
 
 func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroupingLabel() {
@@ -273,6 +319,14 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroup
 			),
 			Samples: []cppbridge.Sample{},
 		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
+		},
 	}
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
@@ -288,7 +342,7 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroup
 }
 
 //
-//
+// TODO DELETE
 //
 
 func TestAGGSS(t *testing.T) {
@@ -329,11 +383,20 @@ func TestAGGSS(t *testing.T) {
 	head.lsses[0].LabelNameToIDs(hints.Grouping, nameIDs)
 	t.Log("nameIDs filled", nameIDs)
 
-	seriesGroups := head.lsses[0].GroupSeriesByLabelNames(seriesIDs, nameIDs)
+	seriesGroups := head.lsses[shardID].GroupSeriesByLabelNames(seriesIDs, nameIDs)
 	t.Log("seriesGroups", seriesGroups.Groups)
 
-	// t.Log("createLabelSet", aggLabelSetCtor(snapshot, hints.Grouping, "headID", seriesGroups.Groups[0][0], shardID))
-	// t.Log("createLabelSet", aggLabelSetCtor(snapshot, hints.Grouping, "headID", seriesGroups.Groups[1][0], shardID))
+	valueNotFoundTimestampValue := int64(0)
+	timestamps := make([]int64, lssQueryResult.Len())
+	head.dss[shardID].QueryFirstTimestamps(lssQueryResult.IDs(), timestamps, 0)
+	t.Log("timestamps", timestamps)
+
+	sNaNSS := querier.NewStaleNaNSeriesSet(
+		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
+		lssQueryResult,
+		snapshot,
+		valueNotFoundTimestampValue,
+	)
 
 	result := head.dss[shardID].Query(
 		cppbridge.DataStorageQuery{
@@ -345,7 +408,7 @@ func TestAGGSS(t *testing.T) {
 		hints,
 	)
 
-	ss := querier.NewAggSeriesSet(
+	aggSS := querier.NewAggSeriesSet(
 		result.SerializedData,
 		snapshot,
 		seriesGroups,
@@ -356,15 +419,18 @@ func TestAGGSS(t *testing.T) {
 		shardID,
 	)
 
+	ss := querier.NewMergeShardSeriesSet([]storage.SeriesSet{sNaNSS, aggSS})
+
 	var it chunkenc.Iterator
 	for ss.Next() {
 		s := ss.At()
-		t.Log(s.Labels())
+		t.Log("s.Labels()", s.Labels())
 		it = s.Iterator(it)
-		t.Log(it.Next())
+		t.Log("it.Next()", it.Next())
+		t.Log(it.At())
 		for it.Next() != chunkenc.ValNone {
 			ts, v := it.At()
-			t.Log(ts, v)
+			t.Log("ts", ts, "v", v)
 		}
 	}
 }

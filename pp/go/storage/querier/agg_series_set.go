@@ -93,7 +93,8 @@ func (ss *AggSeriesSet) Next() bool {
 			ss.shardID,
 		),
 		ss.serializedData,
-		ss.seriesGroups.Groups[ss.nextGroupIndex],
+		ss.seriesGroups,
+		ss.nextGroupIndex,
 		ss.mint,
 		ss.maxt,
 	))
@@ -117,7 +118,8 @@ func (*AggSeriesSet) Warnings() annotations.Annotations {
 type AggSeries struct {
 	labelSet       labels.Labels
 	serializedData *cppbridge.DataStorageSerializedData
-	seriesIDs      []uint32
+	seriesGroups   *cppbridge.SeriesGroups
+	groupIndex     int
 	mint, maxt     int64
 }
 
@@ -125,13 +127,15 @@ type AggSeries struct {
 func NewAggSeries(
 	labelSet labels.Labels,
 	serializedData *cppbridge.DataStorageSerializedData,
-	seriesIDs []uint32,
+	seriesGroups *cppbridge.SeriesGroups,
+	groupIndex int,
 	mint, maxt int64,
 ) AggSeries {
 	return AggSeries{
 		labelSet:       labelSet,
 		serializedData: serializedData,
-		seriesIDs:      seriesIDs,
+		seriesGroups:   seriesGroups,
+		groupIndex:     groupIndex,
 		mint:           mint,
 		maxt:           maxt,
 	}
@@ -144,13 +148,14 @@ func (s *AggSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	if !ok {
 		return NewAggChunkIterator(
 			s.serializedData,
-			s.seriesIDs,
+			s.seriesGroups,
+			s.groupIndex,
 			s.mint,
 			s.maxt,
 		)
 	}
 
-	chunkIterator.reset(s.serializedData, s.seriesIDs, s.mint, s.maxt)
+	chunkIterator.reset(s.serializedData, s.seriesGroups, s.groupIndex, s.mint, s.maxt)
 	return chunkIterator
 }
 
@@ -167,6 +172,7 @@ func (s *AggSeries) Labels() labels.Labels {
 // AggChunkIterator iterates over the aggregated samples of a time series, that can only get the next value.
 type AggChunkIterator struct {
 	serializedData *cppbridge.DataStorageSerializedData
+	seriesGroups   *cppbridge.SeriesGroups
 	chunkIterator  cppbridge.DataStorageSerializedDataMultiSeriesIterator
 	mint           int64
 	maxt           int64
@@ -176,19 +182,19 @@ type AggChunkIterator struct {
 // NewAggChunkIterator initializes a new [AggChunkIterator].
 func NewAggChunkIterator(
 	serializedData *cppbridge.DataStorageSerializedData,
-	seriesIDs []uint32,
+	seriesGroups *cppbridge.SeriesGroups,
+	groupIndex int,
 	mint, maxt int64,
 ) *AggChunkIterator {
 	it := &AggChunkIterator{
 		serializedData: serializedData,
-		chunkIterator:  cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(serializedData, seriesIDs),
-		mint:           mint,
-		maxt:           maxt,
-	}
-
-	if it.chunkIterator.Timestamp() < mint {
-		panic(fmt.Sprintf("NewAggChunkIterator: timestamp(%d) < mint(%d)", it.chunkIterator.Timestamp(), mint))
-		// it.chunkIterator.Seek(mint)
+		seriesGroups:   seriesGroups,
+		chunkIterator: cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(
+			serializedData,
+			seriesGroups.Groups[groupIndex],
+		),
+		mint: mint,
+		maxt: maxt,
 	}
 
 	return it
@@ -250,7 +256,7 @@ func (it *AggChunkIterator) Seek(t int64) chunkenc.ValueType {
 
 	ts := it.AtT()
 	if !it.isInitialized || ts < t {
-		panic(fmt.Sprintf("Seek:timestamp(%d) < mint(%d)", ts, t))
+		panic(fmt.Sprintf("Seek: timestamp(%d) < mint(%d)", ts, t))
 		// 	it.chunkIterator.Seek(t)
 		// 	it.isInitialized = true
 		// 	if !it.chunkIterator.HasData() {
@@ -288,20 +294,20 @@ func (it *AggChunkIterator) nextValue() chunkenc.ValueType {
 // reset resets the iterator to the beginning of the serialized data.
 func (it *AggChunkIterator) reset(
 	serializedData *cppbridge.DataStorageSerializedData,
-	seriesIDs []uint32,
+	seriesGroups *cppbridge.SeriesGroups,
+	groupIndex int,
 	mint, maxt int64,
 ) {
 	it.serializedData = serializedData
+	it.seriesGroups = seriesGroups
 	it.mint = mint
 	it.maxt = maxt
 	it.isInitialized = false
 	// it.chunkIterator.Reset(serializedData, chunkRef)
-	it.chunkIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(serializedData, seriesIDs)
-
-	if it.chunkIterator.Timestamp() < mint {
-		// it.chunkIterator.Seek(mint)
-		panic(fmt.Sprintf("reset: timestamp(%d) < mint(%d)", it.chunkIterator.Timestamp(), mint))
-	}
+	it.chunkIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(
+		serializedData,
+		seriesGroups.Groups[groupIndex],
+	)
 }
 
 //

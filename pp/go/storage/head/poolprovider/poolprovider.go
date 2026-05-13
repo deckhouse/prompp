@@ -34,15 +34,17 @@ type HeadPool[TGShard Shard] struct {
 	shardedInnerSeriesPool     sync.Pool
 	statsPool                  zeropool.Pool[[]cppbridge.RelabelerStats]
 	// use in querier
-	snapshotsPool       zeropool.Pool[[]*cppbridge.LabelSetSnapshot]
-	lssQueryResultsPool zeropool.Pool[[]*cppbridge.LSSQueryResult]
-	selectorsPool       zeropool.Pool[[]uintptr]
-	seriesSetPool       zeropool.Pool[[]storage.SeriesSet]
-	chunkSeriesSetPool  zeropool.Pool[[]storage.ChunkSeriesSet]
-	serializedDataPool  zeropool.Pool[[]*cppbridge.DataStorageSerializedData]
-	errorsPool          zeropool.Pool[[]error]
-	seriesGroupsPool    zeropool.Pool[[]*cppbridge.SeriesGroups]
-	nameIDsPool         pool.SlicePool[uint32]
+	snapshotsPool         zeropool.Pool[[]*cppbridge.LabelSetSnapshot]
+	lssQueryResultsPool   zeropool.Pool[[]*cppbridge.LSSQueryResult]
+	selectorsPool         zeropool.Pool[[]uintptr]
+	seriesSetPool         zeropool.Pool[[]storage.SeriesSet]
+	chunkSeriesSetPool    zeropool.Pool[[]storage.ChunkSeriesSet]
+	serializedDataPool    zeropool.Pool[[]*cppbridge.DataStorageSerializedData]
+	errorsPool            zeropool.Pool[[]error]
+	sliceOfTimestampsPool zeropool.Pool[[][]int64]
+	timestampsPool        pool.SlicePool[int64]
+	seriesGroupsPool      zeropool.Pool[[]*cppbridge.SeriesGroups]
+	nameIDsPool           pool.SlicePool[uint32]
 }
 
 // NewHeadPool init new [HeadPool], pools for reusable objects.
@@ -97,6 +99,10 @@ func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 		errorsPool: zeropool.New(func() []error {
 			return make([]error, numberOfShards)
 		}),
+		sliceOfTimestampsPool: zeropool.New(func() [][]int64 {
+			return make([][]int64, numberOfShards)
+		}),
+		timestampsPool: pool.NewSlicePool[int64]([]int{2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}),
 		seriesGroupsPool: zeropool.New(func() []*cppbridge.SeriesGroups {
 			return make([]*cppbridge.SeriesGroups, numberOfShards)
 		}),
@@ -233,6 +239,28 @@ func (hp *HeadPool[TGShard]) GetErrors() []error {
 func (hp *HeadPool[TGShard]) PutErrors(errs []error) {
 	clear(errs)
 	hp.errorsPool.Put(errs)
+}
+
+// GetSliceOfTimestamps gets a slice of []int64 from the pool.
+func (hp *HeadPool[TGShard]) GetSliceOfTimestamps() [][]int64 {
+	return hp.sliceOfTimestampsPool.Get()
+}
+
+// PutSliceOfTimestamps adds slice of []int64 to the pool after resetting it.
+func (hp *HeadPool[TGShard]) PutSliceOfTimestamps(ts [][]int64) {
+	clear(ts)
+	hp.sliceOfTimestampsPool.Put(ts)
+}
+
+// GetTimestamps gets a slice of [int64] from the pool.
+func (hp *HeadPool[TGShard]) GetTimestamps(size int) []int64 {
+	return hp.timestampsPool.Get(size)
+}
+
+// PutTimestamps adds slice of [int64] to the pool after resetting it.
+func (hp *HeadPool[TGShard]) PutTimestamps(ts []int64) {
+	clear(ts)
+	hp.timestampsPool.Put(ts)
 }
 
 // GetSeriesGroups gets a slice of [cppbridge.SeriesGroups] from the pool.

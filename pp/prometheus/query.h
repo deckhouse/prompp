@@ -16,13 +16,15 @@ struct GenericSelectHints {
   String func{};
 
   Slice<String> grouping;
-  bool by{};
   int64_t range_ms{};
 
   uint64_t shard_count{};
   uint64_t shard_index{};
 
+  int64_t lookback_delta_ms{};
+
   bool disable_trimming{};
+  bool by{};
 
   GenericSelectHints() = default;
 
@@ -33,11 +35,12 @@ struct GenericSelectHints {
         limit(hints.limit),
         step_ms(hints.step_ms),
         func(static_cast<std::string_view>(hints.func)),
-        by(hints.by),
         range_ms(hints.range_ms),
         shard_count(hints.shard_count),
         shard_index(hints.shard_index),
-        disable_trimming(hints.disable_trimming) {
+        lookback_delta_ms(hints.lookback_delta_ms),
+        disable_trimming(hints.disable_trimming),
+        by(hints.by) {
     if (!hints.grouping.empty()) [[unlikely]] {
       grouping.reserve(hints.grouping.size());
       for (const auto& group : hints.grouping) {

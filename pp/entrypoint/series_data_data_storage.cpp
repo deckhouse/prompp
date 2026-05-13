@@ -194,27 +194,31 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   }
 }
 
-extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res) {
+extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* args) {
   using PromPP::Primitives::Timestamp;
   using series_data::Decoder;
 
   struct Arguments {
     DataStoragePtr data_storage;
+    Timestamp not_found_timestamp_value;
     SliceView<LabelSetID> series_ids;
-  };
-
-  struct Result {
     Slice<Timestamp> timestamps;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto out = static_cast<Result*>(res);
 
-  assert(in->series_ids.size() == out->timestamps.size());
+  assert(in->series_ids.size() == in->timestamps.size());
   const auto& storage = *in->data_storage;
 
-  std::ranges::transform(in->series_ids, out->timestamps.begin(),
-                         [&storage](uint32_t series_id) { return Decoder::get_series_min_timestamp(storage, series_id); });
+  std::ranges::transform(in->series_ids, in->timestamps.begin(), [&storage, in](uint32_t series_id) {
+    if (storage.open_chunks.size() > series_id) [[likely]] {
+      if (!storage.open_chunks[series_id].is_empty()) [[likely]] {
+        return Decoder::get_series_min_timestamp(storage, series_id);
+      }
+    }
+
+    return in->not_found_timestamp_value;
+  });
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
