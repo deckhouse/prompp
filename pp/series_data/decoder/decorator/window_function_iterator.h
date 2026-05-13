@@ -60,7 +60,7 @@ struct WindowBoundaryCalculator {
 
  private:
   [[nodiscard]] PROMPP_ALWAYS_INLINE static Timestamp next_interval_boundary(Timestamp start, const WindowFunctionParameters& parameters) noexcept {
-    if ((parameters.range % parameters.step) == 0) {
+    if (parameters.step != 0 && (parameters.range % parameters.step) == 0) {
       return start + parameters.step;
     }
 
