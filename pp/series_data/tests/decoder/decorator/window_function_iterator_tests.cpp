@@ -290,6 +290,27 @@ INSTANTIATE_TEST_SUITE_P(PointQueryIntervalWithWinLessThanStep,
                                                                     TimeInterval{.min = 11, .max = 10},
                                                                 }}));
 
+INSTANTIATE_TEST_SUITE_P(RangeMuchLargerThanStepNotDivisibleNoInvertedWindows,
+                         WindowBoundaryCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 20},
+                                                                        .step = 4,
+                                                                        .range = 9,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 1},
+                                                                    TimeInterval{.min = 2, .max = 4},
+                                                                    TimeInterval{.min = 5, .max = 5},
+                                                                    TimeInterval{.min = 6, .max = 8},
+                                                                    TimeInterval{.min = 9, .max = 9},
+                                                                    TimeInterval{.min = 10, .max = 12},
+                                                                    TimeInterval{.min = 13, .max = 13},
+                                                                    TimeInterval{.min = 14, .max = 16},
+                                                                    TimeInterval{.min = 17, .max = 17},
+                                                                    TimeInterval{.min = 18, .max = 20},
+                                                                }}));
+
 struct WindowFunctionIteratorCase {
   std::vector<Sample> samples;
   WindowFunctionParameters parameters;
