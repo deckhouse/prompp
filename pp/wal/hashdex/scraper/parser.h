@@ -31,13 +31,13 @@ template <class Value>
 }
 
 template <class Parser>
-concept ParserInterface = requires(Parser& parser, const Parser& const_parser, Primitives::Timestamp& timestamp, bool& has_timestamp) {
+concept ParserInterface = requires(Parser& parser, const Parser& const_parser, Primitives::Timestamp& timestamp) {
   { parser.tokenizer() };
   { Prometheus::textparse::TokenizerInterface<decltype(parser.tokenizer())> };
   { Prometheus::textparse::TokenizerInterface<decltype(const_parser.tokenizer())> };
 
   { const_parser.is_value_token() } -> std::same_as<bool>;
-  { parser.parse_timestamp(timestamp, has_timestamp) } -> std::same_as<Error>;
+  { parser.parse_timestamp(timestamp) } -> std::same_as<Error>;
   { const_parser.validate_parse_result() } -> std::same_as<Error>;
   { const_parser.validate_parse_sample_result() } -> std::same_as<Error>;
 };
@@ -59,15 +59,13 @@ class PrometheusParser {
     return (tokenizer_.token() == Token::kLinebreak || tokenizer_.token() == Token::kEOF) ? Error::kNoError : Error::kUnexpectedToken;
   }
 
-  [[nodiscard]] Error parse_timestamp(Primitives::Timestamp& timestamp, bool& has_timestamp) noexcept {
-    has_timestamp = false;
+  [[nodiscard]] Error parse_timestamp(Primitives::Timestamp& timestamp) noexcept {
     if (is_timestamp_token()) {
       if (!parse_numeric_value(tokenizer_.token_str(), timestamp)) [[unlikely]] {
         return Error::kInvalidTimestamp;
       }
 
       tokenizer_.next_non_whitespace();
-      has_timestamp = true;
     }
 
     return Error::kNoError;
@@ -98,8 +96,7 @@ class OpenMetricsParser {
     return (tokenizer_.token() == Token::kLinebreak || tokenizer_.token() == Token::kExemplar) ? Error::kNoError : Error::kUnexpectedToken;
   }
 
-  [[nodiscard]] Error parse_timestamp(Primitives::Timestamp& timestamp, bool& has_timestamp) noexcept {
-    has_timestamp = false;
+  [[nodiscard]] Error parse_timestamp(Primitives::Timestamp& timestamp) noexcept {
     if (tokenizer_.token() == Token::kTimestamp) {
       if (double float_timestamp; parse_timestamp_as_float(float_timestamp)) [[likely]] {
         timestamp = static_cast<int64_t>(float_timestamp * 1000.0);
@@ -108,8 +105,8 @@ class OpenMetricsParser {
       }
 
       tokenizer_.next_non_whitespace();
-      has_timestamp = true;
     }
+
     return Error::kNoError;
   }
 
