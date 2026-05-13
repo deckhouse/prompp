@@ -59,27 +59,27 @@ void ScraperParse(benchmark::State& state) {
   }
 }
 
-// void ScraperRead(benchmark::State& state) {
-//   ZoneScoped;
-//   auto str = get_file_content();
+void ScraperRead(benchmark::State& state) {
+  ZoneScoped;
+  auto str = get_file_content();
 
-//   PrometheusScraper scraper;
-//   std::ignore = scraper.parse(str, 0);
+  PrometheusScraper scraper;
+  std::ignore = scraper.parse(str, 0);
 
-//   PromPP::Primitives::TimeseriesSemiview ts_buf;
+  PromPP::Primitives::TimeseriesSemiview ts_buf;
 
-//   for ([[maybe_unused]] auto _ : state) {
-//     for (auto& metric : scraper.metrics()) {
-//       if (metric.hash() % 2 == 0) {
-//         ts_buf.clear();
-//         metric.read(ts_buf);
-//       }
-//     }
-//   }
-// }
+  for ([[maybe_unused]] auto _ : state) {
+    for (auto& metric : scraper.metrics()) {
+      if (metric.hash() % 2 == 0) {
+        ts_buf.clear();
+        metric.read(ts_buf);
+      }
+    }
+  }
+}
 
 BENCHMARK(Parser)->ComputeStatistics("min", benchmark::min_time);
 BENCHMARK(ScraperParse)->ComputeStatistics("min", benchmark::min_time);
-// BENCHMARK(ScraperRead)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(ScraperRead)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace
