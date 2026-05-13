@@ -4,8 +4,6 @@
 
 #include "benchmark/statistic.h"
 #include "primitives/timeseries.h"
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
 #include "profiling/profiling.h"
 #include "wal/hashdex/scraper/scraper.h"
 

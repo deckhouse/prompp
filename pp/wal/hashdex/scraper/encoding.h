@@ -2,6 +2,9 @@
 
 #include <bit>
 #include <cmath>
+#include <cstring>
+#include <string>
+#include <string_view>
 
 #include "bare_bones/bit.h"
 #include "marked_common.h"
@@ -36,16 +39,16 @@ class SampleCodec {
     using encoding::SampleValueType;
 
     const double val = sample.value();
-    if (const auto type = layout.value_type(); type == SampleValueType::kUint32) [[likely]] {
-      out = write_value(out, static_cast<uint32_t>(val));
-    } else if (type == SampleValueType::kDouble) [[likely]] {
-      out = write_value(out, val);
-    } else if (type == SampleValueType::kUint8) [[unlikely]] {
+    if (const auto type = layout.value_type(); type == SampleValueType::kUint8) [[likely]] {
       out = write_value(out, static_cast<uint8_t>(val));
-    } else if (type == SampleValueType::kUint16) [[unlikely]] {
+    } else if (type == SampleValueType::kUint16) [[likely]] {
       out = write_value(out, static_cast<uint16_t>(val));
+    } else if (type == SampleValueType::kUint32) [[likely]] {
+      out = write_value(out, static_cast<uint32_t>(val));
     } else if (type == SampleValueType::kFloat) [[unlikely]] {
       out = write_value(out, static_cast<float>(val));
+    } else if (type == SampleValueType::kDouble) [[unlikely]] {
+      out = write_value(out, val);
     }
 
     if (layout.has_timestamp()) [[unlikely]] {
@@ -69,23 +72,23 @@ class SampleCodec {
     uint64_t chunk;
     std::memcpy(&chunk, in, sizeof(chunk));
 
-    if (const auto type = layout.value_type(); type == SampleValueType::kUint32) [[likely]] {
-      val = static_cast<double>(static_cast<uint32_t>(chunk));
-      in += sizeof(uint32_t);
-    } else if (type == SampleValueType::kDouble) [[likely]] {
-      val = std::bit_cast<double>(chunk);
-      in += sizeof(double);
-    } else if (type == SampleValueType::kUint8) [[unlikely]] {
+    if (const auto type = layout.value_type(); type == SampleValueType::kUint8) [[likely]] {
       val = static_cast<double>(static_cast<uint8_t>(chunk));
       in += sizeof(uint8_t);
-    } else if (type == SampleValueType::kUint16) [[unlikely]] {
+    } else if (type == SampleValueType::kUint16) [[likely]] {
       val = static_cast<double>(static_cast<uint16_t>(chunk));
       in += sizeof(uint16_t);
+    } else if (type == SampleValueType::kUint32) [[likely]] {
+      val = static_cast<double>(static_cast<uint32_t>(chunk));
+      in += sizeof(uint32_t);
     } else if (type == SampleValueType::kFloat) [[unlikely]] {
       val = static_cast<double>(std::bit_cast<float>(static_cast<uint32_t>(chunk)));
       in += sizeof(float);
     } else if (type == SampleValueType::kZero) [[unlikely]] {
       val = 0.0;
+    } else if (type == SampleValueType::kDouble) [[unlikely]] {
+      val = std::bit_cast<double>(chunk);
+      in += sizeof(double);
     } else {
       val = Prometheus::kNormalNan;
     }
@@ -158,13 +161,50 @@ class LabelCodec {
     MarkedLabel label;
   };
 
-  static DecodeResult decode(const char* in) noexcept {
+  template <class LabelSet>
+  static PROMPP_ALWAYS_INLINE void decode_and_append(const char*& in, const char* base, LabelSet& label_set) noexcept {
     uint64_t chunk;
     std::memcpy(&chunk, in, sizeof(chunk));
     const auto layout = static_cast<uint8_t>(chunk);
 
     if (layout == 0b01010101) [[likely]] {
+      label_set.append(std::string_view(base + static_cast<uint8_t>(chunk >> 8), static_cast<uint8_t>(chunk >> 16)),
+                       std::string_view(base + static_cast<uint8_t>(chunk >> 24), static_cast<uint8_t>(chunk >> 32)));
+      in += 5;
+      return;
+    }
+
+    if (layout == 0b01000000) [[likely]] {
+      label_set.append(Prometheus::kMetricLabelName, std::string_view(base, static_cast<uint8_t>(chunk >> 8)));
+      in += 2;
+      return;
+    }
+
+    const auto [next, label] = decode_from_chunk(in, chunk, layout);
+    in = next;
+    if (label.name.is_reserved_name()) [[unlikely]] {
+      label_set.append(Prometheus::kMetricLabelName, std::string_view(base + label.value.offset, label.value.length));
+    } else {
+      label_set.append(std::string_view(base + label.name.offset, label.name.length), std::string_view(base + label.value.offset, label.value.length));
+    }
+  }
+
+  static DecodeResult decode(const char* in) noexcept {
+    uint64_t chunk;
+    std::memcpy(&chunk, in, sizeof(chunk));
+    const auto layout = static_cast<uint8_t>(chunk);
+
+    return decode_from_chunk(in, chunk, layout);
+  }
+
+ private:
+  static PROMPP_ALWAYS_INLINE DecodeResult decode_from_chunk(const char* in, const uint64_t chunk, const uint8_t layout) noexcept {
+    if (layout == 0b01010101) [[likely]] {
       return decode_4_bytes(in, chunk);
+    }
+
+    if (layout == 0b01000000) [[likely]] {
+      return DecodeResult{.next = in + 2, .label = {.name = {.offset = 0, .length = 0}, .value = {.offset = 0, .length = static_cast<uint8_t>(chunk >> 8)}}};
     }
 
     if ((layout & 0x0F) == 0) [[likely]] {
@@ -174,7 +214,6 @@ class LabelCodec {
     return decode_generic(++in, layout);
   }
 
- private:
   static PROMPP_ALWAYS_INLINE char* encode_value_only(char* out, const uint32_t label_value_offset, const uint32_t label_value_length) noexcept {
     char* start = out++;
 
@@ -348,16 +387,15 @@ class LayoutCountCodec {
   };
 
   static PROMPP_ALWAYS_INLINE DecodeResult decode(const char* in) noexcept {
-    uint64_t chunk;
-    std::memcpy(&chunk, in, sizeof(chunk));
-
     LayoutMarker layout{};
-    std::memcpy(&layout, &chunk, sizeof(layout));
+    std::memcpy(&layout, in, sizeof(layout));
 
-    chunk >>= 8;
-    const uint64_t mask = (1ULL << BareBones::Bit::to_bits(layout.size_length_in_bytes())) - 1;
+    if (layout.size_length_in_bytes() == sizeof(uint8_t)) [[likely]] {
+      return {in + sizeof(layout) + sizeof(uint8_t), layout, static_cast<uint32_t>(static_cast<uint8_t>(in[1]))};
+    }
 
-    auto labels_count = static_cast<uint32_t>(chunk & mask);
+    uint32_t labels_count = 0;
+    std::memcpy(&labels_count, in + sizeof(layout), layout.size_length_in_bytes());
 
     return {in + sizeof(layout) + layout.size_length_in_bytes(), layout, labels_count};
   }
