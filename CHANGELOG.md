@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.11
+
+### Enhancements
+1. **Jemalloc arena pool recycling.** Arenas returned to the free pool are reset and purged instead of being destroyed, with updated jemalloc build options. New metrics report arena pool releases and reclaimed bytes (`prompp_common_jemalloc_arena_pool_*`).
+
+### Other
+1. **GCC 14 C++ toolchain.** The CI/devcontainer image and Bazel configuration on this branch build the C++ core with GCC 14.
+
 ## v0.7.10
 
 ### Fixes
