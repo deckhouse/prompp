@@ -57,6 +57,26 @@ INSTANTIATE_TEST_SUITE_P(NoInterval,
                                                                     },
                                                                 .expected{TimeInterval{.min = 1, .max = 0}}}));
 
+INSTANTIATE_TEST_SUITE_P(ZeroStep,
+                         WindowBoundaryCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 1000},
+                                                                        .step = 0,
+                                                                        .range = 100,
+                                                                    },
+                                                                .expected{TimeInterval{.min = 1, .max = 1000}}}));
+
+INSTANTIATE_TEST_SUITE_P(ZeroStepAndRange,
+                         WindowBoundaryCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 1000},
+                                                                        .step = 0,
+                                                                        .range = 0,
+                                                                    },
+                                                                .expected{TimeInterval{.min = 1, .max = 1000}}}));
+
 INSTANTIATE_TEST_SUITE_P(RangeEqualsStep,
                          WindowBoundaryCalculatorFixture,
                          testing::Values(IntervalCalculatorCase{.parameters =
@@ -69,6 +89,45 @@ INSTANTIATE_TEST_SUITE_P(RangeEqualsStep,
                                                                     TimeInterval{.min = 1, .max = 100},
                                                                     TimeInterval{.min = 101, .max = 200},
                                                                     TimeInterval{.min = 201, .max = 300},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(RangeGreaterThanInterval,
+                         WindowBoundaryCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 50},
+                                                                        .step = 30,
+                                                                        .range = 200,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 20},
+                                                                    TimeInterval{.min = 21, .max = 30},
+                                                                    TimeInterval{.min = 31, .max = 50},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(StepGreaterThanInterval,
+                         WindowBoundaryCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 50},
+                                                                        .step = 60,
+                                                                        .range = 0,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 50},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(RangeAndStepGreaterThanInterval,
+                         WindowBoundaryCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 50},
+                                                                        .step = 60,
+                                                                        .range = 70,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 10},
+                                                                    TimeInterval{.min = 11, .max = 50},
                                                                 }}));
 
 INSTANTIATE_TEST_SUITE_P(RangeGreaterThanStepAndDivisibleIntervalCalculation,
@@ -290,7 +349,7 @@ INSTANTIATE_TEST_SUITE_P(PointQueryIntervalWithWinLessThanStep,
                                                                     TimeInterval{.min = 11, .max = 10},
                                                                 }}));
 
-INSTANTIATE_TEST_SUITE_P(RangeMuchLargerThanStepNotDivisibleNoInvertedWindows,
+INSTANTIATE_TEST_SUITE_P(RangeLargerThanStepNotDivisibleNoInvertedWindows,
                          WindowBoundaryCalculatorFixture,
                          testing::Values(IntervalCalculatorCase{.parameters =
                                                                     {
@@ -309,6 +368,21 @@ INSTANTIATE_TEST_SUITE_P(RangeMuchLargerThanStepNotDivisibleNoInvertedWindows,
                                                                     TimeInterval{.min = 14, .max = 16},
                                                                     TimeInterval{.min = 17, .max = 17},
                                                                     TimeInterval{.min = 18, .max = 20},
+                                                                }},
+                                         IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 32},
+                                                                        .step = 10,
+                                                                        .range = 12,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 2},
+                                                                    TimeInterval{.min = 3, .max = 10},
+                                                                    TimeInterval{.min = 11, .max = 12},
+                                                                    TimeInterval{.min = 13, .max = 20},
+                                                                    TimeInterval{.min = 21, .max = 22},
+                                                                    TimeInterval{.min = 23, .max = 30},
+                                                                    TimeInterval{.min = 31, .max = 32},
                                                                 }}));
 
 struct WindowFunctionIteratorCase {
