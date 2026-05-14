@@ -6,7 +6,7 @@ namespace series_data::decoder::decorator {
 
 class FindMaxElementInIterator {
  public:
-  explicit FindMaxElement(encoder::Sample& sample) : sample_{sample} {
+  explicit FindMaxElementInIterator(encoder::Sample& sample) : sample_{sample} {
     sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   }
 

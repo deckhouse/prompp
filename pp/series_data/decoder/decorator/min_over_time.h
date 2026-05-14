@@ -6,7 +6,7 @@ namespace series_data::decoder::decorator {
 
 class FindMinElementInIterator {
  public:
-  explicit FindMinElement(encoder::Sample& sample) : sample_(sample) {
+  explicit FindMinElementInIterator(encoder::Sample& sample) : sample_(sample) {
     sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   }
 

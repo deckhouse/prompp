@@ -19,7 +19,7 @@ PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noex
 
 class SumOfElementsInIterator {
  public:
-  explicit SumOfElements(encoder::Sample& sum) : sum_(sum) {
+  explicit SumOfElementsInIterator(encoder::Sample& sum) : sum_(sum) {
     sum_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   }
 
@@ -32,7 +32,7 @@ class SumOfElementsInIterator {
     sum_.timestamp = timestamp;
   }
 
-  ~SumOfElements() {
+  ~SumOfElementsInIterator() {
     if (!std::isinf(sum_.value)) [[likely]] {
       sum_.value += c_;
     }
