@@ -6,9 +6,7 @@ namespace series_data::decoder::decorator {
 
 class FindMinElement {
  public:
-  explicit FindMinElement(encoder::Sample& sample) : sample_(sample) {
-    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
-  }
+  explicit FindMinElement(encoder::Sample& sample) : sample_(sample) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sample_.value) || value < sample_.value) {
