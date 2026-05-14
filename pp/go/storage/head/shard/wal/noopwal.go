@@ -32,8 +32,8 @@ func (NoopWal) Flush() error {
 	return nil
 }
 
-// MaxItemIndex implementation of [NoopWal], do nothing.
-func (NoopWal) MaxItemIndex() uint32 {
+// MaxWrittenItemIndex implementation of [NoopWal], do nothing.
+func (NoopWal) MaxWrittenItemIndex() uint32 {
 	return 0
 }
 

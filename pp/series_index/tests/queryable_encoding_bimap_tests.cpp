@@ -197,7 +197,7 @@ TEST_F(BimapFixture, InsertedSeriesUpdatesMaxItemIndex) {
   // Act
 
   // Assert
-  EXPECT_EQ(2U, lss_.max_item_index());
+  EXPECT_EQ(2U, lss_.next_item_index());
 }
 
 TEST_F(BimapFixture, FixedStateFindKeepsTouchedPreBoundaryId) {
@@ -222,7 +222,7 @@ TEST_F(BimapFixture, FixedStateFindOrEmplaceKeepsPreBoundaryId) {
   const auto ls2 = LabelViewSet{{"job", "b"}};
   lss_.find_or_emplace(ls1);
   lss_.find_or_emplace(ls2);
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   lss_.set_pending_shrink_boundary(shrink_boundary);
 
   // Act
@@ -545,7 +545,7 @@ TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrieAfterTwoSeries) {
   lss_.find_or_emplace(ls2);
   lss_.build_deferred_indexes();
 
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
@@ -578,7 +578,7 @@ class BimapShrinkFixture : public BimapCopierFixture {
 
 TEST_F(BimapShrinkFixture, FinalizeShrinkMapsSeriesInOrder) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
@@ -595,7 +595,7 @@ TEST_F(BimapShrinkFixture, FinalizeShrinkMapsSeriesInOrder) {
 
 TEST_F(BimapShrinkFixture, ShrunkStateSeriesCountMatchesStorage) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
@@ -606,12 +606,12 @@ TEST_F(BimapShrinkFixture, ShrunkStateSeriesCountMatchesStorage) {
 
   // Assert
   EXPECT_EQ(3U, lss_.items_count());
-  EXPECT_EQ(3U, lss_.max_item_index());
+  EXPECT_EQ(3U, lss_.next_item_index());
 }
 
 TEST_F(BimapShrinkFixture, IndexWriteContextDedupesSymbolsAfterFullShrink) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
@@ -629,7 +629,7 @@ TEST_F(BimapShrinkFixture, IndexWriteContextDedupesSymbolsAfterFullShrink) {
 
 TEST_F(BimapShrinkFixture, IndexWriteContextResolvesRefsAfterFullShrink) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
   copier.copy_added_series_and_build_indexes();
@@ -692,7 +692,7 @@ TEST_F(BimapFixedStateFixture, FixedStateSeriesCountMatchesThree) {
 
   // Assert
   EXPECT_EQ(3U, lss_.items_count());
-  EXPECT_EQ(3U, lss_.max_item_index());
+  EXPECT_EQ(3U, lss_.next_item_index());
 }
 
 TEST_F(BimapFixedStateFixture, FixedStateBracketExposesVisibleSeries) {
@@ -746,7 +746,7 @@ TEST_F(BimapFixedPendingFixture, FixedStateTwoSeriesCountMatchesStorage) {
 
   // Assert
   EXPECT_EQ(2U, lss_.items_count());
-  EXPECT_EQ(2U, lss_.max_item_index());
+  EXPECT_EQ(2U, lss_.next_item_index());
 }
 
 class BimapFiveSeriesFixture : public BimapCopierFixture {
@@ -782,7 +782,7 @@ class BimapFiveSeriesFixture : public BimapCopierFixture {
 
 TEST_F(BimapFiveSeriesFixture, ShrinkFindOrEmplaceAddsAtBoundary) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   FinalizeShrink(lss_.added_series(), shrink_boundary);
 
   // Act
@@ -869,7 +869,7 @@ TEST_F(BimapFiveSeriesFixture, ShrunkReinsertMarksAddedAndLsIdSet) {
 
 TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyKeepsSeriesLayout) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   FinalizeShrink(lss_.added_series(), shrink_boundary);
 
   // Act
@@ -887,7 +887,7 @@ TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyKeepsSeriesLayout) {
 
 TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyLsIdSetHasLogicalIds) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   const auto ids_for_copy = lss_.added_series();
 
   // Act
@@ -906,7 +906,7 @@ TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyLsIdSetHasLogicalIds) {
 
 TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyFindOrEmplaceIdempotent) {
   // Arrange
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   FinalizeShrink(lss_.added_series(), shrink_boundary);
 
   // Act
@@ -1127,7 +1127,7 @@ class BimapShrinkTwoFixture : public BimapCopierFixture {
   }
 
   void RunFinalizeShrinkWithSnapshot(const BareBones::Vector<uint32_t>& ids_for_copy) {
-    const uint32_t shrink_boundary = lss_.max_item_index();
+    const uint32_t shrink_boundary = lss_.next_item_index();
     Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
     copier.copy_added_series_and_build_indexes();
     lss_.set_pending_shrink_boundary(shrink_boundary);
@@ -1171,7 +1171,7 @@ TEST_F(BimapShrinkTwoFixture, ShrunkTwoSeriesCountMatchesIndices) {
 
   // Assert
   EXPECT_EQ(2U, lss_.items_count());
-  EXPECT_EQ(2U, lss_.max_item_index());
+  EXPECT_EQ(2U, lss_.next_item_index());
 }
 
 }  // namespace

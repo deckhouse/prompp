@@ -1,6 +1,7 @@
 #pragma once
 
 #include <scope_exit.h>
+#include <cstring>
 #include <iterator>
 
 #include "bare_bones/exception.h"
@@ -1246,13 +1247,16 @@ struct LabelSet {
 
       symbols_ids_sequences_type new_symbols_ids_sequences;
       // reserve 3 extra bytes to avoid problems with streamvbyte
-      new_symbols_ids_sequences.reserve(symbols_ids_sequences_.size() - drop_seq_offset + 3);
-      std::ranges::copy(symbols_ids_sequences_.begin() + drop_seq_offset, symbols_ids_sequences_.end(), std::back_inserter(new_symbols_ids_sequences));
+      const auto new_symbols_ids_sequences_size = symbols_ids_sequences_.size() - drop_seq_offset;
+      new_symbols_ids_sequences.reserve(new_symbols_ids_sequences_size + 3);
+      new_symbols_ids_sequences.resize(new_symbols_ids_sequences_size);
+      std::memcpy(new_symbols_ids_sequences.data(), symbols_ids_sequences_.data() + drop_seq_offset, new_symbols_ids_sequences_size * sizeof(uint8_t));
       symbols_ids_sequences_ = std::move(new_symbols_ids_sequences);
 
       Vector<item_type> new_items;
-      new_items.reserve(items_.size() - drop_count);
-      std::ranges::copy(items_.begin() + drop_count, items_.end(), std::back_inserter(new_items));
+      const auto new_items_size = items_.size() - drop_count;
+      new_items.resize(new_items_size);
+      std::memcpy(new_items.data(), items_.data() + drop_count, new_items_size * sizeof(item_type));
       items_ = std::move(new_items);
     }
 

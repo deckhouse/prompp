@@ -191,10 +191,10 @@ void prompp_head_wal_encoder_finalize(void* args, void* res);
  *     encoder uintptr // pointer to constructed encoder
  * }
  * @param res {
- *     max_item_index uint32
+ *     max_written_item_index uint32
  * }
  */
-void prompp_head_wal_encoder_max_item_index(void* args, void* res);
+void prompp_head_wal_encoder_max_written_item_index(void* args, void* res);
 
 /**
  * @brief Construct a new Head WAL Decoder

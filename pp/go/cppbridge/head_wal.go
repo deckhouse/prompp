@@ -107,9 +107,9 @@ func (e *HeadWalEncoder) Finalize() (*HeadEncodedSegment, error) {
 	return NewHeadEncodedSegment(segment, samples), err
 }
 
-// MaxItemIndex returns max item index written to WAL.
-func (e *HeadWalEncoder) MaxItemIndex() uint32 {
-	lsid := headWalEncoderMaxItemIndex(e.encoder)
+// MaxWrittenItemIndex returns max item index written to WAL.
+func (e *HeadWalEncoder) MaxWrittenItemIndex() uint32 {
+	lsid := headWalEncoderMaxWrittenItemIndex(e.encoder)
 	runtime.KeepAlive(e)
 	return lsid
 }

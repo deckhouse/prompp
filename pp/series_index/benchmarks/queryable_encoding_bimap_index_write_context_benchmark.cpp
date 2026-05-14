@@ -27,7 +27,7 @@ std::string get_lss_file() {
 
 void assert_added_series_suffix_marked(const Lss& lss, uint32_t begin_id) {
   [[maybe_unused]] const auto& added = lss.added_series();
-  const uint32_t end_id = static_cast<uint32_t>(lss.max_item_index());
+  const uint32_t end_id = static_cast<uint32_t>(lss.next_item_index());
   assert(begin_id <= end_id);
   for (uint32_t id = begin_id; id < end_id; ++id) {
     assert(id < added.size());
@@ -73,7 +73,7 @@ std::shared_ptr<Lss> get_lss_after_shrink() {
     auto source = get_lss_no_shrink();
     s->lss = std::make_shared<Lss>();
     auto& lss = *s->lss;
-    const uint32_t total = static_cast<uint32_t>(source->max_item_index());
+    const uint32_t total = static_cast<uint32_t>(source->next_item_index());
     for (uint32_t i = 0; i < total; ++i) {
       lss.find_or_emplace((*source)[i]);
     }
@@ -101,7 +101,7 @@ void BM_IndexWriteContextNoShrink(benchmark::State& state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{*lss};
     benchmark::DoNotOptimize(context);
   }
-  state.SetItemsProcessed(static_cast<int64_t>(lss->max_item_index()) * state.iterations());
+  state.SetItemsProcessed(static_cast<int64_t>(lss->next_item_index()) * state.iterations());
 }
 
 void BM_IndexWriteContextAfterShrink(benchmark::State& state) {
@@ -111,7 +111,7 @@ void BM_IndexWriteContextAfterShrink(benchmark::State& state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{*lss};
     benchmark::DoNotOptimize(context);
   }
-  state.SetItemsProcessed(static_cast<int64_t>(lss->max_item_index()) * state.iterations());
+  state.SetItemsProcessed(static_cast<int64_t>(lss->next_item_index()) * state.iterations());
 }
 
 }  // namespace

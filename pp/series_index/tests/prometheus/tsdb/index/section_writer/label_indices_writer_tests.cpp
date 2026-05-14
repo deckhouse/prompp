@@ -130,7 +130,7 @@ TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "127.0.0.1"}});
   lss_.build_deferred_indexes();
 
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
 
   Lss lss_copy;
   BareBones::Vector<uint32_t> dst_src_ids_mapping;

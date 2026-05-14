@@ -29,7 +29,7 @@ class IndexWriteContext {
 
   struct ExportSymbolIdHasher {
     [[nodiscard]] size_t operator()(const ExportSymbolId& id) const noexcept {
-      const uint64_t composite = (static_cast<uint64_t>(id.source) << 62U) ^ (static_cast<uint64_t>(id.name_id) << 31U) ^ static_cast<uint64_t>(id.value_id);
+      const uint64_t composite = (static_cast<uint64_t>(id.source) << 62U) | (static_cast<uint64_t>(id.name_id) << 31U) | static_cast<uint64_t>(id.value_id);
       return phmap::phmap_mix<sizeof(size_t)>()(static_cast<size_t>(composite));
     }
   };
@@ -54,8 +54,10 @@ class IndexWriteContext {
 
   template <class Callback>
   void for_each_symbol(Callback&& callback) const {
-    for (uint32_t symbol_ref = 0; symbol_ref < symbols_.size(); ++symbol_ref) {
-      callback(symbol_ref, symbols_[symbol_ref]);
+    uint32_t symbol_ref = 0;
+    for (const auto& symbol : symbols_) {
+      callback(symbol_ref, symbol);
+      ++symbol_ref;
     }
   }
 
@@ -104,10 +106,7 @@ class IndexWriteContext {
   }
 
   void collect_current_symbols_from_shrunk_series(std::vector<SymbolIdWithView>& symbol_ids) const {
-    for (uint32_t ls_id = lss_.shrink_state().shift; ls_id < lss_.max_item_index(); ++ls_id) {
-      if (lss_.symbol_source_for_series(ls_id) != SymbolSource::kCurrent) {
-        continue;
-      }
+    for (uint32_t ls_id = lss_.shrink_state().shift; ls_id < lss_.next_item_index(); ++ls_id) {
       const auto labels = lss_[ls_id];
       for (auto label = labels.begin(); label != labels.end(); ++label) {
         emplace_resolved_symbol(symbol_ids, SymbolSource::kCurrent, label.name_id(), kKeyOnlyValueId);

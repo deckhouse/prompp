@@ -160,12 +160,12 @@ class OutputDecoder : private BaseOutputDecoder {
     add_series_count_ = 0;
     dropped_series_count_ = 0;
     auto& cache = sample_decoder().cache();
-    if (wal_lss_.max_item_index() <= cache.size()) {
+    if (wal_lss_.next_item_index() <= cache.size()) {
       return;
     }
 
-    cache.reserve(wal_lss_.max_item_index());
-    for (size_t ls_id = cache.size(); ls_id < wal_lss_.max_item_index(); ++ls_id) {
+    cache.reserve(wal_lss_.next_item_index());
+    for (size_t ls_id = cache.size(); ls_id < wal_lss_.next_item_index(); ++ls_id) {
       builder_.reset(wal_lss_[ls_id]);
       Prometheus::Relabel::process_external_labels(builder_, external_labels_);
       Prometheus::Relabel::relabelStatus rstatus = stateless_relabeler_.relabeling_process(buf_, builder_);

@@ -44,11 +44,6 @@ concept has_next_item_index = requires(Derived derived) {
 };
 
 template <class Derived>
-concept has_max_item_index = requires(Derived derived) {
-  { derived.max_item_index_impl() };
-};
-
-template <class Derived>
 concept has_items_count = requires(Derived derived) {
   { derived.items_count_impl() };
 };
@@ -354,14 +349,6 @@ class GenericDecodingTable {
       return storage_.count();
     }
   }
-  // Returns exclusive upper bound for ids that may be requested from the table.
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t max_item_index() const noexcept {
-    if constexpr (has_max_item_index<Derived>) {
-      return static_cast<const Derived*>(this)->max_item_index_impl();
-    } else {
-      return next_item_index();
-    }
-  }
 
   PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(storage_, next_item_index(), size(), version_); }
 
@@ -491,7 +478,6 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
 
   using Base::checkpoint;
   using Base::load;
-  using Base::max_item_index;
   using Base::next_item_index;
   using Base::remainder_size;
   using Base::save;

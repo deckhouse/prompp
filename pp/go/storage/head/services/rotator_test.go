@@ -70,7 +70,7 @@ func (*RotatorSuite) createShardOnMemory(
 		shard.NewDataStorage(),
 		nil,
 		nil,
-		&testWal{Wal: wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil), maxItemIndex: 1},
+		&testWal{Wal: wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil), maxWrittenItemIndex: 1},
 		shardID,
 	)
 }
@@ -342,10 +342,10 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 // testWal is a mock implementation of wal.Wal.
 type testWal struct {
 	*wal.Wal[*cppbridge.HeadEncodedSegment, *mock.SegmentWriterMock]
-	maxItemIndex uint32
+	maxWrittenItemIndex uint32
 }
 
-// MaxItemIndex returns the max item index written to the wal.
-func (w *testWal) MaxItemIndex() uint32 {
-	return w.maxItemIndex
+// MaxWrittenItemIndex returns the max item index written to the wal.
+func (w *testWal) MaxWrittenItemIndex() uint32 {
+	return w.maxWrittenItemIndex
 }

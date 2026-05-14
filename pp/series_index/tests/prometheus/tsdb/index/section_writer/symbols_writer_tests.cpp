@@ -109,7 +109,7 @@ TEST_F(SymbolsWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "localhost"}});
   lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "127.0.0.1"}});
   lss_.build_deferred_indexes();
-  const uint32_t shrink_boundary = lss_.max_item_index();
+  const uint32_t shrink_boundary = lss_.next_item_index();
   Lss lss_copy;
   BareBones::Vector<uint32_t> dst_src_ids_mapping;
   Copier<Lss, decltype(lss_.sorting_index()), decltype(lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(

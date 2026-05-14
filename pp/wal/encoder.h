@@ -124,7 +124,7 @@ class GenericEncoder {
     Writer::DestroySourceState(result);
   }
 
-  inline __attribute__((always_inline)) uint32_t max_item_index() const { return encoder_.max_item_index(); }
+  inline __attribute__((always_inline)) uint32_t max_written_item_index() const { return encoder_.max_written_item_index(); }
 
   // finalize - finalize the encoded data in the C++ encoder to Segment.
   template <class Stats, class Output>

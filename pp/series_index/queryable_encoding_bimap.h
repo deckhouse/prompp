@@ -154,7 +154,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE void mark_active(uint32_t ls_id) noexcept { mark_series_as_added(ls_id); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
-    assert(id < max_item_index_impl());
+    assert(id < next_item_index_impl());
     if (is_shrunk()) [[unlikely]] {
       return resolve_shrunk_series(id);
     }
@@ -162,7 +162,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept {
-    assert(boundary <= max_item_index_impl());
+    assert(boundary <= next_item_index_impl());
     assert(is_normal());
     prune_hidden_series_before_fixed_state(boundary);
     shrink_state_.enter_fixed_state(boundary);
@@ -319,7 +319,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shrink_state_.shift + Base::storage_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t max_item_index_impl() const noexcept { return next_item_index_impl(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count_impl() const noexcept { return shrink_state_.mapped_visible_count + Base::storage_.count(); }
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
@@ -366,7 +365,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     }
 
     if (pruned_anything) {
-      sorting_index_.rebuild();
+      sorting_index_.rebuild(next_item_index_impl() - 1);
     }
   }
 };

@@ -40,7 +40,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_Finalize() {
 	segmentData, err := encoder.Finalize()
 	s.Require().NoError(err)
 
-	s.Equal(uint32(0), encoder.MaxItemIndex())
+	s.Equal(uint32(0), encoder.MaxWrittenItemIndex())
 	s.NotNil(segmentData)
 	s.Empty(segmentData.Samples())
 }
@@ -71,7 +71,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	segmentData, err := encoder.Finalize()
 	s.Require().NoError(err)
 
-	s.Equal(uint32(1), encoder.MaxItemIndex())
+	s.Equal(uint32(1), encoder.MaxWrittenItemIndex())
 	s.NotNil(segmentData)
 	s.Equal(expectedSamples, uint64(segmentData.Samples()))
 }

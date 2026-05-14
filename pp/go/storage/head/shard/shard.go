@@ -25,8 +25,8 @@ type Wal interface {
 	// Flush flush all contetnt into wal.
 	Flush() error
 
-	// MaxItemIndex returns max item index written to WAL.
-	MaxItemIndex() uint32
+	// MaxWrittenItemIndex returns max item index written to WAL.
+	MaxWrittenItemIndex() uint32
 
 	// Sync commits the current contents of the [Wal].
 	Sync() error
@@ -293,6 +293,6 @@ func CopyAddedSeries(source, destination *Shard) {
 // CopyLSSWithShrink freeze the lss by shrink boundary and copy the added series to the destination lss.
 // Finalize copy and shrink the lss.
 func CopyLSSWithShrink(source, destination *Shard) {
-	source.lss.FreezeAndCopyAddedSeries(destination.lss, source.wal.MaxItemIndex())
+	source.lss.FreezeAndCopyAddedSeries(destination.lss, source.wal.MaxWrittenItemIndex())
 	source.lss.FinalizeCopyAndShrink()
 }

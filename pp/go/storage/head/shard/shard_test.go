@@ -60,7 +60,7 @@ func (m *fakeWal) Write([]cppbridge.InnerSeries) (bool, error) {
 	return false, m.writeErr
 }
 
-func (m *fakeWal) MaxItemIndex() uint32 {
+func (m *fakeWal) MaxWrittenItemIndex() uint32 {
 	return 0
 }
 

@@ -58,6 +58,23 @@ class SortingIndexBuilder {
     }
   }
 
+  PROMPP_ALWAYS_INLINE void rebuild(uint32_t max_ls_id) {
+    if (ls_id_set_.empty()) {
+      index_.index.clear();
+      return;
+    }
+
+    index_.index.resize(max_ls_id + 1);
+    std::memset(index_.index.data(), 0, index_.index.size() * sizeof(uint32_t));
+
+    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
+    uint32_t index_value = 0;
+    for (auto ls_id : ls_id_set_) {
+      index_value += step;
+      index_.index[static_cast<uint32_t>(ls_id)] = index_value;
+    }
+  }
+
   PROMPP_ALWAYS_INLINE void rebuild() {
     if (ls_id_set_.empty()) {
       index_.index.clear();
@@ -68,15 +85,7 @@ class SortingIndexBuilder {
     for (auto ls_id : ls_id_set_) {
       max_ls_id = std::max(max_ls_id, static_cast<uint32_t>(ls_id));
     }
-    index_.index.resize(max_ls_id + 1);
-    std::memset(index_.index.data(), 0, index_.index.size() * sizeof(uint32_t));
-
-    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
-    uint32_t index_value = 0;
-    for (auto ls_id : ls_id_set_) {
-      index_value += step;
-      index_.index[static_cast<uint32_t>(ls_id)] = index_value;
-    }
+    rebuild(max_ls_id);
   }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept { index_.clear(); }
