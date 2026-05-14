@@ -29,7 +29,7 @@ void load_gorilla_from_wal_and_process_data::execute(const Config& config, Metri
     log() << "Loaded label sets: " << (wal.series() - series) << std::endl;
     log() << "Number of label name symbols: " << wal.label_sets().data_view().keys().size() << std::endl;
     log() << "Number of label name sets: " << wal.label_sets().data_view().label_name_sets().size() << std::endl;
-    log() << "Number of label sets: " << wal.label_sets().series_count() << std::endl;
+    log() << "Number of label sets: " << wal.label_sets().items_count() << std::endl;
     log() << "Loaded samples: " << (wal.samples() - samples) << std::endl;
     log() << "Number of samples processed: " << wal.samples() << std::endl;
     log() << "Load time per sample (overall avg): " << (static_cast<double>(period.count()) / (1.0 * static_cast<double>(wal.samples()))) << " ns" << std::endl;

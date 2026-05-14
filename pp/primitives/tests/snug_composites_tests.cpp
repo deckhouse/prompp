@@ -54,7 +54,7 @@ class ShrinkableEncodingBimapLabelSetFixture : public testing::Test {
   }
 
   void check_decoding_table() const {
-    ASSERT_EQ(3U, decoding_table_.series_count());
+    ASSERT_EQ(3U, decoding_table_.items_count());
     const LabelViewSet expected_label_set0{{"1", "1"}, {"2", "2"}};
     const LabelViewSet expected_label_set1{{"3", "3"}};
     const LabelViewSet expected_label_set2{{"4", "4"}};
@@ -208,7 +208,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, ShrunkElementsRemoved) {
   // Assert
   EXPECT_FALSE(encoding_table_.find(ls_[0]).has_value());
   EXPECT_FALSE(encoding_table_.find(ls_[1]).has_value());
-  EXPECT_EQ(0U, encoding_table_.series_count());
+  EXPECT_EQ(0U, encoding_table_.items_count());
 }
 
 TEST_F(ShrinkableEncodingBimapLabelSetFixture, NonShrunkElementsRemainingAccessible) {
@@ -228,7 +228,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, NonShrunkElementsRemainingAccessi
   EXPECT_TRUE(encoding_table_.find(ls_[2]).has_value());
   EXPECT_TRUE(encoding_table_.find(ls_[3]).has_value());
 
-  EXPECT_EQ(2U, encoding_table_.series_count());
+  EXPECT_EQ(2U, encoding_table_.items_count());
   EXPECT_EQ(id2, encoding_table_.find(ls_[2]).value());
   EXPECT_EQ(id3, encoding_table_.find(ls_[3]).value());
   EXPECT_TRUE(std::ranges::equal(ls_[2], encoding_table_[id2]));
@@ -247,7 +247,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, AddedElementsAfterShrinkRemaining
   const auto id3 = encoding_table_.find_or_emplace(ls_[3]);
 
   // Assert
-  EXPECT_EQ(2U, encoding_table_.series_count());
+  EXPECT_EQ(2U, encoding_table_.items_count());
   EXPECT_EQ(id2, encoding_table_.find(ls_[2]).value());
   EXPECT_EQ(id3, encoding_table_.find(ls_[3]).value());
   EXPECT_TRUE(std::ranges::equal(ls_[2], encoding_table_[id2]));
@@ -285,7 +285,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainSaveAndLoadAll
   delta2_stream >> loaded_table;
 
   // Assert
-  EXPECT_EQ(6U, loaded_table.series_count());
+  EXPECT_EQ(6U, loaded_table.items_count());
   EXPECT_TRUE(std::ranges::equal(ls_, loaded_table, [](const auto& a, const auto& b) { return a == b; }));
 }
 
@@ -320,7 +320,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainWithPartialShr
   delta2_stream >> loaded_table;
 
   // Assert
-  EXPECT_EQ(6U, loaded_table.series_count());
+  EXPECT_EQ(6U, loaded_table.items_count());
   EXPECT_TRUE(std::ranges::equal(ls_, loaded_table, [](const auto& a, const auto& b) { return a == b; }));
 }
 

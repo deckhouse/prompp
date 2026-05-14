@@ -86,22 +86,14 @@ class ShrinkAwareSnapshotLSS : public SnapshotLSS {
       : SnapshotLSS(lss), shrink_state_(lss.shrink_state().clone_for_snapshot()), added_series_(lss.added_series()) {}
 
   [[nodiscard]] value_type operator[](uint32_t id) const noexcept {
-    if (shrink_state_.is_shrunk()) {
+    if (shrink_state_.is_shrunk()) [[unlikely]] {
       return resolve_shrunk_series(id);
-    }
-
-    if (shrink_state_.is_fixed() && is_hidden_in_fixed_state(id)) {
-      return value_type{};
     }
 
     return SnapshotLSS::operator[](id);
   }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t id) const noexcept {
-    return shrink_state_.is_hidden_in_fixed_state(id, added_series_);
-  }
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE value_type resolve_shrunk_series(uint32_t id) const noexcept {
     return shrink_state_.template resolve_shrunk_series<value_type>(
         id, [this](uint32_t storage_id) { return SnapshotLSS::operator[](storage_id); }, Base::kInvalidId);

@@ -311,7 +311,7 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.series_count(); }
+  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
 
   inline __attribute__((always_inline)) uint64_t metadata_bytes() const { return metadata_bytes_; }
 
@@ -712,7 +712,7 @@ class BasicDecoder {
 
   inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.series_count(); }
+  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
 
   /// \Returns Total processed samples count.
   /// \seealso \ref process_segment().

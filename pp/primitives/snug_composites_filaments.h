@@ -557,7 +557,7 @@ struct LabelNameSet {
       }
 
       for (auto i = symbols_ids_sequences_.begin() + pos; i != symbols_ids_sequences_.begin() + pos + size; ++i) {
-        if (*i >= symbols_table_.series_count()) {
+        if (*i >= symbols_table_.items_count()) {
           throw BareBones::Exception(0x218410dde097cc6b,
                                      "LabelSetNames data validation error: expected LabelSetNames length is out of data symbols table range");
         }
@@ -1168,7 +1168,7 @@ struct LabelSet {
     void validate(uint32_t id) const {
       const auto [lns_id, pos] = items_[id];
 
-      if (lns_id >= label_name_sets_table_.series_count()) {
+      if (lns_id >= label_name_sets_table_.items_count()) {
         throw BareBones::Exception(0x48dd6c9d357d3a7e,
                                    "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
       }
@@ -1192,7 +1192,7 @@ struct LabelSet {
       auto values_begin =
           BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences_.begin() + pos - shrinked_size_, lns.size()).first;
       for (auto i = lns.begin(); i != lns.end(); ++i) {
-        if (*values_begin++ >= symbols_tables_[i.id()].series_count()) {
+        if (*values_begin++ >= symbols_tables_[i.id()].items_count()) {
           throw BareBones::Exception(0x0f0c520ad6285f15,
                                      "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
         }

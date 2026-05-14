@@ -58,41 +58,7 @@ class SortingIndexBuilder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept { index_.clear(); }
-
-  PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
-    if (empty()) {
-      return;
-    }
-
-    const uint64_t previous = get_previous(ls_id_iterator);
-    const uint64_t next = get_next(ls_id_iterator);
-    if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
-      const auto ls_id = static_cast<uint32_t>(*ls_id_iterator);
-      if (ls_id >= index_.index.size()) {
-        index_.index.resize(ls_id + 1);
-      }
-      index_.index[ls_id] = value;
-    } else {
-      // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
-      // Index will be built on demand in sort method
-      index_.clear();
-    }
-  }
-
-  template <class Iterator>
-  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) noexcept {
-    build();
-    index_.sort(begin, end);
-  }
-
-  PROMPP_ALWAYS_INLINE const Index& index() const noexcept { return index_; }
-
- private:
-  const Set& ls_id_set_;
-  Index index_;
-
-  void rebuild() {
+  PROMPP_ALWAYS_INLINE void rebuild() {
     if (ls_id_set_.empty()) {
       index_.index.clear();
       return;
@@ -112,6 +78,36 @@ class SortingIndexBuilder {
       index_.index[static_cast<uint32_t>(ls_id)] = index_value;
     }
   }
+
+  PROMPP_ALWAYS_INLINE void clear() noexcept { index_.clear(); }
+
+  PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
+    if (empty()) {
+      return;
+    }
+
+    const uint64_t previous = get_previous(ls_id_iterator);
+    const uint64_t next = get_next(ls_id_iterator);
+    if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
+      index_.index.emplace_back(value);
+    } else {
+      // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
+      // Index will be built on demand in sort method
+      index_.clear();
+    }
+  }
+
+  template <class Iterator>
+  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) noexcept {
+    build();
+    index_.sort(begin, end);
+  }
+
+  PROMPP_ALWAYS_INLINE const Index& index() const noexcept { return index_; }
+
+ private:
+  const Set& ls_id_set_;
+  Index index_;
 
   PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {

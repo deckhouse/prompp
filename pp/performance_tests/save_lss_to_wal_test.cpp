@@ -29,7 +29,7 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
               << " Time per sample: " << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / dummy_wal.cnt()) << " ns" << std::endl;
         log() << "Number of label name symbols: " << lss.data_view().keys().size() << std::endl;
         log() << "Number of label name sets: " << lss.data_view().label_name_sets().size() << std::endl;
-        log() << "Number of label sets: " << lss.series_count() << std::endl;
+        log() << "Number of label sets: " << lss.items_count() << std::endl;
         log() << std::endl;
       }
     }

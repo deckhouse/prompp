@@ -95,7 +95,7 @@ TEST_F(WalEncoderDecoderFixture, EncoderStoresLabelSet) {
   encoder.add(timeseries);
 
   // Assert
-  ASSERT_EQ(encoder.label_sets().series_count(), 1U);
+  ASSERT_EQ(encoder.label_sets().items_count(), 1U);
   EXPECT_TRUE(std::ranges::equal(label_set, encoder.label_sets()[0]));
 }
 
@@ -117,7 +117,7 @@ TEST_F(WalEncoderDecoderFixture, EncodeDecodeLabelSet) {
 
   // Assert
   EXPECT_EQ(encoder.samples(), 3U);
-  ASSERT_EQ(decoder.label_sets().series_count(), 1U);
+  ASSERT_EQ(decoder.label_sets().items_count(), 1U);
   EXPECT_TRUE(std::ranges::equal(label_set, decoder.label_sets()[0]));
 }
 

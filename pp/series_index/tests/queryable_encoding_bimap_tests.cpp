@@ -186,7 +186,7 @@ TEST_F(BimapFixture, InsertedSeriesUpdatesSeriesCount) {
   // Act
 
   // Assert
-  EXPECT_EQ(2U, lss_.series_count());
+  EXPECT_EQ(2U, lss_.items_count());
 }
 
 TEST_F(BimapFixture, InsertedSeriesUpdatesMaxItemIndex) {
@@ -351,7 +351,7 @@ TEST_F(BimapCopierFixture, CopyFromEmptySourceLeavesEmpty) {
   copier.copy_added_series_and_build_indexes();
 
   // Assert
-  EXPECT_EQ(0U, lss_copy.series_count());
+  EXPECT_EQ(0U, lss_copy.items_count());
   EXPECT_EQ(0U, dst_src_ids_mapping_.size());
 }
 
@@ -365,7 +365,7 @@ TEST_F(BimapCopierFixture, CopyKeepsSeriesCount) {
   CopySeriesByIds(ids_for_copy, lss_copy);
 
   // Assert
-  EXPECT_EQ(2U, lss_copy.series_count());
+  EXPECT_EQ(2U, lss_copy.items_count());
 }
 
 TEST_F(BimapCopierFixture, CopyFindsCopiedSeries) {
@@ -441,7 +441,7 @@ TEST_F(BimapCopierFixture, CopySubsetKeepsOrderAndMapping) {
   copier.copy_added_series_and_build_indexes();
 
   // Assert
-  ASSERT_EQ(3U, lss_copy.series_count());
+  ASSERT_EQ(3U, lss_copy.items_count());
   EXPECT_EQ(label_set1, lss_copy[0]);
   EXPECT_EQ(label_set3, lss_copy[1]);
   EXPECT_EQ(label_set5, lss_copy[2]);
@@ -471,7 +471,7 @@ TEST_F(BimapCopierFixture, CopyOfCopyWithNoNewAddedIsEmpty) {
   copier2.copy_added_series_and_build_indexes();
 
   // Assert
-  EXPECT_EQ(0U, lss_copy_of_copy.series_count());
+  EXPECT_EQ(0U, lss_copy_of_copy.items_count());
   EXPECT_FALSE(lss_copy_of_copy.find(label_set));
   EXPECT_FALSE(lss_copy_of_copy.find(label_set2));
   EXPECT_FALSE(lss_copy_of_copy.find(label_set3));
@@ -504,7 +504,7 @@ TEST_F(BimapCopierFixture, CopyOfCopyInsertGetsFirstId) {
   // Assert
   EXPECT_EQ(0U, ls_id);
   EXPECT_TRUE(lss_copy_of_copy.find(label_set3).has_value());
-  EXPECT_EQ(1U, lss_copy_of_copy.series_count());
+  EXPECT_EQ(1U, lss_copy_of_copy.items_count());
 }
 
 TEST_F(BimapCopierFixture, CopyOfCopyInsertBuildsIndexesForNewSeries) {
@@ -605,7 +605,7 @@ TEST_F(BimapShrinkFixture, ShrunkStateSeriesCountMatchesStorage) {
   lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
 
   // Assert
-  EXPECT_EQ(3U, lss_.series_count());
+  EXPECT_EQ(3U, lss_.items_count());
   EXPECT_EQ(3U, lss_.max_item_index());
 }
 
@@ -691,7 +691,7 @@ TEST_F(BimapFixedStateFixture, FixedStateSeriesCountMatchesThree) {
   // Act
 
   // Assert
-  EXPECT_EQ(3U, lss_.series_count());
+  EXPECT_EQ(3U, lss_.items_count());
   EXPECT_EQ(3U, lss_.max_item_index());
 }
 
@@ -745,7 +745,7 @@ TEST_F(BimapFixedPendingFixture, FixedStateTwoSeriesCountMatchesStorage) {
   // Act
 
   // Assert
-  EXPECT_EQ(2U, lss_.series_count());
+  EXPECT_EQ(2U, lss_.items_count());
   EXPECT_EQ(2U, lss_.max_item_index());
 }
 
@@ -1170,7 +1170,7 @@ TEST_F(BimapShrinkTwoFixture, ShrunkTwoSeriesCountMatchesIndices) {
   RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
 
   // Assert
-  EXPECT_EQ(2U, lss_.series_count());
+  EXPECT_EQ(2U, lss_.items_count());
   EXPECT_EQ(2U, lss_.max_item_index());
 }
 

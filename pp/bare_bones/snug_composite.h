@@ -49,8 +49,8 @@ concept has_max_item_index = requires(Derived derived) {
 };
 
 template <class Derived>
-concept has_series_count = requires(Derived derived) {
-  { derived.series_count_impl() };
+concept has_items_count = requires(Derived derived) {
+  { derived.items_count_impl() };
 };
 
 template <class Derived, class Checkpoint>
@@ -322,9 +322,9 @@ class GenericDecodingTable {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count() const noexcept {
-    if constexpr (has_series_count<Derived>) {
-      return static_cast<const Derived*>(this)->series_count_impl();
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept {
+    if constexpr (has_items_count<Derived>) {
+      return static_cast<const Derived*>(this)->items_count_impl();
     } else {
       return storage_.count();
     }
@@ -496,7 +496,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   using Base::remainder_size;
   using Base::save;
   using Base::save_size;
-  using Base::series_count;
+  using Base::items_count;
 
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
 
@@ -680,9 +680,9 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   PROMPP_ALWAYS_INLINE void rollback_impl(const typename Base::checkpoint_type& s) noexcept
     requires(!Base::kIsReadOnly)
   {
-    assert(s.size() <= Base::series_count());
+    assert(s.size() <= Base::items_count());
 
-    for (uint32_t i = s.size(); i != Base::series_count(); ++i) {
+    for (uint32_t i = s.size(); i != Base::items_count(); ++i) {
       set_.erase(typename Base::Proxy(i), Base::hasher(), Base::equality_comparator());
     }
   }

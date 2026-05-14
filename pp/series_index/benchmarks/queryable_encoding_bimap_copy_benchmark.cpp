@@ -34,7 +34,7 @@ void mark_all_series_as_added(Lss& lss) {
 
 const Lss& load_lss_from_file() {
   static Lss lss;
-  if (lss.series_count() == 0) {
+  if (lss.items_count() == 0) {
     const auto file_name = get_lss_file();
 
     std::ifstream istrm(file_name, std::ios::binary);

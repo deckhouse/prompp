@@ -23,7 +23,7 @@ TEST_F(SymbolEncodingBimapTest, StoreAndRetrieveSymbol) {
   const auto id = encoding_table_.find_or_emplace(symbol);
 
   // Assert
-  EXPECT_EQ(1U, encoding_table_.series_count());
+  EXPECT_EQ(1U, encoding_table_.items_count());
   EXPECT_EQ(symbol, encoding_table_[id]);
   EXPECT_EQ(id, encoding_table_.find(symbol));
 }
@@ -40,7 +40,7 @@ TEST_F(SymbolEncodingBimapTest, StoreMultipleSymbols) {
   const auto id3 = encoding_table_.find_or_emplace(symbol3);
 
   // Assert
-  EXPECT_EQ(3U, encoding_table_.series_count());
+  EXPECT_EQ(3U, encoding_table_.items_count());
 
   EXPECT_EQ(symbol1, encoding_table_[id1]);
   EXPECT_EQ(symbol2, encoding_table_[id2]);
@@ -60,7 +60,7 @@ TEST_F(SymbolEncodingBimapTest, FindOrEmplaceReturnsSameIdForDuplicate) {
   const auto id2 = encoding_table_.find_or_emplace(symbol);
 
   // Assert
-  EXPECT_EQ(1U, encoding_table_.series_count());
+  EXPECT_EQ(1U, encoding_table_.items_count());
   EXPECT_EQ(id1, id2);
 }
 
@@ -76,7 +76,7 @@ TEST_F(SymbolEncodingBimapTest, IterateOverSymbols) {
   encoding_table_.find_or_emplace(symbol3);
 
   // Assert
-  EXPECT_EQ(3U, encoding_table_.series_count());
+  EXPECT_EQ(3U, encoding_table_.items_count());
   EXPECT_TRUE(std::ranges::equal(encoding_table_, std::initializer_list{"a"s, "b"s, "c"s}));
 }
 
@@ -92,7 +92,7 @@ TEST_F(SymbolEncodingBimapTest, CheckpointAndRollback) {
   encoding_table_.rollback(checkpoint);
 
   // Assert
-  EXPECT_EQ(1U, encoding_table_.series_count());
+  EXPECT_EQ(1U, encoding_table_.items_count());
   EXPECT_TRUE(encoding_table_.find(symbol1).has_value());
   EXPECT_FALSE(encoding_table_.find(symbol2).has_value());
 }
@@ -170,7 +170,7 @@ TEST_F(SymbolDecodingTableTest, LoadFromCheckpoint) {
   decoding_table_.load(ss);
 
   // Assert
-  EXPECT_EQ(2U, decoding_table_.series_count());
+  EXPECT_EQ(2U, decoding_table_.items_count());
   EXPECT_EQ(symbol1, decoding_table_[id1]);
   EXPECT_EQ(symbol2, decoding_table_[id2]);
 }
@@ -189,7 +189,7 @@ TEST_F(SymbolDecodingTableTest, IterateOverDecodingTable) {
   decoding_table_.load(ss);
 
   // Assert
-  EXPECT_EQ(2U, decoding_table_.series_count());
+  EXPECT_EQ(2U, decoding_table_.items_count());
   EXPECT_TRUE(std::ranges::equal(decoding_table_, std::initializer_list{"a"s, "b"s}));
 }
 
@@ -271,7 +271,7 @@ TEST_F(SymbolDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
   decoding_table_.load(ss);
 
   // Assert
-  EXPECT_EQ(2U, decoding_table_.series_count());
+  EXPECT_EQ(2U, decoding_table_.items_count());
   EXPECT_EQ(symbol1, decoding_table_[id1]);
   EXPECT_EQ(symbol2, decoding_table_[id2]);
 }

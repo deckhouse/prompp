@@ -155,14 +155,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
     assert(id < max_item_index_impl());
-    if (is_normal()) [[likely]] {
-      return Base::storage_composite(id);
+    if (is_shrunk()) [[unlikely]] {
+      return resolve_shrunk_series(id);
     }
-    if (is_fixed()) [[unlikely]] {
-      return is_hidden_in_fixed_state(id) ? empty_composite() : Base::storage_composite(id);
-    }
-    assert(is_shrunk());
-    return resolve_shrunk_series(id);
+    return Base::storage_composite(id);
   }
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept {
@@ -324,7 +320,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shrink_state_.shift + Base::storage_.count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t max_item_index_impl() const noexcept { return next_item_index_impl(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count_impl() const noexcept { return shrink_state_.mapped_visible_count + Base::storage_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count_impl() const noexcept { return shrink_state_.mapped_visible_count + Base::storage_.count(); }
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
 
@@ -370,8 +366,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     }
 
     if (pruned_anything) {
-      sorting_index_.clear();
-      sorting_index_.build();
+      sorting_index_.rebuild();
     }
   }
 };
@@ -419,12 +414,12 @@ class QueryableEncodingBimapCopier {
                                QueryableEncodingBimap& destination,
                                LsIdVector& dst_src_ids_mapping)
       : source_(source), sorting_index_(sorting_index), ls_id_range_(ls_id_range), destination_(destination), dst_src_ids_mapping_(dst_src_ids_mapping) {
-    assert(destination.series_count() == 0);
+    assert(destination.items_count() == 0);
   }
 
   void copy_added_series() {
     old_new_ids_.clear();
-    old_new_ids_.reserve(source_.series_count());
+    old_new_ids_.reserve(source_.items_count());
 
     Cache<uint32_t> cache;
     cache.reserve(source_.data_view());
@@ -432,7 +427,7 @@ class QueryableEncodingBimapCopier {
     destination_.reserve(source_);
 
     dst_src_ids_mapping_.clear();
-    dst_src_ids_mapping_.reserve(source_.series_count());
+    dst_src_ids_mapping_.reserve(source_.items_count());
 
     for (const auto ls_id : ls_id_range_) {
       old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
@@ -453,7 +448,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_reverse_index() {
-    const auto size = destination_.series_count();
+    const auto size = destination_.items_count();
     const auto names_view = destination_.data_view().keys();
     destination_.reverse_index_.reserve(names_view.size());
 
@@ -466,7 +461,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_ls_id_hashset() {
-    const auto size = destination_.series_count();
+    const auto size = destination_.items_count();
     destination_.ls_id_hash_set_.reserve(size);
 
     const auto hasher = destination_.hasher();

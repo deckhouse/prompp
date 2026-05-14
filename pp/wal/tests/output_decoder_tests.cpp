@@ -166,7 +166,7 @@ TEST_F(TestWALOutputDecoder, DumpLoadSingleData) {
 
   EXPECT_EQ(1, wod.cache().size());
   EXPECT_EQ(wod.cache(), wod2.cache());
-  EXPECT_EQ(output_lss_.series_count(), output_lss2.series_count());
+  EXPECT_EQ(output_lss_.items_count(), output_lss2.items_count());
   for (size_t i = 0; i < output_lss_.max_item_index(); ++i) {
     EXPECT_EQ(output_lss_[i], output_lss2[i]);
   }
@@ -200,7 +200,7 @@ TEST_F(TestWALOutputDecoder, DumpLoadDoubleData) {
 
   EXPECT_EQ(2, wod.cache().size());
   EXPECT_EQ(wod.cache(), wod2.cache());
-  EXPECT_EQ(output_lss_.series_count(), output_lss2.series_count());
+  EXPECT_EQ(output_lss_.items_count(), output_lss2.items_count());
   for (size_t i = 0; i < output_lss_.max_item_index(); ++i) {
     EXPECT_EQ(output_lss_[i], output_lss2[i]);
   }
@@ -236,7 +236,7 @@ TEST_F(TestWALOutputDecoder, DumpLoadDataEmptyData) {
 
   EXPECT_EQ(2, wod.cache().size());
   EXPECT_EQ(wod.cache(), wod2.cache());
-  EXPECT_EQ(output_lss_.series_count(), output_lss2.series_count());
+  EXPECT_EQ(output_lss_.items_count(), output_lss2.items_count());
   for (size_t i = 0; i < output_lss_.max_item_index(); ++i) {
     EXPECT_EQ(output_lss_[i], output_lss2[i]);
   }

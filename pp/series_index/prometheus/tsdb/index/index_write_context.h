@@ -155,7 +155,7 @@ class IndexWriteContext {
     if (!lss_.shrink_state().is_shrunk()) {
       return 1 + view.keys().size() + view.values().size();
     }
-    return 1 + std::max(view.keys().size() + view.values().size(), static_cast<size_t>(lss_.series_count()) * 2U);
+    return 1 + std::max(view.keys().size() + view.values().size(), static_cast<size_t>(lss_.items_count()) * 2U);
   }
 
   [[nodiscard]] SymbolSource symbol_source_for_series(uint32_t ls_id) const noexcept { return lss_.symbol_source_for_series(ls_id); }
