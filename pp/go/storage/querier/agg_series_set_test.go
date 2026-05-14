@@ -141,7 +141,7 @@ func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0"),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0"),
 			Samples: []cppbridge.Sample{},
 		},
 		{
@@ -188,11 +188,11 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0", "job", "test"),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0", "job", "test"),
 			Samples: []cppbridge.Sample{},
 		},
 		{
-			Labels:  labels.FromStrings("__head_id", "head_id", "__shard_id", "0", "job", "test2"),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0", "job", "test2"),
 			Samples: []cppbridge.Sample{},
 		},
 		{
@@ -240,21 +240,11 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings(
-				"__head_id", "head_id",
-				"__shard_id", "0",
-				"job", "test",
-				"instance", "instance1",
-			),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{},
 		},
 		{
-			Labels: labels.FromStrings(
-				"__head_id", "head_id",
-				"__shard_id", "0",
-				"job", "test2",
-				"instance", "instance2",
-			),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{},
 		},
 		{
@@ -302,21 +292,11 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroup
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings(
-				"__head_id", "head_id",
-				"__shard_id", "0",
-				"job", "test",
-				"instance", "instance1",
-			),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{},
 		},
 		{
-			Labels: labels.FromStrings(
-				"__head_id", "head_id",
-				"__shard_id", "0",
-				"job", "test2",
-				"instance", "instance2",
-			),
+			Labels:  labels.FromStrings("__head__shard_id", "head_id__0", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{},
 		},
 		{

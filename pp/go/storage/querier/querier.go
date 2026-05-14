@@ -337,7 +337,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
-	if isCrossSeriesFunc(hints.Func) && isAllowedGroupingForCrossSeriesFunc(hints.Grouping) {
+	if isCrossSeriesFunc(hints) && isAllowedGroupingForCrossSeriesFunc(hints.Grouping) {
 		return q.makeAggSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
@@ -477,14 +477,14 @@ func selectFuncOpt(hints *storage.SelectHints) *storage.SelectHints {
 		return emptySelectHints
 
 	case AggrFuncOpt:
-		if isCrossSeriesFunc(hints.Func) {
+		if isCrossSeriesFunc(hints) {
 			return emptySelectHints
 		}
 
 		return hints
 
 	case CrossSeriesFuncOpt:
-		if !isCrossSeriesFunc(hints.Func) {
+		if !isCrossSeriesFunc(hints) {
 			return emptySelectHints
 		}
 
@@ -497,9 +497,9 @@ func selectFuncOpt(hints *storage.SelectHints) *storage.SelectHints {
 // isAllowedGroupingForCrossSeriesFunc checks if the series set is an cross series set.
 func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
 	for _, group := range grouping {
-		if group == labelHeadID || group == labelShardID {
+		if group == labelHeadIDShardID {
 			logger.Infof(
-				"[QUERIER]: head_id or shard_id is in the grouping, it will be ignored: %s",
+				"[QUERIER]: __head__shard_id is in the grouping, it will be ignored: %s",
 				group,
 			)
 			return false
@@ -510,10 +510,10 @@ func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
 }
 
 // isCrossSeriesFunc checks if the function is a cross series function.
-func isCrossSeriesFunc(funcName string) bool {
-	return funcName == "sum" ||
-		funcName == "max" ||
-		funcName == "min"
+func isCrossSeriesFunc(hints *storage.SelectHints) bool {
+	return hints.Func == "sum" ||
+		hints.Func == "max" ||
+		hints.Func == "min" && hints.By
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.

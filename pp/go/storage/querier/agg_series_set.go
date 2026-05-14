@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -20,8 +19,8 @@ import (
 //
 
 // AggSeriesSet contains a set of aggregated series.
-// If grouping is empty, it will return series with labels "__head_id" and "__shard_id".
-// If grouping is not empty, it will return series with "__head_id" and "__shard_id" and the grouping labels.
+// If grouping is empty, it will return series with labels "__head__shard_id".
+// If grouping is not empty, it will return series with "__head__shard_id" and the grouping labels.
 type AggSeriesSet struct {
 	serializedData   *cppbridge.DataStorageSerializedData
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
@@ -315,11 +314,8 @@ func (it *AggChunkIterator) reset(
 //
 
 const (
-	// labelHeadID is the label name for the head ID.
-	labelHeadID = "__head_id"
-
-	// labelShardID is the label name for the shard ID.
-	labelShardID = "__shard_id"
+	// labelHeadIDShardID is the label name for the head ID and shard ID.
+	labelHeadIDShardID = "__head__shard_id"
 )
 
 var (
@@ -339,8 +335,7 @@ func aggLabelSetCtor(
 	seriesID uint32,
 	shardID uint16,
 ) labels.Labels {
-	sb.Add(labelHeadID, headID)
-	sb.Add(labelShardID, strconv.FormatUint(uint64(shardID), 10)) //revive:disable-line:add-constant it's base 10
+	sb.Add(labelHeadIDShardID, fmt.Sprintf("%s__%d", headID, shardID))
 
 	if len(grouping) == 0 {
 		return sb.Labels()
