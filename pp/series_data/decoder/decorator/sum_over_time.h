@@ -30,18 +30,14 @@ class SumOfElementsInIterator {
   }
 
   PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) {
-    if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
-      iterator.invalidate_sample();
-    } else {
-      if (!std::isinf(sum_.value)) [[likely]] {
-        sum_.value += c_;
-      }
-      iterator.set(sum_);
+    if (!std::isinf(sum_.value)) [[likely]] {
+      sum_.value += c_;
     }
+    iterator.set(sum_);
   }
 
  private:
-  encoder::Sample sum_{.value = BareBones::Encoding::Gorilla::STALE_NAN};
+  encoder::Sample sum_{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   double c_{};
 };
 

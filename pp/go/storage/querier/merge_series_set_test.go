@@ -76,8 +76,8 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 				esets := make([]storage.SeriesSet, 0, bm.numShards)
 				asets := make([]storage.SeriesSet, 0, bm.numShards)
 				for i := 0; i < bm.numShards; i++ {
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -90,8 +90,8 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 						esets = append(esets, &querier.SeriesSet{})
 						asets = append(asets, &querier.SeriesSet{})
 					}
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -100,10 +100,10 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 				esets := make([]storage.SeriesSet, 0, bm.numShards)
 				asets := make([]storage.SeriesSet, 0, bm.numShards)
 				for i := 0; i < bm.numShards; i++ {
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				for i := bm.numShards - 1; i >= 0; i-- {
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -126,11 +126,11 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 	for _, bm := range []struct {
 		numShards, numSeries, numSamples int
 	}{
-		{2, 100, 5},
-		{4, 100, 5},
-		{6, 100, 5},
-		{8, 100, 5},
-		{10, 100, 5},
+		{2, 10, 5},
+		{4, 10, 5},
+		{6, 10, 5},
+		{8, 10, 5},
+		{10, 10, 5},
 	} {
 		end := int64(bm.numSamples)
 		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
@@ -141,7 +141,7 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 				b.StopTimer()
 				seriesSets = seriesSets[:0]
 				for i := 0; i < bm.numShards; i++ {
-					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, matcher))
+					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				b.StartTimer()
 
