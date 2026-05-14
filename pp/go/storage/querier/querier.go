@@ -511,9 +511,9 @@ func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
 
 // isCrossSeriesFunc checks if the function is a cross series function.
 func isCrossSeriesFunc(hints *storage.SelectHints) bool {
-	return hints.Func == "sum" ||
+	return (hints.Func == "sum" ||
 		hints.Func == "max" ||
-		hints.Func == "min" && hints.By
+		hints.Func == "min") && hints.By
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
