@@ -106,8 +106,6 @@ class DecodeIteratorTrait {
 
   PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { sample_.timestamp = kInvalidTimestamp; }
 
-  PROMPP_ALWAYS_INLINE void set(const encoder::Sample& sample) noexcept { sample_ = sample; }
-
  protected:
   encoder::Sample sample_;
   SampleCountType remaining_samples_{};

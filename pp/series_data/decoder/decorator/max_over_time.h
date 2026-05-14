@@ -6,23 +6,19 @@ namespace series_data::decoder::decorator {
 
 class FindMaxElementInIterator {
  public:
-  PROMPP_ALWAYS_INLINE SeekResult operator()(PromPP::Primitives::Timestamp, double value) noexcept {
-    if (BareBones::Encoding::Gorilla::isstalenan(max_value_) || value > max_value_) {
-      max_value_ = value;
-      return SeekResult::kUpdateSample;
-    }
-
-    return SeekResult::kNext;
+  explicit FindMaxElement(encoder::Sample& sample) : sample_{sample} {
+    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   }
 
-  PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) const {
-    if (BareBones::Encoding::Gorilla::isstalenan(max_value_)) [[unlikely]] {
-      iterator.invalidate_sample();
+  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
+    if (BareBones::Encoding::Gorilla::isstalenan(sample_.value) || value > sample_.value) {
+      sample_.value = value;
+      sample_.timestamp = timestamp;
     }
   }
 
  private:
-  double max_value_{BareBones::Encoding::Gorilla::STALE_NAN};
+  encoder::Sample& sample_;
 };
 
 class FindMaxElement {

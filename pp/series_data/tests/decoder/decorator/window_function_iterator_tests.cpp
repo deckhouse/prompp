@@ -635,7 +635,11 @@ TEST_P(SumOverTimeWindowFunctionIteratorFixture, TestReset) {
 INSTANTIATE_TEST_SUITE_P(DoesNotDoubleCountBoundarySample,
                          SumOverTimeWindowFunctionIteratorFixture,
                          testing::Values(WindowFunctionIteratorCase{
-                             .samples{Sample{.timestamp = 100, .value = 10.0}, Sample{.timestamp = 150, .value = 1.0}, Sample{.timestamp = 200, .value = 2.0}},
+                             .samples{
+                                 Sample{.timestamp = 100, .value = 10.0},
+                                 Sample{.timestamp = 150, .value = 1.0},
+                                 Sample{.timestamp = 200, .value = 2.0},
+                             },
                              .parameters =
                                  {
                                      .interval{.min = 0, .max = 200},
@@ -643,5 +647,24 @@ INSTANTIATE_TEST_SUITE_P(DoesNotDoubleCountBoundarySample,
                                      .range = 1000,
                                  },
                              .expected{Sample{.timestamp = 100, .value = 10.0}, Sample{.timestamp = 200, .value = 3.0}}}));
+
+INSTANTIATE_TEST_SUITE_P(EmptyWindows,
+                         SumOverTimeWindowFunctionIteratorFixture,
+                         testing::Values(WindowFunctionIteratorCase{.samples{
+                                                                        Sample{.timestamp = 90, .value = 1.0},
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                        Sample{.timestamp = 151, .value = 1.0},
+                                                                        Sample{.timestamp = 190, .value = 1.0},
+                                                                    },
+                                                                    .parameters =
+                                                                        {
+                                                                            .interval{.min = 0, .max = 200},
+                                                                            .step = 50,
+                                                                            .range = 0,
+                                                                        },
+                                                                    .expected{
+                                                                        Sample{.timestamp = 100, .value = 2.0},
+                                                                        Sample{.timestamp = 190, .value = 2.0},
+                                                                    }}));
 
 }  // namespace

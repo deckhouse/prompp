@@ -19,25 +19,27 @@ PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noex
 
 class SumOfElementsInIterator {
  public:
-  PROMPP_ALWAYS_INLINE SeekResult operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
+  explicit SumOfElements(encoder::Sample& sum) : sum_(sum) {
+    sum_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
+  }
+
+  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
       sum_.value = 0.0;
     }
 
     kahan_sum_inc(value, sum_.value, c_);
     sum_.timestamp = timestamp;
-    return SeekResult::kNext;
   }
 
-  PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) {
+  ~SumOfElements() {
     if (!std::isinf(sum_.value)) [[likely]] {
       sum_.value += c_;
     }
-    iterator.set(sum_);
   }
 
  private:
-  encoder::Sample sum_{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
+  encoder::Sample& sum_;
   double c_{};
 };
 
