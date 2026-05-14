@@ -6,7 +6,7 @@ namespace series_data::decoder::decorator {
 
 class FindLastElement {
  public:
-  explicit FindLastElement(encoder::Sample &sample) : sample_(sample) {
+  explicit FindLastElement(encoder::Sample& sample) : sample_(sample) {
     sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   }
 
@@ -16,7 +16,7 @@ class FindLastElement {
   }
 
  private:
-  encoder::Sample &sample_;
+  encoder::Sample& sample_;
 };
 
 using LastOverTimeIterator = OverTimeFuncIterator<FindLastElement>;
