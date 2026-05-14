@@ -33,13 +33,13 @@ class OverTimeFuncIterator {
     find_element();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
+  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
+  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return iterator_->timestamp == kInvalidTimestamp; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE OverTimeFuncIterator& operator++() {
-    iterator_.invalidate_sample();
+    sample_.timestamp = kInvalidTimestamp;
     return *this;
   }
 
@@ -50,26 +50,25 @@ class OverTimeFuncIterator {
   }
 
  protected:
+  encoder::Sample sample_;
   UniversalDecodeIterator iterator_;
   PromPP::Primitives::TimeInterval interval_;
 
   void find_element() {
     iterator_.seek_to(interval_.min);
 
-    SampleHandler handler;
-    iterator_.seek<SeekKind::kAll>([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {
-      if (timestamp > interval_.max) {
+    SampleHandler handler{sample_};
+    iterator_.seek<SeekKind::kNext_Stop>([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {
+      if (timestamp > interval_.max) [[unlikely]] {
         return SeekResult::kStop;
       }
 
-      if (BareBones::Encoding::Gorilla::isstalenan(value)) [[unlikely]] {
-        return SeekResult::kNext;
+      if (!BareBones::Encoding::Gorilla::isstalenan(value)) [[likely]] {
+        handler(timestamp, value);
       }
 
-      return handler(timestamp, value);
+      return SeekResult::kNext;
     });
-
-    handler.set_result(iterator_);
   }
 };
 

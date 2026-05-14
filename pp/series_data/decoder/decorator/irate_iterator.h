@@ -9,14 +9,15 @@ class IRateIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  explicit IRateIterator(PromPP::Primitives::TimeInterval interval) : interval_(interval) {}
+  explicit IRateIterator(PromPP::Primitives::TimeInterval interval) : interval_(interval) { reset_samples(); }
   explicit IRateIterator(UniversalDecodeIterator&& iterator, PromPP::Primitives::TimeInterval interval) : iterator_(iterator), interval_(interval) {
+    reset_samples();
     find_last_2samples();
   }
 
   PROMPP_ALWAYS_INLINE IRateIterator& operator=(UniversalDecodeIterator&& iterator) {
     iterator_ = std::move(iterator);
-    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp};
+    reset_samples();
     find_last_2samples();
     return *this;
   }
@@ -24,25 +25,25 @@ class IRateIterator {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
   PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
     interval_ = interval;
-    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp};
+    reset_samples();
     find_last_2samples();
   }
 
   PROMPP_ALWAYS_INLINE void reset(UniversalDecodeIterator&& iterator, const PromPP::Primitives::TimeInterval& interval) {
     iterator_ = std::move(iterator);
     interval_ = interval;
-    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp};
+    reset_samples();
     find_last_2samples();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
+  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return samples_[0]; }
+  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &samples_[0]; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return iterator_->timestamp == kInvalidTimestamp; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return samples_[0].timestamp == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE IRateIterator& operator++() {
-    iterator_.set(sample_);
-    sample_.timestamp = kInvalidTimestamp;
+    samples_[0] = samples_[1];
+    samples_[1].timestamp = kInvalidTimestamp;
     return *this;
   }
 
@@ -53,9 +54,13 @@ class IRateIterator {
   }
 
  protected:
+  std::array<encoder::Sample, 2> samples_;
   UniversalDecodeIterator iterator_;
   PromPP::Primitives::TimeInterval interval_;
-  encoder::Sample sample_{.timestamp = kInvalidTimestamp};
+
+  PROMPP_ALWAYS_INLINE void reset_samples() {
+    samples_[0] = samples_[1] = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
+  }
 
   void find_last_2samples() {
     iterator_.seek<SeekKind::kNext_Stop>([this](PromPP::Primitives::Timestamp timestamp, double value) {
@@ -70,13 +75,12 @@ class IRateIterator {
         return SeekResult::kNext;
       }
 
-      iterator_.set(sample_);
-      sample_.timestamp = timestamp;
-      sample_.value = value;
+      samples_[0] = samples_[1];
+      samples_[1] = encoder::Sample{.timestamp = timestamp, .value = value};
       return SeekResult::kNext;
     });
 
-    if (sample_.timestamp == kInvalidTimestamp) [[unlikely]] {
+    if (samples_[1].timestamp == kInvalidTimestamp) [[unlikely]] {
       iterator_.invalidate_sample();
     }
   }

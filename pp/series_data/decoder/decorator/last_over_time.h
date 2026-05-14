@@ -6,19 +6,17 @@ namespace series_data::decoder::decorator {
 
 class FindLastElement {
  public:
-  PROMPP_ALWAYS_INLINE SeekResult operator()(PromPP::Primitives::Timestamp, double) noexcept {
-    has_value_ = true;
-    return SeekResult::kUpdateSample;
+  explicit FindLastElement(encoder::Sample& sample) : sample_(sample) {
+    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
   }
 
-  PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) const {
-    if (!has_value_) [[unlikely]] {
-      iterator.invalidate_sample();
-    }
+  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
+    sample_.value = value;
+    sample_.timestamp = timestamp;
   }
 
  private:
-  bool has_value_{};
+  encoder::Sample& sample_;
 };
 
 using LastOverTimeIterator = OverTimeFuncIterator<FindLastElement>;
