@@ -149,9 +149,10 @@ func (s *SegmentV2Suite) TestHappyPath() {
 	s.Require().NoError(err)
 
 	segment := reader.NewSegmentV2()
-	_, err = segment.ReadFrom(buf)
+	n, err := segment.ReadFrom(buf)
 	s.Require().NoError(err)
 
+	s.Require().Equal(int64(len(toWrite)), n)
 	s.Require().Equal(segmentID, segment.ID())
 	s.Require().Equal(len(data), segment.Length())
 	s.Require().Equal(segmentSamples, segment.Samples())
@@ -174,9 +175,10 @@ func (s *SegmentV2Suite) TestReuseSegment() {
 	s.Require().NoError(err)
 
 	segment := reader.NewSegmentV2()
-	_, err = segment.ReadFrom(buf)
+	n, err := segment.ReadFrom(buf)
 	s.Require().NoError(err)
 
+	s.Require().Equal(int64(len(toWrite)), n)
 	s.Require().Equal(segmentID, segment.ID())
 	s.Require().Equal(len(data), segment.Length())
 	s.Require().Equal(segmentSamples, segment.Samples())
@@ -196,9 +198,10 @@ func (s *SegmentV2Suite) TestReuseSegment() {
 	s.Require().NoError(err)
 
 	segment.Reset()
-	_, err = segment.ReadFrom(buf)
+	n, err = segment.ReadFrom(buf)
 	s.Require().NoError(err)
 
+	s.Require().Equal(int64(len(toWrite)), n)
 	s.Require().Equal(segmentID, segment.ID())
 	s.Require().Equal(len(data), segment.Length())
 	s.Require().Equal(segmentSamples, segment.Samples())
@@ -221,8 +224,9 @@ func (s *SegmentV2Suite) TestCrc32Error() {
 	s.Require().NoError(err)
 
 	segment := reader.NewSegmentV2()
-	_, err = segment.ReadFrom(buf)
+	n, err := segment.ReadFrom(buf)
 	s.Require().Error(err)
+	s.Require().Equal(int64(len(toWrite)), n)
 }
 
 func (s *SegmentV2Suite) TestCutSegment() {
@@ -235,6 +239,7 @@ func (s *SegmentV2Suite) TestCutSegment() {
 	toWrite = append(toWrite, binary.AppendUvarint(nil, uint64(len(data)))...)
 	toWrite = append(toWrite, binary.AppendUvarint(nil, uint64(segmentCrc32))...)
 	toWrite = append(toWrite, byte(segmentSamples))
+	expectedBytes := int64(len(toWrite))
 	toWrite = append(toWrite, data[:len(data)-2]...)
 
 	buf := &bytes.Buffer{}
@@ -242,6 +247,39 @@ func (s *SegmentV2Suite) TestCutSegment() {
 	s.Require().NoError(err)
 
 	segment := reader.NewSegmentV2()
-	_, err = segment.ReadFrom(buf)
+	n, err := segment.ReadFrom(buf)
 	s.Require().ErrorIs(err, io.ErrUnexpectedEOF)
+	s.Require().Equal(expectedBytes, n)
+}
+
+func (s *SegmentV2Suite) TestReadIDAndBody() {
+	segmentID := uint32(10)
+	data := []byte(faker.Paragraph())
+	segmentSamples := uint32(42)
+	toWrite := []byte{}
+	toWrite = append(toWrite, byte(segmentID))
+	expectedIDBytes := int64(len(toWrite))
+	toWrite = append(toWrite, binary.AppendUvarint(nil, uint64(len(data)))...)
+	toWrite = append(toWrite, binary.AppendUvarint(nil, uint64(crc32.ChecksumIEEE(data)))...)
+	toWrite = append(toWrite, byte(segmentSamples))
+	toWrite = append(toWrite, data...)
+
+	buf := &bytes.Buffer{}
+	_, err := buf.Write(toWrite)
+	s.Require().NoError(err)
+
+	segment := reader.NewSegmentV2()
+	n, err := segment.ReadID(buf)
+	s.Require().NoError(err)
+
+	s.Require().Equal(expectedIDBytes, n)
+	s.Require().Equal(segmentID, segment.ID())
+
+	n, err = segment.ReadBody(buf)
+	s.Require().NoError(err)
+
+	s.Require().Equal(int64(len(toWrite))-expectedIDBytes, n)
+	s.Require().Equal(len(data), segment.Length())
+	s.Require().Equal(segmentSamples, segment.Samples())
+	s.Require().Equal(data, segment.Bytes())
 }

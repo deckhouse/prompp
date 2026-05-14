@@ -21,33 +21,10 @@ struct GenericSelectHints {
   uint64_t shard_count{};
   uint64_t shard_index{};
 
-  int64_t lookback_delta_ms{};
+  int64_t lookback_delta{};
 
   bool disable_trimming{};
   bool by{};
-
-  GenericSelectHints() = default;
-
-  template <class AnyString, template <class> class AnySlice>
-    requires(!std::same_as<AnyString, String> || !std::same_as<AnySlice<AnyString>, Slice<String>>)
-  explicit GenericSelectHints(const GenericSelectHints<AnyString, AnySlice>& hints)
-      : interval(hints.interval),
-        limit(hints.limit),
-        step_ms(hints.step_ms),
-        func(static_cast<std::string_view>(hints.func)),
-        range_ms(hints.range_ms),
-        shard_count(hints.shard_count),
-        shard_index(hints.shard_index),
-        lookback_delta_ms(hints.lookback_delta_ms),
-        disable_trimming(hints.disable_trimming),
-        by(hints.by) {
-    if (!hints.grouping.empty()) [[unlikely]] {
-      grouping.reserve(hints.grouping.size());
-      for (const auto& group : hints.grouping) {
-        grouping.emplace_back(static_cast<std::string_view>(group));
-      }
-    }
-  }
 
   bool operator==(const GenericSelectHints&) const noexcept = default;
 };

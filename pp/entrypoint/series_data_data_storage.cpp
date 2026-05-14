@@ -136,7 +136,8 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   const auto in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, *in->hints, out->serialized_data, in->downsampling_ms);
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, in->hints ? *in->hints : entrypoint::series_data::GoSelectHints{},
+                                             out->serialized_data, in->downsampling_ms);
   querier.query();
 
   if (querier.need_loading()) {
