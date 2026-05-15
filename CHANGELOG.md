@@ -8,10 +8,19 @@
 3. **GCC 14 and clang-tidy 21.** Upgraded the C++ toolchain to GCC 14.2.0 and clang-tidy 21.1.8 with new `bugprone-*` diagnostics enabled; all findings resolved.
 4. **Go `/sync/*` runtime metrics.** The Prometheus Go collector now exports mutex and semaphore contention statistics from `runtime/metrics` (`/sync/*`) alongside the existing GC and scheduler metrics, making locker contention observable in production.
 5. **Jemalloc resident memory metric.** Exposed jemalloc's resident set size as a new metric alongside the existing allocated/mapped stats, giving operators clearer visibility into the C++ allocator's memory footprint.
+6. **Chunk recoder optimization.** Switched the chunk recoder to a seek-based decode iterator and tuned the Prometheus `chunkenc` encoder with `[[likely]]` annotations, giving roughly a 10% speedup on the recoder benchmark.
+7. **Remote write data source refactor.** Reworked the WAL/encoder pipeline — extracted `SegmentSamplesStorage`, added a V2 WAL reader and `DataSourceV2`, and the shard now transparently switches between WAL format versions.
+8. **Merge-shard series sets.** New generic `mergeShardSeriesSet` / `mergeShardChunkSeriesSet` iterators stream across shards without an intermediate merge buffer, lowering query memory pressure on sharded heads.
+9. **Jemalloc arena pool recycling.** Arenas returned to the free pool are now reset and purged instead of being destroyed, with updated jemalloc build options. New metrics report arena pool releases and reclaimed bytes (`prompp_common_jemalloc_arena_pool_*`). Carried over from v0.7.11.
 
 ### Fixes
 1. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
 2. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
+3. **Go 1.26.3.** Bumped Go to 1.26.3, pulling in stdlib security fixes from the 1.26.x series.
+4. **aarch64 jemalloc page size.** Aligned the jemalloc build with the aarch64 host page size so ARM64 builds no longer hit a configuration mismatch under the GCC 14 toolchain.
+
+### Other
+1. **Bazel Bzlmod migration.** Migrated `pp/` to Bzlmod and refreshed `rules_cc`, `rules_foreign_cc`, and `bazel_clang_tidy` to resolve dependency conflicts that had blocked further updates of the C++ build stack.
 
 ## v0.7.11
 
