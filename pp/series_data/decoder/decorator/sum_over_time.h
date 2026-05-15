@@ -19,9 +19,7 @@ PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noex
 
 class SumOfElementsInIterator {
  public:
-  explicit SumOfElementsInIterator(encoder::Sample& sum) : sum_(sum) {
-    sum_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
-  }
+  explicit SumOfElementsInIterator(encoder::Sample& sum) : sum_(sum) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {

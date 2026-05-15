@@ -6,7 +6,7 @@ namespace series_data::decoder::decorator {
 
 class ElementsCounter {
  public:
-  explicit ElementsCounter(encoder::Sample& sample) : sample_(sample) { sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = 0}; }
+  explicit ElementsCounter(encoder::Sample& sample) : sample_(sample) { sample_.value = 0; }
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double) const noexcept {
     ++sample_.value;

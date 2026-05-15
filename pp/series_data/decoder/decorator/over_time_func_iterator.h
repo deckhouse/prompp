@@ -55,9 +55,10 @@ class OverTimeFuncIterator {
   PromPP::Primitives::TimeInterval interval_;
 
   void find_element() {
-    iterator_.seek_to(interval_.min);
-
+    sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
     SampleHandler handler{sample_};
+
+    iterator_.seek_to(interval_.min);
     iterator_.seek<SeekKind::kNext_Stop>([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp > interval_.max) [[unlikely]] {
         return SeekResult::kStop;
