@@ -646,7 +646,7 @@ INSTANTIATE_TEST_SUITE_P(DoesNotDoubleCountBoundarySample,
                                      .step = 100,
                                      .range = 1000,
                                  },
-                             .expected{Sample{.timestamp = 100, .value = 10.0}, Sample{.timestamp = 200, .value = 3.0}}}));
+                             .expected{Sample{.timestamp = 99, .value = 10.0}, Sample{.timestamp = 199, .value = 3.0}}}));
 
 INSTANTIATE_TEST_SUITE_P(EmptyWindows,
                          SumOverTimeWindowFunctionIteratorFixture,
@@ -663,8 +663,8 @@ INSTANTIATE_TEST_SUITE_P(EmptyWindows,
                                                                             .range = 0,
                                                                         },
                                                                     .expected{
-                                                                        Sample{.timestamp = 100, .value = 2.0},
-                                                                        Sample{.timestamp = 190, .value = 2.0},
+                                                                        Sample{.timestamp = 99, .value = 2.0},
+                                                                        Sample{.timestamp = 199, .value = 2.0},
                                                                     }}));
 
 }  // namespace

@@ -63,7 +63,7 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
 # `binutils-gold` package above — those Go releases no longer require gold on
 # linux/arm64 when GNU ld is 2.36+. See the comment near `binutils-gold` and
 # https://github.com/golang/go/issues/22040 (issue #78405 for the 1.25 backport).
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.26.3
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"

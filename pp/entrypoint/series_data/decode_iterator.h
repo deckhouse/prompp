@@ -8,6 +8,7 @@
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
 #include "series_data/decoder/decorator/irate_iterator.h"
+#include "series_data/decoder/decorator/last_over_step.h"
 #include "series_data/decoder/decorator/last_over_time.h"
 #include "series_data/decoder/decorator/max_over_time.h"
 #include "series_data/decoder/decorator/min_over_time.h"
@@ -35,6 +36,7 @@ class DecodeIterator {
   using MinOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MinOverTimeIterator>;
   using MaxOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MaxOverTimeIterator>;
   using LastOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverTimeIterator>;
+  using LastOverStepIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverStepIterator>;
   using SumOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::SumOverTimeIterator>;
   using CountOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::CountOverTimeIterator>;
   using RateIterator = WindowFunctionIterator<::series_data::decoder::decorator::RateIterator>;
@@ -48,6 +50,7 @@ class DecodeIterator {
                                        MinOverTimeIterator,
                                        MaxOverTimeIterator,
                                        LastOverTimeIterator,
+                                       LastOverStepIterator,
                                        SumOverTimeIterator,
                                        CountOverTimeIterator,
                                        RateIterator,
@@ -126,6 +129,9 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& se
 
     case kLastOverTime:
       return DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, select_hints.function_parameters);
+
+    case kLastOverStep:
+      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverStepIterator>, select_hints.function_parameters);
 
     case kSumOverTime:
       return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, select_hints.function_parameters);
