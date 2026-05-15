@@ -1,6 +1,8 @@
 #pragma once
 
+#include <mutex>
 #include <utility>
+#include <vector>
 
 #include "allocator.h"
 
@@ -23,6 +25,46 @@ PROMPP_ALWAYS_INLINE void refresh_stats() noexcept {
 #if JEMALLOC_AVAILABLE
 
 inline const auto kPageSize = sysconf(_SC_PAGESIZE);
+
+template <class Object>
+struct ArenaReallocator;
+
+struct FreeArenas {
+  static double releases_total;
+  static double released_bytes_total;
+  static double released_bytes_max;
+
+ private:
+  static inline std::vector<ArenaIndex> free_arenas;
+  static inline std::mutex free_arenas_mutex;
+
+  template <class Object>
+  friend struct ArenaReallocator;
+
+  static ArenaIndex get() noexcept {
+    std::scoped_lock lock(free_arenas_mutex);
+    if (!free_arenas.empty()) {
+      const auto result = free_arenas.back();
+      free_arenas.pop_back();
+      return result;
+    }
+
+    return kInvalidArenaIndex;
+  }
+
+  static void add(ArenaIndex arena_index, size_t arena_memory_bytes) noexcept {
+    std::scoped_lock lock(free_arenas_mutex);
+    free_arenas.push_back(arena_index);
+
+    ++releases_total;
+    released_bytes_total += static_cast<double>(arena_memory_bytes);
+    released_bytes_max = std::max(released_bytes_max, static_cast<double>(arena_memory_bytes));
+  }
+};
+
+inline double FreeArenas::releases_total{};
+inline double FreeArenas::released_bytes_total{};
+inline double FreeArenas::released_bytes_max{};
 
 template <class Object>
 struct ArenaReallocator {
@@ -59,14 +101,20 @@ struct ArenaReallocator {
   }
 
   PROMPP_ALWAYS_INLINE static ArenaIndex create_arena() noexcept {
-    uint32_t arena_index{kInvalidArenaIndex};
-    size_t size = sizeof(arena_index);
-    mallctl("arenas.create", &arena_index, &size, nullptr, 0);
+    auto arena_index = FreeArenas::get();
+    if (arena_index == kInvalidArenaIndex) {
+      size_t size = sizeof(arena_index);
+      mallctl("arenas.create", &arena_index, &size, nullptr, 0);
+    }
+
     return arena_index;
   }
 
-  PROMPP_ALWAYS_INLINE static void destroy_arena(uint32_t arena_index) noexcept {
-    mallctl(create_command("arena.%u.destroy", arena_index).data(), nullptr, nullptr, nullptr, 0);
+  PROMPP_ALWAYS_INLINE static void release_arena(ArenaIndex arena_index) noexcept {
+    const auto bytes_at_release = arena_allocated_memory(arena_index);
+    mallctl(create_command("arena.%u.reset", arena_index).data(), nullptr, nullptr, nullptr, 0);
+    mallctl(create_command("arena.%u.purge", arena_index).data(), nullptr, nullptr, nullptr, 0);
+    FreeArenas::add(arena_index, bytes_at_release);
   }
 
   PROMPP_ALWAYS_INLINE static auto thread_arena_guard(ArenaIndex arena_index) noexcept {

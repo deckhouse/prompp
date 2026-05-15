@@ -59,3 +59,7 @@ func (c *CppMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- metric
 	}
 }
+
+func init() {
+	prometheusMetricsRegister()
+}
