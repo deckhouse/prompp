@@ -6,7 +6,7 @@ namespace series_data::decoder::decorator {
 
 class FindLastElement {
  public:
-  explicit FindLastElement(encoder::Sample& sample) : sample_(sample) {}
+  explicit FindLastElement(encoder::Sample& sample, const PromPP::Primitives::TimeInterval&) : sample_(sample) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
     sample_.value = value;

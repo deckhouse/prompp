@@ -56,7 +56,7 @@ class OverTimeFuncIterator {
 
   void find_element() {
     sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
-    SampleHandler handler{sample_};
+    SampleHandler handler{sample_, interval_};
 
     iterator_.seek_to(interval_.min);
     iterator_.seek<SeekKind::kNext_Stop>([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {

@@ -19,7 +19,7 @@ PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noex
 
 class SumOfElements {
  public:
-  explicit SumOfElements(encoder::Sample& sum) : sum_(sum) {}
+  explicit SumOfElements(encoder::Sample& sum, const PromPP::Primitives::TimeInterval& interval) : sum_(sum), interval_(interval) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
@@ -34,10 +34,15 @@ class SumOfElements {
     if (!std::isinf(sum_.value)) [[likely]] {
       sum_.value += c_;
     }
+
+    if (sum_.timestamp != kInvalidTimestamp) [[likely]] {
+      sum_.timestamp = interval_.max - 1;
+    }
   }
 
  private:
   encoder::Sample& sum_;
+  const PromPP::Primitives::TimeInterval& interval_;
   double c_{};
 };
 

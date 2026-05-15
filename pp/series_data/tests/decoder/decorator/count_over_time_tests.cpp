@@ -72,7 +72,7 @@ INSTANTIATE_TEST_SUITE_P(
     CountOverTimeFixture,
     testing::Values(CountOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
                                               .interval{.min = 0, .max = 100},
-                                              .expected{Sample{.timestamp = 100, .value = 1.0}}},
+                                              .expected{Sample{.timestamp = 99, .value = 1.0}}},
                     CountOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
                     CountOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 
@@ -86,7 +86,7 @@ INSTANTIATE_TEST_SUITE_P(
                                                   Sample{.timestamp = 30, .value = 1.1},
                                               },
                                               .interval{.min = 0, .max = 100},
-                                              .expected{Sample{.timestamp = 30, .value = 2.0}}},
+                                              .expected{Sample{.timestamp = 99, .value = 2.0}}},
                     CountOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}}, .interval{.min = 0, .max = 100}, .expected{}}));
 
 INSTANTIATE_TEST_SUITE_P(TimeInterval,
@@ -98,13 +98,13 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                        Sample{.timestamp = 201, .value = 1.0},
                                                                    },
                                                                    .interval{.min = 100, .max = 200},
-                                                                   .expected{Sample{.timestamp = 200, .value = 2.0}}},
+                                                                   .expected{Sample{.timestamp = 199, .value = 2.0}}},
                                          CountOverTimeIteratorCase{.samples{
                                                                        Sample{.timestamp = 100, .value = 1.1},
                                                                        Sample{.timestamp = 150, .value = 1.2},
                                                                        Sample{.timestamp = 200, .value = 1.0},
                                                                    },
                                                                    .interval{.min = 100, .max = 200},
-                                                                   .expected{Sample{.timestamp = 200, .value = 3.0}}}));
+                                                                   .expected{Sample{.timestamp = 199, .value = 3.0}}}));
 
 }  // namespace
