@@ -1005,6 +1005,8 @@ func extractFuncFromPath(p []parser.Node) string {
 		// If we hit a binary expression we terminate since we only care about functions
 		// or aggregations over a single metric.
 		return ""
+	case *parser.SubqueryExpr:
+		return "last_over_step"
 	}
 	return extractFuncFromPath(p[:len(p)-1])
 }
