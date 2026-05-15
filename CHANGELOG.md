@@ -14,10 +14,11 @@
 9. **Jemalloc arena pool recycling.** Arenas returned to the free pool are now reset and purged instead of being destroyed, with updated jemalloc build options. New metrics report arena pool releases and reclaimed bytes (`prompp_common_jemalloc_arena_pool_*`). Carried over from v0.7.11.
 
 ### Fixes
-1. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
-2. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
-3. **Go 1.26.3.** Bumped Go to 1.26.3, pulling in stdlib security fixes from the 1.26.x series.
-4. **aarch64 jemalloc page size.** Aligned the jemalloc build with the aarch64 host page size so ARM64 builds no longer hit a configuration mismatch under the GCC 14 toolchain.
+1. **Remote-read snappy DoS (CVE-2026-42154).** Backported the upstream fix (GHSA-8rm2-7qqf-34qm) — `/api/v1/read` now rejects snappy-compressed payloads whose declared decoded length exceeds the 32 MiB decode limit before allocation, preventing memory exhaustion via crafted small requests.
+2. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
+3. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
+4. **Go 1.26.3.** Bumped Go to 1.26.3, pulling in stdlib security fixes from the 1.26.x series.
+5. **aarch64 jemalloc page size.** Aligned the jemalloc build with the aarch64 host page size so ARM64 builds no longer hit a configuration mismatch under the GCC 14 toolchain.
 
 ### Other
 1. **Bazel Bzlmod migration.** Migrated `pp/` to Bzlmod and refreshed `rules_cc`, `rules_foreign_cc`, and `bazel_clang_tidy` to resolve dependency conflicts that had blocked further updates of the C++ build stack.
