@@ -17,6 +17,7 @@ enum class WindowFunction : uint8_t {
   kMinOverTime,
   kMaxOverTime,
   kLastOverTime,
+  kLastOverStep,
   kSumOverTime,
   kCountOverTime,
   kDelta,
@@ -51,6 +52,7 @@ constexpr uint32_t function_name_hash(std::string_view str) {
     PROMQL_WINDOW_FUNC_CASE("min_over_time", kMinOverTime)
     PROMQL_WINDOW_FUNC_CASE("max_over_time", kMaxOverTime)
     PROMQL_WINDOW_FUNC_CASE("last_over_time", kLastOverTime)
+    PROMQL_WINDOW_FUNC_CASE("last_over_step", kLastOverStep)
     PROMQL_WINDOW_FUNC_CASE("sum_over_time", kSumOverTime)
     PROMQL_WINDOW_FUNC_CASE("count_over_time", kCountOverTime)
     PROMQL_WINDOW_FUNC_CASE("delta", kDelta)

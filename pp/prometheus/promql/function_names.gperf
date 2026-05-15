@@ -40,6 +40,7 @@ info
 irate
 label_join
 label_replace
+last_over_step
 last_over_time
 ln
 log10
