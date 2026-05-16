@@ -11,7 +11,7 @@ import sanitizeHTML from 'sanitize-html';
 import { Fuzzy, FuzzyResult } from '@nexucis/fuzzy';
 import { Trans, useTranslation } from 'react-i18next';
 
-const fuz = new Fuzzy({ pre: '<strong>', post: '</strong>', shouldSort: true });
+const fuz = new Fuzzy({ pre: '<strong>', post: '</strong>', shouldSort: true, escapeHTML: true });
 const flagSeparator = '||';
 
 interface FlagMap {
