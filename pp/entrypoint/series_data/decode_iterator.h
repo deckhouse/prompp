@@ -32,7 +32,8 @@ class DecodeIterator {
   using DownsamplingIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<UniversalDecodeIterator>;
 
   template <class Iterator>
-  using WindowFunctionIterator = ::series_data::decoder::decorator::WindowFunctionIterator<Iterator>;
+  using WindowFunctionIterator =
+      ::series_data::decoder::decorator::WindowFunctionIterator<Iterator, ::series_data::decoder::decorator::StepRangeWindowCalculator>;
   using MinOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MinOverTimeIterator>;
   using MaxOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MaxOverTimeIterator>;
   using LastOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverTimeIterator>;
