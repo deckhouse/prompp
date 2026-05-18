@@ -293,7 +293,7 @@ class GenericDecodingTable {
   using delta_type = typename checkpoint_type::Delta;
 
   GenericDecodingTable() noexcept = default;
-  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version){};
+  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version) {};
 
   template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
     requires kIsReadOnly
@@ -477,12 +477,12 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   using value_type = typename Base::value_type;
 
   using Base::checkpoint;
+  using Base::items_count;
   using Base::load;
   using Base::next_item_index;
   using Base::remainder_size;
   using Base::save;
   using Base::save_size;
-  using Base::items_count;
 
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
 

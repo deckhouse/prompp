@@ -25,7 +25,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
     using reference = Iterator&;
 
     PROMPP_ALWAYS_INLINE Iterator(const Hashes* hashes, const Lss* lss, const series_data::DataStorage* data_storage)
-        : hashes_(hashes), lss_(lss), data_storage_(data_storage), max_ls_id_(lss -> next_item_index()) {}
+        : hashes_(hashes), lss_(lss), data_storage_(data_storage), max_ls_id_(lss->next_item_index()) {}
 
     PROMPP_ALWAYS_INLINE const Iterator& operator*() const noexcept { return *this; }
     PROMPP_ALWAYS_INLINE const Iterator* operator->() const noexcept { return this; }
