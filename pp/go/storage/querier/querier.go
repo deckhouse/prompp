@@ -45,17 +45,24 @@ const (
 type queryOptimizeType uint8
 
 const (
-	// aggrOptimizeType is the option for aggregated functions optimization.
-	aggrOptimizeType queryOptimizeType = 1 << iota
+	// dropPointOptimizeType is the option for drop point functions optimization.
+	dropPointOptimizeType queryOptimizeType = 1 << iota
+
+	// newPointOptimizeType is the option for new point functions optimization.
+	// Optimization creates a new point at the end of the window or step.
+	newPointOptimizeType
 
 	// crossSeriesOptimizeType is the option for cross-series functions optimization.
+	// A new series is created.
 	crossSeriesOptimizeType
+)
 
+const (
 	// noneOptimizeType is the option without any optimization.
 	noneOptimizeType queryOptimizeType = 0
 
 	// allOptimizeType is the option for all functions optimization.
-	allOptimizeType queryOptimizeType = 3
+	allOptimizeType queryOptimizeType = dropPointOptimizeType | newPointOptimizeType | crossSeriesOptimizeType
 )
 
 // SetSelectFuncOptimize sets the select func optimization option by name.
@@ -65,8 +72,12 @@ func SetSelectFuncOptimize(opt string) error {
 		selectFuncOptimize = noneOptimizeType
 		return nil
 
-	case "aggr":
-		selectFuncOptimize = aggrOptimizeType
+	case "drop_point":
+		selectFuncOptimize = dropPointOptimizeType
+		return nil
+
+	case "new_point":
+		selectFuncOptimize = newPointOptimizeType
 		return nil
 
 	case "cross":
@@ -79,7 +90,8 @@ func SetSelectFuncOptimize(opt string) error {
 
 	default:
 		return fmt.Errorf(
-			"invalid select func optimization option: '%s', valid options are: 'none', 'aggr', 'cross', 'all'", opt,
+			"invalid select func optimization option: '%s', valid options are: "+
+				"'none', 'drop_point', 'new_point', 'cross', 'all'", opt,
 		)
 	}
 }
@@ -142,7 +154,15 @@ func NewQuerierWithOutSelectFuncOptimize[
 	closer func() error,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, noneOptimizeType)
+	return newQuerierWithSelectFuncOptimize(
+		head,
+		deduplicatorCtor,
+		mint,
+		maxt,
+		closer,
+		metrics,
+		selectFuncOptimize&dropPointOptimizeType,
+	)
 }
 
 // newQuerierWithSelectFuncOptimize init new [Querier] with select func optimization.
@@ -370,7 +390,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = q.switchFuncOptimize(hints)
+	hints = SwitchFuncOptimize(hints, q.queryOptimize)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
@@ -394,40 +414,39 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// switchFuncOptimize switch the function optimization hints.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) switchFuncOptimize(
-	hints *storage.SelectHints,
-) *storage.SelectHints {
-	switch q.queryOptimize {
-	case noneOptimizeType:
-		return emptySelectHints
-
-	case aggrOptimizeType:
-		if isCrossSeriesFunc(hints) {
-			return emptySelectHints
-		}
-
+// SwitchFuncOptimize switch the function optimization hints.
+func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeType) *storage.SelectHints {
+	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithpout(hints) {
 		return hints
-
-	case crossSeriesOptimizeType:
-		if !isCrossSeriesFunc(hints) {
-			return emptySelectHints
-		}
-
-		return hints
-	case allOptimizeType:
-		return hints
-
-	default:
-		return emptySelectHints
 	}
+
+	return emptySelectHints
 }
 
-// isCrossSeriesFunc checks if the function is a cross series function.
-func isCrossSeriesFunc(hints *storage.SelectHints) bool {
-	return (hints.Func == "sum" ||
-		hints.Func == "max" ||
-		hints.Func == "min") && hints.By
+// isNotWithpout checks if the hints is not without by.
+func isNotWithpout(hints *storage.SelectHints) bool {
+	return hints.By || len(hints.Grouping) == 0
+}
+
+// funcOptimizeMap is the map of the function to the query optimization type.
+var funcOptimizeMap = map[string]queryOptimizeType{
+	"sum":             crossSeriesOptimizeType,
+	"max":             crossSeriesOptimizeType,
+	"min":             crossSeriesOptimizeType,
+	"group":           crossSeriesOptimizeType,
+	"count":           newPointOptimizeType,
+	"sum_over_time":   newPointOptimizeType,
+	"max_over_time":   dropPointOptimizeType,
+	"min_over_time":   dropPointOptimizeType,
+	"count_over_time": newPointOptimizeType,
+	"last_over_time":  dropPointOptimizeType,
+	"rate":            dropPointOptimizeType,
+	"irate":           dropPointOptimizeType,
+	"delta":           dropPointOptimizeType,
+	"idelta":          dropPointOptimizeType,
+	"increase":        dropPointOptimizeType,
+	"resets":          dropPointOptimizeType,
+	"changes":         dropPointOptimizeType,
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.

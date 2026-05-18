@@ -509,3 +509,220 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	s.Equal([]string{}, names)
 	s.Len(anns.AsErrors(), 1)
 }
+
+//
+// SwitchFuncOptimizeSuite
+//
+
+type SwitchFuncOptimizeSuite struct {
+	suite.Suite
+}
+
+func TestSwitchFuncOptimizeSuite(t *testing.T) {
+	suite.Run(t, new(SwitchFuncOptimizeSuite))
+}
+
+func (s *SwitchFuncOptimizeSuite) TestNone() {
+	tests := []struct {
+		hints    *prom_storage.SelectHints
+		expected *prom_storage.SelectHints
+	}{
+		{
+			hints:    &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+	}
+
+	for _, test := range tests {
+		result := querier.SwitchFuncOptimize(test.hints, 0)
+		s.Require().Equal(test.expected, result)
+	}
+}
+
+func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
+	tests := []struct {
+		hints    *prom_storage.SelectHints
+		expected *prom_storage.SelectHints
+	}{
+		{
+			hints:    &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
+			expected: &prom_storage.SelectHints{Func: "max_over_time"},
+		},
+	}
+
+	for _, test := range tests {
+		result := querier.SwitchFuncOptimize(test.hints, 1)
+		s.Require().Equal(test.expected, result)
+	}
+}
+
+func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
+	tests := []struct {
+		hints    *prom_storage.SelectHints
+		expected *prom_storage.SelectHints
+	}{
+		{
+			hints:    &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum_over_time"},
+			expected: &prom_storage.SelectHints{Func: "sum_over_time"},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+	}
+
+	for _, test := range tests {
+		result := querier.SwitchFuncOptimize(test.hints, 2)
+		s.Require().Equal(test.expected, result)
+	}
+}
+
+func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
+	tests := []struct {
+		hints    *prom_storage.SelectHints
+		expected *prom_storage.SelectHints
+	}{
+		{
+			hints:    &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum"},
+			expected: &prom_storage.SelectHints{Func: "sum"},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+	}
+
+	for _, test := range tests {
+		result := querier.SwitchFuncOptimize(test.hints, 4)
+		s.Require().Equal(test.expected, result)
+	}
+}
+
+func (s *SwitchFuncOptimizeSuite) TestAll() {
+	tests := []struct {
+		hints    *prom_storage.SelectHints
+		expected *prom_storage.SelectHints
+	}{
+		{
+			hints:    &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum"},
+			expected: &prom_storage.SelectHints{Func: "sum"},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "sum_over_time"},
+			expected: &prom_storage.SelectHints{Func: "sum_over_time"},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
+			expected: &prom_storage.SelectHints{Func: "max_over_time"},
+		},
+	}
+
+	for _, test := range tests {
+		result := querier.SwitchFuncOptimize(test.hints, 7)
+		s.Require().Equal(test.expected, result)
+	}
+}
