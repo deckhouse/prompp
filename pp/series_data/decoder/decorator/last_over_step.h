@@ -24,6 +24,7 @@ class LastOverStep {
   const PromPP::Primitives::TimeInterval& interval_;
 };
 
-using LastOverStepIterator = OverTimeFuncIterator<LastOverStep>;
+using LastOverStepIterator = OverTimeFuncIterator<LastOverStep, true>;
+using LastOverStepWithStaleNansIterator = OverTimeFuncIterator<LastOverStep, false>;
 
 }  // namespace series_data::decoder::decorator

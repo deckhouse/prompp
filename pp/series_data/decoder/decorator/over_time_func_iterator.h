@@ -5,7 +5,7 @@
 
 namespace series_data::decoder::decorator {
 
-template <class SampleHandler>
+template <class SampleHandler, bool SkipStaleNans>
 class OverTimeFuncIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
@@ -64,10 +64,11 @@ class OverTimeFuncIterator {
         return SeekResult::kStop;
       }
 
-      if (!BareBones::Encoding::Gorilla::isstalenan(value)) [[likely]] {
-        handler(timestamp, value);
+      if (SkipStaleNans && BareBones::Encoding::Gorilla::isstalenan(value)) [[unlikely]] {
+        return SeekResult::kNext;
       }
 
+      handler(timestamp, value);
       return SeekResult::kNext;
     });
   }

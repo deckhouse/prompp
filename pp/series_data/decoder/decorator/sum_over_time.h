@@ -72,6 +72,6 @@ class SumOfElements {
   double c_{};
 };
 
-using SumOverTimeIterator = OverTimeFuncIterator<SumOfElementsInIterator>;
+using SumOverTimeIterator = OverTimeFuncIterator<SumOfElementsInIterator, true>;
 
 }  // namespace series_data::decoder::decorator

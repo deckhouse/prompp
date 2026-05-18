@@ -17,6 +17,6 @@ class LastOverTime {
   encoder::Sample& sample_;
 };
 
-using LastOverTimeIterator = OverTimeFuncIterator<LastOverTime>;
+using LastOverTimeIterator = OverTimeFuncIterator<LastOverTime, true>;
 
 }  // namespace series_data::decoder::decorator

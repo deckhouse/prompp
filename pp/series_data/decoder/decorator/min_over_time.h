@@ -39,6 +39,6 @@ class FindMinElement {
   encoder::Sample& min_;
 };
 
-using MinOverTimeIterator = OverTimeFuncIterator<FindMinElementInIterator>;
+using MinOverTimeIterator = OverTimeFuncIterator<FindMinElementInIterator, true>;
 
 }  // namespace series_data::decoder::decorator

@@ -26,6 +26,6 @@ class ElementsCounter {
   const PromPP::Primitives::TimeInterval& interval_;
 };
 
-using CountOverTimeIterator = OverTimeFuncIterator<ElementsCounter>;
+using CountOverTimeIterator = OverTimeFuncIterator<ElementsCounter, true>;
 
 }  // namespace series_data::decoder::decorator
