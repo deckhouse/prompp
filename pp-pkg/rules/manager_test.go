@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"sync"
 	"testing"
@@ -2140,6 +2141,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		require.NoError(t, err)
 		opts.ConcurrencyExecuter.Run()
 		defer opts.ConcurrencyExecuter.Stop()
+		warmupConcurrencyExecuter(opts.ConcurrencyExecuter, opts.MaxConcurrentEvals)
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
@@ -2337,6 +2339,31 @@ func TestUpdateWhenStopped(t *testing.T) {
 }
 
 const artificialDelay = 250 * time.Millisecond
+
+// warmupConcurrencyExecuter forces every worker goroutine in a freshly Run()
+// ConcurrentRuleEvalExecuter to reach its `<-queue` receive case at least once,
+// so that subsequent Execute calls reliably hand work off to a worker instead
+// of falling through to the synchronous fallback branch.
+//
+// Background: ConcurrentRuleEvalExecuter.Execute uses a non-blocking send on an
+// unbuffered queue; if no worker has parked yet (Run only spawns goroutines, it
+// does not wait for them), the dispatch loop in Group.concurrencyEval runs the
+// rule synchronously on the caller goroutine and blocks until that rule
+// completes — which serializes what was meant to be the concurrent batch and
+// undercounts maxInflight. The runtime.Gosched call inside the warmup tasks
+// lets the scheduler park the workers even when the very first Execute lands
+// on the caller.
+func warmupConcurrencyExecuter(exe ConcurrencyExecuter, maxConcurrency int64) {
+	var wg sync.WaitGroup
+	wg.Add(int(maxConcurrency))
+	for range maxConcurrency {
+		exe.Execute(func() {
+			runtime.Gosched()
+			wg.Done()
+		})
+	}
+	wg.Wait()
+}
 
 func optsFactory(
 	st storage.Storage,

@@ -1,4 +1,4 @@
-/* C++ code produced by gperf version 3.1 */
+/* C++ code produced by gperf version 3.2.1 */
 /* Command-line: gperf -L C++ function_names.gperf  */
 /* Computed positions: -k'2-4,$' */
 #pragma once
@@ -19,7 +19,7 @@
 #error "gperf generated tables don't work with this execution character set. Please report a bug to <bug-gperf@gnu.org>."
 #endif
 
-#define TOTAL_KEYWORDS 81
+#define TOTAL_KEYWORDS 82
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 18
 #define MIN_HASH_VALUE 2
@@ -32,7 +32,7 @@ class FunctionNamesHash {
   static constexpr unsigned int hash(const char* str, size_t len);
 };
 
-constexpr inline unsigned int FunctionNamesHash::hash(const char* str, size_t len) {
+constexpr unsigned int FunctionNamesHash::hash(const char* str, size_t len) {
   constexpr static unsigned char asso_values[] = {
       199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
       199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 5,   5,   0,   199, 199, 199, 199, 199, 199, 199,
@@ -54,7 +54,7 @@ constexpr inline unsigned int FunctionNamesHash::hash(const char* str, size_t le
 #elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)
       __attribute__((__fallthrough__));
 #endif
-      /*FALLTHROUGH*/
+    /*FALLTHROUGH*/
     case 3:
       hval += asso_values[static_cast<unsigned char>(str[2])];
 #if (defined __cplusplus && (__cplusplus >= 201703L || (__cplusplus >= 201103L && defined __clang__ && __clang_major__ + (__clang_minor__ >= 9) > 3))) || \
@@ -63,7 +63,7 @@ constexpr inline unsigned int FunctionNamesHash::hash(const char* str, size_t le
 #elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)
       __attribute__((__fallthrough__));
 #endif
-      /*FALLTHROUGH*/
+    /*FALLTHROUGH*/
     case 2:
       hval += asso_values[static_cast<unsigned char>(str[1])];
       break;
