@@ -226,7 +226,7 @@ class BimapCopierFixtureBase : public BimapFixture {
   BareBones::Vector<uint32_t> dst_src_ids_mapping_;
 };
 
-class BimapStatesFixture : public BimapCopierFixtureBase {
+class BimapFixedStateFixture : public BimapCopierFixtureBase {
  protected:
   void SetUp() override {
     Lss initial_lss;
@@ -251,7 +251,7 @@ class BimapStatesFixture : public BimapCopierFixtureBase {
   }
 };
 
-TEST_F(BimapStatesFixture, LssInitialState) {
+TEST_F(BimapFixedStateFixture, LssInitialState) {
   // Arrange
 
   // Act
@@ -263,7 +263,19 @@ TEST_F(BimapStatesFixture, LssInitialState) {
   EXPECT_TRUE(std::ranges::equal(lss_.added_series(), std::vector<uint32_t>{1, 3, 4}));
 }
 
-TEST_F(BimapStatesFixture, FixedStateResolveBehavesLikeNormal) {
+TEST_F(BimapFixedStateFixture, FixedStateKeepsSeriesCount) {
+  // Arrange
+
+  // Act
+  constexpr uint32_t shrink_boundary = 3U;
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Assert
+  EXPECT_EQ(5U, lss_.items_count());
+  EXPECT_EQ(5U, lss_.next_item_index());
+}
+
+TEST_F(BimapFixedStateFixture, FixedStateResolveBehavesLikeNormal) {
   // Arrange
   auto before_shrink = lss_[2];
 
@@ -276,7 +288,7 @@ TEST_F(BimapStatesFixture, FixedStateResolveBehavesLikeNormal) {
   EXPECT_EQ(before_shrink, after_shrink);
 }
 
-TEST_F(BimapStatesFixture, FixedStateFindHidesPreBoundarySeries) {
+TEST_F(BimapFixedStateFixture, FixedStateFindHidesPreBoundarySeries) {
   // Arrange
   const auto from_find_before_fixed = lss_.find(ls2_);
 
@@ -290,7 +302,7 @@ TEST_F(BimapStatesFixture, FixedStateFindHidesPreBoundarySeries) {
   EXPECT_FALSE(from_find.has_value());
 }
 
-TEST_F(BimapStatesFixture, NormalStateFillsNonaddedSeries) {
+TEST_F(BimapFixedStateFixture, NormalStateFillsNonaddedSeries) {
   // Arrange
 
   // Act
@@ -302,7 +314,7 @@ TEST_F(BimapStatesFixture, NormalStateFillsNonaddedSeries) {
   EXPECT_TRUE(lss_.added_series()[0]);
 }
 
-TEST_F(BimapStatesFixture, FixedStateAppendPastBoundary) {
+TEST_F(BimapFixedStateFixture, FixedStateAppendPastBoundary) {
   // Arrange
 
   // Act
@@ -480,7 +492,7 @@ TEST_F(BimapCopierFixture, CopyOfCopyInsertBuildsIndexesForNewSeries) {
   EXPECT_TRUE(lss_copy_of_copy.trie_index().names_trie().lookup("server"));
 }
 
-TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrieAfterTwoSeries) {
+TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrie) {
   // Arrange
   Lss lss_copy;
   const BareBones::Vector<uint32_t> ids_for_snapshot{0U, 1U};
@@ -529,92 +541,6 @@ TEST_F(BimapShrinkFixture, FinalizeShrinkMapsSeriesInOrderAndKeepsCounts) {
   EXPECT_EQ(ls2_, lss_[2]);
   EXPECT_EQ(kLogicalSeriesCount, lss_.items_count());
   EXPECT_EQ(kLogicalSeriesCount, lss_.next_item_index());
-}
-
-class BimapFixedStateFixture : public BimapCopierFixtureBase {
- protected:
-  static constexpr uint32_t kPendingShrinkBoundary = 2;
-
-  void SetUp() override {
-    lss_.find_or_emplace(ls0_);
-    lss_.find_or_emplace(ls1_);
-    lss_.set_pending_shrink_boundary(kPendingShrinkBoundary);
-    lss_.find_or_emplace(ls2_);
-  }
-};
-
-TEST_F(BimapFixedStateFixture, FixedStateFindMatchesFindOrEmplace) {
-  // Arrange
-
-  // Act
-  const auto from_find = lss_.find(ls2_);
-  const auto from_find_or_emplace = lss_.find_or_emplace(ls2_);
-
-  // Assert
-  ASSERT_TRUE(from_find.has_value());
-  EXPECT_EQ(kPendingShrinkBoundary, *from_find);
-  EXPECT_EQ(from_find_or_emplace, *from_find);
-  EXPECT_TRUE(std::ranges::equal(ls2_, lss_[*from_find]));
-}
-
-TEST_F(BimapFixedStateFixture, FixedStateSeriesCountMatchesThree) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_EQ(3U, lss_.items_count());
-  EXPECT_EQ(3U, lss_.next_item_index());
-}
-
-TEST_F(BimapFixedStateFixture, FixedStateBracketExposesVisibleSeries) {
-  // Arrange
-
-  // Act
-  const auto id = lss_.find(ls2_);
-
-  // Assert
-  ASSERT_TRUE(id.has_value());
-  EXPECT_EQ(kPendingShrinkBoundary, *id);
-  EXPECT_TRUE(std::ranges::equal(ls0_, lss_[0]));
-  EXPECT_TRUE(std::ranges::equal(ls1_, lss_[1]));
-  EXPECT_TRUE(std::ranges::equal(ls2_, lss_[2]));
-  EXPECT_TRUE(std::ranges::equal(ls2_, lss_[*id]));
-}
-
-class BimapFixedPendingFixture : public BimapCopierFixtureBase {
- protected:
-  static constexpr uint32_t kPendingShrinkBoundary = 2;
-
-  void SetUp() override {
-    lss_.find_or_emplace(ls0_);
-    lss_.find_or_emplace(ls1_);
-    lss_.set_pending_shrink_boundary(kPendingShrinkBoundary);
-  }
-};
-
-TEST_F(BimapFixedPendingFixture, FixedStateInsertTailGetsBoundaryOrAbove) {
-  // Arrange
-
-  // Act
-  const auto id = lss_.find_or_emplace(ls2_);
-
-  // Assert
-  EXPECT_EQ(kPendingShrinkBoundary, id);
-  const auto from_find = lss_.find(ls2_);
-  ASSERT_TRUE(from_find.has_value());
-  EXPECT_EQ(id, *from_find);
-  EXPECT_TRUE(std::ranges::equal(ls2_, lss_[id]));
-}
-
-TEST_F(BimapFixedPendingFixture, FixedStateTwoSeriesCountMatchesStorage) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_EQ(2U, lss_.items_count());
-  EXPECT_EQ(2U, lss_.next_item_index());
 }
 
 class BimapFiveSeriesFixture : public BimapCopierFixture {
