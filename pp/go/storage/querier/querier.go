@@ -459,16 +459,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 		dsQueryFirstTimestampsQuerier,
 		func(shard TShard) error {
 			shardID := shard.ShardID()
-			lssQueryResult := lssQueryResults[shardID]
-			if lssQueryResult == nil {
+			res := lssQueryResults[shardID]
+			if res == nil {
 				return nil
 			}
 
-			shard.DataStorage().QueryFirstTimestamps(
-				lssQueryResult.IDs(),
-				timestamps[shardID],
-				DefaultNotFoundTimestampValue,
-			)
+			shard.DataStorage().QueryFirstTimestamps(res.IDs(), timestamps[shardID], DefaultNotFoundTimestampValue)
 
 			return nil
 		},
@@ -481,14 +477,14 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 		lssGroupSeriesByLabelNames,
 		func(shard TShard) error {
 			shardID := shard.ShardID()
-			lssQueryResult := lssQueryResults[shardID]
-			if lssQueryResult == nil {
+			res := lssQueryResults[shardID]
+			if res == nil {
 				return nil
 			}
 
 			nameIDs := poolProvider.GetNameIDs(len(hints.Grouping))
 			shard.LSS().LabelNameToIDs(hints.Grouping, nameIDs)
-			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(lssQueryResult.IDs(), nameIDs)
+			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(res.IDs(), nameIDs)
 			poolProvider.PutNameIDs(nameIDs)
 
 			return nil
