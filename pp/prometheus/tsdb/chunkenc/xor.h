@@ -151,7 +151,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
     state_.last_v_xor_trailing_z = v_xor_trailing_z;
     assert(state_.last_v_xor_length + state_.last_v_xor_trailing_z <= BareBones::Bit::to_bits(sizeof(uint64_t)));
 
-    stream.write_bits((0b11 << (5 + 6)) | (v_xor_leading_z << 6) | v_xor_length, kXorLengthMaskBits);
+    stream.write_bits((0b11 << (5 + 6)) | (v_xor_leading_z << 6) | (v_xor_length & 63), kXorLengthMaskBits);
     stream.write_bits(v_xor >> state_.last_v_xor_trailing_z, state_.last_v_xor_length);
   }
 
