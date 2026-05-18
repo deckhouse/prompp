@@ -215,7 +215,7 @@ TEST_F(BimapFixture, InsertedSeriesUpdatesMaxItemIndex) {
   EXPECT_EQ(2U, lss_.next_item_index());
 }
 
-class BimapCopierFixtureBase : public BimapFixture {
+class BimapFixedStateFixture : public BimapFixture {
  protected:
   const LabelViewSet ls0_{{"job", "a"}};
   const LabelViewSet ls1_{{"job", "b"}};
@@ -223,11 +223,6 @@ class BimapCopierFixtureBase : public BimapFixture {
   const LabelViewSet ls3_{{"job", "d"}};
   const LabelViewSet ls4_{{"job", "e"}};
 
-  BareBones::Vector<uint32_t> dst_src_ids_mapping_;
-};
-
-class BimapFixedStateFixture : public BimapCopierFixtureBase {
- protected:
   void SetUp() override {
     Lss initial_lss;
 
@@ -249,6 +244,15 @@ class BimapFixedStateFixture : public BimapCopierFixtureBase {
     [[maybe_unused]] const auto touched_ls4 = lss_.find_or_emplace(ls4_);
     lss_.build_deferred_indexes();
   }
+
+  [[nodiscard]] std::vector<uint32_t> ls_logical_ids_in_set_order() const {
+    std::vector<uint32_t> ids;
+    ids.reserve(lss_.ls_id_set().size());
+    for (const auto id : lss_.ls_id_set()) {
+      ids.emplace_back(static_cast<uint32_t>(id));
+    }
+    return ids;
+  }
 };
 
 TEST_F(BimapFixedStateFixture, LssInitialState) {
@@ -265,9 +269,9 @@ TEST_F(BimapFixedStateFixture, LssInitialState) {
 
 TEST_F(BimapFixedStateFixture, FixedStateKeepsSeriesCount) {
   // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
 
   // Act
-  constexpr uint32_t shrink_boundary = 3U;
   lss_.set_pending_shrink_boundary(shrink_boundary);
 
   // Assert
@@ -279,9 +283,10 @@ TEST_F(BimapFixedStateFixture, FixedStateResolveBehavesLikeNormal) {
   // Arrange
   auto before_shrink = lss_[2];
 
-  // Act
   constexpr uint32_t shrink_boundary = 3U;
   lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
   const auto after_shrink = lss_[2];
 
   // Assert
@@ -291,10 +296,10 @@ TEST_F(BimapFixedStateFixture, FixedStateResolveBehavesLikeNormal) {
 TEST_F(BimapFixedStateFixture, FixedStateFindHidesPreBoundarySeries) {
   // Arrange
   const auto from_find_before_fixed = lss_.find(ls2_);
-
-  // Act
   constexpr uint32_t shrink_boundary = 3U;
   lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
   const auto from_find = lss_.find(ls2_);
 
   // Assert
@@ -316,10 +321,10 @@ TEST_F(BimapFixedStateFixture, NormalStateFillsNonaddedSeries) {
 
 TEST_F(BimapFixedStateFixture, FixedStateAppendPastBoundary) {
   // Arrange
-
-  // Act
   constexpr uint32_t shrink_boundary = 3U;
   lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
   const auto ls_id = lss_.find_or_emplace(ls0_);
 
   // Assert
@@ -330,8 +335,70 @@ TEST_F(BimapFixedStateFixture, FixedStateAppendPastBoundary) {
   EXPECT_FALSE(lss_.added_series()[0]);
 }
 
-class BimapCopierFixture : public BimapCopierFixtureBase {
+TEST_F(BimapFixedStateFixture, FixedStatePrunesLsIdSet) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  const LabelViewSet ls5{{"job", "f"}};
+
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
+  const auto new_id = lss_.find_or_emplace(ls5);
+  const auto& ls_ids = lss_.ls_id_set();
+
+  // Assert
+  EXPECT_EQ(new_id, 5U);
+  EXPECT_EQ(ls_ids.size(), 4U);
+
+  using LsIdProxy = typename Lss::LsIdSet::value_type;
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{3U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{5U}));
+}
+
+TEST_F(BimapFixedStateFixture, FixedStateLsIdSetIsSorted) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  const LabelViewSet ls5{{"job", "f"}};
+
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
+  std::ignore = lss_.find_or_emplace(ls5);
+
+  // Assert
+  EXPECT_TRUE(
+      std::ranges::is_sorted(lss_.ls_id_set(), [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
+}
+
+TEST_F(BimapFixedStateFixture, FixedStateSortingIndexSortKeepsOrder) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+
+  std::vector<uint32_t> ids = {3U, 1U, 4U};
+  const std::vector<uint32_t> expected_ids = {1U, 3U, 4U};
+
+  // Act
+  lss_.sorting_index().sort(ids);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::is_sorted(expected_ids, [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
+  EXPECT_EQ(ids, expected_ids);
+}
+
+class BimapCopierFixture : public BimapFixture {
  protected:
+  const LabelViewSet ls0_{{"job", "a"}};
+  const LabelViewSet ls1_{{"job", "b"}};
+  const LabelViewSet ls2_{{"job", "c"}};
+  const LabelViewSet ls3_{{"job", "d"}};
+  const LabelViewSet ls4_{{"job", "e"}};
+  BareBones::Vector<uint32_t> dst_src_ids_mapping_;
+
   void SetUp() override {
     lss_.find_or_emplace(ls0_);
     lss_.find_or_emplace(ls1_);
@@ -342,17 +409,19 @@ class BimapCopierFixture : public BimapCopierFixtureBase {
   }
 };
 
-TEST_F(BimapCopierFixtureBase, CopyFromEmptySourceLeavesEmpty) {
+TEST_F(BimapCopierFixture, CopyFromEmptySourceLeavesEmpty) {
   // Arrange
+  Lss empty_lss;
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  BareBones::Vector<uint32_t> dst_src_ids_mapping;
+  Copier copier(empty_lss, empty_lss.sorting_index(), empty_lss.added_series(), lss_copy, dst_src_ids_mapping);
 
   // Act
   copier.copy_added_series_and_build_indexes();
 
   // Assert
   EXPECT_EQ(0U, lss_copy.items_count());
-  EXPECT_EQ(0U, dst_src_ids_mapping_.size());
+  EXPECT_EQ(0U, dst_src_ids_mapping.size());
 }
 
 TEST_F(BimapCopierFixture, CopyKeepsSeriesCountAndFinds) {
@@ -513,330 +582,58 @@ TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrie) {
   EXPECT_EQ(ls1_, lss_[1]);
 }
 
-class BimapShrinkFixture : public BimapCopierFixtureBase {
+class BimapShrinkedStateFixture : public BimapFixture {
  protected:
-  void SetUp() override {
-    lss_.find_or_emplace(ls0_);
-    lss_.find_or_emplace(ls1_);
-    lss_.find_or_emplace(ls2_);
-    lss_.build_deferred_indexes();
-  }
-};
+  static constexpr uint32_t kShrinkBoundary = 3U;
 
-TEST_F(BimapShrinkFixture, FinalizeShrinkMapsSeriesInOrderAndKeepsCounts) {
-  // Arrange
-  const uint32_t shrink_boundary = lss_.next_item_index();
-  Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
-  copier.copy_added_series_and_build_indexes();
-  constexpr uint32_t kLogicalSeriesCount = 3U;
+  const LabelViewSet ls0_{{"job", "a"}};
+  const LabelViewSet ls1_{{"job", "b"}};
+  const LabelViewSet ls2_{{"job", "c"}};
+  const LabelViewSet ls3_{{"job", "d"}};
+  const LabelViewSet ls4_{{"job", "e"}};
+  const LabelViewSet ls5_{{"job", "f"}};
 
-  // Act
-  lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
-
-  // Assert
-  EXPECT_EQ(ls0_, lss_[0]);
-  EXPECT_EQ(ls1_, lss_[1]);
-  EXPECT_EQ(ls2_, lss_[2]);
-  EXPECT_EQ(kLogicalSeriesCount, lss_.items_count());
-  EXPECT_EQ(kLogicalSeriesCount, lss_.next_item_index());
-}
-
-class BimapFiveSeriesFixture : public BimapCopierFixture {
- protected:
-  const LabelViewSet ls6_{{"job", "f"}};
-  Lss lss_copy_;
-
-  void SetUp() override { BimapCopierFixture::SetUp(); }
-
-  template <class SeriesIds>
-  void FinalizeShrink(const SeriesIds& ids_for_copy, uint32_t shrink_boundary) {
-    dst_src_ids_mapping_.clear();
-    Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
-    copier.copy_added_series_and_build_indexes();
-
-    lss_.set_pending_shrink_boundary(shrink_boundary);
-    lss_.finalize_copy_and_shrink(lss_copy_, dst_src_ids_mapping_);
-  }
-};
-
-TEST_F(BimapFiveSeriesFixture, ShrinkFindOrEmplaceAddsAtBoundary) {
-  // Arrange
-  const uint32_t shrink_boundary = lss_.next_item_index();
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto new_id = lss_.find_or_emplace(ls6_);
-  const auto from_find = lss_.find(ls6_);
-
-  // Assert
-  EXPECT_EQ(shrink_boundary, new_id);
-  ASSERT_TRUE(from_find.has_value());
-  EXPECT_EQ(new_id, *from_find);
-  EXPECT_EQ(ls6_, lss_[new_id]);
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrinkMiddleCopyKeepsSeriesLayout) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto from_find_ls1 = lss_.find(ls1_);
-
-  // Assert
-  EXPECT_EQ(ls0_, lss_[0]);
-  EXPECT_EQ(ls1_, lss_[1]);
-  EXPECT_EQ(ls2_, lss_[2]);
-  EXPECT_EQ(ls3_, lss_[3]);
-  EXPECT_EQ(ls4_, lss_[4]);
-  ASSERT_TRUE(from_find_ls1.has_value());
-  EXPECT_EQ(1U, *from_find_ls1);
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrinkMiddleCopyLsIdSetHasLogicalIds) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  const auto ids_for_copy = lss_.added_series();
-
-  // Act
-  FinalizeShrink(ids_for_copy, shrink_boundary);
-
-  // Assert
-  const auto& ls_ids = lss_.ls_id_set();
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
-  EXPECT_EQ(5U, ls_ids.size());
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{0U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{2U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{3U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrinkMiddleCopyFindOrEmplaceIdempotent) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto existing_id = lss_.find_or_emplace(ls1_);
-  const auto from_find_after = lss_.find(ls1_);
-
-  // Assert
-  EXPECT_EQ(1U, existing_id);
-  ASSERT_TRUE(from_find_after.has_value());
-  EXPECT_EQ(existing_id, *from_find_after);
-  EXPECT_EQ(ls1_, lss_[existing_id]);
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrunkReinsertMarksAddedAndLsIdSet) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  constexpr uint32_t expected_existing_id = 1U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto new_id = lss_.find_or_emplace(ls1_);
-
-  // Assert
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
-
-  ASSERT_EQ(expected_existing_id, new_id);
-  ASSERT_LT(new_id, lss_.added_series().size());
-  EXPECT_TRUE(lss_.added_series()[new_id]);
-  EXPECT_TRUE(lss_.ls_id_set().contains(LsIdProxy{new_id}));
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyKeepsSeriesLayout) {
-  // Arrange
-  const uint32_t shrink_boundary = lss_.next_item_index();
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto from_find = lss_.find(ls1_);
-
-  // Assert
-  EXPECT_EQ(ls0_, lss_[0]);
-  EXPECT_EQ(ls1_, lss_[1]);
-  EXPECT_EQ(ls2_, lss_[2]);
-  EXPECT_EQ(ls3_, lss_[3]);
-  EXPECT_EQ(ls4_, lss_[4]);
-  ASSERT_TRUE(from_find.has_value());
-  EXPECT_EQ(1U, *from_find);
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyLsIdSetHasLogicalIds) {
-  // Arrange
-  const uint32_t shrink_boundary = lss_.next_item_index();
-  const auto ids_for_copy = lss_.added_series();
-
-  // Act
-  FinalizeShrink(ids_for_copy, shrink_boundary);
-
-  // Assert
-  const auto& ls_ids = lss_.ls_id_set();
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
-  EXPECT_EQ(5U, ls_ids.size());
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{0U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{2U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{3U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrinkFullCopyFindOrEmplaceIdempotent) {
-  // Arrange
-  const uint32_t shrink_boundary = lss_.next_item_index();
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto new_id = lss_.find_or_emplace(ls1_);
-  const auto from_find_after = lss_.find(ls1_);
-
-  // Assert
-  EXPECT_EQ(1U, new_id);
-  ASSERT_TRUE(from_find_after.has_value());
-  EXPECT_EQ(new_id, *from_find_after);
-  EXPECT_EQ(ls1_, lss_[new_id]);
-}
-
-TEST_F(BimapFiveSeriesFixture, ShrunkStateFindResolvesTailIds) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto ls3_id = lss_.find(ls3_);
-  const auto ls4_id = lss_.find(ls4_);
-
-  // Assert
-  ASSERT_TRUE(ls3_id.has_value());
-  ASSERT_TRUE(ls4_id.has_value());
-  EXPECT_EQ(shrink_boundary, *ls3_id);
-  EXPECT_EQ(shrink_boundary + 1, *ls4_id);
-  EXPECT_EQ(ls3_, lss_[*ls3_id]);
-  EXPECT_EQ(ls4_, lss_[*ls4_id]);
-}
-
-class BimapPartialAddedFixture : public BimapCopierFixtureBase {
- protected:
-  Lss seeded_lss_;
+  BareBones::Vector<uint32_t> dst_src_ids_mapping_;
   Lss lss_copy_;
 
   void SetUp() override {
-    seeded_lss_.find_or_emplace(ls0_);
-    seeded_lss_.find_or_emplace(ls1_);
-    seeded_lss_.find_or_emplace(ls2_);
-    seeded_lss_.find_or_emplace(ls3_);
-    seeded_lss_.find_or_emplace(ls4_);
-    seeded_lss_.build_deferred_indexes();
+    Lss seeded_lss;
+    seeded_lss.find_or_emplace(ls0_);
+    seeded_lss.find_or_emplace(ls1_);
+    seeded_lss.find_or_emplace(ls2_);
+    seeded_lss.find_or_emplace(ls3_);
+    seeded_lss.find_or_emplace(ls4_);
+    seeded_lss.build_deferred_indexes();
 
-    dst_src_ids_mapping_.clear();
-    Copier copier(seeded_lss_, seeded_lss_.sorting_index(), seeded_lss_.added_series(), lss_, dst_src_ids_mapping_);
+    Copier copier(seeded_lss, seeded_lss.sorting_index(), seeded_lss.added_series(), lss_, dst_src_ids_mapping_);
     copier.copy_added_series_and_build_indexes();
 
-    // Keep ids >= shrink boundary alive and preserve one pre-boundary series.
+    // Mixed state: ids 1, 3 and 4 are active; ids 0 and 2 are hidden before the shrink boundary.
     [[maybe_unused]] const auto touched_ls1 = lss_.find_or_emplace(ls1_);
     [[maybe_unused]] const auto touched_ls3 = lss_.find_or_emplace(ls3_);
     [[maybe_unused]] const auto touched_ls4 = lss_.find_or_emplace(ls4_);
     lss_.build_deferred_indexes();
-  }
 
-  template <class SeriesIds>
-  void FinalizeShrink(const SeriesIds& ids_for_copy, uint32_t shrink_boundary) {
     dst_src_ids_mapping_.clear();
-    Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
-    copier.copy_added_series_and_build_indexes();
-
-    lss_.set_pending_shrink_boundary(shrink_boundary);
+    Copier shrink_copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy_, dst_src_ids_mapping_);
+    shrink_copier.copy_added_series_and_build_indexes();
+    lss_.set_pending_shrink_boundary(kShrinkBoundary);
     lss_.finalize_copy_and_shrink(lss_copy_, dst_src_ids_mapping_);
-  }
-
-  [[nodiscard]] std::vector<uint32_t> ls_logical_ids_in_set_order() const {
-    std::vector<uint32_t> ids;
-    ids.reserve(lss_.ls_id_set().size());
-    for (const auto id : lss_.ls_id_set()) {
-      ids.emplace_back(static_cast<uint32_t>(id));
-    }
-    return ids;
   }
 };
 
-TEST_F(BimapPartialAddedFixture, FixedStatePrunesHiddenPreBoundaryFromLsIdSet) {
+TEST_F(BimapShrinkedStateFixture, ShrinkHidesNonAddedSeries) {
   // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  LabelViewSet ls6_{{"job", "f"}};
-
-  lss_.set_pending_shrink_boundary(shrink_boundary);
 
   // Act
-  const auto new_id = lss_.find_or_emplace(ls6_);
 
   // Assert
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
-  const auto& ls_ids = lss_.ls_id_set();
-  EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
-  EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));
-  EXPECT_GE(ls_ids.size(), 4U);
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{new_id}));
+  EXPECT_EQ(3U, lss_.items_count());
+  EXPECT_EQ(5U, lss_.next_item_index());
 }
 
-TEST_F(BimapPartialAddedFixture, FixedStateLsIdSetOrderStaysSortedByCurrentResolve) {
+TEST_F(BimapShrinkedStateFixture, ShrinkResolveSkipsNonAddedSeries) {
   // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  lss_.set_pending_shrink_boundary(shrink_boundary);
-
-  // Act
-  const std::vector<uint32_t> ids_in_tree_order = ls_logical_ids_in_set_order();
-
-  // Assert
-  EXPECT_TRUE(
-      std::ranges::is_sorted(ids_in_tree_order, [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
-}
-
-TEST_F(BimapPartialAddedFixture, FixedStateSortingIndexSortKeepsCurrentResolveOrder) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  lss_.set_pending_shrink_boundary(shrink_boundary);
-  std::vector<uint32_t> ids = ls_logical_ids_in_set_order();
-
-  // Act
-  std::ranges::reverse(ids);
-  lss_.sorting_index().sort(ids);
-
-  // Assert
-  EXPECT_TRUE(std::ranges::is_sorted(ids, [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
-}
-
-TEST_F(BimapPartialAddedFixture, PartialAddedFindOmitsDeadPreBoundary) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Act
-  const auto find_ls0 = lss_.find(ls0_);
-  const auto find_ls1 = lss_.find(ls1_);
-  const auto find_ls2 = lss_.find(ls2_);
-  const auto find_ls3 = lss_.find(ls3_);
-  const auto find_ls4 = lss_.find(ls4_);
-
-  // Assert
-  EXPECT_FALSE(find_ls0.has_value());
-  EXPECT_TRUE(find_ls1.has_value());
-  EXPECT_EQ(1U, *find_ls1);
-  EXPECT_FALSE(find_ls2.has_value());
-
-  ASSERT_TRUE(find_ls3.has_value());
-  ASSERT_TRUE(find_ls4.has_value());
-  EXPECT_EQ(3U, *find_ls3);
-  EXPECT_EQ(4U, *find_ls4);
-}
-
-TEST_F(BimapPartialAddedFixture, PartialAddedResolveEmptiesDeadSlots) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
 
   // Act
 
@@ -848,29 +645,8 @@ TEST_F(BimapPartialAddedFixture, PartialAddedResolveEmptiesDeadSlots) {
   EXPECT_EQ(ls4_, lss_[4]);
 }
 
-TEST_F(BimapPartialAddedFixture, PartialAddedLsIdSetKeepsAliveOnly) {
+TEST_F(BimapShrinkedStateFixture, ShrinkFindOrEmplaceRecreatesNonAddedSeriesAtBoundary) {
   // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-
-  // Act
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
-
-  // Assert
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
-
-  const auto& ls_ids = lss_.ls_id_set();
-  EXPECT_EQ(3U, ls_ids.size());
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{3U}));
-  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
-  EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
-  EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));
-}
-
-TEST_F(BimapPartialAddedFixture, PartialAddedRecreatePrunedAtOrAfterBoundary) {
-  // Arrange
-  constexpr uint32_t shrink_boundary = 3U;
-  FinalizeShrink(lss_.added_series(), shrink_boundary);
 
   // Act
   const auto recreated_ls0 = lss_.find_or_emplace(ls0_);
@@ -889,62 +665,114 @@ TEST_F(BimapPartialAddedFixture, PartialAddedRecreatePrunedAtOrAfterBoundary) {
   EXPECT_EQ(recreated_ls2, *find_ls2);
 }
 
-class BimapShrinkTwoFixture : public BimapCopierFixtureBase {
- protected:
-  Lss lss_copy_;
-
-  void SetUp() override {
-    lss_.find_or_emplace(ls0_);
-    lss_.find_or_emplace(ls1_);
-    lss_.build_deferred_indexes();
-  }
-
-  void RunFinalizeShrinkWithSnapshot(const BareBones::Vector<uint32_t>& ids_for_copy) {
-    const uint32_t shrink_boundary = lss_.next_item_index();
-    Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
-    copier.copy_added_series_and_build_indexes();
-    lss_.set_pending_shrink_boundary(shrink_boundary);
-    lss_.finalize_copy_and_shrink(lss_copy_, dst_src_ids_mapping_);
-  }
-};
-
-TEST_F(BimapShrinkTwoFixture, FinalizeShrinkSnapshotPreservesLayout) {
+TEST_F(BimapShrinkedStateFixture, ShrinkFindOrEmplaceNewSeriesAppendsAtBoundary) {
   // Arrange
 
   // Act
-  RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
+  const auto ls_id = lss_.find_or_emplace(ls5_);
+  const auto from_find = lss_.find(ls5_);
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(ls0_, lss_[0]));
-  EXPECT_TRUE(std::ranges::equal(ls1_, lss_[1]));
+  EXPECT_EQ(5U, ls_id);
+  ASSERT_TRUE(from_find.has_value());
+  EXPECT_EQ(ls_id, *from_find);
+  EXPECT_EQ(ls5_, lss_[ls_id]);
 }
 
-TEST_F(BimapShrinkTwoFixture, FinalizeShrinkSnapshotKeepsFindWorking) {
+TEST_F(BimapShrinkedStateFixture, ShrinkFindOrEmplaceExistingSeries) {
   // Arrange
-  RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
 
   // Act
-  const auto from_find_first = lss_.find(ls0_);
-  const auto from_find_second = lss_.find(ls1_);
+  const auto ls_id = lss_.find_or_emplace(ls1_);
+  const auto from_find = lss_.find(ls1_);
 
   // Assert
-  ASSERT_TRUE(from_find_first.has_value());
-  ASSERT_TRUE(from_find_second.has_value());
-  EXPECT_EQ(0U, *from_find_first);
-  EXPECT_EQ(1U, *from_find_second);
-  EXPECT_TRUE(std::ranges::equal(ls0_, lss_[*from_find_first]));
-  EXPECT_TRUE(std::ranges::equal(ls1_, lss_[*from_find_second]));
+  EXPECT_EQ(1U, ls_id);
+  ASSERT_TRUE(from_find.has_value());
+  EXPECT_EQ(ls_id, *from_find);
+  EXPECT_EQ(ls1_, lss_[ls_id]);
 }
 
-TEST_F(BimapShrinkTwoFixture, ShrunkTwoSeriesCountMatchesIndices) {
+TEST_F(BimapShrinkedStateFixture, ShrinkLsIdSetKeepsAliveOnly) {
   // Arrange
 
   // Act
-  RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
 
   // Assert
-  EXPECT_EQ(2U, lss_.items_count());
-  EXPECT_EQ(2U, lss_.next_item_index());
+  const auto& ls_ids = lss_.ls_id_set();
+
+  EXPECT_EQ(3U, ls_ids.size());
+
+  using LsIdProxy = typename Lss::LsIdSet::value_type;
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
+  EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{3U}));
+  EXPECT_TRUE(ls_ids.contains(LsIdProxy{4U}));
+}
+
+TEST_F(BimapShrinkedStateFixture, ShrinkLsIdSetIsSorted) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_TRUE(
+      std::ranges::is_sorted(lss_.ls_id_set(), [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
+}
+
+TEST_F(BimapShrinkedStateFixture, ShrinkSortingIndexSortKeepsOrder) {
+  // Arrange
+  std::vector<uint32_t> ids = {4U, 3U, 1U};
+  const std::vector<uint32_t> expected_ids = {1U, 3U, 4U};
+
+  // Act
+  lss_.sorting_index().sort(ids);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::is_sorted(expected_ids, [this](uint32_t lhs, uint32_t rhs) { return std::ranges::lexicographical_compare(lss_[lhs], lss_[rhs]); }));
+  EXPECT_EQ(ids, expected_ids);
+}
+
+TEST_F(BimapShrinkedStateFixture, ShrunkStateCorrectlyResolvesSeries) {
+  // Arrange
+
+  // Act
+  const auto ls3_id = lss_.find(ls3_);
+  const auto ls4_id = lss_.find(ls4_);
+
+  // Assert
+  ASSERT_TRUE(ls3_id.has_value());
+  ASSERT_TRUE(ls4_id.has_value());
+  EXPECT_EQ(kShrinkBoundary, *ls3_id);
+  EXPECT_EQ(kShrinkBoundary + 1, *ls4_id);
+  EXPECT_EQ(ls3_, lss_[*ls3_id]);
+  EXPECT_EQ(ls4_, lss_[*ls4_id]);
+}
+
+TEST_F(BimapShrinkedStateFixture, FindOmitsNonAddedPreBoundarySeries) {
+  // Arrange
+
+  // Act
+  const auto find_ls0 = lss_.find(ls0_);
+  const auto find_ls1 = lss_.find(ls1_);
+  const auto find_ls2 = lss_.find(ls2_);
+  const auto find_ls3 = lss_.find(ls3_);
+  const auto find_ls4 = lss_.find(ls4_);
+
+  // Assert
+  EXPECT_FALSE(find_ls0.has_value());
+
+  EXPECT_TRUE(find_ls1.has_value());
+  EXPECT_EQ(1U, *find_ls1);
+
+  EXPECT_FALSE(find_ls2.has_value());
+
+  ASSERT_TRUE(find_ls3.has_value());
+  EXPECT_EQ(3U, *find_ls3);
+
+  ASSERT_TRUE(find_ls4.has_value());
+  EXPECT_EQ(4U, *find_ls4);
 }
 
 }  // namespace
