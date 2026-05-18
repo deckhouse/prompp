@@ -1,12 +1,9 @@
-#include <optional>
-
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/label_indices_writer.h"
-#include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
@@ -17,7 +14,6 @@ using PromPP::Prometheus::tsdb::index::StreamWriter;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::section_writer::LabelIndicesWriter;
-using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
 using std::operator""sv;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
@@ -44,19 +40,16 @@ class LabelIndicesWriterFixture : public testing::TestWithParam<LabelIndicesWrit
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  std::optional<series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>> index_write_context_;
-  std::optional<LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)>> label_indices_writer_;
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
+  LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)> label_indices_writer_{lss_, index_write_context_, stream_writer_};
 
   void SetUp() final {
     for (auto& label_set : GetParam().label_sets) {
       lss_.find_or_emplace(label_set);
     }
 
-    std::ostringstream stream;
-    StreamWriter<decltype(stream_)> stream_writer{&stream};
-    index_write_context_.emplace(lss_);
-    label_indices_writer_.emplace(lss_, *index_write_context_, stream_writer_);
-    SymbolsWriter<QueryableEncodingBimap, decltype(stream_)>{*index_write_context_, stream_writer}.write();
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
   }
 };
 
@@ -64,8 +57,8 @@ TEST_P(LabelIndicesWriterFixture, Test) {
   // Arrange
 
   // Act
-  label_indices_writer_->write_label_indices();
-  label_indices_writer_->write_label_indices_table();
+  label_indices_writer_.write_label_indices();
+  label_indices_writer_.write_label_indices_table();
 
   // Assert
   EXPECT_EQ(GetParam().expected, stream_.view());
