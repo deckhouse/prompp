@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <optional>
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
@@ -39,18 +38,20 @@ class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> 
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
   SeriesReferencesMap series_references_;
-  std::optional<series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>> index_write_context_;
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
 
   void fill_data(const LabelViewSetList& label_sets, const ChunkMetadataList& chunk_metadata_list) {
     for (auto& label_set : label_sets) {
       lss_.find_or_emplace(label_set);
     }
 
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
+
     std::ostringstream stream;
     StreamWriter<decltype(stream_)> stream_writer{&stream};
-    index_write_context_.emplace(lss_);
-    SymbolsWriter<QueryableEncodingBimap, decltype(stream_)>{*index_write_context_, stream_writer}.write();
-    SeriesWriter<QueryableEncodingBimap, decltype(stream_)> series_writer{lss_, *index_write_context_, series_references_};
+    SymbolsWriter<QueryableEncodingBimap, decltype(stream_)>{index_write_context_, stream_writer}.write();
+    SeriesWriter<QueryableEncodingBimap, decltype(stream_)> series_writer{lss_, index_write_context_, series_references_};
     for (uint32_t ls_id = 0; ls_id < chunk_metadata_list.size(); ++ls_id) {
       series_writer.write(ls_id, chunk_metadata_list[ls_id], stream_writer);
     }
