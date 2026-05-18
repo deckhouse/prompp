@@ -6,7 +6,7 @@ namespace series_data::decoder::decorator {
 
 class FindMaxElementInIterator {
  public:
-  explicit FindMaxElementInIterator(encoder::Sample& sample) : sample_{sample} {}
+  explicit FindMaxElementInIterator(encoder::Sample& sample, const PromPP::Primitives::TimeInterval&) : sample_{sample} {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sample_.value) || value > sample_.value) {

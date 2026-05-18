@@ -353,7 +353,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
 	}, []uint32{0, 1}, []uint32{0, 1})
 
 	// Assert
-	s.Equal([]cppbridge.Sample{{Timestamp: 80, Value: 30.0}, {Timestamp: 180, Value: 50.0}}, samples)
+	s.Equal([]cppbridge.Sample{{Timestamp: 99, Value: 30.0}, {Timestamp: 199, Value: 50.0}}, samples)
 }
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {

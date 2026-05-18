@@ -4,9 +4,9 @@
 
 namespace series_data::decoder::decorator {
 
-class FindLastElement {
+class LastOverTime {
  public:
-  explicit FindLastElement(encoder::Sample& sample) : sample_(sample) {}
+  explicit LastOverTime(encoder::Sample& sample, const PromPP::Primitives::TimeInterval&) : sample_(sample) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
     sample_.value = value;
@@ -17,6 +17,6 @@ class FindLastElement {
   encoder::Sample& sample_;
 };
 
-using LastOverTimeIterator = OverTimeFuncIterator<FindLastElement>;
+using LastOverTimeIterator = OverTimeFuncIterator<LastOverTime>;
 
 }  // namespace series_data::decoder::decorator
