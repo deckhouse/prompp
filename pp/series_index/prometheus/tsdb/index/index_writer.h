@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "prometheus/tsdb/index/toc_writer.h"
 #include "section_writer/label_indices_writer.h"
 #include "section_writer/postings_writer.h"
@@ -83,6 +85,25 @@ class IndexWriter {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_postings_data() const noexcept { return postings_writer_.has_more_data(); }
+
+  void write(Stream& stream) {
+    write_header(stream);
+    write_symbols(stream);
+
+    const std::vector<ChunkMetadata> empty_chunks;
+    for (PromPP::Primitives::LabelSetID ls_id = 0; ls_id < lss_.next_item_index(); ++ls_id) {
+      if (lss_[ls_id].size() == 0) {
+        continue;
+      }
+      write_series(ls_id, empty_chunks, stream);
+    }
+
+    write_label_indices(stream);
+    write_postings(stream, PostingsWriter::kUnlimitedBatchSize);
+    write_label_indices_table(stream);
+    write_postings_table_offsets(stream);
+    write_toc(stream);
+  }
 
  private:
   const QueryableEncodingBimap& lss_;
