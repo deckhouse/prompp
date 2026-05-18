@@ -1,11 +1,9 @@
 #include <gtest/gtest.h>
-#include <optional>
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
-#include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
@@ -15,7 +13,6 @@ using PromPP::Primitives::LabelViewSet;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::SeriesReferencesMap;
-using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
 using std::operator""sv;
 
 using ChunkMetadataList = std::vector<ChunkMetadata>;
@@ -32,24 +29,22 @@ class SeriesWriterFixture : public testing::Test {
   StreamWriter stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
   SeriesReferencesMap series_references_;
-  std::optional<series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>> index_write_context_;
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
 
   void fill_lss_and_symbols(const LabelViewSetList& label_sets) {
     for (auto& label_set : label_sets) {
       lss_.find_or_emplace(label_set);
     }
 
-    std::ostringstream stream;
-    StreamWriter stream_writer{&stream};
-    index_write_context_.emplace(lss_);
-    SymbolsWriter<QueryableEncodingBimap, Stream>{*index_write_context_, stream_writer}.write();
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
   }
 };
 
 TEST_F(SeriesWriterFixture, OneChunk) {
   // Arrange
   fill_lss_and_symbols({{{"job", "cron"}, {"server", "localhost"}}});
-  SeriesWriter series_writer{lss_, *index_write_context_, series_references_};
+  SeriesWriter series_writer{lss_, index_write_context_, series_references_};
 
   // Act
   series_writer.write(0, ChunkMetadataList{{.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0}}, stream_writer_);
@@ -78,7 +73,7 @@ TEST_F(SeriesWriterFixture, MultiplySeriesMultiplyChunks) {
       {{"job", "cron"}, {"server", "remote"}},
       {{"job", "cron"}, {"server", "localhost"}},
   });
-  SeriesWriter series_writer{lss_, *index_write_context_, series_references_};
+  SeriesWriter series_writer{lss_, index_write_context_, series_references_};
   const ChunkMetadataList chunks = {{
       {.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0},
       {.min_timestamp = 2002, .max_timestamp = 4004, .reference = 100},
