@@ -38,6 +38,59 @@ const (
 )
 
 //
+// queryOptimizeType
+//
+
+// queryOptimizeType is the type for query optimization.
+type queryOptimizeType uint8
+
+const (
+	// aggrOptimizeType is the option for aggregated functions optimization.
+	aggrOptimizeType queryOptimizeType = 1 << iota
+
+	// crossSeriesOptimizeType is the option for cross-series functions optimization.
+	crossSeriesOptimizeType
+
+	// noneOptimizeType is the option without any optimization.
+	noneOptimizeType queryOptimizeType = 0
+
+	// allOptimizeType is the option for all functions optimization.
+	allOptimizeType queryOptimizeType = 3
+)
+
+// SetSelectFuncOptimize sets the select func optimization option by name.
+func SetSelectFuncOptimize(opt string) error {
+	switch opt {
+	case "none":
+		selectFuncOptimize = noneOptimizeType
+		return nil
+
+	case "aggr":
+		selectFuncOptimize = aggrOptimizeType
+		return nil
+
+	case "cross":
+		selectFuncOptimize = crossSeriesOptimizeType
+		return nil
+
+	case "all":
+		selectFuncOptimize = allOptimizeType
+		return nil
+
+	default:
+		return fmt.Errorf(
+			"invalid select func optimization option: '%s', valid options are: 'none', 'aggr', 'cross', 'all'", opt,
+		)
+	}
+}
+
+// selectFuncOptimize is the option for selecting functions optimization.
+var selectFuncOptimize = noneOptimizeType
+
+// emptySelectHints is an empty select hints, it's used when no optimization is needed.
+var emptySelectHints = &storage.SelectHints{}
+
+//
 // Querier
 //
 
@@ -55,6 +108,7 @@ type Querier[
 	deduplicatorCtor deduplicatorCtor
 	closer           func() error
 	metrics          *Metrics
+	queryOptimize    queryOptimizeType
 }
 
 // NewQuerier init new [Querier].
@@ -71,6 +125,41 @@ func NewQuerier[
 	closer func() error,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, selectFuncOptimize)
+}
+
+// NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
+func NewQuerierWithOutSelectFuncOptimize[
+	TTask Task,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
+](
+	head THead,
+	deduplicatorCtor deduplicatorCtor,
+	mint, maxt int64,
+	closer func() error,
+	metrics *Metrics,
+) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, noneOptimizeType)
+}
+
+// newQuerierWithSelectFuncOptimize init new [Querier] with select func optimization.
+func newQuerierWithSelectFuncOptimize[
+	TTask Task,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
+](
+	head THead,
+	deduplicatorCtor deduplicatorCtor,
+	mint, maxt int64,
+	closer func() error,
+	metrics *Metrics,
+	queryOptimize queryOptimizeType,
+) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
@@ -78,6 +167,7 @@ func NewQuerier[
 		deduplicatorCtor: deduplicatorCtor,
 		closer:           closer,
 		metrics:          metrics,
+		queryOptimize:    queryOptimize,
 	}
 }
 
@@ -280,6 +370,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	hints = q.switchFuncOptimize(hints)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
@@ -301,6 +392,42 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	}
 
 	return NewMergeShardSeriesSet(seriesSets)
+}
+
+// switchFuncOptimize switch the function optimization hints.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) switchFuncOptimize(
+	hints *storage.SelectHints,
+) *storage.SelectHints {
+	switch q.queryOptimize {
+	case noneOptimizeType:
+		return emptySelectHints
+
+	case aggrOptimizeType:
+		if isCrossSeriesFunc(hints) {
+			return emptySelectHints
+		}
+
+		return hints
+
+	case crossSeriesOptimizeType:
+		if !isCrossSeriesFunc(hints) {
+			return emptySelectHints
+		}
+
+		return hints
+	case allOptimizeType:
+		return hints
+
+	default:
+		return emptySelectHints
+	}
+}
+
+// isCrossSeriesFunc checks if the function is a cross series function.
+func isCrossSeriesFunc(hints *storage.SelectHints) bool {
+	return (hints.Func == "sum" ||
+		hints.Func == "max" ||
+		hints.Func == "min") && hints.By
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.

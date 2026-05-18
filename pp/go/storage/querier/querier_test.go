@@ -509,3 +509,64 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	s.Equal([]string{}, names)
 	s.Len(anns.AsErrors(), 1)
 }
+
+const (
+	AggrOptimizeType QueryOptimizeType = 1 << iota
+	CrossSeriesOptimizeType
+	SomeSelectFuncOptimizeType
+
+	noneOptimizeType QueryOptimizeType = 0
+	fullOptimizeType QueryOptimizeType = 7
+)
+
+type QueryOptimizeType uint8
+
+func (q *QueryOptimizeType) SetAggrOptimizeType() {
+	*q |= AggrOptimizeType
+}
+
+func (q *QueryOptimizeType) SetSomeSelectFuncOptimizeType() {
+	*q |= SomeSelectFuncOptimizeType
+}
+
+func (q *QueryOptimizeType) SetCrossSeriesOptimizeType() {
+	*q |= CrossSeriesOptimizeType
+}
+
+func (q *QueryOptimizeType) IsOnlyAggrOptimizeType() bool {
+	return *q^AggrOptimizeType == 0
+}
+
+func (q *QueryOptimizeType) IsOnlyCrossSeriesOptimizeType() bool {
+	return *q^CrossSeriesOptimizeType == 0
+}
+
+func TestXxx(t *testing.T) {
+	querierType := noneOptimizeType
+	t.Log(querierType, querierType&noneOptimizeType)
+
+	querierType.SetAggrOptimizeType()
+	t.Log(querierType, querierType&AggrOptimizeType)
+	t.Log(querierType.IsOnlyAggrOptimizeType())
+	t.Log(querierType.IsOnlyCrossSeriesOptimizeType())
+
+	querierType.SetCrossSeriesOptimizeType()
+	t.Log(querierType, querierType&(AggrOptimizeType|CrossSeriesOptimizeType))
+	t.Log(querierType.IsOnlyAggrOptimizeType())
+	t.Log(querierType.IsOnlyCrossSeriesOptimizeType())
+
+	// querierType |= uint8(1) << 1
+	// t.Log(querierType)
+	// querierType |= uint8(1) << 2
+	// t.Log(querierType)
+	// querierType |= uint8(1) << 3
+	// t.Log(querierType)
+	// querierType |= uint8(1) << 4
+	// t.Log(querierType)
+	// querierType |= uint8(1) << 5
+	// t.Log(querierType)
+	// querierType |= uint8(1) << 6
+	// t.Log(querierType)
+	// querierType |= uint8(1) << 7
+	// t.Log(querierType)
+}
