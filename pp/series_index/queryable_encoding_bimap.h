@@ -54,7 +54,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   struct ShrinkState {
     uint32_t shift{0};
     uint32_t pending_shrink_boundary{kPendingShrinkBoundaryNotSet};
-    BareBones::Vector<uint32_t> post_shrink_mapping{};
+    Vector<uint32_t> post_shrink_mapping{};
     PostShrinkSnapshotResolverPtr post_shrink_snapshot_resolver{};
     uint32_t mapped_visible_count{0};
     State state{State::kNormal};
