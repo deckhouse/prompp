@@ -86,4 +86,6 @@ func (e *MessageEncoders) Encode(
 	messages []RWMessage,
 ) {
 	walRemoteWriteEncodeMessage(&e.encoders[encoderIndex], e.lssPointers, messageIndex, messagesCount, messages)
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(messages)
 }

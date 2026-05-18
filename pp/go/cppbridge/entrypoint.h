@@ -500,6 +500,11 @@ extern "C" {
 #endif
 
 /**
+ * @brief Register cpp metrics
+ */
+void prompp_metrics_register();
+
+/**
  * @brief Initialize metrics iterator
  *
  * @param args *MetricIterator

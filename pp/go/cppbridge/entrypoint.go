@@ -3759,6 +3759,12 @@ func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
 	)
 }
 
+func prometheusMetricsRegister() {
+	fastcgo.UnsafeCall0(
+		C.prompp_metrics_register,
+	)
+}
+
 func prometheusMetricsIteratorCtor() CppMetricsIterator {
 	var iterator CppMetricsIterator
 

@@ -21,23 +21,36 @@ import (
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
 //go:generate moq mock/protobuf_writer.go . ProtobufWriter
+//go:generate moq mock/target_segment_id_set_closer.go . TargetSegmentIDSetCloser
 
 //
-// DataSource
+// DataSourceV2
 //
 
-// DataSource is a implementation of data source.
-type DataSource interface {
-	Read(
+// DataSourceV2 a data source of the head shards for sending data through the RemoteWriter..
+type DataSourceV2 interface {
+	// Close write caches and closes the data source and releases the resources.
+	Close() error
+
+	// Init it initializes the data source by reading segments from shards until the required number is reached.
+	Init(ctx context.Context, targetSegmentID uint32) error
+
+	// LSSSnapshots returns the snapshots of the label set storages,
+	// it's used to create message encoders, creating from shard decoder lss snapshots.
+	LSSSnapshots() []*cppbridge.LabelSetSnapshot
+
+	// Next checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
+	Next(
 		ctx context.Context,
-		targetSegmentID uint32,
 		minTimestamp int64,
 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 	) ([]*DecodedSegment, error)
-	LSSSnapshots() []*cppbridge.LabelSetSnapshot
+
+	// NumberOfLSSes returns the number of label set storages.
 	NumberOfLSSes() int
+
+	// WriteCaches writes caches to the buffer and sends the signal to write the caches.
 	WriteCaches()
-	Close() error
 }
 
 //
@@ -110,7 +123,7 @@ func (s *sharder) NumberOfShards() int {
 type Iterator struct {
 	clock                    clockwork.Clock
 	queueConfig              config.QueueConfig
-	dataSource               DataSource
+	dataSource               DataSourceV2
 	protobufWriter           ProtobufWriter
 	targetSegmentIDSetCloser TargetSegmentIDSetCloser
 	metrics                  *DestinationMetrics
@@ -126,7 +139,7 @@ type Iterator struct {
 func newIterator(
 	clock clockwork.Clock,
 	queueConfig config.QueueConfig,
-	dataSource DataSource,
+	dataSource DataSourceV2,
 	targetSegmentIDSetCloser TargetSegmentIDSetCloser,
 	targetSegmentID uint32,
 	readTimeout time.Duration,
@@ -169,7 +182,7 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) (*batch, error) {
+func (i *Iterator) Next(ctx context.Context) (*batch, error) { //revive:disable-line:unexported-return
 	if i.endOfBlockReached {
 		return nil, i.wrapError(nil)
 	}
@@ -192,7 +205,7 @@ readLoop:
 		}
 
 		readStartTime := i.clock.Now()
-		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp(), b.segmentSampleStorages)
+		decodedSegments, err := i.dataSource.Next(ctx, i.minTimestamp(), b.segmentSampleStorages)
 		i.metrics.readSegmentDuration.Observe(i.clock.Since(readStartTime).Seconds())
 
 		if err != nil {
@@ -212,7 +225,7 @@ readLoop:
 		}
 
 		b.add(decodedSegments)
-		i.targetSegmentID++
+		i.setTargetSegmentID(decodedSegments)
 
 		if b.IsFilled() {
 			break readLoop
@@ -242,7 +255,8 @@ readLoop:
 	// so we can predict number of samples per scrape interval as
 	// scrapeInterval / readDuration * numberOfSamplesInBatch
 	// next step is to divide it by max samples per shard to get desired number of shards.
-	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) * float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
+	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) *
+		float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
 
 	numberOfMessages := math.Ceil(float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()))
 	bestNumberOfShards := i.outputSharder.BestNumberOfShards(numberOfMessages)
@@ -266,8 +280,14 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 	}(i.clock.Now())
 
 	encodersCount := b.numberOfShards
-	messages := b.segmentSampleStorages.SplitMessages(uint32(b.maxNumberOfSamplesPerShard), b.targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), b.snapshots)
+	messages := b.segmentSampleStorages.SplitMessages(
+		uint32(b.maxNumberOfSamplesPerShard), // #nosec G115 // no overflow
+		b.TargetSegmentID(),
+	)
+	encoders := cppbridge.NewMessageEncoders(
+		uint64(encodersCount), // #nosec G115 // no overflow
+		b.snapshots,
+	)
 
 	messagesCount := len(messages.Messages)
 	messagesPerEncoder := messagesCount / encodersCount
@@ -288,7 +308,12 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 		go func(encoderIndex, messageIndex, encodeCount int) {
 			defer wg.Done()
 
-			encoders.Encode(encoderIndex, uint64(messageIndex), uint64(encodeCount), messages.Messages)
+			encoders.Encode(
+				encoderIndex,
+				uint64(messageIndex), // #nosec G115 // no overflow
+				uint64(encodeCount),  // #nosec G115 // no overflow
+				messages.Messages,
+			)
 		}(encoderIndex, messageIndex, encodeCount)
 
 		messageIndex += encodeCount
@@ -304,7 +329,6 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 // It is intended to be called from the send stage of the write pipeline.
 func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
-
 	sendersCount := i.outputSharder.max
 
 	sendIteration := 0
@@ -404,6 +428,13 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 	return nil
 }
 
+// setTargetSegmentID sets the target segment id.
+func (i *Iterator) setTargetSegmentID(decodedSegments []*DecodedSegment) {
+	for _, segment := range decodedSegments {
+		i.targetSegmentID = max(i.targetSegmentID, segment.ID+1)
+	}
+}
+
 func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
@@ -430,8 +461,8 @@ func (i *Iterator) Close() error {
 	return errors.Join(i.dataSource.Close(), i.targetSegmentIDSetCloser.Close())
 }
 
+// batch is a accumulate samples from decoded segments.
 type batch struct {
-	segments                   []*DecodedSegment
 	snapshots                  []*cppbridge.LabelSetSnapshot
 	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
@@ -455,6 +486,7 @@ func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int
 	}
 }
 
+// add adds the samples stats to the batch.
 func (b *batch) add(segments []*DecodedSegment) {
 	for _, segment := range segments {
 		b.numberOfSamples += int(segment.SampleCount)
@@ -465,22 +497,27 @@ func (b *batch) add(segments []*DecodedSegment) {
 	}
 }
 
+// IsFilled checks if the batch is filled.
 func (b *batch) IsFilled() bool {
 	return b.numberOfSamples > b.numberOfShards*b.maxNumberOfSamplesPerShard
 }
 
+// IsEmpty checks if the batch is empty.
 func (b *batch) IsEmpty() bool {
 	return b.numberOfSamples == 0
 }
 
+// HasDroppedSamples checks if the batch has dropped samples.
 func (b *batch) HasDroppedSamples() bool {
 	return b.droppedSamplesCount > 0 || b.outdatedSamplesCount > 0
 }
 
+// OutdatedSamplesCount number of outdated samples.
 func (b *batch) OutdatedSamplesCount() uint32 {
 	return b.outdatedSamplesCount
 }
 
+// DroppedSamplesCount number of dropped samples.
 func (b *batch) DroppedSamplesCount() uint32 {
 	return b.droppedSamplesCount
 }
@@ -495,18 +532,22 @@ func (b *batch) DroppedSeriesCount() uint32 {
 	return b.droppedSeriesCount
 }
 
+// NumberOfSamples the total number of samples.
 func (b *batch) NumberOfSamples() int {
 	return b.numberOfSamples
 }
 
+// MaxNumberOfSamplesPerShard the maximum number of samples per shard.
 func (b *batch) MaxNumberOfSamplesPerShard() int {
 	return b.maxNumberOfSamplesPerShard
 }
 
+// NumberOfShards the number of shards.
 func (b *batch) NumberOfShards() int {
 	return b.numberOfShards
 }
 
-func (b *batch) Data() []*DecodedSegment {
-	return b.segments
+// TargetSegmentID the target segment id.
+func (b *batch) TargetSegmentID() uint32 {
+	return b.targetSegmentID
 }
