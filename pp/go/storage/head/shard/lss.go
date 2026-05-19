@@ -11,9 +11,10 @@ import (
 
 // LSS labelset storage for [shard].
 type LSS struct {
-	input                *cppbridge.LabelSetStorage
-	target               *cppbridge.LabelSetStorage
-	snapshot             *cppbridge.LabelSetSnapshot
+	input    *cppbridge.LabelSetStorage
+	target   *cppbridge.LabelSetStorage
+	snapshot *cppbridge.LabelSetSnapshot
+	// writes are unlocked because these fields are read only after rotation completes (no concurrent readers).
 	dstSrcLsIdsMapping   *cppbridge.IdsMapping
 	newToOldLsIdsMapping *cppbridge.IdsMapping
 	mappedSnapshot       *cppbridge.LabelSetSnapshot
@@ -45,6 +46,11 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	bitsetSeries := l.target.BitsetSeries()
 	l.locker.RUnlock()
 
+	// The post-copy writes to destination.dstSrcLsIdsMapping, l.mappedSnapshot
+	// and l.newToOldLsIdsMapping are performed without holding any locker: it is
+	// safe because these fields are read only after the rotation completes (by
+	// [LSS.FinalizeCopyAndShrink] and [Shard.DstSrcLsIdsMapping] from the
+	// post-rotation path).
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
 }
 
@@ -65,6 +71,11 @@ func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) 
 	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 	l.locker.Unlock()
 
+	// The post-copy writes to destination.dstSrcLsIdsMapping, l.mappedSnapshot
+	// and l.newToOldLsIdsMapping are performed without holding any locker: it is
+	// safe because these fields are read only after the rotation completes (by
+	// [LSS.FinalizeCopyAndShrink] and [Shard.DstSrcLsIdsMapping] from the
+	// post-rotation path).
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
 	l.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
 	l.newToOldLsIdsMapping = destination.dstSrcLsIdsMapping
@@ -164,13 +175,6 @@ func (l *LSS) RUnlock() {
 func (l *LSS) ResetSnapshot() {
 	l.snapshot = nil
 	l.once = sync.Once{}
-}
-
-// SetPendingShrinkBoundary sets pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
-// Attention: works only with QueryableEncodingBimap type of LSS.
-// Note: it does not require blocking, because the shrink occurs in the same goroutine.
-func (l *LSS) SetPendingShrinkBoundary(shrinkBoundary uint32) {
-	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 }
 
 // Target returns main [LSS].

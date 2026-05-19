@@ -253,7 +253,8 @@ func (s *Shard) LoadAndQuerySeriesData() (err error) {
 	return nil
 }
 
-// DstSrcLsIdsMapping return ids mapping after lss copying
+// DstSrcLsIdsMapping return ids mapping after lss copying.
+// Note: writes are unlocked because these fields are read only after rotation completes (no concurrent readers).
 func (s *Shard) DstSrcLsIdsMapping() *cppbridge.IdsMapping {
 	return s.lss.dstSrcLsIdsMapping
 }
