@@ -171,6 +171,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Callback>
   void for_each_snapshot_symbol_id(Callback&& callback) const {
+    assert(!is_shrunk() || shrink_state_.post_shrink_snapshot_resolver != nullptr);
     if (!is_shrunk() || !shrink_state_.post_shrink_snapshot_resolver) {
       return;
     }
