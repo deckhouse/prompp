@@ -41,16 +41,60 @@ type QuerierSuite struct {
 	dataDir string
 	context context.Context
 	head    *storage.Head
+
+	timeSeries []storagetest.TimeSeries
+	hints      *prom_storage.SelectHints
+	matcher    *labels.Matcher
 }
 
 func TestQuerierSuite(t *testing.T) {
 	suite.Run(t, new(QuerierSuite))
 }
 
+func (s *QuerierSuite) SetupSuite() {
+	s.timeSeries = []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 20, Value: 10},
+				{Timestamp: 40, Value: 10},
+				{Timestamp: 60, Value: 20},
+				{Timestamp: 80, Value: 30},
+				{Timestamp: 110, Value: 50},
+				{Timestamp: 130, Value: 80},
+				{Timestamp: 150, Value: 130},
+				{Timestamp: 170, Value: 210},
+				{Timestamp: 190, Value: 340},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 10, Value: 1},
+				{Timestamp: 30, Value: 1},
+				{Timestamp: 50, Value: 2},
+				{Timestamp: 70, Value: 3},
+				{Timestamp: 90, Value: 5},
+				{Timestamp: 100, Value: 8},
+				{Timestamp: 120, Value: 13},
+				{Timestamp: 140, Value: 21},
+				{Timestamp: 160, Value: 34},
+				{Timestamp: 180, Value: 55},
+			},
+		},
+	}
+	s.matcher, _ = labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
+}
+
 func (s *QuerierSuite) SetupTest() {
 	s.dataDir = s.createDataDirectory()
 	s.context = context.Background()
 	s.head = s.mustCreateHead(1)
+	s.hints = &prom_storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Range: 100,
+	}
 }
 
 func (s *QuerierSuite) createDataDirectory() string {
@@ -508,4 +552,557 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	// Assert
 	s.Equal([]string{}, names)
 	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestRangeQuerySumOverTimeStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, s.hints.End, nil, nil)
+	defer func() { _ = q.Close() }()
+
+	s.hints.Func = "sum_over_time"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 99, Value: 70},
+					{Timestamp: 199, Value: 810},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 99, Value: 20},
+					{Timestamp: 199, Value: 123},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQuerySumOverTimeStep50() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "sum_over_time"
+	s.hints.Step = 50
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 49, Value: 20},
+					{Timestamp: 99, Value: 50},
+					{Timestamp: 149, Value: 260},
+					{Timestamp: 199, Value: 550},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 49, Value: 4},
+					{Timestamp: 99, Value: 16},
+					{Timestamp: 149, Value: 34},
+					{Timestamp: 199, Value: 89},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryMinOverTimeStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "min_over_time"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 20, Value: 10},
+					{Timestamp: 110, Value: 50},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 10, Value: 1},
+					{Timestamp: 120, Value: 13},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryMinOverTimeStep50() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "min_over_time"
+	s.hints.Step = 50
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 20, Value: 10},
+					{Timestamp: 60, Value: 20},
+					{Timestamp: 110, Value: 50},
+					{Timestamp: 170, Value: 210},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 10, Value: 1},
+					{Timestamp: 70, Value: 3},
+					{Timestamp: 120, Value: 13},
+					{Timestamp: 160, Value: 34},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryMaxOverTimeStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "max_over_time"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryMaxOverTimeStep50() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "max_over_time"
+	s.hints.Step = 50
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 20, Value: 10},
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 150, Value: 130},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 50, Value: 2},
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 140, Value: 21},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryCountOverTimeStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "count_over_time"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 99, Value: 4},
+					{Timestamp: 199, Value: 5},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 99, Value: 6},
+					{Timestamp: 199, Value: 4},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryCountOverTimeStep50() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "count_over_time"
+	s.hints.Step = 50
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 49, Value: 2},
+					{Timestamp: 99, Value: 2},
+					{Timestamp: 149, Value: 3},
+					{Timestamp: 199, Value: 2},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 49, Value: 3},
+					{Timestamp: 99, Value: 3},
+					{Timestamp: 149, Value: 2},
+					{Timestamp: 199, Value: 2},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryLastOverTimeStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "last_over_time"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryLastOverTimeStep50() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "last_over_time"
+	s.hints.Step = 50
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 40, Value: 10},
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 150, Value: 130},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 50, Value: 2},
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 140, Value: 21},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryRateStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "rate"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 20, Value: 10},
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 110, Value: 50},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 10, Value: 1},
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 120, Value: 13},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryRateStep50() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "rate"
+	s.hints.Step = 50
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 20, Value: 10},
+					{Timestamp: 40, Value: 10},
+					{Timestamp: 60, Value: 20},
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 110, Value: 50},
+					{Timestamp: 150, Value: 130},
+					{Timestamp: 170, Value: 210},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 10, Value: 1},
+					{Timestamp: 50, Value: 2},
+					{Timestamp: 70, Value: 3},
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 120, Value: 13},
+					{Timestamp: 140, Value: 21},
+					{Timestamp: 160, Value: 34},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryIRateStep100() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "irate"
+	s.hints.Step = 100
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 60, Value: 20},
+					{Timestamp: 80, Value: 30},
+					{Timestamp: 170, Value: 210},
+					{Timestamp: 190, Value: 340},
+				},
+			},
+			{
+				Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: []cppbridge.Sample{
+					{Timestamp: 90, Value: 5},
+					{Timestamp: 100, Value: 8},
+					{Timestamp: 160, Value: 34},
+					{Timestamp: 180, Value: 55},
+				},
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
+}
+
+func (s *QuerierSuite) TestRangeQueryIRateStep10() {
+	// Arrange
+	s.appendTimeSeries(s.timeSeries)
+	err := querier.SetSelectFuncOptimize("all")
+	s.Require().NoError(err)
+	defer querier.SetDefaultOptimizeType()
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 200, nil, nil)
+	defer func() { _ = q.Close() }()
+	s.hints.Func = "irate"
+	s.hints.Step = 10
+
+	// Act
+	seriesSet := q.Select(s.context, false, s.hints, s.matcher)
+
+	// Assert
+	s.Equal(
+		[]storagetest.TimeSeries{
+			{
+				Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+				Samples: nil,
+			},
+			{
+				Labels:  labels.FromStrings("__name__", "metric", "job", "test2"),
+				Samples: nil,
+			},
+		},
+		storagetest.TimeSeriesFromSeriesSet(seriesSet, true),
+	)
 }

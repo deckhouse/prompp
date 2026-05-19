@@ -164,7 +164,7 @@ func NewQuerier[
 		maxt,
 		closer,
 		metrics,
-		selectFuncOptimize&dropPointOptimizeType,
+		selectFuncOptimize,
 	)
 }
 
@@ -182,7 +182,15 @@ func NewQuerierWithOutSelectFuncOptimize[
 	closer func() error,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, noneOptimizeType)
+	return newQuerierWithSelectFuncOptimize(
+		head,
+		deduplicatorCtor,
+		mint,
+		maxt,
+		closer,
+		metrics,
+		selectFuncOptimize&dropPointOptimizeType,
+	)
 }
 
 // newQuerierWithSelectFuncOptimize init new [Querier] with select func optimization.
