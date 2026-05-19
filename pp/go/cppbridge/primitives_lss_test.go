@@ -537,6 +537,27 @@ func (s *RotateLSSSuite) TestCopyOnRotate() {
 	runtime.KeepAlive(result)
 }
 
+func (s *RotateLSSSuite) TestOldLSSSnapshotFinalizer() {
+	// Arrange
+	newLSS := cppbridge.NewQueryableLssStorage()
+	shrinkBoundary := slices.Max(s.labelSetIDs) + 1
+
+	// Act
+	_ = s.rotate(shrinkBoundary, s.lss, newLSS)
+	runtime.GC()
+	runtime.GC()
+
+	// Assert
+	selector := s.mustQuerySelector(s.matchers)
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	runtime.GC()
+	runtime.GC()
+
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets[:3]), s.convertQueryResultToLabelSets(snapshot, selector))
+
+	runtime.KeepAlive(snapshot)
+}
+
 func (s *RotateLSSSuite) TestCopyOnRotateCheckQueryOnOldSnapshot() {
 	// Arrange
 	newLSS := cppbridge.NewQueryableLssStorage()
