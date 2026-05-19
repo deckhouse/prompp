@@ -82,15 +82,15 @@ func SetSelectFuncOptimize(opt string) error {
 		return nil
 
 	case "drop_point":
-		selectFuncOptimize = dropPointOptimizeType
+		selectFuncOptimize |= dropPointOptimizeType
 		return nil
 
 	case "new_point":
-		selectFuncOptimize = newPointOptimizeType
+		selectFuncOptimize |= newPointOptimizeType
 		return nil
 
 	case "cross":
-		selectFuncOptimize = crossSeriesOptimizeType
+		selectFuncOptimize |= crossSeriesOptimizeType
 		return nil
 
 	case "all":
