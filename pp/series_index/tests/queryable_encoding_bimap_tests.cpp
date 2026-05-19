@@ -307,6 +307,24 @@ TEST_F(BimapFixedStateFixture, FixedStateFindHidesPreBoundarySeries) {
   EXPECT_FALSE(from_find.has_value());
 }
 
+TEST_F(BimapFixedStateFixture, FixedStateCanBeEnteredTwiceForRetry) {
+  // Arrange
+  constexpr uint32_t first_shrink_boundary = 3U;
+  constexpr uint32_t retry_shrink_boundary = 4U;
+
+  // Act
+  lss_.set_pending_shrink_boundary(first_shrink_boundary);
+  lss_.set_pending_shrink_boundary(retry_shrink_boundary);
+
+  // Assert
+  EXPECT_TRUE(lss_.shrink_state().is_fixed());
+  EXPECT_EQ(retry_shrink_boundary, lss_.shrink_state().pending_shrink_boundary);
+  EXPECT_FALSE(lss_.find(ls0_).has_value());
+  EXPECT_FALSE(lss_.find(ls2_).has_value());
+  EXPECT_TRUE(lss_.find(ls1_).has_value());
+  EXPECT_TRUE(lss_.find(ls3_).has_value());
+}
+
 TEST_F(BimapFixedStateFixture, NormalStateFillsNonaddedSeries) {
   // Arrange
 

@@ -63,7 +63,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return state == State::kShrunk; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return state == State::kFixed; }
     PROMPP_ALWAYS_INLINE void enter_fixed_state(uint32_t boundary) noexcept {
-      assert(state == State::kNormal);
+      // Retrying rotation may freeze an already fixed LSS again before final shrink.
+      assert(state != State::kShrunk);
       pending_shrink_boundary = boundary;
       state = State::kFixed;
     }
@@ -158,7 +159,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept {
     assert(boundary <= next_item_index_impl());
-    assert(is_normal());
+    assert(!is_shrunk());
     prune_hidden_series_before_fixed_state(boundary);
     shrink_state_.enter_fixed_state(boundary);
   }
