@@ -70,4 +70,20 @@ TEST_F(IndexWriterShrunkFixture, WritesSameIndexForNormalAndShrunkAllFromSnapsho
   EXPECT_EQ(normal, shrunk);
 }
 
+TEST_F(IndexWriterShrunkFixture, WritesSameIndexForNormalAndShrunkWithSeriesAddedAfterShrink) {
+  // Arrange
+  const LabelViewSet added_after_shrink{{"job", "cron"}, {"server", "remote"}};
+  const auto normal_id = normal_lss_.find_or_emplace(added_after_shrink);
+  const auto shrunk_id = shrunk_lss_.find_or_emplace(added_after_shrink);
+  const auto normal = write_index(normal_lss_);
+
+  // Act
+  const auto shrunk = write_index(shrunk_lss_);
+
+  // Assert
+  EXPECT_EQ(2U, normal_id);
+  EXPECT_EQ(normal_id, shrunk_id);
+  EXPECT_EQ(normal, shrunk);
+}
+
 }  // namespace
