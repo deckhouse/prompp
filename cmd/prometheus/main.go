@@ -2261,7 +2261,7 @@ func readPromPPFeatures(logger log.Logger) {
 func selectFuncOptimization(fvalue string) error {
 	for opt := range strings.SplitSeq(fvalue, "|") {
 		if err := querier.SetSelectFuncOptimize(opt); err != nil {
-			_ = querier.SetSelectFuncOptimize("none") // reset to none if error
+			querier.SetDefaultOptimizeType() // reset to default if error
 			return err
 		}
 	}

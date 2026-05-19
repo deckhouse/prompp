@@ -74,6 +74,9 @@ const (
 	allOptimizeType queryOptimizeType = dropPointOptimizeType | newPointOptimizeType | crossSeriesOptimizeType
 )
 
+// defaultOptimizeType is the default option for selecting functions optimization.
+var defaultOptimizeType = noneOptimizeType
+
 // SetSelectFuncOptimize sets the select func optimization option by name.
 func SetSelectFuncOptimize(opt string) error {
 	switch opt {
@@ -105,8 +108,13 @@ func SetSelectFuncOptimize(opt string) error {
 	}
 }
 
+// SetDefaultOptimizeType set the default option for selecting functions optimization.
+func SetDefaultOptimizeType() {
+	selectFuncOptimize = defaultOptimizeType
+}
+
 // selectFuncOptimize is the option for selecting functions optimization.
-var selectFuncOptimize = noneOptimizeType
+var selectFuncOptimize = defaultOptimizeType
 
 // emptySelectHints is an empty select hints, it's used when no optimization is needed.
 var emptySelectHints = &storage.SelectHints{}
