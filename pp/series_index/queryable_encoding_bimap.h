@@ -83,11 +83,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       rebuild_post_shrink_mapping(new_to_old, invalid_id);
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t ls_id, const BareBones::Bitset& added_series) const noexcept {
-      assert(is_fixed());
-      return ls_id < pending_shrink_boundary && !added_series.is_set(ls_id);
-    }
-
     template <class ValueType, class CurrentStorageResolver>
     [[nodiscard]] PROMPP_ALWAYS_INLINE ValueType resolve_shrunk_series(uint32_t ls_id,
                                                                        CurrentStorageResolver&& resolve_current_storage,
@@ -326,10 +321,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept { return shrink_state_.is_normal(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shrink_state_.is_shrunk(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shrink_state_.is_fixed(); }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t ls_id) const noexcept {
-    return shrink_state_.is_hidden_in_fixed_state(ls_id, added_series_);
-  }
 
   template <class LabelSetLike>
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t emplace_series_and_update_indexes(const LabelSetLike& label_set, size_t mixed_hash) {
