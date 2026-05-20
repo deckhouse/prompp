@@ -278,13 +278,12 @@ TEST_F(WalEncoderDecoderFixture, HeadDecoderLoad_MarksSeriesWithSamplesAsActive)
   // Assert
   ASSERT_TRUE(cpu_id.has_value());
   ASSERT_TRUE(mem_id.has_value());
-  ASSERT_LT(*cpu_id, added_series.size());
-  ASSERT_LT(*mem_id, added_series.size());
+
   EXPECT_TRUE(added_series[*cpu_id]);
   EXPECT_TRUE(added_series[*mem_id]);
 }
 
-TEST_F(WalEncoderDecoderFixture, HeadDecoderLoad_DoesNotMarkSeriesWithoutSamplesAsActive) {
+TEST_F(WalEncoderDecoderFixture, DoesNotMarkSeriesWithoutSamplesAsActive) {
   // Arrange
   const LabelSet active_cpu{{"metric", "cpu"}};
   const LabelSet active_mem{{"metric", "memory"}};
@@ -318,6 +317,56 @@ TEST_F(WalEncoderDecoderFixture, HeadDecoderLoad_DoesNotMarkSeriesWithoutSamples
   // Assert
   ASSERT_TRUE(idle_id.has_value());
   EXPECT_FALSE(idle_is_active);
+}
+
+TEST_F(WalEncoderDecoderFixture, AddedSeriesMatchesSeriesBeforeFirstShrink) {
+  // Arrange
+  const LabelSet active_cpu{{"metric", "cpu"}};
+  const LabelSet active_mem{{"metric", "memory"}};
+  const LabelSet idle_only{{"metric", "idle_only"}};
+  const LabelSet never_seen{{"metric", "never_seen"}};
+
+  Qeb source_lss;
+  source_lss.find_or_emplace(idle_only);
+  source_lss.find_or_emplace(never_seen);
+
+  WalEncoderQeb encoder(source_lss);
+  encoder.add(create_timeseries(active_cpu, {{1000, 1.0}, {2000, 1.1}}));
+  encoder.add(create_timeseries(active_mem, {{1000, 2.0}}));
+
+  std::stringstream stream;
+  stream << encoder;
+  const std::string segment = stream.str();
+
+  Qeb preloaded_lss;
+  preloaded_lss.find_or_emplace(idle_only);
+  preloaded_lss.find_or_emplace(never_seen);
+  std::stringstream preload_stream;
+  preload_stream << preloaded_lss;
+  Qeb restored_lss;
+  preload_stream >> restored_lss;
+  HeadWalDecoder decoder(restored_lss, PromPP::WAL::BasicEncoderVersion::kV3);
+
+  // Act
+  decoder.decode(segment, [&restored_lss](LabelSetID ls_id, Timestamp, double) { restored_lss.mark_active(ls_id); });
+
+  const auto cpu_id = restored_lss.find(active_cpu);
+  const auto mem_id = restored_lss.find(active_mem);
+  const auto idle_id = restored_lss.find(idle_only);
+  const auto never_seen_id = restored_lss.find(never_seen);
+  const auto& added_series = restored_lss.added_series();
+
+  // Assert
+  ASSERT_TRUE(cpu_id.has_value());
+  ASSERT_TRUE(mem_id.has_value());
+  ASSERT_TRUE(idle_id.has_value());
+  ASSERT_TRUE(never_seen_id.has_value());
+
+  EXPECT_TRUE(added_series[*cpu_id]);
+  EXPECT_TRUE(added_series[*mem_id]);
+  EXPECT_FALSE(added_series[*idle_id]);
+  EXPECT_FALSE(added_series[*never_seen_id]);
+  EXPECT_EQ(added_series.popcount(), 2U);
 }
 
 class CreateBasicEncoderFromBasicDecoderFixture : public ::testing::Test {
