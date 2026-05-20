@@ -429,26 +429,31 @@ func isNotWithpout(hints *storage.SelectHints) bool {
 }
 
 // funcOptimizeMap is the map of the function to the query optimization type.
-var funcOptimizeMap = map[string]queryOptimizeType{
-	"sum":             crossSeriesOptimizeType,
-	"max":             crossSeriesOptimizeType,
-	"min":             crossSeriesOptimizeType,
-	"group":           crossSeriesOptimizeType,
-	"count":           newPointOptimizeType,
-	"sum_over_time":   newPointOptimizeType,
-	"max_over_time":   dropPointOptimizeType,
-	"min_over_time":   dropPointOptimizeType,
-	"count_over_time": newPointOptimizeType,
-	"last_over_time":  dropPointOptimizeType,
-	// "last_over_step":  dropPointOptimizeType,
-	"rate":     dropPointOptimizeType,
-	"irate":    dropPointOptimizeType,
-	"delta":    dropPointOptimizeType,
-	"idelta":   dropPointOptimizeType,
-	"increase": dropPointOptimizeType,
-	"resets":   dropPointOptimizeType,
-	"changes":  dropPointOptimizeType,
-}
+var funcOptimizeMap = func() map[string]queryOptimizeType {
+	optimizeType := func(Type cppbridge.PromqlCppFunctionType) queryOptimizeType {
+		switch Type {
+		case cppbridge.PromqlCppThinningFunction:
+			return dropPointOptimizeType
+		case cppbridge.PromqlCppSynthesizingFunction:
+			return newPointOptimizeType
+		case cppbridge.PromqlCppCrossSeriesThinningFunction, cppbridge.PromqlCppCrossSeriesSynthesizingFunction:
+			return crossSeriesOptimizeType
+
+		default:
+			return noneOptimizeType
+		}
+
+	}
+
+	functions := make(map[string]queryOptimizeType)
+	for _, function := range cppbridge.GetPromqlCppFunctions() {
+		if oType := optimizeType(function.Type); oType != noneOptimizeType {
+			functions[function.Name] = oType
+		}
+	}
+
+	return functions
+}()
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
 func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.LabelMatcher {
