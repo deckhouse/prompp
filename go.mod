@@ -43,7 +43,7 @@ require (
 	github.com/ionos-cloud/sdk-go/v6 v6.2.1
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.6
 	github.com/kolo/xmlrpc v0.0.0-20220921171641-a4b6fa1dd06b
 	github.com/linode/linodego v1.40.0
 	github.com/mailru/easyjson v0.7.7
