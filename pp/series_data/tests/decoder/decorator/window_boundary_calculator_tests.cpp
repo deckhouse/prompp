@@ -10,6 +10,7 @@ using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::TimeInterval;
 using PromPP::Primitives::Timestamp;
 using series_data::decoder::kInvalidTimestamp;
+using series_data::decoder::decorator::StepLookbackDeltaWindowCalculator;
 using series_data::decoder::decorator::StepRangeWindowCalculator;
 using series_data::decoder::decorator::WindowBoundaryCalculatorInterface;
 using series_data::decoder::decorator::WindowFunctionIteratorInterface;
@@ -380,6 +381,107 @@ INSTANTIATE_TEST_SUITE_P(RangeLargerThanStepNotDivisibleNoInvertedWindows,
                                                                     TimeInterval{.min = 21, .max = 22},
                                                                     TimeInterval{.min = 23, .max = 30},
                                                                     TimeInterval{.min = 31, .max = 32},
+                                                                }}));
+
+using StepLookbackDeltaWindowCalculatorFixture = WindowBoundaryCalculatorFixture<StepLookbackDeltaWindowCalculator>;
+
+TEST_P(StepLookbackDeltaWindowCalculatorFixture, Test) {
+  test();
+}
+
+INSTANTIATE_TEST_SUITE_P(NoInterval,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 0},
+                                                                        .step = 100,
+                                                                        .lookback_delta = 50,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 0},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(LookbackEqualsStep,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 200},
+                                                                        .step = 100,
+                                                                        .lookback_delta = 100,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 100},
+                                                                    TimeInterval{.min = 101, .max = 200},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(LookbackGreaterThanStep,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 250},
+                                                                        .step = 60,
+                                                                        .lookback_delta = 120,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 120},
+                                                                    TimeInterval{.min = 121, .max = 180},
+                                                                    TimeInterval{.min = 181, .max = 240},
+                                                                    TimeInterval{.min = 241, .max = 250},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(LookbackLessThanStep,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 300},
+                                                                        .step = 100,
+                                                                        .lookback_delta = 60,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 60},
+                                                                    TimeInterval{.min = 61, .max = 160},
+                                                                    TimeInterval{.min = 161, .max = 260},
+                                                                    TimeInterval{.min = 261, .max = 300},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(NonZeroIntervalMin,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 100, .max = 500},
+                                                                        .step = 80,
+                                                                        .lookback_delta = 30,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 101, .max = 130},
+                                                                    TimeInterval{.min = 131, .max = 210},
+                                                                    TimeInterval{.min = 211, .max = 290},
+                                                                    TimeInterval{.min = 291, .max = 370},
+                                                                    TimeInterval{.min = 371, .max = 450},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(PointQueryInterval,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 10, .max = 10},
+                                                                        .step = 100,
+                                                                        .lookback_delta = 60,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 11, .max = 10},
+                                                                }}));
+
+INSTANTIATE_TEST_SUITE_P(SingleWindow,
+                         StepLookbackDeltaWindowCalculatorFixture,
+                         testing::Values(IntervalCalculatorCase{.parameters =
+                                                                    {
+                                                                        .interval{.min = 0, .max = 40},
+                                                                        .step = 100,
+                                                                        .lookback_delta = 60,
+                                                                    },
+                                                                .expected{
+                                                                    TimeInterval{.min = 1, .max = 40},
                                                                 }}));
 
 }  // namespace
