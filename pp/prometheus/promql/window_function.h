@@ -41,6 +41,7 @@ struct Function {
   FunctionType type;
 };
 
+// The order of the functions must match the order in the WindowFunction enum
 constexpr std::array kFunctions = {
     Function{.name = "", .type = FunctionType::kNone},
     Function{.name = "rate", .type = FunctionType::kThinning},
@@ -50,7 +51,7 @@ constexpr std::array kFunctions = {
     Function{.name = "min_over_time", .type = FunctionType::kThinning},
     Function{.name = "max_over_time", .type = FunctionType::kThinning},
     Function{.name = "last_over_time", .type = FunctionType::kThinning},
-    Function{.name = "last_over_step", .type = FunctionType::kThinning},
+    Function{.name = "last_over_step", .type = FunctionType::kSynthesizing},
     Function{.name = "sum_over_time", .type = FunctionType::kSynthesizing},
     Function{.name = "count_over_time", .type = FunctionType::kSynthesizing},
     Function{.name = "delta", .type = FunctionType::kThinning},
