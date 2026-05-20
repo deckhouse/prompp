@@ -694,9 +694,10 @@ func (s *SeriesSetTestSuite) TestLastOverStepFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
-		End:   250,
-		Func:  "last_over_step",
+		Start:         101,
+		End:           250,
+		Func:          "last_over_step",
+		LookbackDelta: 150,
 	}
 
 	// Act
