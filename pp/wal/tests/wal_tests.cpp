@@ -268,7 +268,7 @@ TEST_F(WalEncoderDecoderFixture, HeadDecoderLoad_MarksSeriesWithSamplesAsActive)
   Qeb restored_lss;
   preload_stream >> restored_lss;
   HeadWalDecoder decoder(restored_lss, PromPP::WAL::BasicEncoderVersion::kV3);
-  decoder.decode(segment, [](LabelSetID, Timestamp, double) {});
+  decoder.decode(segment, [&restored_lss](LabelSetID ls_id, Timestamp, double) { restored_lss.mark_active(ls_id); });
 
   // Act
   const auto cpu_id = restored_lss.find(active_cpu);
@@ -308,7 +308,7 @@ TEST_F(WalEncoderDecoderFixture, HeadDecoderLoad_DoesNotMarkSeriesWithoutSamples
   Qeb restored_lss;
   preload_stream >> restored_lss;
   HeadWalDecoder decoder(restored_lss, PromPP::WAL::BasicEncoderVersion::kV3);
-  decoder.decode(segment, [](LabelSetID, Timestamp, double) {});
+  decoder.decode(segment, [&restored_lss](LabelSetID ls_id, Timestamp, double) { restored_lss.mark_active(ls_id); });
   const auto idle_id = restored_lss.find(idle_only);
 
   // Act

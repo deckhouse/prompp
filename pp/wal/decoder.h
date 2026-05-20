@@ -81,12 +81,8 @@ class GenericDecoder {
   PROMPP_ALWAYS_INLINE void decode(Input& in, SegmentProcessor&& processor) {
     std::ispanstream(std::string_view(in.data(), in.size())) >> decoder_;
 
-    decoder_.process_segment([this, &processor](Primitives::LabelSetID ls_id, Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
-      if constexpr (requires(LSS& label_set, uint32_t id) { label_set.mark_active(id); }) {
-        label_set_.mark_active(ls_id);
-      }
-      processor(ls_id, timestamp, value);
-    });
+    decoder_.process_segment([&processor](Primitives::LabelSetID ls_id, Primitives::Timestamp timestamp, double value)
+                                 PROMPP_LAMBDA_INLINE { processor(ls_id, timestamp, value); });
   }
 
   // decode_to_hashdex decoding incoming data and add to hashdex with metadata.
@@ -105,10 +101,7 @@ class GenericDecoder {
     inspan >> decoder_;
     BareBones::Vector<Primitives::Sample> samples;
     uint32_t last_ls_id = std::numeric_limits<uint32_t>::max();
-    decoder_.process_segment([this, &last_ls_id, &samples, &container](uint32_t ls_id, int64_t ts, double v) PROMPP_LAMBDA_INLINE {
-      if constexpr (requires(LSS& label_set, uint32_t id) { label_set.mark_active(id); }) {
-        label_set_.mark_active(ls_id);
-      }
+    decoder_.process_segment([&last_ls_id, &samples, &container](uint32_t ls_id, int64_t ts, double v) PROMPP_LAMBDA_INLINE {
       if (ls_id != last_ls_id) {
         if (!samples.empty()) {
           container.emplace_back(samples, last_ls_id, false);
