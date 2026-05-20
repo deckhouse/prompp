@@ -15,7 +15,7 @@ class LastOverStep {
 
   ~LastOverStep() {
     if (sample_.timestamp != kInvalidTimestamp) [[likely]] {
-      sample_.timestamp = interval_.max - 1;
+      sample_.timestamp = interval_.max;
     }
   }
 

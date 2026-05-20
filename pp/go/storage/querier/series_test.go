@@ -581,7 +581,7 @@ func (s *SeriesSetTestSuite) TestMinOverTimeFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 101,
 		End:   200,
 		Func:  "min_over_time",
 	}
@@ -711,7 +711,7 @@ func (s *SeriesSetTestSuite) TestLastOverStepFunc() {
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
-				{Timestamp: 249, Value: 3.0},
+				{Timestamp: 250, Value: 3.0},
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -749,7 +749,7 @@ func (s *SeriesSetTestSuite) TestSumOverTimeFunc() {
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
-				{Timestamp: 249, Value: 6.0},
+				{Timestamp: 250, Value: 6.0},
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -769,7 +769,7 @@ func (s *SeriesSetTestSuite) TestCountOverTimeFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 101,
 		End:   200,
 		Func:  "count_over_time",
 	}
@@ -786,7 +786,7 @@ func (s *SeriesSetTestSuite) TestCountOverTimeFunc() {
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
-				{Timestamp: 199, Value: 2.0},
+				{Timestamp: 200, Value: 2.0},
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))

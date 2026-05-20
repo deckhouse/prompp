@@ -72,7 +72,7 @@ INSTANTIATE_TEST_SUITE_P(
     LastOverStepFixture,
     testing::Values(LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
                                              .interval{.min = 0, .max = 100},
-                                             .expected{Sample{.timestamp = 99, .value = 1.0}}},
+                                             .expected{Sample{.timestamp = 100, .value = 1.0}}},
                     LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
                     LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 
@@ -86,7 +86,7 @@ INSTANTIATE_TEST_SUITE_P(
                                                  Sample{.timestamp = 30, .value = 1.1},
                                              },
                                              .interval{.min = 0, .max = 100},
-                                             .expected{Sample{.timestamp = 99, .value = 1.1}}},
+                                             .expected{Sample{.timestamp = 100, .value = 1.1}}},
                     LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}}, .interval{.min = 0, .max = 100}, .expected{}}));
 
 INSTANTIATE_TEST_SUITE_P(TimeInterval,
@@ -98,14 +98,14 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                       Sample{.timestamp = 201, .value = 1.1},
                                                                   },
                                                                   .interval{.min = 100, .max = 200},
-                                                                  .expected{Sample{.timestamp = 199, .value = 1.0}}},
+                                                                  .expected{Sample{.timestamp = 200, .value = 1.0}}},
                                          LastOverStepIteratorCase{.samples{
                                                                       Sample{.timestamp = 100, .value = 1.0},
                                                                       Sample{.timestamp = 150, .value = 1.1},
                                                                       Sample{.timestamp = 200, .value = 1.2},
                                                                   },
                                                                   .interval{.min = 100, .max = 200},
-                                                                  .expected{Sample{.timestamp = 199, .value = 1.2}}},
+                                                                  .expected{Sample{.timestamp = 200, .value = 1.2}}},
                                          LastOverStepIteratorCase{.samples{
                                                                       Sample{.timestamp = 100, .value = 1.0},
                                                                       Sample{.timestamp = 150, .value = 1.1},
@@ -113,6 +113,6 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                       Sample{.timestamp = 200, .value = STALE_NAN},
                                                                   },
                                                                   .interval{.min = 100, .max = 200},
-                                                                  .expected{Sample{.timestamp = 199, .value = 1.2}}}));
+                                                                  .expected{Sample{.timestamp = 200, .value = 1.2}}}));
 
 }  // namespace
