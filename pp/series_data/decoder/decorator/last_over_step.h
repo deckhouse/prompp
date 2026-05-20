@@ -8,13 +8,10 @@ class LastOverStep {
  public:
   explicit LastOverStep(encoder::Sample& sample, const PromPP::Primitives::TimeInterval& interval) : sample_(sample), interval_(interval) {}
 
-  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
-    sample_.value = value;
-    sample_.timestamp = timestamp;
-  }
+  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp, double value) const noexcept { sample_.value = value; }
 
   ~LastOverStep() {
-    if (sample_.timestamp != kInvalidTimestamp) [[likely]] {
+    if (!BareBones::Encoding::Gorilla::isstalenan(sample_.value)) [[likely]] {
       sample_.timestamp = interval_.max;
     }
   }
