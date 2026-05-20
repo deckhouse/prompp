@@ -979,11 +979,12 @@ func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s
 				interval = s.Interval
 			}
 			hints := &storage.SelectHints{
-				Start: start,
-				End:   end,
-				Step:  durationMilliseconds(interval),
-				Range: durationMilliseconds(evalRange),
-				Func:  extractFuncFromPath(path),
+				Start:         start,
+				End:           end,
+				Step:          durationMilliseconds(interval),
+				Range:         durationMilliseconds(evalRange),
+				Func:          extractFuncFromPath(path),
+				LookbackDelta: durationMilliseconds(s.LookbackDelta),
 			}
 			evalRange = 0
 			hints.By, hints.Grouping = extractGroupsFromPath(path)

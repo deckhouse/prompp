@@ -440,13 +440,14 @@ var funcOptimizeMap = map[string]queryOptimizeType{
 	"min_over_time":   dropPointOptimizeType,
 	"count_over_time": newPointOptimizeType,
 	"last_over_time":  dropPointOptimizeType,
-	"rate":            dropPointOptimizeType,
-	"irate":           dropPointOptimizeType,
-	"delta":           dropPointOptimizeType,
-	"idelta":          dropPointOptimizeType,
-	"increase":        dropPointOptimizeType,
-	"resets":          dropPointOptimizeType,
-	"changes":         dropPointOptimizeType,
+	// "last_over_step":  dropPointOptimizeType,
+	"rate":     dropPointOptimizeType,
+	"irate":    dropPointOptimizeType,
+	"delta":    dropPointOptimizeType,
+	"idelta":   dropPointOptimizeType,
+	"increase": dropPointOptimizeType,
+	"resets":   dropPointOptimizeType,
+	"changes":  dropPointOptimizeType,
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
