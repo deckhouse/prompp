@@ -442,11 +442,11 @@ var funcOptimizeMap = func() map[string]queryOptimizeType {
 		default:
 			return noneOptimizeType
 		}
-
 	}
 
-	functions := make(map[string]queryOptimizeType)
-	for _, function := range cppbridge.GetPromqlCppFunctions() {
+	cppFunctions := cppbridge.GetPromqlCppFunctions()
+	functions := make(map[string]queryOptimizeType, len(cppFunctions))
+	for _, function := range cppFunctions {
 		if oType := optimizeType(function.Type); oType != noneOptimizeType {
 			functions[function.Name] = oType
 		}

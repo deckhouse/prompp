@@ -1013,7 +1013,7 @@ func extractFuncFromPath(p []parser.Node) string {
 		// or aggregations over a single metric.
 		return ""
 	case *parser.SubqueryExpr:
-		return "last_over_step"
+		return "subquery" // for subquery, we need to optimize the query
 	}
 	return extractFuncFromPath(p[:len(p)-1])
 }
