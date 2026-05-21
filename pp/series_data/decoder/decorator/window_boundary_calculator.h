@@ -7,7 +7,7 @@ namespace series_data::decoder::decorator {
 struct WindowFunctionParameters {
   PromPP::Primitives::TimeInterval interval;
   PromPP::Primitives::Timestamp step;
-  PromPP::Primitives::Timestamp range;
+  PromPP::Primitives::Timestamp range{};
   PromPP::Primitives::Timestamp lookback_delta{};
 };
 
