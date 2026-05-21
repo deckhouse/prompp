@@ -116,7 +116,8 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
 }
 
 extern "C" void prompp_get_promql_optimized_functions(void* res) {
-  using namespace PromPP::Prometheus::promql;
+  using PromPP::Prometheus::promql::FunctionType;
+  using PromPP::Prometheus::promql::kFunctions;
 
   struct GoFunction {
     PromPP::Primitives::Go::String name;
