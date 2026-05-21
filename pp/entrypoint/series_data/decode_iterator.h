@@ -31,13 +31,15 @@ class DecodeIterator {
   using UniversalDecodeIterator = ::series_data::decoder::UniversalDecodeIterator;
   using DownsamplingIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<UniversalDecodeIterator>;
 
-  template <class Iterator>
-  using WindowFunctionIterator =
-      ::series_data::decoder::decorator::WindowFunctionIterator<Iterator, ::series_data::decoder::decorator::StepRangeWindowCalculator>;
+  template <class Iterator,
+            ::series_data::decoder::decorator::WindowBoundaryCalculatorInterface WindowBoundaryCalculator =
+                ::series_data::decoder::decorator::StepRangeWindowCalculator>
+  using WindowFunctionIterator = ::series_data::decoder::decorator::WindowFunctionIterator<Iterator, WindowBoundaryCalculator>;
   using MinOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MinOverTimeIterator>;
   using MaxOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MaxOverTimeIterator>;
   using LastOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverTimeIterator>;
-  using LastOverStepIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverStepIterator>;
+  using LastOverStepIterator =
+      WindowFunctionIterator<::series_data::decoder::decorator::LastOverStepIterator, ::series_data::decoder::decorator::StepLookbackDeltaWindowCalculator>;
   using SumOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::SumOverTimeIterator>;
   using CountOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::CountOverTimeIterator>;
   using RateIterator = WindowFunctionIterator<::series_data::decoder::decorator::RateIterator>;

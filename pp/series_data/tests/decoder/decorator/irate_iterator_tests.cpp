@@ -69,7 +69,9 @@ TEST_P(IRateIteratorFixture, TestReset) {
 
 INSTANTIATE_TEST_SUITE_P(OneSample,
                          IRateIteratorFixture,
-                         testing::Values(IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 100}, .expected{}},
+                         testing::Values(IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
+                                                           .interval{.min = 0, .max = 100},
+                                                           .expected{Sample{.timestamp = 100, .value = 1.0}}},
                                          IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
                                          IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 

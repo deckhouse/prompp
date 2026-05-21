@@ -1,5 +1,11 @@
 package cppbridge
 
+const (
+	PromqlCppThinningFunction                = 1
+	PromqlCppSynthesizingFunction            = 2
+	PromqlCppCrossSeriesSynthesizingFunction = 3
+)
+
 // GetFlavor returns recognized architecture flavor
 //
 //revive:disable:confusing-naming // wrapper
@@ -22,4 +28,8 @@ func GetMemInfo() MemInfo {
 // DumpMemoryProfile Dump C++ allocated memory profile to file
 func DumpMemoryProfile(filename string) bool {
 	return dumpMemoryProfile(filename) == 0
+}
+
+func GetPromqlCppFunctions() []PromqlCppFunction {
+	return getPromqlCppFunctions()
 }

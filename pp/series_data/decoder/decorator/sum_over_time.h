@@ -36,7 +36,7 @@ class SumOfElementsInIterator {
     }
 
     if (sum_.timestamp != kInvalidTimestamp) [[likely]] {
-      sum_.timestamp = interval_.max - 1;
+      sum_.timestamp = interval_.max;
     }
   }
 

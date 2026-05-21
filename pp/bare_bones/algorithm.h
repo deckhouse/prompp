@@ -20,6 +20,11 @@ constexpr bool is_in(const Value& value, Args&&... args) {
   return (... || (value == std::forward<Args>(args)));
 }
 
+template <class ResultType, class... Args>
+constexpr ResultType build_bitmask(Args&&... args) {
+  return (... | static_cast<ResultType>(std::forward<Args>(args)));
+}
+
 template <class Range1, class Range2, class Comparator>
 auto lexicographical_compare_three_way(const Range1& range1, const Range2& range2, Comparator&& comparator) {
   using result_type = decltype(comparator(*range1.begin(), *range2.begin()));

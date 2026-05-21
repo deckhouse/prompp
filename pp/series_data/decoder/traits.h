@@ -1,7 +1,7 @@
 #pragma once
 
+#include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
-#include "series_data/encoder/bit_sequence.h"
 #include "series_data/encoder/sample.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
@@ -20,16 +20,16 @@ class DecodeIteratorSentinel {};
 
 enum class SeekResult : uint8_t {
   kUpdateSample = 1,
-  kNext,
-  kStop,
-  kUpdateSampleNextAndStop,
+  kNext = 2,
+  kStop = 4,
+  kUpdateSampleNextAndStop = 8,
 };
 
 enum class SeekKind : uint8_t {
-  kUpdateSample_Stop = static_cast<uint8_t>(SeekResult::kUpdateSample) | static_cast<uint8_t>(SeekResult::kStop),
-  kNext_Stop = static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop),
-  kAll = static_cast<uint8_t>(SeekResult::kUpdateSample) | static_cast<uint8_t>(SeekResult::kNext) | static_cast<uint8_t>(SeekResult::kStop) |
-         static_cast<uint8_t>(SeekResult::kUpdateSampleNextAndStop),
+  kUpdateSample_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kStop),
+  kNext_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kNext, SeekResult::kStop),
+  kUpdateSample_Next_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop),
+  kAll = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop, SeekResult::kUpdateSampleNextAndStop),
 };
 
 template <class Iterator>

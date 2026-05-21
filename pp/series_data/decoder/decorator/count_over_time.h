@@ -10,14 +10,11 @@ class ElementsCounter {
     sample_.value = 0;
   }
 
-  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double) const noexcept {
-    ++sample_.value;
-    sample_.timestamp = timestamp;
-  }
+  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp, double) const noexcept { ++sample_.value; }
 
   ~ElementsCounter() {
-    if (sample_.timestamp != kInvalidTimestamp) [[likely]] {
-      sample_.timestamp = interval_.max - 1;
+    if (sample_.value != 0) [[likely]] {
+      sample_.timestamp = interval_.max;
     }
   }
 

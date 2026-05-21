@@ -7,10 +7,8 @@ namespace series_data::decoder::decorator {
 struct WindowFunctionParameters {
   PromPP::Primitives::TimeInterval interval;
   PromPP::Primitives::Timestamp step;
-  union {
-    PromPP::Primitives::Timestamp range;
-    PromPP::Primitives::Timestamp lookback_delta;
-  };
+  PromPP::Primitives::Timestamp range{};
+  PromPP::Primitives::Timestamp lookback_delta{};
 };
 
 template <class WindowCalculator>
@@ -100,5 +98,7 @@ struct StepLookbackDeltaWindowCalculator {
     return {.min = current_window.max + 1, .max = std::min(current_window.max + parameters.step, parameters.interval.max)};
   }
 };
+
+static_assert(WindowBoundaryCalculatorInterface<StepLookbackDeltaWindowCalculator>);
 
 }  // namespace series_data::decoder::decorator

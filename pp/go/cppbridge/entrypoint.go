@@ -2070,6 +2070,27 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
+type PromqlCppFunctionType uint8
+
+type PromqlCppFunction struct {
+	Name string
+	Type PromqlCppFunctionType
+}
+
+func getPromqlCppFunctions() []PromqlCppFunction {
+	res := struct {
+		functions []PromqlCppFunction
+	}{nil}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_get_promql_optimized_functions,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.functions
+}
+
 func seriesDataDataStorageQueryV2(
 	dataStorage uintptr,
 	query DataStorageQuery,
