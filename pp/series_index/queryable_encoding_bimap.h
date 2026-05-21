@@ -44,6 +44,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   using PostShrinkSnapshotResolverPtr = std::unique_ptr<PostShrinkSnapshotResolver>;
 
   static constexpr uint32_t kPendingShrinkBoundaryNotSet = std::numeric_limits<uint32_t>::max();
+  static constexpr uint32_t kRebuildBasePercent = 35;
+  static constexpr uint32_t kRebuildBoundaryPercent = 10;
 
   enum class State : uint8_t {
     kNormal = 0,
@@ -346,19 +348,57 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
     assert(boundary <= added_series_.size());
-    bool pruned_anything = false;
+    const auto added_series_size = added_series_.size();
+    const auto active_series_count = static_cast<size_t>(added_series_.popcount());
+
+    if (should_rebuild_before_fixed_state(boundary, added_series_size, active_series_count)) [[unlikely]] {
+      rebuild_before_fixed_state(boundary, added_series_size, active_series_count);
+    } else {
+      erase_before_fixed_state(boundary);
+    }
+
+    sorting_index_.rebuild(next_item_index_impl() - 1);
+  }
+
+  [[nodiscard]] bool should_rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) const noexcept {
+    const auto next_item_index = next_item_index_impl();
+    const auto hidden_series_count = added_series_size - active_series_count;
+    const auto lhs = static_cast<uint64_t>(hidden_series_count) * 100U * next_item_index;
+    const auto rhs = static_cast<uint64_t>(added_series_size) * (kRebuildBasePercent * next_item_index + kRebuildBoundaryPercent * boundary);
+    return lhs >= rhs;
+  }
+
+  void erase_before_fixed_state(uint32_t boundary) noexcept {
     for (const auto zero_id : added_series_.zeroes()) {
-      if (zero_id >= boundary) {
+      if (zero_id >= boundary) [[unlikely]] {
         break;
       }
+
       const auto proxy = typename Base::Proxy(zero_id);
       ls_id_hash_set_.erase(proxy);
       ls_id_set_.erase(proxy);
-      pruned_anything = true;
+    }
+  }
+
+  void rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) noexcept {
+    ls_id_set_.clear();
+    ls_id_hash_set_.clear();
+    ls_id_hash_set_.reserve(active_series_count + added_series_size - boundary);
+
+    const auto hasher = this->hasher();
+    for (const auto ls_id : added_series_) {
+      if (ls_id >= boundary) [[unlikely]] {
+        break;
+      }
+      ls_id_set_.emplace(ls_id);
+      const auto label_set = this->operator[](ls_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
     }
 
-    if (pruned_anything) {
-      sorting_index_.rebuild(next_item_index_impl() - 1);
+    for (uint32_t ls_id = boundary; ls_id < added_series_size; ++ls_id) {
+      ls_id_set_.emplace(ls_id);
+      const auto label_set = this->operator[](ls_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
     }
   }
 };
