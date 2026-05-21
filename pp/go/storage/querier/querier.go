@@ -436,7 +436,7 @@ var funcOptimizeMap = func() map[string]queryOptimizeType {
 			return dropPointOptimizeType
 		case cppbridge.PromqlCppSynthesizingFunction:
 			return newPointOptimizeType
-		case cppbridge.PromqlCppCrossSeriesThinningFunction, cppbridge.PromqlCppCrossSeriesSynthesizingFunction:
+		case cppbridge.PromqlCppCrossSeriesSynthesizingFunction:
 			return crossSeriesOptimizeType
 
 		default:
