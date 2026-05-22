@@ -10,6 +10,7 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
+using PromPP::Primitives::Timestamp;
 using series_data::ChunkFinalizer;
 using series_data::DataStorage;
 using series_data::Encoder;
@@ -23,6 +24,9 @@ using series_data::querier::QueriedChunkList;
 using series_data::serialization::DataSerializer;
 using series_data::serialization::SerializedData;
 using series_data::serialization::SerializedDataView;
+
+using series_data::decoder::SeekKind;
+using series_data::decoder::SeekResult;
 
 class SerializerDeserializerTrait {
  protected:
@@ -1049,6 +1053,246 @@ TEST_F(SerializedDataIterFixture, ResetIteratorToAnotherSerializedData) {
       std::ranges::equal(std::ranges::subrange(iter, DecodeIteratorSentinel{}),
                          std::initializer_list{Sample{.timestamp = 1, .value = 1.0}, Sample{.timestamp = 2, .value = 1.1}, Sample{.timestamp = 3, .value = 1.2},
                                                Sample{.timestamp = 4, .value = 1.3}, Sample{.timestamp = 5, .value = 1.4}}));
+}
+
+class SerializedDataIterSeekFixture : public SerializerDeserializerTrait, public testing::Test {
+ protected:
+  SerializedData serialized_data_;
+
+  SerializedDataView::SeriesIterator create_iterator() noexcept {
+    serialized_data_ = serialize();
+    SerializedDataView serialized_view(serialized_data_);
+
+    auto [series_id, chunk_id] = serialized_view.next_series();
+    return serialized_view.create_series_iterator(chunk_id);
+  }
+};
+
+TEST_F(SerializedDataIterSeekFixture, SeekToLastSampleThroughtChunks) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 5, 1.0);
+  encoder_.encode(0, 6, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek<SeekKind::kAll>([](Timestamp) { return SeekResult::kUpdateSample; });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 6, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, SeekToLastSampleInChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek<SeekKind::kAll>([](Timestamp ts) { return ts == 2 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample; });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 2, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, SeekToSampleInSecondChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 2.0);
+  encoder_.encode(0, 4, 2.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek<SeekKind::kAll>([](Timestamp ts) { return ts == 3 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample; });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 3, .value = 2.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, SeekWithSampleHandler) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek<SeekKind::kAll>([](Timestamp, double value) { return value == 3.0 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample; });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 3, .value = 3.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, SeekWithNextAcrossChunks) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek<SeekKind::kAll>([](Timestamp ts) { return ts == 3 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kNext; });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 3, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, SeekWithStop) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek<SeekKind::kUpdateSample_Stop>([](Timestamp ts) { return ts == 2 ? SeekResult::kStop : SeekResult::kUpdateSample; });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 1, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, ConsecutiveSeekWithUpdateSampleNextAndStop) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 5, 5.0);
+  encoder_.encode(0, 6, 6.0);
+
+  auto iterator = create_iterator();
+
+  const auto seek_and_stop_at = [&iterator](Timestamp target) {
+    iterator.seek<SeekKind::kAll>([target](Timestamp ts) { return ts == target ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample; });
+  };
+
+  // Act
+  seek_and_stop_at(2);
+  const auto sample_after_first_seek = *iterator;
+  seek_and_stop_at(4);
+  const auto sample_after_second_seek = *iterator;
+  seek_and_stop_at(6);
+  const auto sample_after_third_seek = *iterator;
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 2, .value = 2.0}), sample_after_first_seek);
+  EXPECT_EQ((Sample{.timestamp = 4, .value = 4.0}), sample_after_second_seek);
+  EXPECT_EQ((Sample{.timestamp = 6, .value = 6.0}), sample_after_third_seek);
+}
+
+TEST_F(SerializedDataIterSeekFixture, ConsecutiveSeekResumesFromCurrentPosition) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 5, 5.0);
+  encoder_.encode(0, 6, 6.0);
+
+  auto iterator = create_iterator();
+
+  std::vector<Timestamp> seen_on_second_seek;
+  std::vector<Timestamp> seen_on_third_seek;
+
+  // Act
+  iterator.seek<SeekKind::kAll>([](Timestamp ts) { return ts == 2 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample; });
+
+  iterator.seek<SeekKind::kAll>([&seen_on_second_seek](Timestamp ts) {
+    seen_on_second_seek.push_back(ts);
+    return ts == 4 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample;
+  });
+
+  iterator.seek<SeekKind::kAll>([&seen_on_third_seek](Timestamp ts) {
+    seen_on_third_seek.push_back(ts);
+    return ts == 6 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample;
+  });
+
+  // Assert
+  EXPECT_THAT(seen_on_second_seek, testing::ElementsAre(3, 4));
+  EXPECT_THAT(seen_on_third_seek, testing::ElementsAre(5, 6));
+  EXPECT_EQ((Sample{.timestamp = 6, .value = 6.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekFixture, ConsecutiveSeekWithNext) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 5, 5.0);
+  encoder_.encode(0, 6, 6.0);
+
+  auto iterator = create_iterator();
+
+  const auto seek_with_next_and_stop_at = [&iterator](Timestamp target) {
+    iterator.seek<SeekKind::kAll>([target](Timestamp ts) { return ts == target ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kNext; });
+  };
+
+  // Act
+  seek_with_next_and_stop_at(3);
+  const auto sample_after_first_seek = *iterator;
+  seek_with_next_and_stop_at(5);
+  const auto sample_after_second_seek = *iterator;
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 3, .value = 3.0}), sample_after_first_seek);
+  EXPECT_EQ((Sample{.timestamp = 5, .value = 5.0}), sample_after_second_seek);
+}
+
+TEST_F(SerializedDataIterSeekFixture, ConsecutiveSeekAfterStop) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+
+  auto iterator = create_iterator();
+
+  std::vector<Timestamp> seen_on_second_seek;
+
+  // Act
+  iterator.seek<SeekKind::kUpdateSample_Stop>([](Timestamp ts) { return ts == 2 ? SeekResult::kStop : SeekResult::kUpdateSample; });
+
+  const auto sample_after_stop = *iterator;
+
+  iterator.seek<SeekKind::kAll>([&seen_on_second_seek](Timestamp ts) {
+    seen_on_second_seek.push_back(ts);
+    return ts == 4 ? SeekResult::kUpdateSampleNextAndStop : SeekResult::kUpdateSample;
+  });
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 1, .value = 1.0}), sample_after_stop);
+  EXPECT_THAT(seen_on_second_seek, testing::ElementsAre(2, 3, 4));
+  EXPECT_EQ((Sample{.timestamp = 4, .value = 4.0}), *iterator);
 }
 
 }  // namespace

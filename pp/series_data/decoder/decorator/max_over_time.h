@@ -19,6 +19,7 @@ class FindMaxElement {
   encoder::Sample& sample_;
 };
 
-using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElement>;
+template <class Iterator = UniversalDecodeIterator>
+using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElement, Iterator>;
 
 }  // namespace series_data::decoder::decorator
