@@ -16,6 +16,7 @@
 #include "series_data/decoder/decorator/sum_over_time.h"
 #include "series_data/decoder/decorator/window_function_iterator.h"
 #include "series_data/decoder/universal_decode_iterator.h"
+#include "series_data/serialization/serialized_data.h"
 
 namespace entrypoint::series_data {
 
@@ -28,25 +29,26 @@ class DecodeIterator {
  public:
   using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
   using UniversalDecodeIterator = ::series_data::decoder::UniversalDecodeIterator;
-  using DownsamplingIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<UniversalDecodeIterator>;
+  using SeriesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
+  using DownsamplingIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<SeriesIterator>;
 
   template <class Iterator,
             ::series_data::decoder::decorator::WindowBoundaryCalculatorInterface WindowBoundaryCalculator =
                 ::series_data::decoder::decorator::StepRangeWindowCalculator>
   using WindowFunctionIterator = ::series_data::decoder::decorator::WindowFunctionIterator<Iterator, WindowBoundaryCalculator>;
-  using MinOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MinOverTimeIterator>;
-  using MaxOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MaxOverTimeIterator>;
-  using LastOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverTimeIterator>;
-  using LastOverStepIterator =
-      WindowFunctionIterator<::series_data::decoder::decorator::LastOverStepIterator, ::series_data::decoder::decorator::StepLookbackDeltaWindowCalculator>;
-  using SumOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::SumOverTimeIterator>;
-  using RateIterator = WindowFunctionIterator<::series_data::decoder::decorator::RateIterator>;
-  using IRateIterator = WindowFunctionIterator<::series_data::decoder::decorator::IRateIterator>;
-  using ChangesIterator = WindowFunctionIterator<::series_data::decoder::decorator::ChangesIterator>;
-  using DeltaIterator = WindowFunctionIterator<::series_data::decoder::decorator::DeltaIterator>;
-  using ResetsIterator = WindowFunctionIterator<::series_data::decoder::decorator::ResetsIterator>;
+  using MinOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MinOverTimeIterator<SeriesIterator>>;
+  using MaxOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::MaxOverTimeIterator<SeriesIterator>>;
+  using LastOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverTimeIterator<SeriesIterator>>;
+  using LastOverStepIterator = WindowFunctionIterator<::series_data::decoder::decorator::LastOverStepIterator<SeriesIterator>,
+                                                      ::series_data::decoder::decorator::StepLookbackDeltaWindowCalculator>;
+  using SumOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::SumOverTimeIterator<SeriesIterator>>;
+  using RateIterator = WindowFunctionIterator<::series_data::decoder::decorator::RateIterator<SeriesIterator>>;
+  using IRateIterator = WindowFunctionIterator<::series_data::decoder::decorator::IRateIterator<SeriesIterator>>;
+  using ChangesIterator = WindowFunctionIterator<::series_data::decoder::decorator::ChangesIterator<SeriesIterator>>;
+  using DeltaIterator = WindowFunctionIterator<::series_data::decoder::decorator::DeltaIterator<SeriesIterator>>;
+  using ResetsIterator = WindowFunctionIterator<::series_data::decoder::decorator::ResetsIterator<SeriesIterator>>;
 
-  using IteratorVariant = std::variant<UniversalDecodeIterator,
+  using IteratorVariant = std::variant<SeriesIterator,
                                        DownsamplingIterator,
                                        MinOverTimeIterator,
                                        MaxOverTimeIterator,
@@ -63,11 +65,6 @@ class DecodeIterator {
 
   template <class InPlaceType, class... Args>
   explicit DecodeIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
-
-  PROMPP_ALWAYS_INLINE DecodeIterator& operator=(UniversalDecodeIterator&& it) {
-    std::visit([&it](auto& iterator) PROMPP_LAMBDA_INLINE { iterator = std::move(it); }, iterator_);
-    return *this;
-  }
 
   PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample& operator*() const {
     return std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE -> auto const& { return *iterator; }, iterator_);
@@ -110,9 +107,11 @@ struct SelectHints {
   PromPP::Prometheus::promql::WindowFunction window_function{PromPP::Prometheus::promql::WindowFunction::kNone};
 };
 
-PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& select_hints, PromPP::Primitives::Timestamp downsampling_ms) {
+PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,
+                                                           const SelectHints& select_hints,
+                                                           PromPP::Primitives::Timestamp downsampling_ms) {
   if (downsampling_ms != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
-    return DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, downsampling_ms);
+    return DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, std::move(iterator), downsampling_ms);
   }
 
   switch (select_hints.window_function) {
@@ -120,38 +119,38 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& se
 
     case kRate:
     case kIncrease:
-      return DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kIrate:
     case kIdelta:
-      return DecodeIterator(std::in_place_type<DecodeIterator::IRateIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::IRateIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kMinOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kMaxOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::MaxOverTimeIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::MaxOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kLastOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kLastOverStep:
-      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverStepIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverStepIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kSumOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kDelta:
-      return DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kResets:
-      return DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kChanges:
-      return DecodeIterator(std::in_place_type<DecodeIterator::ChangesIterator>, select_hints.function_parameters);
+      return DecodeIterator(std::in_place_type<DecodeIterator::ChangesIterator>, std::move(iterator), select_hints.function_parameters);
 
     default:
-      return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
+      return DecodeIterator(std::in_place_type<DecodeIterator::SeriesIterator>, std::move(iterator));
   }
 }
 

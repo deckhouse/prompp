@@ -5,31 +5,18 @@
 
 namespace series_data::decoder::decorator {
 
+template <class Iterator = UniversalDecodeIterator>
 class RateIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
 
   explicit RateIterator(PromPP::Primitives::TimeInterval interval) : interval_(interval) {}
-  explicit RateIterator(UniversalDecodeIterator&& iterator, PromPP::Primitives::TimeInterval interval) : iterator_(iterator), interval_(interval) {
+  explicit RateIterator(Iterator&& iterator, PromPP::Primitives::TimeInterval interval) : iterator_(std::move(iterator)), interval_(interval) {
     seek_to_first_sample();
-  }
-
-  PROMPP_ALWAYS_INLINE RateIterator& operator=(UniversalDecodeIterator&& iterator) {
-    iterator_ = std::move(iterator);
-    counter_reset_ = false;
-    seek_to_first_sample();
-    return *this;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
   PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
-    interval_ = interval;
-    counter_reset_ = false;
-    seek_to_first_sample();
-  }
-
-  PROMPP_ALWAYS_INLINE void reset(UniversalDecodeIterator&& iterator, const PromPP::Primitives::TimeInterval& interval) {
-    iterator_ = std::move(iterator);
     interval_ = interval;
     counter_reset_ = false;
     seek_to_first_sample();
@@ -52,14 +39,14 @@ class RateIterator {
   }
 
  protected:
-  UniversalDecodeIterator iterator_;
+  Iterator iterator_;
   PromPP::Primitives::TimeInterval interval_;
   bool counter_reset_{};
 
   void seek_to_first_sample() {
     bool has_value{};
 
-    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp < interval_.min) {
         return SeekResult::kNext;
       }
@@ -83,7 +70,7 @@ class RateIterator {
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
     bool has_value{};
 
-    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (counter_reset_) [[unlikely]] {
         counter_reset_ = false;
         has_value = true;
