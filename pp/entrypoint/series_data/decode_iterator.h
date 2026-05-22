@@ -4,7 +4,6 @@
 
 #include "prometheus/promql/window_function.h"
 #include "series_data/decoder/decorator/changes_iterator.h"
-#include "series_data/decoder/decorator/count_over_time.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
 #include "series_data/decoder/decorator/irate_iterator.h"
@@ -41,7 +40,6 @@ class DecodeIterator {
   using LastOverStepIterator =
       WindowFunctionIterator<::series_data::decoder::decorator::LastOverStepIterator, ::series_data::decoder::decorator::StepLookbackDeltaWindowCalculator>;
   using SumOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::SumOverTimeIterator>;
-  using CountOverTimeIterator = WindowFunctionIterator<::series_data::decoder::decorator::CountOverTimeIterator>;
   using RateIterator = WindowFunctionIterator<::series_data::decoder::decorator::RateIterator>;
   using IRateIterator = WindowFunctionIterator<::series_data::decoder::decorator::IRateIterator>;
   using ChangesIterator = WindowFunctionIterator<::series_data::decoder::decorator::ChangesIterator>;
@@ -55,7 +53,6 @@ class DecodeIterator {
                                        LastOverTimeIterator,
                                        LastOverStepIterator,
                                        SumOverTimeIterator,
-                                       CountOverTimeIterator,
                                        RateIterator,
                                        IRateIterator,
                                        ChangesIterator,
@@ -143,9 +140,6 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const SelectHints& se
 
     case kSumOverTime:
       return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, select_hints.function_parameters);
-
-    case kCountOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::CountOverTimeIterator>, select_hints.function_parameters);
 
     case kDelta:
       return DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, select_hints.function_parameters);

@@ -19,7 +19,6 @@ enum class WindowFunction : uint8_t {
   kLastOverTime,
   kLastOverStep,
   kSumOverTime,
-  kCountOverTime,
   kDelta,
   kResets,
   kChanges,
@@ -52,7 +51,6 @@ constexpr std::array kFunctions = {
     Function{.name = "last_over_time", .type = FunctionType::kThinning},
     Function{.name = "last_over_step", .type = FunctionType::kSynthesizing},
     Function{.name = "sum_over_time", .type = FunctionType::kSynthesizing},
-    Function{.name = "count_over_time", .type = FunctionType::kSynthesizing},
     Function{.name = "delta", .type = FunctionType::kThinning},
     Function{.name = "resets", .type = FunctionType::kThinning},
     Function{.name = "changes", .type = FunctionType::kThinning},
@@ -90,7 +88,6 @@ constexpr uint32_t function_name_hash(std::string_view str) {
     PROMQL_WINDOW_FUNC_CASE(kLastOverTime)
     PROMQL_WINDOW_FUNC_CASE(kLastOverStep)
     PROMQL_WINDOW_FUNC_CASE(kSumOverTime)
-    PROMQL_WINDOW_FUNC_CASE(kCountOverTime)
     PROMQL_WINDOW_FUNC_CASE(kDelta)
     PROMQL_WINDOW_FUNC_CASE(kResets)
     PROMQL_WINDOW_FUNC_CASE(kChanges)
