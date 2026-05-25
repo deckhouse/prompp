@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <utility>
 
 namespace BareBones {
@@ -20,9 +21,10 @@ constexpr bool is_in(const Value& value, Args&&... args) {
   return (... || (value == std::forward<Args>(args)));
 }
 
-template <class ResultType, class... Args>
-constexpr ResultType build_bitmask(Args&&... args) {
-  return (... | static_cast<ResultType>(std::forward<Args>(args)));
+template <class ResultType, auto... Values>
+constexpr ResultType build_bitmask() {
+  static_assert((... && std::has_single_bit(static_cast<ResultType>(Values))), "each bitmask value must be a power of two");
+  return (... | static_cast<ResultType>(Values));
 }
 
 template <class Range1, class Range2, class Comparator>
