@@ -19,13 +19,14 @@ class RateIterator {
   PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
     interval_ = interval;
     counter_reset_ = false;
+    sample_ = kInvalidSample;
     seek_to_first_sample();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
+  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
+  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return iterator_->timestamp == kInvalidTimestamp; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE RateIterator& operator++() {
     seek_to_next_sample();
@@ -39,14 +40,15 @@ class RateIterator {
   }
 
  protected:
+  static constexpr encoder::Sample kInvalidSample = {.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
+
+  encoder::Sample sample_{kInvalidSample};
   Iterator iterator_;
   PromPP::Primitives::TimeInterval interval_;
   bool counter_reset_{};
 
   void seek_to_first_sample() {
-    bool has_value{};
-
-    iterator_.template seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kNext_Stop_NextAndStop>([this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp < interval_.min) {
         return SeekResult::kNext;
       }
@@ -58,23 +60,19 @@ class RateIterator {
         return SeekResult::kNext;
       }
 
-      has_value = true;
-      return SeekResult::kUpdateSampleNextAndStop;
+      sample_ = encoder::Sample{.timestamp = timestamp, .value = value};
+      return SeekResult::kNextAndStop;
     });
-
-    if (!has_value) [[unlikely]] {
-      iterator_.invalidate_sample();
-    }
   }
 
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
-    bool has_value{};
+    sample_.timestamp = kInvalidTimestamp;
 
-    iterator_.template seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kNext_Stop_NextAndStop>([this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (counter_reset_) [[unlikely]] {
         counter_reset_ = false;
-        has_value = true;
-        return SeekResult::kUpdateSampleNextAndStop;
+        sample_ = encoder::Sample{.timestamp = timestamp, .value = value};
+        return SeekResult::kNextAndStop;
       }
 
       if (timestamp > interval_.max) {
@@ -85,23 +83,19 @@ class RateIterator {
         return SeekResult::kNext;
       }
 
-      if (value < iterator_->value) [[unlikely]] {
+      if (value < sample_.value) [[unlikely]] {
         counter_reset_ = true;
-        if (has_value) {
+        if (sample_.timestamp != kInvalidTimestamp) {
           return SeekResult::kStop;
         }
 
-        has_value = true;
-        return SeekResult::kUpdateSampleNextAndStop;
+        sample_ = encoder::Sample{.timestamp = timestamp, .value = value};
+        return SeekResult::kNextAndStop;
       }
 
-      has_value = true;
-      return SeekResult::kUpdateSample;
+      sample_ = encoder::Sample{.timestamp = timestamp, .value = value};
+      return SeekResult::kNext;
     });
-
-    if (!has_value) [[unlikely]] {
-      iterator_.invalidate_sample();
-    }
   }
 };
 
