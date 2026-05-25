@@ -48,7 +48,7 @@ require (
 	github.com/linode/linodego v1.40.0
 	github.com/mailru/easyjson v0.7.7
 	github.com/miekg/dns v1.1.72
-	github.com/moby/moby/api v1.54.0
+	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.3.0
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f
