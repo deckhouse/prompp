@@ -27,15 +27,12 @@ enum class SeekResult : uint8_t {
 };
 
 enum class SeekKind : uint8_t {
-  kUpdateSample_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kStop),
-  kNext_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kNext, SeekResult::kStop),
-  kNext_Stop_NextAndStop = BareBones::build_bitmask<uint8_t>(SeekResult::kNext, SeekResult::kStop, SeekResult::kNextAndStop),
-  kUpdateSample_Next_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop),
-  kAll = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample,
-                                           SeekResult::kNext,
-                                           SeekResult::kStop,
-                                           SeekResult::kNextAndStop,
-                                           SeekResult::kUpdateSampleNextAndStop),
+  kUpdateSample_Stop = BareBones::build_bitmask<uint8_t, SeekResult::kUpdateSample, SeekResult::kStop>(),
+  kNext_Stop = BareBones::build_bitmask<uint8_t, SeekResult::kNext, SeekResult::kStop>(),
+  kNext_Stop_NextAndStop = BareBones::build_bitmask<uint8_t, SeekResult::kNext, SeekResult::kStop, SeekResult::kNextAndStop>(),
+  kUpdateSample_Next_Stop = BareBones::build_bitmask<uint8_t, SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop>(),
+  kAll = BareBones::
+      build_bitmask<uint8_t, SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop, SeekResult::kNextAndStop, SeekResult::kUpdateSampleNextAndStop>(),
 };
 
 template <class Iterator>

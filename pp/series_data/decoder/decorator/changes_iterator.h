@@ -63,16 +63,18 @@ class ChangesIterator {
 
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
     bool has_changes{};
+    double previous_value = iterator_->value;
 
-    iterator_.template seek<SeekKind::kAll>([&has_changes, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kAll>([&has_changes, &previous_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       using BareBones::Encoding::Gorilla::isstalenan;
 
       if (timestamp > interval_.max) {
         return SeekResult::kStop;
       }
 
-      if (value != iterator_->value) {
+      if (value != previous_value) {
         has_changes = true;
+        previous_value = value;
         return SeekResult::kUpdateSampleNextAndStop;
       }
 
