@@ -16,7 +16,7 @@
     "npm": ">=7.0.0"
   },
   "devDependencies": {
-    "@babel/runtime": "7.26.10",
+    "@babel/runtime": "7.28.6",
     "@rollup/plugin-node-resolve": "16.0.3",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.9",
