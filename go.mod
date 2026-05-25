@@ -19,7 +19,7 @@ require (
 	github.com/digitalocean/godo v1.122.0
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0
-	github.com/envoyproxy/protoc-gen-validate v1.3.0
+	github.com/envoyproxy/protoc-gen-validate v1.3.3
 	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-faker/faker/v4 v4.6.0
@@ -38,16 +38,16 @@ require (
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/consul/api v1.29.4
-	github.com/hashicorp/nomad/api v0.0.0-20260519202851-a7d679bf03ce
+	github.com/hashicorp/nomad/api v0.0.0-20260522071703-d69256f355f5
 	github.com/hetznercloud/hcloud-go/v2 v2.13.1
 	github.com/ionos-cloud/sdk-go/v6 v6.2.1
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.6
 	github.com/kolo/xmlrpc v0.0.0-20220921171641-a4b6fa1dd06b
 	github.com/linode/linodego v1.40.0
 	github.com/mailru/easyjson v0.7.7
-	github.com/miekg/dns v1.1.62
+	github.com/miekg/dns v1.1.72
 	github.com/moby/moby/api v1.54.0
 	github.com/moby/moby/client v0.3.0
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -63,7 +63,7 @@ require (
 	github.com/prometheus/common/assets v0.2.0
 	github.com/prometheus/common/sigv4 v0.1.0
 	github.com/prometheus/exporter-toolkit v0.12.0
-	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.30
+	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.36
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
 	github.com/stretchr/testify v1.11.1
 	github.com/vultr/govultr/v2 v2.17.2
@@ -308,7 +308,7 @@ require (
 	github.com/sivchari/tenv v1.12.1 // indirect
 	github.com/sonatard/noctx v0.1.0 // indirect
 	github.com/sourcegraph/go-diff v0.7.0 // indirect
-	github.com/spf13/afero v1.12.0 // indirect
+	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
