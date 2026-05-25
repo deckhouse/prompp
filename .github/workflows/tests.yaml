@@ -218,6 +218,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
+            -e CI=true \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             -e CGO_CFLAGS="-Wno-error -I/usr/include" \
@@ -309,6 +310,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
+            -e CI=true \
             -e OPT=opt \
             -e SANITIZERS=no_sanitizers \
             -e CGO_CFLAGS="-Wno-error -I/usr/include" \

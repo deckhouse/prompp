@@ -824,7 +824,7 @@ Outer:
 }
 
 func TestDB_e2e(t *testing.T) {
-	t.Skip("upstream tsdb e2e: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
+	testutil.SkipIfCI(t, "upstream tsdb e2e: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
 	const (
 		numDatapoints = 1000
 		numRanges     = 1000
@@ -1089,7 +1089,7 @@ func TestWALSegmentSizeOptions(t *testing.T) {
 // https://github.com/prometheus/prometheus/issues/9846
 // https://github.com/prometheus/prometheus/issues/9859
 func TestWALReplayRaceOnSamplesLoggedBeforeSeries(t *testing.T) {
-	t.Skip("upstream tsdb WAL race: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
+	testutil.SkipIfCI(t, "upstream tsdb WAL race: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
 	const (
 		numRuns                        = 1
 		numSamplesBeforeSeriesCreation = 1000
@@ -1359,7 +1359,7 @@ func TestTombstoneCleanFail(t *testing.T) {
 // and retention limit policies, when triggered at the same time,
 // won't race against each other.
 func TestTombstoneCleanRetentionLimitsRace(t *testing.T) {
-	t.Skip("upstream tsdb tombstone race: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
+	testutil.SkipIfCI(t, "upstream tsdb tombstone race: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}

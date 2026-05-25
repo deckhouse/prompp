@@ -1480,7 +1480,7 @@ func TestDeletedSamplesAndSeriesStillInWALAfterCheckpoint(t *testing.T) {
 }
 
 func TestDelete_e2e(t *testing.T) {
-	t.Skip("upstream tsdb delete e2e: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
+	testutil.SkipIfCI(t, "upstream tsdb delete e2e: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
 	numDatapoints := 1000
 	numRanges := 1000
 	timeInterval := int64(2)
@@ -2664,7 +2664,7 @@ func TestIsolationAppendIDZeroIsNoop(t *testing.T) {
 }
 
 func TestHeadSeriesChunkRace(t *testing.T) {
-	t.Skip("upstream tsdb head chunk race: 1000-iteration stress; too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
+	testutil.SkipIfCI(t, "upstream tsdb head chunk race: 1000-iteration stress; too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
 	for i := 0; i < 1000; i++ {
 		testHeadSeriesChunkRace(t)
 	}

@@ -3882,7 +3882,7 @@ func TestOptionsMethod(t *testing.T) {
 }
 
 func TestTSDBStatus(t *testing.T) {
-	t.Skip("upstream test: api.gatherer = prometheus.DefaultGatherer is polluted by parallel tests in shared CI runners; covered by pp-pkg coverage of the TSDB status API path")
+	testutil.SkipIfCI(t, "upstream test: api.gatherer = prometheus.DefaultGatherer is polluted by parallel tests in shared CI runners; covered by pp-pkg coverage of the TSDB status API path")
 	tsdb := &fakeDB{}
 	tsdbStatusAPI := func(api *API) apiFunc { return api.serveTSDBStatus }
 

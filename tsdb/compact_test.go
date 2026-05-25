@@ -43,6 +43,7 @@ import (
 	"github.com/prometheus/prometheus/tsdb/tombstones"
 	"github.com/prometheus/prometheus/tsdb/tsdbutil"
 	"github.com/prometheus/prometheus/tsdb/wlog"
+	"github.com/prometheus/prometheus/util/testutil"
 )
 
 func TestSplitByRange(t *testing.T) {
@@ -1304,7 +1305,7 @@ func TestDisableAutoCompactions(t *testing.T) {
 // TestCancelCompactions ensures that when the db is closed
 // any running compaction is cancelled to unblock closing the db.
 func TestCancelCompactions(t *testing.T) {
-	t.Skip("upstream tsdb cancel compaction: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
+	testutil.SkipIfCI(t, "upstream tsdb cancel compaction: too slow under -race+coverage in CI; covered by pp-pkg/tsdb")
 	tmpdir := t.TempDir()
 
 	// Create some blocks to fall within the compaction range.
