@@ -52,7 +52,7 @@ constexpr std::array kFunctions = {
     Function{.name = "last_over_step", .type = FunctionType::kNone},
     Function{.name = "sum_over_time", .type = FunctionType::kNone},
     Function{.name = "delta", .type = FunctionType::kNone},
-    Function{.name = "resets", .type = FunctionType::kNone},
+    Function{.name = "resets", .type = FunctionType::kThinning},
     Function{.name = "changes", .type = FunctionType::kThinning},
     Function{.name = "sum", .type = FunctionType::kNone},
     Function{.name = "min", .type = FunctionType::kNone},
