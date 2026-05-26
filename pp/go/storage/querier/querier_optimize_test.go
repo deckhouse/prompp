@@ -1,6 +1,7 @@
 package querier_test
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -242,6 +244,21 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 }
 
 //
+// Constants
+//
+
+const (
+	// defaultStartMs is the default start time.
+	defaultStartMs = 1779290789000
+
+	// defaultStep is the default step.
+	defaultStep = 15 * time.Second
+
+	// defaultCountOfSteps is the default count of steps.
+	defaultCountOfSteps = 480
+)
+
+//
 // modifier
 //
 
@@ -267,15 +284,31 @@ const (
 //
 
 // offset is the offset for query string.
-type offset time.Duration
+type offset struct {
+	duration model.Duration
+	negative bool
+}
+
+// newOffset creates a new [offset].
+func newOffset(duration time.Duration) offset {
+	if duration < 0 {
+		return offset{duration: model.Duration(-duration), negative: true}
+	}
+
+	return offset{duration: model.Duration(duration)}
+}
 
 // String converts the offset to query string.
 func (o offset) String() string {
-	if o == 0 {
+	if o.duration == 0 {
 		return ""
 	}
 
-	return fmt.Sprintf(" offset %s", time.Duration(o))
+	if o.negative {
+		return fmt.Sprintf(" offset -%s", o.duration)
+	}
+
+	return fmt.Sprintf(" offset %s", o.duration)
 }
 
 //
@@ -303,8 +336,8 @@ func (q *queryFunc) toQueryString(metricName string, sq subQuery, mod modifier, 
 
 // subQuery is the struct for subquery.
 type subQuery struct {
-	window      time.Duration
-	step        time.Duration
+	window      model.Duration
+	step        model.Duration
 	defaultStep bool
 }
 
@@ -322,25 +355,87 @@ func (s *subQuery) toQueryString() string {
 }
 
 //
+// query
+//
+
+// queryResult is a result of a query.
+type queryResult struct {
+	qry promql.Query
+	res *promql.Result
+}
+
+// queryRange executes a range query and returns the result.
+func queryRange(
+	ctx context.Context,
+	optimization string,
+	queryEngine *promql.Engine,
+	q prom_storage.Queryable,
+	opts promql.QueryOpts,
+	query string,
+	start, end time.Time,
+	step time.Duration,
+) (*queryResult, error) {
+	if err := querier.SetSelectFuncOptimize(optimization); err != nil {
+		return nil, err
+	}
+
+	qry, err := queryEngine.NewRangeQuery(ctx, q, opts, query, start, end, step)
+	if err != nil {
+		return nil, err
+	}
+
+	res := qry.Exec(ctx)
+	if res.Err != nil {
+		qry.Close()
+		return nil, res.Err
+	}
+
+	return &queryResult{qry: qry, res: res}, nil
+}
+
+// queryInstant executes an instant query and returns the result.
+func queryInstant(
+	ctx context.Context,
+	optimization string,
+	queryEngine *promql.Engine,
+	q prom_storage.Queryable,
+	opts promql.QueryOpts,
+	query string,
+	ts time.Time,
+) (*queryResult, error) {
+	if err := querier.SetSelectFuncOptimize(optimization); err != nil {
+		return nil, err
+	}
+	qry, err := queryEngine.NewInstantQuery(ctx, q, opts, query, ts)
+	if err != nil {
+		return nil, err
+	}
+	res := qry.Exec(ctx)
+	if res.Err != nil {
+		qry.Close()
+		return nil, res.Err
+	}
+
+	return &queryResult{qry: qry, res: res}, nil
+}
+
+//
 // QuerierOptimizeSuite
 //
 
 type QuerierOptimizeSuite struct {
 	suite.Suite
 
-	dataDir     string
-	head        *storage.Head
-	start       time.Time
-	end         time.Time
-	step        time.Duration
-	queryEngine *promql.Engine
-	queryOpts   promql.QueryOpts
-	metricNames []string
-	queryFuncs  []queryFunc
-	steps       []time.Duration
-	subQueries  []subQuery
-	modifiers   []modifier
-	offsets     []offset
+	dataDir string
+	head    *storage.Head
+	start   time.Time
+	end     time.Time
+	step    time.Duration
+
+	lookbackDelta time.Duration
+	queryOpts     promql.QueryOpts
+	metricNames   []string
+	queryFuncs    []queryFunc
 }
 
 func TestQuerieOptimizeSuite(t *testing.T) {
@@ -348,84 +443,30 @@ func TestQuerieOptimizeSuite(t *testing.T) {
 }
 
 func (s *QuerierOptimizeSuite) SetupSuite() {
-	s.start = time.UnixMilli(1779290789000)
-	s.end = time.UnixMilli(1779297989000)
-	s.step = 15 * time.Second
-
-	s.queryFuncs = []queryFunc{
-		// {name: "rate", needRange: true},
-		{name: "irate", needRange: true},
-		// {name: "delta", needRange: true},
-		// // {name: "idelta", needRange: true},
-		// {name: "increase", needRange: true},
-		// {name: "min_over_time", needRange: true},
-		// {name: "max_over_time", needRange: true},
-		// {name: "last_over_time", needRange: true},
-		// {name: "sum_over_time", needRange: true},
-		// {name: "count_over_time", needRange: true},
-		// {name: "resets", needRange: true},
-		// {name: "changes", needRange: true},
-	}
-	s.steps = []time.Duration{
-		// s.step - time.Second,
-		s.step,
-		// (s.step - time.Second) * 2,
-		// s.step * 2,
-		// (s.step - time.Second) * 3,
-		// s.step * 3,
-		// (s.step - time.Second) * 4,
-		// s.step * 4,
-		// (s.step - time.Second) * 5,
-	}
-	s.subQueries = []subQuery{
-		{window: s.step, step: 0},                           // [15s]
-		{window: s.step * 4, step: 0},                       // [60s]
-		{window: s.step*4 - time.Second, step: 0},           // [59s]
-		{window: s.step*4 + time.Second, step: 0},           // [61s]
-		{window: s.step * 4, step: 0, defaultStep: true},    // [60s:]
-		{window: s.step * 4, step: s.step},                  // [60s:15s]
-		{window: s.step * 4, step: s.step - time.Second},    // [60s:14s]
-		{window: s.step * 4, step: s.step + time.Second},    // [60s:16s]
-		{window: s.step * 16, step: s.step * 4},             // [240s:60s]
-		{window: s.step * 16, step: s.step*4 - time.Second}, // [240s:59s]
-		{window: s.step * 16, step: s.step*4 + time.Second}, // [240s:61s]
-		{window: s.step * 4, step: s.step * 8},              // [60s:120s]
-	}
-	s.modifiers = []modifier{
-		modifierNone,
-		// modifier(fmt.Sprintf(modifierAt, s.start.Unix()+(s.end.Unix()-s.start.Unix())/2)), // middle of the range
-		// modifierEnd,
-		// modifierStart,
-	}
-	s.offsets = []offset{
-		offset(0),
-		// offset(5 * time.Minute),
-		// offset(-5 * time.Minute),
-		// offset(10 * time.Minute),
-		// offset(-10 * time.Minute),
-		// offset(20 * time.Minute),
-		// offset(-20 * time.Minute),
-		// offset(30 * time.Minute),
-		// offset(-30 * time.Minute),
-		// offset(60 * time.Minute),
-		// offset(-60 * time.Minute),
-	}
+	s.start = time.UnixMilli(defaultStartMs)
+	s.step = defaultStep
+	s.end = s.start.Add(s.step * 480) // 480 steps
 
 	s.dataDir = s.createDataDirectory()
-	s.head = s.mustCreateHead(1)
+	s.head = s.mustCreateHead(0)
 	s.fillHead()
 
-	lookbackDelta := 5 * time.Minute
-	s.queryEngine = promql.NewEngine(promql.EngineOpts{
-		Logger:                   log.NewNopLogger(),
-		MaxSamples:               10000,
-		Timeout:                  10 * time.Second,
-		LookbackDelta:            lookbackDelta,
-		NoStepSubqueryIntervalFn: func(int64) int64 { return lookbackDelta.Milliseconds() },
-		EnableAtModifier:         true,
-		EnableNegativeOffset:     true,
-	})
-	s.queryOpts = promql.NewPrometheusQueryOpts(false, lookbackDelta)
+	s.lookbackDelta = 5 * time.Minute
+	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
+
+	s.queryFuncs = []queryFunc{
+		// {name: "rate", needRange: true}, // -
+		// {name: "irate", needRange: true}, // -
+		// {name: "delta", needRange: true}, // -
+		// {name: "idelta", needRange: true}, // -
+		// {name: "increase", needRange: true}, // -
+		{name: "min_over_time", needRange: true},  // +
+		{name: "max_over_time", needRange: true},  // +
+		{name: "last_over_time", needRange: true}, // +
+		// {name: "sum_over_time", needRange: true}, // -
+		// {name: "resets", needRange: true}, // -
+		{name: "changes", needRange: true}, // +
+	}
 
 	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
 	s.Require().NoError(err)
@@ -438,7 +479,6 @@ func (s *QuerierOptimizeSuite) SetupSuite() {
 }
 
 func (s *QuerierOptimizeSuite) TearDownSuite() {
-	s.Require().NoError(s.queryEngine.Close())
 	s.Require().NoError(s.head.Close())
 }
 
@@ -507,8 +547,13 @@ func (s *QuerierOptimizeSuite) fillHead() {
 			Labels:  labels.FromStrings("__name__", "counter_metric", "value", "with_stalenan"),
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
 		},
+		{
+			Labels:  labels.FromStrings("__name__", "counter_metric", "value", "with_resets"),
+			Samples: make([]cppbridge.Sample, 0, countOfSamples),
+		},
 	}
 
+	resetsCounter := 1
 	valueCounter := 1
 	for ts := s.start; !ts.After(s.end); ts = ts.Add(s.step) {
 		tsMilli := ts.UnixMilli()
@@ -537,15 +582,102 @@ func (s *QuerierOptimizeSuite) fillHead() {
 				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter + 1)},
 			)
 		}
+		// fmt.Println("timeSeries[5].Samples", timeSeries[5].Samples[len(timeSeries[5].Samples)-1])
 
+		if resetsCounter%10 == 0 {
+			resetsCounter = 1
+		}
+		timeSeries[6].Samples = append(timeSeries[6].Samples,
+			cppbridge.Sample{Timestamp: tsMilli, Value: float64(resetsCounter)},
+		)
+
+		resetsCounter++
 		valueCounter++
 	}
 
 	s.appendTimeSeries(timeSeries)
 }
 
+//
+// MatrixQuerierOptimizeSuiteSuite
+//
+
+type MatrixQuerierOptimizeSuiteSuite struct {
+	QuerierOptimizeSuite
+
+	queryEngine *promql.Engine
+	steps       []time.Duration
+	subQueries  []subQuery
+	modifiers   []modifier
+	offsets     []offset
+}
+
+func TestMatrixQuerierOptimizeSuiteSuite(t *testing.T) {
+	suite.Run(t, new(MatrixQuerierOptimizeSuiteSuite))
+}
+
+func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
+	s.QuerierOptimizeSuite.SetupSuite()
+
+	s.queryEngine = promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               10000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            s.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return s.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
+	})
+
+	s.steps = []time.Duration{
+		s.step - time.Second,
+		s.step,
+		(s.step - time.Second) * 2,
+		s.step * 2,
+		(s.step - time.Second) * 4,
+		s.step * 4,
+		(s.step - time.Second) * 5,
+	}
+	s.subQueries = []subQuery{
+		{window: model.Duration(s.step), step: 0},                               // [15s]
+		{window: model.Duration(s.step * 4), step: 0},                           // [60s]
+		{window: model.Duration(s.step*4 - time.Second), step: 0},               // [59s]
+		{window: model.Duration(s.step*4 + time.Second), step: 0},               // [61s]
+		{window: model.Duration(s.step * 4), step: 0, defaultStep: true},        // [60s:]
+		{window: model.Duration(s.step*16 - time.Second), step: 0},              // [239s]
+		{window: model.Duration(s.step * 16), step: 0},                          // [240s]
+		{window: model.Duration(s.step*16 + time.Second), step: 0},              // [241s]
+		{window: model.Duration(s.step * 16), step: model.Duration(s.step * 4)}, // [240s:60s]
+	}
+	s.modifiers = []modifier{
+		modifierNone,
+		modifier(fmt.Sprintf(modifierAt, s.start.Unix()+(s.end.Unix()-s.start.Unix())/2)), // middle of the range
+		modifierEnd,
+		modifierStart,
+	}
+	s.offsets = []offset{
+		newOffset(0),
+		newOffset(s.end.Sub(s.start) / 2),
+		newOffset(-s.end.Sub(s.start) / 2),
+		newOffset(s.end.Sub(s.start)),
+		newOffset(-s.end.Sub(s.start)),
+	}
+
+	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
+	s.Require().NoError(err)
+
+	names, _, err := q.LabelValues(s.T().Context(), "__name__", &prom_storage.LabelHints{})
+	s.Require().NoError(err)
+
+	s.metricNames = querier.DeduplicateAndSortStringSlices(names)
+	s.Require().NoError(q.Close())
+}
+
+// rangeArgs runs the given function for all combinations of
+// query functions, metric names, steps, subqueries, modifiers and offsets.
+//
 //revive:disable-next-line:cognitive-complexity // matrix test
-func (s *QuerierOptimizeSuite) rangeArgs(fn func(
+func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgs(fn func(
 	qFunc queryFunc,
 	metricName string,
 	step time.Duration,
@@ -569,7 +701,11 @@ func (s *QuerierOptimizeSuite) rangeArgs(fn func(
 	}
 }
 
-func (s *QuerierOptimizeSuite) rangeArgsWithStep(fn func(
+// rangeArgsWithStep runs the given function for all combinations of
+// query functions, metric names, subqueries, modifiers and offsets.
+//
+//revive:disable-next-line:cognitive-complexity // matrix test
+func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgsWithStep(fn func(
 	qFunc queryFunc,
 	metricName string,
 	subq subQuery,
@@ -590,138 +726,126 @@ func (s *QuerierOptimizeSuite) rangeArgsWithStep(fn func(
 	}
 }
 
+// Querier implements the [prom_storage.Queryable] interface.
 func (s *QuerierOptimizeSuite) Querier(mint, maxt int64) (prom_storage.Querier, error) {
 	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
 }
 
-func (s *QuerierOptimizeSuite) TestQuerierOptimizeRange() {
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRange() {
 	ctx := s.T().Context()
 
 	s.rangeArgs(func(qFunc queryFunc, metricName string, step time.Duration, subq subQuery, mod modifier, o offset) {
 		query := qFunc.toQueryString(metricName, subq, mod, o)
 		s.Run(fmt.Sprintf("%s_step_%s", query, step), func() {
-			s.Require().NoError(querier.SetSelectFuncOptimize("none"))
-			qry, err := s.queryEngine.NewRangeQuery(ctx, s, s.queryOpts, query, s.start, s.end, step)
+			res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.start, s.end, step)
 			s.Require().NoError(err)
-			defer qry.Close()
-			res := qry.Exec(ctx)
-			s.Require().NoError(res.Err)
+			defer res.qry.Close()
 
-			s.Require().NoError(querier.SetSelectFuncOptimize("all"))
-			qryOpt, err := s.queryEngine.NewRangeQuery(ctx, s, s.queryOpts, query, s.start, s.end, step)
+			resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, s.start, s.end, step)
 			s.Require().NoError(err)
-			resOpt := qryOpt.Exec(ctx)
-			s.Require().NoError(resOpt.Err)
-			defer qryOpt.Close()
+			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.Value, resOpt.Value)
+			s.Require().Equal(res.res, resOpt.res)
 		})
 	})
 }
 
-func (s *QuerierOptimizeSuite) TestQuerierOptimizeRangeWithStep() {
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeWithStep() {
 	ctx := s.T().Context()
-	w := 20 * time.Minute
-	step := w / 2
+	w := 30 * time.Minute
+	stepWindow := w / 2
 
-	for st, end := s.start, s.start.Add(w); !end.After(s.end); st, end = st.Add(step), end.Add(step) {
-		s.rangeArgs(func(qFunc queryFunc, metricName string, step time.Duration, subq subQuery, mod modifier, o offset) {
-			query := qFunc.toQueryString(metricName, subq, mod, o)
+	for st, end := s.start, s.start.Add(w); !end.After(s.end); st, end = st.Add(stepWindow), end.Add(stepWindow) {
+		s.rangeArgs(func(qFunc queryFunc, mName string, step time.Duration, subq subQuery, mod modifier, o offset) {
+			query := qFunc.toQueryString(mName, subq, mod, o)
 			s.Run(fmt.Sprintf("%s_step_%s", query, step), func() {
-				s.Require().NoError(querier.SetSelectFuncOptimize("none"))
-				qry, err := s.queryEngine.NewRangeQuery(ctx, s, s.queryOpts, query, st, end, step)
+				res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, st, end, step)
 				s.Require().NoError(err)
-				defer qry.Close()
-				res := qry.Exec(ctx)
-				s.Require().NoError(res.Err)
+				defer res.qry.Close()
 
-				s.Require().NoError(querier.SetSelectFuncOptimize("all"))
-				qryOpt, err := s.queryEngine.NewRangeQuery(ctx, s, s.queryOpts, query, st, end, step)
+				resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, st, end, step)
 				s.Require().NoError(err)
-				defer qryOpt.Close()
-				resOpt := qryOpt.Exec(ctx)
-				s.Require().NoError(resOpt.Err)
+				defer resOpt.qry.Close()
 
-				s.Require().Equal(res.Value, resOpt.Value)
+				s.Require().Equal(res.res, resOpt.res)
 			})
 		})
 	}
 }
 
-func (s *QuerierOptimizeSuite) TestQuerierOptimizeInstantStart() {
-	baseCtx := s.T().Context()
-
-	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
-		query := qFunc.toQueryString(metricName, subq, mod, o)
-		s.Run(query, func() {
-			s.Require().NoError(querier.SetSelectFuncOptimize("none"))
-			qry, err := s.queryEngine.NewInstantQuery(baseCtx, s, s.queryOpts, query, s.start)
-			s.Require().NoError(err)
-			defer qry.Close()
-			res := qry.Exec(baseCtx)
-			s.Require().NoError(res.Err)
-
-			s.Require().NoError(querier.SetSelectFuncOptimize("all"))
-			qryOpt, err := s.queryEngine.NewInstantQuery(baseCtx, s, s.queryOpts, query, s.start)
-			s.Require().NoError(err)
-			defer qryOpt.Close()
-			resOpt := qryOpt.Exec(baseCtx)
-			s.Require().NoError(resOpt.Err)
-
-			s.Require().Equal(res.Value, resOpt.Value)
-		})
-	})
-}
-
-func (s *QuerierOptimizeSuite) TestQuerierOptimizeInstantMiddle() {
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantStart() {
 	ctx := s.T().Context()
 
 	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
 		query := qFunc.toQueryString(metricName, subq, mod, o)
 		s.Run(query, func() {
-			s.Require().NoError(querier.SetSelectFuncOptimize("none"))
-			// qry, err := s.queryEngine.NewInstantQuery(ctx, s, s.queryOpts, query, s.start.Add(s.step*90))
-			qry, err := s.queryEngine.NewInstantQuery(ctx, s, s.queryOpts, query, s.start.Add(s.step*3))
+			res, err := queryInstant(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.start)
 			s.Require().NoError(err)
-			defer qry.Close()
-			res := qry.Exec(ctx)
-			s.Require().NoError(res.Err)
+			defer res.qry.Close()
 
-			s.Require().NoError(querier.SetSelectFuncOptimize("all"))
-			qryOpt, err := s.queryEngine.NewInstantQuery(ctx, s, s.queryOpts, query, s.start.Add(s.step*3))
+			resOpt, err := queryInstant(ctx, "all", s.queryEngine, s, s.queryOpts, query, s.start)
 			s.Require().NoError(err)
-			defer qryOpt.Close()
-			resOpt := qryOpt.Exec(ctx)
-			s.Require().NoError(resOpt.Err)
+			defer resOpt.qry.Close()
 
-			s.T().Log(res.Value)
-			s.T().Log(resOpt.Value)
-			s.Require().Equal(res.Value, resOpt.Value)
+			s.Require().Equal(res.res, resOpt.res)
 		})
 	})
 }
 
-func (s *QuerierOptimizeSuite) TestQuerierOptimizeInstantEnd() {
-	baseCtx := s.T().Context()
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantMiddle() {
+	ctx := s.T().Context()
 
 	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
 		query := qFunc.toQueryString(metricName, subq, mod, o)
 		s.Run(query, func() {
-			s.Require().NoError(querier.SetSelectFuncOptimize("none"))
-			qry, err := s.queryEngine.NewInstantQuery(baseCtx, s, s.queryOpts, query, s.end)
+			res, err := queryInstant(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.start.Add(s.step*90))
 			s.Require().NoError(err)
-			defer qry.Close()
-			res := qry.Exec(baseCtx)
-			s.Require().NoError(res.Err)
+			defer res.qry.Close()
 
-			s.Require().NoError(querier.SetSelectFuncOptimize("all"))
-			qryOpt, err := s.queryEngine.NewInstantQuery(baseCtx, s, s.queryOpts, query, s.end)
+			resOpt, err := queryInstant(ctx, "all", s.queryEngine, s, s.queryOpts, query, s.start.Add(s.step*90))
 			s.Require().NoError(err)
-			defer qryOpt.Close()
-			resOpt := qryOpt.Exec(baseCtx)
-			s.Require().NoError(resOpt.Err)
+			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.Value, resOpt.Value)
+			s.Require().Equal(res.res, resOpt.res)
 		})
 	})
 }
+
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantEnd() {
+	ctx := s.T().Context()
+
+	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
+		query := qFunc.toQueryString(metricName, subq, mod, o)
+		s.Run(query, func() {
+			res, err := queryInstant(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.end)
+			s.Require().NoError(err)
+			defer res.qry.Close()
+
+			resOpt, err := queryInstant(ctx, "all", s.queryEngine, s, s.queryOpts, query, s.end)
+			s.Require().NoError(err)
+			defer resOpt.qry.Close()
+
+			s.Require().Equal(res.res, resOpt.res)
+		})
+	})
+}
+
+// func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
+// 	ctx := s.T().Context()
+// 	queryF := "avg_over_time((rate(%s[60s]))[60s:])"
+// 	start := s.start.Add(12 * time.Second)
+// 	for _, metricName := range s.metricNames {
+// 		query := fmt.Sprintf(queryF, metricName)
+// 		s.Run(query, func() {
+// 			res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, start, s.end, s.step)
+// 			s.Require().NoError(err)
+// 			defer res.qry.Close()
+
+// 			resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, start, s.end, s.step)
+// 			s.Require().NoError(err)
+// 			defer resOpt.qry.Close()
+
+// 			s.Require().Equal(res.res, resOpt.res)
+// 		})
+// 	}
+// }
