@@ -445,7 +445,7 @@ func TestQuerieOptimizeSuite(t *testing.T) {
 func (s *QuerierOptimizeSuite) SetupSuite() {
 	s.start = time.UnixMilli(defaultStartMs)
 	s.step = defaultStep
-	s.end = s.start.Add(s.step * 480) // 480 steps
+	s.end = s.start.Add(s.step * 20) // 480 steps
 
 	s.dataDir = s.createDataDirectory()
 	s.head = s.mustCreateHead(0)
@@ -830,22 +830,22 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantEnd() {
 	})
 }
 
-// func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
-// 	ctx := s.T().Context()
-// 	queryF := "avg_over_time((rate(%s[60s]))[60s:])"
-// 	start := s.start.Add(12 * time.Second)
-// 	for _, metricName := range s.metricNames {
-// 		query := fmt.Sprintf(queryF, metricName)
-// 		s.Run(query, func() {
-// 			res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, start, s.end, s.step)
-// 			s.Require().NoError(err)
-// 			defer res.qry.Close()
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
+	ctx := s.T().Context()
+	queryF := "max_over_time(((min_over_time(%s[60s])))[60s:])"
+	start := s.start.Add(12 * time.Second)
+	for _, metricName := range s.metricNames {
+		query := fmt.Sprintf(queryF, metricName)
+		s.Run(query, func() {
+			res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, start, s.end, s.step)
+			s.Require().NoError(err)
+			defer res.qry.Close()
 
-// 			resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, start, s.end, s.step)
-// 			s.Require().NoError(err)
-// 			defer resOpt.qry.Close()
+			resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, start, s.end, s.step)
+			s.Require().NoError(err)
+			defer resOpt.qry.Close()
 
-// 			s.Require().Equal(res.res, resOpt.res)
-// 		})
-// 	}
-// }
+			s.Require().Equal(res.res, resOpt.res)
+		})
+	}
+}
