@@ -67,8 +67,9 @@ class ResetsIterator {
 
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
     bool has_resets{};
+    double previous_value = iterator_->value;
 
-    iterator_.template seek<SeekKind::kAll>([&has_resets, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kAll>([&has_resets, &previous_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp > interval_.max) {
         return SeekResult::kStop;
       }
@@ -77,12 +78,14 @@ class ResetsIterator {
         return SeekResult::kNext;
       }
 
-      if (value < iterator_->value) [[unlikely]] {
+      if (value < previous_value) [[unlikely]] {
         has_resets = true;
+        previous_value = value;
         return SeekResult::kUpdateSampleNextAndStop;
       }
 
-      return SeekResult::kUpdateSample;
+      previous_value = value;
+      return SeekResult::kNext;
     });
 
     if (!has_resets) [[unlikely]] {

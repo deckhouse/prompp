@@ -42,21 +42,21 @@ struct Function {
 // The order of the functions must match the order in the WindowFunction enum
 constexpr std::array kFunctions = {
     Function{.name = "", .type = FunctionType::kNone},
-    Function{.name = "rate", .type = FunctionType::kThinning},
-    Function{.name = "increase", .type = FunctionType::kThinning},
-    Function{.name = "irate", .type = FunctionType::kThinning},
-    Function{.name = "idelta", .type = FunctionType::kThinning},
+    Function{.name = "rate", .type = FunctionType::kNone},
+    Function{.name = "increase", .type = FunctionType::kNone},
+    Function{.name = "irate", .type = FunctionType::kNone},
+    Function{.name = "idelta", .type = FunctionType::kNone},
     Function{.name = "min_over_time", .type = FunctionType::kThinning},
     Function{.name = "max_over_time", .type = FunctionType::kThinning},
     Function{.name = "last_over_time", .type = FunctionType::kThinning},
-    Function{.name = "last_over_step", .type = FunctionType::kSynthesizing},
-    Function{.name = "sum_over_time", .type = FunctionType::kSynthesizing},
-    Function{.name = "delta", .type = FunctionType::kThinning},
-    Function{.name = "resets", .type = FunctionType::kThinning},
+    Function{.name = "last_over_step", .type = FunctionType::kNone},
+    Function{.name = "sum_over_time", .type = FunctionType::kNone},
+    Function{.name = "delta", .type = FunctionType::kNone},
+    Function{.name = "resets", .type = FunctionType::kNone},
     Function{.name = "changes", .type = FunctionType::kThinning},
-    Function{.name = "sum", .type = FunctionType::kCrossSeriesSynthesizing},
-    Function{.name = "min", .type = FunctionType::kCrossSeriesSynthesizing},
-    Function{.name = "max", .type = FunctionType::kCrossSeriesSynthesizing},
+    Function{.name = "sum", .type = FunctionType::kNone},
+    Function{.name = "min", .type = FunctionType::kNone},
+    Function{.name = "max", .type = FunctionType::kNone},
 };
 
 constexpr uint32_t function_name_hash(std::string_view str) {

@@ -1003,6 +1003,11 @@ func extractFuncFromPath(p []parser.Node) string {
 	if len(p) == 0 {
 		return ""
 	}
+
+	if containsSubquery(p) {
+		return "subquery" // for subquery, we need to disable the optimization of the query
+	}
+
 	switch n := p[len(p)-1].(type) {
 	case *parser.AggregateExpr:
 		return n.Op.String()
@@ -1013,9 +1018,20 @@ func extractFuncFromPath(p []parser.Node) string {
 		// or aggregations over a single metric.
 		return ""
 	case *parser.SubqueryExpr:
-		return "subquery" // for subquery, we need to optimize the query
+		return "subquery" // for subquery, we need to disable the optimization of the query
 	}
 	return extractFuncFromPath(p[:len(p)-1])
+}
+
+// containsSubquery checks if the path contains a subquery.
+func containsSubquery(p []parser.Node) bool {
+	for _, n := range p {
+		if _, ok := n.(*parser.SubqueryExpr); ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 // extractGroupsFromPath parses vector outer function and extracts grouping information if by or without was used.
