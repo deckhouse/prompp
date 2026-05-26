@@ -445,7 +445,7 @@ func TestQuerieOptimizeSuite(t *testing.T) {
 func (s *QuerierOptimizeSuite) SetupSuite() {
 	s.start = time.UnixMilli(defaultStartMs)
 	s.step = defaultStep
-	s.end = s.start.Add(s.step * 20) // 480 steps
+	s.end = s.start.Add(s.step * 480) // 480 steps
 
 	s.dataDir = s.createDataDirectory()
 	s.head = s.mustCreateHead(0)
@@ -582,7 +582,6 @@ func (s *QuerierOptimizeSuite) fillHead() {
 				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter + 1)},
 			)
 		}
-		// fmt.Println("timeSeries[5].Samples", timeSeries[5].Samples[len(timeSeries[5].Samples)-1])
 
 		if resetsCounter%10 == 0 {
 			resetsCounter = 1
@@ -596,6 +595,11 @@ func (s *QuerierOptimizeSuite) fillHead() {
 	}
 
 	s.appendTimeSeries(timeSeries)
+}
+
+// Querier implements the [prom_storage.Queryable] interface.
+func (s *QuerierOptimizeSuite) Querier(mint, maxt int64) (prom_storage.Querier, error) {
+	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
 }
 
 //
@@ -724,11 +728,6 @@ func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgsWithStep(fn func(
 			}
 		}
 	}
-}
-
-// Querier implements the [prom_storage.Queryable] interface.
-func (s *QuerierOptimizeSuite) Querier(mint, maxt int64) (prom_storage.Querier, error) {
-	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
 }
 
 func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRange() {
