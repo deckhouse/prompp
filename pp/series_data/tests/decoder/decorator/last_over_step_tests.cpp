@@ -49,34 +49,12 @@ class GenericLastOverStepFixture : public ::testing::TestWithParam<LastOverStepI
     // Assert
     EXPECT_EQ(GetParam().expected, actual_samples);
   }
-
-  void test_reset() {
-    // Arrange
-    std::vector<Sample> actual_samples;
-
-    // Act
-    Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
-      Iterator begin_at_start = begin;
-      LastOverStepIterator iterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval);
-      std::advance(iterator, GetParam().samples.size());
-
-      iterator = UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin_at_start)};
-      std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
-    });
-
-    // Assert
-    EXPECT_EQ(GetParam().expected, actual_samples);
-  }
 };
 
-using LastOverStepFixture = GenericLastOverStepFixture<LastOverStepIterator>;
+using LastOverStepFixture = GenericLastOverStepFixture<LastOverStepIterator<>>;
 
 TEST_P(LastOverStepFixture, Test) {
   test();
-}
-
-TEST_P(LastOverStepFixture, TestReset) {
-  test_reset();
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -127,14 +105,10 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                   .interval{.min = 100, .max = 200},
                                                                   .expected{Sample{.timestamp = 200, .value = 1.2}}}));
 
-using LastOverStepWithStaleNansFixture = GenericLastOverStepFixture<LastOverStepWithStaleNansIterator>;
+using LastOverStepWithStaleNansFixture = GenericLastOverStepFixture<LastOverStepWithStaleNansIterator<>>;
 
 TEST_P(LastOverStepWithStaleNansFixture, Test) {
   test();
-}
-
-TEST_P(LastOverStepWithStaleNansFixture, TestReset) {
-  test_reset();
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -142,24 +116,23 @@ INSTANTIATE_TEST_SUITE_P(
     LastOverStepWithStaleNansFixture,
     testing::Values(LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
                                              .interval{.min = 0, .max = 100},
-                                             .expected{Sample{.timestamp = 99, .value = 1.0}}},
+                                             .expected{Sample{.timestamp = 100, .value = 1.0}}},
                     LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
                     LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 
-INSTANTIATE_TEST_SUITE_P(
-    StaleNan,
-    LastOverStepWithStaleNansFixture,
-    testing::Values(LastOverStepIteratorCase{.samples{
-                                                 Sample{.timestamp = 5, .value = STALE_NAN},
-                                                 Sample{.timestamp = 10, .value = 1.0},
-                                                 Sample{.timestamp = 20, .value = STALE_NAN},
-                                                 Sample{.timestamp = 30, .value = 1.1},
-                                             },
-                                             .interval{.min = 0, .max = 100},
-                                             .expected{Sample{.timestamp = 99, .value = 1.1}}},
-                    LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
-                                             .interval{.min = 0, .max = 100},
-                                             .expected{Sample{.timestamp = 99, .value = STALE_NAN}}}));
+INSTANTIATE_TEST_SUITE_P(StaleNan,
+                         LastOverStepWithStaleNansFixture,
+                         testing::Values(LastOverStepIteratorCase{.samples{
+                                                                      Sample{.timestamp = 5, .value = STALE_NAN},
+                                                                      Sample{.timestamp = 10, .value = 1.0},
+                                                                      Sample{.timestamp = 20, .value = STALE_NAN},
+                                                                      Sample{.timestamp = 30, .value = 1.1},
+                                                                  },
+                                                                  .interval{.min = 0, .max = 100},
+                                                                  .expected{Sample{.timestamp = 100, .value = 1.1}}},
+                                         LastOverStepIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
+                                                                  .interval{.min = 0, .max = 100},
+                                                                  .expected{Sample{.timestamp = 100, .value = STALE_NAN}}}));
 
 INSTANTIATE_TEST_SUITE_P(TimeInterval,
                          LastOverStepWithStaleNansFixture,
@@ -170,14 +143,14 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                       Sample{.timestamp = 201, .value = 1.1},
                                                                   },
                                                                   .interval{.min = 100, .max = 200},
-                                                                  .expected{Sample{.timestamp = 199, .value = 1.0}}},
+                                                                  .expected{Sample{.timestamp = 200, .value = 1.0}}},
                                          LastOverStepIteratorCase{.samples{
                                                                       Sample{.timestamp = 100, .value = 1.0},
                                                                       Sample{.timestamp = 150, .value = 1.1},
                                                                       Sample{.timestamp = 200, .value = 1.2},
                                                                   },
                                                                   .interval{.min = 100, .max = 200},
-                                                                  .expected{Sample{.timestamp = 199, .value = 1.2}}},
+                                                                  .expected{Sample{.timestamp = 200, .value = 1.2}}},
                                          LastOverStepIteratorCase{.samples{
                                                                       Sample{.timestamp = 100, .value = 1.0},
                                                                       Sample{.timestamp = 150, .value = 1.1},
@@ -185,6 +158,6 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
                                                                       Sample{.timestamp = 200, .value = STALE_NAN},
                                                                   },
                                                                   .interval{.min = 100, .max = 200},
-                                                                  .expected{Sample{.timestamp = 199, .value = STALE_NAN}}}));
+                                                                  .expected{Sample{.timestamp = 200, .value = STALE_NAN}}}));
 
 }  // namespace

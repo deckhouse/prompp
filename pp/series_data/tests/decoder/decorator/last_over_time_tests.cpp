@@ -49,24 +49,6 @@ TEST_P(LastOverTimeFixture, Test) {
   EXPECT_EQ(GetParam().expected, actual_samples);
 }
 
-TEST_P(LastOverTimeFixture, TestReset) {
-  // Arrange
-  std::vector<Sample> actual_samples;
-
-  // Act
-  Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
-    Iterator begin_at_start = begin;
-    LastOverTimeIterator iterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval);
-    std::advance(iterator, GetParam().samples.size());
-
-    iterator = UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin_at_start)};
-    std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
-  });
-
-  // Assert
-  EXPECT_EQ(GetParam().expected, actual_samples);
-}
-
 INSTANTIATE_TEST_SUITE_P(
     OneSample,
     LastOverTimeFixture,

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "bare_bones/memory.h"
 #include "series_data/chunk/serialized_chunk.h"
 #include "series_data/data_storage.h"
@@ -10,6 +11,14 @@ namespace series_data::serialization {
 
 struct SerializedData {
   using Memory = BareBones::Memory<BareBones::MemoryControlBlockWithItemCount, unsigned char>;
+
+  SerializedData() = default;
+
+  SerializedData(const SerializedData&) = delete;
+  SerializedData(SerializedData&&) noexcept = default;
+
+  SerializedData& operator=(const SerializedData&) = delete;
+  SerializedData& operator=(SerializedData&&) noexcept = default;
 
   ~SerializedData() {
     uint32_t timestamp_offset{kNoTimestampOffset};
@@ -250,33 +259,17 @@ class DataSerializer {
   const DataStorage& storage_;
 };
 
-template <class DecodeIterator>
-concept AssignableFromUniversalDecodeIterator = requires(DecodeIterator iterator, decoder::UniversalDecodeIterator&& universal_decode_iterator) {
-  { iterator = std::move(universal_decode_iterator) };
-};
-
 class SerializedDataView {
  public:
   using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
   static constexpr uint32_t kNoMoreSeries = std::numeric_limits<uint32_t>::max();
 
-  template <AssignableFromUniversalDecodeIterator Iterator>
   class SeriesIterator {
    public:
-    using iterator_category = std::forward_iterator_tag;
-    using value_type = encoder::Sample;
-    using difference_type = ptrdiff_t;
-    using pointer = value_type*;
-    using reference = value_type&;
+    DECODE_ITERATOR_TYPE_TRAITS();
 
-    using DecodeIterator = Iterator;
-
-    SeriesIterator(DecodeIterator&& decode_iterator, std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
-        : decode_iter_(std::move(decode_iterator)),
-          chunk_iter_(chunks.begin() + chunk_id),
-          series_id_(chunk_iter_->label_set_id),
-          buffer_(buffer),
-          chunks_(chunks) {
+    SeriesIterator(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
+        : chunk_iter_(chunks.begin() + chunk_id), series_id_(chunk_iter_->label_set_id), buffer_(buffer), chunks_(chunks) {
       reset_decode_iterator();
     }
 
@@ -285,10 +278,7 @@ class SerializedDataView {
 
     PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
       if (++decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
-        if (std::next(chunk_iter_) != chunks_.end() && series_id_ == std::next(chunk_iter_)->label_set_id) {
-          ++chunk_iter_;
-          reset_decode_iterator();
-        }
+        advance_to_next_series_chunk();
       }
       return *this;
     }
@@ -313,13 +303,49 @@ class SerializedDataView {
       reset_decode_iterator();
     }
 
+    template <decoder::SeekKind Kind, class SeekHandler>
+    PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+      using enum decoder::SeekResult;
+
+      do {
+        if (decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+          if (!advance_to_next_series_chunk()) {
+            return;
+          }
+        }
+
+        auto handler_result = kUpdateSample;
+        if constexpr (decoder::SampleSeekHandler<SeekHandler>) {
+          decode_iter_.seek<Kind>([&](PromPP::Primitives::Timestamp timestamp, double value) { return handler_result = handler(timestamp, value); });
+        } else {
+          decode_iter_.seek<Kind>([&](PromPP::Primitives::Timestamp timestamp) { return handler_result = handler(timestamp); });
+        }
+
+        if (!BareBones::is_in(handler_result, kUpdateSample, kNext)) {
+          break;
+        }
+      } while (true);
+    }
+
+    PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { decode_iter_.invalidate_sample(); }
+
    private:
-    DecodeIterator decode_iter_;
+    decoder::UniversalDecodeIterator decode_iter_;
     chunk::SerializedChunkSpan::const_iterator chunk_iter_;
     uint32_t series_id_;
 
     std::span<const unsigned char> buffer_;
     chunk::SerializedChunkSpan chunks_;
+
+    PROMPP_ALWAYS_INLINE bool advance_to_next_series_chunk() noexcept {
+      if (std::next(chunk_iter_) != chunks_.end() && series_id_ == std::next(chunk_iter_)->label_set_id) {
+        ++chunk_iter_;
+        reset_decode_iterator();
+        return true;
+      }
+
+      return false;
+    }
 
     PROMPP_ALWAYS_INLINE void reset_decode_iterator() noexcept {
       Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename IteratorType>(IteratorType&& begin, auto&&) {
@@ -361,14 +387,10 @@ class SerializedDataView {
     return {chunks[series_first_chunk_id_].label_set_id, series_first_chunk_id_};
   }
 
-  template <AssignableFromUniversalDecodeIterator DecodeIterator = decoder::UniversalDecodeIterator>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIterator<DecodeIterator> create_current_series_iterator(DecodeIterator&& decode_iterator = {}) const noexcept {
-    return {std::forward<DecodeIterator>(decode_iterator), get_buffer_view(), get_chunks_view(), series_first_chunk_id_};
-  }
-  template <AssignableFromUniversalDecodeIterator DecodeIterator = decoder::UniversalDecodeIterator>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIterator<DecodeIterator> create_series_iterator(uint32_t series_first_chunk_id,
-                                                                                           DecodeIterator&& decode_iterator = {}) const noexcept {
-    return {std::forward<DecodeIterator>(decode_iterator), get_buffer_view(), get_chunks_view(), series_first_chunk_id};
+  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {get_buffer_view(), get_chunks_view(), series_first_chunk_id_}; }
+
+  [[nodiscard]] SeriesIterator create_series_iterator(uint32_t series_first_chunk_id) const noexcept {
+    return {get_buffer_view(), get_chunks_view(), series_first_chunk_id};
   }
 
   template <class SeriesChunkHandler>

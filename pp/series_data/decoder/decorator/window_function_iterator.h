@@ -9,7 +9,6 @@ namespace series_data::decoder::decorator {
 template <class Iterator>
 concept WindowFunctionIteratorInterface = requires(Iterator iterator, const Iterator const_iterator) {
   { Iterator(PromPP::Primitives::TimeInterval()) };
-  { Iterator(UniversalDecodeIterator(), PromPP::Primitives::TimeInterval()) };
 
   { const_iterator == DecodeIteratorSentinel() };
   { ++iterator } -> std::same_as<Iterator&>;
@@ -18,7 +17,6 @@ concept WindowFunctionIteratorInterface = requires(Iterator iterator, const Iter
   { const_iterator.interval() } -> std::same_as<const PromPP::Primitives::TimeInterval&>;
 
   { iterator.set_interval(PromPP::Primitives::TimeInterval()) };
-  { iterator.reset(UniversalDecodeIterator(), PromPP::Primitives::TimeInterval()) };
 };
 
 template <WindowFunctionIteratorInterface FunctionIterator, WindowBoundaryCalculatorInterface WindowBoundaryCalculator>
@@ -34,15 +32,10 @@ class WindowFunctionIterator {
     advance();
   }
 
-  explicit WindowFunctionIterator(UniversalDecodeIterator&& iterator, const WindowFunctionParameters& parameters)
-      : iterator_(std::forward<UniversalDecodeIterator>(iterator), WindowBoundaryCalculator::initial_window(parameters)), parameters_(&parameters) {
+  template <class Iterator>
+  explicit WindowFunctionIterator(Iterator&& iterator, const WindowFunctionParameters& parameters)
+      : iterator_(std::forward<Iterator>(iterator), WindowBoundaryCalculator::initial_window(parameters)), parameters_(&parameters) {
     advance();
-  }
-
-  PROMPP_ALWAYS_INLINE WindowFunctionIterator& operator=(UniversalDecodeIterator&& iterator) {
-    iterator_.reset(std::move(iterator), WindowBoundaryCalculator::initial_window(*parameters_));
-    advance();
-    return *this;
   }
 
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }

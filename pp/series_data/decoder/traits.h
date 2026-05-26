@@ -22,14 +22,17 @@ enum class SeekResult : uint8_t {
   kUpdateSample = 1,
   kNext = 2,
   kStop = 4,
-  kUpdateSampleNextAndStop = 8,
+  kNextAndStop = 8,
+  kUpdateSampleNextAndStop = 16,
 };
 
 enum class SeekKind : uint8_t {
-  kUpdateSample_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kStop),
-  kNext_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kNext, SeekResult::kStop),
-  kUpdateSample_Next_Stop = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop),
-  kAll = BareBones::build_bitmask<uint8_t>(SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop, SeekResult::kUpdateSampleNextAndStop),
+  kUpdateSample_Stop = BareBones::build_bitmask<uint8_t, SeekResult::kUpdateSample, SeekResult::kStop>(),
+  kNext_Stop = BareBones::build_bitmask<uint8_t, SeekResult::kNext, SeekResult::kStop>(),
+  kNext_Stop_NextAndStop = BareBones::build_bitmask<uint8_t, SeekResult::kNext, SeekResult::kStop, SeekResult::kNextAndStop>(),
+  kUpdateSample_Next_Stop = BareBones::build_bitmask<uint8_t, SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop>(),
+  kAll = BareBones::
+      build_bitmask<uint8_t, SeekResult::kUpdateSample, SeekResult::kNext, SeekResult::kStop, SeekResult::kNextAndStop, SeekResult::kUpdateSampleNextAndStop>(),
 };
 
 template <class Iterator>
@@ -81,6 +84,9 @@ class DecodeIteratorTrait {
       if (has_kind(SeekResult::kUpdateSample) && result == SeekResult::kUpdateSample) [[likely]] {
         derived()->update_sample();
       } else if (has_kind(SeekResult::kStop) && result == SeekResult::kStop) {
+        break;
+      } else if (has_kind(SeekResult::kNextAndStop) && result == SeekResult::kNextAndStop) {
+        derived()->decode();
         break;
       } else if (has_kind(SeekResult::kUpdateSampleNextAndStop) && result == SeekResult::kUpdateSampleNextAndStop) {
         derived()->update_sample();
