@@ -3,11 +3,11 @@
 #include <variant>
 
 #include "select_hints.h"
+#include "series_data/decoder/decorator/last_over_step.h"
 #include "series_data/decoder/decorator/max_over_time.h"
 #include "series_data/decoder/decorator/min_over_time.h"
 #include "series_data/decoder/decorator/multiseries_iterator.h"
 #include "series_data/decoder/decorator/sum_over_time.h"
-#include "series_data/decoder/decorator/window_function_iterator.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 #include "series_data/serialization/serialized_data.h"
 
@@ -17,29 +17,21 @@ class MultiSeriesDecodeIterator {
  public:
   using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
   using UniversalDecodeIterator = ::series_data::decoder::UniversalDecodeIterator;
+  using WindowBoundaryCalculator = ::series_data::decoder::decorator::StepLookbackDeltaWindowCalculator;
 
   template <class Iterator, class SampleHandler>
-  using MultiSeriesIterator = ::series_data::decoder::decorator::MultiSeriesIterator<Iterator, SampleHandler>;
-  template <class Iterator>
-  using WindowFunctionIterator = ::series_data::decoder::decorator::WindowFunctionIterator<Iterator>;
-  template <class Iterator>
-  using SeriesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator<Iterator>;
+  using MultiSeriesIterator = ::series_data::decoder::decorator::MultiSeriesIterator<Iterator, SampleHandler, WindowBoundaryCalculator>;
+  using SeriesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
 
-  using MinIterator = ::series_data::decoder::decorator::MinOverTimeIterator;
-  using MaxIterator = ::series_data::decoder::decorator::MaxOverTimeIterator;
-  using SumIterator = ::series_data::decoder::decorator::SumOverTimeIterator;
-
-  using MinSeriesIterator = SeriesIterator<WindowFunctionIterator<MinIterator>>;
-  using MaxSeriesIterator = SeriesIterator<WindowFunctionIterator<MaxIterator>>;
-  using SumSeriesIterator = SeriesIterator<WindowFunctionIterator<SumIterator>>;
+  using LastOverStepIterator = ::series_data::decoder::decorator::LastOverStepIterator<SeriesIterator>;
 
   using FindMinElement = ::series_data::decoder::decorator::FindMinElement;
   using FindMaxElement = ::series_data::decoder::decorator::FindMaxElement;
   using SumOfElements = ::series_data::decoder::decorator::SumOfElements;
 
-  using MinMultiSeriesIterator = MultiSeriesIterator<MinSeriesIterator, FindMinElement>;
-  using MaxMultiSeriesIterator = MultiSeriesIterator<MaxSeriesIterator, FindMaxElement>;
-  using SumMultiSeriesIterator = MultiSeriesIterator<SumSeriesIterator, SumOfElements>;
+  using MinMultiSeriesIterator = MultiSeriesIterator<LastOverStepIterator, FindMinElement>;
+  using MaxMultiSeriesIterator = MultiSeriesIterator<LastOverStepIterator, FindMaxElement>;
+  using SumMultiSeriesIterator = MultiSeriesIterator<LastOverStepIterator, SumOfElements>;
 
   using IteratorVariant = std::variant<MinMultiSeriesIterator, MaxMultiSeriesIterator, SumMultiSeriesIterator>;
 
@@ -77,13 +69,15 @@ class MultiSeriesDecodeIterator {
 PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator create_multi_series_decode_iterator(const SelectHints& select_hints,
                                                                                    std::span<const uint32_t> series_ids,
                                                                                    ::series_data::serialization::SerializedDataView data_view) {
-  const auto create_series_iterators = [&]<class Iterator>() {
-    BareBones::Vector<Iterator> iterators;
+  const auto create_series_iterators = [&] {
+    BareBones::Vector<MultiSeriesDecodeIterator::LastOverStepIterator> iterators;
     iterators.reserve(series_ids.size());
+
+    const auto initial_interval = MultiSeriesDecodeIterator::WindowBoundaryCalculator::initial_window(select_hints.function_parameters);
 
     data_view.enumerate_series([&](const auto& chunk, uint32_t chunk_id) {
       if (std::ranges::find(series_ids, chunk.label_set_id) != series_ids.end()) {
-        iterators.emplace_back(data_view.create_series_iterator(chunk_id, typename Iterator::DecodeIterator(select_hints.function_parameters)));
+        iterators.emplace_back(data_view.create_series_iterator(chunk_id), initial_interval);
       }
     });
 
@@ -94,19 +88,19 @@ PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator create_multi_series_decode_iterat
     using enum PromPP::Prometheus::promql::WindowFunction;
 
     case kMin: {
-      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::MinMultiSeriesIterator>,
-                                       create_series_iterators.operator()<MultiSeriesDecodeIterator::MinSeriesIterator>());
+      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::MinMultiSeriesIterator>, create_series_iterators(),
+                                       select_hints.function_parameters);
     }
 
     case kMax: {
-      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::MaxMultiSeriesIterator>,
-                                       create_series_iterators.operator()<MultiSeriesDecodeIterator::MaxSeriesIterator>());
+      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::MaxMultiSeriesIterator>, create_series_iterators(),
+                                       select_hints.function_parameters);
     }
 
     case kSum:
     default: {
-      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::SumMultiSeriesIterator>,
-                                       create_series_iterators.operator()<MultiSeriesDecodeIterator::SumSeriesIterator>());
+      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::SumMultiSeriesIterator>, create_series_iterators(),
+                                       select_hints.function_parameters);
     }
   }
 }

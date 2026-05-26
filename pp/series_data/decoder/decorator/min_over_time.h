@@ -4,9 +4,9 @@
 
 namespace series_data::decoder::decorator {
 
-class FindMinElementInIterator {
+class FindMinElement {
  public:
-  explicit FindMinElementInIterator(encoder::Sample& sample, const PromPP::Primitives::TimeInterval&) : sample_(sample) {}
+  explicit FindMinElement(encoder::Sample& sample, const PromPP::Primitives::TimeInterval&) : sample_(sample) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sample_.value) || value < sample_.value) {
@@ -19,27 +19,7 @@ class FindMinElementInIterator {
   encoder::Sample& sample_;
 };
 
-class FindMinElement {
- public:
-  explicit FindMinElement(encoder::Sample& result) : min_(result) { min_.value = BareBones::Encoding::Gorilla::STALE_NAN; }
-
-  PROMPP_ALWAYS_INLINE void operator()(const encoder::Sample& sample) const noexcept {
-    if (BareBones::Encoding::Gorilla::isstalenan(min_.value) || sample.value < min_.value) {
-      min_ = sample;
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE void set_result() const {
-    if (BareBones::Encoding::Gorilla::isstalenan(min_.value)) [[unlikely]] {
-      min_.timestamp = kInvalidTimestamp;
-    }
-  }
-
- private:
-  encoder::Sample& min_;
-};
-
 template <class Iterator = UniversalDecodeIterator>
-using MinOverTimeIterator = OverTimeFuncIterator<FindMinElementInIterator, Iterator, true>;
+using MinOverTimeIterator = OverTimeFuncIterator<FindMinElement, Iterator, true>;
 
 }  // namespace series_data::decoder::decorator

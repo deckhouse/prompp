@@ -4,22 +4,9 @@
 
 namespace series_data::decoder::decorator {
 
-PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
-  const auto t = sum + inc;
-  if (std::isinf(t)) {
-    c = 0;
-  } else if (std::abs(sum) >= std::abs(inc)) {
-    c += sum - t + inc;
-  } else {
-    c += inc - t + sum;
-  }
-
-  sum = t;
-}
-
-class SumOfElementsInIterator {
+class SumOfElements {
  public:
-  explicit SumOfElementsInIterator(encoder::Sample& sum, const PromPP::Primitives::TimeInterval& interval) : sum_(sum), interval_(interval) {}
+  explicit SumOfElements(encoder::Sample& sum, const PromPP::Primitives::TimeInterval& interval) : sum_(sum), interval_(interval) {}
 
   PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
@@ -30,7 +17,7 @@ class SumOfElementsInIterator {
     sum_.timestamp = timestamp;
   }
 
-  ~SumOfElementsInIterator() {
+  ~SumOfElements() {
     if (!std::isinf(sum_.value)) [[likely]] {
       sum_.value += c_;
     }
@@ -44,35 +31,22 @@ class SumOfElementsInIterator {
   encoder::Sample& sum_;
   const PromPP::Primitives::TimeInterval& interval_;
   double c_{};
-};
 
-class SumOfElements {
- public:
-  explicit SumOfElements(encoder::Sample& result) : sum_(result) { sum_.value = BareBones::Encoding::Gorilla::STALE_NAN; }
-
-  PROMPP_ALWAYS_INLINE void operator()(const encoder::Sample& sample) noexcept {
-    if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
-      sum_.value = 0.0;
+  PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
+    const auto t = sum + inc;
+    if (std::isinf(t)) {
+      c = 0;
+    } else if (std::abs(sum) >= std::abs(inc)) {
+      c += sum - t + inc;
+    } else {
+      c += inc - t + sum;
     }
 
-    kahan_sum_inc(sample.value, sum_.value, c_);
-    sum_.timestamp = sample.timestamp;
+    sum = t;
   }
-
-  PROMPP_ALWAYS_INLINE void set_result() const {
-    if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
-      sum_.timestamp = kInvalidTimestamp;
-    }
-
-    sum_.value += c_;
-  }
-
- private:
-  encoder::Sample& sum_;
-  double c_{};
 };
 
 template <class Iterator = UniversalDecodeIterator>
-using SumOverTimeIterator = OverTimeFuncIterator<SumOfElementsInIterator, Iterator, true>;
+using SumOverTimeIterator = OverTimeFuncIterator<SumOfElements, Iterator, true>;
 
 }  // namespace series_data::decoder::decorator
