@@ -45,13 +45,11 @@ class MultiSeriesIterator {
     }
 
     const auto current_window = iterators_[0].interval();
-    const auto next_window = WindowBoundaryCalculator::next_window(current_window, *parameters_);
-
-    handle_samples(current_window, next_window);
-
-    if (sample_.timestamp == kInvalidTimestamp && next_window.min < parameters_->interval.max) [[unlikely]] {
-      sample_.timestamp = current_window.max;
+    if (current_window.min > current_window.max) [[unlikely]] {
+      return;
     }
+
+    handle_samples(current_window, WindowBoundaryCalculator::next_window(current_window, *parameters_));
   }
 
   PROMPP_ALWAYS_INLINE void handle_samples(const PromPP::Primitives::TimeInterval& current_window,
@@ -64,6 +62,8 @@ class MultiSeriesIterator {
 
       iterator.set_interval(next_window);
     }
+
+    sample_.timestamp = current_window.max;
   }
 };
 

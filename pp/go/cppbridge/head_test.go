@@ -317,15 +317,18 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{
-		Start: 0,
-		End:   200,
-		Step:  100,
-		Range: 100,
-		Func:  "sum",
+		Start:         1,
+		End:           200,
+		Step:          100,
+		LookbackDelta: 100,
+		Func:          "sum",
 	}, []uint32{0, 1}, []uint32{0, 1})
 
 	// Assert
-	s.Equal([]cppbridge.Sample{{Timestamp: 99, Value: 30.0}, {Timestamp: 199, Value: 50.0}}, samples)
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 100, Value: 30.0},
+		{Timestamp: 200, Value: 50.0},
+	}, samples)
 }
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
@@ -339,15 +342,19 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{
-		Start: 0,
-		End:   200,
-		Step:  100,
-		Range: 100,
-		Func:  "min",
+		Start:         1,
+		End:           200,
+		Step:          100,
+		LookbackDelta: 50,
+		Func:          "min",
 	}, []uint32{0, 1}, []uint32{0, 1})
 
 	// Assert
-	s.Equal([]cppbridge.Sample{{Timestamp: 50, Value: 10.0}, {Timestamp: 180, Value: 20.0}}, samples)
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 50, Value: 10.0},
+		{Timestamp: 150, Value: 20.0},
+		{Timestamp: 200, Value: 20.0},
+	}, samples)
 }
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
@@ -361,15 +368,19 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{
-		Start: 0,
-		End:   200,
-		Step:  100,
-		Range: 100,
-		Func:  "max",
+		Start:         1,
+		End:           200,
+		Step:          100,
+		LookbackDelta: 50,
+		Func:          "max",
 	}, []uint32{0, 1}, []uint32{0, 1})
 
 	// Assert
-	s.Equal([]cppbridge.Sample{{Timestamp: 50, Value: 20.0}, {Timestamp: 180, Value: 30.0}}, samples)
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 50, Value: 20.0},
+		{Timestamp: 150, Value: 20.0},
+		{Timestamp: 200, Value: 30.0},
+	}, samples)
 }
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestNoSeries() {
