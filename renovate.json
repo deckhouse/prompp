@@ -1,10 +1,84 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  "minimumReleaseAge": "90 days",
+  "internalChecksFilter": "strict",
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "minimumReleaseAge": "0 days",
+    "labels": ["security"],
+    "prPriority": 5
+  },
+  "osvVulnerabilityAlerts": true,
+
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+
   "packageRules": [
+    {
+      "description": "Trusted vendors (large orgs / foundations with strong release discipline). Shorten the 90-day cool-down to 14 days: enough time for the upstream to yank or patch a bad release (e.g. aws-sdk-go v1.55.6), but no longer than that. CVEs still flow through the vulnerabilityAlerts channel without any delay.",
+      "matchSourceUrlPrefixes": [
+        "https://github.com/google/",
+        "https://github.com/googleapis/",
+        "https://github.com/grpc/",
+        "https://github.com/grpc-ecosystem/",
+        "https://github.com/golang/",
+
+        "https://github.com/aws/",
+
+        "https://github.com/moby/",
+
+        "https://github.com/Azure/",
+        "https://github.com/Microsoft/",
+        "https://github.com/microsoft/",
+
+        "https://github.com/hashicorp/",
+
+        "https://github.com/envoyproxy/",
+        "https://github.com/prometheus/",
+        "https://github.com/kubernetes/",
+        "https://github.com/kubernetes-sigs/",
+        "https://github.com/opencontainers/",
+
+        "https://github.com/uber/",
+        "https://github.com/uber-go/",
+
+        "https://github.com/digitalocean/",
+        "https://github.com/hetznercloud/",
+        "https://github.com/linode/",
+        "https://github.com/ovh/",
+        "https://github.com/scaleway/",
+        "https://github.com/ionos-cloud/",
+        "https://github.com/vultr/",
+        "https://github.com/gophercloud/",
+
+        "https://github.com/grafana/"
+      ],
+      "minimumReleaseAge": "14 days"
+    },
+    {
+      "description": "Trusted Go-module paths that don't live on github.com. Same 14-day cool-down rationale as the trusted-vendors rule above.",
+      "matchPackageNames": [
+        "google.golang.org/**",
+        "cloud.google.com/**",
+        "golang.org/x/**",
+        "k8s.io/**",
+        "go.opentelemetry.io/**",
+        "go.uber.org/**"
+      ],
+      "minimumReleaseAge": "14 days"
+    },
+
     {
       "description": "Pin github.com/prometheus/prometheus to the v2.x line (Go module versions < v0.300.0). v3.x releases are published as v0.300.0+ and require major migration work, so we stay on the latest v2.x until migration is planned.",
       "matchPackageNames": ["github.com/prometheus/prometheus"],
       "allowedVersions": "<0.300.0"
+    },
+    {
+      "description": "Stay on aws-sdk-go v1.55.5: newer v1.55.x revisions added package-level // Deprecated: annotations that staticcheck (SA1019) reports as fatal across upstream discovery/aws/*. Bump only after migrating to aws-sdk-go-v2 (see #330).",
+      "matchPackageNames": ["github.com/aws/aws-sdk-go"],
+      "allowedVersions": "<1.55.6"
     }
   ]
 }
