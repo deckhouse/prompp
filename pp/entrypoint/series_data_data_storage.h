@@ -93,6 +93,18 @@ void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void*
 void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 
 /**
+ * @brief Get optimized promql functions list
+ *
+ * @param res {
+ *     functions []struct {
+ *        name string
+ *        type uint8
+ *     }  // serialized data
+ * }
+ */
+void prompp_get_promql_optimized_functions(void* res);
+
+/**
  * @brief Queries data storage and serializes result (new serialization model).
  * If args.downsamplingMs != 0 than DownsamplingIterator will be created regardless of the args.hints
  *

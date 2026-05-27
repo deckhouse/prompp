@@ -40,8 +40,8 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 #define Sizeof_GoLabels 16
 
-#define Sizeof_SerializedDataIterator 248
-#define Sizeof_MultiSeriesDecodeIterator 40
+#define Sizeof_SerializedDataIterator 240
+#define Sizeof_MultiSeriesDecodeIterator 48
 
 #define Sizeof_MetricsIterator 24
 
@@ -1454,6 +1454,18 @@ void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void*
  * }
  */
 void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
+
+/**
+ * @brief Get optimized promql functions list
+ *
+ * @param res {
+ *     functions []struct {
+ *        name string
+ *        type uint8
+ *     }  // serialized data
+ * }
+ */
+void prompp_get_promql_optimized_functions(void* res);
 
 /**
  * @brief Queries data storage and serializes result (new serialization model).

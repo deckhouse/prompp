@@ -157,15 +157,7 @@ func NewQuerier[
 	closer func() error,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(
-		head,
-		deduplicatorCtor,
-		mint,
-		maxt,
-		closer,
-		metrics,
-		selectFuncOptimize,
-	)
+	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, selectFuncOptimize)
 }
 
 // NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
@@ -569,25 +561,31 @@ func isNotWithpout(hints *storage.SelectHints) bool {
 }
 
 // funcOptimizeMap is the map of the function to the query optimization type.
-var funcOptimizeMap = map[string]queryOptimizeType{
-	"sum":             crossSeriesOptimizeType,
-	"max":             crossSeriesOptimizeType,
-	"min":             crossSeriesOptimizeType,
-	"group":           crossSeriesOptimizeType,
-	"count":           newPointOptimizeType,
-	"sum_over_time":   newPointOptimizeType,
-	"max_over_time":   dropPointOptimizeType,
-	"min_over_time":   dropPointOptimizeType,
-	"count_over_time": newPointOptimizeType,
-	"last_over_time":  dropPointOptimizeType,
-	"rate":            dropPointOptimizeType,
-	"irate":           dropPointOptimizeType,
-	"delta":           dropPointOptimizeType,
-	"idelta":          dropPointOptimizeType,
-	"increase":        dropPointOptimizeType,
-	"resets":          dropPointOptimizeType,
-	"changes":         dropPointOptimizeType,
-}
+var funcOptimizeMap = func() map[string]queryOptimizeType {
+	optimizeType := func(Type cppbridge.PromqlCppFunctionType) queryOptimizeType {
+		switch Type {
+		case cppbridge.PromqlCppThinningFunction:
+			return dropPointOptimizeType
+		case cppbridge.PromqlCppSynthesizingFunction:
+			return newPointOptimizeType
+		case cppbridge.PromqlCppCrossSeriesSynthesizingFunction:
+			return crossSeriesOptimizeType
+
+		default:
+			return noneOptimizeType
+		}
+	}
+
+	cppFunctions := cppbridge.GetPromqlCppFunctions()
+	functions := make(map[string]queryOptimizeType, len(cppFunctions))
+	for _, function := range cppFunctions {
+		if oType := optimizeType(function.Type); oType != noneOptimizeType {
+			functions[function.Name] = oType
+		}
+	}
+
+	return functions
+}()
 
 // isAllowedGroupingForCrossSeriesFunc checks if the series set is an cross series set.
 func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {

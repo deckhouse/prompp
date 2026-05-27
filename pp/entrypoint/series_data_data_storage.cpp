@@ -115,6 +115,30 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
   new (res) Result{.result = result};
 }
 
+extern "C" void prompp_get_promql_optimized_functions(void* res) {
+  using PromPP::Prometheus::promql::FunctionType;
+  using PromPP::Prometheus::promql::kFunctions;
+
+  struct GoFunction {
+    PromPP::Primitives::Go::String name;
+    FunctionType type;
+  };
+
+  static constexpr auto kGoFunctions = [] {
+    std::array<GoFunction, kFunctions.size()> functions;
+    for (size_t i = 0; i < functions.size(); ++i) {
+      functions[i] = {.name = PromPP::Primitives::Go::String(kFunctions[i].name), .type = kFunctions[i].type};
+    }
+    return functions;
+  }();
+
+  struct Result {
+    SliceView<const GoFunction> functions;
+  };
+
+  new (res) Result{.functions = SliceView{kGoFunctions.data(), kGoFunctions.size(), kGoFunctions.size()}};
+}
+
 extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
   using entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2;

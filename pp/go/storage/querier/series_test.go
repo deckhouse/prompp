@@ -581,7 +581,7 @@ func (s *SeriesSetTestSuite) TestMinOverTimeFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
+		Start: 101,
 		End:   200,
 		Func:  "min_over_time",
 	}
@@ -694,9 +694,10 @@ func (s *SeriesSetTestSuite) TestLastOverStepFunc() {
 		},
 	}...)
 	hints := &storage.SelectHints{
-		Start: 100,
-		End:   250,
-		Func:  "last_over_step",
+		Start:         101,
+		End:           250,
+		Func:          "last_over_step",
+		LookbackDelta: 150,
 	}
 
 	// Act
@@ -711,7 +712,7 @@ func (s *SeriesSetTestSuite) TestLastOverStepFunc() {
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
-				{Timestamp: 249, Value: 3.0},
+				{Timestamp: 250, Value: 3.0},
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -749,44 +750,7 @@ func (s *SeriesSetTestSuite) TestSumOverTimeFunc() {
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
-				{Timestamp: 249, Value: 6.0},
-			},
-		},
-	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
-}
-
-func (s *SeriesSetTestSuite) TestCountOverTimeFunc() {
-	// Arrange
-	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
-		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 100, Value: 1.0},
-				{Timestamp: 150, Value: 2.0},
-				{Timestamp: 200, Value: 3.0},
-				{Timestamp: 250, Value: 0.0},
-			},
-		},
-	}...)
-	hints := &storage.SelectHints{
-		Start: 100,
-		End:   200,
-		Func:  "count_over_time",
-	}
-
-	// Act
-	seriesSet := s.query(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
-		Name:        "__name__",
-		Value:       "metric",
-		MatcherType: model.MatcherTypeExactMatch,
-	})
-
-	// Assert
-	require.Equal(s.T(), []storagetest.TimeSeries{
-		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 199, Value: 2.0},
+				{Timestamp: 250, Value: 6.0},
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))

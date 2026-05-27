@@ -2245,7 +2245,6 @@ func readPromPPFeatures(logger log.Logger) {
 					"msg", "[FEATURE] Error parsing select_func_optimization value",
 					"err", err,
 				)
-
 				continue
 			}
 

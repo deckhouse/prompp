@@ -74,7 +74,10 @@ class RangeQuerierWithArgumentsWrapperV2 {
                                      SerializedDataPtr* serialized_data,
                                      PromPP::Primitives::Timestamp downsampling_ms)
       : select_hints_{
-            .function_parameters = {.interval = hints.interval, .step = hints.step_ms, .range = hints.range_ms},
+            .function_parameters = {.interval = {.min = hints.interval.min - 1, .max = hints.interval.max},
+                                    .step = hints.step_ms,
+                                    .range = hints.range_ms,
+                                    .lookback_delta = hints.lookback_delta},
             .window_function = PromPP::Prometheus::promql::window_function_from_string(static_cast<std::string_view>(hints.func)),
         },
         querier_(storage),

@@ -49,27 +49,11 @@ TEST_P(IRateIteratorFixture, Test) {
   EXPECT_EQ(GetParam().expected, actual_samples);
 }
 
-TEST_P(IRateIteratorFixture, TestReset) {
-  // Arrange
-  std::vector<Sample> actual_samples;
-
-  // Act
-  Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
-    Iterator begin_at_start = begin;
-    IRateIterator iterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval);
-    std::advance(iterator, GetParam().samples.size());
-
-    iterator = UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin_at_start)};
-    std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
-  });
-
-  // Assert
-  EXPECT_EQ(GetParam().expected, actual_samples);
-}
-
 INSTANTIATE_TEST_SUITE_P(OneSample,
                          IRateIteratorFixture,
-                         testing::Values(IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 100}, .expected{}},
+                         testing::Values(IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
+                                                           .interval{.min = 0, .max = 100},
+                                                           .expected{Sample{.timestamp = 100, .value = 1.0}}},
                                          IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
                                          IRateIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 

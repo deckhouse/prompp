@@ -5,29 +5,18 @@
 
 namespace series_data::decoder::decorator {
 
+template <class Iterator = UniversalDecodeIterator>
 class DeltaIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
 
   explicit DeltaIterator(PromPP::Primitives::TimeInterval interval) : interval_(interval) {}
-  explicit DeltaIterator(UniversalDecodeIterator&& iterator, PromPP::Primitives::TimeInterval interval) : iterator_(iterator), interval_(interval) {
+  explicit DeltaIterator(Iterator&& iterator, PromPP::Primitives::TimeInterval interval) : iterator_(std::move(iterator)), interval_(interval) {
     seek_to_first_sample();
-  }
-
-  PROMPP_ALWAYS_INLINE DeltaIterator& operator=(UniversalDecodeIterator&& iterator) {
-    iterator_ = std::move(iterator);
-    seek_to_first_sample();
-    return *this;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
   PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
-    interval_ = interval;
-    seek_to_first_sample();
-  }
-
-  PROMPP_ALWAYS_INLINE void reset(UniversalDecodeIterator&& iterator, const PromPP::Primitives::TimeInterval& interval) {
-    iterator_ = std::move(iterator);
     interval_ = interval;
     seek_to_first_sample();
   }
@@ -49,13 +38,13 @@ class DeltaIterator {
   }
 
  protected:
-  UniversalDecodeIterator iterator_;
+  Iterator iterator_;
   PromPP::Primitives::TimeInterval interval_;
 
   void seek_to_first_sample() {
     bool has_value{};
 
-    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp < interval_.min) {
         return SeekResult::kNext;
       }
@@ -79,7 +68,7 @@ class DeltaIterator {
   PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
     bool has_value{};
 
-    iterator_.seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
+    iterator_.template seek<SeekKind::kAll>([&has_value, this](PromPP::Primitives::Timestamp timestamp, double value) {
       if (timestamp > interval_.max) {
         return SeekResult::kStop;
       }

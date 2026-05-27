@@ -4,7 +4,7 @@ import ReactResizeDetector from 'react-resize-detector';
 
 import { Legend } from './Legend';
 import { ExemplarData, Histogram, Metric, QueryParams } from '../../types/types';
-import { isPresent } from '../../utils';
+import { escapeHTML, isPresent } from '../../utils';
 import { getOptions, normalizeData, toHoverColor } from './GraphHelpers';
 import { Button } from 'reactstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -152,7 +152,7 @@ class Graph extends PureComponent<GraphProps, GraphState> {
 
     if (options.yaxis && isHeatmap) {
       options.yaxis.ticks = () => new Array(data.length + 1).fill(0).map((_el, i) => i);
-      options.yaxis.tickFormatter = (val) => `${val ? data[val - 1].labels.le : ''}`;
+      options.yaxis.tickFormatter = (val) => `${val ? escapeHTML(data[val - 1].labels.le) : ''}`;
       options.yaxis.min = 0;
       options.yaxis.max = data.length;
       options.series.lines = { show: false };

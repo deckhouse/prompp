@@ -1,20 +1,29 @@
-"""Module extension declaring third-party C/C++ dependencies with custom BUILD
+"""Module extensions declaring third-party C/C++ dependencies with custom BUILD
 files and/or local patches.
 
 These declarations live here (rather than in BCR) because we maintain custom
 BUILD files and/or local patches per repository. For each repository we keep
 its canonical name so that existing `@name//:target` references in BUILD files
-and patches resolve correctly after `use_repo(third_party_deps, "name")` in
+and patches resolve correctly after `use_repo(<extension>, "name")` in
 MODULE.bazel.
+
+Two extensions are exposed:
+
+* `third_party_deps` — declares libraries reachable from the production
+  entrypoint build (`//:entrypoint_aio` / `//:entrypoint_init_aio`).
+* `third_party_dev_deps` — declares libraries used only by tests, benchmarks
+  and profiling (gtest, google_benchmark, tracy). MODULE.bazel pulls this
+  extension in with `dev_dependency = True` so closed-loop / production builds
+  do not need to mirror these archives (`--ignore_dev_dependency` skips them).
 """
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 
-def _third_party_deps_impl(_ctx):
+def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "d72f9c8aea6817cdf1ca0ac10887f328de7f3da2",
+        commit = "add971c7cb497d40985b48641891bf9b51423730",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -40,6 +49,9 @@ def _third_party_deps_impl(_ctx):
         url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.tar.gz",
     )
 
+third_party_dev_deps = module_extension(implementation = _third_party_dev_deps_impl)
+
+def _third_party_deps_impl(_ctx):
     http_archive(
         name = "jemalloc",
         build_file = Label("//third_party:jemalloc.BUILD"),

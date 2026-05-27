@@ -53,7 +53,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(
   };
 
   const Arguments* in = static_cast<Arguments*>(args);
-  in->iterator->reset(in->serialized_data->get_buffer_view(), in->serialized_data->get_chunks_view(), in->chunk_ref);
+  *in->iterator = in->serialized_data->iterator(in->chunk_ref);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args) {

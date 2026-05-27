@@ -4,10 +4,13 @@
 #include "series_data/decoder.h"
 #include "series_data/decoder/decorator/rate_iterator.h"
 #include "series_data/encoder.h"
+#include "series_data/serialization/deserializer.h"
+#include "series_data/serialization/serialized_data.h"
 
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
+using PromPP::Primitives::TimeInterval;
 using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
@@ -16,6 +19,8 @@ using series_data::decoder::DecodeIteratorSentinel;
 using series_data::decoder::UniversalDecodeIterator;
 using series_data::decoder::decorator::RateIterator;
 using series_data::encoder::Sample;
+using series_data::serialization::DataSerializer;
+using series_data::serialization::SerializedDataView;
 
 struct RateIteratorCase {
   std::vector<Sample> samples;
@@ -26,41 +31,18 @@ struct RateIteratorCase {
 class RateIteratorFixture : public ::testing::TestWithParam<RateIteratorCase> {
  protected:
   DataStorage storage_;
-
-  void SetUp() override {
-    Encoder encoder(storage_);
-    for (const auto& sample : GetParam().samples) {
-      encoder.encode(0, sample.timestamp, sample.value);
-    }
-  }
+  Encoder<> encoder_{storage_};
 };
 
 TEST_P(RateIteratorFixture, Test) {
   // Arrange
+  std::ranges::for_each(GetParam().samples, [this](const auto& sample) { encoder_.encode(0, sample.timestamp, sample.value); });
   std::vector<Sample> actual_samples;
 
   // Act
   Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
     std::ranges::copy(RateIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval),
                       DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
-  });
-
-  // Assert
-  EXPECT_EQ(GetParam().expected, actual_samples);
-}
-
-TEST_P(RateIteratorFixture, TestReset) {
-  // Arrange
-  std::vector<Sample> actual_samples;
-
-  // Act
-  Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
-    Iterator begin_at_start = begin;
-    RateIterator iterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval);
-    std::advance(iterator, GetParam().samples.size());
-
-    iterator = UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin_at_start)};
-    std::ranges::copy(iterator, DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
   });
 
   // Assert
@@ -110,56 +92,63 @@ INSTANTIATE_TEST_SUITE_P(FirstAndLastValueInInterval,
                                                           .interval{.min = 100, .max = 200},
                                                           .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 200, .value = 4.0}}}));
 
-INSTANTIATE_TEST_SUITE_P(CounterResetting,
-                         RateIteratorFixture,
-                         testing::Values(RateIteratorCase{.samples{
-                                                              Sample{.timestamp = 100, .value = 5.0},
-                                                              Sample{.timestamp = 200, .value = 1.0},
-                                                          },
-                                                          .interval{.min = 100, .max = 300},
-                                                          .expected{Sample{.timestamp = 100, .value = 5.0}, Sample{.timestamp = 200, .value = 1.0}}},
-                                         RateIteratorCase{.samples{
-                                                              Sample{.timestamp = 100, .value = 5.0},
-                                                              Sample{.timestamp = 200, .value = 4.0},
-                                                              Sample{.timestamp = 300, .value = 3.0},
-                                                              Sample{.timestamp = 400, .value = 2.0},
-                                                              Sample{.timestamp = 500, .value = 1.0},
-                                                          },
-                                                          .interval{.min = 100, .max = 500},
-                                                          .expected{Sample{.timestamp = 100, .value = 5.0}, Sample{.timestamp = 200, .value = 4.0},
-                                                                    Sample{.timestamp = 300, .value = 3.0}, Sample{.timestamp = 400, .value = 2.0},
-                                                                    Sample{.timestamp = 500, .value = 1.0}}},
-                                         RateIteratorCase{.samples{
-                                                              Sample{.timestamp = 100, .value = 5.0},
-                                                              Sample{.timestamp = 200, .value = 4.0},
-                                                              Sample{.timestamp = 250, .value = 5.0},
-                                                              Sample{.timestamp = 300, .value = 3.0},
-                                                              Sample{.timestamp = 400, .value = 2.0},
-                                                              Sample{.timestamp = 500, .value = 1.0},
-                                                          },
-                                                          .interval{.min = 100, .max = 500},
-                                                          .expected{Sample{.timestamp = 100, .value = 5.0}, Sample{.timestamp = 200, .value = 4.0},
-                                                                    Sample{.timestamp = 250, .value = 5.0}, Sample{.timestamp = 300, .value = 3.0},
-                                                                    Sample{.timestamp = 400, .value = 2.0}, Sample{.timestamp = 500, .value = 1.0}}},
-                                         RateIteratorCase{.samples{
-                                                              Sample{.timestamp = 100, .value = 1.0},
-                                                              Sample{.timestamp = 120, .value = 2.0},
-                                                              Sample{.timestamp = 160, .value = 0.0},
-                                                              Sample{.timestamp = 200, .value = 2.0},
-                                                              Sample{.timestamp = 250, .value = 3.0},
-                                                              Sample{.timestamp = 300, .value = 4.0},
-                                                          },
-                                                          .interval{.min = 100, .max = 300},
-                                                          .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 120, .value = 2.0},
-                                                                    Sample{.timestamp = 160, .value = 0.0}, Sample{.timestamp = 300, .value = 4.0}}},
-                                         RateIteratorCase{.samples{
-                                                              Sample{.timestamp = 100, .value = 1.0},
-                                                              Sample{.timestamp = 120, .value = 2.0},
-                                                              Sample{.timestamp = 160, .value = 0.0},
-                                                              Sample{.timestamp = 201, .value = 2.0},
-                                                          },
-                                                          .interval{.min = 100, .max = 200},
-                                                          .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 120, .value = 2.0},
-                                                                    Sample{.timestamp = 160, .value = 0.0}}}));
+INSTANTIATE_TEST_SUITE_P(
+    CounterResetting,
+    RateIteratorFixture,
+    testing::Values(
+        RateIteratorCase{.samples{
+                             Sample{.timestamp = 100, .value = 5.0},
+                             Sample{.timestamp = 200, .value = 1.0},
+                         },
+                         .interval{.min = 100, .max = 300},
+                         .expected{Sample{.timestamp = 100, .value = 5.0}, Sample{.timestamp = 200, .value = 1.0}}},
+        RateIteratorCase{.samples{
+                             Sample{.timestamp = 100, .value = 5.0},
+                             Sample{.timestamp = 200, .value = 4.0},
+                             Sample{.timestamp = 300, .value = 3.0},
+                             Sample{.timestamp = 400, .value = 2.0},
+                             Sample{.timestamp = 500, .value = 1.0},
+                         },
+                         .interval{.min = 100, .max = 500},
+                         .expected{Sample{.timestamp = 100, .value = 5.0}, Sample{.timestamp = 200, .value = 4.0}, Sample{.timestamp = 300, .value = 3.0},
+                                   Sample{.timestamp = 400, .value = 2.0}, Sample{.timestamp = 500, .value = 1.0}}},
+        RateIteratorCase{.samples{
+                             Sample{.timestamp = 100, .value = 5.0},
+                             Sample{.timestamp = 200, .value = 4.0},
+                             Sample{.timestamp = 250, .value = 5.0},
+                             Sample{.timestamp = 300, .value = 3.0},
+                             Sample{.timestamp = 400, .value = 2.0},
+                             Sample{.timestamp = 500, .value = 1.0},
+                         },
+                         .interval{.min = 100, .max = 500},
+                         .expected{Sample{.timestamp = 100, .value = 5.0}, Sample{.timestamp = 200, .value = 4.0}, Sample{.timestamp = 250, .value = 5.0},
+                                   Sample{.timestamp = 300, .value = 3.0}, Sample{.timestamp = 400, .value = 2.0}, Sample{.timestamp = 500, .value = 1.0}}},
+        RateIteratorCase{.samples{
+                             Sample{.timestamp = 100, .value = 1.0},
+                             Sample{.timestamp = 120, .value = 2.0},
+                             Sample{.timestamp = 160, .value = 0.0},
+                             Sample{.timestamp = 200, .value = 2.0},
+                             Sample{.timestamp = 250, .value = 3.0},
+                             Sample{.timestamp = 300, .value = 4.0},
+                         },
+                         .interval{.min = 100, .max = 300},
+                         .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 120, .value = 2.0}, Sample{.timestamp = 160, .value = 0.0},
+                                   Sample{.timestamp = 300, .value = 4.0}}},
+        RateIteratorCase{.samples{
+                             Sample{.timestamp = 100, .value = 1.0},
+                             Sample{.timestamp = 120, .value = 2.0},
+                             Sample{.timestamp = 160, .value = 0.0},
+                             Sample{.timestamp = 201, .value = 2.0},
+                         },
+                         .interval{.min = 100, .max = 200},
+                         .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 120, .value = 2.0}, Sample{.timestamp = 160, .value = 0.0}}},
+        RateIteratorCase{.samples{
+                             Sample{.timestamp = 100, .value = 1.0},
+                             Sample{.timestamp = 120, .value = 2.0},
+                             Sample{.timestamp = 160, .value = 3.0},
+                             Sample{.timestamp = 200, .value = 0.0},
+                         },
+                         .interval{.min = 100, .max = 200},
+                         .expected{Sample{.timestamp = 100, .value = 1.0}, Sample{.timestamp = 160, .value = 3.0}, Sample{.timestamp = 200, .value = 0.0}}}));
 
 }  // namespace
