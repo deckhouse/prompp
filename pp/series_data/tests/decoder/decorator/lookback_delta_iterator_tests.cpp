@@ -18,7 +18,7 @@ using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
 using series_data::decoder::kInvalidTimestamp;
 using series_data::decoder::UniversalDecodeIterator;
-using series_data::decoder::decorator::LastOverTimeIterator;
+using series_data::decoder::decorator::LastOverTimeWithStaleNansIterator;
 using series_data::decoder::decorator::LookbackDeltaIterator;
 using series_data::encoder::Sample;
 
@@ -33,7 +33,7 @@ struct LookbackDeltaIteratorCase {
 
 class LookbackDeltaIteratorFixture : public testing::TestWithParam<LookbackDeltaIteratorCase> {
  protected:
-  using Iterator = LookbackDeltaIterator<LastOverTimeIterator<>>;
+  using Iterator = LookbackDeltaIterator<LastOverTimeWithStaleNansIterator<>>;
 
   DataStorage storage_;
   Encoder<> encoder_{storage_};
@@ -49,7 +49,8 @@ class LookbackDeltaIteratorFixture : public testing::TestWithParam<LookbackDelta
 
     Decoder::create_decode_iterator<DataChunk::Type::kOpen>(
         storage_, storage_.open_chunks[0], [&samples, &intervals, lookback_delta]<typename DecodeIterator>(DecodeIterator&& begin, auto&&) {
-          Iterator it(LastOverTimeIterator(UniversalDecodeIterator{std::in_place_type<DecodeIterator>, std::forward<DecodeIterator>(begin)}, intervals.front()),
+          Iterator it(LastOverTimeWithStaleNansIterator(UniversalDecodeIterator{std::in_place_type<DecodeIterator>, std::forward<DecodeIterator>(begin)},
+                                                        intervals.front()),
                       lookback_delta);
           samples.emplace_back(*it);
 
@@ -102,7 +103,23 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                          LookbackDeltaIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
                                                                    .intervals{{.min = 0, .max = 100}},
                                                                    .lookback_delta = 50,
-                                                                   .expected{kInvalidSample}}));
+                                                                   .expected{kInvalidSample}},
+                                         LookbackDeltaIteratorCase{.samples{
+                                                                       Sample{.timestamp = 100, .value = 1.0},
+                                                                       Sample{.timestamp = 101, .value = STALE_NAN},
+                                                                       Sample{.timestamp = 201, .value = 2.0},
+                                                                   },
+                                                                   .intervals{
+                                                                       {.min = 0, .max = 100},
+                                                                       {.min = 101, .max = 200},
+                                                                       {.min = 201, .max = 300},
+                                                                   },
+                                                                   .lookback_delta = 50,
+                                                                   .expected{
+                                                                       Sample{.timestamp = 100, .value = 1.0},
+                                                                       kInvalidSample,
+                                                                       Sample{.timestamp = 201, .value = 2.0},
+                                                                   }}));
 
 INSTANTIATE_TEST_SUITE_P(TimeInterval,
                          LookbackDeltaIteratorFixture,

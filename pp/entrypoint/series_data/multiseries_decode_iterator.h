@@ -24,9 +24,9 @@ class MultiSeriesDecodeIterator {
   using MultiSeriesIterator = ::series_data::decoder::decorator::MultiSeriesIterator<Iterator, SampleHandler, WindowBoundaryCalculator>;
   using SeriesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
 
-  using LastOverTimeIterator = ::series_data::decoder::decorator::LastOverTimeIterator<SeriesIterator>;
+  using LastOverTimeWithStaleNansIterator = ::series_data::decoder::decorator::LastOverTimeWithStaleNansIterator<SeriesIterator>;
 
-  using Iterator = ::series_data::decoder::decorator::LookbackDeltaIterator<LastOverTimeIterator>;
+  using Iterator = ::series_data::decoder::decorator::LookbackDeltaIterator<LastOverTimeWithStaleNansIterator>;
 
   using FindMinElement = ::series_data::decoder::decorator::FindMinElement;
   using FindMaxElement = ::series_data::decoder::decorator::FindMaxElement;
@@ -80,7 +80,7 @@ PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator create_multi_series_decode_iterat
 
     data_view.enumerate_series([&](const auto& chunk, uint32_t chunk_id) {
       if (std::ranges::find(series_ids, chunk.label_set_id) != series_ids.end()) {
-        iterators.emplace_back(MultiSeriesDecodeIterator::LastOverTimeIterator(data_view.create_series_iterator(chunk_id), initial_interval),
+        iterators.emplace_back(MultiSeriesDecodeIterator::LastOverTimeWithStaleNansIterator(data_view.create_series_iterator(chunk_id), initial_interval),
                                select_hints.function_parameters.lookback_delta);
       }
     });

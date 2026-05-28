@@ -46,7 +46,11 @@ class LookbackDeltaIterator {
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     if (iterator_ != DecodeIteratorSentinel{}) [[likely]] {
-      sample_ = *iterator_;
+      if (BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[unlikely]] {
+        sample_ = kInvalidSample;
+      } else {
+        sample_ = *iterator_;
+      }
     } else if (!sample_in_lookback_delta_interval()) {
       sample_ = kInvalidSample;
     }

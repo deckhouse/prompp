@@ -19,21 +19,22 @@ using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
 using series_data::decoder::UniversalDecodeIterator;
-using series_data::decoder::decorator::LastOverTimeIterator;
+using series_data::decoder::decorator::LastOverTimeWithStaleNansIterator;
 using series_data::decoder::decorator::LookbackDeltaIterator;
 using series_data::decoder::decorator::MultiSeriesIterator;
 using series_data::decoder::decorator::StepLookbackDeltaWindowCalculator;
 using series_data::decoder::decorator::WindowFunctionParameters;
 using series_data::encoder::Sample;
 
-using MultiSeriesMinIterator =
-    MultiSeriesIterator<LookbackDeltaIterator<LastOverTimeIterator<>>, series_data::decoder::decorator::FindMinElement, StepLookbackDeltaWindowCalculator>;
+using MultiSeriesMinIterator = MultiSeriesIterator<LookbackDeltaIterator<LastOverTimeWithStaleNansIterator<>>,
+                                                   series_data::decoder::decorator::FindMinElement,
+                                                   StepLookbackDeltaWindowCalculator>;
 
 class MultiSeriesIteratorFixture : public ::testing::Test {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  BareBones::Vector<LookbackDeltaIterator<LastOverTimeIterator<>>> iterators_;
+  BareBones::Vector<LookbackDeltaIterator<LastOverTimeWithStaleNansIterator<>>> iterators_;
   BareBones::Vector<Sample> samples_;
 
   void create_iterators(std::initializer_list<uint32_t> series_ids, const WindowFunctionParameters& parameters) {
@@ -41,8 +42,9 @@ class MultiSeriesIteratorFixture : public ::testing::Test {
 
     for (const auto series_id : series_ids) {
       Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[series_id], [&]<typename Iterator>(Iterator&& begin, auto&&) {
-        iterators_.emplace_back(LastOverTimeIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, initial_window),
-                                parameters.lookback_delta);
+        iterators_.emplace_back(
+            LastOverTimeWithStaleNansIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, initial_window),
+            parameters.lookback_delta);
       });
     }
   }
@@ -175,6 +177,34 @@ TEST_F(MultiSeriesIteratorMinElementFixture, LoopbackInterval) {
   EXPECT_EQ((BareBones::Vector{
                 Sample{.timestamp = 100, .value = 10.0},
                 Sample{.timestamp = 200, .value = 20.0},
+            }),
+            samples_);
+}
+
+TEST_F(MultiSeriesIteratorMinElementFixture, StaleNansInSeries) {
+  // Arrange
+  encoder_.encode(0, 50, 20.0);
+  encoder_.encode(1, 80, 10.0);
+  encoder_.encode(0, 150, STALE_NAN);
+  encoder_.encode(1, 180, STALE_NAN);
+  encoder_.encode(0, 250, 20.0);
+  encoder_.encode(1, 280, 30.0);
+
+  constexpr WindowFunctionParameters parameters = {
+      .interval = TimeInterval{.min = 0, .max = 300},
+      .step = 100,
+      .lookback_delta = 100,
+  };
+  create_iterators({0, 1}, parameters);
+
+  // Act
+  get_samples(parameters);
+
+  // Assert
+  EXPECT_EQ((BareBones::Vector{
+                Sample{.timestamp = 100, .value = 10.0},
+                Sample{.timestamp = 200, .value = STALE_NAN},
+                Sample{.timestamp = 300, .value = 20.0},
             }),
             samples_);
 }
