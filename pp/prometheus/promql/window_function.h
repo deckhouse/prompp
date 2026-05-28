@@ -32,6 +32,7 @@ enum class FunctionType : uint8_t {
   kThinning,
   kSynthesizing,
   kCrossSeriesSynthesizing,
+  kExtrapolatedRate,
 };
 
 struct Function {
@@ -42,8 +43,8 @@ struct Function {
 // The order of the functions must match the order in the WindowFunction enum
 constexpr std::array kFunctions = {
     Function{.name = "", .type = FunctionType::kNone},
-    Function{.name = "rate", .type = FunctionType::kNone},
-    Function{.name = "increase", .type = FunctionType::kNone},
+    Function{.name = "rate", .type = FunctionType::kExtrapolatedRate},
+    Function{.name = "increase", .type = FunctionType::kExtrapolatedRate},
     Function{.name = "irate", .type = FunctionType::kNone},
     Function{.name = "idelta", .type = FunctionType::kNone},
     Function{.name = "min_over_time", .type = FunctionType::kThinning},
@@ -51,7 +52,7 @@ constexpr std::array kFunctions = {
     Function{.name = "last_over_time", .type = FunctionType::kThinning},
     Function{.name = "last_over_step", .type = FunctionType::kNone},
     Function{.name = "sum_over_time", .type = FunctionType::kNone},
-    Function{.name = "delta", .type = FunctionType::kNone},
+    Function{.name = "delta", .type = FunctionType::kExtrapolatedRate},
     Function{.name = "resets", .type = FunctionType::kNone},
     Function{.name = "changes", .type = FunctionType::kThinning},
     Function{.name = "sum", .type = FunctionType::kNone},

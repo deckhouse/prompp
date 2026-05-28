@@ -1,9 +1,10 @@
 package cppbridge
 
 const (
-	PromqlCppThinningFunction                = 1
-	PromqlCppSynthesizingFunction            = 2
-	PromqlCppCrossSeriesSynthesizingFunction = 3
+	PromqlCppThinningFunction = iota + 1
+	PromqlCppSynthesizingFunction
+	PromqlCppCrossSeriesSynthesizingFunction
+	PromqlCppExtrapolatedRateFunction
 )
 
 // GetFlavor returns recognized architecture flavor
