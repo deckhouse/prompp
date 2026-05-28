@@ -172,15 +172,15 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum"},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum"},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
@@ -213,15 +213,15 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum"},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum"},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
@@ -253,9 +253,6 @@ const (
 
 	// defaultStep is the default step.
 	defaultStep = 15 * time.Second
-
-	// defaultCountOfSteps is the default count of steps.
-	defaultCountOfSteps = 480
 )
 
 //
@@ -438,14 +435,10 @@ type QuerierOptimizeSuite struct {
 	queryFuncs    []queryFunc
 }
 
-func TestQuerieOptimizeSuite(t *testing.T) {
-	suite.Run(t, new(QuerierOptimizeSuite))
-}
-
 func (s *QuerierOptimizeSuite) SetupSuite() {
 	s.start = time.UnixMilli(defaultStartMs)
 	s.step = defaultStep
-	s.end = s.start.Add(s.step * 480) // 480 steps
+	s.end = s.start.Add(s.step * defaultCountOfSteps) // 480 steps
 
 	s.dataDir = s.createDataDirectory()
 	s.head = s.mustCreateHead(0)
@@ -535,6 +528,10 @@ func (s *QuerierOptimizeSuite) fillHead() {
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
 		},
 		{
+			Labels:  labels.FromStrings("__name__", "sin_cos_metric", "value", "sin_stalenan", "inc", "tick_second"),
+			Samples: make([]cppbridge.Sample, 0, countOfSamples),
+		},
+		{
 			Labels:  labels.FromStrings("__name__", "sin_cos_metric", "value", "cos", "inc", "tick_usecond"),
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
 		},
@@ -556,6 +553,7 @@ func (s *QuerierOptimizeSuite) fillHead() {
 		},
 	}
 
+	floatStaleNaN := math.Float64frombits(value.StaleNaN)
 	resetsCounter := 1
 	valueCounter := 1
 	for ts := s.start; !ts.After(s.end); ts = ts.Add(s.step) {
@@ -566,22 +564,33 @@ func (s *QuerierOptimizeSuite) fillHead() {
 		timeSeries[1].Samples = append(timeSeries[1].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(ts.Second())) * 10},
 		)
-		timeSeries[2].Samples = append(timeSeries[2].Samples,
+
+		if valueCounter%5 == 0 {
+			timeSeries[2].Samples = append(timeSeries[2].Samples,
+				cppbridge.Sample{Timestamp: tsMilli, Value: floatStaleNaN},
+			)
+		} else {
+			timeSeries[2].Samples = append(timeSeries[2].Samples,
+				cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(ts.Second())) * 10},
+			)
+		}
+
+		timeSeries[3].Samples = append(timeSeries[3].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Cos(float64(ts.UnixMilli())) * 10},
 		)
-		timeSeries[3].Samples = append(timeSeries[3].Samples,
+		timeSeries[4].Samples = append(timeSeries[4].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Cos(float64(ts.Second())) * 10},
 		)
-		timeSeries[4].Samples = append(timeSeries[4].Samples,
+		timeSeries[5].Samples = append(timeSeries[5].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter)},
 		)
 
 		if valueCounter%5 == 0 {
-			timeSeries[5].Samples = append(timeSeries[5].Samples,
-				cppbridge.Sample{Timestamp: tsMilli, Value: math.Float64frombits(value.StaleNaN)},
+			timeSeries[6].Samples = append(timeSeries[6].Samples,
+				cppbridge.Sample{Timestamp: tsMilli, Value: floatStaleNaN},
 			)
 		} else {
-			timeSeries[5].Samples = append(timeSeries[5].Samples,
+			timeSeries[6].Samples = append(timeSeries[6].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter + 1)},
 			)
 		}
@@ -589,7 +598,7 @@ func (s *QuerierOptimizeSuite) fillHead() {
 		if resetsCounter%10 == 0 {
 			resetsCounter = 1
 		}
-		timeSeries[6].Samples = append(timeSeries[6].Samples,
+		timeSeries[7].Samples = append(timeSeries[7].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: float64(resetsCounter)},
 		)
 
@@ -636,39 +645,10 @@ func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
 		EnableNegativeOffset:     true,
 	})
 
-	s.steps = []time.Duration{
-		s.step - time.Second,
-		s.step,
-		(s.step - time.Second) * 2,
-		s.step * 2,
-		(s.step - time.Second) * 4,
-		s.step * 4,
-		(s.step - time.Second) * 5,
-	}
-	s.subQueries = []subQuery{
-		{window: model.Duration(s.step), step: 0},                               // [15s]
-		{window: model.Duration(s.step * 4), step: 0},                           // [60s]
-		{window: model.Duration(s.step*4 - time.Second), step: 0},               // [59s]
-		{window: model.Duration(s.step*4 + time.Second), step: 0},               // [61s]
-		{window: model.Duration(s.step * 4), step: 0, defaultStep: true},        // [60s:]
-		{window: model.Duration(s.step*16 - time.Second), step: 0},              // [239s]
-		{window: model.Duration(s.step * 16), step: 0},                          // [240s]
-		{window: model.Duration(s.step*16 + time.Second), step: 0},              // [241s]
-		{window: model.Duration(s.step * 16), step: model.Duration(s.step * 4)}, // [240s:60s]
-	}
-	s.modifiers = []modifier{
-		modifierNone,
-		modifier(fmt.Sprintf(modifierAt, s.start.Unix()+(s.end.Unix()-s.start.Unix())/2)), // middle of the range
-		modifierEnd,
-		modifierStart,
-	}
-	s.offsets = []offset{
-		newOffset(0),
-		newOffset(s.end.Sub(s.start) / 2),
-		newOffset(-s.end.Sub(s.start) / 2),
-		newOffset(s.end.Sub(s.start)),
-		newOffset(-s.end.Sub(s.start)),
-	}
+	s.steps = defaultSteps
+	s.subQueries = defaultSubQueries
+	s.modifiers = defaultModifiers
+	s.offsets = defaultOffsets
 
 	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
 	s.Require().NoError(err)
@@ -754,29 +734,6 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRange() {
 			s.Require().Equal(res.res, resOpt.res)
 		})
 	})
-}
-
-func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeWithStep() {
-	ctx := s.T().Context()
-	w := 30 * time.Minute
-	stepWindow := w / 2
-
-	for st, end := s.start, s.start.Add(w); !end.After(s.end); st, end = st.Add(stepWindow), end.Add(stepWindow) {
-		s.rangeArgs(func(qFunc queryFunc, mName string, step time.Duration, subq subQuery, mod modifier, o offset) {
-			query := qFunc.toQueryString(mName, subq, mod, o)
-			s.Run(fmt.Sprintf("%s_step_%s", query, step), func() {
-				res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, st, end, step)
-				s.Require().NoError(err)
-				defer res.qry.Close()
-
-				resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, st, end, step)
-				s.Require().NoError(err)
-				defer resOpt.qry.Close()
-
-				s.Require().Equal(res.res, resOpt.res)
-			})
-		})
-	}
 }
 
 func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantStart() {

@@ -184,7 +184,6 @@ type QuickQuerierOptimizeSuite struct {
 }
 
 func TestQuickQuerierOptimizeSuite(t *testing.T) {
-	// t.Skip("long test")
 	suite.Run(t, new(QuickQuerierOptimizeSuite))
 }
 
