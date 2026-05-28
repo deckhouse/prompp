@@ -38,7 +38,7 @@ require (
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/consul/api v1.29.4
-	github.com/hashicorp/nomad/api v0.0.0-20260522071703-d69256f355f5
+	github.com/hashicorp/nomad/api v0.0.0-20260528135333-5b027732945f
 	github.com/hetznercloud/hcloud-go/v2 v2.13.1
 	github.com/ionos-cloud/sdk-go/v6 v6.2.1
 	github.com/jonboulle/clockwork v0.5.0
