@@ -27,7 +27,5 @@ class LastOverStep {
 
 template <class Iterator = UniversalDecodeIterator>
 using LastOverStepIterator = OverTimeFuncIterator<LastOverStep, Iterator, true>;
-template <class Iterator = UniversalDecodeIterator>
-using LastOverStepWithStaleNansIterator = OverTimeFuncIterator<LastOverStep, Iterator, false>;
 
 }  // namespace series_data::decoder::decorator

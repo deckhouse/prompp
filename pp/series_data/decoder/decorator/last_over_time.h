@@ -20,4 +20,7 @@ class LastOverTime {
 template <class Iterator = UniversalDecodeIterator>
 using LastOverTimeIterator = OverTimeFuncIterator<LastOverTime, Iterator, true>;
 
+template <class Iterator = UniversalDecodeIterator>
+using LastOverTimeWithStaleNansIterator = OverTimeFuncIterator<LastOverTime, Iterator, false>;
+
 }  // namespace series_data::decoder::decorator
