@@ -455,17 +455,20 @@ func (s *QuerierOptimizeSuite) SetupSuite() {
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
 
 	s.queryFuncs = []queryFunc{
-		// {name: "rate", needRange: true}, // -
-		// {name: "irate", needRange: true}, // -
-		// {name: "delta", needRange: true}, // -
-		// {name: "idelta", needRange: true}, // -
-		// {name: "increase", needRange: true}, // -
-		{name: "min_over_time", needRange: true},  // +
-		{name: "max_over_time", needRange: true},  // +
-		{name: "last_over_time", needRange: true}, // +
-		// {name: "sum_over_time", needRange: true}, // -
-		// {name: "resets", needRange: true}, // -
-		{name: "changes", needRange: true}, // +
+		// // {name: "rate", needRange: true}, // -
+		// // {name: "irate", needRange: true}, // -
+		// // {name: "delta", needRange: true}, // -
+		// // {name: "idelta", needRange: true}, // -
+		// // {name: "increase", needRange: true}, // -
+		// {name: "min_over_time", needRange: true},  // +
+		// {name: "max_over_time", needRange: true},  // +
+		// {name: "last_over_time", needRange: true}, // +
+		// // {name: "sum_over_time", needRange: true}, // -
+		// // {name: "resets", needRange: true}, // -
+		// {name: "changes", needRange: true}, // +
+		{name: "min", needRange: false}, // +
+		{name: "max", needRange: false}, // +
+		// {name: "sum", needRange: false}, // +
 	}
 
 	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
@@ -699,17 +702,21 @@ func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgs(fn func(
 							fn(qFunc, metricName, step, subq, mod, o)
 						}
 					}
+
+					if !qFunc.needRange {
+						break // skip subQuery
+					}
 				}
 			}
 		}
 	}
 }
 
-// rangeArgsWithStep runs the given function for all combinations of
+// rangeArgsWithoutStep runs the given function for all combinations of
 // query functions, metric names, subqueries, modifiers and offsets.
 //
 //revive:disable-next-line:cognitive-complexity // matrix test
-func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgsWithStep(fn func(
+func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgsWithoutStep(fn func(
 	qFunc queryFunc,
 	metricName string,
 	subq subQuery,
@@ -775,7 +782,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeWithStep() {
 func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantStart() {
 	ctx := s.T().Context()
 
-	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
+	s.rangeArgsWithoutStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
 		query := qFunc.toQueryString(metricName, subq, mod, o)
 		s.Run(query, func() {
 			res, err := queryInstant(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.start)
@@ -794,7 +801,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantStart() {
 func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantMiddle() {
 	ctx := s.T().Context()
 
-	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
+	s.rangeArgsWithoutStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
 		query := qFunc.toQueryString(metricName, subq, mod, o)
 		s.Run(query, func() {
 			res, err := queryInstant(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.start.Add(s.step*90))
@@ -813,7 +820,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantMiddle() {
 func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantEnd() {
 	ctx := s.T().Context()
 
-	s.rangeArgsWithStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
+	s.rangeArgsWithoutStep(func(qFunc queryFunc, metricName string, subq subQuery, mod modifier, o offset) {
 		query := qFunc.toQueryString(metricName, subq, mod, o)
 		s.Run(query, func() {
 			res, err := queryInstant(ctx, "none", s.queryEngine, s, s.queryOpts, query, s.end)
