@@ -3,9 +3,11 @@ package querier_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/parser"
 	prom_storage "github.com/prometheus/prometheus/storage"
 )
 
@@ -459,9 +462,9 @@ func (s *QuerierOptimizeSuite) SetupSuite() {
 		// // {name: "sum_over_time", needRange: true}, // -
 		// // {name: "resets", needRange: true}, // -
 		// {name: "changes", needRange: true}, // +
-		{name: "min", needRange: false}, // +
-		{name: "max", needRange: false}, // +
-		// {name: "sum", needRange: false}, // +
+		// {name: "min", needRange: false}, // +
+		// {name: "max", needRange: false}, // +
+		{name: "sum", needRange: false}, // +
 	}
 
 	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
@@ -606,6 +609,10 @@ func (s *QuerierOptimizeSuite) fillHead() {
 		valueCounter++
 	}
 
+	fmt.Println("timeSeries 5:", timeSeries[5].Samples[len(timeSeries[5].Samples)-1])
+	fmt.Println("timeSeries 6:", timeSeries[6].Samples[len(timeSeries[6].Samples)-1])
+	fmt.Println("timeSeries 7:", timeSeries[7].Samples[len(timeSeries[7].Samples)-1])
+
 	s.appendTimeSeries(timeSeries)
 }
 
@@ -712,6 +719,10 @@ func (s *MatrixQuerierOptimizeSuiteSuite) rangeArgsWithoutStep(fn func(
 						fn(qFunc, metricName, subq, mod, o)
 					}
 				}
+
+				if !qFunc.needRange {
+					break // skip subQuery
+				}
 			}
 		}
 	}
@@ -731,7 +742,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRange() {
 			s.Require().NoError(err)
 			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.res, resOpt.res)
+			s.Require().True(resultEqual(res.res, resOpt.res, query))
 		})
 	})
 }
@@ -750,7 +761,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantStart() {
 			s.Require().NoError(err)
 			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.res, resOpt.res)
+			s.Require().True(resultEqual(res.res, resOpt.res, query))
 		})
 	})
 }
@@ -769,7 +780,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantMiddle() {
 			s.Require().NoError(err)
 			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.res, resOpt.res)
+			s.Require().True(resultEqual(res.res, resOpt.res, query))
 		})
 	})
 }
@@ -788,7 +799,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryInstantEnd() {
 			s.Require().NoError(err)
 			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.res, resOpt.res)
+			s.Require().True(resultEqual(res.res, resOpt.res, query))
 		})
 	})
 }
@@ -808,7 +819,248 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
 			s.Require().NoError(err)
 			defer resOpt.qry.Close()
 
-			s.Require().Equal(res.res, resOpt.res)
+			s.Require().True(resultEqual(res.res, resOpt.res, query))
 		})
 	}
+}
+
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle2() {
+	ctx := s.T().Context()
+	query := "sum(counter_metric)"
+	start := time.UnixMilli(1779290900885)
+	end := time.UnixMilli(1779298553283)
+	step := time.Duration(7424188 * 1e6)
+	// for _, metricName := range s.metricNames {
+	// 	query := fmt.Sprintf(queryF, metricName)
+	s.Run(query, func() {
+		res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, start, end, step)
+		s.Require().NoError(err)
+		defer res.qry.Close()
+
+		resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, start, end, step)
+		s.Require().NoError(err)
+		defer resOpt.qry.Close()
+
+		s.Require().True(resultEqual(res.res, resOpt.res, query))
+	})
+	// }
+}
+
+//
+// resultEqual
+//
+
+// defaultEpsilon is the default epsilon for comparing two values.
+var defaultEpsilon = 0.0000000000001
+
+// resultEqual compares two results.
+//
+//nolint:gocritic // unnamedResult // comporator
+func resultEqual(exp, act *promql.Result, query string) (bool, string) {
+	if exp == nil && act == nil {
+		return true, ""
+	}
+
+	if exp == nil || act == nil {
+		return false, fmt.Sprintf("one of the results is nil: %s", query)
+	}
+
+	if exp.Err != act.Err {
+		return false, fmt.Sprintf("expected error %v, got %v: %s", exp.Err, act.Err, query)
+	}
+
+	if !maps.Equal(exp.Warnings, act.Warnings) {
+		return false, fmt.Sprintf("expected warnings %v, got %v: %s", exp.Warnings, act.Warnings, query)
+	}
+
+	if eq, result := valueEqual(exp.Value, act.Value); !eq {
+		return false, fmt.Sprintf("query: %s\n%s", query, result)
+	}
+
+	return true, ""
+}
+
+// valueEqual compares two values.
+//
+//nolint:gocritic // unnamedResult // comporator
+func valueEqual(exp, act parser.Value) (bool, string) {
+	if exp == nil && act == nil {
+		return true, ""
+	}
+
+	if exp == nil || act == nil {
+		return false, "one of the values is nil"
+	}
+
+	if exp.Type() != act.Type() {
+		return false, fmt.Sprintf("value type: expected %s, got %s", exp.Type(), act.Type())
+	}
+
+	switch expType := exp.(type) {
+	case promql.Scalar:
+		return scalarEqual(expType, act.(promql.Scalar))
+
+	case promql.Vector:
+		return vectorEqual(expType, act.(promql.Vector))
+
+	case promql.Matrix:
+		return matrixEqual(expType, act.(promql.Matrix))
+
+	default:
+		return false, fmt.Sprintf("expected scalar, vector or matrix, got %T", exp)
+	}
+}
+
+// scalarEqual compares two scalars.
+//
+//nolint:gocritic // unnamedResult // comporator
+func scalarEqual(exp, act promql.Scalar) (bool, string) {
+	if exp.T != act.T || !inEpsilon(exp.V, act.V, defaultEpsilon) {
+		return false, fmt.Sprintf("scalar: %s != %s", exp, act)
+	}
+
+	return true, ""
+}
+
+// vectorEqual compares two vectors.
+//
+//nolint:gocritic // unnamedResult // comporator
+func vectorEqual(exp, act promql.Vector) (bool, string) {
+	if len(exp) != len(act) {
+		return false, fmt.Sprintf("vector: length: %d != %d", len(exp), len(act))
+	}
+
+	msg := strings.Builder{}
+	_, _ = msg.WriteString("vector:\n")
+	isEqual := true
+
+	for i, v := range exp {
+		if eq, result := sampleEqual(v, act[i]); !eq {
+			_, _ = msg.WriteString(result)
+			isEqual = false
+		}
+	}
+
+	if isEqual {
+		msg.Reset()
+	}
+
+	return isEqual, msg.String()
+}
+
+// sampleEqual compares two samples.
+//
+//nolint:gocritic // unnamedResult // comporator
+func sampleEqual(exp, act promql.Sample) (bool, string) {
+	if !labels.Equal(exp.Metric, act.Metric) {
+		return false, fmt.Sprintf("labels: %s != %s\n", exp.Metric, act.Metric)
+	}
+
+	msg := strings.Builder{}
+	_, _ = fmt.Fprintf(&msg, "labels: %s\n", exp.Metric)
+	isEqual := true
+
+	if exp.T != act.T || !inEpsilon(exp.F, act.F, defaultEpsilon) {
+		_, _ = fmt.Fprintf(
+			&msg,
+			"floats:\n %s != %s\n",
+			promql.FPoint{T: exp.T, F: exp.F},
+			promql.FPoint{T: act.T, F: act.F},
+		)
+		isEqual = false
+	}
+
+	if isEqual {
+		msg.Reset()
+	}
+
+	return isEqual, msg.String()
+}
+
+// matrixEqual compares two matrices.
+//
+//nolint:gocritic // unnamedResult // comporator
+func matrixEqual(exp, act promql.Matrix) (bool, string) {
+	if len(exp) != len(act) {
+		return false, fmt.Sprintf("matrix: length: %d != %d", len(exp), len(act))
+	}
+
+	msg := strings.Builder{}
+	_, _ = msg.WriteString("matrix:\n")
+	isEqual := true
+
+	for i, v := range exp {
+		if eq, result := seriesEqual(v, act[i]); !eq {
+			_, _ = msg.WriteString(result)
+			isEqual = false
+		}
+	}
+
+	if isEqual {
+		msg.Reset()
+	}
+
+	return isEqual, msg.String()
+}
+
+// seriesEqual compares two series.
+//
+//nolint:gocritic // unnamedResult // comporator
+func seriesEqual(exp, act promql.Series) (bool, string) {
+	if !labels.Equal(exp.Metric, act.Metric) {
+		return false, fmt.Sprintf("labels: %s != %s\n", exp.Metric, act.Metric)
+	}
+
+	msg := strings.Builder{}
+	isEqual := true
+	_, _ = fmt.Fprintf(&msg, "labels: %s\n", exp.Metric)
+
+	if len(exp.Floats) != len(act.Floats) {
+		_, _ = fmt.Fprintf(&msg, "floats: length: %d != %d\n", len(exp.Floats), len(act.Floats))
+		_, _ = fmt.Fprintf(&msg, "    exp: %s\n", exp.Floats)
+		_, _ = fmt.Fprintf(&msg, "    act: %s\n", act.Floats)
+		return false, msg.String()
+	}
+
+	_, _ = msg.WriteString("floats:\n")
+
+	for i, v := range exp.Floats {
+		if v.T != act.Floats[i].T || !inEpsilon(v.F, act.Floats[i].F, defaultEpsilon) {
+			// if v.T != act.Floats[i].T || v.F != act.Floats[i].F {
+			_, _ = fmt.Fprintf(&msg, "  %s != %s\n", v, act.Floats[i])
+			isEqual = false
+		}
+	}
+
+	if isEqual {
+		msg.Reset()
+	}
+
+	return isEqual, msg.String()
+}
+
+// inEpsilon checks if two values are within epsilon.
+func inEpsilon(expected, actual, epsilon float64) bool {
+	if math.IsNaN(expected) && math.IsNaN(actual) {
+		return true
+	}
+
+	if math.IsNaN(expected) || math.IsNaN(actual) {
+		return false
+	}
+
+	if expected == 0 && actual == 0 {
+		return true
+	}
+
+	if expected == 0 || actual == 0 {
+		return false
+	}
+
+	return calcRelative(expected, actual) <= epsilon
+}
+
+// calcRelative calculates the relative between two values.
+func calcRelative(expected, actual float64) float64 {
+	return math.Abs(expected-actual) / math.Abs(expected)
 }

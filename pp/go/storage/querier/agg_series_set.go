@@ -161,6 +161,7 @@ func (s *AggSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 // Labels returns the labels of the [AggSeries].
 // [storage.Series] interface implementation.
 func (s *AggSeries) Labels() labels.Labels {
+	fmt.Println("Labels", s.labelSet)
 	return s.labelSet
 }
 
@@ -204,6 +205,7 @@ func NewAggChunkIterator(
 //
 //nolint:gocritic // unnamedResult not need
 func (it *AggChunkIterator) At() (int64, float64) {
+	fmt.Println("At", it.chunkIterator.Timestamp(), it.chunkIterator.Value())
 	return it.chunkIterator.Timestamp(), it.chunkIterator.Value()
 }
 
@@ -235,12 +237,16 @@ func (*AggChunkIterator) Err() error {
 // [chunkenc.Iterator] interface implementation.
 func (it *AggChunkIterator) Next() chunkenc.ValueType {
 	if it.nextValue() == chunkenc.ValNone {
+		fmt.Println("Next: ValNone")
 		return chunkenc.ValNone
 	}
 
 	if it.AtT() > it.maxt {
+		fmt.Println("Next: AtT() > maxt")
 		return chunkenc.ValNone
 	}
+
+	fmt.Println("Next: ValFloat")
 
 	return chunkenc.ValFloat
 }
@@ -248,25 +254,18 @@ func (it *AggChunkIterator) Next() chunkenc.ValueType {
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
 // [chunkenc.Iterator] interface implementation.
 func (it *AggChunkIterator) Seek(t int64) chunkenc.ValueType {
-	// adjust lower limit.
-	if t < it.mint {
-		t = it.mint
+	it.isInitialized = true
+	if t > it.AtT() {
+		fmt.Println("Seek: t > AtT()")
+		return it.Next()
 	}
 
-	ts := it.AtT()
-	if !it.isInitialized || ts < t {
-		panic(fmt.Sprintf("Seek: timestamp(%d) < mint(%d)", ts, t))
-		// 	it.chunkIterator.Seek(t)
-		// 	it.isInitialized = true
-		// 	if !it.chunkIterator.HasData() {
-		// 		return chunkenc.ValNone
-		// 	}
-		// 	ts = it.AtT()
-	}
-
-	if ts > it.maxt {
+	if it.AtT() > it.maxt {
+		fmt.Println("Seek: AtT() > maxt")
 		return chunkenc.ValNone
 	}
+
+	fmt.Println("Seek: ValFloat")
 
 	return chunkenc.ValFloat
 }

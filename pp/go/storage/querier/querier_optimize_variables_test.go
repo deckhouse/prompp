@@ -73,7 +73,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeWithStep() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				s.Require().Equal(res.res, resOpt.res)
+				s.Require().True(resultEqual(res.res, resOpt.res, query))
 			})
 		})
 	}

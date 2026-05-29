@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include "primitives/primitives.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 
@@ -45,6 +46,8 @@ class LookbackDeltaIterator {
   PromPP::Primitives::Timestamp lookback_delta_;
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+    std::cout << "update_sample: " << iterator_->timestamp << " v: " << iterator_->value << std::endl;
+
     if (iterator_ != DecodeIteratorSentinel{}) [[likely]] {
       if (BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[unlikely]] {
         sample_ = kInvalidSample;
@@ -57,6 +60,7 @@ class LookbackDeltaIterator {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool sample_in_lookback_delta_interval() const noexcept {
+    std::cout << "sample_in_lookback_delta_interval: " << sample_.timestamp << " > " << iterator_.interval().max << " - " << lookback_delta_ << std::endl;
     return sample_.timestamp > iterator_.interval().max - lookback_delta_;
   }
 };
