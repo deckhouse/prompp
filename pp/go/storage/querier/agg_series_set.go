@@ -161,7 +161,6 @@ func (s *AggSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 // Labels returns the labels of the [AggSeries].
 // [storage.Series] interface implementation.
 func (s *AggSeries) Labels() labels.Labels {
-	fmt.Println("Labels", s.labelSet)
 	return s.labelSet
 }
 
@@ -205,7 +204,6 @@ func NewAggChunkIterator(
 //
 //nolint:gocritic // unnamedResult not need
 func (it *AggChunkIterator) At() (int64, float64) {
-	fmt.Println("At", it.chunkIterator.Timestamp(), it.chunkIterator.Value())
 	return it.chunkIterator.Timestamp(), it.chunkIterator.Value()
 }
 
@@ -237,16 +235,12 @@ func (*AggChunkIterator) Err() error {
 // [chunkenc.Iterator] interface implementation.
 func (it *AggChunkIterator) Next() chunkenc.ValueType {
 	if it.nextValue() == chunkenc.ValNone {
-		fmt.Println("Next: ValNone")
 		return chunkenc.ValNone
 	}
 
 	if it.AtT() > it.maxt {
-		fmt.Println("Next: AtT() > maxt")
 		return chunkenc.ValNone
 	}
-
-	fmt.Println("Next: ValFloat")
 
 	return chunkenc.ValFloat
 }
@@ -256,16 +250,12 @@ func (it *AggChunkIterator) Next() chunkenc.ValueType {
 func (it *AggChunkIterator) Seek(t int64) chunkenc.ValueType {
 	it.isInitialized = true
 	if t > it.AtT() {
-		fmt.Println("Seek: t > AtT()")
 		return it.Next()
 	}
 
 	if it.AtT() > it.maxt {
-		fmt.Println("Seek: AtT() > maxt")
 		return chunkenc.ValNone
 	}
-
-	fmt.Println("Seek: ValFloat")
 
 	return chunkenc.ValFloat
 }

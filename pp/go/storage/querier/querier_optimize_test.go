@@ -471,20 +471,21 @@ func (s *QuerierOptimizeSuite) SetupSuite() {
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
 
 	s.queryFuncs = []queryFunc{
-		// // {name: "rate", needRange: true}, // -
-		// // {name: "irate", needRange: true}, // -
-		// // {name: "delta", needRange: true}, // -
-		// // {name: "idelta", needRange: true}, // -
-		// // {name: "increase", needRange: true}, // -
-		// {name: "min_over_time", needRange: true},  // +
-		// {name: "max_over_time", needRange: true},  // +
-		// {name: "last_over_time", needRange: true}, // +
-		// // {name: "sum_over_time", needRange: true}, // -
-		// // {name: "resets", needRange: true}, // -
-		// {name: "changes", needRange: true}, // +
-		// {name: "min", needRange: false}, // +
-		// {name: "max", needRange: false}, // +
-		{name: "sum", needRange: false}, // +
+		{name: "min_over_time", needRange: true},  // +
+		{name: "max_over_time", needRange: true},  // +
+		{name: "last_over_time", needRange: true}, // +
+		{name: "changes", needRange: true},        // +
+		{name: "min", needRange: false},           // +
+		{name: "max", needRange: false},           // +
+		{name: "sum", needRange: false},           // +
+
+		// {name: "rate", needRange: true}, // -
+		// {name: "irate", needRange: true}, // -
+		// {name: "delta", needRange: true}, // -
+		// {name: "idelta", needRange: true}, // -
+		// {name: "increase", needRange: true}, // -
+		// {name: "sum_over_time", needRange: true}, // -
+		// {name: "resets", needRange: true}, // -
 	}
 
 	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
@@ -628,10 +629,6 @@ func (s *QuerierOptimizeSuite) fillHead() {
 		resetsCounter++
 		valueCounter++
 	}
-
-	fmt.Println("timeSeries 5:", timeSeries[5].Samples[len(timeSeries[5].Samples)-1])
-	fmt.Println("timeSeries 6:", timeSeries[6].Samples[len(timeSeries[6].Samples)-1])
-	fmt.Println("timeSeries 7:", timeSeries[7].Samples[len(timeSeries[7].Samples)-1])
 
 	s.appendTimeSeries(timeSeries)
 }
@@ -844,28 +841,6 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
 	}
 }
 
-func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle2() {
-	ctx := s.T().Context()
-	query := "sum(counter_metric)"
-	start := time.UnixMilli(1779290900885)
-	end := time.UnixMilli(1779298553283)
-	step := time.Duration(7424188 * 1e6)
-	// for _, metricName := range s.metricNames {
-	// 	query := fmt.Sprintf(queryF, metricName)
-	s.Run(query, func() {
-		res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, start, end, step)
-		s.Require().NoError(err)
-		defer res.qry.Close()
-
-		resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, start, end, step)
-		s.Require().NoError(err)
-		defer resOpt.qry.Close()
-
-		s.Require().True(resultEqual(res.res, resOpt.res, query))
-	})
-	// }
-}
-
 //
 // resultEqual
 //
@@ -882,15 +857,15 @@ func resultEqual(exp, act *promql.Result, query string) (bool, string) {
 	}
 
 	if exp == nil || act == nil {
-		return false, fmt.Sprintf("one of the results is nil: %s", query)
+		return false, fmt.Sprintf("query: %s\none of the results is nil", query)
 	}
 
 	if exp.Err != act.Err {
-		return false, fmt.Sprintf("expected error %v, got %v: %s", exp.Err, act.Err, query)
+		return false, fmt.Sprintf("query: %s\nerror: %v, got %v", query, exp.Err, act.Err)
 	}
 
 	if !maps.Equal(exp.Warnings, act.Warnings) {
-		return false, fmt.Sprintf("expected warnings %v, got %v: %s", exp.Warnings, act.Warnings, query)
+		return false, fmt.Sprintf("query: %s\nwarnings: %v, got %v", query, exp.Warnings, act.Warnings)
 	}
 
 	if eq, result := valueEqual(exp.Value, act.Value); !eq {
@@ -1046,8 +1021,7 @@ func seriesEqual(exp, act promql.Series) (bool, string) {
 
 	for i, v := range exp.Floats {
 		if v.T != act.Floats[i].T || !inEpsilon(v.F, act.Floats[i].F, defaultEpsilon) {
-			// if v.T != act.Floats[i].T || v.F != act.Floats[i].F {
-			_, _ = fmt.Fprintf(&msg, "  %s != %s\n", v, act.Floats[i])
+			_, _ = fmt.Fprintf(&msg, "    %s != %s\n", v, act.Floats[i])
 			isEqual = false
 		}
 	}
