@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -627,6 +629,32 @@ func (s *querierOptimize) fillHead(ctx context.Context) {
 	storagetest.MustAppendTimeSeries(ctx, s.noErrorFunc, s.head, timeSeries)
 }
 
+// fillHeadWithCounter fills the head with the given number of counter metrics.
+func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, counter int) {
+	countOfSamples := (s.end.UnixMilli()-s.start.UnixMilli())/s.step.Milliseconds() + 1
+	timeSeries := make([]storagetest.TimeSeries, 0, counter)
+	for i := range counter {
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels:  labels.FromStrings("__name__", "counter_metric", "value", "inc", "counter", strconv.Itoa(i)),
+			Samples: make([]cppbridge.Sample, 0, countOfSamples),
+		})
+	}
+
+	valueCounter := 1
+	for ts := s.start; !ts.After(s.end); ts = ts.Add(s.step) {
+		tsMilli := ts.UnixMilli()
+		for i := range counter {
+			timeSeries[i].Samples = append(timeSeries[i].Samples,
+				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter)},
+			)
+		}
+
+		valueCounter++
+	}
+
+	storagetest.MustAppendTimeSeries(ctx, s.noErrorFunc, s.head, timeSeries)
+}
+
 // Querier implements the [prom_storage.Queryable] interface.
 func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error) {
 	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
@@ -1056,4 +1084,50 @@ func inEpsilon(expected, actual, epsilon float64) bool {
 // calcRelative calculates the relative between two values.
 func calcRelative(expected, actual float64) float64 {
 	return math.Abs(expected-actual) / math.Abs(expected)
+}
+
+//
+// Benchmark
+//
+
+func BenchmarkRangeQuery(b *testing.B) {
+	ctx := b.Context()
+	qo := &querierOptimize{}
+	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
+	qo.fillHeadWithCounter(ctx, 50)
+	defer qo.close()
+
+	queryEngine := promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               100000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            qo.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return qo.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
+	})
+
+	query := "sum(counter_metric)"
+	// query := "max_over_time(counter_metric[3600s])"
+
+	// step := qo.step
+	step := qo.step * 4
+
+	b.Run("none", func(b *testing.B) {
+		b.ResetTimer()
+		for b.Loop() {
+			res, err := queryRange(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+			require.NoError(b, err)
+			res.qry.Close()
+		}
+	})
+
+	b.Run("all", func(b *testing.B) {
+		b.ResetTimer()
+		for b.Loop() {
+			res, err := queryRange(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+			require.NoError(b, err)
+			res.qry.Close()
+		}
+	})
 }
