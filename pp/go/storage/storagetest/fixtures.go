@@ -28,7 +28,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/suite"
 )
 
 // TimeSeries test data.
@@ -74,30 +73,33 @@ func (tsd *timeSeriesDataSlice) Destroy() {
 	tsd.timeSeries = nil
 }
 
+// NoErrorFunc is a function that can be used to assert that an error is nil.
+type NoErrorFunc func(err error, msgAndArgs ...any)
+
 // MustAppendTimeSeries add time series to head.
-func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeSeries) {
+func MustAppendTimeSeries(ctx context.Context, noErrorFunc NoErrorFunc, head *storage.Head, timeSeries []TimeSeries) {
 	headAppender := appender.New(head, services.CFViaRange)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
-	s.Require().NoError(err)
+	noErrorFunc(err)
 
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetStatelessRelabeler(statelessRelabeler)
 
 	for i := range timeSeries {
 		_, err = headAppender.Append(
-			context.Background(),
-			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
+			ctx,
+			NewIncomingData(noErrorFunc, timeSeries[i].toModelTimeSeries()),
 			state,
 			true)
-		s.NoError(err)
+		noErrorFunc(err)
 	}
 }
 
-func NewIncomingData(s *suite.Suite, timeSeries []model.TimeSeries) *appender.IncomingData {
+func NewIncomingData(noErrorFunc NoErrorFunc, timeSeries []model.TimeSeries) *appender.IncomingData {
 	tsd := timeSeriesDataSlice{timeSeries: timeSeries}
 	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-	s.Require().NoError(err)
+	noErrorFunc(err)
 
 	return &appender.IncomingData{Hashdex: hx, Data: &tsd}
 }

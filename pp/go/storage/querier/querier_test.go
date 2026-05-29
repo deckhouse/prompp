@@ -133,7 +133,7 @@ func (s *QuerierSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *
 }
 
 func (s *QuerierSuite) appendTimeSeries(timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, timeSeries)
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, timeSeries)
 }
 
 func (s *QuerierSuite) TestRangeQuery() {

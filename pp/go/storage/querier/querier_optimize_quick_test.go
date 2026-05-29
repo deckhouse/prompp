@@ -220,7 +220,8 @@ func (oqp *OffsetQueryParams) offsetGen(rd *rand.Rand) {
 //
 
 type QuickQuerierOptimizeSuite struct {
-	QuerierOptimizeSuite
+	suite.Suite
+	querierOptimize
 
 	quickQE *promql.Engine
 }
@@ -230,7 +231,7 @@ func TestQuickQuerierOptimizeSuite(t *testing.T) {
 }
 
 func (s *QuickQuerierOptimizeSuite) SetupSuite() {
-	s.QuerierOptimizeSuite.SetupSuite()
+	s.querierOptimize.setup(s.T().Context(), s.T().TempDir(), s.Require().NoError)
 
 	s.quickQE = promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -241,6 +242,10 @@ func (s *QuickQuerierOptimizeSuite) SetupSuite() {
 		EnableAtModifier:         true,
 		EnableNegativeOffset:     true,
 	})
+}
+
+func (s *QuickQuerierOptimizeSuite) TearDownSuite() {
+	s.Suite.Require().NoError(s.querierOptimize.close())
 }
 
 func (s *QuickQuerierOptimizeSuite) TestQueryRangeQuickQueryParam() {

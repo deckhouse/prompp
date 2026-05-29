@@ -440,11 +440,12 @@ func queryInstant(
 }
 
 //
-// QuerierOptimizeSuite
+// querierOptimize
 //
 
-type QuerierOptimizeSuite struct {
-	suite.Suite
+// querierOptimize is the querier optimizer for testing.
+type querierOptimize struct {
+	noErrorFunc storagetest.NoErrorFunc
 
 	dataDir string
 	head    *storage.Head
@@ -458,14 +459,18 @@ type QuerierOptimizeSuite struct {
 	queryFuncs    []queryFunc
 }
 
-func (s *QuerierOptimizeSuite) SetupSuite() {
+// setup sets up the querier optimizer.
+func (s *querierOptimize) setup(ctx context.Context, baseDir string, noErrorFunc storagetest.NoErrorFunc) {
+	s.noErrorFunc = noErrorFunc
 	s.start = time.UnixMilli(defaultStartMs)
 	s.step = defaultStep
 	s.end = s.start.Add(s.step * defaultCountOfSteps) // 480 steps
 
-	s.dataDir = s.createDataDirectory()
+	s.dataDir = filepath.Join(baseDir, "data")
+	s.noErrorFunc(os.MkdirAll(s.dataDir, os.ModeDir))
+
 	s.head = s.mustCreateHead(0)
-	s.fillHead()
+	s.fillHead(ctx)
 
 	s.lookbackDelta = 5 * time.Minute
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
@@ -489,28 +494,24 @@ func (s *QuerierOptimizeSuite) SetupSuite() {
 	}
 
 	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
-	s.Require().NoError(err)
+	s.noErrorFunc(err)
 
-	names, _, err := q.LabelValues(s.T().Context(), "__name__", &prom_storage.LabelHints{})
-	s.Require().NoError(err)
+	names, _, err := q.LabelValues(ctx, "__name__", &prom_storage.LabelHints{})
+	s.noErrorFunc(err)
 
 	s.metricNames = querier.DeduplicateAndSortStringSlices(names)
-	s.Require().NoError(q.Close())
+	s.noErrorFunc(q.Close())
 }
 
-func (s *QuerierOptimizeSuite) TearDownSuite() {
-	s.Require().NoError(s.head.Close())
+// close closes the querier optimizer.
+func (s *querierOptimize) close() error {
+	return s.head.Close()
 }
 
-func (s *QuerierOptimizeSuite) createDataDirectory() string {
-	dataDir := filepath.Join(s.T().TempDir(), "data")
-	s.Require().NoError(os.MkdirAll(dataDir, os.ModeDir))
-	return dataDir
-}
-
-func (s *QuerierOptimizeSuite) mustCreateCatalog() *catalog.Catalog {
+// mustCreateHead creates a new head.
+func (s *querierOptimize) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	l, err := catalog.NewFileLogV2(filepath.Join(s.dataDir, "catalog.log"))
-	s.Require().NoError(err)
+	s.noErrorFunc(err)
 
 	c, err := catalog.New(
 		clockwork.NewFakeClock(),
@@ -519,28 +520,21 @@ func (s *QuerierOptimizeSuite) mustCreateCatalog() *catalog.Catalog {
 		catalog.DefaultMaxLogFileSize,
 		nil,
 	)
-	s.Require().NoError(err)
+	s.noErrorFunc(err)
 
-	return c
-}
-
-func (s *QuerierOptimizeSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	h, err := storage.NewBuilder(
-		s.mustCreateCatalog(),
+		c,
 		s.dataDir,
 		maxSegmentSize,
 		prometheus.DefaultRegisterer,
 		unloadDataStorageInterval,
 	).Build(0, numberOfShards)
-	s.Require().NoError(err)
+	s.noErrorFunc(err)
 	return h
 }
 
-func (s *QuerierOptimizeSuite) appendTimeSeries(timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, timeSeries)
-}
-
-func (s *QuerierOptimizeSuite) fillHead() {
+// fillHead fills the head with the given time series.
+func (s *querierOptimize) fillHead(ctx context.Context) {
 	countOfSamples := (s.end.UnixMilli()-s.start.UnixMilli())/s.step.Milliseconds() + 1
 	timeSeries := []storagetest.TimeSeries{
 		{
@@ -630,11 +624,11 @@ func (s *QuerierOptimizeSuite) fillHead() {
 		valueCounter++
 	}
 
-	s.appendTimeSeries(timeSeries)
+	storagetest.MustAppendTimeSeries(ctx, s.noErrorFunc, s.head, timeSeries)
 }
 
 // Querier implements the [prom_storage.Queryable] interface.
-func (s *QuerierOptimizeSuite) Querier(mint, maxt int64) (prom_storage.Querier, error) {
+func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error) {
 	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
 }
 
@@ -643,7 +637,8 @@ func (s *QuerierOptimizeSuite) Querier(mint, maxt int64) (prom_storage.Querier, 
 //
 
 type MatrixQuerierOptimizeSuiteSuite struct {
-	QuerierOptimizeSuite
+	suite.Suite
+	querierOptimize
 
 	queryEngine *promql.Engine
 	steps       []time.Duration
@@ -657,7 +652,7 @@ func TestMatrixQuerierOptimizeSuiteSuite(t *testing.T) {
 }
 
 func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
-	s.QuerierOptimizeSuite.SetupSuite()
+	s.querierOptimize.setup(s.T().Context(), s.T().TempDir(), s.Require().NoError)
 
 	s.queryEngine = promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -682,6 +677,10 @@ func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
 
 	s.metricNames = querier.DeduplicateAndSortStringSlices(names)
 	s.Require().NoError(q.Close())
+}
+
+func (s *MatrixQuerierOptimizeSuiteSuite) TearDownSuite() {
+	s.Suite.Require().NoError(s.querierOptimize.close())
 }
 
 // rangeArgs runs the given function for all combinations of
