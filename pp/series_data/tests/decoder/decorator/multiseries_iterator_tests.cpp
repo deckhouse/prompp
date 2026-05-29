@@ -212,12 +212,13 @@ TEST_F(MultiSeriesIteratorMinElementFixture, StaleNansInSeries) {
 
 using MultiSeriesIteratorSumOfElementsFixture = MultiSeriesIteratorFixture<SumOfElements>;
 
-TEST_F(MultiSeriesIteratorSumOfElementsFixture, SumOfEmptySamples) {
+TEST_F(MultiSeriesIteratorSumOfElementsFixture, SumOfNoSamplesInStep) {
   // Arrange
-  encoder_.encode(0, 50, STALE_NAN);
+  encoder_.encode(0, 50, 1.0);
+  encoder_.encode(0, 150, STALE_NAN);
 
   constexpr WindowFunctionParameters parameters = {
-      .interval = TimeInterval{.min = 0, .max = 100},
+      .interval = TimeInterval{.min = 0, .max = 200},
       .step = 100,
       .lookback_delta = 100,
   };
@@ -228,7 +229,34 @@ TEST_F(MultiSeriesIteratorSumOfElementsFixture, SumOfEmptySamples) {
 
   // Assert
   EXPECT_EQ((BareBones::Vector{
-                Sample{.timestamp = 100, .value = STALE_NAN},
+                Sample{.timestamp = 100, .value = 1.0},
+                Sample{.timestamp = 200, .value = STALE_NAN},
+            }),
+            samples_);
+}
+
+TEST_F(MultiSeriesIteratorSumOfElementsFixture, SkipLeadingStaleNans) {
+  // Arrange
+  encoder_.encode(0, 50, STALE_NAN);
+  encoder_.encode(0, 150, STALE_NAN);
+  encoder_.encode(0, 250, STALE_NAN);
+  encoder_.encode(0, 350, 1.0);
+  encoder_.encode(0, 450, 2.0);
+
+  constexpr WindowFunctionParameters parameters = {
+      .interval = TimeInterval{.min = 0, .max = 500},
+      .step = 100,
+      .lookback_delta = 100,
+  };
+  create_iterators({0}, parameters);
+
+  // Act
+  get_samples(parameters);
+
+  // Assert
+  EXPECT_EQ((BareBones::Vector{
+                Sample{.timestamp = 400, .value = 1.0},
+                Sample{.timestamp = 500, .value = 2.0},
             }),
             samples_);
 }

@@ -13,7 +13,7 @@ class MultiSeriesIterator {
 
   explicit MultiSeriesIterator(BareBones::Vector<Iterator>&& iterators, const WindowFunctionParameters& parameters)
       : iterators_(std::move(iterators)), parameters_(&parameters) {
-    update_sample();
+    seek_to_first_non_stale_nan_sample();
   }
 
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
@@ -36,6 +36,12 @@ class MultiSeriesIterator {
   encoder::Sample sample_;
   BareBones::Vector<Iterator> iterators_;
   const WindowFunctionParameters* parameters_;
+
+  PROMPP_ALWAYS_INLINE void seek_to_first_non_stale_nan_sample() {
+    do {
+      update_sample();
+    } while (*this != DecodeIteratorSentinel{} && BareBones::Encoding::Gorilla::isstalenan(sample_.value));
+  }
 
   void update_sample() {
     sample_ = encoder::Sample{.timestamp = kInvalidTimestamp, .value = BareBones::Encoding::Gorilla::STALE_NAN};
