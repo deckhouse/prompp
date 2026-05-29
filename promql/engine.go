@@ -985,6 +985,7 @@ func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s
 				Range:         durationMilliseconds(evalRange),
 				Func:          extractFuncFromPath(path),
 				LookbackDelta: durationMilliseconds(s.LookbackDelta),
+				IsSubquery:    containsSubquery(path),
 			}
 			evalRange = 0
 			hints.By, hints.Grouping = extractGroupsFromPath(path)
@@ -1004,10 +1005,6 @@ func extractFuncFromPath(p []parser.Node) string {
 		return ""
 	}
 
-	if containsSubquery(p) {
-		return "subquery" // for subquery, we need to disable the optimization of the query
-	}
-
 	switch n := p[len(p)-1].(type) {
 	case *parser.AggregateExpr:
 		return n.Op.String()
@@ -1017,8 +1014,6 @@ func extractFuncFromPath(p []parser.Node) string {
 		// If we hit a binary expression we terminate since we only care about functions
 		// or aggregations over a single metric.
 		return ""
-	case *parser.SubqueryExpr:
-		return "subquery" // for subquery, we need to disable the optimization of the query
 	}
 	return extractFuncFromPath(p[:len(p)-1])
 }
