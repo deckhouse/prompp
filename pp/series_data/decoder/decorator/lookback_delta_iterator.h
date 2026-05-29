@@ -48,10 +48,13 @@ class LookbackDeltaIterator {
     if (iterator_ != DecodeIteratorSentinel{}) [[likely]] {
       if (BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[unlikely]] {
         sample_ = kInvalidSample;
-      } else {
-        sample_ = *iterator_;
+        return;
       }
-    } else if (!sample_in_lookback_delta_interval()) {
+
+      sample_ = *iterator_;
+    }
+
+    if (!sample_in_lookback_delta_interval()) {
       sample_ = kInvalidSample;
     }
   }
