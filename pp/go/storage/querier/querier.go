@@ -553,6 +553,10 @@ func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeT
 		return emptySelectHints
 	}
 
+	if hints.IsSubquery {
+		return emptySelectHints
+	}
+
 	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithpout(hints) {
 		return hints
 	}

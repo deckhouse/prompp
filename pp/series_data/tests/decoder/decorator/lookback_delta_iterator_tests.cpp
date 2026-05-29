@@ -95,11 +95,11 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                        Sample{.timestamp = 5, .value = STALE_NAN},
                                                                        Sample{.timestamp = 10, .value = 1.0},
                                                                        Sample{.timestamp = 20, .value = STALE_NAN},
-                                                                       Sample{.timestamp = 30, .value = 1.1},
+                                                                       Sample{.timestamp = 51, .value = 1.1},
                                                                    },
                                                                    .intervals{{.min = 0, .max = 100}},
                                                                    .lookback_delta = 50,
-                                                                   .expected{Sample{.timestamp = 30, .value = 1.1}}},
+                                                                   .expected{Sample{.timestamp = 51, .value = 1.1}}},
                                          LookbackDeltaIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
                                                                    .intervals{{.min = 0, .max = 100}},
                                                                    .lookback_delta = 50,
@@ -107,7 +107,7 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                          LookbackDeltaIteratorCase{.samples{
                                                                        Sample{.timestamp = 100, .value = 1.0},
                                                                        Sample{.timestamp = 101, .value = STALE_NAN},
-                                                                       Sample{.timestamp = 201, .value = 2.0},
+                                                                       Sample{.timestamp = 299, .value = 2.0},
                                                                    },
                                                                    .intervals{
                                                                        {.min = 0, .max = 100},
@@ -118,7 +118,7 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                    .expected{
                                                                        Sample{.timestamp = 100, .value = 1.0},
                                                                        kInvalidSample,
-                                                                       Sample{.timestamp = 201, .value = 2.0},
+                                                                       Sample{.timestamp = 299, .value = 2.0},
                                                                    }}));
 
 INSTANTIATE_TEST_SUITE_P(TimeInterval,
@@ -146,13 +146,9 @@ INSTANTIATE_TEST_SUITE_P(LookbackDeltaBoundary,
                          testing::Values(LookbackDeltaIteratorCase{.samples{Sample{.timestamp = 50, .value = 1.0}},
                                                                    .intervals{{.min = 100, .max = 200}},
                                                                    .lookback_delta = 50,
-                                                                   .expected{kInvalidSample}},
-                                         LookbackDeltaIteratorCase{.samples{Sample{.timestamp = 51, .value = 1.0}},
-                                                                   .intervals{{.min = 100, .max = 200}},
-                                                                   .lookback_delta = 50,
                                                                    .expected{kInvalidSample}}));
 
-INSTANTIATE_TEST_SUITE_P(KeepsSampleAfterIntervalShift,
+INSTANTIATE_TEST_SUITE_P(KeepSample,
                          LookbackDeltaIteratorFixture,
                          testing::Values(LookbackDeltaIteratorCase{.samples{Sample{.timestamp = 150, .value = 2.0}},
                                                                    .intervals{{.min = 100, .max = 200}, {.min = 201, .max = 300}},
@@ -162,5 +158,12 @@ INSTANTIATE_TEST_SUITE_P(KeepsSampleAfterIntervalShift,
                                                                    .intervals{{.min = 100, .max = 200}, {.min = 201, .max = 300}},
                                                                    .lookback_delta = 150,
                                                                    .expected{Sample{.timestamp = 150, .value = 2.0}, kInvalidSample}}));
+
+INSTANTIATE_TEST_SUITE_P(DropSample,
+                         LookbackDeltaIteratorFixture,
+                         testing::Values(LookbackDeltaIteratorCase{.samples{Sample{.timestamp = 50, .value = 2.0}},
+                                                                   .intervals{{.min = 0, .max = 100}},
+                                                                   .lookback_delta = 50,
+                                                                   .expected{kInvalidSample}}));
 
 }  // namespace

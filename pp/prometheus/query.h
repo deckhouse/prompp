@@ -25,6 +25,7 @@ struct GenericSelectHints {
 
   bool disable_trimming{};
   bool by{};
+  bool is_subquery{};
 
   bool operator==(const GenericSelectHints&) const noexcept = default;
 };

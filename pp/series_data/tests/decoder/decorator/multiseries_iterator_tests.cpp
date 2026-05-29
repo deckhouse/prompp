@@ -113,9 +113,9 @@ TEST_F(MultiSeriesIteratorMinElementFixture, TwoWindowsAcrossTwoSeries) {
   encoder_.encode(1, 201, 5.0);
 
   constexpr WindowFunctionParameters parameters = {
-      .interval = TimeInterval{.min = 149, .max = 250},
+      .interval = TimeInterval{.min = 100, .max = 250},
       .step = 50,
-      .lookback_delta = 1,
+      .lookback_delta = 50,
   };
   create_iterators({0, 1}, parameters);
 

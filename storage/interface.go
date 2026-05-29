@@ -223,6 +223,10 @@ type SelectHints struct {
 	DisableTrimming bool
 
 	By bool // Indicate whether it is without or by.
+
+	// IsSubquery indicates whether the query is a subquery.
+	// For subquery, we need to disable the optimization of the query
+	IsSubquery bool
 }
 
 // LabelHints specifies hints passed for label reads.
