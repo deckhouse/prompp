@@ -71,6 +71,10 @@ func (s *SwitchFuncOptimizeSuite) TestNone() {
 			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
 			expected: &prom_storage.SelectHints{},
 		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time", IsSubquery: true},
+			expected: &prom_storage.SelectHints{},
+		},
 	}
 
 	for _, test := range tests {
@@ -112,6 +116,10 @@ func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
 			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
 			expected: &prom_storage.SelectHints{Func: "max_over_time"},
 		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time", IsSubquery: true},
+			expected: &prom_storage.SelectHints{},
+		},
 	}
 
 	for _, test := range tests {
@@ -151,6 +159,10 @@ func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
+			expected: &prom_storage.SelectHints{},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time", IsSubquery: true},
 			expected: &prom_storage.SelectHints{},
 		},
 	}
@@ -194,6 +206,10 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
 			expected: &prom_storage.SelectHints{},
 		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time", IsSubquery: true},
+			expected: &prom_storage.SelectHints{},
+		},
 	}
 
 	for _, test := range tests {
@@ -234,6 +250,10 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 		{
 			hints:    &prom_storage.SelectHints{Func: "max_over_time"},
 			expected: &prom_storage.SelectHints{Func: "max_over_time"},
+		},
+		{
+			hints:    &prom_storage.SelectHints{Func: "max_over_time", IsSubquery: true},
+			expected: &prom_storage.SelectHints{},
 		},
 	}
 
