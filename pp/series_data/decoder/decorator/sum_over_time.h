@@ -18,11 +18,11 @@ class SumOfElements {
   }
 
   ~SumOfElements() {
-    if (!std::isinf(sum_.value)) [[likely]] {
-      sum_.value += c_;
-    }
-
     if (sum_.timestamp != kInvalidTimestamp) [[likely]] {
+      if (!std::isinf(sum_.value)) [[likely]] {
+        sum_.value += c_;
+      }
+
       sum_.timestamp = interval_.max;
     }
   }

@@ -548,6 +548,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 
 // SwitchFuncOptimize switch the function optimization hints.
 func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeType) *storage.SelectHints {
+	if hints == nil {
+		return emptySelectHints
+	}
+
 	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithpout(hints) {
 		return hints
 	}
