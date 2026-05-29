@@ -364,7 +364,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
 	s.enc.Encode(0, 50, 10.0)
-	s.enc.Encode(1, 80, 20.0)
+	s.enc.Encode(1, 130, 20.0)
 	s.enc.Encode(0, 150, 30.0)
 	s.enc.Encode(1, 180, 20.0)
 
