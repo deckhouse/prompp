@@ -17,9 +17,9 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
                            const BareBones::BitSequenceReader& values_reader,
                            bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
-    if (remaining_samples_ > 0) [[likely]] {
+    if (data_.remaining_samples > 0) [[likely]] {
       decode_value();
-      sample_.value = decoded_value();
+      data_.sample.value = decoded_value();
     }
   }
 
@@ -66,8 +66,8 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
   PROMPP_ALWAYS_INLINE void decode_value() noexcept { value_type_ = decoder_.decode(reader_, gorilla_state_); }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
-    sample_.timestamp = decoded_timestamp();
-    sample_.value = decoded_value();
+    data_.sample.timestamp = decoded_timestamp();
+    data_.sample.value = decoded_value();
   }
 };
 

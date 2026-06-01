@@ -71,7 +71,6 @@ class UniversalDecodeIterator {
                                        ValuesGorillaDecodeIterator,
                                        GorillaDecodeIterator>;
 
-#ifdef __cpp_lib_is_pointer_interconvertible
   template <class Variant>
   struct SampleIsFirstIteratorsField;
 
@@ -79,14 +78,13 @@ class UniversalDecodeIterator {
   struct SampleIsFirstIteratorsField<std::variant<Iterators...>> {
     template <class Iterator>
     struct SampleIsFirstIteratorField : Iterator {
-      static constexpr auto value = std::is_pointer_interconvertible_with_class(&SampleIsFirstIteratorField::sample_);
+      static constexpr auto value = decoder::DecodeIteratorData<decltype(SampleIsFirstIteratorField::data_)>;
     };
 
     static constexpr bool value = (SampleIsFirstIteratorField<Iterators>::value && ...);
   };
 
   static_assert(SampleIsFirstIteratorsField<IteratorVariant>::value, "each iterator must contain encoder::Sample as the first field");
-#endif
 
   union VariantLayoutAssertHelper {
     IteratorVariant variant;

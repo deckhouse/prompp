@@ -39,7 +39,7 @@ class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIter
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
-    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
+    if (data_.remaining_samples == 1 && data_.last_stalenan) [[unlikely]] {
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
 
@@ -60,8 +60,8 @@ class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIter
   }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
-    sample_.timestamp = decoded_timestamp();
-    sample_.value = decoded_value();
+    data_.sample.timestamp = decoded_timestamp();
+    data_.sample.value = decoded_value();
   }
 };
 
