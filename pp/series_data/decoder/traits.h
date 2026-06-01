@@ -127,7 +127,25 @@ class DecodeIteratorTrait {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
-template <class Derived>
+template <class Data>
+concept DecodeIteratorDataWithTimestampDecoder = requires(Data data) {
+  requires DecodeIteratorData<Data>;
+
+  requires std::same_as<encoder::timestamp::TimestampDecoder, decltype(data.timestamp_decoder)>;
+};
+
+#pragma pack(push, 1)
+struct DecoderDataWithTimestampDecoder {
+  encoder::Sample sample{};
+  uint8_t remaining_samples{};
+  encoder::timestamp::TimestampDecoder timestamp_decoder;
+  bool last_stalenan{false};
+};
+#pragma pack(pop)
+
+static_assert(DecodeIteratorDataWithTimestampDecoder<DecoderDataWithTimestampDecoder>);
+
+template <class Derived, DecodeIteratorDataWithTimestampDecoder Data = DecoderDataWithTimestampDecoder>
 class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<Derived> {
  public:
   using Base = DecodeIteratorTrait<Derived>;
@@ -139,11 +157,11 @@ class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<De
       : data_{
             .sample{.value = value},
             .remaining_samples = samples_count,
+            .timestamp_decoder{timestamp_reader},
             .last_stalenan = last_stalenan,
-        },
-        timestamp_decoder_(timestamp_reader) {
+        } {
     if (data_.remaining_samples > 0) [[likely]] {
-      data_.sample.timestamp = timestamp_decoder_.decode();
+      data_.sample.timestamp = data_.timestamp_decoder.decode();
     }
   }
 
@@ -162,19 +180,18 @@ class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<De
  protected:
   friend Base;
 
-  DefaultDecodeIteratorData<uint8_t> data_;
-  encoder::timestamp::TimestampDecoder timestamp_decoder_;
+  Data data_;
 
   PROMPP_ALWAYS_INLINE bool decode_timestamp() noexcept {
     if (--data_.remaining_samples > 0) [[likely]] {
-      std::ignore = timestamp_decoder_.decode();
+      std::ignore = data_.timestamp_decoder.decode();
       return true;
     }
 
     return false;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return timestamp_decoder_.timestamp(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
 };
 
 }  // namespace series_data::decoder
