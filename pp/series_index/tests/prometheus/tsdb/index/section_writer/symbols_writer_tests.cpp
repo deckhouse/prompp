@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "bare_bones/vector.h"
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -10,6 +11,9 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
@@ -18,6 +22,11 @@ using std::operator""sv;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
+
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
+using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
 struct SymbolsWriterCase {
   std::vector<LabelViewSet> label_sets;
@@ -35,8 +44,6 @@ LabelViewSet make_ls_with_empty_label_value() {
 
 class SymbolsWriterFixture : public testing::TestWithParam<SymbolsWriterCase> {
  protected:
-  using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
-
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
@@ -98,7 +105,6 @@ INSTANTIATE_TEST_SUITE_P(TestUniquenessAndSorting,
 
 class SymbolsWriterShrunkLssFixture : public testing::Test {
  protected:
-  using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   Lss lss_;
@@ -116,7 +122,8 @@ TEST_F(SymbolsWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
       lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping);
+  const ReadonlyLss resolve_snapshot(lss_copy);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
 
   // Act
   const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};

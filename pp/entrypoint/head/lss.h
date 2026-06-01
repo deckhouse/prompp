@@ -73,6 +73,12 @@ class SnapshotLSS : public PromPP::Primitives::SnugComposites::LabelSet::Decodin
 
   explicit SnapshotLSS(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
 
+  SnapshotLSS& operator=(const SnapshotLSS& other) {
+    Base::operator=(other);
+    sorting_index_ = other.sorting_index_;
+    return *this;
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return Base::operator[](id); }
 
@@ -84,6 +90,13 @@ class ShrinkAwareSnapshotLSS : public SnapshotLSS {
  public:
   explicit ShrinkAwareSnapshotLSS(const QueryableEncodingBimap& lss)
       : SnapshotLSS(lss), shrink_state_(lss.shrink_state().clone_for_snapshot()), added_series_(lss.added_series()) {}
+
+  ShrinkAwareSnapshotLSS& operator=(const ShrinkAwareSnapshotLSS& other) {
+    SnapshotLSS::operator=(other);
+    shrink_state_ = other.shrink_state_.clone_for_snapshot();
+    added_series_ = other.added_series_;
+    return *this;
+  }
 
   [[nodiscard]] value_type operator[](uint32_t id) const noexcept {
     if (shrink_state_.is_shrunk()) [[unlikely]] {

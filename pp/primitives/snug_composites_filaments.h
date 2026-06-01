@@ -781,8 +781,10 @@ struct LabelSetComposite {
 };
 
 template <template <template <class> class> class SymbolsTableType,
-          template <template <class> class> class LabelNameSetsTableType,
-          template <class> class Vector>
+          template <template <class> class>
+          class LabelNameSetsTableType,
+          template <class>
+          class Vector>
 struct LabelSet {
   class storage_type {
    public:
@@ -1115,8 +1117,28 @@ struct LabelSet {
     using view_type = label_set_view;
 
     storage_type() noexcept = default;
-    template <class AnotherStorageType>
+
+    storage_type& operator=(const storage_type& other) noexcept
       requires kIsReadOnly
+    {
+      if (this != &other) [[likely]] {
+        const auto symbols_tables_count = other.symbols_tables_.size();
+        symbols_tables_.resize(symbols_tables_count);
+        for (uint32_t i = 0; i < symbols_tables_count; ++i) {
+          symbols_tables_[i] = other.symbols_tables_[i];
+        }
+        symbols_ids_sequences_ = other.symbols_ids_sequences_;
+        label_name_sets_table_ = other.label_name_sets_table_;
+        next_item_index_ = other.next_item_index_;
+        shrinked_size_ = other.shrinked_size_;
+        items_ = other.items_;
+      }
+
+      return *this;
+    }
+
+    template <class AnotherStorageType>
+      requires(kIsReadOnly && !std::is_same_v<AnotherStorageType, storage_type>)
     explicit storage_type(const AnotherStorageType& other)
         : symbols_ids_sequences_(other.symbols_ids_sequences_),
           label_name_sets_table_(other.label_name_sets_table_),

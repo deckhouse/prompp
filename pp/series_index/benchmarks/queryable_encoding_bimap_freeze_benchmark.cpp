@@ -8,12 +8,18 @@
 #include <vector>
 
 #include "bare_bones/vector.h"
+#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/queryable_encoding_bimap.h"
 
 namespace {
 
-using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using LssCopier =
     series_index::QueryableEncodingBimapCopier<Lss, typename Lss::SortingIndexBuilder::Index, BareBones::Bitset, Lss, BareBones::Vector<uint32_t>>;
 
@@ -138,7 +144,8 @@ void FreezeAllStepsWithTiming(benchmark::State& state) {
 
     {
       const auto start = steady_clock::now();
-      lss.finalize_copy_and_shrink(copy, dst_src_ids_mapping);
+      const ReadonlyLss resolve_snapshot(copy);
+      lss.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
       timings.finalize_copy_and_shrink += steady_clock::now() - start;
     }
 

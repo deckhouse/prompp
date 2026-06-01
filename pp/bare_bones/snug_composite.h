@@ -293,7 +293,7 @@ class GenericDecodingTable {
   using delta_type = typename checkpoint_type::Delta;
 
   GenericDecodingTable() noexcept = default;
-  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version) {};
+  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version){};
 
   template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
     requires kIsReadOnly
@@ -301,6 +301,18 @@ class GenericDecodingTable {
       : storage_(other.storage_), version_(other.version_) {}
 
   GenericDecodingTable(const GenericDecodingTable& other) = delete;
+
+  GenericDecodingTable& operator=(const GenericDecodingTable& other) noexcept
+    requires kIsReadOnly
+  {
+    if (this != &other) [[likely]] {
+      storage_ = other.storage_;
+      version_ = other.version_;
+    }
+
+    return *this;
+  }
+
   GenericDecodingTable& operator=(const GenericDecodingTable& other) = delete;
 
   GenericDecodingTable(GenericDecodingTable&& other) noexcept = delete;

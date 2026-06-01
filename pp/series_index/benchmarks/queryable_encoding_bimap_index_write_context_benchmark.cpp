@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "bare_bones/vector.h"
+#include "primitives/snug_composites.h"
 #include "benchmark/statistic.h"
 #include "profiling/profiling.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -10,7 +11,12 @@
 
 namespace {
 
-using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using LssCopier =
     series_index::QueryableEncodingBimapCopier<Lss, typename Lss::SortingIndexBuilder::Index, BareBones::Bitset, Lss, BareBones::Vector<uint32_t>>;
 
@@ -65,7 +71,8 @@ const Lss& get_lss_after_shrink() {
     copier.copy_added_series_and_build_indexes();
 
     state.lss.set_pending_shrink_boundary(shrink_boundary);
-    state.lss.finalize_copy_and_shrink(state.snapshot_copy, dst_src_ids_mapping);
+    const ReadonlyLss resolve_snapshot(state.snapshot_copy);
+    state.lss.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
     initialized = true;
   }
   return state.lss;

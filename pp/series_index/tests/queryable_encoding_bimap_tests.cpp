@@ -10,16 +10,22 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = QueryableEncodingBimap<DefaultSharedVector>;
+using LsIdProxy = typename Lss::LsIdSet::value_type;
+
 class BimapFixture : public testing::Test {
  protected:
-  using Lss = QueryableEncodingBimap<BareBones::Vector>;
-
   Lss lss_;
 
   static void load_lss_with_single_series(const LabelViewSet& label_set, Lss& loaded, uint32_t& loaded_id) {
@@ -368,7 +374,6 @@ TEST_F(BimapFixedStateFixture, FixedStatePrunesLsIdSet) {
   EXPECT_EQ(new_id, 5U);
   EXPECT_EQ(ls_ids.size(), 4U);
 
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
   EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
   EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
   EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));
@@ -591,7 +596,8 @@ TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrie) {
 
   // Act
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  lss_.finalize_copy_and_shrink(lss_copy, dst_src_ids_mapping_);
+  const ReadonlyLss resolve_snapshot(lss_copy);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping_);
 
   // Assert
   EXPECT_TRUE(lss_.trie_index().names_trie().lookup("job"));
@@ -636,7 +642,8 @@ class BimapShrinkedStateFixture : public BimapFixture {
     Copier shrink_copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy_, dst_src_ids_mapping_);
     shrink_copier.copy_added_series_and_build_indexes();
     lss_.set_pending_shrink_boundary(kShrinkBoundary);
-    lss_.finalize_copy_and_shrink(lss_copy_, dst_src_ids_mapping_);
+    const ReadonlyLss resolve_snapshot(lss_copy_);
+    lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping_);
   }
 };
 
@@ -721,7 +728,6 @@ TEST_F(BimapShrinkedStateFixture, ShrinkLsIdSetKeepsAliveOnly) {
 
   EXPECT_EQ(3U, ls_ids.size());
 
-  using LsIdProxy = typename Lss::LsIdSet::value_type;
   EXPECT_FALSE(ls_ids.contains(LsIdProxy{0U}));
   EXPECT_TRUE(ls_ids.contains(LsIdProxy{1U}));
   EXPECT_FALSE(ls_ids.contains(LsIdProxy{2U}));

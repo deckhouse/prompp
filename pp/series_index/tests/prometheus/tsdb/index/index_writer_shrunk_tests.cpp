@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 
+#include "bare_bones/vector.h"
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
@@ -12,18 +13,23 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::prometheus::tsdb::index::IndexWriter;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
+using Stream = std::ostringstream;
+using Writer = IndexWriter<Lss, Stream>;
+
 class IndexWriterShrunkFixture : public testing::Test {
  protected:
-  using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
-  using Stream = std::ostringstream;
-  using Writer = IndexWriter<Lss, Stream>;
-
   Lss normal_lss_;
   Lss shrunk_lss_;
   Lss snapshot_copy_;
@@ -47,7 +53,8 @@ class IndexWriterShrunkFixture : public testing::Test {
     copier.copy_added_series_and_build_indexes();
 
     shrunk_lss_.set_pending_shrink_boundary(shrink_boundary);
-    shrunk_lss_.finalize_copy_and_shrink(snapshot_copy_, dst_src_ids_mapping);
+    const ReadonlyLss resolve_snapshot(snapshot_copy_);
+    shrunk_lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
   }
 
   static std::string write_index(const Lss& lss) {

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "bare_bones/vector.h"
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -12,6 +13,9 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::prometheus::tsdb::index::IndexWriteContext;
@@ -19,10 +23,12 @@ using series_index::prometheus::tsdb::index::IndexWriteContext;
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = QueryableEncodingBimap<DefaultSharedVector>;
+
 class IndexWriteContextFixture : public testing::Test {
  protected:
-  using Lss = QueryableEncodingBimap<BareBones::Vector>;
-
   const LabelViewSet ls0_{{"job", "a"}};
   const LabelViewSet ls1_{{"job", "b"}};
   const LabelViewSet ls2_{{"job", "c"}};
@@ -43,7 +49,8 @@ class IndexWriteContextFixture : public testing::Test {
     copier.copy_added_series_and_build_indexes();
 
     lss_.set_pending_shrink_boundary(shrink_boundary);
-    lss_.finalize_copy_and_shrink(snapshot_copy_, dst_src_ids_mapping);
+    const ReadonlyLss resolve_snapshot(snapshot_copy_);
+    lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
   }
 
   [[nodiscard]] std::vector<std::string> CollectSymbols() const {
