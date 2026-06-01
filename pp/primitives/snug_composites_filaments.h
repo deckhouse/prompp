@@ -781,10 +781,8 @@ struct LabelSetComposite {
 };
 
 template <template <template <class> class> class SymbolsTableType,
-          template <template <class> class>
-          class LabelNameSetsTableType,
-          template <class>
-          class Vector>
+          template <template <class> class> class LabelNameSetsTableType,
+          template <class> class Vector>
 struct LabelSet {
   class storage_type {
    public:

@@ -3,8 +3,8 @@
 #include <fstream>
 
 #include "bare_bones/vector.h"
-#include "primitives/snug_composites.h"
 #include "benchmark/statistic.h"
+#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/queryable_encoding_bimap.h"
