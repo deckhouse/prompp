@@ -3,6 +3,7 @@ package querier
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"slices"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -196,6 +197,12 @@ func NewAggChunkIterator(
 		maxt: maxt,
 	}
 
+	runtime.SetFinalizer(it, func(iter *AggChunkIterator) {
+		iter.chunkIterator.Close()
+		iter.serializedData = nil
+		iter.seriesGroups = nil
+	})
+
 	return it
 }
 
@@ -292,6 +299,7 @@ func (it *AggChunkIterator) reset(
 	it.maxt = maxt
 	it.isInitialized = false
 	// it.chunkIterator.Reset(serializedData, chunkRef)
+	it.chunkIterator.Close()
 	it.chunkIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(
 		serializedData,
 		seriesGroups.Groups[groupIndex],
