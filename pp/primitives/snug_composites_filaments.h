@@ -1120,6 +1120,7 @@ struct LabelSet {
       requires kIsReadOnly
     {
       if (this != &other) [[likely]] {
+        // Keep nested tables copied one by one to preserve their shared state
         const auto symbols_tables_count = other.symbols_tables_.size();
         symbols_tables_.resize(symbols_tables_count);
         for (uint32_t i = 0; i < symbols_tables_count; ++i) {

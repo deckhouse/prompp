@@ -26,10 +26,14 @@ class TypedPostShrinkSnapshotResolver final : public PostShrinkSnapshotResolver<
  public:
   TypedPostShrinkSnapshotResolver() = default;
 
-  explicit TypedPostShrinkSnapshotResolver(const Snapshot& snapshot) { snapshot_ = snapshot; }
+  explicit TypedPostShrinkSnapshotResolver(const Snapshot& snapshot) {
+    // Read-only snapshots can only be copied through assignment
+    snapshot_ = snapshot;
+  }
 
   [[nodiscard]] std::unique_ptr<PostShrinkSnapshotResolver<ValueType>> clone() const override {
     auto copy = std::make_unique<TypedPostShrinkSnapshotResolver<Snapshot, ValueType>>();
+    // Same readonly copy path from above
     copy->snapshot_ = snapshot_;
     return copy;
   }

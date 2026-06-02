@@ -44,8 +44,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   using PostShrinkSnapshotResolverPtr = std::unique_ptr<PostShrinkSnapshotResolver>;
 
   static constexpr uint32_t kPendingShrinkBoundaryNotSet = std::numeric_limits<uint32_t>::max();
-  static constexpr uint32_t kRebuildBasePercent = 35;
-  static constexpr uint32_t kRebuildBoundaryPercent = 10;
 
   enum class State : uint8_t {
     kNormal = 0,
@@ -361,6 +359,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   [[nodiscard]] bool should_rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) const noexcept {
+    // Rebuild when hidden fraction crosses 35% + 10% * boundary / N
+    static constexpr uint32_t kRebuildBasePercent = 35;
+    static constexpr uint32_t kRebuildBoundaryPercent = 10;
+
     const auto next_item_index = next_item_index_impl();
     const auto hidden_series_count = added_series_size - active_series_count;
     const auto lhs = static_cast<uint64_t>(hidden_series_count) * 100U * next_item_index;
