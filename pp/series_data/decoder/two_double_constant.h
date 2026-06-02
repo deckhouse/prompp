@@ -22,7 +22,6 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
             .remaining_samples = samples_count,
             .value1_count = encoder.value1_count(),
             .last_stalenan = is_last_stalenan,
-            .value1 = encoder.value1(),
             .value2 = encoder.value2(),
             .timestamp_decoder{timestamp_reader},
         } {
@@ -60,7 +59,6 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
     uint8_t remaining_samples{};
     uint8_t value1_count;
     bool last_stalenan{false};
-    double value1;
     double value2;
     encoder::timestamp::TimestampDecoder timestamp_decoder;
   };
