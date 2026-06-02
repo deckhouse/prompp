@@ -43,7 +43,6 @@ const (
 )
 
 var (
-
 	// per_goroutine_relabeler input_relabeling
 	perGoroutineRelabelerInputRelabelingSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1707,10 +1706,12 @@ func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
 	}{lss, shrinkBoundary}
 
 	testGC()
+	start := time.Now()
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_set_pending_shrink_boundary,
 		uintptr(unsafe.Pointer(&args)),
 	)
+	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
 //
