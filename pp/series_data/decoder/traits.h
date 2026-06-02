@@ -46,28 +46,34 @@ concept Seekable = requires(Iterator iterator, const Iterator const_iterator) {
 template <class SeekHandler>
 concept SampleSeekHandler = std::is_invocable_v<SeekHandler, PromPP::Primitives::Timestamp, double>;
 
-template <class Derived, std::unsigned_integral SampleCountType>
+template <class Data>
+concept DecodeIteratorData = requires(Data data) {
+  requires std::same_as<encoder::Sample, decltype(data.sample)>;
+
+  data.remaining_samples;
+
+#ifdef __cpp_lib_is_pointer_interconvertible
+  requires std::is_pointer_interconvertible_with_class(&Data::sample);
+#endif
+};
+
+template <class Derived>
 class DecodeIteratorTrait {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  explicit constexpr DecodeIteratorTrait(SampleCountType count) : remaining_samples_{count} {}
-  explicit constexpr DecodeIteratorTrait(double value, SampleCountType count) : sample_{.value = value}, remaining_samples_{count} {}
-  explicit constexpr DecodeIteratorTrait(double value, SampleCountType count, bool last_stalenan)
-      : sample_{.value = value}, remaining_samples_{count}, last_stalenan_{last_stalenan} {}
+  const encoder::Sample& operator*() const noexcept { return derived()->data_.sample; }
+  const encoder::Sample* operator->() const noexcept { return &derived()->data_.sample; }
 
-  const encoder::Sample& operator*() const noexcept { return sample_; }
-  const encoder::Sample* operator->() const noexcept { return &sample_; }
-
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return remaining_samples_ == 0; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SampleCountType remaining_samples() const noexcept { return remaining_samples_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return derived()->data_.remaining_samples == 0; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto remaining_samples() const noexcept { return derived()->data_.remaining_samples; }
 
   template <SeekKind Kind, class SeekHandler>
     requires Seekable<Derived>
   PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
     static constexpr auto has_kind = [](SeekResult operation) { return static_cast<uint8_t>(Kind) & static_cast<uint8_t>(operation); };
 
-    if (remaining_samples_ == 0) [[unlikely]] {
+    if (derived()->data_.remaining_samples == 0) [[unlikely]] {
       return;
     }
 
@@ -97,7 +103,7 @@ class DecodeIteratorTrait {
   }
 
   PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
-    if (remaining_samples_ == 0) [[unlikely]] {
+    if (derived()->data_.remaining_samples == 0) [[unlikely]] {
       return;
     }
 
@@ -110,59 +116,28 @@ class DecodeIteratorTrait {
     derived()->update_sample();
   }
 
-  PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { sample_.timestamp = kInvalidTimestamp; }
+  PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { derived()->data_.sample.timestamp = kInvalidTimestamp; }
 
  protected:
-  encoder::Sample sample_;
-  SampleCountType remaining_samples_{};
-  bool last_stalenan_{false};
-
- private:
   [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
-template <class Derived>
-class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<Derived, uint8_t> {
- public:
-  using Base = DecodeIteratorTrait<Derived, uint8_t>;
+template <class Data>
+concept DecodeIteratorDataWithTimestampDecoder = requires(Data data) {
+  requires DecodeIteratorData<Data>;
 
-  constexpr SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count,
-                                                       const BareBones::BitSequenceReader& timestamp_reader,
-                                                       double value,
-                                                       bool last_stalenan)
-      : Base(value, samples_count, last_stalenan), timestamp_decoder_(timestamp_reader) {
-    if (Base::remaining_samples_ > 0) [[likely]] {
-      Base::sample_.timestamp = timestamp_decoder_.decode();
-    }
-  }
-
-  template <class BitSequenceWithItemsCount>
-  explicit SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), 0.0, false) {}
-
-  template <class BitSequenceWithItemsCount>
-  SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, false) {}
-
-  template <class BitSequenceWithItemsCount>
-  SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value, bool last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, last_stalenan) {}
-
- protected:
-  friend class DecodeIteratorTrait<Derived, uint8_t>;
-
-  encoder::timestamp::TimestampDecoder timestamp_decoder_;
-
-  PROMPP_ALWAYS_INLINE bool decode_timestamp() noexcept {
-    if (--Base::remaining_samples_ > 0) [[likely]] {
-      std::ignore = timestamp_decoder_.decode();
-      return true;
-    }
-
-    return false;
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return timestamp_decoder_.timestamp(); }
+  requires std::same_as<encoder::timestamp::TimestampDecoder, decltype(data.timestamp_decoder)>;
 };
+
+template <DecodeIteratorDataWithTimestampDecoder Data>
+PROMPP_ALWAYS_INLINE bool decode_timestamp(Data& data) noexcept {
+  if (--data.remaining_samples > 0) [[likely]] {
+    std::ignore = data.timestamp_decoder.decode();
+    return true;
+  }
+
+  return false;
+}
 
 }  // namespace series_data::decoder

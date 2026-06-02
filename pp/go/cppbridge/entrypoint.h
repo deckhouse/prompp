@@ -40,7 +40,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 #define Sizeof_GoLabels 16
 
-#define Sizeof_SerializedDataIterator 240
+#define Sizeof_SerializedDataIterator 224
 
 #define Sizeof_MetricsIterator 24
 
