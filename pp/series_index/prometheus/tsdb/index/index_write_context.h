@@ -24,6 +24,7 @@ struct ExportSymbolId {
   constexpr ExportSymbolId() = default;
   constexpr ExportSymbolId(SymbolSource source, uint32_t name_id, uint32_t value_id)
       : name_id_bits(name_id), source_bit(pack_source(source)), value_id(value_id) {
+    assert(source != SymbolSource::kSnapshot || name_id != kNameIdMask || value_id != kNoId);
     assert(name_id <= kNameIdMask);
   }
 
@@ -67,10 +68,15 @@ class SymbolIdsCollector {
 
   [[nodiscard]] size_t estimate_count() const {
     const auto view = lss_.data_view();
+    const auto current_symbol_count = view.keys().size() + view.values().size();
     if (!lss_.shrink_state().is_shrunk()) {
-      return 1 + view.keys().size() + view.values().size();
+      // Empty symbol + current-side entries.
+      return current_symbol_count;
     }
-    return 1 + std::max(view.keys().size() + view.values().size(), static_cast<size_t>(lss_.items_count()) * 2U);
+    size_t snapshot_symbol_count = 0;
+    lss_.for_each_snapshot_symbol_id([&](uint32_t, uint32_t) { ++snapshot_symbol_count; });
+    // Empty symbol + current-side entries + snapshot-side entries.
+    return current_symbol_count + snapshot_symbol_count;
   }
 
   void collect_current(ExportSymbolIds& symbol_ids) const {
@@ -120,7 +126,8 @@ class IndexWriteContext {
   void rebuild() {
     symbols_.clear();
     symbol_refs_.clear();
-    build_symbol_table(SymbolIdsCollector<Lss>{lss_}.collect());
+    auto symbol_ids = SymbolIdsCollector<Lss>{lss_}.collect();
+    build_symbol_table(symbol_ids);
   }
 
   template <class Callback>
@@ -156,23 +163,21 @@ class IndexWriteContext {
   ExportSymbolIds symbols_;
   SymbolReferencesMap symbol_refs_;
 
-  void build_symbol_table(ExportSymbolIds symbol_ids) {
+  void build_symbol_table(ExportSymbolIds& symbol_ids) {
+    // Sort by resolved string so duplicate ids end up adjacent.
     std::ranges::sort(symbol_ids, [this](const auto& lhs, const auto& rhs) { return resolve_symbol(lhs) < resolve_symbol(rhs); });
     symbols_.reserve(symbol_ids.size());
     symbol_refs_.reserve(symbol_ids.size());
 
-    uint32_t symbol_ref = 0;
-    for (auto it = symbol_ids.begin(); it != symbol_ids.end(); ++symbol_ref) {
-      symbol_refs_.try_emplace(*it, symbol_ref);
+    for (auto it = symbol_ids.begin(); it != symbol_ids.end();) {
       const auto symbol = resolve_symbol(*it);
+      const auto symbol_ref = static_cast<uint32_t>(symbols_.size());
       symbols_.emplace_back(*it);
+      symbol_refs_.try_emplace(*it, symbol_ref);
 
       auto next = it;
-      while (true) {
-        ++next;
-        if (next == symbol_ids.end() || symbol != resolve_symbol(*next)) {
-          break;
-        }
+      for (++next; next != symbol_ids.end() && symbol == resolve_symbol(*next); ++next) {
+        // Same string can be backed by current and snapshot ids.
         symbol_refs_.try_emplace(*next, symbol_ref);
       }
       it = next;
