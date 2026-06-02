@@ -5,25 +5,31 @@
 
 namespace series_data::decoder {
 
-class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<TwoDoubleConstantDecodeIterator> {
+class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleConstantDecodeIterator> {
  public:
   template <class BitSequenceWithItemsCount>
   TwoDoubleConstantDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream,
                                   const encoder::value::TwoDoubleConstantEncoder& encoder,
                                   bool is_last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream, encoder.value1(), is_last_stalenan),
-        value1_(encoder.value1()),
-        value2_(encoder.value2()),
-        value1_count_(encoder.value1_count()) {}
+      : TwoDoubleConstantDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), encoder, is_last_stalenan) {}
 
   TwoDoubleConstantDecodeIterator(uint8_t samples_count,
                                   const BareBones::BitSequenceReader& timestamp_reader,
                                   const encoder::value::TwoDoubleConstantEncoder& encoder,
                                   bool is_last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, encoder.value1(), is_last_stalenan),
-        value1_(encoder.value1()),
-        value2_(encoder.value2()),
-        value1_count_(encoder.value1_count()) {}
+      : data_{
+            .sample = {.value = encoder.value1()},
+            .remaining_samples = samples_count,
+            .value1_count = encoder.value1_count(),
+            .last_stalenan = is_last_stalenan,
+            .value1 = encoder.value1(),
+            .value2 = encoder.value2(),
+            .timestamp_decoder{timestamp_reader},
+        } {
+    if (data_.remaining_samples > 0) [[likely]] {
+      data_.sample.timestamp = data_.timestamp_decoder.decode();
+    }
+  }
 
   PROMPP_ALWAYS_INLINE TwoDoubleConstantDecodeIterator& operator++() noexcept {
     if (decode()) [[likely]] {
@@ -43,20 +49,37 @@ class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIter
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
 
-    return count_ <= value1_count_ ? value1_ : value2_;
+    return data_.sample.value;
   }
 
- private:
-  friend Base;
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
 
-  double value1_;
-  double value2_;
-  uint8_t value1_count_;
-  uint8_t count_{1};
+ protected:
+  struct Data {
+    encoder::Sample sample{};
+    uint8_t remaining_samples{};
+    uint8_t value1_count;
+    bool last_stalenan{false};
+    double value1;
+    double value2;
+    encoder::timestamp::TimestampDecoder timestamp_decoder;
+  };
+
+  static_assert(DecodeIteratorDataWithTimestampDecoder<Data>);
+
+  Data data_;
+
+ private:
+  friend DecodeIteratorTrait;
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
-    ++count_;
-    return decode_timestamp();
+    if (data_.value1_count > 0) [[likely]] {
+      if (--data_.value1_count == 0) [[unlikely]] {
+        data_.sample.value = data_.value2;
+      }
+    }
+
+    return decode_timestamp(data_);
   }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {

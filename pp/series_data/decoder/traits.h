@@ -48,19 +48,10 @@ concept DecodeIteratorData = requires(Data data) {
 
   data.remaining_samples;
 
-  requires std::same_as<bool, decltype(data.last_stalenan)>;
-
+#ifndef __CLION_IDE__
   requires std::is_pointer_interconvertible_with_class(&Data::sample);
+#endif
 };
-
-template <std::unsigned_integral SampleCountType>
-struct DefaultDecodeIteratorData {
-  encoder::Sample sample{};
-  SampleCountType remaining_samples{};
-  bool last_stalenan{false};
-};
-
-static_assert(DecodeIteratorData<DefaultDecodeIteratorData<uint8_t>>);
 
 template <class Derived>
 class DecodeIteratorTrait {
@@ -122,7 +113,7 @@ class DecodeIteratorTrait {
 
   PROMPP_ALWAYS_INLINE void set(const encoder::Sample& sample) noexcept { derived()->data_.sample_ = sample; }
 
- private:
+ protected:
   [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
@@ -134,64 +125,14 @@ concept DecodeIteratorDataWithTimestampDecoder = requires(Data data) {
   requires std::same_as<encoder::timestamp::TimestampDecoder, decltype(data.timestamp_decoder)>;
 };
 
-#pragma pack(push, 1)
-struct DecoderDataWithTimestampDecoder {
-  encoder::Sample sample{};
-  uint8_t remaining_samples{};
-  encoder::timestamp::TimestampDecoder timestamp_decoder;
-  bool last_stalenan{false};
-};
-#pragma pack(pop)
-
-static_assert(DecodeIteratorDataWithTimestampDecoder<DecoderDataWithTimestampDecoder>);
-
-template <class Derived, DecodeIteratorDataWithTimestampDecoder Data = DecoderDataWithTimestampDecoder>
-class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<Derived> {
- public:
-  using Base = DecodeIteratorTrait<Derived>;
-
-  constexpr SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count,
-                                                       const BareBones::BitSequenceReader& timestamp_reader,
-                                                       double value,
-                                                       bool last_stalenan)
-      : data_{
-            .sample{.value = value},
-            .remaining_samples = samples_count,
-            .timestamp_decoder{timestamp_reader},
-            .last_stalenan = last_stalenan,
-        } {
-    if (data_.remaining_samples > 0) [[likely]] {
-      data_.sample.timestamp = data_.timestamp_decoder.decode();
-    }
+template <DecodeIteratorDataWithTimestampDecoder Data>
+PROMPP_ALWAYS_INLINE bool decode_timestamp(Data& data) noexcept {
+  if (--data.remaining_samples > 0) [[likely]] {
+    std::ignore = data.timestamp_decoder.decode();
+    return true;
   }
 
-  template <class BitSequenceWithItemsCount>
-  explicit SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), 0.0, false) {}
-
-  template <class BitSequenceWithItemsCount>
-  SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, false) {}
-
-  template <class BitSequenceWithItemsCount>
-  SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value, bool last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, last_stalenan) {}
-
- protected:
-  friend Base;
-
-  Data data_;
-
-  PROMPP_ALWAYS_INLINE bool decode_timestamp() noexcept {
-    if (--data_.remaining_samples > 0) [[likely]] {
-      std::ignore = data_.timestamp_decoder.decode();
-      return true;
-    }
-
-    return false;
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
-};
+  return false;
+}
 
 }  // namespace series_data::decoder
