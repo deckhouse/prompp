@@ -22,6 +22,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
             .remaining_samples = samples_count,
             .value1_count = encoder.value1_count(),
             .last_stalenan = is_last_stalenan,
+            .value1 = encoder.value1(),
             .value2 = encoder.value2(),
             .timestamp_decoder{timestamp_reader},
         } {
@@ -48,7 +49,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
 
-    return data_.sample.value;
+    return data_.value1_count > 0 ? data_.value1 : data_.value2;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
@@ -59,6 +60,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
     uint8_t remaining_samples{};
     uint8_t value1_count;
     bool last_stalenan{false};
+    double value1;
     double value2;
     encoder::timestamp::TimestampDecoder timestamp_decoder;
   };
@@ -72,9 +74,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
     if (data_.value1_count > 0) [[likely]] {
-      if (--data_.value1_count == 0) [[unlikely]] {
-        data_.sample.value = data_.value2;
-      }
+      --data_.value1_count;
     }
 
     return decode_timestamp(data_);
