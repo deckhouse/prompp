@@ -37,10 +37,16 @@ import (
 
 type SwitchFuncOptimizeSuite struct {
 	suite.Suite
+
+	isPossibleToOptimize func() bool
 }
 
 func TestSwitchFuncOptimizeSuite(t *testing.T) {
 	suite.Run(t, new(SwitchFuncOptimizeSuite))
+}
+
+func (s *SwitchFuncOptimizeSuite) SetupSuite() {
+	s.isPossibleToOptimize = func() bool { return true }
 }
 
 func (s *SwitchFuncOptimizeSuite) TestNone() {
@@ -83,7 +89,7 @@ func (s *SwitchFuncOptimizeSuite) TestNone() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, 0)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -128,7 +134,7 @@ func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, 1)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -173,7 +179,7 @@ func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, 2)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -218,7 +224,7 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, 4)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -263,7 +269,7 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, 7)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -277,7 +283,7 @@ const (
 	defaultStartMs = 1779290789000
 
 	// defaultStep is the default step.
-	defaultStep = 15 * time.Second
+	defaultStep = 30 * time.Second
 )
 
 //
@@ -473,18 +479,22 @@ func (s *querierOptimize) setup(ctx context.Context, baseDir string, noErrorFunc
 
 	s.head = s.mustCreateHead(0)
 	s.fillHead(ctx)
+	s.fillHeadWithCounter(ctx, querier.DefaultCountOfSeriesToOptimize)
 
 	s.lookbackDelta = 5 * time.Minute
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
 
 	s.queryFuncs = []queryFunc{
-		{name: "min_over_time", needRange: true},  // +
-		{name: "max_over_time", needRange: true},  // +
-		{name: "last_over_time", needRange: true}, // +
-		{name: "changes", needRange: true},        // +
-		{name: "min", needRange: false},           // +
-		{name: "max", needRange: false},           // +
-		{name: "sum", needRange: false},           // +
+		{name: "min_over_time", needRange: true},   // +
+		{name: "max_over_time", needRange: true},   // +
+		{name: "last_over_time", needRange: true},  // +
+		{name: "changes", needRange: true},         // +
+		{name: "min", needRange: false},            // +
+		{name: "min by(value) ", needRange: false}, // +
+		{name: "max", needRange: false},            // +
+		{name: "max by(value) ", needRange: false}, // +
+		{name: "sum", needRange: false},            // +
+		{name: "sum by(value) ", needRange: false}, // +
 
 		// {name: "rate", needRange: true}, // -
 		// {name: "irate", needRange: true}, // -
@@ -632,10 +642,17 @@ func (s *querierOptimize) fillHead(ctx context.Context) {
 // fillHeadWithCounter fills the head with the given number of counter metrics.
 func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, counter int) {
 	countOfSamples := (s.end.UnixMilli()-s.start.UnixMilli())/s.step.Milliseconds() + 1
-	timeSeries := make([]storagetest.TimeSeries, 0, counter)
+	timeSeries := make([]storagetest.TimeSeries, 0, counter*2)
 	for i := range counter {
 		timeSeries = append(timeSeries, storagetest.TimeSeries{
 			Labels:  labels.FromStrings("__name__", "counter_metric", "value", "inc", "counter", strconv.Itoa(i)),
+			Samples: make([]cppbridge.Sample, 0, countOfSamples),
+		})
+	}
+
+	for i := range counter {
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels:  labels.FromStrings("__name__", "sin_cos_metric", "value", "sin_cos", "counter", strconv.Itoa(i)),
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
 		})
 	}
@@ -646,6 +663,10 @@ func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, counter int) 
 		for i := range counter {
 			timeSeries[i].Samples = append(timeSeries[i].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter)},
+			)
+
+			timeSeries[i+counter].Samples = append(timeSeries[i+counter].Samples,
+				cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(i))*10 + math.Cos(float64(i))*10},
 			)
 		}
 
@@ -1094,7 +1115,7 @@ func BenchmarkRangeQuery(b *testing.B) {
 	ctx := b.Context()
 	qo := &querierOptimize{}
 	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
-	qo.fillHeadWithCounter(ctx, 50)
+	qo.fillHeadWithCounter(ctx, 3)
 	defer qo.close()
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
@@ -1110,8 +1131,8 @@ func BenchmarkRangeQuery(b *testing.B) {
 	query := "sum(counter_metric)"
 	// query := "max_over_time(counter_metric[3600s])"
 
-	// step := qo.step
-	step := qo.step * 4
+	step := qo.step
+	// step := qo.step * 4
 
 	b.Run("none", func(b *testing.B) {
 		b.ResetTimer()
@@ -1126,6 +1147,50 @@ func BenchmarkRangeQuery(b *testing.B) {
 		b.ResetTimer()
 		for b.Loop() {
 			res, err := queryRange(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+			require.NoError(b, err)
+			res.qry.Close()
+		}
+	})
+}
+
+func BenchmarkInstantQuery(b *testing.B) {
+	ctx := b.Context()
+	qo := &querierOptimize{}
+	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
+	qo.fillHeadWithCounter(ctx, 15)
+	defer qo.close()
+
+	queryEngine := promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               100000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            qo.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return qo.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
+	})
+
+	query := "sum(counter_metric)"
+	// query := "max_over_time(counter_metric[3600s])"
+
+	ttt := 4800 * time.Second
+	mid := qo.start.Add(ttt)
+	// mid := qo.start
+	// mid := qo.end
+
+	b.Run("none", func(b *testing.B) {
+		b.ResetTimer()
+		for b.Loop() {
+			res, err := queryInstant(ctx, "none", queryEngine, qo, qo.queryOpts, query, mid)
+			require.NoError(b, err)
+			res.qry.Close()
+		}
+	})
+
+	b.Run("all", func(b *testing.B) {
+		b.ResetTimer()
+		for b.Loop() {
+			res, err := queryInstant(ctx, "all", queryEngine, qo, qo.queryOpts, query, mid)
 			require.NoError(b, err)
 			res.qry.Close()
 		}

@@ -74,6 +74,9 @@ const (
 	allOptimizeType queryOptimizeType = dropPointOptimizeType | newPointOptimizeType | crossSeriesOptimizeType
 )
 
+// DefaultCountOfSeriesToOptimize is the default count of series to optimize.
+const DefaultCountOfSeriesToOptimize = 6
+
 // defaultOptimizeType is the default option for selecting functions optimization.
 var defaultOptimizeType = noneOptimizeType
 
@@ -412,12 +415,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = SwitchFuncOptimize(hints, q.queryOptimize)
+	hints = SwitchFuncOptimize(hints, isPossibleToOptimize(lssQueryResults, hints), q.queryOptimize)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
-	if isCrossSeriesFunc(hints) && isAllowedGroupingForCrossSeriesFunc(hints.Grouping) {
+	if isCrossSeriesFunc(hints) {
 		return q.makeAggSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
@@ -547,7 +550,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 }
 
 // SwitchFuncOptimize switch the function optimization hints.
-func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeType) *storage.SelectHints {
+func SwitchFuncOptimize(
+	hints *storage.SelectHints,
+	possibleToOptimize func() bool,
+	queryOptimize queryOptimizeType,
+) *storage.SelectHints {
 	if hints == nil {
 		return emptySelectHints
 	}
@@ -556,11 +563,35 @@ func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeT
 		return emptySelectHints
 	}
 
-	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithpout(hints) {
+	if funcOptimizeMap[hints.Func]&queryOptimize != 0 &&
+		isNotWithpout(hints) &&
+		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) &&
+		possibleToOptimize() {
 		return hints
 	}
 
 	return emptySelectHints
+}
+
+// isPossibleToOptimize checks if the query possible to optimization.
+func isPossibleToOptimize(lssQueryResults []*cppbridge.LSSQueryResult, hints *storage.SelectHints) func() bool {
+	return func() bool {
+		countOfSeries := 0
+		for _, lssQueryResult := range lssQueryResults {
+			if lssQueryResult == nil {
+				continue
+			}
+
+			countOfSeries += lssQueryResult.Len()
+		}
+
+		if hints.Step == 0 && isCrossSeriesFunc(hints) {
+			//revive:disable-next-line:add-constant // x3 we need to optimize the query for the crossseries function
+			return countOfSeries >= DefaultCountOfSeriesToOptimize*3
+		}
+
+		return countOfSeries >= DefaultCountOfSeriesToOptimize
+	}
 }
 
 // isNotWithpout checks if the hints is not without by.
@@ -612,7 +643,7 @@ func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
 
 // isCrossSeriesFunc checks if the function is a cross series function.
 func isCrossSeriesFunc(hints *storage.SelectHints) bool {
-	return funcOptimizeMap[hints.Func]&crossSeriesOptimizeType == crossSeriesOptimizeType && isNotWithpout(hints)
+	return funcOptimizeMap[hints.Func]&crossSeriesOptimizeType == crossSeriesOptimizeType
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.

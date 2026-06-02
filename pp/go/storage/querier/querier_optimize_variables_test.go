@@ -11,7 +11,7 @@ import (
 
 const (
 	// defaultCountOfSteps is the default count of steps.
-	defaultCountOfSteps = 480
+	defaultCountOfSteps = 240
 )
 
 // defaultSteps is the default steps.
