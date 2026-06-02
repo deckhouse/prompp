@@ -22,6 +22,8 @@
 6. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
 7. **Go 1.26.3.** Bumped Go to 1.26.3, pulling in stdlib security fixes from the 1.26.x series.
 8. **aarch64 jemalloc page size.** Aligned the jemalloc build with the aarch64 host page size so ARM64 builds no longer hit a configuration mismatch under the GCC 14 toolchain.
+9. **Gorilla float encoder length overflow.** Fixed the XOR value encoder in `chunkenc` — a 64-bit-wide XOR difference produced a length of 64 that overflowed the 6-bit length field; the value is now masked so it wraps to the `0`-means-64 encoding, preventing corrupted samples in chunks containing such values.
+10. **Dependency security updates.** Bumped `google.golang.org/grpc` to v1.79.3, `golang.org/x/net` to v0.55.0, and `golang.org/x/crypto` to v0.52.0 on the Go side, plus the web UI `ws` package to v8.20.1, picking up upstream security fixes.
 
 ### Other
 1. **Bazel Bzlmod migration.** Migrated `pp/` to Bzlmod and refreshed `rules_cc`, `rules_foreign_cc`, and `bazel_clang_tidy` to resolve dependency conflicts that had blocked further updates of the C++ build stack.
