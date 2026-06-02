@@ -263,11 +263,7 @@ class SerializedDataView {
   template <AssignableFromUniversalDecodeIterator DecodeIterator>
   class SeriesIterator {
    public:
-    using iterator_category = std::forward_iterator_tag;
-    using value_type = encoder::Sample;
-    using difference_type = ptrdiff_t;
-    using pointer = value_type*;
-    using reference = value_type&;
+    DECODE_ITERATOR_TYPE_TRAITS();
 
     SeriesIterator(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
         : decode_iter_(create_decode_iterator(buffer, *(chunks.begin() + chunk_id))),
@@ -282,9 +278,11 @@ class SerializedDataView {
 
     PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
       if (++decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
-        if (std::next(chunk_iter_) != chunk_iter_end_ && series_id_ == std::next(chunk_iter_)->label_set_id) {
-          ++chunk_iter_;
+        ++chunk_iter_;
+        if (chunk_iter_ != chunk_iter_end_ && chunk_iter_->label_set_id == series_id_) {
           reset_decode_iterator();
+        } else {
+          chunk_iter_ = chunk_iter_end_;
         }
       }
       return *this;
@@ -296,10 +294,7 @@ class SerializedDataView {
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const decoder::DecodeIteratorSentinel&) const noexcept {
-      return (decode_iter_ == decoder::DecodeIteratorSentinel{}) &&
-             (std::next(chunk_iter_) == chunk_iter_end_ || series_id_ != std::next(chunk_iter_)->label_set_id);
-    }
+    PROMPP_ALWAYS_INLINE bool operator==(const decoder::DecodeIteratorSentinel&) const noexcept { return chunk_iter_ == chunk_iter_end_; }
 
     PROMPP_ALWAYS_INLINE void reset(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id) {
       buffer_ = buffer.data();
