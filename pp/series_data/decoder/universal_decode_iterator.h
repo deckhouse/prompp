@@ -57,11 +57,14 @@ class UniversalDecodeIterator {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek_to(timestamp); }, iterator_);
   }
 
-  PROMPP_ALWAYS_INLINE void invalidate_sample() {
-    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate_sample(); }, iterator_);
-  }
+  PROMPP_ALWAYS_INLINE void invalidate_sample() { reinterpret_cast<encoder::Sample&>(iterator_).timestamp = kInvalidTimestamp; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return static_cast<Type>(iterator_.index()); }
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE auto visit(Visitor&& visitor) {
+    return std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(iterator); }, iterator_);
+  }
 
  private:
   using IteratorVariant = std::variant<ConstantDecodeIterator,
