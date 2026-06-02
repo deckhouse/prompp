@@ -48,7 +48,7 @@ concept DecodeIteratorData = requires(Data data) {
 
   data.remaining_samples;
 
-#ifndef __CLION_IDE__
+#ifdef __cpp_lib_is_pointer_interconvertible
   requires std::is_pointer_interconvertible_with_class(&Data::sample);
 #endif
 };

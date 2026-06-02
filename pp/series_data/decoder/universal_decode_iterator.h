@@ -95,9 +95,7 @@ class UniversalDecodeIterator {
       .variant = IteratorVariant(std::in_place_type<ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false),
   };
 
-#ifndef __CLION_IDE__
   static_assert(&std::get<ConstantDecodeIterator>(kVariantLayoutAssertHelper.variant) == &kVariantLayoutAssertHelper.field, "unexpected std::variant layout");
-#endif
 
   IteratorVariant iterator_;
 };
