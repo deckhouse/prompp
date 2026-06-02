@@ -272,16 +272,17 @@ class SerializedDataView {
     SeriesIterator(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
         : decode_iter_(create_decode_iterator(buffer, *(chunks.begin() + chunk_id))),
           chunk_iter_(chunks.begin() + chunk_id),
-          series_id_(chunk_iter_->label_set_id),
-          buffer_(buffer),
-          chunks_(chunks) {}
+          chunk_iter_end_(chunks.end()),
+          buffer_(buffer.data()),
+          buffer_size_(buffer.size()),
+          series_id_(chunk_iter_->label_set_id) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return *decode_iter_; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return decode_iter_.operator->(); }
 
     PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
       if (++decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
-        if (std::next(chunk_iter_) != chunks_.end() && series_id_ == std::next(chunk_iter_)->label_set_id) {
+        if (std::next(chunk_iter_) != chunk_iter_end_ && series_id_ == std::next(chunk_iter_)->label_set_id) {
           ++chunk_iter_;
           reset_decode_iterator();
         }
@@ -297,27 +298,28 @@ class SerializedDataView {
 
     PROMPP_ALWAYS_INLINE bool operator==(const decoder::DecodeIteratorSentinel&) const noexcept {
       return (decode_iter_ == decoder::DecodeIteratorSentinel{}) &&
-             (std::next(chunk_iter_) == chunks_.end() || series_id_ != std::next(chunk_iter_)->label_set_id);
+             (std::next(chunk_iter_) == chunk_iter_end_ || series_id_ != std::next(chunk_iter_)->label_set_id);
     }
 
     PROMPP_ALWAYS_INLINE void reset(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id) {
-      buffer_ = buffer;
-      chunks_ = chunks;
-
-      chunk_iter_ = chunks_.begin() + chunk_id;
+      buffer_ = buffer.data();
+      buffer_size_ = buffer.size();
+      chunk_iter_ = chunks.begin() + chunk_id;
+      chunk_iter_end_ = chunks.end();
       series_id_ = chunk_iter_->label_set_id;
+
       reset_decode_iterator();
     }
 
    private:
     DecodeIterator decode_iter_;
     chunk::SerializedChunkSpan::const_iterator chunk_iter_;
+    chunk::SerializedChunkSpan::const_iterator chunk_iter_end_;
+    const uint8_t* buffer_;
+    uint32_t buffer_size_;
     uint32_t series_id_;
 
-    std::span<const unsigned char> buffer_;
-    chunk::SerializedChunkSpan chunks_;
-
-    PROMPP_ALWAYS_INLINE void reset_decode_iterator() { decode_iter_ = create_decode_iterator(buffer_, *chunk_iter_); }
+    PROMPP_ALWAYS_INLINE void reset_decode_iterator() { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, *chunk_iter_); }
 
     PROMPP_ALWAYS_INLINE static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
                                                                                         const chunk::SerializedChunk& chunk) noexcept {

@@ -5,7 +5,7 @@
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 #define Sizeof_GoLabels 16
 
-#define Sizeof_SerializedDataIterator 168
+#define Sizeof_SerializedDataIterator 152
 
 #define Sizeof_MetricsIterator 24
 
