@@ -260,7 +260,6 @@ class SerializedDataView {
   using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
   static constexpr uint32_t kNoMoreSeries = std::numeric_limits<uint32_t>::max();
 
-  template <AssignableFromUniversalDecodeIterator DecodeIterator>
   class SeriesIterator {
    public:
     DECODE_ITERATOR_TYPE_TRAITS();
@@ -277,7 +276,9 @@ class SerializedDataView {
     [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return decode_iter_.operator->(); }
 
     PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
-      if (++decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+      const auto iterator_is_end = decode_iter_.visit([](auto& iterator) { return ++iterator == decoder::DecodeIteratorSentinel{}; });
+
+      if (iterator_is_end) [[unlikely]] {
         ++chunk_iter_;
         if (chunk_iter_ != chunk_iter_end_ && chunk_iter_->label_set_id == series_id_) {
           reset_decode_iterator();
@@ -307,7 +308,7 @@ class SerializedDataView {
     }
 
    private:
-    DecodeIterator decode_iter_;
+    decoder::UniversalDecodeIterator decode_iter_;
     chunk::SerializedChunkSpan::const_iterator chunk_iter_;
     chunk::SerializedChunkSpan::const_iterator chunk_iter_end_;
     const uint8_t* buffer_;
@@ -357,12 +358,8 @@ class SerializedDataView {
     return {chunks[series_first_chunk_id_].label_set_id, series_first_chunk_id_};
   }
 
-  template <AssignableFromUniversalDecodeIterator DecodeIterator = decoder::UniversalDecodeIterator>
-  [[nodiscard]] SeriesIterator<DecodeIterator> create_current_series_iterator() const noexcept {
-    return {get_buffer_view(), get_chunks_view(), series_first_chunk_id_};
-  }
-  template <AssignableFromUniversalDecodeIterator DecodeIterator = decoder::UniversalDecodeIterator>
-  [[nodiscard]] SeriesIterator<DecodeIterator> create_series_iterator(uint32_t series_first_chunk_id) const noexcept {
+  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {get_buffer_view(), get_chunks_view(), series_first_chunk_id_}; }
+  [[nodiscard]] SeriesIterator create_series_iterator(uint32_t series_first_chunk_id) const noexcept {
     return {get_buffer_view(), get_chunks_view(), series_first_chunk_id};
   }
 
