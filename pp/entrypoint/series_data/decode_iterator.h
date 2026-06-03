@@ -109,9 +109,12 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(::series_data::serial
     return DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, std::move(iterator), downsampling_ms);
   }
 
-  switch (select_hints.window_function) {
-    using enum PromPP::Prometheus::promql::WindowFunction;
+  using enum PromPP::Prometheus::promql::WindowFunction;
+  if (select_hints.window_function == kNone) [[likely]] {
+    return DecodeIterator(std::in_place_type<DecodeIterator::SeriesIterator>, std::move(iterator));
+  }
 
+  switch (select_hints.window_function) {
     case kRate:
     case kIncrease:
       return DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, std::move(iterator), select_hints.function_parameters);
