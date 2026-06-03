@@ -25,6 +25,7 @@ class OverTimeFuncIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_samples() const noexcept { return iterator_ != DecodeIteratorSentinel{}; }
 
   PROMPP_ALWAYS_INLINE OverTimeFuncIterator& operator++() {
     sample_.timestamp = kInvalidTimestamp;
