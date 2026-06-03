@@ -41,8 +41,6 @@ class ConstantDecodeIterator : public DecodeIteratorTrait<ConstantDecodeIterator
     return data_.sample.value;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
-
  protected:
   friend DecodeIteratorTrait;
 
@@ -57,7 +55,7 @@ class ConstantDecodeIterator : public DecodeIteratorTrait<ConstantDecodeIterator
 
   Data data_;
 
-  PROMPP_ALWAYS_INLINE bool decode() noexcept { return decode_timestamp(data_); }
+  PROMPP_ALWAYS_INLINE bool decode() noexcept { return try_decode_timestamp(); }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     data_.sample.timestamp = decoded_timestamp();

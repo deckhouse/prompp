@@ -52,8 +52,6 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
     return data_.value1_count > 0 ? data_.value1 : data_.value2;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
-
  protected:
   struct Data {
     encoder::Sample sample{};
@@ -77,7 +75,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
       --data_.value1_count;
     }
 
-    return decode_timestamp(data_);
+    return try_decode_timestamp();
   }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
