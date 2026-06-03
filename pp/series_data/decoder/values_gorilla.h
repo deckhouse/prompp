@@ -53,7 +53,6 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return data_.decoder.value(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
 
  protected:
   struct Data {
@@ -72,7 +71,7 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
   friend DecodeIteratorTrait;
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
-    if (decoder::decode_timestamp(data_)) [[likely]] {
+    if (try_decode_timestamp()) [[likely]] {
       decode_value<SampleType::kOther>();
       return true;
     }
@@ -84,8 +83,6 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
     data_.sample.timestamp = decoded_timestamp();
     data_.sample.value = decoded_value();
   }
-
-  PROMPP_ALWAYS_INLINE void decode_timestamp() noexcept { std::ignore = data_.timestamp_decoder.decode(); }
 
   template <SampleType Type>
   PROMPP_ALWAYS_INLINE void decode_value() noexcept {

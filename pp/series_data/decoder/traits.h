@@ -57,6 +57,13 @@ concept DecodeIteratorData = requires(Data data) {
 #endif
 };
 
+template <class Data>
+concept DecodeIteratorDataWithTimestampDecoder = requires(Data data) {
+  requires DecodeIteratorData<Data>;
+
+  requires std::same_as<encoder::timestamp::TimestampDecoder, decltype(data.timestamp_decoder)>;
+};
+
 template <class Derived>
 class DecodeIteratorTrait {
  public:
@@ -118,26 +125,32 @@ class DecodeIteratorTrait {
 
   PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { derived()->data_.sample.timestamp = kInvalidTimestamp; }
 
+  PROMPP_ALWAYS_INLINE void decode_timestamp() noexcept
+    requires(DecodeIteratorDataWithTimestampDecoder<typename Derived::Data>)
+  {
+    std::ignore = derived()->data_.timestamp_decoder.decode();
+  }
+
+  PROMPP_ALWAYS_INLINE bool try_decode_timestamp() noexcept
+    requires(DecodeIteratorDataWithTimestampDecoder<typename Derived::Data>)
+  {
+    if (--derived()->data_.remaining_samples > 0) [[likely]] {
+      std::ignore = derived()->data_.timestamp_decoder.decode();
+      return true;
+    }
+
+    return false;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept
+    requires(DecodeIteratorDataWithTimestampDecoder<typename Derived::Data>)
+  {
+    return derived()->data_.timestamp_decoder.timestamp();
+  }
+
  protected:
   [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
-
-template <class Data>
-concept DecodeIteratorDataWithTimestampDecoder = requires(Data data) {
-  requires DecodeIteratorData<Data>;
-
-  requires std::same_as<encoder::timestamp::TimestampDecoder, decltype(data.timestamp_decoder)>;
-};
-
-template <DecodeIteratorDataWithTimestampDecoder Data>
-PROMPP_ALWAYS_INLINE bool decode_timestamp(Data& data) noexcept {
-  if (--data.remaining_samples > 0) [[likely]] {
-    std::ignore = data.timestamp_decoder.decode();
-    return true;
-  }
-
-  return false;
-}
 
 }  // namespace series_data::decoder

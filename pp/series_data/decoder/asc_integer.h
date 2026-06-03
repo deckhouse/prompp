@@ -45,7 +45,6 @@ class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIter
 
     return static_cast<double>(data_.decoder.timestamp());
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.timestamp_decoder.timestamp(); }
 
  protected:
   struct Data {
@@ -68,7 +67,7 @@ class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIter
   friend DecodeIteratorTrait;
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
-    if (decoder::decode_timestamp(data_)) [[likely]] {
+    if (try_decode_timestamp()) [[likely]] {
       decode_value();
       return true;
     }
@@ -77,7 +76,6 @@ class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIter
   }
 
   PROMPP_ALWAYS_INLINE void decode_value() noexcept { data_.value_type = data_.decoder.decode(data_.reader, data_.gorilla_state); }
-  PROMPP_ALWAYS_INLINE void decode_timestamp() noexcept { std::ignore = data_.timestamp_decoder.decode(); }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     data_.sample.timestamp = decoded_timestamp();
