@@ -184,15 +184,15 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum"},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum"},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
@@ -229,15 +229,15 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum"},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum"},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
-			expected: &prom_storage.SelectHints{},
+			expected: &prom_storage.SelectHints{Func: "sum", By: true, Grouping: []string{"label"}},
 		},
 		{
 			hints:    &prom_storage.SelectHints{Func: "sum", By: false, Grouping: []string{"label"}},
