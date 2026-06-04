@@ -314,6 +314,10 @@ func (it *DataStorageSerializedDataMultiSeriesIterator) Next() {
 	seriesDataSerializedDataMultiSeriesIteratorNext(it)
 }
 
+func (it *DataStorageSerializedDataMultiSeriesIterator) Reset(serializedData *DataStorageSerializedData, seriesIDs []uint32) {
+	seriesDataSerializedDataMultiSeriesIteratorReset(it, serializedData.serializedData, seriesIDs)
+}
+
 func (it *DataStorageSerializedDataMultiSeriesIterator) Close() {
 	seriesDataSerializedDataMultiSeriesIteratorDtor(it)
 }

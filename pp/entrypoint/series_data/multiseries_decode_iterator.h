@@ -65,6 +65,26 @@ class MultiSeriesDecodeIterator {
     return result;
   }
 
+  template <class IteratorsGenerator>
+  PROMPP_ALWAYS_INLINE void reset(const ::series_data::decoder::decorator::WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
+    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.reset(parameters, std::forward<IteratorsGenerator>(iterators_generator)); }, iterator_);
+  }
+
+  PROMPP_ALWAYS_INLINE static void create_series_iterators(const SelectHints& select_hints,
+                                                           std::span<const uint32_t> series_ids,
+                                                           ::series_data::serialization::SerializedDataView data_view,
+                                                           BareBones::Vector<Iterator>& iterators) {
+    const auto initial_interval = WindowBoundaryCalculator::initial_window(select_hints.function_parameters);
+
+    iterators.reserve(series_ids.size());
+    data_view.enumerate_series([&](const auto& chunk, uint32_t chunk_id) {
+      if (std::ranges::find(series_ids, chunk.label_set_id) != series_ids.end()) {
+        iterators.emplace_back(LastOverTimeWithStaleNansIterator(data_view.create_series_iterator(chunk_id), initial_interval),
+                               select_hints.function_parameters.lookback_delta);
+      }
+    });
+  }
+
  private:
   IteratorVariant iterator_;
 };
@@ -74,17 +94,7 @@ PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator create_multi_series_decode_iterat
                                                                                    ::series_data::serialization::SerializedDataView data_view) {
   const auto create_series_iterators = [&] {
     BareBones::Vector<MultiSeriesDecodeIterator::Iterator> iterators;
-    iterators.reserve(series_ids.size());
-
-    const auto initial_interval = MultiSeriesDecodeIterator::WindowBoundaryCalculator::initial_window(select_hints.function_parameters);
-
-    data_view.enumerate_series([&](const auto& chunk, uint32_t chunk_id) {
-      if (std::ranges::find(series_ids, chunk.label_set_id) != series_ids.end()) {
-        iterators.emplace_back(MultiSeriesDecodeIterator::LastOverTimeWithStaleNansIterator(data_view.create_series_iterator(chunk_id), initial_interval),
-                               select_hints.function_parameters.lookback_delta);
-      }
-    });
-
+    MultiSeriesDecodeIterator::create_series_iterators(select_hints, series_ids, data_view, iterators);
     return iterators;
   };
 

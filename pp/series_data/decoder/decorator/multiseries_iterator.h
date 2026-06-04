@@ -32,6 +32,16 @@ class MultiSeriesIterator {
     return result;
   }
 
+  template <class IteratorsGenerator>
+  PROMPP_ALWAYS_INLINE void reset(const WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
+    iterators_.clear();
+    std::forward<IteratorsGenerator>(iterators_generator)(iterators_);
+
+    parameters_ = &parameters;
+
+    seek_to_first_non_stale_nan_sample();
+  }
+
  private:
   encoder::Sample sample_;
   BareBones::Vector<Iterator> iterators_;

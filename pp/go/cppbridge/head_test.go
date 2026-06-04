@@ -280,12 +280,31 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
 	s.ds = cppbridge.NewDataStorage()
 	s.enc = cppbridge.NewHeadEncoderWithDataStorage(s.ds)
+
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
+}
+
+type createIteratorMethod = func(*cppbridge.DataStorageSerializedData, []uint32) cppbridge.DataStorageSerializedDataMultiSeriesIterator
+
+var createMultiSeriesIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator
+var createAndResetMultiSeriesIterator = func(
+	serializedData *cppbridge.DataStorageSerializedData,
+	seriesIDs []uint32,
+) cppbridge.DataStorageSerializedDataMultiSeriesIterator {
+	it := createMultiSeriesIterator(serializedData, seriesIDs)
+	for it.HasData() {
+		it.Next()
+	}
+	it.Reset(serializedData, seriesIDs)
+	return it
 }
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 	hints storage.SelectHints,
 	seriesToSerialize []uint32,
 	series []uint32,
+	createIterator createIteratorMethod,
 ) []cppbridge.Sample {
 	result := s.ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: hints.Start,
@@ -293,7 +312,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 		LabelSetIDs:      seriesToSerialize,
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&hints))
 
-	it := cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(result.SerializedData, series)
+	it := createIterator(result.SerializedData, series)
 	defer it.Close()
 
 	out := make([]cppbridge.Sample, 0)
@@ -307,9 +326,15 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 }
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
+	s.testSum(createMultiSeriesIterator)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSumWithIteratorReset() {
+	s.testSum(createAndResetMultiSeriesIterator)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) testSum(method createIteratorMethod) {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
 	s.enc.Encode(0, 50, 10.0)
 	s.enc.Encode(1, 80, 20.0)
 	s.enc.Encode(0, 150, 20.0)
@@ -322,7 +347,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
 		Step:          100,
 		LookbackDelta: 100,
 		Func:          "sum",
-	}, []uint32{0, 1}, []uint32{0, 1})
+	}, []uint32{0, 1}, []uint32{0, 1}, method)
 
 	// Assert
 	s.Equal([]cppbridge.Sample{
@@ -333,8 +358,6 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
 	s.enc.Encode(0, 50, 10.0)
 	s.enc.Encode(1, 130, 20.0)
 	s.enc.Encode(0, 150, 30.0)
@@ -347,7 +370,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 		Step:          100,
 		LookbackDelta: 50,
 		Func:          "min",
-	}, []uint32{0, 1}, []uint32{0, 1})
+	}, []uint32{0, 1}, []uint32{0, 1}, createMultiSeriesIterator)
 
 	// Assert
 	s.Equal([]cppbridge.Sample{
@@ -359,8 +382,6 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
 	s.enc.Encode(0, 50, 20.0)
 	s.enc.Encode(1, 80, 10.0)
 	s.enc.Encode(0, 150, 20.0)
@@ -373,7 +394,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
 		Step:          100,
 		LookbackDelta: 50,
 		Func:          "max",
-	}, []uint32{0, 1}, []uint32{0, 1})
+	}, []uint32{0, 1}, []uint32{0, 1}, createMultiSeriesIterator)
 
 	// Assert
 	s.Equal([]cppbridge.Sample{
@@ -385,8 +406,6 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestNoSeries() {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
 	s.enc.Encode(0, 50, 20.0)
 	s.enc.Encode(1, 80, 10.0)
 	s.enc.Encode(0, 150, 20.0)
@@ -400,7 +419,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestNoSeries() {
 		Step:  100,
 		Range: 100,
 		Func:  "max",
-	}, []uint32{0, 1}, []uint32{2})
+	}, []uint32{0, 1}, []uint32{2}, createMultiSeriesIterator)
 
 	// Assert
 	s.Equal([]cppbridge.Sample{}, samples)

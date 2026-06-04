@@ -70,6 +70,17 @@ void prompp_series_data_serialization_serialized_data_iterator_reset(void* args)
 void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args);
 
 /**
+ * @brief Reset a multi-series decode iterator into the given series ids.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to a constructed MultiSeriesDecodeIterator.
+ *     serializedData uintptr // pointer to serialized data.
+ *     seriesIDs []uint32 // slice view of series ids to use in iterator.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_reset(void* args);
+
+/**
  * @brief Advance multi-series decode iterator.
  *
  * @param iterator uintptr // pointer to multi-series decode iterator

@@ -32,6 +32,12 @@ class SerializedDataGo {
     return create_multi_series_decode_iterator(select_hints_, series_ids, data_view_);
   }
 
+  PROMPP_ALWAYS_INLINE void reset_multi_series_iterator(MultiSeriesDecodeIterator& iterator, std::span<const uint32_t> series_ids) const noexcept {
+    iterator.reset(select_hints_.function_parameters, [&](auto& iterators) PROMPP_LAMBDA_INLINE {
+      MultiSeriesDecodeIterator::create_series_iterators(select_hints_, series_ids, data_view_, iterators);
+    });
+  }
+
  private:
   ::series_data::serialization::SerializedData data_;
   ::series_data::serialization::SerializedDataView data_view_{data_};
