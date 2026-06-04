@@ -678,7 +678,7 @@ func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, counter int) 
 
 // Querier implements the [prom_storage.Queryable] interface.
 func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error) {
-	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
+	return querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, mint, maxt, int64(s.step), nil), nil
 }
 
 //

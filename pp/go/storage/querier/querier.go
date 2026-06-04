@@ -139,9 +139,9 @@ type Querier[
 ] struct {
 	mint             int64
 	maxt             int64
+	scrapeInterval   int64
 	head             THead
 	deduplicatorCtor deduplicatorCtor
-	closer           func() error
 	metrics          *Metrics
 	queryOptimize    queryOptimizeType
 }
@@ -156,11 +156,18 @@ func NewQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
-	closer func() error,
+	mint, maxt, scrapeInterval int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, selectFuncOptimize)
+	return newQuerierWithSelectFuncOptimize(
+		head,
+		deduplicatorCtor,
+		mint,
+		maxt,
+		scrapeInterval,
+		metrics,
+		selectFuncOptimize,
+	)
 }
 
 // NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
@@ -173,8 +180,7 @@ func NewQuerierWithOutSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
-	closer func() error,
+	mint, maxt, scrapeInterval int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return newQuerierWithSelectFuncOptimize(
@@ -182,7 +188,7 @@ func NewQuerierWithOutSelectFuncOptimize[
 		deduplicatorCtor,
 		mint,
 		maxt,
-		closer,
+		scrapeInterval,
 		metrics,
 		selectFuncOptimize&dropPointOptimizeType,
 	)
@@ -198,17 +204,16 @@ func newQuerierWithSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
-	closer func() error,
+	mint, maxt, scrapeInterval int64,
 	metrics *Metrics,
 	queryOptimize queryOptimizeType,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
+		scrapeInterval:   scrapeInterval,
 		head:             head,
 		deduplicatorCtor: deduplicatorCtor,
-		closer:           closer,
 		metrics:          metrics,
 		queryOptimize:    queryOptimize,
 	}
@@ -217,11 +222,7 @@ func newQuerierWithSelectFuncOptimize[
 // Close [Querier] if need.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
-	if q.closer != nil {
-		return q.closer()
-	}
-
+func (*Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	return nil
 }
 
@@ -415,7 +416,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = SwitchFuncOptimize(hints, isPossibleToOptimize(lssQueryResults, hints), q.queryOptimize)
+	hints = SwitchFuncOptimize(hints, isPossibleToOptimize(lssQueryResults, hints, q.scrapeInterval), q.queryOptimize)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
@@ -574,7 +575,11 @@ func SwitchFuncOptimize(
 }
 
 // isPossibleToOptimize checks if the query possible to optimization.
-func isPossibleToOptimize(lssQueryResults []*cppbridge.LSSQueryResult, hints *storage.SelectHints) func() bool {
+func isPossibleToOptimize(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	hints *storage.SelectHints,
+	scrapeInterval int64,
+) func() bool {
 	return func() bool {
 		countOfSeries := 0
 		for _, lssQueryResult := range lssQueryResults {
@@ -583,6 +588,11 @@ func isPossibleToOptimize(lssQueryResults []*cppbridge.LSSQueryResult, hints *st
 			}
 
 			countOfSeries += lssQueryResult.Len()
+		}
+
+		//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
+		if hints.Step*1e6 >= scrapeInterval*2 {
+			return true
 		}
 
 		if hints.Step == 0 && isCrossSeriesFunc(hints) {

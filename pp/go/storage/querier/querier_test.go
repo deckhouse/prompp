@@ -43,48 +43,12 @@ type QuerierSuite struct {
 	context context.Context
 	head    *storage.Head
 
-	timeSeries []storagetest.TimeSeries
-	hints      *prom_storage.SelectHints
-	matcher    *labels.Matcher
+	hints          *prom_storage.SelectHints
+	scrapeInterval int64
 }
 
 func TestQuerierSuite(t *testing.T) {
 	suite.Run(t, new(QuerierSuite))
-}
-
-func (s *QuerierSuite) SetupSuite() {
-	s.timeSeries = []storagetest.TimeSeries{
-		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 20, Value: 10},
-				{Timestamp: 40, Value: 10},
-				{Timestamp: 60, Value: 20},
-				{Timestamp: 80, Value: 30},
-				{Timestamp: 110, Value: 50},
-				{Timestamp: 130, Value: 80},
-				{Timestamp: 150, Value: 130},
-				{Timestamp: 170, Value: 210},
-				{Timestamp: 190, Value: 340},
-			},
-		},
-		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
-			Samples: []cppbridge.Sample{
-				{Timestamp: 10, Value: 1},
-				{Timestamp: 30, Value: 1},
-				{Timestamp: 50, Value: 2},
-				{Timestamp: 70, Value: 3},
-				{Timestamp: 90, Value: 5},
-				{Timestamp: 100, Value: 8},
-				{Timestamp: 120, Value: 13},
-				{Timestamp: 140, Value: 21},
-				{Timestamp: 160, Value: 34},
-				{Timestamp: 180, Value: 55},
-			},
-		},
-	}
-	s.matcher, _ = labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 }
 
 func (s *QuerierSuite) SetupTest() {
@@ -96,6 +60,7 @@ func (s *QuerierSuite) SetupTest() {
 		End:   200,
 		Range: 100,
 	}
+	s.scrapeInterval = 1
 }
 
 func (s *QuerierSuite) createDataDirectory() string {
@@ -159,7 +124,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -187,7 +152,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
@@ -240,7 +205,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -278,7 +243,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -331,7 +296,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -375,7 +340,7 @@ func (s *QuerierSuite) TestLabelNames() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -408,7 +373,7 @@ func (s *QuerierSuite) TestLabelNamesWithLimit() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -441,7 +406,7 @@ func (s *QuerierSuite) TestLabelNamesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
 	s.Require().NoError(err)
@@ -474,7 +439,7 @@ func (s *QuerierSuite) TestLabelValues() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
@@ -507,7 +472,7 @@ func (s *QuerierSuite) TestLabelValuesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
 	s.Require().NoError(err)
@@ -540,7 +505,7 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)

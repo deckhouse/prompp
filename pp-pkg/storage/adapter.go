@@ -36,6 +36,7 @@ type Adapter struct {
 	hashdexLimits         atomic.Value // stores cppbridge.WALHashdexLimits
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
+	scrapeInterval        atomic.Int64
 
 	// stat
 	activeQuerierMetrics  *querier.Metrics
@@ -132,7 +133,10 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
-	hx, err := cppbridge.NewWALSnappyProtobufHashdex(compressedData.Bytes(), ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits))
+	hx, err := cppbridge.NewWALSnappyProtobufHashdex(
+		compressedData.Bytes(),
+		ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits),
+	)
 	compressedData.Destroy()
 	if err != nil {
 		return err
@@ -247,11 +251,12 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 // Label limit fields follow the same 0 = no limit semantics as scrape config.
 func (ar *Adapter) ApplyConfig(cfg *config.Config) error {
 	limits := cppbridge.WALHashdexLimits{
-		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),
-		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),
-		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit),
+		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),            // #nosec G115 // no overflow
+		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),  // #nosec G115 // no overflow
+		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit), // #nosec G115 // no overflow
 	}
 	ar.hashdexLimits.Store(limits)
+	ar.scrapeInterval.Store(int64(cfg.GlobalConfig.ScrapeInterval))
 	return nil
 }
 
@@ -269,7 +274,7 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		querier.NewNoOpShardedDeduplicator,
 		mint,
 		maxt,
-		nil,
+		ar.scrapeInterval.Load(),
 		ar.activeQuerierMetrics,
 	), nil
 }
@@ -296,7 +301,14 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
-		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+		querier.NewQuerier(
+			ahead,
+			querier.NewNoOpShardedDeduplicator,
+			mint,
+			maxt,
+			ar.scrapeInterval.Load(),
+			ar.activeQuerierMetrics,
+		),
 	)
 
 	for _, head := range ar.proxy.Heads() {
@@ -316,7 +328,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				querier.NewNoOpShardedDeduplicator,
 				mint,
 				maxt,
-				nil,
+				ar.scrapeInterval.Load(),
 				ar.storageQuerierMetrics,
 			),
 		)
