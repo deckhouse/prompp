@@ -784,14 +784,15 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceAfterBoundaryLS() {
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
-	lsIDExisting := rLSS.oldLSS.FindOrEmplace(s.labelSets[len(s.labelSets)-1]).LabelSetID
+	// returned ls id is new
+	lsIDNew := rLSS.oldLSS.FindOrEmplace(s.labelSets[len(s.labelSets)-1]).LabelSetID
 
 	// Assert
 	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
 	expectedLabelSets := labelSetToCppBridgeLabels(rLSS.expectedLSes)
 	s.Equal(expectedLabelSets, newLSS.GetLabelSets(rLSS.newLabelSetIDs).LabelsSets())
 	s.Equal(expectedLabelSets, rLSS.oldLSS.GetLabelSets(rLSS.oldLabelSetIDs).LabelsSets())
-	s.Equal(s.labelSetIDs[len(s.labelSetIDs)-1], lsIDExisting)
+	s.Equal(s.labelSetIDs[len(s.labelSetIDs)-1]+1, lsIDNew)
 
 	selector := s.mustQuerySelector(s.matchers)
 	snapshot := s.lss.CreateLabelSetSnapshot()
