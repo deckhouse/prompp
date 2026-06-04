@@ -84,29 +84,20 @@ func (it *ChunkIterator) Err() error {
 	return nil
 }
 
-func (it *ChunkIterator) next() chunkenc.ValueType {
+// Next advances the iterator by one and returns the type of the value.
+func (it *ChunkIterator) Next() chunkenc.ValueType {
 	if !it.isInitialized {
 		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
 		}
 
 		it.isInitialized = true
-		return chunkenc.ValFloat
 	} else {
 		it.chunkIterator.Next()
 
 		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
 		}
-
-		return chunkenc.ValFloat
-	}
-}
-
-// Next advances the iterator by one and returns the type of the value.
-func (it *ChunkIterator) Next() chunkenc.ValueType {
-	if it.next() == chunkenc.ValNone {
-		return chunkenc.ValNone
 	}
 
 	if it.AtT() > it.maxt {
