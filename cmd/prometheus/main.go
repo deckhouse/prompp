@@ -2238,6 +2238,10 @@ func readPromPPFeatures(logger log.Logger) {
 			)
 
 			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
+
+		case "enable_instant_query_feature":
+			querier.InstantQueryFeature = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is enabled.")
 		}
 	}
 }
