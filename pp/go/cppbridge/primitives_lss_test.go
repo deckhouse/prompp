@@ -784,7 +784,8 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceAfterBoundaryLS() {
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
-	// returned ls id is new
+	// the new ls ID will be returned because the labelset(6 - even-numbered) is copied to the oldlass,
+	// but the bit is not set in the bitset, and after rotation, the labelset will be discarded
 	lsIDNew := rLSS.oldLSS.FindOrEmplace(s.labelSets[len(s.labelSets)-1]).LabelSetID
 
 	// Assert

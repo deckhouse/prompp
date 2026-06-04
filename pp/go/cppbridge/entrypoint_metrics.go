@@ -16,13 +16,39 @@ const defaultUpdateInterval = 5 * time.Minute
 // [LabelSetStorage].SetPendingShrinkBoundary() cpp call duration.
 var lssSetPendingShrinkBoundaryDurationMax = newMaxGaugeMetric()
 
+// snapshotLSSCopyAddedSeriesDurationMax is the max value of
+// [LabelSetSnapshot].CopyAddedSeries() cpp call duration.
+var snapshotLSSCopyAddedSeriesDurationMax = newMaxGaugeMetric()
+
+// lssFinalizeCopyAndShrinkDurationMax is the max value of
+// [LabelSetStorage].FinalizeCopyAndShrink() cpp call duration.
+var lssFinalizeCopyAndShrinkDurationMax = newMaxGaugeMetric()
+
 // [LabelSetStorage].SetPendingShrinkBoundary() cpp call duration.
 var _ = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewGaugeFunc(
 	prometheus.GaugeOpts{
-		Name: "prompp_cppbridge_unsafecall_lss_set_pending_shrink_boundary_nanoseconds",
+		Name: "prompp_rotator_freeze_set_pending_duration_nanoseconds",
 		Help: "The time duration lss set pending shrink boundary cpp call.",
 	},
 	lssSetPendingShrinkBoundaryDurationMax.get,
+)
+
+// [LabelSetSnapshot].CopyAddedSeries() cpp call duration.
+var _ = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewGaugeFunc(
+	prometheus.GaugeOpts{
+		Name: "prompp_rotator_freeze_copy_added_series_duration_nanoseconds",
+		Help: "The time duration snapshot lss copy added series cpp call.",
+	},
+	snapshotLSSCopyAddedSeriesDurationMax.get,
+)
+
+// [LabelSetStorage].FinalizeCopyAndShrink() cpp call duration.
+var _ = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewGaugeFunc(
+	prometheus.GaugeOpts{
+		Name: "prompp_rotator_freeze_finalize_copy_and_shrink_duration_nanoseconds",
+		Help: "The time duration lss finalize copy and shrink cpp call.",
+	},
+	lssFinalizeCopyAndShrinkDurationMax.get,
 )
 
 type maxGaugeMetric struct {

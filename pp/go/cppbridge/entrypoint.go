@@ -1650,10 +1650,12 @@ func primitivesLSSFinalizeCopyAndShrink(lss, resolveSnapshot, newToOldMapping ui
 	}{lss, resolveSnapshot, newToOldMapping}
 
 	testGC()
+	start := time.Now()
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_finalize_copy_and_shrink,
 		uintptr(unsafe.Pointer(&args)),
 	)
+	lssFinalizeCopyAndShrinkDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
 // primitivesLSSBitsetDtor destroy bitset of added series.
@@ -1674,12 +1676,14 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
+	start := time.Now()
 	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
 		C.uint64_t(uintptr(unsafe.Pointer(&dstSrcLsIdsMapping))),
 	)
+	snapshotLSSCopyAddedSeriesDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return dstSrcLsIdsMapping
 }
