@@ -298,12 +298,7 @@ func (it *AggChunkIterator) reset(
 	it.mint = mint
 	it.maxt = maxt
 	it.isInitialized = false
-	// it.chunkIterator.Reset(serializedData, chunkRef)
-	it.chunkIterator.Close()
-	it.chunkIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(
-		serializedData,
-		seriesGroups.Groups[groupIndex],
-	)
+	it.chunkIterator.Reset(serializedData, seriesGroups.Groups[groupIndex])
 }
 
 //

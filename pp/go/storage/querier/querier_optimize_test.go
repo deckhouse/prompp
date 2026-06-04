@@ -1129,6 +1129,7 @@ func BenchmarkRangeQuery(b *testing.B) {
 	})
 
 	query := "sum(counter_metric)"
+	// query := "sum by(value) (counter_metric)"
 	// query := "max_over_time(counter_metric[3600s])"
 
 	step := qo.step
@@ -1157,7 +1158,7 @@ func BenchmarkInstantQuery(b *testing.B) {
 	ctx := b.Context()
 	qo := &querierOptimize{}
 	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
-	qo.fillHeadWithCounter(ctx, 15)
+	qo.fillHeadWithCounter(ctx, 3)
 	defer qo.close()
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
@@ -1170,10 +1171,11 @@ func BenchmarkInstantQuery(b *testing.B) {
 		EnableNegativeOffset:     true,
 	})
 
-	query := "sum(counter_metric)"
-	// query := "max_over_time(counter_metric[3600s])"
+	// query := "sum(counter_metric)"
+	// query := "sum by(value) (counter_metric)"
+	query := "max_over_time(counter_metric[3600s])"
 
-	ttt := 4800 * time.Second
+	ttt := 3700 * time.Second
 	mid := qo.start.Add(ttt)
 	// mid := qo.start
 	// mid := qo.end
