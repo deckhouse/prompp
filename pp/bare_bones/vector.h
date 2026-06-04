@@ -101,6 +101,14 @@ class GenericVector {
     derived()->set_size(0);
   }
 
+  PROMPP_ALWAYS_INLINE iterator erase(iterator it) noexcept {
+    if (it == end()) [[unlikely]] {
+      return it;
+    }
+
+    return erase(it, it + 1);
+  }
+
   PROMPP_ALWAYS_INLINE iterator erase(iterator first, iterator last) noexcept {
     assert(first >= begin());
     assert(last <= end());

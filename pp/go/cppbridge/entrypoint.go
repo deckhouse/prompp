@@ -2277,6 +2277,25 @@ func seriesDataSerializedDataMultiSeriesIteratorCtor(
 	runtime.KeepAlive(seriesIDs)
 }
 
+func seriesDataSerializedDataMultiSeriesIteratorReset(
+	iterator *DataStorageSerializedDataMultiSeriesIterator,
+	serializedData uintptr,
+	seriesIDs []uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		seriesIDs      []uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, seriesIDs}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(seriesIDs)
+}
+
 func seriesDataSerializedDataMultiSeriesIteratorNext(iterator *DataStorageSerializedDataMultiSeriesIterator) {
 	testGC()
 	fastcgo.UnsafeCall1(

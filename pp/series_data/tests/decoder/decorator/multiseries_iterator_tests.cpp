@@ -157,7 +157,7 @@ TEST_F(MultiSeriesIteratorMinElementFixture, LastStaleNan) {
             samples_);
 }
 
-TEST_F(MultiSeriesIteratorMinElementFixture, LoopbackInterval) {
+TEST_F(MultiSeriesIteratorMinElementFixture, LookbackInterval) {
   // Arrange
   encoder_.encode(0, 50, 20.0);
   encoder_.encode(1, 80, 10.0);
@@ -257,6 +257,55 @@ TEST_F(MultiSeriesIteratorSumOfElementsFixture, SkipLeadingStaleNans) {
   EXPECT_EQ((BareBones::Vector{
                 Sample{.timestamp = 400, .value = 1.0},
                 Sample{.timestamp = 500, .value = 2.0},
+            }),
+            samples_);
+}
+
+TEST_F(MultiSeriesIteratorSumOfElementsFixture, SkipTrailingStaleNans) {
+  // Arrange
+  encoder_.encode(0, 50, 1.0);
+  encoder_.encode(1, 50, 1.0);
+  encoder_.encode(1, 150, 2.0);
+
+  constexpr WindowFunctionParameters parameters = {
+      .interval = TimeInterval{.min = 0, .max = 500},
+      .step = 100,
+      .lookback_delta = 100,
+  };
+  create_iterators({0, 1}, parameters);
+
+  // Act
+  get_samples(parameters);
+
+  // Assert
+  EXPECT_EQ((BareBones::Vector{
+                Sample{.timestamp = 100, .value = 2.0},
+                Sample{.timestamp = 200, .value = 2.0},
+                Sample{.timestamp = 300, .value = STALE_NAN},
+            }),
+            samples_);
+}
+
+TEST_F(MultiSeriesIteratorSumOfElementsFixture, SkipTrailingStaleNansWithLastStaleNans) {
+  // Arrange
+  encoder_.encode(0, 50, 1.0);
+  encoder_.encode(1, 50, 1.0);
+  encoder_.encode(0, 150, STALE_NAN);
+
+  constexpr WindowFunctionParameters parameters = {
+      .interval = TimeInterval{.min = 0, .max = 500},
+      .step = 100,
+      .lookback_delta = 100,
+  };
+  create_iterators({0, 1}, parameters);
+
+  // Act
+  get_samples(parameters);
+
+  // Assert
+  EXPECT_EQ((BareBones::Vector{
+                Sample{.timestamp = 100, .value = 2.0},
+                Sample{.timestamp = 200, .value = STALE_NAN},
             }),
             samples_);
 }

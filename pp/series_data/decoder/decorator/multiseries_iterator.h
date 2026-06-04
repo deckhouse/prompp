@@ -32,6 +32,16 @@ class MultiSeriesIterator {
     return result;
   }
 
+  template <class IteratorsGenerator>
+  PROMPP_ALWAYS_INLINE void reset(const WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
+    iterators_.clear();
+    std::forward<IteratorsGenerator>(iterators_generator)(iterators_);
+
+    parameters_ = &parameters;
+
+    seek_to_first_non_stale_nan_sample();
+  }
+
  private:
   encoder::Sample sample_;
   BareBones::Vector<Iterator> iterators_;
@@ -62,14 +72,19 @@ class MultiSeriesIterator {
   PROMPP_ALWAYS_INLINE void handle_samples(const PromPP::Primitives::TimeInterval& current_window,
                                            const PromPP::Primitives::TimeInterval& next_window) noexcept {
     SampleHandler handler{sample_, current_window};
-    for (auto& iterator : iterators_) {
+    for (auto it = iterators_.begin(); it != iterators_.end();) {
+      auto& iterator = *it;
       if (iterator != DecodeIteratorSentinel{}) [[likely]] {
         handler(iterator->timestamp, iterator->value);
+      } else if (!iterator.has_more_samples()) {
+        iterators_.erase(it);
+        continue;
       }
 
       iterator.set_interval(next_window);
+      ++it;
     }
   }
 };
 
-};  // namespace series_data::decoder::decorator
+}  // namespace series_data::decoder::decorator

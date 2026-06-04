@@ -5,21 +5,23 @@
 
 namespace series_data::decoder {
 
-class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<AscIntegerDecodeIterator> {
+class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIterator> {
  public:
   using Decoder = encoder::ZigZagTimestampDecoder;
 
   template <class BitSequenceWithItemsCount>
-  AscIntegerDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
-      : AscIntegerDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
-  AscIntegerDecodeIterator(uint8_t samples_count,
-                           const BareBones::BitSequenceReader& timestamp_reader,
-                           const BareBones::BitSequenceReader& values_reader,
-                           bool is_last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
-    if (remaining_samples_ > 0) [[likely]] {
+  AscIntegerDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader)
+      : AscIntegerDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader) {}
+  AscIntegerDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, const BareBones::BitSequenceReader& values_reader)
+      : data_{
+            .remaining_samples = samples_count,
+            .timestamp_decoder{timestamp_reader},
+            .reader{values_reader},
+        } {
+    if (data_.remaining_samples > 0) [[likely]] {
+      decode_timestamp();
       decode_value();
-      sample_.value = decoded_value();
+      update_sample();
     }
   }
 
@@ -37,25 +39,35 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
-    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
+    if (data_.value_type == encoder::ValueType::kStaleNan) [[unlikely]] {
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
 
-    return static_cast<double>(decoder_.timestamp());
+    return static_cast<double>(data_.decoder.timestamp());
   }
 
+ protected:
+  struct Data {
+    using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
+
+    encoder::Sample sample{};
+    uint8_t remaining_samples{};
+    GorillaState gorilla_state{GorillaState::kFirstPoint};
+    encoder::ValueType value_type{encoder::ValueType::kValue};
+    Decoder decoder{};
+    encoder::timestamp::TimestampDecoder timestamp_decoder;
+    BareBones::BitSequenceReader reader;
+  };
+
+  static_assert(DecodeIteratorDataWithTimestampDecoder<Data>);
+
+  Data data_;
+
  private:
-  friend Base;
-
-  using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
-
-  Decoder decoder_;
-  BareBones::BitSequenceReader reader_;
-  GorillaState gorilla_state_{GorillaState::kFirstPoint};
-  encoder::ValueType value_type_{encoder::ValueType::kValue};
+  friend DecodeIteratorTrait;
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
-    if (decode_timestamp()) [[likely]] {
+    if (try_decode_timestamp()) [[likely]] {
       decode_value();
       return true;
     }
@@ -63,11 +75,11 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void decode_value() noexcept { value_type_ = decoder_.decode(reader_, gorilla_state_); }
+  PROMPP_ALWAYS_INLINE void decode_value() noexcept { data_.value_type = data_.decoder.decode(data_.reader, data_.gorilla_state); }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
-    sample_.timestamp = decoded_timestamp();
-    sample_.value = decoded_value();
+    data_.sample.timestamp = decoded_timestamp();
+    data_.sample.value = decoded_value();
   }
 };
 
