@@ -70,12 +70,12 @@ class SymbolIdsCollector {
     const auto view = lss_.data_view();
     const auto current_symbol_count = view.keys().size() + view.values().size();
     if (!lss_.shrink_state().is_shrunk()) {
-      // Empty symbol + current-side entries.
+      // Сurrent-side entries (name symbols + value symbols)
       return current_symbol_count;
     }
     size_t snapshot_symbol_count = 0;
     lss_.for_each_snapshot_symbol_id([&](uint32_t, uint32_t) { ++snapshot_symbol_count; });
-    // Empty symbol + current-side entries + snapshot-side entries.
+    // Сurrent-side entries + snapshot-side entries
     return current_symbol_count + snapshot_symbol_count;
   }
 
