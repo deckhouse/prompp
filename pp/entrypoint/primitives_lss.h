@@ -267,6 +267,27 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
+ * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ *
+ * @param args {
+ *     lss                 uintptr  // pointer to source queryable lss;
+ *     shrink_boundary      uint32  // boundary
+ * }
+ */
+void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+
+/**
+ * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to source queryable lss;
+ *     resolve_snapshot   uintptr  // pointer to snapshot lss for resolving ids with mapping;
+ *     new_to_old_mapping uintptr  // pointer to ls id `new (copy) -> old (source)` mapping from copier
+ * }
+ */
+void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
+
+/**
  * @brief destroy ls ids mapping
  *
  * @param args {

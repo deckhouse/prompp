@@ -232,6 +232,9 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //			FinalizeFunc: func() (TSegment, error) {
 //				panic("mock out the Finalize method")
 //			},
+//			MaxWrittenItemIndexFunc: func() uint32 {
+//				panic("mock out the MaxWrittenItemIndex method")
+//			},
 //		}
 //
 //		// use mockedEncoder in code that requires wal.Encoder
@@ -245,6 +248,9 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
 
+	// MaxWrittenItemIndexFunc mocks the MaxWrittenItemIndex method.
+	MaxWrittenItemIndexFunc func() uint32
+
 	// calls tracks calls to the methods.
 	calls struct {
 		// Encode holds details about calls to the Encode method.
@@ -255,9 +261,13 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 		// Finalize holds details about calls to the Finalize method.
 		Finalize []struct {
 		}
+		// MaxWrittenItemIndex holds details about calls to the MaxWrittenItemIndex method.
+		MaxWrittenItemIndex []struct {
+		}
 	}
-	lockEncode   sync.RWMutex
-	lockFinalize sync.RWMutex
+	lockEncode              sync.RWMutex
+	lockFinalize            sync.RWMutex
+	lockMaxWrittenItemIndex sync.RWMutex
 }
 
 // Encode calls EncodeFunc.
@@ -316,6 +326,33 @@ func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 	mock.lockFinalize.RLock()
 	calls = mock.calls.Finalize
 	mock.lockFinalize.RUnlock()
+	return calls
+}
+
+// MaxWrittenItemIndex calls MaxWrittenItemIndexFunc.
+func (mock *EncoderMock[TSegment]) MaxWrittenItemIndex() uint32 {
+	if mock.MaxWrittenItemIndexFunc == nil {
+		panic("EncoderMock.MaxWrittenItemIndexFunc: method is nil but Encoder.MaxWrittenItemIndex was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockMaxWrittenItemIndex.Lock()
+	mock.calls.MaxWrittenItemIndex = append(mock.calls.MaxWrittenItemIndex, callInfo)
+	mock.lockMaxWrittenItemIndex.Unlock()
+	return mock.MaxWrittenItemIndexFunc()
+}
+
+// MaxWrittenItemIndexCalls gets all the calls that were made to MaxWrittenItemIndex.
+// Check the length with:
+//
+//	len(mockedEncoder.MaxWrittenItemIndexCalls())
+func (mock *EncoderMock[TSegment]) MaxWrittenItemIndexCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockMaxWrittenItemIndex.RLock()
+	calls = mock.calls.MaxWrittenItemIndex
+	mock.lockMaxWrittenItemIndex.RUnlock()
 	return calls
 }
 
