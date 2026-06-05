@@ -320,10 +320,6 @@ func (it *DataStorageSerializedDataAggregationIterator) Next() {
 	seriesDataSerializedDataAggregationIteratorNext(it)
 }
 
-func (it *DataStorageSerializedDataAggregationIterator) Seek(timestamp int64) {
-	seriesDataSerializedDataAggregationIteratorSeek(it, timestamp)
-}
-
 func (it *DataStorageSerializedDataAggregationIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
 	seriesDataSerializedDataAggregationIteratorReset(it, serializedData.serializedData, chunkRef)
 }

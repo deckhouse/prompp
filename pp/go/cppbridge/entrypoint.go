@@ -2330,22 +2330,6 @@ func seriesDataSerializedDataAggregationIteratorNext(iterator *DataStorageSerial
 	)
 }
 
-func seriesDataSerializedDataAggregationIteratorSeek(
-	iterator *DataStorageSerializedDataAggregationIterator,
-	targetTimestamp int64,
-) {
-	args := struct {
-		iterator        uintptr
-		targetTimestamp int64
-	}{uintptr(unsafe.Pointer(iterator)), targetTimestamp}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_seek,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
 func seriesDataSerializedDataAggregationIteratorReset(
 	iterator *DataStorageSerializedDataAggregationIterator,
 	serializedData uintptr,
