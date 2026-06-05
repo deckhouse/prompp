@@ -20,7 +20,7 @@ using series_index::querier::QuerierStatus;
 using series_index::querier::Selector;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
-using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, CedarTrie>;
+using Index = QueryableEncodingBimap<BareBones::Vector>;
 
 struct LabelValuesQuerierCase {
   std::string_view label_name;

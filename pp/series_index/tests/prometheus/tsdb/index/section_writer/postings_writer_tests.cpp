@@ -2,6 +2,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/postings_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
@@ -15,7 +16,6 @@ using PromPP::Prometheus::tsdb::index::StreamWriter;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::SeriesReferencesMap;
-using series_index::prometheus::tsdb::index::SymbolReferencesMap;
 using series_index::prometheus::tsdb::index::section_writer::PostingsWriter;
 using series_index::prometheus::tsdb::index::section_writer::SeriesWriter;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
@@ -32,24 +32,26 @@ struct PostingsWriterCase {
 
 class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> {
  protected:
-  using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+  using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  SymbolReferencesMap symbol_references_;
   SeriesReferencesMap series_references_;
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
 
   void fill_data(const LabelViewSetList& label_sets, const ChunkMetadataList& chunk_metadata_list) {
     for (auto& label_set : label_sets) {
       lss_.find_or_emplace(label_set);
     }
 
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
+
     std::ostringstream stream;
     StreamWriter<decltype(stream_)> stream_writer{&stream};
-    SymbolsWriter{lss_, symbol_references_, stream_writer}.write();
-    SeriesWriter<QueryableEncodingBimap, decltype(stream_)> series_writer{lss_, symbol_references_, series_references_};
+    SymbolsWriter<QueryableEncodingBimap, decltype(stream_)>{index_write_context_, stream_writer}.write();
+    SeriesWriter<QueryableEncodingBimap, decltype(stream_)> series_writer{lss_, index_write_context_, series_references_};
     for (uint32_t ls_id = 0; ls_id < chunk_metadata_list.size(); ++ls_id) {
       series_writer.write(ls_id, chunk_metadata_list[ls_id], stream_writer);
     }

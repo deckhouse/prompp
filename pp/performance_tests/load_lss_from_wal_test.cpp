@@ -19,20 +19,20 @@ void load_lss_from_wal::execute(const Config& config, Metrics& metrics) const {
 
   auto start = std::chrono::steady_clock::now();
   while (!in.eof()) {
-    auto old_size = lss.size();
+    auto old_size = lss.items_count();
     in >> lss;
 
     auto now = std::chrono::steady_clock::now();
-    log() << "Loaded label sets: " << (lss.size() - old_size) << std::endl;
-    log() << "Load time per label set (overall avg): " << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / lss.size()) << " ns"
-          << std::endl;
+    log() << "Loaded label sets: " << (lss.items_count() - old_size) << std::endl;
+    log() << "Load time per label set (overall avg): " << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / lss.items_count())
+          << " ns" << std::endl;
     log() << "Number of label name symbols: " << lss.data_view().keys().size() << std::endl;
     log() << "Number of label name sets: " << lss.data_view().label_name_sets().size() << std::endl;
-    log() << "Number of label sets: " << lss.size() << std::endl;
+    log() << "Number of label sets: " << lss.items_count() << std::endl;
     log() << std::endl;
   }
   auto now = std::chrono::steady_clock::now();
 
   metrics << (Metric() << "decoding_table_wal_add_label_set_avg_duration_nanoseconds"
-                       << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) / lss.size());
+                       << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) / lss.items_count());
 }

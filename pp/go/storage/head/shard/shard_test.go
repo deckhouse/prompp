@@ -60,6 +60,10 @@ func (m *fakeWal) Write([]cppbridge.InnerSeries) (bool, error) {
 	return false, m.writeErr
 }
 
+func (m *fakeWal) MaxWrittenItemIndex() uint32 {
+	return 0
+}
+
 type ShardSuite struct {
 	suite.Suite
 }

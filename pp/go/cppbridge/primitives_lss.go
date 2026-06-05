@@ -73,6 +73,17 @@ func (lss *LabelSetStorage) BitsetSeries() *BitsetSeries {
 	return newBitsetSeriesFromPointer(bsPointer)
 }
 
+// FinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+// Attention: works only with QueryableEncodingBimap type of LSS.
+// newToOldMapping is the copier output (new id in copy -> old id in source);
+// C++ inverts it and stores old->new in the LSS.
+func (lss *LabelSetStorage) FinalizeCopyAndShrink(resolveSnapshot *LabelSetSnapshot, newToOldMapping *IdsMapping) {
+	primitivesLSSFinalizeCopyAndShrink(lss.pointer, resolveSnapshot.pointer, newToOldMapping.pointer)
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(resolveSnapshot)
+	runtime.KeepAlive(newToOldMapping)
+}
+
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
 	res := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
@@ -152,6 +163,13 @@ func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
 	res := newLabelSetSnapshot(primitivesLSSCreateSnapshotLSS(lss.pointer))
 	runtime.KeepAlive(lss)
 	return res
+}
+
+// SetPendingShrinkBoundary sets pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+func (lss *LabelSetStorage) SetPendingShrinkBoundary(shrinkBoundary uint32) {
+	primitivesLSSSetPendingShrinkBoundary(lss.pointer, shrinkBoundary)
+	runtime.KeepAlive(lss)
 }
 
 //
