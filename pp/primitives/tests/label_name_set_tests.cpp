@@ -25,7 +25,7 @@ TEST_F(LabelNameSetEncodingBimapTest, StoreAndRetrieveLabelNameSet) {
   const auto id = encoding_table_.find_or_emplace(label_set.names());
 
   // Assert
-  EXPECT_EQ(1U, encoding_table_.size());
+  EXPECT_EQ(1U, encoding_table_.items_count());
   const auto retrieved = encoding_table_[id];
   EXPECT_TRUE(std::ranges::equal(label_set.names(), retrieved));
 }
@@ -40,7 +40,7 @@ TEST_F(LabelNameSetEncodingBimapTest, StoreMultipleLabelNameSets) {
   const auto id2 = encoding_table_.find_or_emplace(label_set2.names());
 
   // Assert
-  EXPECT_EQ(2U, encoding_table_.size());
+  EXPECT_EQ(2U, encoding_table_.items_count());
   EXPECT_TRUE(std::ranges::equal(label_set1.names(), encoding_table_[id1]));
   EXPECT_TRUE(std::ranges::equal(label_set2.names(), encoding_table_[id2]));
 }
@@ -54,7 +54,7 @@ TEST_F(LabelNameSetEncodingBimapTest, FindOrEmplaceReturnsSameIdForDuplicate) {
   const auto id2 = encoding_table_.find_or_emplace(label_set.names());
 
   // Assert
-  EXPECT_EQ(1U, encoding_table_.size());
+  EXPECT_EQ(1U, encoding_table_.items_count());
   EXPECT_EQ(id1, id2);
 }
 
@@ -68,7 +68,7 @@ TEST_F(LabelNameSetEncodingBimapTest, IterateOverLabelNameSets) {
   encoding_table_.find_or_emplace(label_set2.names());
 
   // Assert
-  EXPECT_EQ(2U, encoding_table_.size());
+  EXPECT_EQ(2U, encoding_table_.items_count());
   auto it = encoding_table_.begin();
   EXPECT_TRUE(std::ranges::equal(label_set1.names(), *it++));
   EXPECT_TRUE(std::ranges::equal(label_set2.names(), *it++));
@@ -87,7 +87,7 @@ TEST_F(LabelNameSetEncodingBimapTest, CheckpointAndRollback) {
   encoding_table_.rollback(checkpoint);
 
   // Assert
-  EXPECT_EQ(1U, encoding_table_.size());
+  EXPECT_EQ(1U, encoding_table_.items_count());
   EXPECT_TRUE(std::ranges::equal(label_set1.names(), *encoding_table_.begin()));
 }
 
@@ -104,7 +104,7 @@ TEST_F(LabelNameSetEncodingBimapTest, CreateViewFromEncodingBimap) {
   const auto view = encoding_table_.data_view();
 
   // Assert
-  EXPECT_EQ(encoding_table_.size(), view.size());
+  EXPECT_EQ(encoding_table_.items_count(), view.size());
   EXPECT_TRUE(std::ranges::equal(encoding_table_, view));
 }
 
@@ -169,7 +169,7 @@ TEST_F(LabelNameSetDecodingTableTest, LoadFromCheckpoint) {
   decoding_table_.load(ss);
 
   // Assert
-  EXPECT_EQ(2U, decoding_table_.size());
+  EXPECT_EQ(2U, decoding_table_.items_count());
   EXPECT_TRUE(std::ranges::equal(label_set1.names(), decoding_table_[id1]));
   EXPECT_TRUE(std::ranges::equal(label_set2.names(), decoding_table_[id2]));
 }
@@ -188,7 +188,7 @@ TEST_F(LabelNameSetDecodingTableTest, IterateOverDecodingTable) {
   decoding_table_.load(ss);
 
   // Assert
-  EXPECT_EQ(2U, decoding_table_.size());
+  EXPECT_EQ(2U, decoding_table_.items_count());
   EXPECT_TRUE(
       std::ranges::equal(decoding_table_, std::initializer_list{label_set1.names(), label_set2.names()}, [](const auto& a, const auto& b) { return a == b; }));
 }
@@ -239,7 +239,7 @@ TEST_F(LabelNameSetDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
   decoding_table_.load(ss);
 
   // Assert
-  EXPECT_EQ(2U, decoding_table_.size());
+  EXPECT_EQ(2U, decoding_table_.items_count());
   EXPECT_TRUE(std::ranges::equal(label_set1.names(), decoding_table_[id1]));
   EXPECT_TRUE(std::ranges::equal(label_set2.names(), decoding_table_[id2]));
 }

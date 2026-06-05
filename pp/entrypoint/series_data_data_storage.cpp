@@ -172,6 +172,27 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   }
 }
 
+extern "C" void prompp_series_data_serialized_data_next(void* args, void* res) {
+  struct Arguments {
+    entrypoint::series_data::SerializedDataPtr serialized_data;
+  };
+
+  using Result = struct {
+    uint32_t series_id;
+    uint32_t chunk_ref;
+  };
+  const auto out = new (res) Result{};
+  std::tie(out->series_id, out->chunk_ref) = static_cast<Arguments*>(args)->serialized_data->next();
+}
+
+extern "C" void prompp_series_data_serialized_data_dtor(void* args) {
+  struct Arguments {
+    entrypoint::series_data::SerializedDataPtr serialized_data;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
 extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
   using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint;
   using PromPP::Primitives::Timestamp;

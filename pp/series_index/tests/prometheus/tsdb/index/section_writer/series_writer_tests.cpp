@@ -2,8 +2,8 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
-#include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
@@ -13,8 +13,6 @@ using PromPP::Primitives::LabelViewSet;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::SeriesReferencesMap;
-using series_index::prometheus::tsdb::index::SymbolReferencesMap;
-using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
 using std::operator""sv;
 
 using ChunkMetadataList = std::vector<ChunkMetadata>;
@@ -22,8 +20,7 @@ using LabelViewSetList = std::vector<LabelViewSet>;
 
 class SeriesWriterFixture : public testing::Test {
  protected:
-  using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+  using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
   using Stream = std::ostringstream;
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using SeriesWriter = series_index::prometheus::tsdb::index::section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
@@ -31,24 +28,23 @@ class SeriesWriterFixture : public testing::Test {
   Stream stream_;
   StreamWriter stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  SymbolReferencesMap symbol_references_;
   SeriesReferencesMap series_references_;
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
 
   void fill_lss_and_symbols(const LabelViewSetList& label_sets) {
     for (auto& label_set : label_sets) {
       lss_.find_or_emplace(label_set);
     }
 
-    std::ostringstream stream;
-    StreamWriter stream_writer{&stream};
-    SymbolsWriter{lss_, symbol_references_, stream_writer}.write();
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
   }
 };
 
 TEST_F(SeriesWriterFixture, OneChunk) {
   // Arrange
   fill_lss_and_symbols({{{"job", "cron"}, {"server", "localhost"}}});
-  SeriesWriter series_writer{lss_, symbol_references_, series_references_};
+  SeriesWriter series_writer{lss_, index_write_context_, series_references_};
 
   // Act
   series_writer.write(0, ChunkMetadataList{{.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0}}, stream_writer_);
@@ -77,7 +73,7 @@ TEST_F(SeriesWriterFixture, MultiplySeriesMultiplyChunks) {
       {{"job", "cron"}, {"server", "remote"}},
       {{"job", "cron"}, {"server", "localhost"}},
   });
-  SeriesWriter series_writer{lss_, symbol_references_, series_references_};
+  SeriesWriter series_writer{lss_, index_write_context_, series_references_};
   const ChunkMetadataList chunks = {{
       {.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0},
       {.min_timestamp = 2002, .max_timestamp = 4004, .reference = 100},

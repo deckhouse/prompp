@@ -1,10 +1,14 @@
 #pragma once
 
+#include <vector>
+
 #include "prometheus/tsdb/index/toc_writer.h"
 #include "section_writer/label_indices_writer.h"
 #include "section_writer/postings_writer.h"
 #include "section_writer/series_writer.h"
 #include "section_writer/symbols_writer.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
+#include "types.h"
 
 namespace series_index::prometheus::tsdb::index {
 
@@ -15,8 +19,9 @@ class IndexWriter {
   using SeriesWriter = section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
   using PostingsWriter = section_writer::PostingsWriter<QueryableEncodingBimap, Stream>;
   using LabelIndicesWriter = section_writer::LabelIndicesWriter<QueryableEncodingBimap, Stream>;
+  using ExportContext = series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>;
 
-  explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss), series_writer_(lss_, symbol_references_, series_references_) {}
+  explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {}
 
   PROMPP_ALWAYS_INLINE void write_header(Stream& stream) {
     const auto stream_setter = writer_.writer().stream_setter(&stream);
@@ -29,7 +34,8 @@ class IndexWriter {
     const auto stream_setter = writer_.writer().stream_setter(&stream);
 
     toc_.symbols = writer_.position();
-    section_writer::SymbolsWriter{lss_, symbol_references_, writer_}.write();
+    index_write_context_.rebuild();
+    section_writer::SymbolsWriter<QueryableEncodingBimap, Stream>{index_write_context_, writer_}.write();
   }
 
   template <class ChunkMetadataContainer>
@@ -39,7 +45,7 @@ class IndexWriter {
     if (toc_.series == 0) [[unlikely]] {
       toc_.series = writer_.position();
     }
-    series_writer_.write(ls_id, chunks, writer_);
+    section_writer::SeriesWriter<QueryableEncodingBimap, Stream>{lss_, index_write_context_, series_references_}.write(ls_id, chunks, writer_);
   }
 
   PROMPP_ALWAYS_INLINE void write_label_indices(Stream& stream) {
@@ -83,7 +89,15 @@ class IndexWriter {
   void write(Stream& stream) {
     write_header(stream);
     write_symbols(stream);
-    write_series(stream, SeriesWriter::kAllSeries);
+
+    const std::vector<ChunkMetadata> empty_chunks;
+    for (PromPP::Primitives::LabelSetID ls_id = 0; ls_id < lss_.next_item_index(); ++ls_id) {
+      if (lss_[ls_id].size() == 0) {
+        continue;
+      }
+      write_series(ls_id, empty_chunks, stream);
+    }
+
     write_label_indices(stream);
     write_postings(stream, PostingsWriter::kUnlimitedBatchSize);
     write_label_indices_table(stream);
@@ -94,13 +108,12 @@ class IndexWriter {
  private:
   const QueryableEncodingBimap& lss_;
 
-  SymbolReferencesMap symbol_references_;
   SeriesReferencesMap series_references_;
+  ExportContext index_write_context_{lss_};
 
   StreamWriter writer_;
 
-  SeriesWriter series_writer_;
-  LabelIndicesWriter label_indices_writer_{lss_, symbol_references_, writer_};
+  LabelIndicesWriter label_indices_writer_{lss_, index_write_context_, writer_};
   PostingsWriter postings_writer_{lss_, series_references_, writer_};
 
   PromPP::Prometheus::tsdb::index::Toc toc_;

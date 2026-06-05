@@ -1,7 +1,5 @@
 #pragma once
 
-#include <variant>
-
 #include "select_hints.h"
 #include "series_data/decoder/decorator/last_over_step.h"
 #include "series_data/decoder/decorator/lookback_delta_iterator.h"
@@ -36,38 +34,71 @@ class MultiSeriesDecodeIterator {
   using MaxMultiSeriesIterator = MultiSeriesIterator<Iterator, FindMaxElement>;
   using SumMultiSeriesIterator = MultiSeriesIterator<Iterator, SumOfElements>;
 
-  using IteratorVariant = std::variant<MinMultiSeriesIterator, MaxMultiSeriesIterator, SumMultiSeriesIterator>;
+  enum class Type : uint8_t {
+    kMin = 0,
+    kMax,
+    kSum,
+  };
 
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  template <class InPlaceType, class... Args>
-  explicit MultiSeriesDecodeIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
+#define DEFINE_CONSTRUCTOR(MultiSeriesIteratorType, field, type)                                    \
+  template <class... Args>                                                                          \
+  explicit MultiSeriesDecodeIterator(std::in_place_type_t<MultiSeriesIteratorType>, Args&&... args) \
+      : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} {}
+
+  DEFINE_CONSTRUCTOR(MinMultiSeriesIterator, min, kMin)
+  DEFINE_CONSTRUCTOR(MaxMultiSeriesIterator, max, kMax)
+  DEFINE_CONSTRUCTOR(SumMultiSeriesIterator, sum, kSum)
+
+#undef DEFINE_CONSTRUCTOR
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) const {
+    switch (type_) {
+      case Type::kMin: {
+        return std::forward<Visitor>(visitor)(iterator_.min);
+      }
+
+      case Type::kMax: {
+        return std::forward<Visitor>(visitor)(iterator_.max);
+      }
+
+      default: {
+        return std::forward<Visitor>(visitor)(iterator_.sum);
+      }
+    }
+  }
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) {
+    return const_cast<const MultiSeriesDecodeIterator*>(this)->visit(
+        [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
+  }
+
+  ~MultiSeriesDecodeIterator() {
+    visit([](const auto& iterator) PROMPP_LAMBDA_INLINE { std::destroy_at(&iterator); });
+  }
 
   PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample& operator*() const {
-    return std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE -> auto const& { return *iterator; }, iterator_);
+    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto& { return *iterator; });
   }
   PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample* operator->() const {
-    return std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE -> auto const* { return iterator.operator->(); }, iterator_);
+    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto* { return iterator.operator->(); });
   }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const {
-    return std::visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; }, iterator_);
+    return visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; });
   }
 
   PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator& operator++() {
-    std::visit([]<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE { ++iterator; }, iterator_);
+    visit([]<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE { ++iterator; });
     return *this;
-  }
-
-  PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator operator++(int) {
-    const auto result = *this;
-    ++*this;
-    return result;
   }
 
   template <class IteratorsGenerator>
   PROMPP_ALWAYS_INLINE void reset(const ::series_data::decoder::decorator::WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
-    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.reset(parameters, std::forward<IteratorsGenerator>(iterators_generator)); }, iterator_);
+    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.reset(parameters, std::forward<IteratorsGenerator>(iterators_generator)); });
   }
 
   PROMPP_ALWAYS_INLINE static void create_series_iterators(const SelectHints& select_hints,
@@ -85,13 +116,24 @@ class MultiSeriesDecodeIterator {
     });
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
+
  private:
-  IteratorVariant iterator_;
+  union Iterators {
+    ~Iterators() {}
+
+    MinMultiSeriesIterator min;
+    MaxMultiSeriesIterator max;
+    SumMultiSeriesIterator sum;
+  } iterator_;
+
+  Type type_;
 };
 
-PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator create_multi_series_decode_iterator(const SelectHints& select_hints,
-                                                                                   std::span<const uint32_t> series_ids,
-                                                                                   ::series_data::serialization::SerializedDataView data_view) {
+PROMPP_ALWAYS_INLINE void construct_multi_series_decode_iterator(MultiSeriesDecodeIterator* iterator,
+                                                                 const SelectHints& select_hints,
+                                                                 std::span<const uint32_t> series_ids,
+                                                                 ::series_data::serialization::SerializedDataView data_view) {
   const auto create_series_iterators = [&] {
     BareBones::Vector<MultiSeriesDecodeIterator::Iterator> iterators;
     MultiSeriesDecodeIterator::create_series_iterators(select_hints, series_ids, data_view, iterators);
@@ -102,19 +144,22 @@ PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator create_multi_series_decode_iterat
     using enum PromPP::Prometheus::promql::WindowFunction;
 
     case kMin: {
-      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::MinMultiSeriesIterator>, create_series_iterators(),
-                                       select_hints.function_parameters);
+      std::construct_at(iterator, std::in_place_type<MultiSeriesDecodeIterator::MinMultiSeriesIterator>, create_series_iterators(),
+                        select_hints.function_parameters);
+      break;
     }
 
     case kMax: {
-      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::MaxMultiSeriesIterator>, create_series_iterators(),
-                                       select_hints.function_parameters);
+      std::construct_at(iterator, std::in_place_type<MultiSeriesDecodeIterator::MaxMultiSeriesIterator>, create_series_iterators(),
+                        select_hints.function_parameters);
+      break;
     }
 
     case kSum:
     default: {
-      return MultiSeriesDecodeIterator(std::in_place_type<MultiSeriesDecodeIterator::SumMultiSeriesIterator>, create_series_iterators(),
-                                       select_hints.function_parameters);
+      std::construct_at(iterator, std::in_place_type<MultiSeriesDecodeIterator::SumMultiSeriesIterator>, create_series_iterators(),
+                        select_hints.function_parameters);
+      break;
     }
   }
 }

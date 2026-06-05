@@ -11,12 +11,15 @@ import (
 
 // LSS labelset storage for [shard].
 type LSS struct {
-	input              *cppbridge.LabelSetStorage
-	target             *cppbridge.LabelSetStorage
-	snapshot           *cppbridge.LabelSetSnapshot
-	dstSrcLsIdsMapping *cppbridge.IdsMapping
-	locker             sync.RWMutex
-	once               sync.Once
+	input    *cppbridge.LabelSetStorage
+	target   *cppbridge.LabelSetStorage
+	snapshot *cppbridge.LabelSetSnapshot
+	// writes are unlocked because these fields are read only after rotation completes (no concurrent readers).
+	dstSrcLsIdsMapping   *cppbridge.IdsMapping
+	newToOldLsIdsMapping *cppbridge.IdsMapping
+	mappedSnapshot       *cppbridge.LabelSetSnapshot
+	locker               sync.RWMutex
+	once                 sync.Once
 }
 
 // NewLSS init new [LSS].
@@ -43,7 +46,39 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	bitsetSeries := l.target.BitsetSeries()
 	l.locker.RUnlock()
 
+	// The post-copy writes to destination.dstSrcLsIdsMapping, l.mappedSnapshot
+	// and l.newToOldLsIdsMapping are performed without holding any locker: it is
+	// safe because these fields are read only after the rotation completes (by
+	// [LSS.FinalizeCopyAndShrink] and [Shard.DstSrcLsIdsMapping] from the
+	// post-rotation path).
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
+}
+
+// FinalizeCopyAndShrink finalize copy and shrink the lss.
+func (l *LSS) FinalizeCopyAndShrink() {
+	l.locker.Lock()
+	l.target.FinalizeCopyAndShrink(l.mappedSnapshot, l.newToOldLsIdsMapping)
+	l.newToOldLsIdsMapping = nil
+	l.ResetSnapshot()
+	l.locker.Unlock()
+}
+
+// FreezeAndCopyAddedSeries freeze the lss by shrink boundary and copy the added series to the destination lss.
+func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) {
+	l.locker.Lock()
+	snapshot := l.getSnapshot()
+	bitsetSeries := l.target.BitsetSeries()
+	l.target.SetPendingShrinkBoundary(shrinkBoundary)
+	l.locker.Unlock()
+
+	// The post-copy writes to destination.dstSrcLsIdsMapping, l.mappedSnapshot
+	// and l.newToOldLsIdsMapping are performed without holding any locker: it is
+	// safe because these fields are read only after the rotation completes (by
+	// [LSS.FinalizeCopyAndShrink] and [Shard.DstSrcLsIdsMapping] from the
+	// post-rotation path).
+	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
+	l.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
+	l.newToOldLsIdsMapping = destination.dstSrcLsIdsMapping
 }
 
 // GroupSeriesByLabelNames group series by label names.

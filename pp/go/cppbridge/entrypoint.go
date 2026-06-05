@@ -31,7 +31,8 @@ type (
 	CppStdVector                         = [C.Sizeof_StdVector]byte
 	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
 	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
-	CppSerializedDataIterator            = [C.Sizeof_SerializedDataIterator]byte
+	CppSerializedDataSamplesIterator     = [C.Sizeof_SerializedDataSamplesIterator]byte
+	CppSerializedDataAggregationIterator = [C.Sizeof_SerializedDataAggregationIterator]byte
 	CppSerializedDataMultiSeriesIterator = [C.Sizeof_MultiSeriesDecodeIterator]byte
 	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
 	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
@@ -44,7 +45,6 @@ const (
 )
 
 var (
-
 	// per_goroutine_relabeler input_relabeling
 	perGoroutineRelabelerInputRelabelingSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1641,6 +1641,23 @@ func primitivesLSSBitsetSeries(lss uintptr) uintptr {
 	return res.bitset
 }
 
+// primitivesLSSFinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+func primitivesLSSFinalizeCopyAndShrink(lss, resolveSnapshot, newToOldMapping uintptr) {
+	args := struct {
+		lss             uintptr
+		resolveSnapshot uintptr
+		newToOldMapping uintptr
+	}{lss, resolveSnapshot, newToOldMapping}
+
+	testGC()
+	start := time.Now()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_finalize_copy_and_shrink,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	lssFinalizeCopyAndShrinkDurationMax.set(float64(time.Since(start).Nanoseconds()))
+}
+
 // primitivesLSSBitsetDtor destroy bitset of added series.
 func primitivesLSSBitsetDtor(bitset uintptr) {
 	args := struct {
@@ -1659,12 +1676,14 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
+	start := time.Now()
 	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
 		C.uint64_t(uintptr(unsafe.Pointer(&dstSrcLsIdsMapping))),
 	)
+	snapshotLSSCopyAddedSeriesDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return dstSrcLsIdsMapping
 }
@@ -1679,6 +1698,24 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 		C.prompp_primitives_free_ls_ids_mapping,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
+	args := struct {
+		lss            uintptr
+		shrinkBoundary uint32
+	}{lss, shrinkBoundary}
+
+	testGC()
+	start := time.Now()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_set_pending_shrink_boundary,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
 //
@@ -2185,7 +2222,7 @@ func seriesDataSerializedDataDtor(serializedData uintptr) {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_dtor,
+		C.prompp_series_data_serialized_data_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2201,7 +2238,7 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_serialization_serialized_data_next,
+		C.prompp_series_data_serialized_data_next,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2209,7 +2246,11 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 	return res.seriesID, res.chunkRef
 }
 
-func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
+func seriesDataSerializedDataSamplesIteratorCtor(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
 	args := struct {
 		iterator       uintptr
 		serializedData uintptr
@@ -2218,20 +2259,23 @@ func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIte
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_ctor,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_ctor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-func seriesDataSerializedDataIteratorNext(iterator *DataStorageSerializedDataIterator) {
+func seriesDataSerializedDataSamplesIteratorNext(iterator *DataStorageSerializedDataSamplesIterator) {
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_next,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_next,
 		uintptr(unsafe.Pointer(iterator)),
 	)
 }
 
-func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIterator, targetTimestamp int64) {
+func seriesDataSerializedDataSamplesIteratorSeek(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	targetTimestamp int64,
+) {
 	args := struct {
 		iterator        uintptr
 		targetTimestamp int64
@@ -2239,12 +2283,16 @@ func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIte
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_seek,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_seek,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
+func seriesDataSerializedDataSamplesIteratorReset(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
 	args := struct {
 		iterator       uintptr
 		serializedData uintptr
@@ -2253,7 +2301,67 @@ func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIt
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_reset,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorCtor(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		chunkRef       uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorNext(iterator *DataStorageSerializedDataAggregationIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_next,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorSeek(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	targetTimestamp int64,
+) {
+	args := struct {
+		iterator        uintptr
+		targetTimestamp int64
+	}{uintptr(unsafe.Pointer(iterator)), targetTimestamp}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_seek,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorReset(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		chunkRef       uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_reset,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -3214,6 +3322,25 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	headWalEncoderFinalizeCount.Inc()
 
 	return res.samples, res.segment, handleException(res.exception)
+}
+
+// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
+func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+	args := struct {
+		encoder uintptr
+	}{encoder}
+	var res struct {
+		maxWrittenItemIndex uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_head_wal_encoder_max_written_item_index,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.maxWrittenItemIndex
 }
 
 func headWalEncoderDtor(encoder uintptr) {

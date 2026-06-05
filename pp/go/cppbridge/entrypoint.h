@@ -3,6 +3,55 @@ extern "C" {
 #endif
 
 /**
+ * @brief Create a aggregation iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor(void* args);
+
+/**
+ * @brief Advance aggregation iterator.
+ *
+ * @param iterator uintptr // pointer to aggregation iterator
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_next(void* iterator);
+
+/**
+ * @brief Advance aggregation iterator until referenced sample is gte targetTimestamp.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to aggregation iterator
+ *     targetTimestamp int64 // target timestamp
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_seek(void* args);
+
+/**
+ * @brief Reset a aggregation iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     iterator uintptr // pointer to aggregation iterator
+ *     chunkRef uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_reset(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
  * @brief Free memory allocated for response as []byte
  *
  * @param args *[]byte
@@ -40,7 +89,8 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 #define Sizeof_GoLabels 16
 
-#define Sizeof_SerializedDataIterator 208
+#define Sizeof_SerializedDataSamplesIterator 152
+#define Sizeof_SerializedDataAggregationIterator 208
 #define Sizeof_MultiSeriesDecodeIterator 48
 
 #define Sizeof_MetricsIterator 24
@@ -184,6 +234,18 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
  * }
  */
 void prompp_head_wal_encoder_finalize(void* args, void* res);
+
+/**
+ * @brief Exclusive upper bound of series item indices written to WAL.
+ *
+ * @param args {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ * @param res {
+ *     max_written_item_index uint32
+ * }
+ */
+void prompp_head_wal_encoder_max_written_item_index(void* args, void* res);
 
 /**
  * @brief Construct a new Head WAL Decoder
@@ -544,6 +606,49 @@ void prompp_metrics_page_for_test_detach(void* args);
 extern "C" {
 #endif
 
+/**
+ * @brief Construct a multi-series decode iterator over the given series ids.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to storage of size Sizeof_MultiSeriesDecodeIterator (placement new).
+ *     serializedData uintptr // pointer to serialized data.
+ *     seriesIDs []uint32 // slice view of series ids to use in iterator.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args);
+
+/**
+ * @brief Reset a multi-series decode iterator into the given series ids.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to a constructed MultiSeriesDecodeIterator.
+ *     serializedData uintptr // pointer to serialized data.
+ *     seriesIDs []uint32 // slice view of series ids to use in iterator.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_reset(void* args);
+
+/**
+ * @brief Advance multi-series decode iterator.
+ *
+ * @param iterator uintptr // pointer to multi-series decode iterator
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_next(void* iterator);
+
+/**
+ * @brief Destroy multi-series decode iterator (call before reusing).
+ *
+ * @param iterator uintptr // pointer to multi-series decode iterator
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor(void* iterator);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 /**
@@ -807,6 +912,27 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  *
  */
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
+
+/**
+ * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ *
+ * @param args {
+ *     lss                 uintptr  // pointer to source queryable lss;
+ *     shrink_boundary      uint32  // boundary
+ * }
+ */
+void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+
+/**
+ * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to source queryable lss;
+ *     resolve_snapshot   uintptr  // pointer to snapshot lss for resolving ids with mapping;
+ *     new_to_old_mapping uintptr  // pointer to ls id `new (copy) -> old (source)` mapping from copier
+ * }
+ */
+void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
 
 /**
  * @brief destroy ls ids mapping
@@ -1366,6 +1492,55 @@ extern "C" {
 #endif
 
 /**
+ * @brief Create a samples iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_ctor(void* args);
+
+/**
+ * @brief Advance samples iterator.
+ *
+ * @param iterator uintptr // pointer to samples iterator
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* iterator);
+
+/**
+ * @brief Advance samples iterator until referenced sample is gte targetTimestamp.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to samples iterator
+ *     targetTimestamp int64 // target timestamp
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_seek(void* args);
+
+/**
+ * @brief Reset a samples iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     iterator uintptr // pointer to samples iterator
+ *     chunkRef uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_reset(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
  * @brief Construct a new series data DataStorage
  *
  * @param res {
@@ -1486,6 +1661,30 @@ void prompp_get_promql_optimized_functions(void* res);
  * }
  */
 void prompp_series_data_data_storage_query_v2(void* args, void* res);
+
+/**
+ * @brief Get next series_id in serialized data.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ * @param res {
+ *     series_id uint32 // series id (UINT32_MAX if no more series).
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ */
+void prompp_series_data_serialized_data_next(void* args, void* res);
+
+/**
+ * @brief Destroy serialized data object.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ */
+void prompp_series_data_serialized_data_dtor(void* args);
 
 /**
  * @brief return instant series at given timestamp for label sets.
@@ -1776,115 +1975,6 @@ void prompp_series_data_encoder_merge_out_of_order_chunks(void* args);
  * }
  */
 void prompp_series_data_encoder_dtor(void* args);
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * @brief Get next series_id in serialized data.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- * }
- *
- * @param res {
- *     series_id uint32 // series id (UINT32_MAX if no more series).
- *     chunk_ref uint32 // inner chunk id.
- * }
- */
-void prompp_series_data_serialization_serialized_data_next(void* args, void* res);
-
-/**
- * @brief Create a decode iterator for corresponding chunk_ref.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- *     chunk_ref uint32 // inner chunk id.
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args);
-
-/**
- * @brief Advance decode iterator.
- *
- * @param iterator uintptr // pointer to decode iterator
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator);
-
-/**
- * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
- *
- * @param args {
- *     iterator uintptr // pointer to decode iterator
- *     targetTimestamp int64 // target timestamp
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_seek(void* args);
-
-/**
- * @brief Reset a decode iterator for corresponding chunk_ref.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- *     iterator uintptr // pointer to decode iterator
- *     chunkRef uint32 // inner chunk id.
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_reset(void* args);
-
-/**
- * @brief Construct a multi-series decode iterator over the given series ids.
- *
- * @param args {
- *     iterator uintptr // pointer to storage of size Sizeof_MultiSeriesDecodeIterator (placement new).
- *     serializedData uintptr // pointer to serialized data.
- *     seriesIDs []uint32 // slice view of series ids to use in iterator.
- * }
- */
-void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args);
-
-/**
- * @brief Reset a multi-series decode iterator into the given series ids.
- *
- * @param args {
- *     iterator uintptr // pointer to a constructed MultiSeriesDecodeIterator.
- *     serializedData uintptr // pointer to serialized data.
- *     seriesIDs []uint32 // slice view of series ids to use in iterator.
- * }
- */
-void prompp_series_data_serialization_serialized_data_multi_series_iterator_reset(void* args);
-
-/**
- * @brief Advance multi-series decode iterator.
- *
- * @param iterator uintptr // pointer to multi-series decode iterator
- */
-void prompp_series_data_serialization_serialized_data_multi_series_iterator_next(void* iterator);
-
-/**
- * @brief Destroy multi-series decode iterator (call before reusing).
- *
- * @param iterator uintptr // pointer to multi-series decode iterator
- */
-void prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor(void* iterator);
-
-/**
- * @brief Destroy serialized data object.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

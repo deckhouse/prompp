@@ -14,13 +14,12 @@
 
 namespace {
 
-using Lss =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using LssCopier = series_index::QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
-std::string get_lss_file_name() {
+std::string get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
     return context->operator[]("lss_file");
   }
@@ -35,8 +34,8 @@ void mark_all_series_as_added(Lss& lss) {
 
 const Lss& load_lss_from_file() {
   static Lss lss;
-  if (lss.size() == 0) [[unlikely]] {
-    const auto file_name = get_lss_file_name();
+  if (lss.items_count() == 0) {
+    const auto file_name = get_lss_file();
 
     std::ifstream istrm(file_name, std::ios::binary);
     istrm >> lss;
