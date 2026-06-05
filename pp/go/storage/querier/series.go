@@ -23,7 +23,7 @@ var builderPool = sync.Pool{
 // ChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type ChunkIterator struct {
 	serializedData *cppbridge.DataStorageSerializedData
-	chunkIterator  cppbridge.DataStorageSerializedDataIterator
+	chunkIterator  cppbridge.DataStorageSerializedDataSamplesIterator
 	mint           int64
 	maxt           int64
 	isInitialized  bool
@@ -33,7 +33,7 @@ type ChunkIterator struct {
 func NewChunkIterator(serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32, mint, maxt int64) *ChunkIterator {
 	it := &ChunkIterator{
 		serializedData: serializedData,
-		chunkIterator:  cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef),
+		chunkIterator:  cppbridge.NewDataStorageSerializedDataSamplesIterator(serializedData, chunkRef),
 		mint:           mint,
 		maxt:           maxt,
 	}

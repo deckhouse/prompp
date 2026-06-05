@@ -125,6 +125,30 @@ void prompp_get_promql_optimized_functions(void* res);
 void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
+ * @brief Get next series_id in serialized data.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ * @param res {
+ *     series_id uint32 // series id (UINT32_MAX if no more series).
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ */
+void prompp_series_data_serialized_data_next(void* args, void* res);
+
+/**
+ * @brief Destroy serialized data object.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ */
+void prompp_series_data_serialized_data_dtor(void* args);
+
+/**
  * @brief return instant series at given timestamp for label sets.
  *
  * @param args {

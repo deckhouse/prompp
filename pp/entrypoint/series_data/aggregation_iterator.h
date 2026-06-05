@@ -25,7 +25,7 @@ concept invalidatable = requires(Iterator iterator) {
   { iterator.invalidate_sample() };
 };
 
-class DecodeIterator {
+class AggregationIterator {
  public:
   using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
   using UniversalDecodeIterator = ::series_data::decoder::UniversalDecodeIterator;
@@ -64,7 +64,7 @@ class DecodeIterator {
   DECODE_ITERATOR_TYPE_TRAITS();
 
   template <class InPlaceType, class... Args>
-  explicit DecodeIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
+  explicit AggregationIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
 
   PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample& operator*() const {
     return std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE -> auto const& { return *iterator; }, iterator_);
@@ -77,7 +77,7 @@ class DecodeIterator {
     return std::visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; }, iterator_);
   }
 
-  PROMPP_ALWAYS_INLINE DecodeIterator& operator++() {
+  PROMPP_ALWAYS_INLINE AggregationIterator& operator++() {
     std::visit(
         []<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE {
           ++iterator;
@@ -92,7 +92,7 @@ class DecodeIterator {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE DecodeIterator operator++(int) {
+  PROMPP_ALWAYS_INLINE AggregationIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;
@@ -107,53 +107,50 @@ struct SelectHints {
   PromPP::Prometheus::promql::WindowFunction window_function{PromPP::Prometheus::promql::WindowFunction::kNone};
 };
 
-PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,
-                                                           const SelectHints& select_hints,
-                                                           PromPP::Primitives::Timestamp downsampling_ms) {
+PROMPP_ALWAYS_INLINE AggregationIterator create_aggregation_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,
+                                                                     const SelectHints& select_hints,
+                                                                     PromPP::Primitives::Timestamp downsampling_ms) {
   if (downsampling_ms != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
-    return DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, std::move(iterator), downsampling_ms);
+    return AggregationIterator(std::in_place_type<AggregationIterator::DownsamplingIterator>, std::move(iterator), downsampling_ms);
   }
 
   using enum PromPP::Prometheus::promql::WindowFunction;
-  if (select_hints.window_function == kNone) [[likely]] {
-    return DecodeIterator(std::in_place_type<DecodeIterator::SeriesIterator>, std::move(iterator));
-  }
 
   switch (select_hints.window_function) {
     case kRate:
     case kIncrease:
-      return DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::RateIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kIrate:
     case kIdelta:
-      return DecodeIterator(std::in_place_type<DecodeIterator::IRateIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::IRateIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kMinOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::MinOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kMaxOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::MaxOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::MaxOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kLastOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::LastOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kLastOverStep:
-      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverStepIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::LastOverStepIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kSumOverTime:
-      return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::SumOverTimeIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kDelta:
-      return DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::DeltaIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kResets:
-      return DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::ResetsIterator>, std::move(iterator), select_hints.function_parameters);
 
     case kChanges:
-      return DecodeIterator(std::in_place_type<DecodeIterator::ChangesIterator>, std::move(iterator), select_hints.function_parameters);
+      return AggregationIterator(std::in_place_type<AggregationIterator::ChangesIterator>, std::move(iterator), select_hints.function_parameters);
 
     default:
-      return DecodeIterator(std::in_place_type<DecodeIterator::SeriesIterator>, std::move(iterator));
+      return AggregationIterator(std::in_place_type<AggregationIterator::SeriesIterator>, std::move(iterator));
   }
 }
 
