@@ -102,6 +102,9 @@ var selectFuncOptimize = noneOptimizeType
 // emptySelectHints is an empty select hints, it's used when no optimization is needed.
 var emptySelectHints = &storage.SelectHints{}
 
+// emptySeriesSet is an empty series set.
+var emptySeriesSet = &SeriesSet{}
+
 //
 // Querier
 //
@@ -395,6 +398,49 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
+	if isAggregationSeriesFunc(hints) {
+		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+	}
+
+	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+}
+
+// makeAggrSeriesSet makes the aggregated series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
+
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData != nil {
+			seriesSets[shardID] = NewAggrSeriesSet(
+				snapshots[shardID],
+				serializedData,
+				lssQueryResults[shardID],
+				q.mint,
+				q.maxt,
+			)
+			continue
+		}
+
+		seriesSets[shardID] = emptySeriesSet
+	}
+
+	return NewMergeShardSeriesSet(seriesSets)
+}
+
+// makeSeriesSet makes the series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
+
 	seriesSets := poolProvider.GetSeriesSet()
 	defer poolProvider.PutSeriesSet(seriesSets)
 	for shardID, serializedData := range shardedSerializedData {
@@ -408,7 +454,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 			)
 			continue
 		}
-		seriesSets[shardID] = &SeriesSet{}
+
+		seriesSets[shardID] = emptySeriesSet
 	}
 
 	return NewMergeShardSeriesSet(seriesSets)
@@ -462,6 +509,11 @@ var funcOptimizeMap = func() map[string]queryOptimizeType {
 
 	return functions
 }()
+
+// isAggregationSeriesFunc checks if the function is an aggregation series function.
+func isAggregationSeriesFunc(hints *storage.SelectHints) bool {
+	return funcOptimizeMap[hints.Func]&dropPointOptimizeType == dropPointOptimizeType
+}
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
 func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.LabelMatcher {

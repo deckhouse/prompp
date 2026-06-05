@@ -22,17 +22,6 @@ void prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor(
 void prompp_series_data_serialization_serialized_data_aggregation_iterator_next(void* iterator);
 
 /**
- * @brief Advance aggregation iterator until referenced sample is gte targetTimestamp.
- *
- * @param args {
- *     iterator uintptr // pointer to aggregation iterator
- *     targetTimestamp int64 // target timestamp
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_aggregation_iterator_seek(void* args);
-
-/**
  * @brief Reset a aggregation iterator for corresponding chunk_ref.
  *
  * @param args {
