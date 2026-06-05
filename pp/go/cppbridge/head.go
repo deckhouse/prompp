@@ -259,49 +259,90 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	return seriesDataSerializedDataNext(sd.serializedData)
 }
 
-type DataStorageSerializedDataIteratorControlBlock struct {
+type DataStorageSerializedDataSamplesIteratorControlBlock struct {
+	timestamp        int64
+	value            float64
+	remainingSamples uint8
+}
+
+type DataStorageSerializedDataSamplesIterator struct {
+	DataStorageSerializedDataSamplesIteratorControlBlock
+	cppInternalData [unsafe.Sizeof(CppSerializedDataSamplesIterator{}) - unsafe.Sizeof(DataStorageSerializedDataSamplesIteratorControlBlock{})]byte
+}
+
+func NewDataStorageSerializedDataSamplesIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataSamplesIterator {
+	it := DataStorageSerializedDataSamplesIterator{}
+	seriesDataSerializedDataSamplesIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	return it
+}
+
+func (it *DataStorageSerializedDataSamplesIterator) Next() {
+	seriesDataSerializedDataSamplesIteratorNext(it)
+}
+
+func (it *DataStorageSerializedDataSamplesIterator) Seek(timestamp int64) {
+	seriesDataSerializedDataSamplesIteratorSeek(it, timestamp)
+}
+
+func (it *DataStorageSerializedDataSamplesIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
+	seriesDataSerializedDataSamplesIteratorReset(it, serializedData.serializedData, chunkRef)
+}
+
+func (it *DataStorageSerializedDataSamplesIterator) HasData() bool {
+	return it.remainingSamples != 0
+}
+
+func (it *DataStorageSerializedDataSamplesIterator) Timestamp() int64 {
+	return it.timestamp
+}
+
+func (it *DataStorageSerializedDataSamplesIterator) Value() float64 {
+	return it.value
+}
+
+type DataStorageSerializedDataAggregationIteratorControlBlock struct {
 	timestamp int64
 	value     float64
 }
 
-func (it *DataStorageSerializedDataIteratorControlBlock) HasData() bool {
+func (it *DataStorageSerializedDataAggregationIteratorControlBlock) HasData() bool {
 	return it.timestamp != math.MinInt64
 }
 
-func (it *DataStorageSerializedDataIteratorControlBlock) Timestamp() int64 {
+func (it *DataStorageSerializedDataAggregationIteratorControlBlock) Timestamp() int64 {
 	return it.timestamp
 }
 
-func (it *DataStorageSerializedDataIteratorControlBlock) Value() float64 {
+func (it *DataStorageSerializedDataAggregationIteratorControlBlock) Value() float64 {
 	return it.value
 }
 
-type DataStorageSerializedDataIterator struct {
-	DataStorageSerializedDataIteratorControlBlock
-	cppInternalData [unsafe.Sizeof(CppSerializedDataIterator{}) - unsafe.Sizeof(DataStorageSerializedDataIteratorControlBlock{})]byte
+type DataStorageSerializedDataAggregationIterator struct {
+	DataStorageSerializedDataAggregationIteratorControlBlock
+	cppInternalData [unsafe.Sizeof(CppSerializedDataAggregationIterator{}) - unsafe.Sizeof(DataStorageSerializedDataAggregationIteratorControlBlock{})]byte
 }
 
-func NewDataStorageSerializedDataIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataIterator {
-	it := DataStorageSerializedDataIterator{}
-	seriesDataSerializedDataIteratorCtor(&it, serializedData.serializedData, chunkRef)
+func NewDataStorageSerializedDataAggregationIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataAggregationIterator {
+	it := DataStorageSerializedDataAggregationIterator{}
+	seriesDataSerializedDataAggregationIteratorCtor(&it, serializedData.serializedData, chunkRef)
 	return it
 }
 
-func (it *DataStorageSerializedDataIterator) Next() {
-	seriesDataSerializedDataIteratorNext(it)
+func (it *DataStorageSerializedDataAggregationIterator) Next() {
+	seriesDataSerializedDataAggregationIteratorNext(it)
 }
 
-func (it *DataStorageSerializedDataIterator) Seek(timestamp int64) {
-	seriesDataSerializedDataIteratorSeek(it, timestamp)
+func (it *DataStorageSerializedDataAggregationIterator) Seek(timestamp int64) {
+	seriesDataSerializedDataAggregationIteratorSeek(it, timestamp)
 }
 
-func (it *DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
-	seriesDataSerializedDataIteratorReset(it, serializedData.serializedData, chunkRef)
+func (it *DataStorageSerializedDataAggregationIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
+	seriesDataSerializedDataAggregationIteratorReset(it, serializedData.serializedData, chunkRef)
 }
 
 type DataStorageSerializedDataMultiSeriesIterator struct {
-	DataStorageSerializedDataIteratorControlBlock
-	cppInternalData [unsafe.Sizeof(CppSerializedDataMultiSeriesIterator{}) - unsafe.Sizeof(DataStorageSerializedDataIteratorControlBlock{})]byte
+	DataStorageSerializedDataAggregationIteratorControlBlock
+	cppInternalData [unsafe.Sizeof(CppSerializedDataMultiSeriesIterator{}) - unsafe.Sizeof(DataStorageSerializedDataAggregationIteratorControlBlock{})]byte
 }
 
 func NewDataStorageSerializedDataMultiSeriesIterator(serializedData *DataStorageSerializedData, seriesIDs []uint32) DataStorageSerializedDataMultiSeriesIterator {

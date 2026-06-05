@@ -2,14 +2,13 @@
 
 #include "bare_bones/bitset.h"
 #include "entrypoint/go_constants.h"
-#include "entrypoint/series_data/decode_iterator.h"
+#include "entrypoint/series_data/aggregation_iterator.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "prometheus/query.h"
 #include "serialization.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
-#include "series_data/serialization/serialized_data.h"
 
 namespace entrypoint::series_data {
 

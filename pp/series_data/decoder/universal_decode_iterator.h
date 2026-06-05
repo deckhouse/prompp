@@ -1,7 +1,6 @@
 #pragma once
 
-#include <type_traits>
-#include <variant>
+#include <memory>
 
 #include "asc_integer.h"
 #include "asc_integer_then_values_gorilla.h"
@@ -14,7 +13,7 @@ namespace series_data::decoder {
 
 class UniversalDecodeIterator {
  public:
-  enum class Type {
+  enum class Type : uint8_t {
     kConstant = 0,
     kTwoDoubleConstant,
     kAscInteger,
@@ -25,20 +24,68 @@ class UniversalDecodeIterator {
 
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  UniversalDecodeIterator() : iterator_(std::in_place_type<ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0.0, false) {}
+#define DEFINE_CONSTRUCTOR(DecodeIterator, field, type)                                                                                                        \
+  template <class... Args>                                                                                                                                     \
+  explicit UniversalDecodeIterator(std::in_place_type_t<DecodeIterator>, Args&&... args) : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} { \
+    struct SampleIsFirstIteratorField : DecodeIterator {                                                                                                       \
+      static_assert(decoder::DecodeIteratorData<decltype(SampleIsFirstIteratorField::data_)>,                                                                  \
+                    #DecodeIterator "::data_ must comply with the DecodeIteratorData concept");                                                                \
+    };                                                                                                                                                         \
+  }
 
-  template <class InPlaceType, class... Args>
-  explicit UniversalDecodeIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
+  DEFINE_CONSTRUCTOR(ConstantDecodeIterator, constant, kConstant)
+  DEFINE_CONSTRUCTOR(TwoDoubleConstantDecodeIterator, two_double_constant, kTwoDoubleConstant)
+  DEFINE_CONSTRUCTOR(AscIntegerDecodeIterator, asc_int, kAscInteger)
+  DEFINE_CONSTRUCTOR(AscIntegerThenValuesGorillaDecodeIterator, asc_int_then_values, kAscIntegerThenValuesGorilla)
+  DEFINE_CONSTRUCTOR(ValuesGorillaDecodeIterator, values_gorilla, kValuesGorilla)
+  DEFINE_CONSTRUCTOR(GorillaDecodeIterator, gorilla, kGorilla)
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return reinterpret_cast<const encoder::Sample&>(iterator_); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return reinterpret_cast<const encoder::Sample*>(&iterator_); }
+#undef DEFINE_CONSTRUCTOR
+
+  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return iterator_.constant.operator*(); }
+  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.constant.operator->(); }
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE auto visit(Visitor&& visitor) const noexcept {
+    switch (type_) {
+      case Type::kConstant: {
+        return std::forward<Visitor>(visitor)(iterator_.constant);
+      }
+
+      case Type::kTwoDoubleConstant: {
+        return std::forward<Visitor>(visitor)(iterator_.two_double_constant);
+      }
+
+      case Type::kAscInteger: {
+        return std::forward<Visitor>(visitor)(iterator_.asc_int);
+      }
+
+      case Type::kAscIntegerThenValuesGorilla: {
+        return std::forward<Visitor>(visitor)(iterator_.asc_int_then_values);
+      }
+
+      case Type::kValuesGorilla: {
+        return std::forward<Visitor>(visitor)(iterator_.values_gorilla);
+      }
+
+      default: {
+        return std::forward<Visitor>(visitor)(iterator_.gorilla);
+      }
+    }
+  }
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE auto visit(Visitor&& visitor) noexcept {
+    return const_cast<const UniversalDecodeIterator*>(this)->visit(
+        [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
+  }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const noexcept {
-    return std::visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; }, iterator_);
+    return visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; });
   }
 
   PROMPP_ALWAYS_INLINE UniversalDecodeIterator& operator++() noexcept {
-    std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE { ++iterator; }, iterator_);
+    visit([](auto& iterator) PROMPP_LAMBDA_INLINE { ++iterator; });
     return *this;
   }
 
@@ -50,57 +97,30 @@ class UniversalDecodeIterator {
 
   template <SeekKind Kind, class SeekHandler>
   PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
-    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.template seek<Kind>(std::forward<SeekHandler>(handler)); }, iterator_);
+    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.template seek<Kind>(std::forward<SeekHandler>(handler)); });
   }
 
   PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
-    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek_to(timestamp); }, iterator_);
+    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek_to(timestamp); });
   }
 
-  PROMPP_ALWAYS_INLINE void invalidate_sample() { reinterpret_cast<encoder::Sample&>(iterator_).timestamp = kInvalidTimestamp; }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return static_cast<Type>(iterator_.index()); }
-
-  template <class Visitor>
-  PROMPP_ALWAYS_INLINE auto visit(Visitor&& visitor) {
-    return std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(iterator); }, iterator_);
+  PROMPP_ALWAYS_INLINE void invalidate_sample() {
+    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate_sample(); });
   }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
 
  private:
-  using IteratorVariant = std::variant<ConstantDecodeIterator,
-                                       TwoDoubleConstantDecodeIterator,
-                                       AscIntegerDecodeIterator,
-                                       AscIntegerThenValuesGorillaDecodeIterator,
-                                       ValuesGorillaDecodeIterator,
-                                       GorillaDecodeIterator>;
+  union {
+    ConstantDecodeIterator constant;
+    TwoDoubleConstantDecodeIterator two_double_constant;
+    AscIntegerDecodeIterator asc_int;
+    AscIntegerThenValuesGorillaDecodeIterator asc_int_then_values;
+    ValuesGorillaDecodeIterator values_gorilla;
+    GorillaDecodeIterator gorilla;
+  } iterator_;
 
-  template <class Variant>
-  struct SampleIsFirstIteratorsField;
-
-  template <class... Iterators>
-  struct SampleIsFirstIteratorsField<std::variant<Iterators...>> {
-    template <class Iterator>
-    struct SampleIsFirstIteratorField : Iterator {
-      static constexpr auto value = decoder::DecodeIteratorData<decltype(SampleIsFirstIteratorField::data_)>;
-    };
-
-    static constexpr bool value = (SampleIsFirstIteratorField<Iterators>::value && ...);
-  };
-
-  static_assert(SampleIsFirstIteratorsField<IteratorVariant>::value, "each iterator must contain encoder::Sample as the first field");
-
-  union VariantLayoutAssertHelper {
-    IteratorVariant variant;
-    const ConstantDecodeIterator field;
-  };
-
-  static constexpr auto kVariantLayoutAssertHelper = VariantLayoutAssertHelper{
-      .variant = IteratorVariant(std::in_place_type<ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false),
-  };
-
-  static_assert(&std::get<ConstantDecodeIterator>(kVariantLayoutAssertHelper.variant) == &kVariantLayoutAssertHelper.field, "unexpected std::variant layout");
-
-  IteratorVariant iterator_;
+  Type type_;
 };
 
 }  // namespace series_data::decoder

@@ -31,7 +31,8 @@ type (
 	CppStdVector                         = [C.Sizeof_StdVector]byte
 	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
 	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
-	CppSerializedDataIterator            = [C.Sizeof_SerializedDataIterator]byte
+	CppSerializedDataSamplesIterator     = [C.Sizeof_SerializedDataSamplesIterator]byte
+	CppSerializedDataAggregationIterator = [C.Sizeof_SerializedDataAggregationIterator]byte
 	CppSerializedDataMultiSeriesIterator = [C.Sizeof_MultiSeriesDecodeIterator]byte
 	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
 	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
@@ -2184,7 +2185,7 @@ func seriesDataSerializedDataDtor(serializedData uintptr) {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_dtor,
+		C.prompp_series_data_serialized_data_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2200,7 +2201,7 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_serialization_serialized_data_next,
+		C.prompp_series_data_serialized_data_next,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2208,7 +2209,11 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 	return res.seriesID, res.chunkRef
 }
 
-func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
+func seriesDataSerializedDataSamplesIteratorCtor(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
 	args := struct {
 		iterator       uintptr
 		serializedData uintptr
@@ -2217,20 +2222,23 @@ func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIte
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_ctor,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_ctor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-func seriesDataSerializedDataIteratorNext(iterator *DataStorageSerializedDataIterator) {
+func seriesDataSerializedDataSamplesIteratorNext(iterator *DataStorageSerializedDataSamplesIterator) {
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_next,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_next,
 		uintptr(unsafe.Pointer(iterator)),
 	)
 }
 
-func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIterator, targetTimestamp int64) {
+func seriesDataSerializedDataSamplesIteratorSeek(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	targetTimestamp int64,
+) {
 	args := struct {
 		iterator        uintptr
 		targetTimestamp int64
@@ -2238,12 +2246,16 @@ func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIte
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_seek,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_seek,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
+func seriesDataSerializedDataSamplesIteratorReset(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
 	args := struct {
 		iterator       uintptr
 		serializedData uintptr
@@ -2252,7 +2264,67 @@ func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIt
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_reset,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorCtor(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		chunkRef       uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorNext(iterator *DataStorageSerializedDataAggregationIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_next,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorSeek(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	targetTimestamp int64,
+) {
+	args := struct {
+		iterator        uintptr
+		targetTimestamp int64
+	}{uintptr(unsafe.Pointer(iterator)), targetTimestamp}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_seek,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorReset(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		chunkRef       uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_reset,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
