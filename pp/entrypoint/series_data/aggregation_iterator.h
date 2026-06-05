@@ -1,7 +1,5 @@
 #pragma once
 
-#include <variant>
-
 #include "prometheus/promql/window_function.h"
 #include "series_data/decoder/decorator/changes_iterator.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
@@ -48,47 +46,123 @@ class AggregationIterator {
   using DeltaIterator = WindowFunctionIterator<::series_data::decoder::decorator::DeltaIterator<SeriesIterator>>;
   using ResetsIterator = WindowFunctionIterator<::series_data::decoder::decorator::ResetsIterator<SeriesIterator>>;
 
-  using IteratorVariant = std::variant<SeriesIterator,
-                                       DownsamplingIterator,
-                                       MinOverTimeIterator,
-                                       MaxOverTimeIterator,
-                                       LastOverTimeIterator,
-                                       LastOverStepIterator,
-                                       SumOverTimeIterator,
-                                       RateIterator,
-                                       IRateIterator,
-                                       ChangesIterator,
-                                       DeltaIterator,
-                                       ResetsIterator>;
+  enum class Type : uint8_t {
+    kSeries = 0,
+    kDownsampling,
+    kMinOverTime,
+    kMaxOverTime,
+    kLastOverTime,
+    kLastOverStep,
+    kSumOverTime,
+    kRate,
+    kIRate,
+    kChanges,
+    kDelta,
+    kResets,
+  };
 
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  template <class InPlaceType, class... Args>
-  explicit AggregationIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
+#define DEFINE_CONSTRUCTOR(AggregationIteratorType, field, type)                              \
+  template <class... Args>                                                                    \
+  explicit AggregationIterator(std::in_place_type_t<AggregationIteratorType>, Args&&... args) \
+      : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} {}
+
+  DEFINE_CONSTRUCTOR(SeriesIterator, series, kSeries)
+  DEFINE_CONSTRUCTOR(DownsamplingIterator, downsampling, kDownsampling)
+  DEFINE_CONSTRUCTOR(MinOverTimeIterator, min_over_time, kMinOverTime)
+  DEFINE_CONSTRUCTOR(MaxOverTimeIterator, max_over_time, kMaxOverTime)
+  DEFINE_CONSTRUCTOR(LastOverTimeIterator, last_over_time, kLastOverTime)
+  DEFINE_CONSTRUCTOR(LastOverStepIterator, last_over_step, kLastOverStep)
+  DEFINE_CONSTRUCTOR(SumOverTimeIterator, sum_over_time, kSumOverTime)
+  DEFINE_CONSTRUCTOR(RateIterator, rate, kRate)
+  DEFINE_CONSTRUCTOR(IRateIterator, irate, kIRate)
+  DEFINE_CONSTRUCTOR(ChangesIterator, changes, kChanges)
+  DEFINE_CONSTRUCTOR(DeltaIterator, delta, kDelta)
+  DEFINE_CONSTRUCTOR(ResetsIterator, resets, kResets)
+
+#undef DEFINE_CONSTRUCTOR
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) const {
+    switch (type_) {
+      case Type::kSeries: {
+        return std::forward<Visitor>(visitor)(iterator_.series);
+      }
+
+      case Type::kDownsampling: {
+        return std::forward<Visitor>(visitor)(iterator_.downsampling);
+      }
+
+      case Type::kMinOverTime: {
+        return std::forward<Visitor>(visitor)(iterator_.min_over_time);
+      }
+
+      case Type::kMaxOverTime: {
+        return std::forward<Visitor>(visitor)(iterator_.max_over_time);
+      }
+
+      case Type::kLastOverTime: {
+        return std::forward<Visitor>(visitor)(iterator_.last_over_time);
+      }
+
+      case Type::kLastOverStep: {
+        return std::forward<Visitor>(visitor)(iterator_.last_over_step);
+      }
+
+      case Type::kSumOverTime: {
+        return std::forward<Visitor>(visitor)(iterator_.sum_over_time);
+      }
+
+      case Type::kRate: {
+        return std::forward<Visitor>(visitor)(iterator_.rate);
+      }
+
+      case Type::kIRate: {
+        return std::forward<Visitor>(visitor)(iterator_.irate);
+      }
+
+      case Type::kChanges: {
+        return std::forward<Visitor>(visitor)(iterator_.changes);
+      }
+
+      case Type::kDelta: {
+        return std::forward<Visitor>(visitor)(iterator_.delta);
+      }
+
+      default: {
+        return std::forward<Visitor>(visitor)(iterator_.resets);
+      }
+    }
+  }
+
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) {
+    return const_cast<const AggregationIterator*>(this)->visit(
+        [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
+  }
 
   PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample& operator*() const {
-    return std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE -> auto const& { return *iterator; }, iterator_);
+    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto& { return *iterator; });
   }
   PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample* operator->() const {
-    return std::visit([](auto& iterator) PROMPP_LAMBDA_INLINE -> auto const* { return iterator.operator->(); }, iterator_);
+    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto* { return iterator.operator->(); });
   }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const {
-    return std::visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; }, iterator_);
+    return visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; });
   }
 
   PROMPP_ALWAYS_INLINE AggregationIterator& operator++() {
-    std::visit(
-        []<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE {
-          ++iterator;
+    visit([]<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE {
+      ++iterator;
 
-          if constexpr (invalidatable<Iterator>) {
-            if (iterator == DecodeIteratorSentinel{}) [[unlikely]] {
-              iterator.invalidate_sample();
-            }
-          }
-        },
-        iterator_);
+      if constexpr (invalidatable<Iterator>) {
+        if (iterator == DecodeIteratorSentinel{}) [[unlikely]] {
+          iterator.invalidate_sample();
+        }
+      }
+    });
     return *this;
   }
 
@@ -98,8 +172,25 @@ class AggregationIterator {
     return result;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
+
  private:
-  IteratorVariant iterator_;
+  union {
+    SeriesIterator series;
+    DownsamplingIterator downsampling;
+    MinOverTimeIterator min_over_time;
+    MaxOverTimeIterator max_over_time;
+    LastOverTimeIterator last_over_time;
+    LastOverStepIterator last_over_step;
+    SumOverTimeIterator sum_over_time;
+    RateIterator rate;
+    IRateIterator irate;
+    ChangesIterator changes;
+    DeltaIterator delta;
+    ResetsIterator resets;
+  } iterator_;
+
+  Type type_;
 };
 
 struct SelectHints {
