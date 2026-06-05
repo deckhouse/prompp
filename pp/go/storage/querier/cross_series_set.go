@@ -16,13 +16,13 @@ import (
 )
 
 //
-// AggSeriesSet
+// CrossSeriesSet
 //
 
-// AggSeriesSet contains a set of aggregated series.
+// CrossSeriesSet contains a set of cross series.
 // If grouping is empty, it will return series with labels "__head__shard_id".
 // If grouping is not empty, it will return series with "__head__shard_id" and the grouping labels.
-type AggSeriesSet struct {
+type CrossSeriesSet struct {
 	serializedData   *cppbridge.DataStorageSerializedData
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	seriesGroups     *cppbridge.SeriesGroups
@@ -31,12 +31,12 @@ type AggSeriesSet struct {
 	headID           string
 	shardID          uint16
 
-	series         []AggSeries
+	series         []CrossSeries
 	nextGroupIndex int
 }
 
-// NewAggSeriesSet initializes a new [AggSeriesSet].
-func NewAggSeriesSet(
+// NewCrossSeriesSet initializes a new [CrossSeriesSet].
+func NewCrossSeriesSet(
 	serializedData *cppbridge.DataStorageSerializedData,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	seriesGroups *cppbridge.SeriesGroups,
@@ -44,8 +44,8 @@ func NewAggSeriesSet(
 	grouping []string,
 	headID string,
 	shardID uint16,
-) *AggSeriesSet {
-	return &AggSeriesSet{
+) *CrossSeriesSet {
+	return &CrossSeriesSet{
 		serializedData:   serializedData,
 		labelSetSnapshot: labelSetSnapshot,
 		seriesGroups:     seriesGroups,
@@ -54,25 +54,25 @@ func NewAggSeriesSet(
 		grouping:         grouping,
 		headID:           headID,
 		shardID:          shardID,
-		series:           make([]AggSeries, 0, len(seriesGroups.Groups)),
+		series:           make([]CrossSeries, 0, len(seriesGroups.Groups)),
 	}
 }
 
 // At returns the current series.
 // [storage.SeriesSet] interface implementation.
-func (ss *AggSeriesSet) At() storage.Series {
+func (ss *CrossSeriesSet) At() storage.Series {
 	return &ss.series[len(ss.series)-1]
 }
 
-// Err returns the error of the [AggSeriesSet] - always nil.
+// Err returns the error of the [CrossSeriesSet] - always nil.
 // [storage.SeriesSet] interface implementation.
-func (*AggSeriesSet) Err() error {
+func (*CrossSeriesSet) Err() error {
 	return nil
 }
 
 // Next advances the iterator by one and returns false if there are no more values.
 // [storage.SeriesSet] interface implementation.
-func (ss *AggSeriesSet) Next() bool {
+func (ss *CrossSeriesSet) Next() bool {
 	if ss.serializedData == nil {
 		return false
 	}
@@ -83,8 +83,8 @@ func (ss *AggSeriesSet) Next() bool {
 
 	builder := builderPool.Get().(*labels.ScratchBuilder)
 	builder.Reset()
-	ss.series = append(ss.series, NewAggSeries(
-		aggLabelSetCtor(
+	ss.series = append(ss.series, NewCrossSeries(
+		crossLabelSetCtor(
 			builder,
 			ss.labelSetSnapshot,
 			ss.grouping,
@@ -104,18 +104,18 @@ func (ss *AggSeriesSet) Next() bool {
 	return true
 }
 
-// Warnings returns the warnings of the [AggSeriesSet] - always nil.
+// Warnings returns the warnings of the [CrossSeriesSet] - always nil.
 // [storage.SeriesSet] interface implementation.
-func (*AggSeriesSet) Warnings() annotations.Annotations {
+func (*CrossSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
 
 //
-// AggSeries
+// CrossSeries
 //
 
-// AggSeries represents a time series with aggregated samples.
-type AggSeries struct {
+// CrossSeries represents a time series with cross samples.
+type CrossSeries struct {
 	labelSet       labels.Labels
 	serializedData *cppbridge.DataStorageSerializedData
 	seriesGroups   *cppbridge.SeriesGroups
@@ -123,15 +123,15 @@ type AggSeries struct {
 	mint, maxt     int64
 }
 
-// NewAggSeries initializes a new [AggSeries].
-func NewAggSeries(
+// NewCrossSeries initializes a new [CrossSeries].
+func NewCrossSeries(
 	labelSet labels.Labels,
 	serializedData *cppbridge.DataStorageSerializedData,
 	seriesGroups *cppbridge.SeriesGroups,
 	groupIndex int,
 	mint, maxt int64,
-) AggSeries {
-	return AggSeries{
+) CrossSeries {
+	return CrossSeries{
 		labelSet:       labelSet,
 		serializedData: serializedData,
 		seriesGroups:   seriesGroups,
@@ -141,12 +141,12 @@ func NewAggSeries(
 	}
 }
 
-// Iterator returns an iterator that iterates over the aggregated samples of the [AggSeries].
+// Iterator returns an iterator that iterates over the cross samples of the [CrossSeries].
 // [storage.Series] interface implementation.
-func (s *AggSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
-	chunkIterator, ok := it.(*AggChunkIterator)
+func (s *CrossSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
+	chunkIterator, ok := it.(*CrossChunkIterator)
 	if !ok {
-		return NewAggChunkIterator(
+		return NewCrossChunkIterator(
 			s.serializedData,
 			s.seriesGroups,
 			s.groupIndex,
@@ -159,18 +159,18 @@ func (s *AggSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	return chunkIterator
 }
 
-// Labels returns the labels of the [AggSeries].
+// Labels returns the labels of the [CrossSeries].
 // [storage.Series] interface implementation.
-func (s *AggSeries) Labels() labels.Labels {
+func (s *CrossSeries) Labels() labels.Labels {
 	return s.labelSet
 }
 
 //
-// AggChunkIterator
+// CrossChunkIterator
 //
 
-// AggChunkIterator iterates over the aggregated samples of a time series, that can only get the next value.
-type AggChunkIterator struct {
+// CrossChunkIterator iterates over the cross samples of a time series, that can only get the next value.
+type CrossChunkIterator struct {
 	serializedData *cppbridge.DataStorageSerializedData
 	seriesGroups   *cppbridge.SeriesGroups
 	chunkIterator  cppbridge.DataStorageSerializedDataMultiSeriesIterator
@@ -179,14 +179,14 @@ type AggChunkIterator struct {
 	isInitialized  bool
 }
 
-// NewAggChunkIterator initializes a new [AggChunkIterator].
-func NewAggChunkIterator(
+// NewCrossChunkIterator initializes a new [CrossChunkIterator].
+func NewCrossChunkIterator(
 	serializedData *cppbridge.DataStorageSerializedData,
 	seriesGroups *cppbridge.SeriesGroups,
 	groupIndex int,
 	mint, maxt int64,
-) *AggChunkIterator {
-	it := &AggChunkIterator{
+) *CrossChunkIterator {
+	it := &CrossChunkIterator{
 		serializedData: serializedData,
 		seriesGroups:   seriesGroups,
 		chunkIterator: cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(
@@ -197,7 +197,7 @@ func NewAggChunkIterator(
 		maxt: maxt,
 	}
 
-	runtime.SetFinalizer(it, func(iter *AggChunkIterator) {
+	runtime.SetFinalizer(it, func(iter *CrossChunkIterator) {
 		iter.chunkIterator.Close()
 		iter.serializedData = nil
 		iter.seriesGroups = nil
@@ -210,37 +210,37 @@ func NewAggChunkIterator(
 // [chunkenc.Iterator] interface implementation.
 //
 //nolint:gocritic // unnamedResult not need
-func (it *AggChunkIterator) At() (int64, float64) {
+func (it *CrossChunkIterator) At() (int64, float64) {
 	return it.chunkIterator.Timestamp(), it.chunkIterator.Value()
 }
 
 // AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
 // [chunkenc.Iterator] interface implementation.
-func (*AggChunkIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+func (*CrossChunkIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
 	return 0, nil
 }
 
 // AtHistogram returns the current timestamp/value pair if the value is a histogram with integer counts.
 // [chunkenc.Iterator] interface implementation.
-func (*AggChunkIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
+func (*CrossChunkIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
 	return 0, nil
 }
 
 // AtT returns the current timestamp.
 // [chunkenc.Iterator] interface implementation.
-func (it *AggChunkIterator) AtT() int64 {
+func (it *CrossChunkIterator) AtT() int64 {
 	return it.chunkIterator.Timestamp()
 }
 
 // Err returns the current error - always nil.
 // [chunkenc.Iterator] interface implementation.
-func (*AggChunkIterator) Err() error {
+func (*CrossChunkIterator) Err() error {
 	return nil
 }
 
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
-func (it *AggChunkIterator) Next() chunkenc.ValueType {
+func (it *CrossChunkIterator) Next() chunkenc.ValueType {
 	if it.nextValue() == chunkenc.ValNone {
 		return chunkenc.ValNone
 	}
@@ -254,7 +254,7 @@ func (it *AggChunkIterator) Next() chunkenc.ValueType {
 
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
 // [chunkenc.Iterator] interface implementation.
-func (it *AggChunkIterator) Seek(t int64) chunkenc.ValueType {
+func (it *CrossChunkIterator) Seek(t int64) chunkenc.ValueType {
 	it.isInitialized = true
 	if t > it.AtT() {
 		return it.Next()
@@ -268,7 +268,7 @@ func (it *AggChunkIterator) Seek(t int64) chunkenc.ValueType {
 }
 
 // nextValue advances the iterator by one and returns the type of the value.
-func (it *AggChunkIterator) nextValue() chunkenc.ValueType {
+func (it *CrossChunkIterator) nextValue() chunkenc.ValueType {
 	if !it.isInitialized {
 		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
@@ -287,7 +287,7 @@ func (it *AggChunkIterator) nextValue() chunkenc.ValueType {
 }
 
 // reset resets the iterator to the beginning of the serialized data.
-func (it *AggChunkIterator) reset(
+func (it *CrossChunkIterator) reset(
 	serializedData *cppbridge.DataStorageSerializedData,
 	seriesGroups *cppbridge.SeriesGroups,
 	groupIndex int,
@@ -302,7 +302,7 @@ func (it *AggChunkIterator) reset(
 }
 
 //
-// aggLabelSetCtor
+// crossLabelSetCtor
 //
 
 const (
@@ -318,8 +318,8 @@ var (
 	errGroupingLabelsIsEnough = errors.New("grouping labels is enough")
 )
 
-// aggLabelSetCtor constructs the label set for an aggregated series.
-func aggLabelSetCtor(
+// crossLabelSetCtor constructs the label set for a cross series.
+func crossLabelSetCtor(
 	sb *labels.ScratchBuilder,
 	snapshot *cppbridge.LabelSetSnapshot,
 	grouping []string,

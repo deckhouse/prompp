@@ -422,7 +422,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
 	if isCrossSeriesFunc(hints) {
-		return q.makeAggSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
+		return q.makeCrossSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
 	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
@@ -456,8 +456,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// makeAggSeriesSet queries the aggregated cross series set.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
+// makeCrossSeriesSet queries the cross series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
@@ -535,7 +535,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggSeriesSet(
 			DefaultNotFoundTimestampValue,
 		)
 
-		seriesSets[shardID] = NewAggSeriesSet(
+		seriesSets[shardID] = NewCrossSeriesSet(
 			serializedData,
 			snapshots[shardID],
 			seriesGroups[shardID],

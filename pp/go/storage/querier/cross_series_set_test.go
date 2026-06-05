@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type AggSeriesSetSuite struct {
+type CrossSeriesSetSuite struct {
 	suite.Suite
 
 	timeSeries []storagetest.TimeSeries
@@ -25,11 +25,11 @@ type AggSeriesSetSuite struct {
 	ds         *shard.DataStorage
 }
 
-func TestAggSeriesSetSuite(t *testing.T) {
-	suite.Run(t, new(AggSeriesSetSuite))
+func TestCrossSeriesSetSuite(t *testing.T) {
+	suite.Run(t, new(CrossSeriesSetSuite))
 }
 
-func (s *AggSeriesSetSuite) SetupTest() {
+func (s *CrossSeriesSetSuite) SetupTest() {
 	s.lss = shard.NewLSS()
 	s.ds = shard.NewDataStorage()
 
@@ -65,7 +65,7 @@ func (s *AggSeriesSetSuite) SetupTest() {
 	}
 }
 
-func (s *AggSeriesSetSuite) query(
+func (s *CrossSeriesSetSuite) query(
 	lss *shard.LSS,
 	ds *shard.DataStorage,
 	start, end, downsamplingMs int64,
@@ -76,12 +76,12 @@ func (s *AggSeriesSetSuite) query(
 	s.Require().NoError(err)
 
 	if selector == 0 || snapshot == nil {
-		return &querier.AggSeriesSet{}
+		return &querier.CrossSeriesSet{}
 	}
 
 	lssQueryResult := snapshot.Query(selector)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-		return &querier.AggSeriesSet{}
+		return &querier.CrossSeriesSet{}
 	}
 
 	valueNotFoundTimestampValue := int64(0)
@@ -107,7 +107,7 @@ func (s *AggSeriesSetSuite) query(
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 
-	aggSS := querier.NewAggSeriesSet(
+	aggSS := querier.NewCrossSeriesSet(
 		dsQueryResult.SerializedData,
 		snapshot,
 		seriesGroups,
@@ -121,7 +121,7 @@ func (s *AggSeriesSetSuite) query(
 	return querier.NewMergeShardSeriesSet([]storage.SeriesSet{sNaNSS, aggSS})
 }
 
-func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
+func (s *CrossSeriesSetSuite) TestQueryWithoutGrouping() {
 	// Arrange
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
@@ -167,7 +167,7 @@ func (s *AggSeriesSetSuite) TestQueryWithoutGrouping() {
 	s.Require().Equal(expected[2].Labels, actual[2].Labels)
 }
 
-func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
+func (s *CrossSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 	// Arrange
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
@@ -219,7 +219,7 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 	s.Require().Equal(expected[3].Labels, actual[3].Labels)
 }
 
-func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
+func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 	// Arrange
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
@@ -271,7 +271,7 @@ func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 	s.Require().Equal(expected[3].Labels, actual[3].Labels)
 }
 
-func (s *AggSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroupingLabel() {
+func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroupingLabel() {
 	// Arrange
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
@@ -388,7 +388,7 @@ func TestAGGSS(t *testing.T) {
 		hints,
 	)
 
-	aggSS := querier.NewAggSeriesSet(
+	aggSS := querier.NewCrossSeriesSet(
 		result.SerializedData,
 		snapshot,
 		seriesGroups,
