@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 
 #include "bare_bones/preprocess.h"
@@ -56,6 +58,36 @@ class SortingIndexBuilder {
     }
   }
 
+  PROMPP_ALWAYS_INLINE void rebuild(uint32_t max_ls_id) {
+    if (ls_id_set_.empty()) {
+      index_.index.clear();
+      return;
+    }
+
+    index_.index.resize(max_ls_id + 1);
+    std::memset(index_.index.data(), 0, index_.index.size() * sizeof(uint32_t));
+
+    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
+    uint32_t index_value = 0;
+    for (auto ls_id : ls_id_set_) {
+      index_value += step;
+      index_.index[static_cast<uint32_t>(ls_id)] = index_value;
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void rebuild() {
+    if (ls_id_set_.empty()) {
+      index_.index.clear();
+      return;
+    }
+
+    uint32_t max_ls_id = 0;
+    for (auto ls_id : ls_id_set_) {
+      max_ls_id = std::max(max_ls_id, static_cast<uint32_t>(ls_id));
+    }
+    rebuild(max_ls_id);
+  }
+
   PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
     if (empty()) {
       return;
@@ -84,20 +116,9 @@ class SortingIndexBuilder {
   const Set& ls_id_set_;
   Index index_;
 
-  void rebuild() {
-    index_.index.resize(ls_id_set_.size());
-
-    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
-    uint32_t index_value = 0;
-    for (auto ls_id : ls_id_set_) {
-      index_value += step;
-      index_.index[ls_id] = index_value;
-    }
-  }
-
   PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {
-      return index_.index[*--ls_id_iterator];
+      return index_.index[static_cast<uint32_t>(*--ls_id_iterator)];
     }
 
     return 0;
@@ -105,7 +126,7 @@ class SortingIndexBuilder {
 
   PROMPP_ALWAYS_INLINE uint32_t get_next(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (++ls_id_iterator != ls_id_set_.end()) {
-      return index_.index[*ls_id_iterator];
+      return index_.index[static_cast<uint32_t>(*ls_id_iterator)];
     }
 
     return kMaxIndexValue;

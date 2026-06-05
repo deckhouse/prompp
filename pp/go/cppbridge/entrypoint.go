@@ -45,7 +45,6 @@ const (
 )
 
 var (
-
 	// per_goroutine_relabeler input_relabeling
 	perGoroutineRelabelerInputRelabelingSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1644,6 +1643,23 @@ func primitivesLSSBitsetSeries(lss uintptr) uintptr {
 	return res.bitset
 }
 
+// primitivesLSSFinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+func primitivesLSSFinalizeCopyAndShrink(lss, resolveSnapshot, newToOldMapping uintptr) {
+	args := struct {
+		lss             uintptr
+		resolveSnapshot uintptr
+		newToOldMapping uintptr
+	}{lss, resolveSnapshot, newToOldMapping}
+
+	testGC()
+	start := time.Now()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_finalize_copy_and_shrink,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	lssFinalizeCopyAndShrinkDurationMax.set(float64(time.Since(start).Nanoseconds()))
+}
+
 // primitivesLSSBitsetDtor destroy bitset of added series.
 func primitivesLSSBitsetDtor(bitset uintptr) {
 	args := struct {
@@ -1662,12 +1678,14 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
+	start := time.Now()
 	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
 		C.uint64_t(uintptr(unsafe.Pointer(&dstSrcLsIdsMapping))),
 	)
+	snapshotLSSCopyAddedSeriesDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return dstSrcLsIdsMapping
 }
@@ -1682,6 +1700,24 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 		C.prompp_primitives_free_ls_ids_mapping,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
+	args := struct {
+		lss            uintptr
+		shrinkBoundary uint32
+	}{lss, shrinkBoundary}
+
+	testGC()
+	start := time.Now()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_set_pending_shrink_boundary,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
 //
@@ -3285,6 +3321,25 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	headWalEncoderFinalizeCount.Inc()
 
 	return res.samples, res.segment, handleException(res.exception)
+}
+
+// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
+func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+	args := struct {
+		encoder uintptr
+	}{encoder}
+	var res struct {
+		maxWrittenItemIndex uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_head_wal_encoder_max_written_item_index,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.maxWrittenItemIndex
 }
 
 func headWalEncoderDtor(encoder uintptr) {

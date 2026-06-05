@@ -1,46 +1,206 @@
 #pragma once
 
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <limits>
+#include <memory>
 #include <ranges>
+#include <utility>
 
 #include "bare_bones/allocator.h"
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
-#include "queried_series.h"
+#include "bare_bones/vector.h"
+#include "parallel_hashmap/phmap.h"
+#include "post_shrink_snapshot_resolver.h"
+#include "primitives/snug_composites.h"
 #include "reverse_index.h"
+#include "series_index/trie/cedarpp_tree.h"
 #include "sorting_index.h"
+#include "symbol_source.h"
 #include "trie_index.h"
 
 namespace series_index {
 
-template <template <template <class> class> class Filament, template <class> class Vector, class Trie>
-class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, Trie>, Filament, Vector> {
+template <template <class> class Vector>
+class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Vector>,
+                                                                                           PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
+                                                                                           Vector> {
  public:
-  using Base = BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
+  using Base = BareBones::SnugComposite::
+      GenericDecodingTable<QueryableEncodingBimap<Vector>, PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, Vector>;
   using LsIdSet = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator, BareBones::Allocator<typename Base::Proxy>>;
   using HashSet =
       phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, BareBones::Allocator<typename Base::Proxy>>;
   using LsIdSetIterator = typename LsIdSet::const_iterator;
   using SortingIndexBuilder = series_index::SortingIndexBuilder<LsIdSet, Vector>;
-  using TrieIndex = series_index::TrieIndex<Trie>;
+  using TrieIndex = series_index::TrieIndex<trie::CedarTrie>;
   using TrieIndexIterator = typename TrieIndex::Iterator;
+  using checkpoint_type = typename Base::checkpoint_type;
 
-  friend class BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
+  using PostShrinkSnapshotResolver = ::series_index::PostShrinkSnapshotResolver<typename Base::value_type>;
+  using PostShrinkSnapshotResolverPtr = std::unique_ptr<PostShrinkSnapshotResolver>;
+
+  static constexpr uint32_t kPendingShrinkBoundaryNotSet = std::numeric_limits<uint32_t>::max();
+
+  enum class State : uint8_t {
+    kNormal = 0,
+    kFixed = 1,
+    kShrunk = 2,
+  };
+
+  struct ShrinkState {
+    uint32_t shift{0};
+    uint32_t pending_shrink_boundary{kPendingShrinkBoundaryNotSet};
+    Vector<uint32_t> post_shrink_mapping{};
+    PostShrinkSnapshotResolverPtr post_shrink_snapshot_resolver{};
+    uint32_t mapped_visible_count{0};
+    State state{State::kNormal};
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept { return state == State::kNormal; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return state == State::kShrunk; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return state == State::kFixed; }
+    PROMPP_ALWAYS_INLINE void enter_fixed_state(uint32_t boundary) noexcept {
+      // Retrying rotation may freeze an already fixed LSS again before final shrink.
+      assert(state != State::kShrunk);
+      pending_shrink_boundary = boundary;
+      state = State::kFixed;
+    }
+    PROMPP_ALWAYS_INLINE void enter_shrunk_state() noexcept {
+      assert(state == State::kFixed);
+      pending_shrink_boundary = kPendingShrinkBoundaryNotSet;
+      state = State::kShrunk;
+    }
+
+    PROMPP_ALWAYS_INLINE void add_drop_count(uint32_t drop_count) noexcept { shift += drop_count; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolSource symbol_source_for_series(uint32_t ls_id) const noexcept {
+      return is_shrunk() && ls_id < shift ? SymbolSource::kSnapshot : SymbolSource::kCurrent;
+    }
+    void set_post_shrink_snapshot(PostShrinkSnapshotResolverPtr snapshot_resolver, const BareBones::Vector<uint32_t>& new_to_old, uint32_t invalid_id) {
+      post_shrink_snapshot_resolver = std::move(snapshot_resolver);
+      rebuild_post_shrink_mapping(new_to_old, invalid_id);
+    }
+
+    template <class ValueType, class CurrentStorageResolver>
+    [[nodiscard]] PROMPP_ALWAYS_INLINE ValueType resolve_shrunk_series(uint32_t ls_id,
+                                                                       CurrentStorageResolver&& resolve_current_storage,
+                                                                       uint32_t invalid_id) const noexcept {
+      assert(is_shrunk());
+      if (ls_id >= shift) {
+        return resolve_current_storage(ls_id - shift);
+      }
+      if (ls_id >= post_shrink_mapping.size() || !post_shrink_snapshot_resolver) {
+        return ValueType{};
+      }
+      const auto mapped_id = post_shrink_mapping[ls_id];
+      if (mapped_id == invalid_id) {
+        return ValueType{};
+      }
+      return post_shrink_snapshot_resolver->at(mapped_id);
+    }
+
+    [[nodiscard]] ShrinkState clone_for_snapshot() const {
+      ShrinkState clone;
+      clone.shift = shift;
+      clone.pending_shrink_boundary = pending_shrink_boundary;
+      clone.post_shrink_mapping = post_shrink_mapping;
+      clone.mapped_visible_count = mapped_visible_count;
+      clone.state = state;
+      clone.post_shrink_snapshot_resolver = post_shrink_snapshot_resolver ? post_shrink_snapshot_resolver->clone() : nullptr;
+      return clone;
+    }
+
+   private:
+    void rebuild_post_shrink_mapping(const BareBones::Vector<uint32_t>& new_to_old, uint32_t invalid_id) {
+      assert(pending_shrink_boundary != kPendingShrinkBoundaryNotSet);
+      post_shrink_mapping.clear();
+      post_shrink_mapping.resize(pending_shrink_boundary);
+      std::fill(post_shrink_mapping.begin(), post_shrink_mapping.end(), invalid_id);
+      mapped_visible_count = 0;
+
+      for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
+        const uint32_t old_id = new_to_old[new_id];
+        if (old_id < post_shrink_mapping.size()) {
+          post_shrink_mapping[old_id] = static_cast<uint32_t>(new_id);
+          ++mapped_visible_count;
+        }
+      }
+    }
+  };
+
+  friend class BareBones::SnugComposite::
+      GenericDecodingTable<QueryableEncodingBimap<Vector>, PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, Vector>;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TrieIndex& trie_index() const noexcept { return trie_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesReverseIndex& reverse_index() const noexcept { return reverse_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const typename SortingIndexBuilder::Index& sorting_index() const noexcept { return sorting_index_.index(); }
 
-  // TODO: review and remove unnecessary calls of this method in code
   PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return trie_index_.allocated_memory() + reverse_index_.allocated_memory() + ls_id_set_allocated_memory_ + ls_id_hash_set_allocated_memory_ +
-           sorting_index_.allocated_memory() + Base::allocated_memory();
+           sorting_index_.allocated_memory() + shrink_state_.post_shrink_mapping.allocated_memory() + Base::allocated_memory();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
+  PROMPP_ALWAYS_INLINE void mark_active(uint32_t ls_id) noexcept { mark_series_as_added(ls_id); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
+    assert(id < next_item_index_impl());
+    if (is_shrunk()) [[unlikely]] {
+      return resolve_shrunk_series(id);
+    }
+    return Base::storage_composite(id);
+  }
+
+  void set_pending_shrink_boundary(uint32_t boundary) noexcept {
+    assert(boundary <= next_item_index_impl());
+    assert(!is_shrunk());
+    prune_hidden_series_before_fixed_state(boundary);
+    shrink_state_.enter_fixed_state(boundary);
+  }
+
+  template <class Snapshot>
+  void finalize_copy_and_shrink(const Snapshot& snapshot, const BareBones::Vector<uint32_t>& new_to_old_mapping) {
+    finalize_copy_and_shrink(make_post_shrink_snapshot_resolver(snapshot), new_to_old_mapping);
+  }
+
+  template <class Callback>
+  void for_each_snapshot_symbol_id(Callback&& callback) const {
+    assert(!is_shrunk() || shrink_state_.post_shrink_snapshot_resolver != nullptr);
+    if (!is_shrunk() || !shrink_state_.post_shrink_snapshot_resolver) {
+      return;
+    }
+    shrink_state_.post_shrink_snapshot_resolver->for_each_symbol_id(std::forward<Callback>(callback));
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const ShrinkState& shrink_state() const noexcept { return shrink_state_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolSource symbol_source_for_series(uint32_t ls_id) const noexcept { return symbol_source_for_series_impl(ls_id); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view resolve_symbol_by_source(SymbolSource source, uint32_t name_id, uint32_t value_id) const noexcept {
+    if (source == SymbolSource::kCurrent) {
+      const auto view = this->data_view();
+      return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
+    }
+    if (shrink_state_.post_shrink_snapshot_resolver) {
+      return shrink_state_.post_shrink_snapshot_resolver->symbol(name_id, value_id);
+    }
+    return {};
+  }
+
+  void shrink_to_boundary(uint32_t shrink_boundary) {
+    if (shrink_boundary > next_item_index_impl()) {
+      throw BareBones::Exception(0x1bf0dbff9fe3d955, "Shrink boundary [%u] exceeds table next_item_index [%u]", shrink_boundary, next_item_index_impl());
+    }
+    const uint32_t drop_count = shrink_boundary;
+
+    shrink_state_.add_drop_count(drop_count);
+    Base::storage_.drop_front(drop_count);
+    shrink_state_.enter_shrunk_state();
+  }
 
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set) noexcept {
@@ -50,16 +210,15 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
-    const auto ls_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
-      auto new_ls_id = Base::storage_.emplace_back(label_set);
-      const auto composite_label_set = Base::operator[](new_ls_id);
-      ctor(typename Base::Proxy(new_ls_id));
-      update_indexes(new_ls_id, composite_label_set);
-      return new_ls_id;
-    });
+    if (const auto existing_it = ls_id_hash_set_.find(label_set, hash); existing_it != ls_id_hash_set_.end()) {
+      const auto logical_id = static_cast<uint32_t>(*existing_it);
+      mark_series_as_added(logical_id);
+      return logical_id;
+    }
 
-    mark_series_as_added(ls_id);
-    return ls_id;
+    const auto logical_id = emplace_series_and_update_indexes(label_set, hash);
+    mark_series_as_added(logical_id);
+    return logical_id;
   }
 
   template <class Class>
@@ -69,10 +228,11 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
-    if (auto i = ls_id_hash_set_.find(c, phmap_hash(hashval)); i != ls_id_hash_set_.end()) {
-      return *i;
+    hashval = phmap_hash(hashval);
+    if (const auto i = ls_id_hash_set_.find(c, hashval); i != ls_id_hash_set_.end()) {
+      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
     }
-    return {};
+    return std::optional<uint32_t>{};
   }
 
   using Base::reserve;
@@ -84,9 +244,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
  private:
   using LabelSet = typename Base::value_type;
+  using Trie = trie::CedarTrie;
 
   template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
   friend class QueryableEncodingBimapCopier;
+
+  [[nodiscard]] auto& storage() noexcept { return this->storage_; }
 
   TrieIndex trie_index_;
   SeriesReverseIndex reverse_index_;
@@ -100,6 +263,22 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   SortingIndexBuilder sorting_index_{ls_id_set_};
 
   BareBones::Bitset added_series_;
+
+  ShrinkState shrink_state_{};
+
+  void finalize_copy_and_shrink(PostShrinkSnapshotResolverPtr snapshot_resolver, const BareBones::Vector<uint32_t>& new_to_old_mapping) {
+    assert(snapshot_resolver);
+    assert(shrink_state_.pending_shrink_boundary != kPendingShrinkBoundaryNotSet);
+    assert(shrink_state_.pending_shrink_boundary <= next_item_index_impl());
+
+    shrink_state_.set_post_shrink_snapshot(std::move(snapshot_resolver), new_to_old_mapping, Base::kInvalidId);
+    shrink_to_boundary(shrink_state_.pending_shrink_boundary);
+  }
+
+  template <class Snapshot>
+  [[nodiscard]] static PostShrinkSnapshotResolverPtr make_post_shrink_snapshot_resolver(const Snapshot& snapshot) {
+    return std::make_unique<TypedPostShrinkSnapshotResolver<Snapshot, typename Base::value_type>>(snapshot);
+  }
 
   template <BareBones::SnugComposite::ls_id_range R>
   PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
@@ -119,7 +298,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     auto ls_id_set_iterator = ls_id_set_.emplace(ls_id).first;
 
     for (auto label = label_set.begin(); label != label_set.end(); ++label) {
-      if (!is_valid_label((*label).second)) [[unlikely]] {
+      if (!is_valid_label((*label).second)) {
         continue;
       }
 
@@ -130,17 +309,100 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     sorting_index_.update(ls_id_set_iterator);
   }
 
-  PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept {
-    if (added_series_.size() <= ls_id) [[unlikely]] {
-      added_series_.resize(ls_id + 1);
-    }
-
-    added_series_.set(ls_id);
-  }
+  PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept { added_series_.set(ls_id); }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
 
   PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shrink_state_.shift + Base::storage_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count_impl() const noexcept { return shrink_state_.mapped_visible_count + Base::storage_.count(); }
+
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept { return shrink_state_.is_normal(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shrink_state_.is_shrunk(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shrink_state_.is_fixed(); }
+
+  template <class LabelSetLike>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t emplace_series_and_update_indexes(const LabelSetLike& label_set, size_t mixed_hash) {
+    const auto new_storage_id = Base::storage_.emplace_back(label_set);
+    const auto composite_label_set = Base::storage_composite(new_storage_id);
+    const auto new_logical_id = shrink_state_.shift + new_storage_id;
+
+    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_logical_id));
+    update_indexes(new_logical_id, composite_label_set);
+    return new_logical_id;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {
+    return shrink_state_.template resolve_shrunk_series<typename Base::value_type>(
+        ls_id, [this](uint32_t storage_id) { return Base::storage_composite(storage_id); }, Base::kInvalidId);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolSource symbol_source_for_series_impl(uint32_t ls_id) const noexcept {
+    return shrink_state_.symbol_source_for_series(ls_id);
+  }
+
+  void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
+    assert(boundary <= added_series_.size());
+    const auto added_series_size = added_series_.size();
+    const auto active_series_count = static_cast<size_t>(added_series_.popcount());
+
+    if (should_rebuild_before_fixed_state(boundary, added_series_size, active_series_count)) [[unlikely]] {
+      rebuild_before_fixed_state(boundary, added_series_size, active_series_count);
+    } else {
+      erase_before_fixed_state(boundary);
+    }
+
+    sorting_index_.rebuild(next_item_index_impl() - 1);
+  }
+
+  [[nodiscard]] bool should_rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) const noexcept {
+    // Rebuild when hidden fraction crosses 35% + 10% * boundary / N
+    static constexpr uint32_t kRebuildBasePercent = 35;
+    static constexpr uint32_t kRebuildBoundaryPercent = 10;
+
+    const auto next_item_index = next_item_index_impl();
+    const auto hidden_series_count = added_series_size - active_series_count;
+    const auto lhs = static_cast<uint64_t>(hidden_series_count) * 100U * next_item_index;
+    const auto rhs = static_cast<uint64_t>(added_series_size) * (kRebuildBasePercent * next_item_index + kRebuildBoundaryPercent * boundary);
+    return lhs >= rhs;
+  }
+
+  void erase_before_fixed_state(uint32_t boundary) noexcept {
+    for (const auto zero_id : added_series_.zeroes()) {
+      if (zero_id >= boundary) [[unlikely]] {
+        break;
+      }
+
+      const auto proxy = typename Base::Proxy(zero_id);
+      ls_id_hash_set_.erase(proxy);
+      ls_id_set_.erase(proxy);
+    }
+  }
+
+  void rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) noexcept {
+    ls_id_set_.clear();
+    ls_id_hash_set_.clear();
+    ls_id_hash_set_.reserve(active_series_count + added_series_size - boundary);
+
+    const auto hasher = this->hasher();
+    for (const auto ls_id : added_series_) {
+      if (ls_id >= boundary) [[unlikely]] {
+        break;
+      }
+      ls_id_set_.emplace(ls_id);
+      const auto label_set = this->operator[](ls_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+    }
+
+    for (uint32_t ls_id = boundary; ls_id < added_series_size; ++ls_id) {
+      ls_id_set_.emplace(ls_id);
+      const auto label_set = this->operator[](ls_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+    }
+  }
 };
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
@@ -186,12 +448,12 @@ class QueryableEncodingBimapCopier {
                                QueryableEncodingBimap& destination,
                                LsIdVector& dst_src_ids_mapping)
       : source_(source), sorting_index_(sorting_index), ls_id_range_(ls_id_range), destination_(destination), dst_src_ids_mapping_(dst_src_ids_mapping) {
-    assert(destination.size() == 0);
+    assert(destination.items_count() == 0);
   }
 
   void copy_added_series() {
     old_new_ids_.clear();
-    old_new_ids_.reserve(source_.size());
+    old_new_ids_.reserve(source_.items_count());
 
     Cache<uint32_t> cache;
     cache.reserve(source_.data_view());
@@ -199,12 +461,12 @@ class QueryableEncodingBimapCopier {
     destination_.reserve(source_);
 
     dst_src_ids_mapping_.clear();
-    dst_src_ids_mapping_.reserve(source_.size());
+    dst_src_ids_mapping_.reserve(source_.items_count());
 
     for (const auto ls_id : ls_id_range_) {
       old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
       dst_src_ids_mapping_.emplace_back(ls_id);
-      destination_.storage_.emplace_back(source_[ls_id], cache);
+      destination_.storage().emplace_back(source_[ls_id], cache);
     }
 
     const auto cmp = sorting_index_.get_comparator();
@@ -220,7 +482,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_reverse_index() {
-    const auto size = destination_.size();
+    const auto size = destination_.items_count();
     const auto names_view = destination_.data_view().keys();
     destination_.reverse_index_.reserve(names_view.size());
 
@@ -233,7 +495,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_ls_id_hashset() {
-    const auto size = destination_.size();
+    const auto size = destination_.items_count();
     destination_.ls_id_hash_set_.reserve(size);
 
     const auto hasher = destination_.hasher();

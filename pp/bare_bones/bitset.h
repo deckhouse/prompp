@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <bitset>
+#include <limits>
 #include <numeric>
 #include <ranges>
 
@@ -183,10 +184,89 @@ class GenericBitset {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(data_, size(), 0); }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
 
+  class ZeroIterator {
+    const uint64_t* data_{};
+    uint32_t size_{};
+    uint32_t last_block_n_{};
+    uint32_t block_n_{};
+    uint32_t j_{64};
+    uint64_t block_{};
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t build_zero_masked_block(uint32_t block_n) const noexcept {
+      uint64_t block = ~data_[block_n];
+      if (block_n == last_block_n_) [[unlikely]] {
+        const uint32_t last_bits = size_ & 0x3F;
+        if (last_bits != 0) {
+          block &= ((uint64_t{1} << last_bits) - 1);
+        }
+      }
+      return block;
+    }
+
+    PROMPP_ALWAYS_INLINE void next() noexcept {
+      while (true) {
+        if (!block_) {
+          if (block_n_ == last_block_n_) [[unlikely]] {
+            j_ = 64;
+            return;
+          }
+          ++block_n_;
+          block_ = build_zero_masked_block(block_n_);
+          continue;
+        }
+
+        j_ = std::countr_zero(block_);
+        block_ &= ~(uint64_t{1} << j_);
+        return;
+      }
+    }
+
+   public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = uint32_t;
+    using difference_type = std::ptrdiff_t;
+
+    ZeroIterator() = default;
+    PROMPP_ALWAYS_INLINE explicit ZeroIterator(const uint64_t* data, uint32_t size) noexcept : data_(data), size_(size) {
+      if (size_ == 0 || !data_) {
+        return;
+      }
+
+      last_block_n_ = (size_ - 1) >> 6;
+      block_ = build_zero_masked_block(block_n_);
+      next();
+    }
+
+    PROMPP_ALWAYS_INLINE uint32_t operator*() const noexcept { return (block_n_ << 6) | j_; }
+    PROMPP_ALWAYS_INLINE ZeroIterator& operator++() noexcept {
+      next();
+      return *this;
+    }
+    PROMPP_ALWAYS_INLINE ZeroIterator operator++(int) noexcept {
+      const ZeroIterator retval = *this;
+      next();
+      return retval;
+    }
+    PROMPP_ALWAYS_INLINE bool operator==(const ZeroIterator& other) const noexcept { return block_n_ == other.block_n_ && j_ == other.j_; }
+    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return j_ == 64; }
+  };
+
+  struct Zeroes {
+    const uint64_t* data{};
+    uint32_t size{};
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return ZeroIterator(data, size); }
+    [[nodiscard]] static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
+  };
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Zeroes zeroes() const noexcept { return Zeroes{.data = data_, .size = static_cast<uint32_t>(size())}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t zerocount() const noexcept { return static_cast<uint32_t>(size()) - popcount(); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return data_.allocated_memory(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t popcount() const noexcept {
-    return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t popcount, uint64_t v) PROMPP_LAMBDA_INLINE { return popcount + std::popcount(v); });
+    return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t count, uint64_t word) { return count + std::popcount(word); });
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
