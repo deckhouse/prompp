@@ -29,8 +29,8 @@ class SerializedDataGo {
   [[nodiscard]] PROMPP_ALWAYS_INLINE AggregationIterator aggregation_iterator(uint32_t chunk_id) const noexcept {
     return create_aggregation_iterator(data_view_.create_series_iterator(chunk_id), select_hints_, downsampling_ms_);
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator multi_series_iterator(std::span<const uint32_t> series_ids) const noexcept {
-    return create_multi_series_decode_iterator(select_hints_, series_ids, data_view_);
+  PROMPP_ALWAYS_INLINE void construct_multi_series_iterator(MultiSeriesDecodeIterator* iterator, std::span<const uint32_t> series_ids) const noexcept {
+    return construct_multi_series_decode_iterator(iterator, select_hints_, series_ids, data_view_);
   }
 
   PROMPP_ALWAYS_INLINE void reset_multi_series_iterator(MultiSeriesDecodeIterator& iterator, std::span<const uint32_t> series_ids) const noexcept {
