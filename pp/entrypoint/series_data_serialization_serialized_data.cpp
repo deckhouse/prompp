@@ -40,11 +40,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(v
     int64_t target_timestamp;
   };
 
-  for (const Arguments* in = static_cast<Arguments*>(args); *in->iterator != DecodeIteratorSentinel{}; ++(*in->iterator)) {
-    if ((*in->iterator)->timestamp >= in->target_timestamp) {
-      return;
-    }
-  }
+  const Arguments* in = static_cast<Arguments*>(args);
+  in->iterator->seek_to(in->target_timestamp);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {

@@ -11,6 +11,14 @@ namespace series_data::serialization {
 struct SerializedData {
   using Memory = BareBones::Memory<BareBones::MemoryControlBlockWithItemCount, unsigned char>;
 
+  SerializedData() = default;
+
+  SerializedData(const SerializedData&) = delete;
+  SerializedData(SerializedData&&) noexcept = default;
+
+  SerializedData& operator=(const SerializedData&) = delete;
+  SerializedData& operator=(SerializedData&&) noexcept = default;
+
   ~SerializedData() {
     uint32_t timestamp_offset{kNoTimestampOffset};
     for (auto& chunk : chunks) {
@@ -277,15 +285,10 @@ class SerializedDataView {
 
     PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
       const auto iterator_is_end = decode_iter_.visit([](auto& iterator) { return ++iterator == decoder::DecodeIteratorSentinel{}; });
-
       if (iterator_is_end) [[unlikely]] {
-        ++chunk_iter_;
-        if (chunk_iter_ != chunk_iter_end_ && chunk_iter_->label_set_id == series_id_) {
-          reset_decode_iterator();
-        } else {
-          chunk_iter_ = chunk_iter_end_;
-        }
+        advance_to_next_series_chunk();
       }
+
       return *this;
     }
 
@@ -307,6 +310,23 @@ class SerializedDataView {
       reset_decode_iterator();
     }
 
+    void seek_to(PromPP::Primitives::Timestamp timestamp) noexcept {
+      if (*this == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+        return;
+      }
+
+      while (true) {
+        decode_iter_.seek_to(timestamp);
+        if (decode_iter_ != decoder::DecodeIteratorSentinel{}) [[likely]] {
+          return;
+        }
+
+        if (!advance_to_next_series_chunk()) {
+          return;
+        }
+      }
+    }
+
    private:
     decoder::UniversalDecodeIterator decode_iter_;
     chunk::SerializedChunkSpan::const_iterator chunk_iter_;
@@ -314,6 +334,17 @@ class SerializedDataView {
     const uint8_t* buffer_;
     uint32_t buffer_size_;
     uint32_t series_id_;
+
+    PROMPP_ALWAYS_INLINE bool advance_to_next_series_chunk() noexcept {
+      ++chunk_iter_;
+      if (chunk_iter_ != chunk_iter_end_ && chunk_iter_->label_set_id == series_id_) {
+        reset_decode_iterator();
+        return true;
+      }
+
+      chunk_iter_ = chunk_iter_end_;
+      return false;
+    }
 
     PROMPP_ALWAYS_INLINE void reset_decode_iterator() { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, *chunk_iter_); }
 
