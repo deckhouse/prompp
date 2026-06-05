@@ -134,7 +134,7 @@ struct TestStringFilament {
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->count(); }
     };
 
     using view_type = symbols_view;
@@ -176,8 +176,6 @@ struct TestStringFilament {
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items);
     }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items.size());
@@ -253,7 +251,12 @@ struct TestStringFilament {
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-    void shrink() noexcept { items.clear(); }
+    void drop_front(uint32_t drop_count) {
+      if (drop_count != count()) [[unlikely]] {
+        throw BareBones::Exception(0x1bf0dbff9fe3d955, "Unsupported drop for tests");
+      }
+      items.clear();
+    }
   };
 };
 
@@ -273,7 +276,7 @@ TEST_F(EncodingBimapFixture, Empty) {
   // Act
 
   // Assert
-  EXPECT_EQ(0U, table_.size());
+  EXPECT_EQ(0U, table_.items_count());
 }
 
 TEST_F(EncodingBimapFixture, FindOrEmplaceNewValue) {
@@ -286,7 +289,7 @@ TEST_F(EncodingBimapFixture, FindOrEmplaceNewValue) {
 
   // Assert
   EXPECT_EQ(expected_id, id);
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
 }
 
 TEST_F(EncodingBimapFixture, FindOrEmplaceExistingValue) {
@@ -299,7 +302,7 @@ TEST_F(EncodingBimapFixture, FindOrEmplaceExistingValue) {
 
   // Assert
   EXPECT_EQ(id1, id2);
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
 }
 
 TEST_F(EncodingBimapFixture, FindOrEmplaceDifferentValues) {
@@ -313,7 +316,7 @@ TEST_F(EncodingBimapFixture, FindOrEmplaceDifferentValues) {
 
   // Assert
   EXPECT_NE(id1, id2);
-  EXPECT_EQ(2U, table_.size());
+  EXPECT_EQ(2U, table_.items_count());
 }
 
 TEST_F(EncodingBimapFixture, FindOrEmplaceWithHash) {
@@ -327,7 +330,7 @@ TEST_F(EncodingBimapFixture, FindOrEmplaceWithHash) {
 
   // Assert
   EXPECT_EQ(id1, id2);
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
 }
 
 TEST_F(EncodingBimapFixture, FindExistingValue) {
@@ -409,7 +412,7 @@ TEST_F(EncodingBimapFixture, Rollback) {
   table_.rollback(checkpoint);
 
   // Assert
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
   EXPECT_TRUE(table_.find("test1"s).has_value());
   EXPECT_FALSE(table_.find("test2"s).has_value());
 }
@@ -423,7 +426,7 @@ TEST_F(EncodingBimapFixture, RollbackToEmpty) {
   table_.rollback(checkpoint);
 
   // Assert
-  EXPECT_EQ(0U, table_.size());
+  EXPECT_EQ(0U, table_.items_count());
 }
 
 TEST_F(EncodingBimapFixture, SerializeDeserializeSnapshot) {
@@ -438,7 +441,7 @@ TEST_F(EncodingBimapFixture, SerializeDeserializeSnapshot) {
   stream >> table2;
 
   // Assert
-  EXPECT_EQ(table_.size(), table2.size());
+  EXPECT_EQ(table_.items_count(), table2.items_count());
   EXPECT_EQ("test1"s, table2[0]);
   EXPECT_EQ("test2"s, table2[1]);
 }
@@ -458,7 +461,7 @@ TEST_F(EncodingBimapFixture, SerializeDeserializeDelta) {
   stream >> table2;
 
   // Assert
-  EXPECT_EQ(2U, table2.size());
+  EXPECT_EQ(2U, table2.items_count());
   EXPECT_EQ("test1"s, table2[0]);
   EXPECT_EQ("test2"s, table2[1]);
 }
@@ -489,7 +492,7 @@ TEST_F(ShrinkableEncodingBimapFixture, Empty) {
   // Act
 
   // Assert
-  EXPECT_EQ(0U, table_.size());
+  EXPECT_EQ(0U, table_.items_count());
 }
 
 TEST_F(ShrinkableEncodingBimapFixture, FindOrEmplace) {
@@ -501,7 +504,7 @@ TEST_F(ShrinkableEncodingBimapFixture, FindOrEmplace) {
 
   // Assert
   EXPECT_EQ(0U, id);
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
 }
 
 TEST_F(ShrinkableEncodingBimapFixture, FindOrEmplaceExisting) {
@@ -514,7 +517,7 @@ TEST_F(ShrinkableEncodingBimapFixture, FindOrEmplaceExisting) {
 
   // Assert
   EXPECT_EQ(id1, id2);
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
 }
 
 TEST_F(ShrinkableEncodingBimapFixture, Checkpoint) {
@@ -537,7 +540,7 @@ TEST_F(ShrinkableEncodingBimapFixture, ShrinkToCheckpointSize) {
   table_.shrink_to_checkpoint_size(checkpoint);
 
   // Assert
-  EXPECT_EQ(0U, table_.size());
+  EXPECT_EQ(0U, table_.items_count());
 }
 
 TEST_F(ShrinkableEncodingBimapFixture, EmplaceAfterShrink) {
@@ -551,7 +554,7 @@ TEST_F(ShrinkableEncodingBimapFixture, EmplaceAfterShrink) {
   // Assert
   EXPECT_EQ(0U, id_before);
   EXPECT_EQ(1U, id_after);
-  EXPECT_EQ(1U, table_.size());
+  EXPECT_EQ(1U, table_.items_count());
 
   EXPECT_EQ("test1"s, table_[id_after]);
 }
@@ -597,7 +600,7 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeSnapshot) {
   stream >> table2;
 
   // Assert
-  EXPECT_EQ(table_.size(), table2.size());
+  EXPECT_EQ(table_.items_count(), table2.items_count());
   EXPECT_EQ("test1"s, table2[0]);
   EXPECT_EQ("test2"s, table2[1]);
 }
@@ -626,7 +629,7 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
   delta_stream >> table2;
 
   // Assert
-  EXPECT_EQ(2U, table2.size());
+  EXPECT_EQ(2U, table2.items_count());
 
   EXPECT_EQ(kInvalidId, table2.find("test1"s).value_or(kInvalidId));
   EXPECT_EQ(kInvalidId, table2.find("test2"s).value_or(kInvalidId));

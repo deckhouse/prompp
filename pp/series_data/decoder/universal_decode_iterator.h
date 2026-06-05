@@ -46,7 +46,7 @@ class UniversalDecodeIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.constant.operator->(); }
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE auto visit(Visitor&& visitor) const noexcept {
+  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) const noexcept {
     switch (type_) {
       case Type::kConstant: {
         return std::forward<Visitor>(visitor)(iterator_.constant);

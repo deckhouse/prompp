@@ -284,6 +284,7 @@ class SerializedDataView {
       if (iterator_is_end) [[unlikely]] {
         advance_to_next_series_chunk();
       }
+
       return *this;
     }
 
@@ -334,6 +335,23 @@ class SerializedDataView {
     }
 
     PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { decode_iter_.invalidate_sample(); }
+
+    void seek_to(PromPP::Primitives::Timestamp timestamp) noexcept {
+      if (*this == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+        return;
+      }
+
+      while (true) {
+        decode_iter_.seek_to(timestamp);
+        if (decode_iter_ != decoder::DecodeIteratorSentinel{}) [[likely]] {
+          return;
+        }
+
+        if (!advance_to_next_series_chunk()) {
+          return;
+        }
+      }
+    }
 
    private:
     decoder::UniversalDecodeIterator decode_iter_;

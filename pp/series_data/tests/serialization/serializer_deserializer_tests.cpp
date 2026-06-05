@@ -1055,6 +1055,156 @@ TEST_F(SerializedDataIterFixture, ResetIteratorToAnotherSerializedData) {
                                                Sample{.timestamp = 4, .value = 1.3}, Sample{.timestamp = 5, .value = 1.4}}));
 }
 
+class SerializedDataIterSeekToFixture : public SerializerDeserializerTrait, public testing::Test {
+ protected:
+  SerializedData serialized_data_;
+
+  SerializedDataView::SeriesIterator create_iterator() noexcept {
+    serialized_data_ = serialize();
+    SerializedDataView serialized_view(serialized_data_);
+
+    auto [series_id, chunk_id] = serialized_view.next_series();
+    return serialized_view.create_series_iterator(chunk_id);
+  }
+};
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToSampleWithinSameChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(3);
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 3, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToFirstSampleInSecondChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(3);
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 3, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToLastSampleInFirstChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(2);
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 2, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToLastSampleInSecondChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(4);
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 4, .value = 1.0}), *iterator);
+  EXPECT_NE(iterator, DecodeIteratorSentinel{});
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToAcrossThreeChunks) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 5, 1.0);
+  encoder_.encode(0, 6, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(5);
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 5, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToBeforeFirstSample) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(0);
+
+  // Assert
+  EXPECT_EQ((Sample{.timestamp = 1, .value = 1.0}), *iterator);
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToAfterLastSample) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  auto iterator = create_iterator();
+
+  // Act
+  iterator.seek_to(5);
+
+  // Assert
+  EXPECT_EQ(iterator, DecodeIteratorSentinel{});
+}
+
+TEST_F(SerializedDataIterSeekToFixture, SeekToOnEndIterator) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+
+  auto iterator = create_iterator();
+  iterator.seek_to(3);
+
+  // Act
+  iterator.seek_to(4);
+
+  // Assert
+  EXPECT_EQ(iterator, DecodeIteratorSentinel{});
+}
+
 class SerializedDataIterSeekFixture : public SerializerDeserializerTrait, public testing::Test {
  protected:
   SerializedData serialized_data_;
