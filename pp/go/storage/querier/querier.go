@@ -425,7 +425,39 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return q.makeCrossSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
+	if isAggregationSeriesFunc(hints) {
+		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+	}
+
 	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+}
+
+// makeAggrSeriesSet makes the aggregated series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
+
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData != nil {
+			seriesSets[shardID] = NewAggrSeriesSet(
+				snapshots[shardID],
+				serializedData,
+				lssQueryResults[shardID],
+				q.mint,
+				q.maxt,
+			)
+			continue
+		}
+
+		seriesSets[shardID] = emptySeriesSet
+	}
+
+	return NewMergeShardSeriesSet(seriesSets)
 }
 
 // makeSeriesSet makes the series set.
@@ -654,6 +686,11 @@ func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
 // isCrossSeriesFunc checks if the function is a cross series function.
 func isCrossSeriesFunc(hints *storage.SelectHints) bool {
 	return funcOptimizeMap[hints.Func]&crossSeriesOptimizeType == crossSeriesOptimizeType
+}
+
+// isAggregationSeriesFunc checks if the function is an aggregation series function.
+func isAggregationSeriesFunc(hints *storage.SelectHints) bool {
+	return funcOptimizeMap[hints.Func]&dropPointOptimizeType == dropPointOptimizeType
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
