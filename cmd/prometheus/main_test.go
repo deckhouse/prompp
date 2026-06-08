@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,9 +30,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/config"
@@ -284,67 +280,6 @@ func TestMaxBlockChunkSegmentSizeBounds(t *testing.T) {
 		status := exitError.Sys().(syscall.WaitStatus)
 		require.Equal(t, expectedExitStatus, status.ExitStatus())
 	}
-}
-
-func TestTimeMetrics(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	reg := prometheus.NewRegistry()
-	db, err := openDBWithMetrics(tmpDir, log.NewNopLogger(), reg, nil, nil)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, db.Close())
-	}()
-
-	// Check initial values.
-	require.Equal(t, map[string]float64{
-		"prometheus_tsdb_lowest_timestamp_seconds": float64(math.MaxInt64) / 1000,
-		"prometheus_tsdb_head_min_time_seconds":    float64(math.MaxInt64) / 1000,
-		"prometheus_tsdb_head_max_time_seconds":    float64(math.MinInt64) / 1000,
-	}, getCurrentGaugeValuesFor(t, reg,
-		"prometheus_tsdb_lowest_timestamp_seconds",
-		"prometheus_tsdb_head_min_time_seconds",
-		"prometheus_tsdb_head_max_time_seconds",
-	))
-
-	app := db.Appender(context.Background())
-	_, err = app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 1000, 1)
-	require.NoError(t, err)
-	_, err = app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 2000, 1)
-	require.NoError(t, err)
-	_, err = app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 3000, 1)
-	require.NoError(t, err)
-	require.NoError(t, app.Commit())
-
-	require.Equal(t, map[string]float64{
-		"prometheus_tsdb_lowest_timestamp_seconds": 1.0,
-		"prometheus_tsdb_head_min_time_seconds":    1.0,
-		"prometheus_tsdb_head_max_time_seconds":    3.0,
-	}, getCurrentGaugeValuesFor(t, reg,
-		"prometheus_tsdb_lowest_timestamp_seconds",
-		"prometheus_tsdb_head_min_time_seconds",
-		"prometheus_tsdb_head_max_time_seconds",
-	))
-}
-
-func getCurrentGaugeValuesFor(t *testing.T, reg prometheus.Gatherer, metricNames ...string) map[string]float64 {
-	f, err := reg.Gather()
-	require.NoError(t, err)
-
-	res := make(map[string]float64, len(metricNames))
-	for _, g := range f {
-		for _, m := range metricNames {
-			if g.GetName() != m {
-				continue
-			}
-
-			require.Len(t, g.GetMetric(), 1)
-			_, ok := res[m]
-			require.False(t, ok, "expected only one metric family for", m)
-			res[m] = *g.GetMetric()[0].GetGauge().Value
-		}
-	}
-	return res
 }
 
 func TestAgentSuccessfulStartup(t *testing.T) {
