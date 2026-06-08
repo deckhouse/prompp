@@ -22,6 +22,7 @@ import (
 var (
 	_ storage.Queryable      = (*Manager)(nil)
 	_ storage.ChunkQueryable = (*Manager)(nil)
+	_ BlockSource            = (*Manager)(nil)
 )
 
 const (
@@ -179,6 +180,14 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 		nil,
 		storage.NewCompactingChunkSeriesMerger(storage.ChainedSeriesMerge),
 	), nil
+}
+
+// Blocks returns a snapshot of the currently loaded blocks. It implements
+// [BlockSource].
+func (m *Manager) Blocks() []*tsdb.Block {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+	return slices.Clone(m.blocks)
 }
 
 // reloadBlocks reloads blocks from disk and deletes the ones past retention.
