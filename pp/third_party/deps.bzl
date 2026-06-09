@@ -143,11 +143,8 @@ def _third_party_deps_impl(_ctx):
     git_repository(
         name = "snappy",
         commit = "27ab5f7f518430a021239bc26a5b2fd64affbc7b",
-        patches = [
-            Label("//third_party/patches/snappy:0001-svacer_fixes.patch"),
-        ],
         remote = "https://github.com/google/snappy",
-        shallow_since = "1689185568 -0700",
+        shallow_since = "1778353109 +0000",
     )
 
     http_archive(
