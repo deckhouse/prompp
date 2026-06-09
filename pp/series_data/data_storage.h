@@ -10,6 +10,7 @@
 #include "common.h"
 #include "encoder/encoder_variant.h"
 #include "encoder/gorilla.h"
+#include "metrics/storage.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
@@ -217,11 +218,6 @@ struct DataStorage {
         finalized_chunks;
   };
 
-  uint32_t outdated_samples_count{};
-  uint32_t outdated_chunks_count{};
-  uint32_t merged_samples_count{};
-  BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
-
   union {
     BareBones::GenericBitset<Reallocator> unloaded_series_bitmap{};
   };
@@ -229,13 +225,19 @@ struct DataStorage {
     BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
   };
 
+  struct Metrics final : metrics::MetricsPage<Metrics> {
+    using MetricsPage::MetricsPage;
+
+    metrics::Counter outdated_samples_count{PromPP::Primitives::LabelSet{{"ptr", std::to_string(std::bit_cast<uint64_t>(this))}},
+                                            "prompp_data_storage_outdated_samples_count"};
+    metrics::Counter outdated_chunks_count{PromPP::Primitives::LabelSet{{"ptr", std::to_string(std::bit_cast<uint64_t>(this))}},
+                                           "prompp_data_storage_outdated_chunks_count"};
+  }* const metrics = metrics::CreateMetricsPage<Metrics>();
+
+  BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
-
-  void reset_sample_counters() noexcept {
-    outdated_samples_count = 0;
-    merged_samples_count = 0;
-  }
 
   void delete_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) noexcept {
     if (const auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {

@@ -99,17 +99,17 @@ class Encoder {
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
+  PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) const {
     if (BareBones::Encoding::Gorilla::isstalenan(value)) [[unlikely]] {
       return;
     }
     if (timestamp < last_timestamp) {
-      ++storage_.outdated_samples_count;
+      storage_.metrics->outdated_samples_count.inc();
 
       if (const auto it = storage_.outdated_chunks.try_emplace(ls_id, timestamp, value); !it.second) {
         it.first->second.encode(timestamp, value);
       } else {
-        ++storage_.outdated_chunks_count;
+        storage_.metrics->outdated_chunks_count.inc();
       }
     }
   }
