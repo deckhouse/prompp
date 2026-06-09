@@ -2,13 +2,15 @@
 
 #include <limits>
 
-#include "bare_bones/xxhash.h"
-#include "hashdex.hpp"
+#include "bare_bones/bitset.h"
+#include "bare_bones/vector.h"
 #include "head/lss.h"
+#include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 #include "series_index/querier/series_operations.h"
+#include "series_index/queryable_encoding_bimap.h"
 
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
 using GoSliceOfString = PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::String>;
@@ -146,18 +148,22 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto& snapshot = std::get<entrypoint::head::SnapshotLSS>(*in->snapshot);
+  auto& snapshot_variant = *in->snapshot;
   auto query_result = Querier{}.query(*in->selector);
   in->selector.reset();
-  snapshot.sorting_index().sort(query_result.series_ids);
+  std::visit([&query_result](const auto& snapshot) { snapshot.sorting_index().sort(query_result.series_ids); }, snapshot_variant);
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());
-  std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
-                         [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
+  std::visit(
+      [&out](const auto& snapshot) {
+        std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
+                               [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
+      },
+      snapshot_variant);
 }
 
 struct GroupSeriesByLabelNamesResult {
@@ -208,7 +214,7 @@ void prompp_primitives_lss_get_label_sets(void* args, void* res) {
 
         for (size_t i = 0; i < in->series_ids.size(); ++i) {
           const auto ls_id = in->series_ids[i];
-          if (lss.size() > ls_id) [[likely]] {
+          if (lss.next_item_index() > ls_id) [[likely]] {
             auto in_label_set = lss[ls_id];
             auto& out_label_set = out->label_sets[i];
             out_label_set.reserve(in_label_set.size());
@@ -337,7 +343,8 @@ extern "C" void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source
                                                                  uint64_t source_bitset,
                                                                  uint64_t destination_lss,
                                                                  uint64_t ids_mapping) {
-  const auto& src = std::get<entrypoint::head::SnapshotLSS>(*std::bit_cast<entrypoint::head::SnapshotLSSVariant*>(source_snapshot));
+  const auto& src_snapshot_variant = *std::bit_cast<entrypoint::head::SnapshotLSSVariant*>(source_snapshot);
+  const auto& src = std::get<entrypoint::head::SnapshotLSS>(src_snapshot_variant);
   const auto& src_bitset = *std::bit_cast<BareBones::Bitset*>(source_bitset);
   auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
   const auto dst_src_ids_mapping = std::bit_cast<LsIdsSlicePtr*>(ids_mapping);
@@ -345,6 +352,28 @@ extern "C" void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source
 
   series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src_bitset, dst, **dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
+}
+
+extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {
+  struct Arguments {
+    LssVariantPtr lss;
+    uint32_t shrink_boundary;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  lss.set_pending_shrink_boundary(in->shrink_boundary);
+}
+
+extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
+  struct Arguments {
+    LssVariantPtr lss;
+    SnapshotLSSVariantPtr resolve_snapshot;
+    LsIdsSlicePtr new_to_old_mapping;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  auto& resolve_snapshot = std::get<entrypoint::head::SnapshotLSS>(*in->resolve_snapshot);
+  lss.finalize_copy_and_shrink(resolve_snapshot, *in->new_to_old_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {

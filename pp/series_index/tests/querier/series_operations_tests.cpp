@@ -7,16 +7,14 @@
 #include "primitives/snug_composites.h"
 #include "series_index/querier/series_operations.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
 using series_index::QueryableEncodingBimap;
 using series_index::querier::group_series_by_label_names;
-using series_index::trie::CedarTrie;
 
-using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, CedarTrie>;
+using Index = QueryableEncodingBimap<BareBones::Vector>;
 
 class GroupSeriesByLabelNamesFixture : public testing::Test {
  protected:

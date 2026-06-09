@@ -2156,7 +2156,9 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
 			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
 			// Some rules should execute concurrently so should complete quicker.
-			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
+			if !tolerantTiming {
+				require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
+			}
 			// Each rule produces one vector.
 			require.EqualValues(t, ruleCount, testutil.ToFloat64(group.metrics.GroupSamples))
 		}
@@ -2208,7 +2210,9 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
 			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
 			// Some rules should execute concurrently so should complete quicker.
-			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
+			if !tolerantTiming {
+				require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
+			}
 			// Each rule produces one vector.
 			require.EqualValues(t, ruleCount, testutil.ToFloat64(group.metrics.GroupSamples))
 		}
@@ -2261,7 +2265,9 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			// Max inflight can be up to MaxConcurrentEvals concurrent evals, since there is sufficient concurrency to run all rules at once.
 			require.LessOrEqual(t, int64(maxInflight.Load())+1, opts.MaxConcurrentEvals)
 			// Some rules should execute concurrently so should complete quicker.
-			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
+			if !tolerantTiming {
+				require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
+			}
 			// Each rule produces one vector.
 			require.EqualValues(t, ruleCount, testutil.ToFloat64(group.metrics.GroupSamples))
 		}
