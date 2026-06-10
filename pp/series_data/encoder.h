@@ -293,7 +293,7 @@ class Encoder {
                                                   const encoder::value::ConstantValue& v1,
                                                   const encoder::value::ConstantValue& v2,
                                                   const encoder::value::ConstantValue& v3) const {
-    storage_.metrics->change_chunk_count(EncodingType::kTwoDoubleConstant, EncodingType::kAscInteger);
+    storage_.metrics->change_chunk_count(chunk.encoding_state.encoding_type, EncodingType::kAscInteger);
 
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kAscInteger>(v1, v2, v3);
@@ -305,7 +305,7 @@ class Encoder {
                                                      const encoder::value::ConstantValue& v1,
                                                      const encoder::value::ConstantValue& v2,
                                                      const encoder::value::ConstantValue& v3) const {
-    storage_.metrics->change_chunk_count(EncodingType::kTwoDoubleConstant, EncodingType::kValuesGorilla);
+    storage_.metrics->change_chunk_count(chunk.encoding_state.encoding_type, EncodingType::kValuesGorilla);
 
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kValuesGorilla>(v1, v2, v3);
@@ -329,7 +329,7 @@ class Encoder {
                                               const encoder::value::ConstantValue& v1,
                                               const encoder::value::ConstantValue& v2,
                                               const encoder::value::ConstantValue& v3) const {
-    storage_.metrics->change_chunk_count(EncodingType::kTwoDoubleConstant, EncodingType::kGorilla);
+    storage_.metrics->change_chunk_count(chunk.encoding_state.encoding_type, EncodingType::kGorilla);
 
     chunk.timestamp_encoder_state_id = storage_.timestamp_encoder.encode(chunk.timestamp_encoder_state_id, timestamp);
     auto& timestamp_stream = storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id);
