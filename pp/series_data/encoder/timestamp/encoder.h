@@ -91,11 +91,11 @@ class Encoder {
 
     const auto previous_state_id = state_id;
     if (state_id == kInvalidStateId) [[unlikely]] {
-      auto& state = states_.emplace_back(state_id);
+      auto& state = emplace_state(state_id);
       TimestampEncoder::encode_first(state.encoder, timestamp, state.stream_data.stream);
       state_id = states_.index_of(state);
     } else {
-      auto& new_state = states_.emplace_back(state_id);
+      auto& new_state = emplace_state(state_id);
 
       auto& state = states_[state_id];
       ++state.child_count;
@@ -125,7 +125,7 @@ class Encoder {
       state_transitions_.erase(state);
       decrease_previous_state_child_count(state_id, state.previous_state_id);
       if (state.child_count == 0) {
-        states_.erase(state_id);
+        erase_state(state_id);
       }
     } else {
       stream = state.stream_data.stream;
@@ -162,16 +162,19 @@ class Encoder {
     return state.reference_count == 1 && state.child_count == 0;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const double& states_count() const noexcept { return states_count_; }
+
  private:
   BareBones::VectorWithHoles<State, Reallocator> states_;
   StateTransitions state_transitions_{states_};
+  double states_count_{};
 
   PROMPP_ALWAYS_INLINE void decrease_reference_count(State& state, StateId state_id) noexcept {
     if (--state.reference_count == 0) {
       state_transitions_.erase(state);
       decrease_previous_state_child_count(state_id, state.previous_state_id);
       if (state.child_count == 0) {
-        states_.erase(state_id);
+        erase_state(state_id);
       } else {
         state.free_memory();
       }
@@ -189,12 +192,22 @@ class Encoder {
         state_id = previous_state_id;
         previous_state_id = previous_state.previous_state_id;
 
-        states_.erase(state_id);
+        erase_state(state_id);
         continue;
       }
 
       return;
     }
+  }
+
+  PROMPP_ALWAYS_INLINE State& emplace_state(StateId state_id) noexcept {
+    ++states_count_;
+    return states_.emplace_back(state_id);
+  }
+
+  PROMPP_ALWAYS_INLINE void erase_state(StateId state_id) noexcept {
+    states_.erase(state_id);
+    --states_count_;
   }
 };
 

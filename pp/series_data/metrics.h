@@ -3,14 +3,13 @@
 #include "common.h"
 #include "metrics/storage.h"
 
-#include <iostream>
-
 namespace series_data {
 
 struct Metrics final : metrics::MetricsPage<Metrics> {
   using MetricsPage::MetricsPage;
 
-  Metrics() : MetricsPage(outdated_samples_count) {}
+  explicit Metrics(const double& timestamp_states_count)
+      : MetricsPage(outdated_samples_count), timestamp_states_count{labels_, "prompp_data_storage_timestamp_states_count", &timestamp_states_count} {}
 
   PROMPP_ALWAYS_INLINE void inc_chunk_count(EncodingType encoding_type) noexcept { get_chunk_count(encoding_type).inc(); }
   PROMPP_ALWAYS_INLINE void dec_chunk_count(EncodingType encoding_type) noexcept { get_chunk_count(encoding_type).dec(); }
@@ -30,6 +29,8 @@ struct Metrics final : metrics::MetricsPage<Metrics> {
   metrics::Counter outdated_samples_count{labels_, "prompp_data_storage_outdated_samples_count"};
   metrics::Counter outdated_chunks_count{labels_, "prompp_data_storage_outdated_chunks_count"};
   metrics::Counter finalized_chunks_count{labels_, "prompp_data_storage_finalized_chunks_count"};
+
+  metrics::GaugeRef timestamp_states_count;
 
   metrics::Gauge uint32_constants_count{labels_, "prompp_data_storage_uint32_constants_count"};
   metrics::Gauge float32_constants_count{labels_, "prompp_data_storage_float32_constants_count"};
