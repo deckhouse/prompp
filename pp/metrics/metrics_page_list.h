@@ -42,6 +42,10 @@ class MetricsPageList {
       while (metrics_page_ != nullptr && metrics_page_->is_unused()) {
         metrics_page_ = metrics_page_->next_metrics_page();
       }
+
+      if (metrics_page_ != nullptr) [[likely]] {
+        metrics_page_->refresh_metrics();
+      }
     }
   };
 

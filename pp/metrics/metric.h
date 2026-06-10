@@ -103,6 +103,7 @@ class GenericGauge final : public Metric {
   PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
   PROMPP_ALWAYS_INLINE void dec(BareBones::concepts::arithmetic auto count) noexcept { value_ -= count; }
   PROMPP_ALWAYS_INLINE void dec() noexcept { dec(1.0f); }
+  PROMPP_ALWAYS_INLINE void set(BareBones::concepts::arithmetic auto value) noexcept { value_ = value; }
 
  protected:
   double value_{};

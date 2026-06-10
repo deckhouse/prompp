@@ -55,6 +55,8 @@ class MetricsPageControlBlock {
   MetricsPageControlBlock& operator=(const MetricsPageControlBlock&) = delete;
   MetricsPageControlBlock& operator=(MetricsPageControlBlock&&) noexcept = delete;
 
+  virtual void refresh_metrics() noexcept {}
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsPageControlBlock* next_metrics_page() const noexcept { return next_metrics_page_; }
   PROMPP_ALWAYS_INLINE void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t page_object_size() const noexcept { return page_object_size_; }
