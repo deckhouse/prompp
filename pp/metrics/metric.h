@@ -58,6 +58,7 @@ class GenericCounter final : public Metric {
   explicit GenericCounter(LabelSet&& labels, std::string_view name, ValueType value = {})
       : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), value_(value) {}
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return value_; }
   PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
   PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
 
@@ -75,6 +76,8 @@ class GenericCounterRef final : public Metric {
   template <class LabelSet>
   explicit GenericCounterRef(LabelSet&& labels, std::string_view name, Type value)
       : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), counter_(reinterpret_cast<double*>(value)) {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return *counter_.value; }
 
  protected:
   PromPP::Primitives::Go::dto::Counter counter_;
@@ -95,8 +98,11 @@ class GenericGauge final : public Metric {
   explicit GenericGauge(LabelSet&& labels, std::string_view name, ValueType value = {})
       : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), value_(value) {}
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return value_; }
   PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+  PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
   PROMPP_ALWAYS_INLINE void dec(BareBones::concepts::arithmetic auto count) noexcept { value_ -= count; }
+  PROMPP_ALWAYS_INLINE void dec() noexcept { dec(1.0f); }
 
  protected:
   double value_{};
@@ -112,6 +118,8 @@ class GenericGaugeRef final : public Metric {
   template <class LabelSet>
   explicit GenericGaugeRef(LabelSet&& labels, std::string_view name, Type value)
       : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), gauge_(value) {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return *gauge_.value; }
 
  protected:
   PromPP::Primitives::Go::dto::Gauge gauge_;
