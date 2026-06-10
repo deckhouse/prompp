@@ -24,7 +24,7 @@ struct Metrics final : metrics::MetricsPage<Metrics> {
 
  private:
   const std::string ptr_label_{std::to_string(std::bit_cast<uint64_t>(this))};
-  const std::array<PromPP::Primitives::LabelView, 1> labels_{PromPP::Primitives::LabelView{"ptr", ptr_label_}};
+  const std::array<PromPP::Primitives::LabelView, 1> labels_{PromPP::Primitives::LabelView{"address", ptr_label_}};
 
   metrics::Counter outdated_samples_count{labels_, "prompp_data_storage_outdated_samples_count"};
   metrics::Counter outdated_chunks_count{labels_, "prompp_data_storage_outdated_chunks_count"};
@@ -35,7 +35,7 @@ struct Metrics final : metrics::MetricsPage<Metrics> {
   metrics::Gauge uint32_constants_count{labels_, "prompp_data_storage_uint32_constants_count"};
   metrics::Gauge float32_constants_count{labels_, "prompp_data_storage_float32_constants_count"};
   metrics::Gauge double_constants_count{labels_, "prompp_data_storage_double_constants_count"};
-  metrics::Gauge two_double_constants_count{labels_, "prompp_data_storage_double_two_constants_count"};
+  metrics::Gauge two_double_constants_count{labels_, "prompp_data_storage_two_double_constants_count"};
   metrics::Gauge asc_int_count{labels_, "prompp_data_storage_asc_int_count"};
   metrics::Gauge asc_int_then_values_gorilla_count{labels_, "prompp_data_storage_asc_int_then_values_gorilla_count"};
   metrics::Gauge values_gorilla_count{labels_, "prompp_data_storage_values_gorilla_count"};

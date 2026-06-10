@@ -34,7 +34,7 @@ TEST_F(MetricsPageFixture, TestIterator) {
   EXPECT_EQ((MetricsVector{&metrics.uint16_counter, &metrics.uint32_counter, &metrics.atomic_counter}), metric_pointers);
 }
 
-TEST_F(MetricsPageFixture, TestIteratorForPageWithMetdata) {
+TEST_F(MetricsPageFixture, TestIteratorForPageWithMetadata) {
   // Arrange
   struct Metrics : MetricsPage<Metrics> {
     using MetricsPage::MetricsPage;
