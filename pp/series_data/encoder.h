@@ -104,12 +104,12 @@ class Encoder {
       return;
     }
     if (timestamp < last_timestamp) {
-      storage_.metrics->outdated_samples_count.inc();
+      storage_.metrics->inc_outdated_samples();
 
       if (const auto it = storage_.outdated_chunks.try_emplace(ls_id, timestamp, value); !it.second) {
         it.first->second.encode(timestamp, value);
       } else {
-        storage_.metrics->outdated_chunks_count.inc();
+        storage_.metrics->inc_outdated_chunks();
       }
     }
   }
@@ -159,9 +159,11 @@ class Encoder {
     if (encoder::value::Uint32ConstantEncoder::can_be_encoded(value)) [[likely]] {
       chunk.encoding_state.encoding_type = EncodingType::kUint32Constant;
       std::construct_at(&chunk.encoder.uint32_constant, encoder::value::Uint32ConstantEncoder(value));
+      storage_.metrics->inc_chunk_count(EncodingType::kUint32Constant);
     } else if (encoder::value::Float32ConstantEncoder::can_be_encoded(value)) [[unlikely]] {
       chunk.encoding_state.encoding_type = EncodingType::kFloat32Constant;
       std::construct_at(&chunk.encoder.float32_constant, encoder::value::Float32ConstantEncoder(value));
+      storage_.metrics->inc_chunk_count(EncodingType::kFloat32Constant);
     } else {
       switch_to_double_constant_encoder(chunk, value);
     }
@@ -274,42 +276,51 @@ class Encoder {
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kDoubleConstant>(value);
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
+    storage_.metrics->inc_chunk_count(EncodingType::kDoubleConstant);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_two_constant_encoder(chunk::DataChunk& chunk, const encoder::value::ConstantValue& v1, double value2) const {
+    const auto prev_encoding_type = chunk.encoding_state.encoding_type;
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kTwoDoubleConstant>(v1.value, value2, v1.count);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kTwoDoubleConstant, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
+    storage_.metrics->change_chunk_count(prev_encoding_type, EncodingType::kTwoDoubleConstant);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_asc_integer(chunk::DataChunk& chunk,
                                                   const encoder::value::ConstantValue& v1,
                                                   const encoder::value::ConstantValue& v2,
                                                   const encoder::value::ConstantValue& v3) const {
+    const auto prev_encoding_type = chunk.encoding_state.encoding_type;
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kAscInteger>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscInteger, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
+    storage_.metrics->change_chunk_count(prev_encoding_type, EncodingType::kAscInteger);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_values_gorilla(chunk::DataChunk& chunk,
                                                      const encoder::value::ConstantValue& v1,
                                                      const encoder::value::ConstantValue& v2,
                                                      const encoder::value::ConstantValue& v3) const {
+    const auto prev_encoding_type = chunk.encoding_state.encoding_type;
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kValuesGorilla>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kValuesGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
+    storage_.metrics->change_chunk_count(prev_encoding_type, EncodingType::kValuesGorilla);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_asc_integer_then_values_gorilla(chunk::DataChunk& chunk,
                                                                       encoder::value::AscIntegerEncoder<Reallocator>&& asc_int_encoder,
                                                                       double value) const {
+    const auto prev_encoding_type = chunk.encoding_state.encoding_type;
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kAscIntegerThenValuesGorilla>(std::move(asc_int_encoder), value);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscIntegerThenValuesGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
+    storage_.metrics->change_chunk_count(prev_encoding_type, EncodingType::kAscIntegerThenValuesGorilla);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_gorilla(chunk::DataChunk& chunk,
@@ -317,6 +328,7 @@ class Encoder {
                                               const encoder::value::ConstantValue& v1,
                                               const encoder::value::ConstantValue& v2,
                                               const encoder::value::ConstantValue& v3) const {
+    const auto prev_encoding_type = chunk.encoding_state.encoding_type;
     chunk.timestamp_encoder_state_id = storage_.timestamp_encoder.encode(chunk.timestamp_encoder_state_id, timestamp);
     auto& timestamp_stream = storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id);
     encoder::timestamp::TimestampDecoder timestamp_decoder(timestamp_stream.reader());
@@ -324,6 +336,7 @@ class Encoder {
     const auto& encoder = storage_.gorilla_encoders.emplace_back(timestamp_decoder, v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.gorilla_encoders.index_of(encoder);
+    storage_.metrics->change_chunk_count(prev_encoding_type, EncodingType::kGorilla);
   }
 };
 

@@ -7,9 +7,9 @@
 #include "chunk/data_chunk.h"
 #include "chunk/finalized_chunk.h"
 #include "chunk/outdated_chunk.h"
-#include "common.h"
 #include "encoder/encoder_variant.h"
 #include "encoder/gorilla.h"
+#include "metrics.h"
 #include "metrics/storage.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
@@ -225,14 +225,7 @@ struct DataStorage {
     BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
   };
 
-  struct Metrics final : metrics::MetricsPage<Metrics> {
-    using MetricsPage::MetricsPage;
-
-    metrics::Counter outdated_samples_count{PromPP::Primitives::LabelSet{{"ptr", std::to_string(std::bit_cast<uint64_t>(this))}},
-                                            "prompp_data_storage_outdated_samples_count"};
-    metrics::Counter outdated_chunks_count{PromPP::Primitives::LabelSet{{"ptr", std::to_string(std::bit_cast<uint64_t>(this))}},
-                                           "prompp_data_storage_outdated_chunks_count"};
-  }* const metrics = metrics::CreateMetricsPage<Metrics>();
+  Metrics* const metrics = metrics::CreateMetricsPage<Metrics>();
 
   BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
 
@@ -241,6 +234,7 @@ struct DataStorage {
 
   void delete_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) noexcept {
     if (const auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {
+      metrics->dec_chunk_count(chunk.encoding_state.encoding_type);
       erase_chunk_timestamp_and_encoder<chunk::DataChunk::Type::kFinalized>(chunk);
       finalized_it->second.erase(chunk);
       if (finalized_it->second.count() == 0) {
@@ -251,6 +245,8 @@ struct DataStorage {
 
   void delete_open_chunk(uint32_t ls_id) noexcept {
     auto& chunk = open_chunks[ls_id];
+    assert(!chunk.is_empty());
+    metrics->dec_chunk_count(chunk.encoding_state.encoding_type);
     erase_chunk_timestamp_and_encoder<chunk::DataChunk::Type::kOpen>(chunk);
     chunk.reset();
   }
@@ -426,6 +422,8 @@ struct DataStorage {
 
   template <BareBones::ReallocatorInterface Reallocator>
   PROMPP_ALWAYS_INLINE void destructor_impl() noexcept {
+    metrics->detach();
+
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
       Reallocator::release_arena(arena_index);
     } else {
