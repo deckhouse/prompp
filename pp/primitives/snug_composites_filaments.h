@@ -1,6 +1,8 @@
 #pragma once
 
 #include <scope_exit.h>
+#include <cstring>
+#include <iterator>
 
 #include "bare_bones/exception.h"
 #include "bare_bones/iterator.h"
@@ -135,7 +137,6 @@ struct Symbol {
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
     };
@@ -183,8 +184,6 @@ struct Symbol {
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(data_) + BareBones::mem::allocated_memory(items_);
     }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items_.size());
@@ -514,7 +513,6 @@ struct LabelNameSet {
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items_.size()}; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table_.data_view(); }
     };
@@ -560,7 +558,7 @@ struct LabelNameSet {
       }
 
       for (auto i = symbols_ids_sequences_.begin() + pos; i != symbols_ids_sequences_.begin() + pos + size; ++i) {
-        if (*i >= symbols_table_.size()) {
+        if (*i >= symbols_table_.items_count()) {
           throw BareBones::Exception(0x218410dde097cc6b,
                                      "LabelSetNames data validation error: expected LabelSetNames length is out of data symbols table range");
         }
@@ -571,8 +569,6 @@ struct LabelNameSet {
       return BareBones::mem::allocated_memory(symbols_table_) + BareBones::mem::allocated_memory(symbols_ids_sequences_) +
              BareBones::mem::allocated_memory(items_);
     }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
     template <class OtherLabelNameSet, class Cache = NoCache>
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
@@ -1099,7 +1095,6 @@ struct LabelSet {
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
         return storage_ptr->label_name_sets_table_.data_view();
@@ -1120,8 +1115,29 @@ struct LabelSet {
     using view_type = label_set_view;
 
     storage_type() noexcept = default;
-    template <class AnotherStorageType>
+
+    storage_type& operator=(const storage_type& other) noexcept
       requires kIsReadOnly
+    {
+      if (this != &other) [[likely]] {
+        // Keep nested tables copied one by one to preserve their shared state
+        const auto symbols_tables_count = other.symbols_tables_.size();
+        symbols_tables_.resize(symbols_tables_count);
+        for (uint32_t i = 0; i < symbols_tables_count; ++i) {
+          symbols_tables_[i] = other.symbols_tables_[i];
+        }
+        symbols_ids_sequences_ = other.symbols_ids_sequences_;
+        label_name_sets_table_ = other.label_name_sets_table_;
+        next_item_index_ = other.next_item_index_;
+        shrinked_size_ = other.shrinked_size_;
+        items_ = other.items_;
+      }
+
+      return *this;
+    }
+
+    template <class AnotherStorageType>
+      requires(kIsReadOnly && !std::is_same_v<AnotherStorageType, storage_type>)
     explicit storage_type(const AnotherStorageType& other)
         : symbols_ids_sequences_(other.symbols_ids_sequences_),
           label_name_sets_table_(other.label_name_sets_table_),
@@ -1174,7 +1190,7 @@ struct LabelSet {
     void validate(uint32_t id) const {
       const auto [lns_id, pos] = items_[id];
 
-      if (lns_id >= label_name_sets_table_.size()) {
+      if (lns_id >= label_name_sets_table_.items_count()) {
         throw BareBones::Exception(0x48dd6c9d357d3a7e,
                                    "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
       }
@@ -1198,7 +1214,7 @@ struct LabelSet {
       auto values_begin =
           BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences_.begin() + pos - shrinked_size_, lns.size()).first;
       for (auto i = lns.begin(); i != lns.end(); ++i) {
-        if (*values_begin++ >= symbols_tables_[i.id()].size()) {
+        if (*values_begin++ >= symbols_tables_[i.id()].items_count()) {
           throw BareBones::Exception(0x0f0c520ad6285f15,
                                      "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
         }
@@ -1209,8 +1225,6 @@ struct LabelSet {
       return BareBones::mem::allocated_memory(symbols_tables_) + BareBones::mem::allocated_memory(symbols_ids_sequences_) +
              BareBones::mem::allocated_memory(label_name_sets_table_) + BareBones::mem::allocated_memory(items_);
     }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
     template <class OtherLabelSet, class Cache = NoCache>
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
@@ -1236,13 +1250,35 @@ struct LabelSet {
       return id;
     }
 
-    void shrink() noexcept {
-      shrinked_size_ += symbols_ids_sequences_.size();
+    void drop_front(uint32_t drop_count) noexcept {
+      assert(drop_count <= count());
+      if (drop_count == 0) [[unlikely]] {
+        return;
+      }
 
-      items_.resize(0);
-      items_.shrink_to_fit();
-      symbols_ids_sequences_.resize(0);
-      symbols_ids_sequences_.shrink_to_fit();
+      if (drop_count == count()) [[likely]] {
+        shrinked_size_ += symbols_ids_sequences_.size();
+        symbols_ids_sequences_ = std::move(symbols_ids_sequences_type{});
+        items_ = std::move(Vector<item_type>{});
+        return;
+      }
+
+      const auto drop_seq_offset = items_[drop_count].pos - shrinked_size_;
+      shrinked_size_ += drop_seq_offset;
+
+      symbols_ids_sequences_type new_symbols_ids_sequences;
+      // reserve 3 extra bytes to avoid problems with streamvbyte
+      const auto new_symbols_ids_sequences_size = symbols_ids_sequences_.size() - drop_seq_offset;
+      new_symbols_ids_sequences.reserve(new_symbols_ids_sequences_size + 3);
+      new_symbols_ids_sequences.resize(new_symbols_ids_sequences_size);
+      std::memcpy(new_symbols_ids_sequences.data(), symbols_ids_sequences_.data() + drop_seq_offset, new_symbols_ids_sequences_size * sizeof(uint8_t));
+      symbols_ids_sequences_ = std::move(new_symbols_ids_sequences);
+
+      Vector<item_type> new_items;
+      const auto new_items_size = items_.size() - drop_count;
+      new_items.resize(new_items_size);
+      std::memcpy(new_items.data(), items_.data() + drop_count, new_items_size * sizeof(item_type));
+      items_ = std::move(new_items);
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {

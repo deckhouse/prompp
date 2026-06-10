@@ -114,6 +114,20 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   }
 }
 
+extern "C" void prompp_head_wal_encoder_max_written_item_index(void* args, void* res) {
+  struct Arguments {
+    EncoderPtr encoder;
+  };
+
+  struct Result {
+    uint32_t max_written_item_index;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto* out = static_cast<Result*>(res);
+  out->max_written_item_index = in->encoder->max_written_item_index();
+}
+
 extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {
   using entrypoint::head::LssVariantPtr;
 
@@ -163,6 +177,9 @@ extern "C" void prompp_head_wal_decoder_decode(void* args, void* res) {
   try {
     in->inner_series->reset();
     in->decoder->decode_to_inner_series(in->segment, *in->inner_series, out);
+    for (const auto& inner_serie : in->inner_series->data()) {
+      in->decoder->label_set().mark_active(inner_serie.ls_id);
+    }
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);
@@ -188,8 +205,10 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   try {
     const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
 
-    in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value)
-                                         PROMPP_LAMBDA_INLINE { in->encoder_wrapper->encoder.encode(ls_id, timestamp, value); });
+    in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
+      in->decoder->label_set().mark_active(ls_id);
+      in->encoder_wrapper->encoder.encode(ls_id, timestamp, value);
+    });
     out->create_timestamp = in->decoder->decoder().created_at_tsns();
     out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <memory>
 #include <variant>
 
@@ -7,20 +8,20 @@
 #include "primitives/primitives.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace entrypoint::head {
 
 using LsIdsSlice = BareBones::Vector<PromPP::Primitives::LabelSetID>;
 using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
 
-enum class LssType : uint32_t {
+enum class LssType : uint8_t {
   kEncodingBimap = 0,
   kQueryableEncodingBimap,
 };
 
-enum class SnapshotLSSType : uint32_t {
+enum class SnapshotLSSType : uint8_t {
   kSnapshotLSS = 0,
+  kShrinkAwareSnapshotLSS,
 };
 
 namespace lss_memory {
@@ -61,22 +62,58 @@ template <class T>
 using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
 
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVectorWithChangesDetection>;
-using QueryableEncodingBimap = series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
-                                                                    SharedVectorWithChangesDetection,
-                                                                    series_index::trie::CedarTrie>;
+using QueryableEncodingBimap = series_index::QueryableEncodingBimap<SharedVectorWithChangesDetection>;
 
 class SnapshotLSS : public PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection> {
  public:
   using Base = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
   using SortingIndex = series_index::SortingIndex<SharedSpanWithChangesDetection>;
+  using value_type = typename Base::value_type;
   using Base::Base;
 
   explicit SnapshotLSS(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
 
+  SnapshotLSS& operator=(const SnapshotLSS& other) {
+    Base::operator=(other);
+    sorting_index_ = other.sorting_index_;
+    return *this;
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return Base::operator[](id); }
 
  private:
   SortingIndex sorting_index_;
+};
+
+class ShrinkAwareSnapshotLSS : public SnapshotLSS {
+ public:
+  explicit ShrinkAwareSnapshotLSS(const QueryableEncodingBimap& lss)
+      : SnapshotLSS(lss), shrink_state_(lss.shrink_state().clone_for_snapshot()), added_series_(lss.added_series()) {}
+
+  ShrinkAwareSnapshotLSS& operator=(const ShrinkAwareSnapshotLSS& other) {
+    SnapshotLSS::operator=(other);
+    shrink_state_ = other.shrink_state_.clone_for_snapshot();
+    added_series_ = other.added_series_;
+    return *this;
+  }
+
+  [[nodiscard]] value_type operator[](uint32_t id) const noexcept {
+    if (shrink_state_.is_shrunk()) [[unlikely]] {
+      return resolve_shrunk_series(id);
+    }
+
+    return SnapshotLSS::operator[](id);
+  }
+
+ private:
+  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type resolve_shrunk_series(uint32_t id) const noexcept {
+    return shrink_state_.template resolve_shrunk_series<value_type>(
+        id, [this](uint32_t storage_id) { return SnapshotLSS::operator[](storage_id); }, Base::kInvalidId);
+  }
+
+  QueryableEncodingBimap::ShrinkState shrink_state_{};
+  BareBones::Bitset added_series_{};
 };
 
 template <class Lss>
@@ -122,7 +159,7 @@ inline LssVariantPtr create_lss(LssType type) {
   }
 }
 
-using SnapshotLSSVariant = std::variant<SnapshotLSS>;
+using SnapshotLSSVariant = std::variant<SnapshotLSS, ShrinkAwareSnapshotLSS>;
 using SnapshotLSSVariantPtr = std::unique_ptr<SnapshotLSSVariant>;
 
 static_assert(sizeof(SnapshotLSSVariantPtr) == sizeof(void*));
@@ -136,6 +173,9 @@ inline SnapshotLSSVariantPtr create_snapshot_lss(LssVariant& lss_variant) {
     case LssType::kQueryableEncodingBimap: {
       auto& lss = std::get<QueryableEncodingBimap>(lss_variant);
       lss.build_deferred_indexes();
+      if (!lss.shrink_state().is_normal()) {
+        return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kShrinkAwareSnapshotLSS)>, lss);
+      }
       return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kSnapshotLSS)>, lss);
     }
 

@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "series_index/queryable_encoding_bimap.h"
+#include "wal/decoder.h"
 #include "wal/wal.h"
 
 namespace {
@@ -23,6 +25,9 @@ class WalEncoderDecoderFixture : public testing::Test {
  protected:
   using WALEncoder = BasicEncoder<>;
   using WALDecoder = BasicDecoder<EncodingBimap<BareBones::Vector>>;
+  using Qeb = series_index::QueryableEncodingBimap<BareBones::Vector>;
+  using WalEncoderQeb = BasicEncoder<Qeb&>;
+  using HeadWalDecoder = PromPP::WAL::GenericDecoder<Qeb&>;
 
   struct DecodedSample {
     uint32_t ls_id;
@@ -90,7 +95,7 @@ TEST_F(WalEncoderDecoderFixture, EncoderStoresLabelSet) {
   encoder.add(timeseries);
 
   // Assert
-  ASSERT_EQ(encoder.label_sets().size(), 1U);
+  ASSERT_EQ(encoder.label_sets().items_count(), 1U);
   EXPECT_TRUE(std::ranges::equal(label_set, encoder.label_sets()[0]));
 }
 
@@ -112,7 +117,7 @@ TEST_F(WalEncoderDecoderFixture, EncodeDecodeLabelSet) {
 
   // Assert
   EXPECT_EQ(encoder.samples(), 3U);
-  ASSERT_EQ(decoder.label_sets().size(), 1U);
+  ASSERT_EQ(decoder.label_sets().items_count(), 1U);
   EXPECT_TRUE(std::ranges::equal(label_set, decoder.label_sets()[0]));
 }
 
@@ -237,6 +242,131 @@ TEST_F(WalEncoderDecoderFixture, AddManyFillsMissingSeriesWithStaleNaN) {
 
   // ls3: present only in second batch
   EXPECT_TRUE(contains_sample(samples, 2, 2000, 3.0));
+}
+
+TEST_F(WalEncoderDecoderFixture, HeadDecoderLoad_MarksSeriesWithSamplesAsActive) {
+  // Arrange
+  const LabelSet active_cpu{{"metric", "cpu"}};
+  const LabelSet active_mem{{"metric", "memory"}};
+  const LabelSet idle_only{{"metric", "idle_only"}};
+
+  Qeb source_lss;
+  source_lss.find_or_emplace(idle_only);
+
+  WalEncoderQeb encoder(source_lss);
+  encoder.add(create_timeseries(active_cpu, {{1000, 1.0}}));
+  encoder.add(create_timeseries(active_mem, {{1000, 2.0}}));
+
+  std::stringstream stream;
+  stream << encoder;
+  const std::string segment = stream.str();
+
+  Qeb preloaded_lss;
+  preloaded_lss.find_or_emplace(idle_only);
+  std::stringstream preload_stream;
+  preload_stream << preloaded_lss;
+  Qeb restored_lss;
+  preload_stream >> restored_lss;
+  HeadWalDecoder decoder(restored_lss, PromPP::WAL::BasicEncoderVersion::kV3);
+  decoder.decode(segment, [&restored_lss](LabelSetID ls_id, Timestamp, double) { restored_lss.mark_active(ls_id); });
+
+  // Act
+  const auto cpu_id = restored_lss.find(active_cpu);
+  const auto mem_id = restored_lss.find(active_mem);
+  const auto& added_series = restored_lss.added_series();
+
+  // Assert
+  ASSERT_TRUE(cpu_id.has_value());
+  ASSERT_TRUE(mem_id.has_value());
+
+  EXPECT_TRUE(added_series[*cpu_id]);
+  EXPECT_TRUE(added_series[*mem_id]);
+}
+
+TEST_F(WalEncoderDecoderFixture, DoesNotMarkSeriesWithoutSamplesAsActive) {
+  // Arrange
+  const LabelSet active_cpu{{"metric", "cpu"}};
+  const LabelSet active_mem{{"metric", "memory"}};
+  const LabelSet idle_only{{"metric", "idle_only"}};
+
+  Qeb source_lss;
+  source_lss.find_or_emplace(idle_only);
+
+  WalEncoderQeb encoder(source_lss);
+  encoder.add(create_timeseries(active_cpu, {{1000, 1.0}}));
+  encoder.add(create_timeseries(active_mem, {{1000, 2.0}}));
+
+  std::stringstream stream;
+  stream << encoder;
+  const std::string segment = stream.str();
+
+  Qeb preloaded_lss;
+  preloaded_lss.find_or_emplace(idle_only);
+  std::stringstream preload_stream;
+  preload_stream << preloaded_lss;
+  Qeb restored_lss;
+  preload_stream >> restored_lss;
+  HeadWalDecoder decoder(restored_lss, PromPP::WAL::BasicEncoderVersion::kV3);
+  decoder.decode(segment, [&restored_lss](LabelSetID ls_id, Timestamp, double) { restored_lss.mark_active(ls_id); });
+  const auto idle_id = restored_lss.find(idle_only);
+
+  // Act
+  const auto& added_series = restored_lss.added_series();
+  const bool idle_is_active = *idle_id < added_series.size() && added_series[*idle_id];
+
+  // Assert
+  ASSERT_TRUE(idle_id.has_value());
+  EXPECT_FALSE(idle_is_active);
+}
+
+TEST_F(WalEncoderDecoderFixture, AddedSeriesMatchesSeriesBeforeFirstShrink) {
+  // Arrange
+  const LabelSet active_cpu{{"metric", "cpu"}};
+  const LabelSet active_mem{{"metric", "memory"}};
+  const LabelSet idle_only{{"metric", "idle_only"}};
+  const LabelSet never_seen{{"metric", "never_seen"}};
+
+  Qeb source_lss;
+  source_lss.find_or_emplace(idle_only);
+  source_lss.find_or_emplace(never_seen);
+
+  WalEncoderQeb encoder(source_lss);
+  encoder.add(create_timeseries(active_cpu, {{1000, 1.0}, {2000, 1.1}}));
+  encoder.add(create_timeseries(active_mem, {{1000, 2.0}}));
+
+  std::stringstream stream;
+  stream << encoder;
+  const std::string segment = stream.str();
+
+  Qeb preloaded_lss;
+  preloaded_lss.find_or_emplace(idle_only);
+  preloaded_lss.find_or_emplace(never_seen);
+  std::stringstream preload_stream;
+  preload_stream << preloaded_lss;
+  Qeb restored_lss;
+  preload_stream >> restored_lss;
+  HeadWalDecoder decoder(restored_lss, PromPP::WAL::BasicEncoderVersion::kV3);
+
+  // Act
+  decoder.decode(segment, [&restored_lss](LabelSetID ls_id, Timestamp, double) { restored_lss.mark_active(ls_id); });
+
+  const auto cpu_id = restored_lss.find(active_cpu);
+  const auto mem_id = restored_lss.find(active_mem);
+  const auto idle_id = restored_lss.find(idle_only);
+  const auto never_seen_id = restored_lss.find(never_seen);
+  const auto& added_series = restored_lss.added_series();
+
+  // Assert
+  ASSERT_TRUE(cpu_id.has_value());
+  ASSERT_TRUE(mem_id.has_value());
+  ASSERT_TRUE(idle_id.has_value());
+  ASSERT_TRUE(never_seen_id.has_value());
+
+  EXPECT_TRUE(added_series[*cpu_id]);
+  EXPECT_TRUE(added_series[*mem_id]);
+  EXPECT_FALSE(added_series[*idle_id]);
+  EXPECT_FALSE(added_series[*never_seen_id]);
+  EXPECT_EQ(added_series.popcount(), 2U);
 }
 
 class CreateBasicEncoderFromBasicDecoderFixture : public ::testing::Test {

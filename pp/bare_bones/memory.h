@@ -290,6 +290,7 @@ class SharedPtr {
         PRAGMA_DIAGNOSTIC(push)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_STRINGOP_OVERREAD)
+        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_ARRAY_BOUNDS)
         std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
         PRAGMA_DIAGNOSTIC(pop)
       }
