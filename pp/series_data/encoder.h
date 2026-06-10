@@ -75,7 +75,6 @@ class Encoder {
     if (timestamp > encoder.timestamp()) [[likely]] {
       if (encoder.stream().count() >= kSamplesPerChunk) [[unlikely]] {
         ChunkFinalizer::finalize(storage_, ls_id, chunk);
-        storage_.metrics->inc_finalized_chunks();
       }
       return true;
     }
@@ -91,7 +90,6 @@ class Encoder {
       if (!ChunkFinalizer::finalize_if_timestamp_finalized(storage_, ls_id, chunk)) [[likely]] {
         if (state.stream_data.stream.count() >= kSamplesPerChunk) [[unlikely]] {
           ChunkFinalizer::finalize(storage_, ls_id, chunk);
-          storage_.metrics->inc_finalized_chunks();
         }
       }
       return true;

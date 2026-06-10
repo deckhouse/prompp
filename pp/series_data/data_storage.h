@@ -235,6 +235,8 @@ struct DataStorage {
   void delete_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) noexcept {
     if (const auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {
       metrics->dec_chunk_count(chunk.encoding_state.encoding_type);
+      metrics->finalized_chunks().dec();
+
       erase_chunk_timestamp_and_encoder<chunk::DataChunk::Type::kFinalized>(chunk);
       finalized_it->second.erase(chunk);
       if (finalized_it->second.count() == 0) {
@@ -247,6 +249,7 @@ struct DataStorage {
     auto& chunk = open_chunks[ls_id];
     assert(!chunk.is_empty());
     metrics->dec_chunk_count(chunk.encoding_state.encoding_type);
+
     erase_chunk_timestamp_and_encoder<chunk::DataChunk::Type::kOpen>(chunk);
     chunk.reset();
   }
