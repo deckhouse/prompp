@@ -11,7 +11,6 @@
 #include "encoder/gorilla.h"
 #include "metrics.h"
 #include "metrics/storage.h"
-#include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
 
@@ -225,7 +224,7 @@ struct DataStorage {
     BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
   };
 
-  Metrics* const metrics = metrics::CreateMetricsPage<Metrics>();
+  Metrics<Reallocator>* const metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(timestamp_encoder);
 
   BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
 

@@ -2,13 +2,18 @@
 
 #include "common.h"
 #include "metrics/storage.h"
+#include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
 
-struct Metrics final : metrics::MetricsPage<Metrics> {
-  using MetricsPage::MetricsPage;
+template <class Reallocator>
+struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
+  using metrics::MetricsPage<Metrics>::MetricsPage;
 
-  PROMPP_ALWAYS_INLINE explicit Metrics() : MetricsPage(outdated_samples_count) {}
+  PROMPP_ALWAYS_INLINE explicit Metrics(const encoder::timestamp::Encoder<Reallocator>& timestamp_encoder)
+      : metrics::MetricsPage<Metrics>(outdated_samples_count), timestamp_encoder_(&timestamp_encoder) {}
+
+  void refresh_metrics() noexcept override { timestamp_states_count.set(timestamp_encoder_->states_count()); }
 
   PROMPP_ALWAYS_INLINE void inc_chunk_count(EncodingType encoding_type) noexcept {
     get_chunk_count(encoding_type, [](metrics::Gauge& gauge) PROMPP_LAMBDA_INLINE { gauge.inc(); });
@@ -26,12 +31,14 @@ struct Metrics final : metrics::MetricsPage<Metrics> {
   PROMPP_ALWAYS_INLINE metrics::Gauge& finalized_chunks() noexcept { return finalized_chunks_count; }
 
  private:
+  const encoder::timestamp::Encoder<Reallocator>* timestamp_encoder_;
   const std::string ptr_label_{std::to_string(std::bit_cast<uint64_t>(this))};
   const std::array<PromPP::Primitives::LabelView, 1> labels_{PromPP::Primitives::LabelView{"address", ptr_label_}};
 
   metrics::Counter outdated_samples_count{labels_, "prompp_data_storage_outdated_samples_count"};
   metrics::Counter outdated_chunks_count{labels_, "prompp_data_storage_outdated_chunks_count"};
   metrics::Gauge finalized_chunks_count{labels_, "prompp_data_storage_finalized_chunks_count"};
+  metrics::Gauge timestamp_states_count{labels_, "prompp_data_storage_timestamp_states_count"};
 
   metrics::Gauge uint32_constants_count{labels_, "prompp_data_storage_uint32_constants_count"};
   metrics::Gauge float32_constants_count{labels_, "prompp_data_storage_float32_constants_count"};
