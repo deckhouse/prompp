@@ -75,7 +75,7 @@ class UniversalDecodeIterator {
   }
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE auto visit(Visitor&& visitor) noexcept {
+  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) noexcept {
     return const_cast<const UniversalDecodeIterator*>(this)->visit(
         [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
   }
