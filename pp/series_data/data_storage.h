@@ -225,7 +225,7 @@ struct DataStorage {
     BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
   };
 
-  Metrics* const metrics = metrics::CreateMetricsPage<Metrics>(timestamp_encoder.states_count());
+  Metrics* const metrics = metrics::CreateMetricsPage<Metrics>();
 
   BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
 
