@@ -1427,6 +1427,17 @@ func main() {
 		g.Add(
 			func() error {
 				level.Info(logger).Log("msg", "Starting persisted block storage ...")
+				if cfg.tsdb.WALSegmentSize != 0 {
+					if cfg.tsdb.WALSegmentSize < 10*1024*1024 || cfg.tsdb.WALSegmentSize > 256*1024*1024 {
+						return errors.New("flag 'storage.tsdb.wal-segment-size' must be set between 10MB and 256MB")
+					}
+				}
+				if cfg.tsdb.MaxBlockChunkSegmentSize != 0 {
+					if cfg.tsdb.MaxBlockChunkSegmentSize < 1024*1024 {
+						return errors.New("flag 'storage.tsdb.max-block-chunk-segment-size' must be set over 1MB")
+					}
+				}
+
 				switch fsType := prom_runtime.Statfs(localStoragePath); fsType {
 				case "NFS_SUPER_MAGIC":
 					level.Warn(logger).Log("fs_type", fsType, "msg", "This filesystem is not supported and may lead to data corruption and data loss. Please carefully read https://prometheus.io/docs/prometheus/latest/storage/ to learn more about supported filesystems.")

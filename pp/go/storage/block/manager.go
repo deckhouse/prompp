@@ -85,6 +85,12 @@ func NewManager(
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}
+
+	if err := m.reloadBlocks(); err != nil {
+		level.Error(logger).Log("msg", "initial reload blocks failed", "err", err)
+	}
+
+	level.Info(logger).Log("msg", "Block manager started", "dir", dir)
 	go m.loop()
 	return m
 }
@@ -116,6 +122,15 @@ func (m *Manager) Close() {
 		close(m.stopc)
 	})
 	<-m.stoppedc
+	level.Info(m.logger).Log("msg", "Block manager closed")
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	for _, b := range m.blocks {
+		if err := b.Close(); err != nil {
+			level.Warn(m.logger).Log("msg", "Closing block failed", "err", err, "block", b.Meta().ULID)
+		}
+	}
+	m.blocks = nil
 }
 
 // Querier returns a new querier over the persisted blocks overlapping the time
