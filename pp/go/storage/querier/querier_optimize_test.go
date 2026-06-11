@@ -479,7 +479,7 @@ func (s *querierOptimize) setup(ctx context.Context, baseDir string, noErrorFunc
 
 	s.head = s.mustCreateHead(0)
 	s.fillHead(ctx)
-	s.fillHeadWithCounter(ctx, querier.DefaultCountOfSeriesToOptimize)
+	s.fillHeadWithCounter(ctx, 0, querier.DefaultCountOfSeriesToOptimize)
 
 	s.lookbackDelta = 5 * time.Minute
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
@@ -640,17 +640,17 @@ func (s *querierOptimize) fillHead(ctx context.Context) {
 }
 
 // fillHeadWithCounter fills the head with the given number of counter metrics.
-func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, counter int) {
+func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, start, counter int) {
 	countOfSamples := (s.end.UnixMilli()-s.start.UnixMilli())/s.step.Milliseconds() + 1
 	timeSeries := make([]storagetest.TimeSeries, 0, counter*2)
-	for i := range counter {
+	for i := start; i < start+counter; i++ {
 		timeSeries = append(timeSeries, storagetest.TimeSeries{
 			Labels:  labels.FromStrings("__name__", "counter_metric", "value", "inc", "counter", strconv.Itoa(i)),
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
 		})
 	}
 
-	for i := range counter {
+	for i := start; i < start+counter; i++ {
 		timeSeries = append(timeSeries, storagetest.TimeSeries{
 			Labels:  labels.FromStrings("__name__", "sin_cos_metric", "value", "sin_cos", "counter", strconv.Itoa(i)),
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
@@ -889,6 +889,28 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
 	}
 }
 
+func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle2() {
+	ctx := s.T().Context()
+	query := "max_over_time(counter_metric[75s])"
+	start := s.start
+	step := 60 * time.Second
+
+	s.Run(query, func() {
+		res, err := queryRange(ctx, "none", s.queryEngine, s, s.queryOpts, query, start, s.end, step)
+		s.Require().NoError(err)
+		defer res.qry.Close()
+
+		resOpt, err := queryRange(ctx, "all", s.queryEngine, s, s.queryOpts, query, start, s.end, step)
+		s.Require().NoError(err)
+		defer resOpt.qry.Close()
+
+		fmt.Println("res", res.res)
+		fmt.Println("resOpt", resOpt.res)
+
+		s.Require().True(resultEqual(res.res, resOpt.res, query))
+	})
+}
+
 //
 // resultEqual
 //
@@ -1111,11 +1133,10 @@ func calcRelative(expected, actual float64) float64 {
 // Benchmark
 //
 
-func BenchmarkRangeQuery(b *testing.B) {
+func BenchmarkRangeQuerySum(b *testing.B) {
 	ctx := b.Context()
 	qo := &querierOptimize{}
 	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
-	qo.fillHeadWithCounter(ctx, 3)
 	defer qo.close()
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
@@ -1129,36 +1150,232 @@ func BenchmarkRangeQuery(b *testing.B) {
 	})
 
 	query := "sum(counter_metric)"
-	// query := "sum by(value) (counter_metric)"
-	// query := "max_over_time(counter_metric[3600s])"
+	steps := []time.Duration{
+		qo.step,
+		qo.step * 2,
+		qo.step * 3,
+	}
 
-	step := qo.step
-	// step := qo.step * 4
+	series := 6
+	qo.fillHeadWithCounter(ctx, 0, series)
 
-	b.Run("none", func(b *testing.B) {
-		b.ResetTimer()
-		for b.Loop() {
-			res, err := queryRange(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
-			require.NoError(b, err)
-			res.qry.Close()
+	// 3 - default series for counter_metric
+	for i := series + 3; i < 14; i++ {
+		qo.fillHeadWithCounter(ctx, i, 1)
+		for _, step := range steps {
+			b.Run(fmt.Sprintf("opt_none_series_%d_step_%s_range_0s", i, step), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryRange(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
+
+			b.Run(fmt.Sprintf("opt_all_series_%d_step_%s_range_0s", i, step), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryRange(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
 		}
-	})
-
-	b.Run("all", func(b *testing.B) {
-		b.ResetTimer()
-		for b.Loop() {
-			res, err := queryRange(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
-			require.NoError(b, err)
-			res.qry.Close()
-		}
-	})
+	}
 }
 
-func BenchmarkInstantQuery(b *testing.B) {
+func BenchmarkRangeQuerySumBy(b *testing.B) {
 	ctx := b.Context()
 	qo := &querierOptimize{}
 	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
-	qo.fillHeadWithCounter(ctx, 3)
+	defer qo.close()
+
+	queryEngine := promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               100000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            qo.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return qo.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
+	})
+
+	query := "sum by(value) (counter_metric)"
+	steps := []time.Duration{
+		qo.step,
+		qo.step * 2,
+		qo.step * 3,
+	}
+
+	series := 7
+	qo.fillHeadWithCounter(ctx, 0, series)
+
+	// 3 - default series for counter_metric
+	for i := series + 3; i < 20; i++ {
+		qo.fillHeadWithCounter(ctx, i, 1)
+		for _, step := range steps {
+			b.Run(fmt.Sprintf("opt_none_series_%d_step_%s_range_0s", i, step), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryRange(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
+
+			b.Run(fmt.Sprintf("opt_all_series_%d_step_%s_range_0s", i, step), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryRange(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
+		}
+	}
+}
+
+//revive:disable-next-line:cognitive-complexity // this is a benchmark
+func BenchmarkRangeQueryOverTime(b *testing.B) {
+	ctx := b.Context()
+	qo := &querierOptimize{}
+	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
+	defer qo.close()
+
+	queryEngine := promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               100000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            qo.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return qo.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
+	})
+
+	queryf := "max_over_time(counter_metric[%s])"
+	steps := []time.Duration{
+		qo.step,
+		qo.step * 2,
+		qo.step * 25 / 10,
+		qo.step * 3,
+		qo.step * 35 / 10,
+		qo.step * 4,
+		qo.step * 9,
+		qo.step * 10,
+	}
+	ranges := []time.Duration{
+		qo.step / 2,
+		qo.step,
+		qo.step * 15 / 10,
+		qo.step * 2,
+		qo.step * 25 / 10,
+		qo.step * 3,
+		qo.step * 35 / 10,
+		qo.step * 4,
+		qo.step * 45 / 10,
+		qo.step * 5,
+		qo.step * 55 / 10,
+		qo.step * 6,
+		qo.step * 65 / 10,
+		qo.step * 7,
+		qo.step * 75 / 10,
+		qo.step * 8,
+		qo.step * 85 / 10,
+		qo.step * 9,
+		qo.step * 95 / 10,
+		qo.step * 10,
+		qo.step * 20,
+		qo.step * 30,
+		qo.step * 40,
+		qo.step * 60,
+	}
+
+	series := 6
+	qo.fillHeadWithCounter(ctx, 0, series)
+
+	// 3 - default series for counter_metric
+	for i := series + 3; i < 12; i++ {
+		qo.fillHeadWithCounter(ctx, i, 1)
+		for _, step := range steps {
+			for _, r := range ranges {
+				query := fmt.Sprintf(queryf, r)
+				b.Run(fmt.Sprintf("opt_none_series_%d_step_%s_range_%s", i, step, r), func(b *testing.B) {
+					b.ResetTimer()
+					for b.Loop() {
+						res, err := queryRange(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+						require.NoError(b, err)
+						res.qry.Close()
+					}
+				})
+
+				b.Run(fmt.Sprintf("opt_all_series_%d_step_%s_range_%s", i, step, r), func(b *testing.B) {
+					b.ResetTimer()
+					for b.Loop() {
+						res, err := queryRange(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start, qo.end, step)
+						require.NoError(b, err)
+						res.qry.Close()
+					}
+				})
+			}
+		}
+	}
+}
+
+func BenchmarkInstantQuerySum(b *testing.B) {
+	ctx := b.Context()
+	qo := &querierOptimize{}
+	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
+	defer qo.close()
+
+	queryEngine := promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               100000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            qo.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return qo.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
+	})
+
+	query := "sum(counter_metric)"
+	shifts := []time.Duration{
+		qo.step * 4,   // 240s
+		qo.step * 60,  // 1800s
+		qo.step * 125, // 3750s
+	}
+
+	series := 10
+	qo.fillHeadWithCounter(ctx, 0, series)
+
+	// 3 - default series for counter_metric
+	for i := series + 3; i < 18; i++ {
+		qo.fillHeadWithCounter(ctx, i, 1)
+		for _, shift := range shifts {
+			b.Run(fmt.Sprintf("opt_none_series_%d_shift_%s_range_0s", i, shift), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryInstant(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start.Add(shift))
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
+
+			b.Run(fmt.Sprintf("opt_all_series_%d_shift_%s_range_0s", i, shift), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryInstant(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start.Add(shift))
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkInstantQuerySumBy(b *testing.B) {
+	ctx := b.Context()
+	qo := &querierOptimize{}
+	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
 	defer qo.close()
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
@@ -1172,29 +1389,130 @@ func BenchmarkInstantQuery(b *testing.B) {
 	})
 
 	// query := "sum(counter_metric)"
-	// query := "sum by(value) (counter_metric)"
-	query := "max_over_time(counter_metric[3600s])"
+	query := "sum by(value) (counter_metric)"
+	shifts := []time.Duration{
+		qo.step * 4,   // 240s
+		qo.step * 60,  // 1800s
+		qo.step * 125, // 3750s
+	}
 
-	ttt := 3700 * time.Second
-	mid := qo.start.Add(ttt)
-	// mid := qo.start
-	// mid := qo.end
+	series := 6
+	qo.fillHeadWithCounter(ctx, 0, series)
 
-	b.Run("none", func(b *testing.B) {
-		b.ResetTimer()
-		for b.Loop() {
-			res, err := queryInstant(ctx, "none", queryEngine, qo, qo.queryOpts, query, mid)
-			require.NoError(b, err)
-			res.qry.Close()
+	// 3 - default series for counter_metric
+	for i := series + 3; i < 14; i++ {
+		qo.fillHeadWithCounter(ctx, i, 1)
+		for _, shift := range shifts {
+			b.Run(fmt.Sprintf("opt_none_series_%d_shift_%s_range_0s", i, shift), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryInstant(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start.Add(shift))
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
+
+			b.Run(fmt.Sprintf("opt_all_series_%d_shift_%s_range_0s", i, shift), func(b *testing.B) {
+				b.ResetTimer()
+				for b.Loop() {
+					res, err := queryInstant(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start.Add(shift))
+					require.NoError(b, err)
+					res.qry.Close()
+				}
+			})
 		}
+	}
+}
+
+//revive:disable-next-line:cognitive-complexity // this is a benchmark
+func BenchmarkInstantQueryOverTime(b *testing.B) {
+	ctx := b.Context()
+	qo := &querierOptimize{}
+	qo.setup(ctx, b.TempDir(), func(err error, msgAndArgs ...any) { require.NoError(b, err, msgAndArgs) })
+	defer qo.close()
+
+	queryEngine := promql.NewEngine(promql.EngineOpts{
+		Logger:                   log.NewNopLogger(),
+		MaxSamples:               100000,
+		Timeout:                  10 * time.Second,
+		LookbackDelta:            qo.lookbackDelta,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return qo.lookbackDelta.Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     true,
 	})
 
-	b.Run("all", func(b *testing.B) {
-		b.ResetTimer()
-		for b.Loop() {
-			res, err := queryInstant(ctx, "all", queryEngine, qo, qo.queryOpts, query, mid)
-			require.NoError(b, err)
-			res.qry.Close()
+	queryf := "max_over_time(counter_metric[%s])"
+	shifts := []time.Duration{
+		qo.step,
+		qo.step * 2,
+		qo.step * 3,
+		qo.step * 4,
+		qo.step * 5,
+		qo.step * 6,
+		qo.step * 7,
+		qo.step * 8,
+		qo.step * 9,
+		qo.step * 10,
+		qo.step * 11,
+		qo.step * 12,
+		qo.step * 62,
+		// qo.step * 125,
+	}
+	ranges := []time.Duration{
+		qo.step / 2,
+		qo.step,
+		qo.step * 15 / 10,
+		qo.step * 2,
+		qo.step * 25 / 10,
+		qo.step * 3,
+		qo.step * 35 / 10,
+		qo.step * 4,
+		qo.step * 45 / 10,
+		qo.step * 5,
+		qo.step * 55 / 10,
+		qo.step * 6,
+		qo.step * 65 / 10,
+		qo.step * 7,
+		qo.step * 75 / 10,
+		qo.step * 8,
+		qo.step * 85 / 10,
+		qo.step * 9,
+		qo.step * 95 / 10,
+		qo.step * 10,
+		qo.step * 20,
+		qo.step * 30,
+		qo.step * 40,
+		qo.step * 60,
+	}
+
+	series := 6
+	qo.fillHeadWithCounter(ctx, 0, series)
+
+	// 3 - default series for counter_metric
+	for i := series + 3; i < 11; i++ {
+		qo.fillHeadWithCounter(ctx, i, 1)
+		for _, shift := range shifts {
+			for _, r := range ranges {
+				query := fmt.Sprintf(queryf, r)
+
+				b.Run(fmt.Sprintf("opt_none_series_%d_shift_%s_range_%s", i, shift, r), func(b *testing.B) {
+					b.ResetTimer()
+					for b.Loop() {
+						res, err := queryInstant(ctx, "none", queryEngine, qo, qo.queryOpts, query, qo.start.Add(shift))
+						require.NoError(b, err)
+						res.qry.Close()
+					}
+				})
+
+				b.Run(fmt.Sprintf("opt_all_series_%d_shift_%s_range_%s", i, shift, r), func(b *testing.B) {
+					b.ResetTimer()
+					for b.Loop() {
+						res, err := queryInstant(ctx, "all", queryEngine, qo, qo.queryOpts, query, qo.start.Add(shift))
+						require.NoError(b, err)
+						res.qry.Close()
+					}
+				})
+			}
 		}
-	})
+	}
 }

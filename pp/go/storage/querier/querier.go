@@ -75,7 +75,7 @@ const (
 )
 
 // DefaultCountOfSeriesToOptimize is the default count of series to optimize.
-const DefaultCountOfSeriesToOptimize = 6
+const DefaultCountOfSeriesToOptimize = 11
 
 // defaultOptimizeType is the default option for selecting functions optimization.
 var defaultOptimizeType = noneOptimizeType
@@ -622,18 +622,78 @@ func isPossibleToOptimize(
 			countOfSeries += lssQueryResult.Len()
 		}
 
-		//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
-		if hints.Step*1e6 >= scrapeInterval*2 {
-			return true
+		if isCrossSeriesFunc(hints) {
+			return isPossibleToOptimizeCrossSeriesFunc(hints, scrapeInterval, countOfSeries)
 		}
 
-		if hints.Step == 0 && isCrossSeriesFunc(hints) {
-			//revive:disable-next-line:add-constant // x3 we need to optimize the query for the crossseries function
-			return countOfSeries >= DefaultCountOfSeriesToOptimize*3
-		}
-
-		return countOfSeries >= DefaultCountOfSeriesToOptimize
+		return true
 	}
+}
+
+// isPossibleToOptimizeCrossSeriesFunc checks if the cross series function is possible to optimize.
+func isPossibleToOptimizeCrossSeriesFunc(
+	hints *storage.SelectHints,
+	scrapeInterval int64,
+	countOfSeries int,
+) bool {
+	// for cross series functions for instant query, we don't need to optimize the query
+	if hints.Step == 0 {
+		return false
+	}
+
+	if countOfSeries < DefaultCountOfSeriesToOptimize {
+		return false
+	}
+
+	if len(hints.Grouping) == 0 {
+		return true
+	}
+
+	hintStep := hints.Step * 1e6 //revive:disable-line:add-constant // ms to ns
+
+	// grouping by
+	if hintStep == scrapeInterval && countOfSeries > DefaultCountOfSeriesToOptimize+1 {
+		return true
+	}
+
+	//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
+	if hintStep >= scrapeInterval*2 && countOfSeries >= DefaultCountOfSeriesToOptimize {
+		return true
+	}
+
+	//revive:disable-next-line:add-constant // x3 scrape interval are required to enable optimization
+	if hintStep >= scrapeInterval*3 && countOfSeries > DefaultCountOfSeriesToOptimize {
+		return true
+	}
+
+	return false
+}
+
+func isPossibleToOptimizeAggregationFunc(
+	hints *storage.SelectHints,
+	scrapeInterval, shift int64,
+) bool {
+	hintStep := hints.Step * 1e6 //revive:disable-line:add-constant // ms to ns
+	if hintStep <= scrapeInterval {
+		return false
+	}
+
+	// instant query, shift is x5 scrape interval and range is x5 scrape interval
+	if hints.Step == 0 {
+		return hintStep >= scrapeInterval*5 && hints.Range >= scrapeInterval*5
+	}
+
+	hintRange := hints.Range * 1e6 //revive:disable-line:add-constant // ms to ns
+	if hintRange < scrapeInterval {
+		return false
+	}
+
+	//revive:disable-next-line:add-constant // check if the range is even
+	if hintRange/scrapeInterval%2 != 0 {
+		return false
+	}
+
+	return true
 }
 
 // isNotWithpout checks if the hints is not without by.

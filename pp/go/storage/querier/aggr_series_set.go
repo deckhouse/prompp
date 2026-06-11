@@ -203,8 +203,16 @@ func (*AggrChunkIterator) Err() error {
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
 func (it *AggrChunkIterator) Next() chunkenc.ValueType {
-	if it.nextValue() == chunkenc.ValNone {
-		return chunkenc.ValNone
+	if !it.isInitialized {
+		if !it.chunkIterator.HasData() {
+			return chunkenc.ValNone
+		}
+		it.isInitialized = true
+	} else {
+		it.chunkIterator.Next()
+		if !it.chunkIterator.HasData() {
+			return chunkenc.ValNone
+		}
 	}
 
 	if it.AtT() > it.maxt {
@@ -223,25 +231,6 @@ func (it *AggrChunkIterator) Seek(t int64) chunkenc.ValueType {
 	}
 
 	if it.AtT() > it.maxt {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
-}
-
-// nextValue advances the iterator by one and returns the type of the value.
-func (it *AggrChunkIterator) nextValue() chunkenc.ValueType {
-	if !it.isInitialized {
-		if !it.chunkIterator.HasData() {
-			return chunkenc.ValNone
-		}
-
-		it.isInitialized = true
-		return chunkenc.ValFloat
-	}
-
-	it.chunkIterator.Next()
-	if !it.chunkIterator.HasData() {
 		return chunkenc.ValNone
 	}
 

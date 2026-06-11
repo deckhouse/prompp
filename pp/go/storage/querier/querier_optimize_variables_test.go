@@ -16,26 +16,26 @@ const (
 
 // defaultSteps is the default steps.
 var defaultSteps = []time.Duration{
-	defaultStep - time.Second,       // [14s]
-	defaultStep,                     // [15s]
-	(defaultStep - time.Second) * 2, // [29s]
-	defaultStep * 2,                 // [30s]
-	(defaultStep - time.Second) * 4, // [59s]
-	defaultStep * 4,                 // [60s]
-	(defaultStep - time.Second) * 5, // [70s]
+	defaultStep - time.Second,
+	defaultStep,
+	(defaultStep - time.Second) * 2,
+	defaultStep * 2,
+	(defaultStep - time.Second) * 4,
+	defaultStep * 4,
+	(defaultStep - time.Second) * 5,
 }
 
 // defaultSubQueries is the default subqueries.
 var defaultSubQueries = []subQuery{
-	{window: model.Duration(defaultStep), step: 0},                                    // [15s]
-	{window: model.Duration(defaultStep * 4), step: 0},                                // [60s]
-	{window: model.Duration(defaultStep*4 - time.Second), step: 0},                    // [59s]
-	{window: model.Duration(defaultStep*4 + time.Second), step: 0},                    // [61s]
-	{window: model.Duration(defaultStep * 4), step: 0, defaultStep: true},             // [60s:]
-	{window: model.Duration(defaultStep * 16), step: model.Duration(defaultStep * 4)}, // [240s:60s]
-	{window: model.Duration(defaultStep*16 - time.Second), step: 0},                   // [239s]
-	{window: model.Duration(defaultStep * 16), step: 0},                               // [240s]
-	{window: model.Duration(defaultStep*16 + time.Second), step: 0},                   // [241s]
+	{window: model.Duration(defaultStep), step: 0},
+	{window: model.Duration(defaultStep * 4), step: 0},
+	{window: model.Duration(defaultStep*4 - time.Second), step: 0},
+	{window: model.Duration(defaultStep*4 + time.Second), step: 0},
+	{window: model.Duration(defaultStep * 4), step: 0, defaultStep: true},
+	{window: model.Duration(defaultStep * 16), step: model.Duration(defaultStep * 4)},
+	{window: model.Duration(defaultStep*16 - time.Second), step: 0},
+	{window: model.Duration(defaultStep * 16), step: 0},
+	{window: model.Duration(defaultStep*16 + time.Second), step: 0},
 }
 
 // defaultModifiers is the default modifiers.

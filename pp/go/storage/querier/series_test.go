@@ -1,6 +1,7 @@
 package querier_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -744,4 +745,106 @@ func (s *SeriesSetTestSuite) TestChangesFunc() {
 	}, actual[0].Samples[:3])
 	s.Equal(int64(250), actual[0].Samples[3].Timestamp)
 	s.Equal(value.StaleNaN, math.Float64bits(actual[0].Samples[3].Value))
+}
+
+func (s *SeriesSetTestSuite) TestMaxOverTimeFunc2() {
+	// Arrange
+	samples := []cppbridge.Sample{}
+
+	timeData := int64(600)
+	endData := int64(1540)
+	stepData := int64(30)
+	val := 1.0
+	for ; timeData < endData; timeData += stepData {
+		samples = append(samples, cppbridge.Sample{Timestamp: timeData, Value: val})
+		val++
+	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: samples,
+		},
+	}...)
+
+	//
+
+	step := int64(70)
+	for i := 15; i <= 600; i += 1 {
+		hints := &storage.SelectHints{
+			Start:         900 - int64(i) + 1,
+			End:           1500,
+			Func:          "max_over_time",
+			Step:          step,
+			Range:         int64(i),
+			LookbackDelta: 120,
+		}
+
+		// Act
+		seriesSet := s.queryAggr(s.lss, s.ds, 0, hints.End, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+			Name:        "__name__",
+			Value:       "metric",
+			MatcherType: model.MatcherTypeExactMatch,
+		})
+
+		ts := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+		calc(hints, stepData, int64(len(ts[0].Samples)))
+		// fmt.Println(
+		// 	"step", step,
+		// 	"range", i,
+		// 	"ts", len(ts[0].Samples),
+		// 	"calc", calc(hints, stepData, int64(len(ts[0].Samples))),
+		// 	// "samples", ts[0].Samples,
+
+		// 	"\n============",
+		// )
+	}
+}
+
+func calc(hints *storage.SelectHints, interval, samples int64) bool {
+	// maxPoints := (hints.End-hints.Start)/interval + 1
+	stepPoints := (hints.End-hints.Start)/hints.Step + 1
+	// rangePoints := (hints.End-hints.Start)/hints.Range + 1
+	// fmt.Println(
+	// 	" === maxPoints", maxPoints,
+	// 	"stepPoints", stepPoints,
+	// 	"rangePoints", rangePoints,
+	// 	"deltaTS", (hints.End - hints.Start),
+	// 	"hints.End", hints.End,
+	// 	"hints.Start", hints.Start,
+	// 	"samples", samples,
+	// )
+	if hints.Step >= hints.Range {
+		// fmt.Println(" === 1 ", (hints.End-hints.Start)/hints.Step, maxPoints)
+		return true
+	}
+
+	k := hints.Range % hints.Step
+	fmt.Println(" === k", k, calc2(float64(samples-stepPoints), float64(stepPoints)))
+	// fmt.Println(" === k1", hints.Range%interval, (hints.End-hints.Start)/(hints.Step-k)+1)
+	// fmt.Println(" === expected", (hints.End-hints.Start)/(samples-1))
+	if k == 0 || k > interval {
+		return true
+	}
+
+	return false
+}
+
+func TestXxx(t *testing.T) {
+	t.Log(75 % 70)
+	t.Log(floorDiv(300, 70))
+	// srape interval
+	// step/scrape_interval (*2 if range > step and range % step > 0)
+}
+
+func floorDiv(a, b int64) int64 {
+	quotient := a / b
+	if a%b < 0 {
+		quotient--
+	}
+	return quotient
+}
+
+func calc2(a, b float64) float64 {
+	return math.Round((a/b)*10) / 10
 }
