@@ -39,6 +39,7 @@ TEST_F(MetricsPageFixture, TestIteratorForPageWithMetadata) {
   struct Metrics : MetricsPage<Metrics> {
     using MetricsPage::MetricsPage;
 
+    // NOLINTNEXTLINE(clang-analyzer-optin.cplusplus.UninitializedObject)
     Metrics() : MetricsPage{uint16_counter} {}
 
     std::string label_name_{"label_name"};
