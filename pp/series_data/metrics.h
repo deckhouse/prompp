@@ -48,8 +48,6 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   [[nodiscard]] PROMPP_ALWAYS_INLINE double timestamp_states_count() const noexcept { return timestamp_states_count_.value(); }
 
  private:
-  using Labels = PromPP::Primitives::LabelViewSet;
-
   const encoder::timestamp::Encoder<Reallocator>* timestamp_encoder_;
 
   metrics::Counter outdated_samples_count_;
@@ -100,11 +98,9 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
       case EncodingType::kValuesGorilla:
         return std::forward<Handler>(handler)(metrics.values_gorilla_count_);
 
-      case EncodingType::kGorilla:
-        return std::forward<Handler>(handler)(metrics.gorilla_count_);
-
       default:
-        assert(false && "Unknown encoding type");
+        assert(encoding_type != EncodingType::kUnknown);
+        return std::forward<Handler>(handler)(metrics.gorilla_count_);
     }
   }
 };
