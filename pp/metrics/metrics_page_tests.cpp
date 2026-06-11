@@ -42,7 +42,7 @@ TEST_F(MetricsPageFixture, TestIteratorForPageWithMetadata) {
     Metrics() : MetricsPage{uint16_counter} {}
 
     std::string label_name_{"label_name"};
-    
+
     Counter uint16_counter{LabelViewSet{{"label", label_name_}}, "uint16_counter", 16};
     Counter uint32_counter{LabelViewSet{{"label", label_name_}}, "uint32_counter", 32};
     AtomicCounter atomic_counter{LabelViewSet{{"label", label_name_}}, "atomic_uint64_counter", 64};
