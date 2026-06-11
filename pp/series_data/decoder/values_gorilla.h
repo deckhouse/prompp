@@ -5,7 +5,7 @@
 
 namespace series_data::decoder {
 
-class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<ValuesGorillaDecodeIterator> {
+class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDecodeIterator> {
  public:
   using Decoder = BareBones::Encoding::Gorilla::ValuesDecoder;
 
@@ -15,16 +15,18 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
   };
 
   template <class BitSequenceWithItemsCount>
-  ValuesGorillaDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
-      : ValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
-  ValuesGorillaDecodeIterator(uint8_t samples_count,
-                              const BareBones::BitSequenceReader& timestamp_reader,
-                              const BareBones::BitSequenceReader& values_reader,
-                              bool is_last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
-    if (remaining_samples_ > 0) [[likely]] {
+  ValuesGorillaDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader)
+      : ValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader) {}
+  ValuesGorillaDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, const BareBones::BitSequenceReader& values_reader)
+      : data_{
+            .remaining_samples = samples_count,
+            .timestamp_decoder{timestamp_reader},
+            .reader{values_reader},
+        } {
+    if (data_.remaining_samples > 0) [[likely]] {
+      decode_timestamp();
       decode_value<SampleType::kFirst>();
-      sample_.value = decoder_.value();
+      update_sample();
     }
   }
 
@@ -50,16 +52,26 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return decoder_.value(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return data_.decoder.value(); }
+
+ protected:
+  struct Data {
+    encoder::Sample sample{};
+    uint8_t remaining_samples{};
+    Decoder decoder{};
+    encoder::timestamp::TimestampDecoder timestamp_decoder;
+    BareBones::BitSequenceReader reader;
+  };
+
+  static_assert(DecodeIteratorDataWithTimestampDecoder<Data>);
+
+  Data data_;
 
  private:
-  friend Base;
-
-  BareBones::BitSequenceReader reader_;
-  Decoder decoder_;
+  friend DecodeIteratorTrait;
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
-    if (decode_timestamp()) [[likely]] {
+    if (try_decode_timestamp()) [[likely]] {
       decode_value<SampleType::kOther>();
       return true;
     }
@@ -68,13 +80,13 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
   }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
-    sample_.timestamp = decoded_timestamp();
-    sample_.value = decoded_value();
+    data_.sample.timestamp = decoded_timestamp();
+    data_.sample.value = decoded_value();
   }
 
   template <SampleType Type>
   PROMPP_ALWAYS_INLINE void decode_value() noexcept {
-    decode_value<Type>(decoder_, reader_);
+    decode_value<Type>(data_.decoder, data_.reader);
   }
 };
 

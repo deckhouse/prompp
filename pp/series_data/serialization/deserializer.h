@@ -25,7 +25,8 @@ class Deserializer {
   }
 
   [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk) {
-    decoder::UniversalDecodeIterator iterator(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false);
+    decoder::UniversalDecodeIterator iterator(std::in_place_type<decoder::ConstantDecodeIterator>, uint8_t{}, BareBones::BitSequenceReader(nullptr, 0), 0.0,
+                                              false);
     Decoder::create_decode_iterator(buffer, chunk, [&iterator]<typename Iterator>(Iterator&& begin, auto&&) {
       iterator = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
     });
