@@ -80,30 +80,12 @@ class SymbolIdsCollector {
   }
 
   void collect_current(ExportSymbolIds& symbol_ids) const {
-    if (!lss_.shrink_state().is_shrunk()) {
-      collect_current_from_bimap(symbol_ids);
-      return;
-    }
-    collect_current_from_shrunk_series(symbol_ids);
-  }
-
-  void collect_current_from_bimap(ExportSymbolIds& symbol_ids) const {
     const auto view = lss_.data_view();
     for (auto it = view.keys().begin(), e = view.keys().end(); it != e; ++it) {
       symbol_ids.emplace_back(SymbolSource::kCurrent, it.id(), kKeyOnlyValueId);
     }
     for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
       symbol_ids.emplace_back(SymbolSource::kCurrent, it.key_id(), it.value_id());
-    }
-  }
-
-  void collect_current_from_shrunk_series(ExportSymbolIds& symbol_ids) const {
-    for (uint32_t ls_id = lss_.shrink_state().shift; ls_id < lss_.next_item_index(); ++ls_id) {
-      const auto labels = lss_[ls_id];
-      for (auto label = labels.begin(); label != labels.end(); ++label) {
-        symbol_ids.emplace_back(SymbolSource::kCurrent, label.name_id(), kKeyOnlyValueId);
-        symbol_ids.emplace_back(SymbolSource::kCurrent, label.name_id(), label.value_id());
-      }
     }
   }
 
