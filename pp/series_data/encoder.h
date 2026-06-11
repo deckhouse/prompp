@@ -104,12 +104,12 @@ class Encoder {
       return;
     }
     if (timestamp < last_timestamp) {
-      storage_.metrics->inc_outdated_samples();
+      storage_.metrics->outdated_samples().inc();
 
       if (const auto it = storage_.outdated_chunks.try_emplace(ls_id, timestamp, value); !it.second) {
         it.first->second.encode(timestamp, value);
       } else {
-        storage_.metrics->inc_outdated_chunks();
+        storage_.metrics->outdated_chunks().inc();
       }
     }
   }
