@@ -366,7 +366,7 @@ struct DataStorage {
             BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}} {
     constructor_impl<Reallocator>();
 
-    // metrics should be constructed after constructor_impl because this affects the encoding speed of the dots. (see SeriesDataEncoder benchmark)
+    // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
     metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(timestamp_encoder, PromPP::Primitives::LabelViewSet{{"address", address_label_}});
   }
 
