@@ -224,7 +224,10 @@ struct DataStorage {
     BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
   };
 
-  Metrics<Reallocator>* const metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(timestamp_encoder);
+  union {
+    const std::string address_label_{std::to_string(std::bit_cast<uint64_t>(this))};
+  };
+  Metrics<Reallocator>* metrics;
 
   BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
 
@@ -362,6 +365,9 @@ struct DataStorage {
             {},
             BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}} {
     constructor_impl<Reallocator>();
+
+    // metrics should be constructed after constructor_impl because this affects the encoding speed of the dots. (see SeriesDataEncoder benchmark)
+    metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(timestamp_encoder, PromPP::Primitives::LabelViewSet{{"address", address_label_}});
   }
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
@@ -444,6 +450,8 @@ struct DataStorage {
       std::destroy_at(&unloaded_series_bitmap);
       std::destroy_at(&queried_series_bitmap);
     }
+
+    std::destroy_at(&address_label_);
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
