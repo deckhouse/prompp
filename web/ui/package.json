@@ -27,7 +27,7 @@
     "eslint-config-react-app": "^7.0.1",
     "eslint-plugin-prettier": "^4.2.1",
     "express": "^4.21.2",
-    "form-data": "3.0.4",
+    "form-data": "3.0.5",
     "http-proxy-middleware": "3.0.5",
     "jest-canvas-mock": "^2.5.2",
     "jest-fetch-mock": "^3.0.3",
