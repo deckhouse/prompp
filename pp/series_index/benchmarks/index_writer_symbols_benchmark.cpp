@@ -1,25 +1,19 @@
 #include <benchmark/benchmark.h>
 
-#include <algorithm>
-#include <cstdint>
+#include <chrono>
 #include <fstream>
-#include <ios>
 #include <numeric>
 #include <random>
 #include <sstream>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "bare_bones/bitset.h"
 #include "bare_bones/vector.h"
-#include "benchmark/statistic.h"
 #include "primitives/snug_composites.h"
-#include "series_index/prometheus/tsdb/index/index_write_context.h"
+#include "profiling/profiling.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
-
-#include "profiling/profiling.h"
 
 namespace {
 
@@ -30,10 +24,13 @@ using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator
 
 using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
-using IndexWriteContext = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>;
 using IndexWriter = series_index::prometheus::tsdb::index::IndexWriter<Lss, std::ostringstream>;
 using LssCopier =
     series_index::QueryableEncodingBimapCopier<Lss, typename Lss::SortingIndexBuilder::Index, BareBones::Bitset, Lss, BareBones::Vector<uint32_t>>;
+using ChunkMetadata = series_index::prometheus::tsdb::index::ChunkMetadata;
+
+// Matches go/storage/block/block.go WriteRestTo postings batch size.
+constexpr uint32_t kPostingsBatchSize = 1U << 20U;
 
 struct ShrunkState {
   Lss lss;
@@ -52,6 +49,12 @@ std::string get_lss_file() {
   return {};
 }
 
+void mark_all_series_as_added(Lss& lss) {
+  for (const auto& label_set : lss) {
+    lss.find_or_emplace(label_set);
+  }
+}
+
 void load_lss_from_file(Lss& lss) {
   const auto path = get_lss_file();
   if (path.empty()) {
@@ -61,6 +64,8 @@ void load_lss_from_file(Lss& lss) {
   std::ifstream in(path, std::ios::binary);
   if (in.is_open()) {
     in >> lss;
+    mark_all_series_as_added(lss);
+    lss.build_deferred_indexes();
   }
 }
 
@@ -93,43 +98,20 @@ ActiveSeries mark_active_series_for_shrink(Lss& lss) {
   return active_series;
 }
 
-void build_loaded_lss(Lss& lss) {
-  load_lss_from_file(lss);
-  lss.build_deferred_indexes();
-}
-
-uint32_t count_symbols(const Lss& lss) {
-  uint32_t symbols_count = 0;
-  const IndexWriteContext context{lss};
-  context.for_each_symbol([&symbols_count](uint32_t, std::string_view) { ++symbols_count; });
-  return symbols_count;
-}
-
-void set_symbol_counters(benchmark::State& state, uint32_t symbols_count) {
-  state.SetItemsProcessed(static_cast<int64_t>(symbols_count) * state.iterations());
-  state.counters["unique_symbols"] = static_cast<double>(symbols_count);
-  state.counters["per_symbol"] =
-      benchmark::Counter(static_cast<double>(symbols_count), benchmark::Counter::kIsIterationInvariantRate | benchmark::Counter::kInvert);
-}
-
 const Lss& get_lss_no_shrink() {
   static Lss lss;
-  static bool initialized = false;
-  if (!initialized) {
-    build_loaded_lss(lss);
-    initialized = true;
+  if (lss.items_count() == 0) {
+    load_lss_from_file(lss);
   }
   return lss;
 }
 
 const Lss& get_lss_fixed_state() {
   static Lss lss;
-  static bool initialized = false;
-  if (!initialized) {
-    build_loaded_lss(lss);
+  if (lss.items_count() == 0) {
+    load_lss_from_file(lss);
     const auto active_series = mark_active_series_for_shrink(lss);
     lss.set_pending_shrink_boundary(active_series.shrink_boundary);
-    initialized = true;
   }
   return lss;
 }
@@ -138,7 +120,7 @@ const Lss& get_lss_after_shrink() {
   static ShrunkState state;
   static bool initialized = false;
   if (!initialized) {
-    build_loaded_lss(state.lss);
+    load_lss_from_file(state.lss);
     const auto active_series = mark_active_series_for_shrink(state.lss);
 
     BareBones::Vector<uint32_t> dst_src_ids_mapping;
@@ -153,48 +135,214 @@ const Lss& get_lss_after_shrink() {
   return state.lss;
 }
 
-using LssProvider = const Lss& (*)();
+const std::vector<ChunkMetadata>& representative_chunks() {
+  static const std::vector<ChunkMetadata> chunks{
+      {.min_timestamp = 1000, .max_timestamp = 2000, .reference = 100},
+      {.min_timestamp = 2001, .max_timestamp = 4000, .reference = 200},
+  };
+  return chunks;
+}
 
-inline void run_index_writer_symbols(benchmark::State& state, LssProvider get_lss) {
-  const auto& lss = get_lss();
+uint32_t first_non_empty_series_id(const Lss& lss) {
+  for (uint32_t ls_id = 0; ls_id < lss.next_item_index(); ++ls_id) {
+    if (lss[ls_id].size() != 0) {
+      return ls_id;
+    }
+  }
+  return 0;
+}
 
-  const uint32_t symbols_count = count_symbols(lss);
-  std::ostringstream stream;
-  IndexWriter writer{lss};
+PROMPP_ALWAYS_INLINE void reset_stream(std::ostringstream& stream) {
+  stream.str({});
+  stream.clear();
+}
+
+void prepare_writer_before_series(IndexWriter& writer, std::ostringstream& stream) {
+  reset_stream(stream);
+  writer.write_header(stream);
+  reset_stream(stream);
+  writer.write_symbols(stream);
+}
+
+void prepare_writer_before_label_indices(IndexWriter& writer, std::ostringstream& stream, uint32_t ls_id, const std::vector<ChunkMetadata>& chunks) {
+  prepare_writer_before_series(writer, stream);
+  reset_stream(stream);
+  writer.write_series(ls_id, chunks, stream);
+}
+
+void write_all_postings(IndexWriter& writer, std::ostringstream& stream) {
+  do {
+    reset_stream(stream);
+    writer.write_postings(stream, kPostingsBatchSize);
+  } while (writer.has_more_postings_data());
+}
+
+// One timed sample per entrypoint call (see entrypoint/index_writer.h).
+struct IndexWriterCallTimings {
+  std::chrono::nanoseconds write_header{};
+  std::chrono::nanoseconds write_symbols_no_shrink{};
+  std::chrono::nanoseconds write_symbols_fixed_state{};
+  std::chrono::nanoseconds write_symbols_after_shrink{};
+  std::chrono::nanoseconds write_next_series_batch{};
+  std::chrono::nanoseconds write_label_indices{};
+  std::chrono::nanoseconds write_next_postings_batch{};
+  std::chrono::nanoseconds write_label_indices_table{};
+  std::chrono::nanoseconds write_postings_table_offsets{};
+  std::chrono::nanoseconds write_table_of_contents{};
+};
+
+std::vector<IndexWriterCallTimings> index_writer_call_timings;
+
+void IndexWriterEntrypointCalls(benchmark::State& state) {
+  ZoneScoped;
+  using std::chrono::steady_clock;
+
+  const auto& lss = get_lss_no_shrink();
+  const auto& chunks = representative_chunks();
+  const auto ls_id = first_non_empty_series_id(lss);
+
+  auto& timings = index_writer_call_timings.emplace_back();
 
   for ([[maybe_unused]] auto _ : state) {
-    state.PauseTiming();
-    stream.str({});
-    stream.clear();
-    state.ResumeTiming();
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      const auto start = steady_clock::now();
+      writer.write_header(stream);
+      timings.write_header += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
 
     {
-      ZoneScopedN("IndexWriterWriteSymbolsLoop");
+      IndexWriter writer{get_lss_no_shrink()};
+      std::ostringstream stream;
+      const auto start = steady_clock::now();
       writer.write_symbols(stream);
+      timings.write_symbols_no_shrink += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
     }
-    benchmark::DoNotOptimize(stream.view().size());
+
+    {
+      IndexWriter writer{get_lss_fixed_state()};
+      std::ostringstream stream;
+      const auto start = steady_clock::now();
+      writer.write_symbols(stream);
+      timings.write_symbols_fixed_state += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{get_lss_after_shrink()};
+      std::ostringstream stream;
+      const auto start = steady_clock::now();
+      writer.write_symbols(stream);
+      timings.write_symbols_after_shrink += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      prepare_writer_before_series(writer, stream);
+      reset_stream(stream);
+      const auto start = steady_clock::now();
+      writer.write_series(ls_id, chunks, stream);
+      timings.write_next_series_batch += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
+      reset_stream(stream);
+      const auto start = steady_clock::now();
+      writer.write_label_indices(stream);
+      timings.write_label_indices += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
+      reset_stream(stream);
+      writer.write_label_indices(stream);
+      reset_stream(stream);
+      const auto start = steady_clock::now();
+      writer.write_postings(stream, kPostingsBatchSize);
+      timings.write_next_postings_batch += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
+      reset_stream(stream);
+      writer.write_label_indices(stream);
+      reset_stream(stream);
+      const auto start = steady_clock::now();
+      writer.write_label_indices_table(stream);
+      timings.write_label_indices_table += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
+      reset_stream(stream);
+      writer.write_label_indices(stream);
+      write_all_postings(writer, stream);
+      reset_stream(stream);
+      const auto start = steady_clock::now();
+      writer.write_postings_table_offsets(stream);
+      timings.write_postings_table_offsets += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+
+    {
+      IndexWriter writer{lss};
+      std::ostringstream stream;
+      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
+      reset_stream(stream);
+      writer.write_label_indices(stream);
+      write_all_postings(writer, stream);
+      reset_stream(stream);
+      writer.write_label_indices_table(stream);
+      reset_stream(stream);
+      writer.write_postings_table_offsets(stream);
+      reset_stream(stream);
+      const auto start = steady_clock::now();
+      writer.write_toc(stream);
+      timings.write_table_of_contents += steady_clock::now() - start;
+      benchmark::DoNotOptimize(stream.view().size());
+    }
+  }
+}
+
+#define MIN_CALL_TIME(field)                                                                                                               \
+  [](const auto&) {                                                                                                                        \
+    return std::chrono::duration<double>(                                                                                                  \
+               std::ranges::min_element(index_writer_call_timings, [](const auto& a, const auto& b) { return a.field < b.field; })->field) \
+        .count();                                                                                                                          \
   }
 
-  set_symbol_counters(state, symbols_count);
-}
+BENCHMARK(IndexWriterEntrypointCalls)
+    // We explicitly set Iterations(1) for the correct calculation benchmark times
+    ->Iterations(1)
+    ->ComputeStatistics("min_write_header", MIN_CALL_TIME(write_header))
+    ->ComputeStatistics("min_write_symbols_no_shrink", MIN_CALL_TIME(write_symbols_no_shrink))
+    ->ComputeStatistics("min_write_symbols_fixed_state", MIN_CALL_TIME(write_symbols_fixed_state))
+    ->ComputeStatistics("min_write_symbols_after_shrink", MIN_CALL_TIME(write_symbols_after_shrink))
+    ->ComputeStatistics("min_write_next_series_batch", MIN_CALL_TIME(write_next_series_batch))
+    ->ComputeStatistics("min_write_label_indices", MIN_CALL_TIME(write_label_indices))
+    ->ComputeStatistics("min_write_next_postings_batch", MIN_CALL_TIME(write_next_postings_batch))
+    ->ComputeStatistics("min_write_label_indices_table", MIN_CALL_TIME(write_label_indices_table))
+    ->ComputeStatistics("min_write_postings_table_offsets", MIN_CALL_TIME(write_postings_table_offsets))
+    ->ComputeStatistics("min_write_table_of_contents", MIN_CALL_TIME(write_table_of_contents));
 
-void IndexWriterSymbolsNoShrink(benchmark::State& state) {
-  ZoneScopedN("IndexWriterSymbolsNoShrink");
-  run_index_writer_symbols(state, get_lss_no_shrink);
-}
-
-void IndexWriterSymbolsFixedState(benchmark::State& state) {
-  ZoneScopedN("IndexWriterSymbolsFixedState");
-  run_index_writer_symbols(state, get_lss_fixed_state);
-}
-
-void IndexWriterSymbolsAfterShrink(benchmark::State& state) {
-  ZoneScopedN("IndexWriterSymbolsAfterShrink");
-  run_index_writer_symbols(state, get_lss_after_shrink);
-}
+#undef MIN_CALL_TIME
 
 }  // namespace
-
-BENCHMARK(IndexWriterSymbolsNoShrink)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(IndexWriterSymbolsFixedState)->ComputeStatistics("min", benchmark::min_time);
-BENCHMARK(IndexWriterSymbolsAfterShrink)->ComputeStatistics("min", benchmark::min_time);
