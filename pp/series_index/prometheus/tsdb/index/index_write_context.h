@@ -68,15 +68,11 @@ class SymbolIdsCollector {
 
   [[nodiscard]] size_t estimate_count() const {
     const auto view = lss_.data_view();
-    const auto current_symbol_count = view.keys().size() + view.values().size();
-    if (!lss_.shrink_state().is_shrunk()) {
-      // Сurrent-side entries (name symbols + value symbols)
-      return current_symbol_count;
-    }
-    size_t snapshot_symbol_count = 0;
-    lss_.for_each_snapshot_symbol_id([&](uint32_t, uint32_t) { ++snapshot_symbol_count; });
-    // Сurrent-side entries + snapshot-side entries
-    return current_symbol_count + snapshot_symbol_count;
+    // Current-side entries (name symbols + value symbols).
+    size_t count = view.keys().size() + view.values().size();
+    // Snapshot-side entries (a no-op unless the LSS is shrunk).
+    lss_.for_each_snapshot_symbol_id([&](uint32_t, uint32_t) { ++count; });
+    return count;
   }
 
   void collect_current(ExportSymbolIds& symbol_ids) const {

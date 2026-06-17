@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <numeric>
@@ -50,6 +51,8 @@ std::string get_lss_file() {
 }
 
 void mark_all_series_as_added(Lss& lss) {
+  // Safe to call find_or_emplace while iterating: every label set already exists,
+  // so this only marks it as added and never mutates the underlying storage.
   for (const auto& label_set : lss) {
     lss.find_or_emplace(label_set);
   }
@@ -191,6 +194,8 @@ struct IndexWriterCallTimings {
   std::chrono::nanoseconds write_table_of_contents{};
 };
 
+// Shared across benchmark invocations; the timing accumulation and GetGlobalContext
+// access below assume a single-threaded run. Do not add ->Threads(N) without reworking this.
 std::vector<IndexWriterCallTimings> index_writer_call_timings;
 
 void IndexWriterEntrypointCalls(benchmark::State& state) {
@@ -198,6 +203,10 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
   using std::chrono::steady_clock;
 
   const auto& lss = get_lss_no_shrink();
+  if (lss.items_count() == 0) {
+    state.SkipWithError("lss_file is empty or not provided (pass --benchmark_context=lss_file=...)");
+    return;
+  }
   const auto& chunks = representative_chunks();
   const auto ls_id = first_non_empty_series_id(lss);
 
