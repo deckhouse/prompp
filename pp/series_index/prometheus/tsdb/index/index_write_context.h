@@ -142,22 +142,40 @@ class IndexWriteContext {
   }
 
  private:
+  static constexpr int32_t kNoNode = -1;
+
+  // Pool node grouping collected ids that resolve to the same string into a linked list.
+  struct SymbolIdNode {
+    ExportSymbolId id;
+    int32_t next;
+  };
+
   const Lss& lss_;
   // Unique symbols in output order; string_views point into the LSS (valid for its lifetime).
   BareBones::Vector<std::string_view> symbols_;
   SymbolReferencesMap symbol_refs_;
 
   void build_symbol_table(const ExportSymbolIds& symbol_ids) {
-    // Each symbol is resolved exactly once, grouped in a hash map (O(1) insert),
-    // then its keys are sorted once at the end instead of maintaining order per insert.
-    phmap::flat_hash_map<std::string_view, std::vector<ExportSymbolId>> symbols_by_string;
-    symbols_by_string.reserve(symbol_ids.size());
+    // Group the ids that resolve to the same string using intrusive singly-linked lists
+    // over a single pre-allocated pool (exactly one node per collected id). The map keeps
+    // the head index of each list; ids are resolved once and prepended to their list.
+    std::vector<SymbolIdNode> nodes;
+    nodes.reserve(symbol_ids.size());
+    phmap::flat_hash_map<std::string_view, int32_t> heads;
+    heads.reserve(symbol_ids.size());
+
     for (const auto& symbol_id : symbol_ids) {
-      symbols_by_string[resolve_symbol(symbol_id)].emplace_back(symbol_id);
+      const auto node_index = static_cast<int32_t>(nodes.size());
+      auto [it, inserted] = heads.try_emplace(resolve_symbol(symbol_id), node_index);
+      nodes.push_back({.id = symbol_id, .next = inserted ? kNoNode : it->second});
+      if (!inserted) {
+        it->second = node_index;
+      }
     }
 
-    symbols_.reserve(static_cast<uint32_t>(symbols_by_string.size()));
-    for (const auto& [symbol, ids] : symbols_by_string) {
+    // Unique strings come out unordered from the hash map; sort them once at the end.
+    symbols_.reserve(static_cast<uint32_t>(heads.size()));
+    for (const auto& [symbol, head] : heads) {
       symbols_.emplace_back(symbol);
     }
     std::ranges::sort(symbols_);
@@ -165,9 +183,9 @@ class IndexWriteContext {
     symbol_refs_.reserve(symbol_ids.size());
     uint32_t symbol_ref = 0;
     for (const auto symbol : symbols_) {
-      for (const auto& symbol_id : symbols_by_string.find(symbol)->second) {
+      for (auto node = heads.find(symbol)->second; node != kNoNode; node = nodes[node].next) {
         // Same string can be backed by several current and snapshot ids.
-        symbol_refs_.try_emplace(symbol_id, symbol_ref);
+        symbol_refs_.try_emplace(nodes[node].id, symbol_ref);
       }
       ++symbol_ref;
     }
