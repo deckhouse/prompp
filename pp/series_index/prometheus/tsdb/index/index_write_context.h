@@ -70,8 +70,9 @@ class SymbolIdsCollector {
     const auto view = lss_.data_view();
     // Current-side entries (name symbols + value symbols).
     size_t count = view.keys().size() + view.values().size();
-    // Snapshot-side entries (a no-op unless the LSS is shrunk).
-    lss_.for_each_snapshot_symbol_id([&](uint32_t, uint32_t) { ++count; });
+    // Snapshot-side entries (a no-op unless the LSS is shrunk): names once + values.
+    lss_.for_each_snapshot_key_id([&](uint32_t) { ++count; });
+    lss_.for_each_snapshot_value_id([&](uint32_t, uint32_t) { ++count; });
     return count;
   }
 
@@ -86,8 +87,11 @@ class SymbolIdsCollector {
   }
 
   void collect_snapshot(ExportSymbolIds& symbol_ids) const {
-    lss_.for_each_snapshot_symbol_id([&](uint32_t name_id, uint32_t value_id) {
+    // Emit each snapshot name symbol once (iterate keys), not once per value.
+    lss_.for_each_snapshot_key_id([&](uint32_t name_id) {  //
       symbol_ids.emplace_back(SymbolSource::kSnapshot, name_id, kKeyOnlyValueId);
+    });
+    lss_.for_each_snapshot_value_id([&](uint32_t name_id, uint32_t value_id) {  //
       symbol_ids.emplace_back(SymbolSource::kSnapshot, name_id, value_id);
     });
   }
