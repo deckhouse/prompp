@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <limits>
 #include <string_view>
 #include <vector>
@@ -150,6 +151,13 @@ class IndexWriteContext {
     int32_t next;
   };
 
+  // Sortable unique symbol with an inline byte prefix for cache-friendly comparisons.
+  struct SortEntry {
+    uint64_t prefix;
+    std::string_view symbol;
+    int32_t head;
+  };
+
   const Lss& lss_;
   // Unique symbols in output order; string_views point into the LSS (valid for its lifetime).
   BareBones::Vector<std::string_view> symbols_;
@@ -174,21 +182,45 @@ class IndexWriteContext {
     }
 
     // Unique strings come out unordered from the hash map; sort them once at the end.
-    symbols_.reserve(static_cast<uint32_t>(heads.size()));
+    // Each entry caches the first 8 bytes of the string as a big-endian integer, so most
+    // comparisons are resolved by the inline prefix without chasing the string_view into
+    // the scattered LSS memory; only equal prefixes fall back to a full string compare.
+    // The list head is carried along too, which removes the per-symbol hash lookup below.
+    std::vector<SortEntry> sorted;
+    sorted.reserve(heads.size());
     for (const auto& [symbol, head] : heads) {
-      symbols_.emplace_back(symbol);
+      sorted.push_back({.prefix = load_prefix(symbol), .symbol = symbol, .head = head});
     }
-    std::ranges::sort(symbols_);
+    std::ranges::sort(sorted, [](const SortEntry& lhs, const SortEntry& rhs) noexcept {
+      return lhs.prefix != rhs.prefix ? lhs.prefix < rhs.prefix : lhs.symbol < rhs.symbol;
+    });
 
+    symbols_.reserve(static_cast<uint32_t>(heads.size()));
     symbol_refs_.reserve(symbol_ids.size());
     uint32_t symbol_ref = 0;
-    for (const auto symbol : symbols_) {
-      for (auto node = heads.find(symbol)->second; node != kNoNode; node = nodes[node].next) {
+    for (const auto& entry : sorted) {
+      symbols_.emplace_back(entry.symbol);
+      for (auto node = entry.head; node != kNoNode; node = nodes[node].next) {
         // Same string can be backed by several current and snapshot ids.
         symbol_refs_.try_emplace(nodes[node].id, symbol_ref);
       }
       ++symbol_ref;
     }
+  }
+
+  // First up-to-8 bytes of the string as a big-endian integer (zero-padded), so integer
+  // ordering matches byte-lexicographic ordering of the prefix.
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static uint64_t load_prefix(std::string_view symbol) noexcept {
+    if (symbol.size() >= sizeof(uint64_t)) {
+      uint64_t prefix = 0;
+      std::memcpy(&prefix, symbol.data(), sizeof(uint64_t));
+      return __builtin_bswap64(prefix);
+    }
+    uint64_t prefix = 0;
+    for (size_t i = 0; i < symbol.size(); ++i) {
+      prefix |= static_cast<uint64_t>(static_cast<uint8_t>(symbol[i])) << (56U - 8U * i);
+    }
+    return prefix;
   }
 
   [[nodiscard]] SymbolSource symbol_source_for_series(uint32_t ls_id) const noexcept { return lss_.symbol_source_for_series(ls_id); }
