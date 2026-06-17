@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "bare_bones/vector.h"
-#include "parallel_hashmap/btree.h"
 #include "parallel_hashmap/phmap.h"
 #include "prometheus/tsdb/index/types.h"
 #include "series_index/symbol_source.h"
@@ -149,23 +148,28 @@ class IndexWriteContext {
   SymbolReferencesMap symbol_refs_;
 
   void build_symbol_table(const ExportSymbolIds& symbol_ids) {
-    // Each symbol is resolved exactly once (at insertion); the btree yields the
-    // symbols already sorted and deduplicated by string.
-    phmap::btree_map<std::string_view, std::vector<ExportSymbolId>> symbols_by_string;
+    // Each symbol is resolved exactly once, grouped in a hash map (O(1) insert),
+    // then its keys are sorted once at the end instead of maintaining order per insert.
+    phmap::flat_hash_map<std::string_view, std::vector<ExportSymbolId>> symbols_by_string;
+    symbols_by_string.reserve(symbol_ids.size());
     for (const auto& symbol_id : symbol_ids) {
       symbols_by_string[resolve_symbol(symbol_id)].emplace_back(symbol_id);
     }
 
     symbols_.reserve(static_cast<uint32_t>(symbols_by_string.size()));
-    symbol_refs_.reserve(symbol_ids.size());
-
     for (const auto& [symbol, ids] : symbols_by_string) {
-      const auto symbol_ref = static_cast<uint32_t>(symbols_.size());
       symbols_.emplace_back(symbol);
-      for (const auto& symbol_id : ids) {
+    }
+    std::ranges::sort(symbols_);
+
+    symbol_refs_.reserve(symbol_ids.size());
+    uint32_t symbol_ref = 0;
+    for (const auto symbol : symbols_) {
+      for (const auto& symbol_id : symbols_by_string.find(symbol)->second) {
         // Same string can be backed by several current and snapshot ids.
         symbol_refs_.try_emplace(symbol_id, symbol_ref);
       }
+      ++symbol_ref;
     }
   }
 
