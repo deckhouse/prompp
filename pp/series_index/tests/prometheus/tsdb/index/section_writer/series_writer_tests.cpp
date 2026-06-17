@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -12,7 +14,8 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
-using series_index::prometheus::tsdb::index::SeriesReferencesMap;
+using series_index::prometheus::tsdb::index::kUnwrittenSeriesReference;
+using series_index::prometheus::tsdb::index::SeriesReferences;
 using std::operator""sv;
 
 using ChunkMetadataList = std::vector<ChunkMetadata>;
@@ -28,7 +31,7 @@ class SeriesWriterFixture : public testing::Test {
   Stream stream_;
   StreamWriter stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  SeriesReferencesMap series_references_;
+  SeriesReferences series_references_;
   series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
 
   void fill_lss_and_symbols(const LabelViewSetList& label_sets) {
@@ -38,6 +41,9 @@ class SeriesWriterFixture : public testing::Test {
 
     lss_.build_deferred_indexes();
     index_write_context_.rebuild();
+
+    series_references_.resize(lss_.next_item_index());
+    std::ranges::fill(series_references_, kUnwrittenSeriesReference);
   }
 };
 
