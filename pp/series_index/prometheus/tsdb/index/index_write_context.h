@@ -117,8 +117,8 @@ class IndexWriteContext {
   template <class Callback>
   void for_each_symbol(Callback&& callback) const {
     uint32_t symbol_ref = 0;
-    for (const auto& symbol_id : symbols_) {
-      callback(symbol_ref, resolve_symbol(symbol_id));
+    for (const auto symbol : symbols_) {
+      callback(symbol_ref, symbol);
       ++symbol_ref;
     }
   }
@@ -144,7 +144,8 @@ class IndexWriteContext {
 
  private:
   const Lss& lss_;
-  ExportSymbolIds symbols_;
+  // Unique symbols in output order; string_views point into the LSS (valid for its lifetime).
+  BareBones::Vector<std::string_view> symbols_;
   SymbolReferencesMap symbol_refs_;
 
   void build_symbol_table(const ExportSymbolIds& symbol_ids) {
@@ -160,7 +161,7 @@ class IndexWriteContext {
 
     for (const auto& [symbol, ids] : symbols_by_string) {
       const auto symbol_ref = static_cast<uint32_t>(symbols_.size());
-      symbols_.emplace_back(ids.front());
+      symbols_.emplace_back(symbol);
       for (const auto& symbol_id : ids) {
         // Same string can be backed by several current and snapshot ids.
         symbol_refs_.try_emplace(symbol_id, symbol_ref);
