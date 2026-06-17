@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <vector>
 
 #include "prometheus/tsdb/index/toc_writer.h"
@@ -24,9 +23,7 @@ class IndexWriter {
 
   explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {
     // Single up-front allocation: the index is dense over [0, next_item_index()).
-    // BareBones::Vector::resize does not value-initialize trivial types, so zero explicitly.
-    series_references_.resize(lss_.next_item_index());
-    std::ranges::fill(series_references_, kUnwrittenSeriesReference);
+    series_references_.resize(lss_.next_item_index(), kUnwrittenSeriesReference);
   }
 
   PROMPP_ALWAYS_INLINE void write_header(Stream& stream) {

@@ -1,7 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
-
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -51,8 +49,7 @@ class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> 
     lss_.build_deferred_indexes();
     index_write_context_.rebuild();
 
-    series_references_.resize(lss_.next_item_index());
-    std::ranges::fill(series_references_, kUnwrittenSeriesReference);
+    series_references_.resize(lss_.next_item_index(), kUnwrittenSeriesReference);
 
     std::ostringstream stream;
     StreamWriter<decltype(stream_)> stream_writer{&stream};
