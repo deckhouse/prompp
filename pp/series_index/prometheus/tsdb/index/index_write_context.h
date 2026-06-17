@@ -4,8 +4,10 @@
 #include <cassert>
 #include <limits>
 #include <string_view>
+#include <vector>
 
 #include "bare_bones/vector.h"
+#include "parallel_hashmap/btree.h"
 #include "parallel_hashmap/phmap.h"
 #include "prometheus/tsdb/index/types.h"
 #include "series_index/symbol_source.h"
@@ -145,24 +147,24 @@ class IndexWriteContext {
   ExportSymbolIds symbols_;
   SymbolReferencesMap symbol_refs_;
 
-  void build_symbol_table(ExportSymbolIds& symbol_ids) {
-    // Sort by resolved string so duplicate ids end up adjacent.
-    std::ranges::sort(symbol_ids, [this](const auto& lhs, const auto& rhs) { return resolve_symbol(lhs) < resolve_symbol(rhs); });
-    symbols_.reserve(symbol_ids.size());
+  void build_symbol_table(const ExportSymbolIds& symbol_ids) {
+    // Each symbol is resolved exactly once (at insertion); the btree yields the
+    // symbols already sorted and deduplicated by string.
+    phmap::btree_map<std::string_view, std::vector<ExportSymbolId>> symbols_by_string;
+    for (const auto& symbol_id : symbol_ids) {
+      symbols_by_string[resolve_symbol(symbol_id)].emplace_back(symbol_id);
+    }
+
+    symbols_.reserve(static_cast<uint32_t>(symbols_by_string.size()));
     symbol_refs_.reserve(symbol_ids.size());
 
-    for (auto it = symbol_ids.begin(); it != symbol_ids.end();) {
-      const auto symbol = resolve_symbol(*it);
+    for (const auto& [symbol, ids] : symbols_by_string) {
       const auto symbol_ref = static_cast<uint32_t>(symbols_.size());
-      symbols_.emplace_back(*it);
-      symbol_refs_.try_emplace(*it, symbol_ref);
-
-      auto next = it;
-      for (++next; next != symbol_ids.end() && symbol == resolve_symbol(*next); ++next) {
-        // Same string can be backed by current and snapshot ids.
-        symbol_refs_.try_emplace(*next, symbol_ref);
+      symbols_.emplace_back(ids.front());
+      for (const auto& symbol_id : ids) {
+        // Same string can be backed by several current and snapshot ids.
+        symbol_refs_.try_emplace(symbol_id, symbol_ref);
       }
-      it = next;
     }
   }
 
