@@ -31,7 +31,7 @@ using LssCopier =
 using ChunkMetadata = series_index::prometheus::tsdb::index::ChunkMetadata;
 
 // Matches go/storage/block/block.go WriteRestTo postings batch size.
-constexpr uint32_t kPostingsBatchSize = 1U << 20U;
+constexpr uint32_t kPostingsBatchSize = 1U << 16U;
 
 struct ShrunkState {
   Lss lss;
