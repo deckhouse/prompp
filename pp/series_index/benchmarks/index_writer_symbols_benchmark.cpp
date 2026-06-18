@@ -173,6 +173,25 @@ void prepare_writer_before_label_indices(IndexWriter& writer, std::ostringstream
   writer.write_series(ls_id, chunks, stream);
 }
 
+void write_all_non_empty_series(IndexWriter& writer, std::ostringstream& stream, const Lss& lss, const std::vector<ChunkMetadata>& chunks) {
+  for (uint32_t id = 0; id < lss.next_item_index(); ++id) {
+    if (lss[id].size() != 0) {
+      writer.write_series(id, chunks, stream);
+    }
+  }
+}
+
+// Postings (and the postings offset table / TOC) are only representative when every
+// series is written: with a single series the output barely grows, batches never fill
+// and one call walks the whole index. Production writes the full block before postings.
+void prepare_writer_before_postings(IndexWriter& writer, std::ostringstream& stream, const Lss& lss, const std::vector<ChunkMetadata>& chunks) {
+  prepare_writer_before_series(writer, stream);
+  reset_stream(stream);
+  write_all_non_empty_series(writer, stream, lss, chunks);
+  reset_stream(stream);
+  writer.write_label_indices(stream);
+}
+
 void write_all_postings(IndexWriter& writer, std::ostringstream& stream) {
   do {
     reset_stream(stream);
@@ -274,9 +293,11 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
     {
       IndexWriter writer{lss};
       std::ostringstream stream;
-      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
+      prepare_writer_before_postings(writer, stream, lss, chunks);
       reset_stream(stream);
-      writer.write_label_indices(stream);
+      // The first batch always emits the all-series posting (a single, unsplittable posting
+      // over every series); skip it untimed so the sample reflects a typical steady-state batch.
+      writer.write_postings(stream, kPostingsBatchSize);
       reset_stream(stream);
       const auto start = steady_clock::now();
       writer.write_postings(stream, kPostingsBatchSize);
@@ -300,9 +321,7 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
     {
       IndexWriter writer{lss};
       std::ostringstream stream;
-      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
-      reset_stream(stream);
-      writer.write_label_indices(stream);
+      prepare_writer_before_postings(writer, stream, lss, chunks);
       write_all_postings(writer, stream);
       reset_stream(stream);
       const auto start = steady_clock::now();
@@ -314,9 +333,7 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
     {
       IndexWriter writer{lss};
       std::ostringstream stream;
-      prepare_writer_before_label_indices(writer, stream, ls_id, chunks);
-      reset_stream(stream);
-      writer.write_label_indices(stream);
+      prepare_writer_before_postings(writer, stream, lss, chunks);
       write_all_postings(writer, stream);
       reset_stream(stream);
       writer.write_label_indices_table(stream);
