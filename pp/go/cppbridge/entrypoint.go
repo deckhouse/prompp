@@ -2705,18 +2705,23 @@ func indexWriterWriteSymbols(writer uintptr, data []byte) []byte {
 		writer uintptr
 	}{writer}
 
-	res := struct {
-		data []byte
-	}{data}
+	// write_symbols is the longest single C call on the index-writing path (multiple ms,
+	// tens of ms in the shrunk state). fastcgo runs on the system stack without releasing
+	// the P, which stalls the Go scheduler and GC for the whole duration; a regular cgo
+	// call parks the goroutine in _Gsyscall and frees the P, and its ~tens-of-ns overhead
+	// is negligible here. res mirrors the []byte header but with a uintptr data field, so
+	// the struct carries no Go pointer type and stays clear of the vet/cgocheck
+	// "Go pointer to C" guard. The buffer is always nil or prompp-allocated, never Go heap.
+	res := *(*struct {
+		data uintptr
+		len  int
+		cap  int
+	})(unsafe.Pointer(&data))
 
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_symbols,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
+	C.prompp_index_writer_write_symbols(unsafe.Pointer(&args), unsafe.Pointer(&res))
 
-	return res.data
+	return *(*[]byte)(unsafe.Pointer(&res))
 }
 
 func indexWriterWriteNextSeriesBatch(writer uintptr, ls_id uint32, chunks_meta []ChunkMetadata, data []byte) []byte {
