@@ -2306,6 +2306,10 @@ func readPromPPFeatures(logger log.Logger) {
 
 			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
 
+		case "enable_instant_query_feature":
+			querier.InstantQueryFeature = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is enabled.")
+
 		case "shrink_shard_copier":
 			pp_storage.ShrinkShardCopier = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is enabled.")

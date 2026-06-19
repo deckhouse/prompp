@@ -10,7 +10,7 @@ FROM debian:trixie-slim
 # fixed in binutils 2.36 (we ship 2.44), but Go itself only learned to detect
 # that and fall back to bfd in CL 740480; the backports landed in
 # release-branch.go1.{25,26} on 2026-04-17, *after* the cut of go1.26.2
-# (2026-04-15), so the fix will first ship in Go 1.25.10 / Go 1.26.3.
+# (2026-04-15), so the fix first shipped in Go 1.25.10 / Go 1.26.3.
 # Once GO_VERSION below is bumped to >=1.25.10 or >=1.26.3, this package can
 # be dropped (see https://github.com/golang/go/issues/78405).
 RUN set -eux; \
@@ -59,11 +59,11 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-# TODO: when bumping GO_VERSION to >=1.25.10 or >=1.26.3, drop the
+# TODO: now that GO_VERSION is >=1.25.10 and >=1.26.3, drop the
 # `binutils-gold` package above — those Go releases no longer require gold on
 # linux/arm64 when GNU ld is 2.36+. See the comment near `binutils-gold` and
 # https://github.com/golang/go/issues/22040 (issue #78405 for the 1.25 backport).
-ARG GO_VERSION=1.26.3
+ARG GO_VERSION=1.26.4
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"
