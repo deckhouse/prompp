@@ -2,6 +2,7 @@ package cppbridge
 
 import (
 	"runtime"
+	"unsafe"
 )
 
 type ChunkMetadata struct {
@@ -11,59 +12,67 @@ type ChunkMetadata struct {
 }
 
 type IndexWriter struct {
-	writer uintptr
+	writer unsafe.Pointer
+	buffer unsafe.Pointer
 	lss    *LabelSetStorage
-	data   []byte
 }
 
 func NewIndexWriter(lss *LabelSetStorage) *IndexWriter {
+	w, buffer := indexWriterCtor(lss.Pointer())
 	writer := &IndexWriter{
-		writer: indexWriterCtor(lss.Pointer()),
+		writer: w,
+		buffer: buffer,
 		lss:    lss,
 	}
 	runtime.SetFinalizer(writer, func(writer *IndexWriter) {
-		freeBytes(writer.data)
 		indexWriterDtor(writer.writer)
 	})
 	return writer
 }
 
+// bytes reads the writer's internal output buffer (a C-side []byte header) filled by the last
+// write_* call. The slice aliases prompp-owned memory and stays valid only until the next
+// write_* call or until the writer is finalized, so callers must consume it before then.
+func (writer *IndexWriter) bytes() []byte {
+	return *(*[]byte)(writer.buffer)
+}
+
 func (writer *IndexWriter) WriteHeader() []byte {
-	writer.data = indexWriterWriteHeader(writer.writer, writer.data)
-	return writer.data
+	indexWriterWriteHeader(writer.writer)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WriteSymbols() []byte {
-	writer.data = indexWriterWriteSymbols(writer.writer, writer.data)
-	return writer.data
+	indexWriterWriteSymbols(writer.writer)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WriteSeries(ls_id uint32, chunks_meta []ChunkMetadata) []byte {
-	writer.data = indexWriterWriteNextSeriesBatch(writer.writer, ls_id, chunks_meta, writer.data)
-	return writer.data
+	indexWriterWriteNextSeriesBatch(writer.writer, ls_id, chunks_meta)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WriteLabelIndices() []byte {
-	writer.data = indexWriterWriteLabelIndices(writer.writer, writer.data)
-	return writer.data
+	indexWriterWriteLabelIndices(writer.writer)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WritePostings() []byte {
-	writer.data = indexWriterWritePostings(writer.writer, writer.data)
-	return writer.data
+	indexWriterWritePostings(writer.writer)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WriteLabelIndicesTable() []byte {
-	writer.data = indexWriterWriteLabelIndicesTable(writer.writer, writer.data)
-	return writer.data
+	indexWriterWriteLabelIndicesTable(writer.writer)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WritePostingsTableOffsets() []byte {
-	writer.data = indexWriterWritePostingsTableOffsets(writer.writer, writer.data)
-	return writer.data
+	indexWriterWritePostingsTableOffsets(writer.writer)
+	return writer.bytes()
 }
 
 func (writer *IndexWriter) WriteTableOfContents() []byte {
-	writer.data = indexWriterWriteTableOfContents(writer.writer, writer.data)
-	return writer.data
+	indexWriterWriteTableOfContents(writer.writer)
+	return writer.bytes()
 }

@@ -2650,13 +2650,17 @@ func seriesDataUnloadedDataLoaderDtor(loader uintptr) {
 	)
 }
 
-func indexWriterCtor(lss uintptr) uintptr {
+// indexWriterCtor constructs the writer and returns both the writer pointer and a stable pointer
+// to its internal output buffer (a Go []byte header). Every write_* call fills that buffer in
+// place; the result is read back from this pointer, so no buffer is threaded through cgo.
+func indexWriterCtor(lss uintptr) (writer, buffer unsafe.Pointer) {
 	args := struct {
 		lss uintptr
 	}{lss}
 
 	var res struct {
-		writer uintptr
+		writer unsafe.Pointer
+		buffer unsafe.Pointer
 	}
 
 	testGC()
@@ -2666,12 +2670,12 @@ func indexWriterCtor(lss uintptr) uintptr {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.writer
+	return res.writer, res.buffer
 }
 
-func indexWriterDtor(writer uintptr) {
+func indexWriterDtor(writer unsafe.Pointer) {
 	args := struct {
-		writer uintptr
+		writer unsafe.Pointer
 	}{writer}
 
 	testGC()
@@ -2681,166 +2685,83 @@ func indexWriterDtor(writer uintptr) {
 	)
 }
 
-func indexWriterWriteHeader(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteHeader(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_header,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteSymbols(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
+func indexWriterWriteSymbols(writer unsafe.Pointer) {
 	// write_symbols is the longest single C call on the index-writing path (multiple ms,
 	// tens of ms in the shrunk state). fastcgo runs on the system stack without releasing
 	// the P, which stalls the Go scheduler and GC for the whole duration; a regular cgo
 	// call parks the goroutine in _Gsyscall and frees the P, and its ~tens-of-ns overhead
-	// is negligible here. res mirrors the []byte header but with a uintptr data field, so
-	// the struct carries no Go pointer type and stays clear of the vet/cgocheck
-	// "Go pointer to C" guard. The buffer is always nil or prompp-allocated, never Go heap.
-	res := *(*struct {
-		data uintptr
-		len  int
-		cap  int
-	})(unsafe.Pointer(&data))
-
+	// is negligible here. Only the writer pointer crosses the boundary, by value: it is a
+	// stable prompp-arena address, so no goroutine stack pointer is handed to C and a
+	// concurrent GC stack move during the call is harmless. The result is read from the
+	// writer's internal buffer.
 	testGC()
-	C.prompp_index_writer_write_symbols(unsafe.Pointer(&args), unsafe.Pointer(&res))
-
-	return *(*[]byte)(unsafe.Pointer(&res))
+	C.prompp_index_writer_write_symbols(writer)
 }
 
-func indexWriterWriteNextSeriesBatch(writer uintptr, ls_id uint32, chunks_meta []ChunkMetadata, data []byte) []byte {
+func indexWriterWriteNextSeriesBatch(writer unsafe.Pointer, ls_id uint32, chunks_meta []ChunkMetadata) {
 	args := struct {
-		writer      uintptr
+		writer      unsafe.Pointer
 		chunks_meta []ChunkMetadata
 		ls_id       uint32
 	}{writer, chunks_meta, ls_id}
 
-	res := struct {
-		data []byte
-	}{data}
-
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_next_series_batch,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteLabelIndices(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteLabelIndices(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_label_indices,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWritePostings(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
+func indexWriterWritePostings(writer unsafe.Pointer) {
 	// write_postings is a long single C call (it walks the whole trie index and the
 	// all-series posting). Like write_symbols, it uses a regular cgo call so the goroutine
 	// parks in _Gsyscall and frees the P for the duration instead of fastcgo blocking the
-	// scheduler. res mirrors the []byte header with a uintptr data field so the struct
-	// carries no Go pointer type; the buffer is always nil or prompp-allocated.
-	res := *(*struct {
-		data uintptr
-		len  int
-		cap  int
-	})(unsafe.Pointer(&data))
-
+	// scheduler. Only the writer pointer crosses the boundary, by value: it is a stable
+	// prompp-arena address, so no goroutine stack pointer is handed to C and a concurrent
+	// GC stack move during the call is harmless. The result is read from the writer's
+	// internal buffer.
 	testGC()
-	C.prompp_index_writer_write_postings(unsafe.Pointer(&args), unsafe.Pointer(&res))
-
-	return *(*[]byte)(unsafe.Pointer(&res))
+	C.prompp_index_writer_write_postings(writer)
 }
 
-func indexWriterWriteLabelIndicesTable(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteLabelIndicesTable(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_label_indices_table,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWritePostingsTableOffsets(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWritePostingsTableOffsets(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_postings_table_offsets,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteTableOfContents(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteTableOfContents(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_table_of_contents,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
 func freeHeadStatus(status *HeadStatus) {
