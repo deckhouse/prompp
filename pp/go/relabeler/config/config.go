@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 

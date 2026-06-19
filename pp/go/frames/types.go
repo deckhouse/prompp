@@ -14,7 +14,7 @@ func (tf TypeFrame) Validate() error {
 	return nil
 }
 
-// Frame types
+// Frame types.
 const (
 	UnknownType TypeFrame = iota
 	AuthType

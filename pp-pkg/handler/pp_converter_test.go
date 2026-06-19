@@ -81,7 +81,7 @@ func (s *PPConverterSuite) TestEmptyLabelsName() {
 
 	actual := ppconverter.TimeSeries().TimeSeries()
 
-	s.Require().Len(actual, 0)
+	s.Require().Empty(actual)
 }
 
 func (s *PPConverterSuite) TestEmptyLabelsValue() {
@@ -92,7 +92,7 @@ func (s *PPConverterSuite) TestEmptyLabelsValue() {
 
 	actual := ppconverter.TimeSeries().TimeSeries()
 
-	s.Require().Len(actual, 0)
+	s.Require().Empty(actual)
 }
 
 func createExportRequest(

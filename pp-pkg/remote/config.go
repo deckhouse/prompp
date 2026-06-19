@@ -1,13 +1,14 @@
 package remote
 
 import (
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // md5 is used only to fingerprint configs, not for security
 	"encoding/hex"
 	"time"
 
 	"gopkg.in/yaml.v2"
 
 	"github.com/prometheus/common/model"
+
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"
 )
@@ -53,6 +54,6 @@ func toHash(data interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	hash := md5.Sum(bytes)
+	hash := md5.Sum(bytes) //nolint:gosec // md5 is used only to fingerprint configs, not for security
 	return hex.EncodeToString(hash[:]), nil
 }

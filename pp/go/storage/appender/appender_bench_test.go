@@ -114,7 +114,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 	}
 }
 
-// services.CFViaRange
+// services.CFViaRange.
 func commitAndFlush(*benchHead) error {
 	return nil
 }

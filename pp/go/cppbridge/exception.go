@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// UnknownExceptionCode is not handled error
+// UnknownExceptionCode is not handled error.
 const UnknownExceptionCode uint64 = 0x0000000000000000
 
-// GetExceptionCodeFromError returns code from error chain if any exists
+// GetExceptionCodeFromError returns code from error chain if any exists.
 func GetExceptionCodeFromError(err error) uint64 {
 	var code interface {
 		Code() uint64
@@ -22,7 +22,7 @@ func GetExceptionCodeFromError(err error) uint64 {
 	return 0
 }
 
-// IsExceptionCodeFromErrorAnyOf returns true if error code equal any in list
+// IsExceptionCodeFromErrorAnyOf returns true if error code equal any in list.
 func IsExceptionCodeFromErrorAnyOf(err error, codes ...uint64) bool {
 	code := GetExceptionCodeFromError(err)
 	for i := range codes {
@@ -33,7 +33,7 @@ func IsExceptionCodeFromErrorAnyOf(err error, codes ...uint64) bool {
 	return false
 }
 
-// IsRemoteWriteParsingError returns true if error throwed on parsing invalid protobuf
+// IsRemoteWriteParsingError returns true if error throwed on parsing invalid protobuf.
 func IsRemoteWriteParsingError(err error) bool {
 	//revive:disable:add-constant this is already constants
 	return IsExceptionCodeFromErrorAnyOf(err,
@@ -47,7 +47,7 @@ func IsRemoteWriteParsingError(err error) bool {
 	//revive:enable
 }
 
-// IsRemoteWriteLimitsExceedsError returns true if limits exceeds
+// IsRemoteWriteLimitsExceedsError returns true if limits exceeds.
 func IsRemoteWriteLimitsExceedsError(err error) bool {
 	//revive:disable:add-constant this is already constants
 	return IsExceptionCodeFromErrorAnyOf(err,
@@ -60,7 +60,7 @@ func IsRemoteWriteLimitsExceedsError(err error) bool {
 	//revive:enable
 }
 
-// Exception container for errors from core
+// Exception container for errors from core.
 type Exception struct {
 	code uint64
 	msg  string
@@ -89,22 +89,22 @@ func handleException(b []byte) error {
 	}
 }
 
-// Error implements error
+// Error implements error.
 func (err *Exception) Error() string {
 	return err.msg
 }
 
-// Code return uniq code to locate error
+// Code return uniq code to locate error.
 func (err *Exception) Code() uint64 {
 	return err.code
 }
 
-// Stacktrace return stacktrace to throw instruction
+// Stacktrace return stacktrace to throw instruction.
 func (err *Exception) Stacktrace() string {
 	return err.st
 }
 
-// Format implements fmt.Formatter interface
+// Format implements fmt.Formatter interface.
 func (err *Exception) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':

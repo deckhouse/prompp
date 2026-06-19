@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/oklog/ulid"
-	"github.com/prometheus/prometheus/tsdb"
 	"github.com/stretchr/testify/require"
+
+	"github.com/prometheus/prometheus/tsdb"
 )
 
 func TestCompactorCompactBlocksUsesPlanAndSource(t *testing.T) {

@@ -87,7 +87,6 @@ func ExampleTCPReader() {
 			} else {
 				handleStream(ctx, msg, tcpReader)
 			}
-
 		}(conn)
 	}
 }

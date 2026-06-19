@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/gogo/protobuf/proto"
+
 	"github.com/prometheus/prometheus/pp/go/frames"
 )
 
@@ -72,7 +73,7 @@ func (s DecodedSegmentStats) LatestBlockSample() int64 {
 	return s.latestBlockSample
 }
 
-// ProtobufContent - decoded to RemoteWrite protobuf segment
+// ProtobufContent - decoded to RemoteWrite protobuf segment.
 type ProtobufContent interface {
 	frames.WritePayload
 	CreatedAt() int64
@@ -292,7 +293,7 @@ func (s OutputDecoderStats) SampleCount() uint32 {
 	return s.sampleCount
 }
 
-// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList
+// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList.
 type SegmentSamplesStorageList struct {
 	storages []CppSegmentSamplesStorage
 }

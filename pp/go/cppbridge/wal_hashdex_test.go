@@ -9,10 +9,11 @@ import (
 	"github.com/go-faker/faker/v4"
 	"github.com/go-faker/faker/v4/pkg/options"
 	"github.com/golang/snappy"
-	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/prompb"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames/framestest"
@@ -132,7 +133,7 @@ func (s *HashdexSuite) TestCppInvalidDataForHashdex() {
 	invalidPbData := []byte("1111")
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, invalidPbData), hlimits)
-	s.Error(err)
+	s.Require().Error(err)
 	s.T().Logf("Got an error (it's OK): %s", err.Error())
 	_ = h
 }
@@ -144,7 +145,7 @@ func (s *HashdexSuite) TestHashdexWithHardLimitsOnLabelNameLength() {
 	data := s.makeData(1)
 	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), limits)
 
-	s.Error(err)
+	s.Require().Error(err)
 	s.T().Logf("Got an error (it's OK): %s", err.Error())
 	_ = h
 }
@@ -156,7 +157,7 @@ func (s *HashdexSuite) TestHashdexWithHardLimitsOnLabelValueLength() {
 	data := s.makeData(1)
 	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), limits)
 
-	s.Error(err)
+	s.Require().Error(err)
 	s.T().Logf("Got an error (it's OK): %s", err.Error())
 	_ = h
 }
@@ -168,7 +169,7 @@ func (s *HashdexSuite) TestHashdexWithHardLimitsOnLabelsInTimeseries() {
 	data := s.makeData(1)
 	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), limits)
 
-	s.Error(err)
+	s.Require().Error(err)
 	s.T().Logf("Got an error (it's OK): %s", err.Error())
 	_ = h
 }
@@ -180,7 +181,7 @@ func (s *HashdexSuite) TestHashdexWithVeryHardLimitsOnTimeseries() {
 	data := s.makeDataWithTwoTimeseries()
 	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), limits)
 
-	s.Error(err)
+	s.Require().Error(err)
 	s.T().Logf("Got an error (it's OK): %s", err.Error())
 	_ = h
 }
@@ -402,8 +403,8 @@ func (s *GoModelHashdexTestSuite) TestHashdexLabels() {
 
 		hdx, err := cppbridge.NewWALGoModelHashdex(limits, []model.TimeSeries{ts})
 		s.Require().NoError(err)
-		require.Equal(s.T(), cluster, hdx.Cluster())
-		require.Equal(s.T(), replica, hdx.Replica())
+		s.Require().Equal(cluster, hdx.Cluster())
+		s.Require().Equal(replica, hdx.Replica())
 	}
 
 	// max label name size exceeded

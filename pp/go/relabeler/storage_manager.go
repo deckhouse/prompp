@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -430,7 +431,7 @@ func (sm *StorageManager) FileExist() (bool, error) {
 	return sm.storage.FileExist()
 }
 
-// Rename file
+// Rename file.
 func (sm *StorageManager) Rename(name string) error {
 	return sm.storage.Rename(name)
 }
@@ -440,7 +441,7 @@ func (sm *StorageManager) IntermediateRename(name string) error {
 	return sm.storage.IntermediateRename(name)
 }
 
-// GetIntermediateName returns true with file name if file was intermediate renamed
+// GetIntermediateName returns true with file name if file was intermediate renamed.
 func (sm *StorageManager) GetIntermediateName() (string, bool) {
 	return sm.storage.GetIntermediateName()
 }
@@ -532,7 +533,7 @@ func (rjs *Rejects) Add(nameID, segment uint32, shardID uint16) {
 	)
 }
 
-// AckStatus keeps destinations list with last acked segments numbers per shard
+// AckStatus keeps destinations list with last acked segments numbers per shard.
 type AckStatus struct {
 	names   *frames.DestinationsNames
 	status  frames.Statuses
@@ -540,7 +541,7 @@ type AckStatus struct {
 	rwmx    *sync.RWMutex
 }
 
-// NewAckStatus is a constructor
+// NewAckStatus is a constructor.
 func NewAckStatus(destinations []string, shardsNumberPower uint8) *AckStatus {
 	dn := frames.NewDestinationsNames(destinations...)
 	shardsNumber := 1 << shardsNumberPower
@@ -590,12 +591,12 @@ func NewAckStatusWithDNames(dnames *frames.DestinationsNames, shardsNumberPower 
 	}
 }
 
-// Destinations returns number of destinations
+// Destinations returns number of destinations.
 func (as *AckStatus) Destinations() int {
 	return as.names.Len()
 }
 
-// Shards returns number of shards
+// Shards returns number of shards.
 func (as *AckStatus) Shards() int {
 	if as.names.Len() == 0 { // The probability is extremely low.
 		return 0
@@ -604,7 +605,7 @@ func (as *AckStatus) Shards() int {
 	return len(as.status) / as.names.Len()
 }
 
-// Ack increment status by destination and shard if segment is next for current value
+// Ack increment status by destination and shard if segment is next for current value.
 func (as *AckStatus) Ack(key cppbridge.SegmentKey, dest string) {
 	id := as.names.StringToID(dest)
 	if id == frames.NotFoundName {
@@ -644,7 +645,7 @@ func (as *AckStatus) Reject(segKey cppbridge.SegmentKey, dest string) {
 	as.rwmx.RUnlock()
 }
 
-// Index returns destination index by name
+// Index returns destination index by name.
 func (as *AckStatus) Index(dest string) (int, bool) {
 	id := as.names.StringToID(dest)
 	if id == frames.NotFoundName {
@@ -654,7 +655,7 @@ func (as *AckStatus) Index(dest string) (int, bool) {
 	return int(id), true
 }
 
-// Last return last ack segment by shard and destination
+// Last return last ack segment by shard and destination.
 func (as *AckStatus) Last(shardID uint16, dest string) uint32 {
 	id := as.names.StringToID(dest)
 	if id == frames.NotFoundName {
@@ -664,7 +665,7 @@ func (as *AckStatus) Last(shardID uint16, dest string) uint32 {
 	return atomic.LoadUint32(&as.status[id*int32(as.Shards())+int32(shardID)])
 }
 
-// IsAck returns true if segment ack by all destinations
+// IsAck returns true if segment ack by all destinations.
 func (as *AckStatus) IsAck(key cppbridge.SegmentKey) bool {
 	for id := 0; id < as.Destinations(); id++ {
 		if atomic.LoadUint32(&as.status[id*as.Shards()+int(key.ShardID)])+1 <= key.Segment {

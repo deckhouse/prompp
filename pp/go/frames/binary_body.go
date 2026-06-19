@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-// SegmentInfoSize = sum 2(ShardID=uint16)+4(SegmentID=uint32)
+// SegmentInfoSize = sum 2(ShardID=uint16)+4(SegmentID=uint32).
 const SegmentInfoSize int = 6
 
 // BinaryBody - unsent segment for save refill.
@@ -77,7 +77,7 @@ func NewBinaryBodyV1Empty() *BinaryBodyV1 {
 	return new(BinaryBodyV1)
 }
 
-// Bytes returns data as is
+// Bytes returns data as is.
 func (sb *BinaryBodyV1) Bytes() []byte {
 	return sb.data
 }
@@ -95,7 +95,7 @@ func (sb *BinaryBodyV1) ReadFrom(ctx context.Context, r io.Reader, size int) err
 	return nil
 }
 
-// Size - get size body
+// Size - get size body.
 func (sb *BinaryBodyV1) Size() int64 {
 	return int64(len(sb.data))
 }
@@ -116,8 +116,10 @@ type BinaryBodyV2 struct {
 	body *BinaryBodyV1
 }
 
-var _ WritePayload = (*BinaryBodyV2)(nil)
-var _ BinaryBody = (*BinaryBodyV2)(nil)
+var (
+	_ WritePayload = (*BinaryBodyV2)(nil)
+	_ BinaryBody   = (*BinaryBodyV2)(nil)
+)
 
 // ReadBinaryBodyV2 - read body to BinaryBodyV2 with Reader.
 func ReadBinaryBodyV2(ctx context.Context, r io.Reader, size int) (*BinaryBodyV2, error) {

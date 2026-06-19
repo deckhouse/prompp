@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/go-faker/faker/v4"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
@@ -13,7 +15,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer/mock"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/stretchr/testify/suite"
 )
 
 type WalReaderSuite struct {

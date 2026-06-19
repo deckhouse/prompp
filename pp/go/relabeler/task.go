@@ -67,7 +67,7 @@ func NewReadOnlyGenericTask(shardFn ShardFn) *GenericTask {
 	return t
 }
 
-// SetShardsNumber set shards number
+// SetShardsNumber set shards number.
 func (t *GenericTask) SetShardsNumber(number uint16) {
 	t.errs = make([]error, number)
 	t.wg.Add(int(number))

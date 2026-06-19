@@ -32,6 +32,8 @@ type CompactorOptions struct {
 
 // BlockSource provides the compactor with the currently loaded blocks.
 // It is implemented by Manager.
+//
+//nolint:revive // BlockSource is intentionally descriptive despite the block package prefix.
 type BlockSource interface {
 	// Blocks returns a snapshot of the currently loaded blocks (the open
 	// argument for Compact).

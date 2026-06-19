@@ -5,6 +5,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -13,7 +15,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/require"
 )
 
 func iterateSeriesSet(seriesSet storage.SeriesSet) {
@@ -59,8 +60,8 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 		MatcherType: model.MatcherTypeExactMatch,
 	}
 
-	var start int64 = 0
-	var end = int64(size)
+	var start int64
+	end := int64(size)
 	lss := shard.NewLSS()
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)

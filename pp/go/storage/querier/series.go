@@ -59,7 +59,7 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 
 // At returns the current timestamp/value pair if the value is a float.
 //
-//nolint:gocritic // unnamedResult not need
+
 func (it *ChunkIterator) At() (int64, float64) {
 	return it.chunkIterator.Timestamp, it.chunkIterator.Value
 }
@@ -173,8 +173,7 @@ type SeriesSet struct {
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	serializedData   *cppbridge.DataStorageSerializedData
 
-	lastIndexFromLSSQueryResult int
-	series                      []Series
+	series []Series
 }
 
 func NewSeriesSet(

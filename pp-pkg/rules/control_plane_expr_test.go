@@ -22,8 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/prometheus/prometheus/promql/promqltest"
 )
 
 const cpmExpr = `max by (node) (kube_node_role{role="master"} unless kube_node_role{role="master"}` +

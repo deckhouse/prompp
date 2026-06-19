@@ -136,7 +136,7 @@ func NewInstantSeriesChunkIterator(t int64, v float64) *InstantSeriesChunkIterat
 
 // At returns the current timestamp/value pair if the value is a float.
 //
-//nolint:gocritic // unnamedResult not need
+
 func (i *InstantSeriesChunkIterator) At() (int64, float64) {
 	return i.t, i.v
 }

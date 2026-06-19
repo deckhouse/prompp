@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/stretchr/testify/suite"
 )
 
 // dataTest - test data.
@@ -24,7 +25,7 @@ func newDataTest(data []byte) *dataTest {
 	}
 }
 
-// Size returns count of bytes in data
+// Size returns count of bytes in data.
 func (dt *dataTest) Size() int64 {
 	return int64(len(dt.data))
 }
@@ -33,7 +34,7 @@ func (dt *dataTest) CRC32() uint32 {
 	return crc32.ChecksumIEEE(dt.data)
 }
 
-// WriteTo implements io.WriterTo interface
+// WriteTo implements io.WriterTo interface.
 func (dt *dataTest) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(dt.data)
 	return int64(n), err

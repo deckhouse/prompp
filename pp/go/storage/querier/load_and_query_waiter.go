@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	// dsLoadAndQuerySeriesData
+	// dsLoadAndQuerySeriesData.
 	dsLoadAndQuerySeriesData = "data_storage_load_and_query_series_data"
 )
 

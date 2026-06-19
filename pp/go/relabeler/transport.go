@@ -17,10 +17,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/net/websocket"
+
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/transport"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"golang.org/x/net/websocket"
 )
 
 // Dialer used for connect to backend
@@ -39,11 +40,7 @@ type Dialer interface {
 	ConnDialer() ConnDialer
 }
 
-// Transport is a destination connection interface
-//
-// We suppose that Transport is full-initiated:
-// - authorized
-// - setted timeouts
+// Transport sends frames to a remote endpoint using configured timeouts.
 type Transport interface {
 	Send(context.Context, frames.FrameWriter) error
 	Listen(ctx context.Context)
@@ -158,7 +155,7 @@ type backoffWithLock struct {
 	bo backoff.BackOff
 }
 
-// BackoffWithLock wraps backoff with mutex to concurrent free use
+// BackoffWithLock wraps backoff with mutex to concurrent free use.
 func BackoffWithLock(bo backoff.BackOff) backoff.BackOff {
 	return backoffWithLock{
 		m:  new(sync.Mutex),
@@ -246,7 +243,7 @@ func (b *startWithBackOff) Reset() {
 	b.delegate.Reset()
 }
 
-// defaultTimer implements Timer interface using time.Timer
+// defaultTimer implements Timer interface using time.Timer.
 type defaultTimer struct {
 	timer *time.Timer
 }
@@ -256,7 +253,7 @@ func (t *defaultTimer) C() <-chan time.Time {
 	return t.timer.C
 }
 
-// Start starts the timer to fire after the given duration
+// Start starts the timer to fire after the given duration.
 func (t *defaultTimer) Start(duration time.Duration) {
 	if t.timer == nil {
 		t.timer = time.NewTimer(duration)
@@ -373,7 +370,7 @@ func (d *WebSocketDialer) SendRefill(ctx context.Context, r io.Reader, shardMeta
 
 	client := http.Client{
 		Transport: &http.Transport{
-			DialTLSContext: func(dctx context.Context, _ string, _ string) (net.Conn, error) {
+			DialTLSContext: func(dctx context.Context, _, _ string) (net.Conn, error) {
 				return d.connDialer.Dial(dctx)
 			},
 			ForceAttemptHTTP2:     true,
@@ -440,7 +437,7 @@ func (*WebSocketDialer) makeHTTPError(res *http.Response) error {
 	}
 }
 
-// ResetBackoff resets next delay to zero
+// ResetBackoff resets next delay to zero.
 func (d *WebSocketDialer) ResetBackoff() {
 	d.backoff.Reset()
 }
@@ -484,7 +481,7 @@ func NewWebSocketTransport(
 	}
 }
 
-// Send frame to server
+// Send frame to server.
 func (tt *WebSocketTransport) Send(ctx context.Context, frame frames.FrameWriter) error {
 	_, err := frame.WriteTo(tt.wt.Writer(ctx))
 	return err

@@ -477,7 +477,7 @@ func (s *AdapterPromQLSuite) TestCPM_PodReplaced_AcrossRotation_PromppStorage() 
 	innerV := s.queryAt(
 		`(kube_pod_status_ready{condition="true"} == 1) * on (pod, namespace) group_right () `+
 			`kube_controller_pod{controller_name="d8-control-plane-manager",controller_type="DaemonSet",namespace="kube-system"}`, t20m)
-	if !s.Equal(3, len(innerV), "INNER must yield exactly 3 series at t=20m — got %d:\n%v", len(innerV), innerV) {
+	if !s.Len(innerV, 3, "INNER must yield exactly 3 series at t=20m — got %d:\n%v", len(innerV), innerV) {
 		for i, ss := range innerV {
 			s.T().Logf("  inner[%d] = %s", i, ss.Metric.String())
 		}
@@ -769,11 +769,11 @@ func (s *AdapterPromQLSuite) TestCPM_RecordingRuleMissedIterations_AlertStaysFir
 // cppbridge head ingest path needs more than 19 ms to make the new sample
 // visible to a querier. Result:
 //
-//	- alert eval @ T+6.329 sees the LATEST committed sample at T-60+6.308
-//	  (previous minute) → distance = 60.021 s > LookbackDelta (60 s)
-//	- INNER subexpression is empty → `unless` cancels nothing
-//	- `max by (node)` returns all three masters → alert FIRING
-//	- API queries (run later) see the new sample already committed → empty
+//   - alert eval @ T+6.329 sees the LATEST committed sample at T-60+6.308
+//     (previous minute) → distance = 60.021 s > LookbackDelta (60 s)
+//   - INNER subexpression is empty → `unless` cancels nothing
+//   - `max by (node)` returns all three masters → alert FIRING
+//   - API queries (run later) see the new sample already committed → empty
 //
 // The fix is to add `query_offset` (per-group or global). An offset of 30 s
 // pushes alert eval to ask storage for time `T-23.671`; the previous-minute
@@ -787,11 +787,11 @@ func (s *AdapterPromQLSuite) TestCPM_RecordingRuleMissedIterations_AlertStaysFir
 // behind the alert eval timestamp).
 func (s *AdapterPromQLSuite) TestCPM_OffsetCollisionRace_FixedByQueryOffset() {
 	const (
-		stepMs       = int64(60_000)
-		offsetMs     = int64(6_000)            // shared offset of both groups inside the minute
-		alertJitterMs = int64(329)             // alert eval starts 329 ms after minute+offset (matches prod 6.329)
-		nLastWritten = int64(29)               // we write kube_controller_pod up to and including this step
-		alertStep    = int64(30)               // alert eval happens at this step's tick
+		stepMs        = int64(60_000)
+		offsetMs      = int64(6_000) // shared offset of both groups inside the minute
+		alertJitterMs = int64(329)   // alert eval starts 329 ms after minute+offset (matches prod 6.329)
+		nLastWritten  = int64(29)    // we write kube_controller_pod up to and including this step
+		alertStep     = int64(30)    // alert eval happens at this step's tick
 	)
 
 	var points []scrapePoint

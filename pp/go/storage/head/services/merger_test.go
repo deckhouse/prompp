@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
@@ -12,7 +14,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/services/mock"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
-	"github.com/stretchr/testify/suite"
 )
 
 type MergerSuite struct {

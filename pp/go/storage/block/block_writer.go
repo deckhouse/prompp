@@ -191,7 +191,6 @@ type blockWriters []blockWriter
 
 // append appends a writer to the block writers.
 
-//nolint:gocritic // hugeParam // we accumulate the writers
 func (bw *blockWriters) append(writer blockWriter) {
 	*bw = append(*bw, writer)
 }

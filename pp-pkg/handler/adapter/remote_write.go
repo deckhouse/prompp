@@ -21,7 +21,7 @@ type RemoteWrite struct {
 	contentLength int
 }
 
-// NewRefill init new RemoteWrite.
+// NewRemoteWrite initializes a new RemoteWrite.
 func NewRemoteWrite(
 	reader io.ReadCloser,
 	writer http.ResponseWriter,
