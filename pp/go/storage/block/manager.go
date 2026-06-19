@@ -67,7 +67,7 @@ func NewManager(
 	blocksToDelete tsdb.BlocksToDeleteFunc,
 	logger log.Logger,
 	r prometheus.Registerer,
-) *Manager {
+) (*Manager, error) {
 	if opts == nil {
 		opts = &Options{}
 	}
@@ -87,12 +87,12 @@ func NewManager(
 	}
 
 	if err := m.reloadBlocks(); err != nil {
-		level.Error(logger).Log("msg", "initial reload blocks failed", "err", err)
+		return nil, fmt.Errorf("initial reload blocks: %w", err)
 	}
 
 	level.Info(logger).Log("msg", "Block manager started", "dir", dir)
 	go m.loop()
-	return m
+	return m, nil
 }
 
 func (m *Manager) loop() {
