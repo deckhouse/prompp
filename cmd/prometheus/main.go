@@ -842,11 +842,15 @@ func main() {
 			pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
 			prometheus.DefaultRegisterer,
 		)
-		blockManager = block.NewManager(localStoragePath, &block.Options{
+		blockManager, err = block.NewManager(localStoragePath, &block.Options{
 			RetentionDuration:           retentionMs,
 			CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 			EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 		}, blocksToDelete, log.With(logger, "component", "blockmanager"), prometheus.DefaultRegisterer)
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
+			os.Exit(1)
+		}
 
 		var compactCtx context.Context
 		compactCtx, compactCancel = context.WithCancel(context.Background())
