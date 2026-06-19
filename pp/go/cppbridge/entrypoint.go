@@ -2764,25 +2764,26 @@ func indexWriterWriteLabelIndices(writer uintptr, data []byte) []byte {
 	return res.data
 }
 
-func indexWriterWriteNextPostingsBatch(writer uintptr, max_batch_size uint32, data []byte) ([]byte, bool) {
+func indexWriterWritePostings(writer uintptr, data []byte) []byte {
 	args := struct {
-		writer         uintptr
-		max_batch_size uint32
-	}{writer, max_batch_size}
+		writer uintptr
+	}{writer}
 
-	res := struct {
-		data          []byte
-		has_more_data bool
-	}{data, false}
+	// write_postings is a long single C call (it walks the whole trie index and the
+	// all-series posting). Like write_symbols, it uses a regular cgo call so the goroutine
+	// parks in _Gsyscall and frees the P for the duration instead of fastcgo blocking the
+	// scheduler. res mirrors the []byte header with a uintptr data field so the struct
+	// carries no Go pointer type; the buffer is always nil or prompp-allocated.
+	res := *(*struct {
+		data uintptr
+		len  int
+		cap  int
+	})(unsafe.Pointer(&data))
 
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_next_postings_batch,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
+	C.prompp_index_writer_write_postings(unsafe.Pointer(&args), unsafe.Pointer(&res))
 
-	return res.data, res.has_more_data
+	return *(*[]byte)(unsafe.Pointer(&res))
 }
 
 func indexWriterWriteLabelIndicesTable(writer uintptr, data []byte) []byte {

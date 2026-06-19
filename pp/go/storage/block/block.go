@@ -10,12 +10,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
-// postingsBatchSize bounds the output bytes produced by one WriteNextPostingsBatch
-// call. 64 KiB keeps a typical batch around ~1ms on production hardware; individual
-// large postings (the all-series posting and hot label values) are emitted atomically
-// and can still exceed the bound in a single call.
-const postingsBatchSize = 1 << 16
-
 // Chunk represents a recoded chunk.
 type Chunk struct {
 	rc *cppbridge.RecodedChunk
@@ -116,17 +110,11 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 		return n, fmt.Errorf("failed to write label indicies: %w", err)
 	}
 
-	for {
-		data, hasMoreData := iw.cppIndexWriter.WriteNextPostingsBatch(postingsBatchSize)
-		bytesWritten, err = w.Write(data)
-		if err != nil {
-			return n, fmt.Errorf("failed to write postings: %w", err)
-		}
-		n += int64(bytesWritten)
-		if !hasMoreData {
-			break
-		}
+	bytesWritten, err = w.Write(iw.cppIndexWriter.WritePostings())
+	if err != nil {
+		return n, fmt.Errorf("failed to write postings: %w", err)
 	}
+	n += int64(bytesWritten)
 
 	bytesWritten, err = w.Write(iw.cppIndexWriter.WriteLabelIndicesTable())
 	if err != nil {

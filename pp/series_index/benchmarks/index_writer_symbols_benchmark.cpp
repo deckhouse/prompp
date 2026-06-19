@@ -30,9 +30,6 @@ using LssCopier =
     series_index::QueryableEncodingBimapCopier<Lss, typename Lss::SortingIndexBuilder::Index, BareBones::Bitset, Lss, BareBones::Vector<uint32_t>>;
 using ChunkMetadata = series_index::prometheus::tsdb::index::ChunkMetadata;
 
-// Matches go/storage/block/block.go WriteRestTo postings batch size.
-constexpr uint32_t kPostingsBatchSize = 1U << 16U;
-
 struct ShrunkState {
   Lss lss;
   Lss snapshot_copy;
@@ -192,13 +189,6 @@ void prepare_writer_before_postings(IndexWriter& writer, std::ostringstream& str
   writer.write_label_indices(stream);
 }
 
-void write_all_postings(IndexWriter& writer, std::ostringstream& stream) {
-  do {
-    reset_stream(stream);
-    writer.write_postings(stream, kPostingsBatchSize);
-  } while (writer.has_more_postings_data());
-}
-
 // One timed sample per entrypoint call (see entrypoint/index_writer.h).
 struct IndexWriterCallTimings {
   std::chrono::nanoseconds write_header{};
@@ -207,7 +197,7 @@ struct IndexWriterCallTimings {
   std::chrono::nanoseconds write_symbols_after_shrink{};
   std::chrono::nanoseconds write_next_series_batch{};
   std::chrono::nanoseconds write_label_indices{};
-  std::chrono::nanoseconds write_next_postings_batch{};
+  std::chrono::nanoseconds write_postings{};
   std::chrono::nanoseconds write_label_indices_table{};
   std::chrono::nanoseconds write_postings_table_offsets{};
   std::chrono::nanoseconds write_table_of_contents{};
@@ -295,13 +285,11 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
       std::ostringstream stream;
       prepare_writer_before_postings(writer, stream, lss, chunks);
       reset_stream(stream);
-      // The first batch always emits the all-series posting (a single, unsplittable posting
-      // over every series); skip it untimed so the sample reflects a typical steady-state batch.
-      writer.write_postings(stream, kPostingsBatchSize);
-      reset_stream(stream);
+      // Postings are written in a single call (no batching): one call walks the whole trie
+      // index and emits the all-series posting.
       const auto start = steady_clock::now();
-      writer.write_postings(stream, kPostingsBatchSize);
-      timings.write_next_postings_batch += steady_clock::now() - start;
+      writer.write_postings(stream);
+      timings.write_postings += steady_clock::now() - start;
       benchmark::DoNotOptimize(stream.view().size());
     }
 
@@ -322,7 +310,7 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
       IndexWriter writer{lss};
       std::ostringstream stream;
       prepare_writer_before_postings(writer, stream, lss, chunks);
-      write_all_postings(writer, stream);
+      writer.write_postings(stream);
       reset_stream(stream);
       const auto start = steady_clock::now();
       writer.write_postings_table_offsets(stream);
@@ -334,7 +322,7 @@ void IndexWriterEntrypointCalls(benchmark::State& state) {
       IndexWriter writer{lss};
       std::ostringstream stream;
       prepare_writer_before_postings(writer, stream, lss, chunks);
-      write_all_postings(writer, stream);
+      writer.write_postings(stream);
       reset_stream(stream);
       writer.write_label_indices_table(stream);
       reset_stream(stream);
@@ -364,7 +352,7 @@ BENCHMARK(IndexWriterEntrypointCalls)
     ->ComputeStatistics("min_write_symbols_after_shrink", MIN_CALL_TIME(write_symbols_after_shrink))
     ->ComputeStatistics("min_write_next_series_batch", MIN_CALL_TIME(write_next_series_batch))
     ->ComputeStatistics("min_write_label_indices", MIN_CALL_TIME(write_label_indices))
-    ->ComputeStatistics("min_write_next_postings_batch", MIN_CALL_TIME(write_next_postings_batch))
+    ->ComputeStatistics("min_write_postings", MIN_CALL_TIME(write_postings))
     ->ComputeStatistics("min_write_label_indices_table", MIN_CALL_TIME(write_label_indices_table))
     ->ComputeStatistics("min_write_postings_table_offsets", MIN_CALL_TIME(write_postings_table_offsets))
     ->ComputeStatistics("min_write_table_of_contents", MIN_CALL_TIME(write_table_of_contents));

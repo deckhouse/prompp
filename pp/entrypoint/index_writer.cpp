@@ -91,22 +91,16 @@ extern "C" void prompp_index_writer_write_label_indices(void* args, void* res) {
   static_cast<Arguments*>(args)->writer->write_label_indices(stream);
 }
 
-extern "C" void prompp_index_writer_write_next_postings_batch(void* args, void* res) {
+extern "C" void prompp_index_writer_write_postings(void* args, void* res) {
   struct Arguments {
     IndexWriterPtr writer;
-    uint32_t max_batch_size;
   };
   struct Result {
     PromPP::Primitives::Go::Slice<char> buffer;
-    bool has_more_data;
   };
 
-  const auto in = static_cast<Arguments*>(args);
-  const auto out = static_cast<Result*>(res);
-
-  auto stream = create_bytes_stream(out->buffer);
-  in->writer->write_postings(stream, in->max_batch_size);
-  out->has_more_data = in->writer->has_more_postings_data();
+  auto stream = create_bytes_stream(static_cast<Result*>(res)->buffer);
+  static_cast<Arguments*>(args)->writer->write_postings(stream);
 }
 
 extern "C" void prompp_index_writer_write_label_indices_table(void* args, void* res) {

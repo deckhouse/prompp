@@ -48,10 +48,9 @@ func (writer *IndexWriter) WriteLabelIndices() []byte {
 	return writer.data
 }
 
-func (writer *IndexWriter) WriteNextPostingsBatch(max_batch_size uint32) ([]byte, bool) {
-	var has_more_data bool
-	writer.data, has_more_data = indexWriterWriteNextPostingsBatch(writer.writer, max_batch_size, writer.data)
-	return writer.data, has_more_data
+func (writer *IndexWriter) WritePostings() []byte {
+	writer.data = indexWriterWritePostings(writer.writer, writer.data)
+	return writer.data
 }
 
 func (writer *IndexWriter) WriteLabelIndicesTable() []byte {

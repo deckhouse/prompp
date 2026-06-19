@@ -58,13 +58,11 @@ class IndexWriter {
     label_indices_writer_.write_label_indices();
   }
 
-  PROMPP_ALWAYS_INLINE void write_postings(Stream& stream, uint32_t max_batch_size) {
+  PROMPP_ALWAYS_INLINE void write_postings(Stream& stream) {
     const auto stream_setter = writer_.writer().stream_setter(&stream);
 
-    if (toc_.postings == 0) [[unlikely]] {
-      toc_.postings = writer_.position();
-    }
-    postings_writer_.write_postings(max_batch_size);
+    toc_.postings = writer_.position();
+    postings_writer_.write_postings();
   }
 
   PROMPP_ALWAYS_INLINE void write_label_indices_table(Stream& stream) {
@@ -87,8 +85,6 @@ class IndexWriter {
     PromPP::Prometheus::tsdb::index::TocWriter{toc_, writer_}.write();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_postings_data() const noexcept { return postings_writer_.has_more_data(); }
-
   void write(Stream& stream) {
     write_header(stream);
     write_symbols(stream);
@@ -102,7 +98,7 @@ class IndexWriter {
     }
 
     write_label_indices(stream);
-    write_postings(stream, PostingsWriter::kUnlimitedBatchSize);
+    write_postings(stream);
     write_label_indices_table(stream);
     write_postings_table_offsets(stream);
     write_toc(stream);

@@ -80,18 +80,16 @@ void prompp_index_writer_write_next_series_batch(void* args, void* res);
 void prompp_index_writer_write_label_indices(void* args, void* res);
 
 /**
- * @brief Write next postings batch
+ * @brief Write all postings in a single call
  *
  * @param args {
- *     writer         uintptr
- *     max_batch_size uint32
+ *     writer uintptr
  * }
  * @param res {
- *     data          []byte // only c allocated memory can be re-used
- *     has_more_data bool   // true if we should repeat this call
+ *     data []byte // only c allocated memory can be re-used
  * }
  */
-void prompp_index_writer_write_next_postings_batch(void* args, void* res);
+void prompp_index_writer_write_postings(void* args, void* res);
 
 /**
  * @brief Write label indeces table
