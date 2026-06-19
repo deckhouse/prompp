@@ -52,21 +52,18 @@ class Storage {
   MetricsPageList page_list_;
 };
 
-PROMPP_ALWAYS_INLINE Storage& storage() {
-  static Storage storage;
-  return storage;
-}
+inline Storage storage;
 
 template <class MetricsPageType, class... Args>
-PROMPP_ALWAYS_INLINE MetricsPageType* CreateMetricsPage(Storage& s, Args&&... args) {
+MetricsPageType* CreateMetricsPage(Storage& s, Args&&... args) {
   auto* page = new MetricsPageType(std::forward<Args>(args)...);
   s.add(page);
   return page;
 }
 
 template <class MetricsPageType, class... Args>
-PROMPP_ALWAYS_INLINE MetricsPageType* CreateMetricsPage(Args&&... args) {
-  return CreateMetricsPage<MetricsPageType>(storage(), std::forward<Args>(args)...);
+MetricsPageType* CreateMetricsPage(Args&&... args) {
+  return CreateMetricsPage<MetricsPageType>(storage, std::forward<Args>(args)...);
 }
 
 }  // namespace metrics

@@ -19,9 +19,9 @@ extern "C" void prompp_metrics_register() {
 }
 
 extern "C" void prompp_metrics_iterator_ctor(void* args) {
-  metrics::storage().remove_unused_pages();
+  metrics::storage.remove_unused_pages();
 
-  std::construct_at(static_cast<metrics::Storage::Iterator*>(args), metrics::storage().begin());
+  std::construct_at(static_cast<metrics::Storage::Iterator*>(args), metrics::storage.begin());
 }
 
 extern "C" void prompp_metrics_iterator_next(void* args, void* res) {
