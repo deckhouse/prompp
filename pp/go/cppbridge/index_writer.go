@@ -12,17 +12,19 @@ type ChunkMetadata struct {
 }
 
 type IndexWriter struct {
-	writer unsafe.Pointer
-	buffer unsafe.Pointer
-	lss    *LabelSetStorage
+	writer          unsafe.Pointer
+	buffer          unsafe.Pointer
+	hasMorePostings unsafe.Pointer
+	lss             *LabelSetStorage
 }
 
 func NewIndexWriter(lss *LabelSetStorage) *IndexWriter {
-	w, buffer := indexWriterCtor(lss.Pointer())
+	w, buffer, hasMorePostings := indexWriterCtor(lss.Pointer())
 	writer := &IndexWriter{
-		writer: w,
-		buffer: buffer,
-		lss:    lss,
+		writer:          w,
+		buffer:          buffer,
+		hasMorePostings: hasMorePostings,
+		lss:             lss,
 	}
 	runtime.SetFinalizer(writer, func(writer *IndexWriter) {
 		indexWriterDtor(writer.writer)
@@ -57,9 +59,12 @@ func (writer *IndexWriter) WriteLabelIndices() []byte {
 	return writer.bytes()
 }
 
-func (writer *IndexWriter) WritePostings() []byte {
-	indexWriterWritePostings(writer.writer)
-	return writer.bytes()
+// WriteNextPostingsBatch writes one postings batch (up to maxBatchSize bytes) into the writer's
+// internal buffer and reports whether more batches remain. The returned slice aliases prompp-owned
+// memory and is valid only until the next write_* call, so callers must consume it before looping.
+func (writer *IndexWriter) WriteNextPostingsBatch(maxBatchSize uint32) ([]byte, bool) {
+	indexWriterWritePostings(writer.writer, maxBatchSize)
+	return writer.bytes(), *(*uint8)(writer.hasMorePostings) != 0
 }
 
 func (writer *IndexWriter) WriteLabelIndicesTable() []byte {

@@ -2653,14 +2653,15 @@ func seriesDataUnloadedDataLoaderDtor(loader uintptr) {
 // indexWriterCtor constructs the writer and returns both the writer pointer and a stable pointer
 // to its internal output buffer (a Go []byte header). Every write_* call fills that buffer in
 // place; the result is read back from this pointer, so no buffer is threaded through cgo.
-func indexWriterCtor(lss uintptr) (writer, buffer unsafe.Pointer) {
+func indexWriterCtor(lss uintptr) (writer, buffer, hasMorePostings unsafe.Pointer) {
 	args := struct {
 		lss uintptr
 	}{lss}
 
 	var res struct {
-		writer unsafe.Pointer
-		buffer unsafe.Pointer
+		writer          unsafe.Pointer
+		buffer          unsafe.Pointer
+		hasMorePostings unsafe.Pointer
 	}
 
 	testGC()
@@ -2670,7 +2671,7 @@ func indexWriterCtor(lss uintptr) (writer, buffer unsafe.Pointer) {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.writer, res.buffer
+	return res.writer, res.buffer, res.hasMorePostings
 }
 
 func indexWriterDtor(writer unsafe.Pointer) {
@@ -2729,16 +2730,17 @@ func indexWriterWriteLabelIndices(writer unsafe.Pointer) {
 	C.prompp_index_writer_write_label_indices(writer)
 }
 
-func indexWriterWritePostings(writer unsafe.Pointer) {
-	// write_postings is a long single C call (it walks the whole trie index and the
-	// all-series posting). Like write_symbols, it uses a regular cgo call so the goroutine
-	// parks in _Gsyscall and frees the P for the duration instead of fastcgo blocking the
-	// scheduler. Only the writer pointer crosses the boundary, by value: it is a stable
-	// prompp-arena address, so no goroutine stack pointer is handed to C and a concurrent
-	// GC stack move during the call is harmless. The result is read from the writer's
+func indexWriterWritePostings(writer unsafe.Pointer, maxBatchSize uint32) {
+	// write_postings emits one batch (up to maxBatchSize bytes) per call; the caller loops
+	// while the has_more_postings flag stays set. Each batch can still be a multi-ms call (the
+	// all-series posting and hot label values are atomic), so it uses a regular cgo call: the
+	// goroutine parks in _Gsyscall and frees the P for the duration instead of fastcgo blocking
+	// the scheduler. Only the writer pointer (a stable prompp-arena address) and the scalar
+	// batch size cross the boundary by value, so no goroutine stack pointer is handed to C and a
+	// concurrent GC stack move during the call is harmless. The result is read from the writer's
 	// internal buffer.
 	testGC()
-	C.prompp_index_writer_write_postings(writer)
+	C.prompp_index_writer_write_postings(writer, C.uint64_t(maxBatchSize))
 }
 
 func indexWriterWriteLabelIndicesTable(writer unsafe.Pointer) {

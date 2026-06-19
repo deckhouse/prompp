@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <limits>
 
 #include "bare_bones/preprocess.h"
 #include "prometheus/tsdb/index/stream_writer.h"
@@ -17,15 +18,34 @@ class PostingsWriter {
   using StringWriter = PromPP::Prometheus::tsdb::index::StringWriter;
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
 
+  static constexpr uint32_t kUnlimitedBatchSize = std::numeric_limits<uint32_t>::max();
+
   PostingsWriter(const Lss& lss, const SeriesReferences& series_references, StreamWriter& writer)
       : lss_(lss), trie_index_iterator_(lss_.trie_index().begin()), series_references_(series_references), writer_(writer) {}
 
-  void write_postings() {
-    write_posting_with_all_series();
+  // Writes postings until either the trie index is exhausted or the bytes emitted in this call
+  // reach max_batch_size. State (trie iterator, entries_) persists across calls, so a caller can
+  // resume with another call while has_more_data() is true. The byte bound is checked only between
+  // whole postings: the all-series posting and hot label values are atomic and can overshoot it.
+  void write_postings(uint32_t max_batch_size = kUnlimitedBatchSize) {
+    auto const is_batch_filled = [this, max_batch_size] PROMPP_LAMBDA_INLINE { return writer_.size() >= max_batch_size; };
 
-    for (const auto end = lss_.trie_index().end(); trie_index_iterator_ != end; ++trie_index_iterator_) {
+    if (entries_ == 0) [[unlikely]] {
+      write_posting_with_all_series();
+
+      if (is_batch_filled()) {
+        return;
+      }
+    }
+
+    while (has_more_data()) {
       auto& item = *trie_index_iterator_;
       write_posting(get_series_ids_sequence(item.name_id(), item.value_id()), item.name(), item.value());
+      ++trie_index_iterator_;
+
+      if (is_batch_filled()) {
+        return;
+      }
     }
   }
 
@@ -37,6 +57,8 @@ class PostingsWriter {
       writer_.write(table_offsets_writer_.writer().buffer());
     });
   }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return trie_index_iterator_ != lss_.trie_index().end(); }
 
  private:
   const Lss& lss_;

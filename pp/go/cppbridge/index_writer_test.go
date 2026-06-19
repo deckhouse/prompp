@@ -20,6 +20,18 @@ func (s *IndexWriterSuite) setLabelSets(label_sets []model.LabelSet) {
 	}
 }
 
+func (s *IndexWriterSuite) writePostings(max_batch_size uint32) []byte {
+	var bytes []byte
+	for {
+		data, has_more_data := s.writer.WriteNextPostingsBatch(max_batch_size)
+		bytes = append(bytes, data...)
+		if !has_more_data {
+			break
+		}
+	}
+	return bytes
+}
+
 func TestIndexWriterSuite(t *testing.T) {
 	suite.Run(t, new(IndexWriterSuite))
 }
@@ -59,7 +71,7 @@ func (s *IndexWriterSuite) TestWriteFullIndex() {
 	index = append(index, s.writer.WriteSeries(1, chunk_metadata_list[1])...)
 	index = append(index, s.writer.WriteSeries(0, chunk_metadata_list[0])...)
 	index = append(index, s.writer.WriteLabelIndices()...)
-	index = append(index, s.writer.WritePostings()...)
+	index = append(index, s.writePostings(16)...)
 	index = append(index, s.writer.WriteLabelIndicesTable()...)
 	index = append(index, s.writer.WritePostingsTableOffsets()...)
 	index = append(index, s.writer.WriteTableOfContents()...)

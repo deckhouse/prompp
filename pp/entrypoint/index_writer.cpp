@@ -16,6 +16,9 @@ namespace {
 struct IndexWriterHandle {
   IndexWriter writer;
   PromPP::Primitives::Go::Slice<char> buffer;
+  // Set after every write_postings batch so Go can decide whether to loop again. Exposed as a
+  // stable pointer from the constructor (like the buffer), so reading it needs no extra cgo call.
+  uint8_t has_more_postings{0};
 
   explicit IndexWriterHandle(entrypoint::head::QueryableEncodingBimap& lss) : writer(lss) {}
 
@@ -34,11 +37,12 @@ extern "C" void prompp_index_writer_ctor(void* args, void* res) {
   struct Result {
     IndexWriterHandle* writer;
     PromPP::Primitives::Go::Slice<char>* buffer;
+    uint8_t* has_more_postings;
   };
 
   const auto in = static_cast<Arguments*>(args);
   auto* handle = new IndexWriterHandle(std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss));
-  *static_cast<Result*>(res) = Result{.writer = handle, .buffer = &handle->buffer};
+  *static_cast<Result*>(res) = Result{.writer = handle, .buffer = &handle->buffer, .has_more_postings = &handle->has_more_postings};
 }
 
 extern "C" void prompp_index_writer_dtor(void* args) {
@@ -79,10 +83,11 @@ extern "C" void prompp_index_writer_write_label_indices(void* writer) {
   handle->writer.write_label_indices(stream);
 }
 
-extern "C" void prompp_index_writer_write_postings(void* writer) {
+extern "C" void prompp_index_writer_write_postings(void* writer, uint64_t max_batch_size) {
   auto* handle = static_cast<IndexWriterHandle*>(writer);
   auto stream = handle->reset_buffer();
-  handle->writer.write_postings(stream);
+  handle->writer.write_postings(stream, static_cast<uint32_t>(max_batch_size));
+  handle->has_more_postings = handle->writer.has_more_postings_data() ? 1 : 0;
 }
 
 extern "C" void prompp_index_writer_write_label_indices_table(void* writer) {

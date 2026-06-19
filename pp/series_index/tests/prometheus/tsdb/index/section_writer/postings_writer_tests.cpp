@@ -60,6 +60,10 @@ class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> 
     }
   }
 
+  void reset_stream() noexcept {
+    stream_.str("");
+    stream_writer_.writer().set_stream(&stream_);
+  }
 };
 
 TEST_P(PostingsWriterFixture, FullWrite) {
@@ -144,5 +148,99 @@ INSTANTIATE_TEST_SUITE_P(Test,
                                                                         "localhost"
                                                                         "\x38"
                                                                         "\xF7\x79\x10\x67"sv}));
+
+TEST_F(PostingsWriterFixture, PartialWrite) {
+  // Arrange
+  fill_data(
+      LabelViewSetList{
+          {{"job", "cron"}, {"server", "127.0.0.1"}},
+          {{"job", "cron"}, {"server", "localhost"}},
+          {{"job", "cron"}, {"server", "remote"}},
+      },
+      ChunkMetadataList{
+          {{.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0},
+           {.min_timestamp = 2002, .max_timestamp = 4004, .reference = 100},
+           {.min_timestamp = 4005, .max_timestamp = 5005, .reference = 125}},
+          {{.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0},
+           {.min_timestamp = 2002, .max_timestamp = 4004, .reference = 100},
+           {.min_timestamp = 4005, .max_timestamp = 5005, .reference = 125}},
+      });
+  PostingsWriter postings_writer{lss_, series_references_, stream_writer_};
+
+  // Act
+  postings_writer.write_postings(0);
+  auto has_more_data_after_first_write = postings_writer.has_more_data();
+  auto first_batch_data = stream_.str();
+  reset_stream();
+
+  postings_writer.write_postings(1);
+  auto has_more_data_after_second_write = postings_writer.has_more_data();
+  auto second_batch_data = stream_.str();
+  reset_stream();
+
+  postings_writer.write_postings(17);
+  auto has_more_data_after_third_write = postings_writer.has_more_data();
+  auto third_batch_data = stream_.str();
+  reset_stream();
+
+  postings_writer.write_postings_table_offsets();
+
+  // Assert
+  EXPECT_TRUE(has_more_data_after_first_write);
+  EXPECT_EQ(
+      "\x00\x00\x00\x0C"
+      "\x00\x00\x00\x02"
+      "\x00\x00\x00\x04"
+      "\x00\x00\x00\x06"
+      "\x00\x15\x36\x64"sv,
+      first_batch_data);
+
+  EXPECT_TRUE(has_more_data_after_second_write);
+  EXPECT_EQ(
+      "\x00\x00\x00\x0C"
+      "\x00\x00\x00\x02"
+      "\x00\x00\x00\x04"
+      "\x00\x00\x00\x06"
+      "\x00\x15\x36\x64"sv,
+      second_batch_data);
+
+  EXPECT_TRUE(has_more_data_after_third_write);
+  EXPECT_EQ(
+      "\x00\x00\x00\x08"
+      "\x00\x00\x00\x01"
+      "\x00\x00\x00\x04"
+      "\x73\xA3\x4A\x39"
+      "\x00\x00\x00\x08"
+      "\x00\x00\x00\x01"
+      "\x00\x00\x00\x06"
+      "\x92\x98\x3A\xCE"sv,
+      third_batch_data);
+
+  EXPECT_EQ(
+      "\x00\x00\x00\x39"
+      "\x00\x00\x00\x04"
+      "\x02"
+      "\x00\x00\x00"
+      "\x02"
+      "\x03"
+      "job"
+      "\x04"
+      "cron"
+      "\x14"
+      "\x02"
+      "\x06"
+      "server"
+      "\x09"
+      "127.0.0.1"
+      "\x28"
+      "\x02"
+      "\x06"
+      "server"
+      "\x09"
+      "localhost"
+      "\x38"
+      "\xF7\x79\x10\x67"sv,
+      stream_.view());
+}
 
 }  // namespace

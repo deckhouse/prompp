@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,8 +20,9 @@ extern "C" {
  *     lss         uintptr      // pointer to constructed lss
  * }
  * @param res {
- *     writer    uintptr        // pointer to constructed index writer
- *     buffer    uintptr        // pointer to the writer's internal output buffer ([]byte header)
+ *     writer            uintptr // pointer to constructed index writer
+ *     buffer            uintptr // pointer to the writer's internal output buffer ([]byte header)
+ *     has_more_postings uintptr // pointer to a uint8 set by write_postings (1 = more batches remain)
  * }
  */
 void prompp_index_writer_ctor(void* args, void* res);
@@ -89,18 +92,24 @@ void prompp_index_writer_write_next_series_batch(void* args);
 void prompp_index_writer_write_label_indices(void* writer);
 
 /**
- * @brief Write all postings in a single call
+ * @brief Write one batch of postings
  *
- * Long-running single call: invoked as a regular cgo call (not fastcgo) so the
- * goroutine parks in _Gsyscall and frees its P for the duration. The writer
- * pointer is a stable prompp-arena address passed by value, so C runs on its
- * own stack frame and never dereferences a goroutine stack address that a
- * concurrent GC stack move could invalidate. The result is written into the
- * writer's internal buffer.
+ * Writes postings into the writer's internal buffer until the bytes produced in
+ * this call reach max_batch_size, then returns; call repeatedly while the
+ * has_more_postings flag (returned by the constructor) is non-zero to drain the
+ * whole section. Batching bounds the transient buffer size: a single unbatched
+ * call buffers the entire postings section (tens of MiB), so Go flushes each
+ * batch and reuses the buffer instead. The byte bound is checked only between
+ * whole postings, so the all-series posting and hot label values can overshoot
+ * it. Each batch is a regular cgo call (not fastcgo) so the goroutine parks in
+ * _Gsyscall and frees its P for the duration; the writer pointer is a stable
+ * prompp-arena address passed by value, so no goroutine stack pointer is handed
+ * to C.
  *
- * @param writer uintptr // pointer to constructed index writer
+ * @param writer         uintptr // pointer to constructed index writer
+ * @param max_batch_size uint64  // soft upper bound on bytes emitted per call
  */
-void prompp_index_writer_write_postings(void* writer);
+void prompp_index_writer_write_postings(void* writer, uint64_t max_batch_size);
 
 /**
  * @brief Write label indeces table
