@@ -16,7 +16,7 @@
     "npm": ">=7.0.0"
   },
   "devDependencies": {
-    "@babel/runtime": "7.28.6",
+    "@babel/runtime": "7.29.2",
     "@rollup/plugin-node-resolve": "16.0.3",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.9",
@@ -27,8 +27,8 @@
     "eslint-config-react-app": "^7.0.1",
     "eslint-plugin-prettier": "^4.2.1",
     "express": "^4.21.2",
-    "form-data": "3.0.4",
-    "http-proxy-middleware": "3.0.5",
+    "form-data": "3.0.5",
+    "http-proxy-middleware": "3.0.7",
     "jest-canvas-mock": "^2.5.2",
     "jest-fetch-mock": "^3.0.3",
     "micromatch": "4.0.8",
@@ -46,7 +46,7 @@
     "typescript": "^5.0.0",
     "webpack": "5.105.3",
     "webpack-dev-server": "5.2.4",
-    "ws": "8.20.1"
+    "ws": "8.21.0"
   },
   "version": "0.55.1",
   "overrides": {

@@ -48,8 +48,6 @@ class OutdatedChunkMerger {
     if (!samples.empty()) {
       merge_outdated_samples<ChunkType::kOpen>(ls_id, encoder_.storage().open_chunks[ls_id], std::numeric_limits<int64_t>::max(), samples);
     }
-
-    encoder_.storage().merged_samples_count += decoded_samples.size();
   }
 
  private:
