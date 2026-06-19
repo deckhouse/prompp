@@ -78,8 +78,11 @@ void prompp_index_writer_write_next_series_batch(void* args);
 /**
  * @brief Write label indices
  *
- * Writes into the writer's internal buffer; read the result from the buffer
- * pointer returned by the constructor.
+ * Long-running single call: it walks the whole name/value trie index, so like
+ * write_symbols/write_postings it is invoked as a regular cgo call (not fastcgo)
+ * to park the goroutine in _Gsyscall and free its P for the duration. The writer
+ * pointer is a stable prompp-arena address passed by value. The result is
+ * written into the writer's internal buffer.
  *
  * @param writer uintptr // pointer to constructed index writer
  */

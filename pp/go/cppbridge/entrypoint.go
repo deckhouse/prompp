@@ -2721,11 +2721,12 @@ func indexWriterWriteNextSeriesBatch(writer unsafe.Pointer, ls_id uint32, chunks
 }
 
 func indexWriterWriteLabelIndices(writer unsafe.Pointer) {
+	// write_label_indices walks the whole name/value trie index (a few ms), long enough that
+	// fastcgo blocking the P would stall the scheduler. Like write_symbols/write_postings it
+	// uses a regular cgo call so the goroutine parks in _Gsyscall and frees the P; only the
+	// writer pointer (a stable prompp-arena address) crosses the boundary by value.
 	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_index_writer_write_label_indices,
-		uintptr(writer),
-	)
+	C.prompp_index_writer_write_label_indices(writer)
 }
 
 func indexWriterWritePostings(writer unsafe.Pointer) {
