@@ -53,10 +53,19 @@ type Manager struct {
 
 	mtx    sync.RWMutex
 	blocks []*tsdb.Block
+	// compactor, when set via SetCompactor, runs a single compaction pass after
+	// each reload in the loop goroutine. Guarded by mtx.
+	compactor compactionRunner
 
 	stopc    chan struct{}
 	stoppedc chan struct{}
 	stopOnce sync.Once
+}
+
+// compactionRunner runs a single compaction pass over the on-disk blocks.
+// Implemented by *Compactor.
+type compactionRunner interface {
+	Compact() error
 }
 
 // NewManager init new [Manager] and starts its periodic reload loop.
@@ -109,13 +118,42 @@ func (m *Manager) loop() {
 	for {
 		select {
 		case <-ticker.C:
-			if err := m.reloadBlocks(); err != nil {
-				level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
-			}
+			m.reloadAndCompact()
 
 		case <-m.stopc:
 			return
 		}
+	}
+}
+
+// SetCompactor sets the compactor driven by the reload loop. Passing nil
+// disables compaction. It is typically called right after construction, before
+// the first tick.
+func (m *Manager) SetCompactor(c compactionRunner) {
+	m.mtx.Lock()
+	m.compactor = c
+	m.mtx.Unlock()
+}
+
+// reloadAndCompact reloads blocks (loading freshly compacted blocks and deleting
+// obsolete parents) and then runs a single compaction pass. Both run in this one
+// goroutine, so a compaction never races with the deletion of its inputs: the
+// parents created by the previous tick's compaction are deleted by this tick's
+// reload before the new plan is computed (mirroring tsdb's single-goroutine
+// compact/reload loop). If there is nothing to compact, the pass is a no-op.
+func (m *Manager) reloadAndCompact() {
+	if err := m.reloadBlocks(); err != nil {
+		level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
+	}
+
+	m.mtx.RLock()
+	c := m.compactor
+	m.mtx.RUnlock()
+	if c == nil {
+		return
+	}
+	if err := c.Compact(); err != nil {
+		level.Error(m.logger).Log("msg", "compaction failed", "err", err)
 	}
 }
 

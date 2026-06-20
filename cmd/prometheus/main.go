@@ -869,11 +869,15 @@ func main() {
 				level.Error(logger).Log("msg", "failed to create block compactor", "err", err)
 				os.Exit(1)
 			}
+			// Drive compaction from the manager's single reload loop so compact
+			// and block deletion never run concurrently.
+			blockManager.SetCompactor(blockCompactor)
 
 			bs := &blockStorage{m: blockManager, onClose: func() error {
-				blockCompactor.Close()
-				blockManager.Close()
+				// Cancel any in-flight leveled compaction first so the manager
+				// loop can return promptly, then stop the loop and close blocks.
 				compactCancel()
+				blockManager.Close()
 				return nil
 			}}
 			persistedStorage = bs

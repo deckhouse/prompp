@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/oklog/ulid"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCompactorCompactBlocksUsesPlanAndSource(t *testing.T) {
+func TestCompactorCompactUsesPlanAndSource(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeCompactor{
 		plan: []string{"01AAA", "01BBB"},
 	}
-	source := fakeBlockSource{
+	source := &fakeBlockSource{
 		blocks: []*tsdb.Block{nil, nil},
 	}
 
@@ -25,11 +24,10 @@ func TestCompactorCompactBlocksUsesPlanAndSource(t *testing.T) {
 		dir:       "/tmp/data",
 		compactor: fake,
 		source:    source,
-		stopc:     make(chan struct{}),
-		stoppedc:  make(chan struct{}),
+		metrics:   newCompactorMetrics(nil),
 	}
 
-	err := c.compactBlocks()
+	err := c.Compact()
 	require.NoError(t, err)
 	require.True(t, fake.compactCalled)
 	require.Equal(t, "/tmp/data", fake.compactDest)
@@ -37,31 +35,20 @@ func TestCompactorCompactBlocksUsesPlanAndSource(t *testing.T) {
 	require.Len(t, fake.compactOpen, 2)
 }
 
-func TestCompactorLoopTriggersCompactions(t *testing.T) {
+func TestCompactorCompactNoPlanIsNoop(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeCompactor{
-		plan: []string{"01AAA"},
-	}
-
+	fake := &fakeCompactor{plan: nil}
 	c := &Compactor{
 		dir:       "/tmp/data",
 		compactor: fake,
-		source:    fakeBlockSource{},
-		interval:  10 * time.Millisecond,
+		source:    &fakeBlockSource{},
 		metrics:   newCompactorMetrics(nil),
-		stopc:     make(chan struct{}),
-		stoppedc:  make(chan struct{}),
 	}
 
-	go c.loop()
-	t.Cleanup(c.Close)
-
-	require.Eventually(t, func() bool {
-		fake.mu.Lock()
-		defer fake.mu.Unlock()
-		return fake.planCalls > 0 && fake.compactCalls > 0
-	}, time.Second, 10*time.Millisecond)
+	require.NoError(t, c.Compact())
+	require.Equal(t, 1, fake.planCalls)
+	require.False(t, fake.compactCalled)
 }
 
 func TestCompactionRanges(t *testing.T) {
@@ -108,7 +95,7 @@ type fakeBlockSource struct {
 	blocks []*tsdb.Block
 }
 
-func (f fakeBlockSource) Blocks() []*tsdb.Block {
+func (f *fakeBlockSource) Blocks() []*tsdb.Block {
 	return f.blocks
 }
 
