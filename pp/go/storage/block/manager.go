@@ -91,6 +91,7 @@ func NewManager(
 	if err := m.reloadBlocks(); err != nil {
 		return nil, fmt.Errorf("initial reload blocks: %w", err)
 	}
+	m.logLoadedBlocks()
 
 	level.Info(logger).Log("msg", "Block manager started", "dir", dir)
 	go m.loop()
@@ -205,6 +206,25 @@ func (m *Manager) Blocks() []*tsdb.Block {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
 	return slices.Clone(m.blocks)
+}
+
+// logLoadedBlocks logs the set of currently loaded blocks, mirroring the
+// "Found healthy block" output of legacy tsdb so operators can see the on-disk
+// block layout at startup.
+func (m *Manager) logLoadedBlocks() {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+
+	for _, b := range m.blocks {
+		meta := b.Meta()
+		level.Info(m.logger).Log(
+			"msg", "Found healthy block",
+			"mint", meta.MinTime,
+			"maxt", meta.MaxTime,
+			"ulid", meta.ULID,
+			"duration_minutes", normalizeBlockDurationMinutes(meta.MaxTime-meta.MinTime),
+		)
+	}
 }
 
 // reloadBlocks reloads blocks from disk and deletes the ones past retention.
