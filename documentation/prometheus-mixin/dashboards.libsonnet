@@ -150,13 +150,13 @@ local template = grafana.template;
           g.panel('Loaded TSDB Blocks by Duration') +
           g.queryPanel(
             if showMultiCluster then
-              'sum by (cluster, job, instance, duration_milliseconds) (prometheus_tsdb_blocks_loaded_by_duration{cluster=~"$cluster",job=~"$job",instance=~"$instance"})'
+              'sum by (cluster, job, instance, duration_minutes) (prometheus_tsdb_blocks_loaded_by_duration{cluster=~"$cluster",job=~"$job",instance=~"$instance"})'
             else
-              'sum by (job, instance, duration_milliseconds) (prometheus_tsdb_blocks_loaded_by_duration{job=~"$job",instance=~"$instance"})',
+              'sum by (job, instance, duration_minutes) (prometheus_tsdb_blocks_loaded_by_duration{job=~"$job",instance=~"$instance"})',
             if showMultiCluster then
-              '{{cluster}} {{job}} {{instance}} {{duration_milliseconds}}ms'
+              '{{cluster}} {{job}} {{instance}} {{duration_minutes}}m'
             else
-              '{{job}} {{instance}} {{duration_milliseconds}}ms'
+              '{{job}} {{instance}} {{duration_minutes}}m'
           ) +
           g.stack
         )

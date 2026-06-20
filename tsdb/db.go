@@ -62,7 +62,7 @@ const (
 	tmpForCreationBlockDirSuffix = ".tmp-for-creation"
 	// Pre-2.21 tmp dir suffix, used in clean-up functions.
 	tmpLegacy             = ".tmp"
-	blockDurationBucketMS = int64(5 * time.Minute / time.Millisecond)
+	blockDurationMinuteMS = int64(time.Minute / time.Millisecond)
 )
 
 // ErrNotReady is returned if the underlying storage is not ready yet.
@@ -313,8 +313,8 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 	})
 	m.loadedBlocksByDuration = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "prometheus_tsdb_blocks_loaded_by_duration",
-		Help: "Number of currently loaded blocks grouped by block duration in milliseconds.",
-	}, []string{"duration_milliseconds"})
+		Help: "Number of currently loaded blocks grouped by block duration in minutes.",
+	}, []string{"duration_minutes"})
 	m.symbolTableSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "prometheus_tsdb_symbol_table_size_bytes",
 		Help: "Size of symbol table in memory for loaded blocks",
@@ -1642,9 +1642,9 @@ func (db *DB) reloadBlocks() (err error) {
 	// PP_CHANGES.md: rebuild on cpp end
 
 	var (
-		toLoad           []*Block
-		blocksSize       int64
-		blocksByDuration = map[int64]int{}
+		toLoad              []*Block
+		blocksSize          int64
+		blocksByDurationMin = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -1656,13 +1656,13 @@ func (db *DB) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
-		durationMS := normalizeBlockDurationMS(block.Meta().MaxTime - block.Meta().MinTime)
-		blocksByDuration[durationMS]++
+		durationMinutes := normalizeBlockDurationMinutes(block.Meta().MaxTime - block.Meta().MinTime)
+		blocksByDurationMin[durationMinutes]++
 	}
 	db.metrics.blocksBytes.Set(float64(blocksSize))
 	db.metrics.loadedBlocksByDuration.Reset()
-	for durationMS, count := range blocksByDuration {
-		db.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMS, 10)).Set(float64(count))
+	for durationMinutes, count := range blocksByDurationMin {
+		db.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
 	}
 
 	slices.SortFunc(toLoad, func(a, b *Block) int {
@@ -1746,11 +1746,11 @@ func openBlocks(l log.Logger, dir string, loaded []*Block, chunkPool chunkenc.Po
 	return blocks, corrupted, nil
 }
 
-func normalizeBlockDurationMS(durationMS int64) int64 {
+func normalizeBlockDurationMinutes(durationMS int64) int64 {
 	if durationMS <= 0 {
-		return durationMS
+		return 0
 	}
-	return ((durationMS + blockDurationBucketMS/2) / blockDurationBucketMS) * blockDurationBucketMS
+	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
 }
 
 // DefaultBlocksToDelete returns a filter which decides time based and size based

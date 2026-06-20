@@ -40,8 +40,8 @@
     "targets": [
       {
         "refId": "A",
-        "expr": "sum by (job, instance, duration_milliseconds) (prometheus_tsdb_blocks_loaded_by_duration{job=~\"$job\",instance=~\"$instance\"})",
-        "legendFormat": "{{job}} {{instance}} {{duration_milliseconds}}ms"
+        "expr": "sum by (job, instance, duration_minutes) (prometheus_tsdb_blocks_loaded_by_duration{job=~\"$job\",instance=~\"$instance\"})",
+        "legendFormat": "{{job}} {{instance}} {{duration_minutes}}m"
       }
     ],
     "fieldConfig": {
@@ -71,8 +71,8 @@
     "targets": [
       {
         "refId": "A",
-        "expr": "sum by (duration_milliseconds) (prometheus_tsdb_blocks_loaded_by_duration{job=~\"$job\",instance=~\"$instance\"})",
-        "legendFormat": "{{duration_milliseconds}}ms"
+        "expr": "sum by (duration_minutes) (prometheus_tsdb_blocks_loaded_by_duration{job=~\"$job\",instance=~\"$instance\"})",
+        "legendFormat": "{{duration_minutes}}m"
       }
     ],
     "fieldConfig": {

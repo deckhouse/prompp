@@ -92,7 +92,7 @@ func TestManagerExportsLoadedBlocksMetrics(t *testing.T) {
 
 	durationCounts := map[int64]int{}
 	for _, b := range m.Blocks() {
-		duration := normalizeBlockDurationMS(b.Meta().MaxTime - b.Meta().MinTime)
+		duration := normalizeBlockDurationMinutes(b.Meta().MaxTime - b.Meta().MinTime)
 		durationCounts[duration]++
 	}
 	for duration, count := range durationCounts {

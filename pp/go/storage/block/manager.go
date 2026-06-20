@@ -29,7 +29,7 @@ var (
 const (
 	tmpForDeletionBlockDirSuffix = ".tmp-for-deletion"
 	reloadBlocksInterval         = time.Minute
-	blockDurationBucketMS        = int64(5 * time.Minute / time.Millisecond)
+	blockDurationMinuteMS        = int64(time.Minute / time.Millisecond)
 )
 
 // Options configures block reload, mirroring the relevant tsdb.Options fields.
@@ -271,9 +271,9 @@ func (m *Manager) reloadBlocks() (err error) {
 	}
 
 	var (
-		toLoad             []*tsdb.Block
-		blocksSize         int64
-		blocksByDurationMS = map[int64]int{}
+		toLoad               []*tsdb.Block
+		blocksSize           int64
+		blocksByDurationMins = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -285,13 +285,13 @@ func (m *Manager) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
-		durationMS := normalizeBlockDurationMS(block.Meta().MaxTime - block.Meta().MinTime)
-		blocksByDurationMS[durationMS]++
+		durationMinutes := normalizeBlockDurationMinutes(block.Meta().MaxTime - block.Meta().MinTime)
+		blocksByDurationMins[durationMinutes]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
 	m.metrics.loadedBlocksByDuration.Reset()
-	for durationMS, count := range blocksByDurationMS {
-		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMS, 10)).Set(float64(count))
+	for durationMinutes, count := range blocksByDurationMins {
+		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
 	}
 
 	slices.SortFunc(toLoad, func(a, b *tsdb.Block) int {
@@ -367,11 +367,11 @@ func (m *Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration)
 	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli())
 }
 
-func normalizeBlockDurationMS(durationMS int64) int64 {
+func normalizeBlockDurationMinutes(durationMS int64) int64 {
 	if durationMS <= 0 {
-		return durationMS
+		return 0
 	}
-	return ((durationMS + blockDurationBucketMS/2) / blockDurationBucketMS) * blockDurationBucketMS
+	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
 }
 
 //
@@ -400,8 +400,8 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 		}),
 		loadedBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prometheus_tsdb_blocks_loaded_by_duration",
-			Help: "Number of currently loaded blocks grouped by block duration in milliseconds.",
-		}, []string{"duration_milliseconds"}),
+			Help: "Number of currently loaded blocks grouped by block duration in minutes.",
+		}, []string{"duration_minutes"}),
 		symbolTableSize: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "prometheus_tsdb_symbol_table_size_bytes",
 			Help: "Size of symbol table in memory for loaded blocks.",
