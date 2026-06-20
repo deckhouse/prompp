@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -281,6 +282,7 @@ type DB struct {
 
 type dbMetrics struct {
 	loadedBlocks         prometheus.GaugeFunc
+	loadedBlocksBySize   *prometheus.GaugeVec
 	symbolTableSize      prometheus.GaugeFunc
 	reloads              prometheus.Counter
 	reloadsFailed        prometheus.Counter
@@ -308,6 +310,10 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 		defer db.mtx.RUnlock()
 		return float64(len(db.blocks))
 	})
+	m.loadedBlocksBySize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "prometheus_tsdb_blocks_loaded_by_size",
+		Help: "Number of currently loaded blocks grouped by block size in bytes.",
+	}, []string{"size_bytes"})
 	m.symbolTableSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "prometheus_tsdb_symbol_table_size_bytes",
 		Help: "Size of symbol table in memory for loaded blocks",
@@ -387,6 +393,7 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 	if r != nil {
 		r.MustRegister(
 			m.loadedBlocks,
+			m.loadedBlocksBySize,
 			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,
@@ -1634,8 +1641,9 @@ func (db *DB) reloadBlocks() (err error) {
 	// PP_CHANGES.md: rebuild on cpp end
 
 	var (
-		toLoad     []*Block
-		blocksSize int64
+		toLoad       []*Block
+		blocksSize   int64
+		blocksBySize = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -1646,9 +1654,15 @@ func (db *DB) reloadBlocks() (err error) {
 		}
 
 		toLoad = append(toLoad, block)
-		blocksSize += block.Size()
+		size := block.Size()
+		blocksSize += size
+		blocksBySize[size]++
 	}
 	db.metrics.blocksBytes.Set(float64(blocksSize))
+	db.metrics.loadedBlocksBySize.Reset()
+	for size, count := range blocksBySize {
+		db.metrics.loadedBlocksBySize.WithLabelValues(strconv.FormatInt(size, 10)).Set(float64(count))
+	}
 
 	slices.SortFunc(toLoad, func(a, b *Block) int {
 		switch {
