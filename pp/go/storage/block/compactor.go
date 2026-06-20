@@ -92,21 +92,22 @@ func NewCompactor(
 }
 
 // Compact runs a single compaction pass: it plans one group of eligible on-disk
-// blocks and compacts them. It does NOT reload or delete blocks; the driver
-// reloads on its next tick, which loads the new block and deletes the
-// now-obsolete parents before the next plan. Compact must be driven by a single
-// goroutine so it never races with block deletion.
-func (c *Compactor) Compact() error {
+// blocks and compacts them. It reports whether a compaction was performed so the
+// driver can immediately reload and compact again until nothing is left. It does
+// NOT reload or delete blocks; the driver reloads between passes, which loads the
+// new block and deletes the now-obsolete parents before the next plan. Compact
+// must be driven by a single goroutine so it never races with block deletion.
+func (c *Compactor) Compact() (compacted bool, err error) {
 	logger := c.loggerOrNop()
 	c.metrics.compactionsTriggered.Inc()
 
 	plan, err := c.compactor.Plan(c.dir)
 	if err != nil {
 		c.metrics.compactionsFailed.Inc()
-		return fmt.Errorf("plan compaction: %w", err)
+		return false, fmt.Errorf("plan compaction: %w", err)
 	}
 	if len(plan) == 0 {
-		return nil
+		return false, nil
 	}
 
 	openBlocks := c.source.Blocks()
@@ -121,7 +122,7 @@ func (c *Compactor) Compact() error {
 	uids, err := c.compactor.Compact(c.dir, plan, openBlocks)
 	if err != nil {
 		c.metrics.compactionsFailed.Inc()
-		return fmt.Errorf("compact %v: %w", plan, err)
+		return false, fmt.Errorf("compact %v: %w", plan, err)
 	}
 	level.Info(logger).Log(
 		"msg", "finished on-disk block compaction",
@@ -131,7 +132,7 @@ func (c *Compactor) Compact() error {
 		"result_blocks", len(uids),
 		"duration", time.Since(start),
 	)
-	return nil
+	return true, nil
 }
 
 func (c *Compactor) loggerOrNop() log.Logger {

@@ -27,8 +27,9 @@ func TestCompactorCompactUsesPlanAndSource(t *testing.T) {
 		metrics:   newCompactorMetrics(nil),
 	}
 
-	err := c.Compact()
+	compacted, err := c.Compact()
 	require.NoError(t, err)
+	require.True(t, compacted)
 	require.True(t, fake.compactCalled)
 	require.Equal(t, "/tmp/data", fake.compactDest)
 	require.Equal(t, []string{"01AAA", "01BBB"}, fake.compactDirs)
@@ -46,7 +47,9 @@ func TestCompactorCompactNoPlanIsNoop(t *testing.T) {
 		metrics:   newCompactorMetrics(nil),
 	}
 
-	require.NoError(t, c.Compact())
+	compacted, err := c.Compact()
+	require.NoError(t, err)
+	require.False(t, compacted)
 	require.Equal(t, 1, fake.planCalls)
 	require.False(t, fake.compactCalled)
 }

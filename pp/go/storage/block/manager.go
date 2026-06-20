@@ -62,10 +62,10 @@ type Manager struct {
 	stopOnce sync.Once
 }
 
-// compactionRunner runs a single compaction pass over the on-disk blocks.
-// Implemented by *Compactor.
+// compactionRunner runs a single compaction pass over the on-disk blocks,
+// reporting whether a compaction was performed. Implemented by *Compactor.
 type compactionRunner interface {
-	Compact() error
+	Compact() (bool, error)
 }
 
 // NewManager init new [Manager] and starts its periodic reload loop.
@@ -135,12 +135,13 @@ func (m *Manager) SetCompactor(c compactionRunner) {
 	m.mtx.Unlock()
 }
 
-// reloadAndCompact reloads blocks (loading freshly compacted blocks and deleting
-// obsolete parents) and then runs a single compaction pass. Both run in this one
-// goroutine, so a compaction never races with the deletion of its inputs: the
-// parents created by the previous tick's compaction are deleted by this tick's
-// reload before the new plan is computed (mirroring tsdb's single-goroutine
-// compact/reload loop). If there is nothing to compact, the pass is a no-op.
+// reloadAndCompact reloads blocks and then compacts repeatedly until there is
+// nothing left to compact, reloading between passes. Everything runs in this one
+// goroutine, so a compaction never races with the deletion of its inputs: after
+// each compaction the reload loads the new block and deletes the now-obsolete
+// parents before the next plan is computed (mirroring tsdb's single-goroutine
+// compact/reload loop). Compacting until exhaustion within a single tick avoids
+// waiting a full ticker interval per compaction step.
 func (m *Manager) reloadAndCompact() {
 	if err := m.reloadBlocks(); err != nil {
 		level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
@@ -152,8 +153,22 @@ func (m *Manager) reloadAndCompact() {
 	if c == nil {
 		return
 	}
-	if err := c.Compact(); err != nil {
-		level.Error(m.logger).Log("msg", "compaction failed", "err", err)
+
+	for {
+		compacted, err := c.Compact()
+		if err != nil {
+			level.Error(m.logger).Log("msg", "compaction failed", "err", err)
+			return
+		}
+		if !compacted {
+			return
+		}
+		// Reload to load the freshly created block and delete the obsolete
+		// parents before planning the next compaction.
+		if err := m.reloadBlocks(); err != nil {
+			level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
+			return
+		}
 	}
 }
 
