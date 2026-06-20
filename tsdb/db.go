@@ -61,7 +61,8 @@ const (
 	tmpForDeletionBlockDirSuffix = ".tmp-for-deletion"
 	tmpForCreationBlockDirSuffix = ".tmp-for-creation"
 	// Pre-2.21 tmp dir suffix, used in clean-up functions.
-	tmpLegacy = ".tmp"
+	tmpLegacy             = ".tmp"
+	blockDurationBucketMS = int64(5 * time.Minute / time.Millisecond)
 )
 
 // ErrNotReady is returned if the underlying storage is not ready yet.
@@ -1655,7 +1656,7 @@ func (db *DB) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
-		durationMS := block.Meta().MaxTime - block.Meta().MinTime
+		durationMS := normalizeBlockDurationMS(block.Meta().MaxTime - block.Meta().MinTime)
 		blocksByDuration[durationMS]++
 	}
 	db.metrics.blocksBytes.Set(float64(blocksSize))
@@ -1743,6 +1744,13 @@ func openBlocks(l log.Logger, dir string, loaded []*Block, chunkPool chunkenc.Po
 		blocks = append(blocks, block)
 	}
 	return blocks, corrupted, nil
+}
+
+func normalizeBlockDurationMS(durationMS int64) int64 {
+	if durationMS <= 0 {
+		return durationMS
+	}
+	return ((durationMS + blockDurationBucketMS/2) / blockDurationBucketMS) * blockDurationBucketMS
 }
 
 // DefaultBlocksToDelete returns a filter which decides time based and size based

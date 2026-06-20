@@ -131,6 +131,37 @@ local template = grafana.template;
         )
       )
       .addRow(
+        g.row('Storage / Block Layout')
+        .addPanel(
+          g.panel('Loaded TSDB Blocks') +
+          g.queryPanel(
+            if showMultiCluster then
+              'sum by (cluster, job, instance) (prometheus_tsdb_blocks_loaded{cluster=~"$cluster",job=~"$job",instance=~"$instance"})'
+            else
+              'sum by (job, instance) (prometheus_tsdb_blocks_loaded{job=~"$job",instance=~"$instance"})',
+            if showMultiCluster then
+              '{{cluster}} {{job}} {{instance}}'
+            else
+              '{{job}} {{instance}}'
+          ) +
+          g.stack
+        )
+        .addPanel(
+          g.panel('Loaded TSDB Blocks by Duration') +
+          g.queryPanel(
+            if showMultiCluster then
+              'sum by (cluster, job, instance, duration_milliseconds) (prometheus_tsdb_blocks_loaded_by_duration{cluster=~"$cluster",job=~"$job",instance=~"$instance"})'
+            else
+              'sum by (job, instance, duration_milliseconds) (prometheus_tsdb_blocks_loaded_by_duration{job=~"$job",instance=~"$instance"})',
+            if showMultiCluster then
+              '{{cluster}} {{job}} {{instance}} {{duration_milliseconds}}ms'
+            else
+              '{{job}} {{instance}} {{duration_milliseconds}}ms'
+          ) +
+          g.stack
+        )
+      )
+      .addRow(
         g.row('Query')
         .addPanel(
           g.panel('Query Rate') +

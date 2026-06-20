@@ -29,6 +29,7 @@ var (
 const (
 	tmpForDeletionBlockDirSuffix = ".tmp-for-deletion"
 	reloadBlocksInterval         = time.Minute
+	blockDurationBucketMS        = int64(5 * time.Minute / time.Millisecond)
 )
 
 // Options configures block reload, mirroring the relevant tsdb.Options fields.
@@ -284,7 +285,7 @@ func (m *Manager) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
-		durationMS := block.Meta().MaxTime - block.Meta().MinTime
+		durationMS := normalizeBlockDurationMS(block.Meta().MaxTime - block.Meta().MinTime)
 		blocksByDurationMS[durationMS]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
@@ -364,6 +365,13 @@ func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*tsdb.Block) error {
 
 func (m *Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration) bool {
 	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli())
+}
+
+func normalizeBlockDurationMS(durationMS int64) int64 {
+	if durationMS <= 0 {
+		return durationMS
+	}
+	return ((durationMS + blockDurationBucketMS/2) / blockDurationBucketMS) * blockDurationBucketMS
 }
 
 //
