@@ -2,7 +2,9 @@
 
 #include <simdutf/simdutf.h>
 
+#include <iostream>
 #include <span>
+#include <string_view>
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/vector.h"
@@ -16,6 +18,33 @@
 #include "prometheus/value.h"
 
 namespace PromPP::WAL::hashdex::scraper {
+
+// log_invalid_utf8 prints the buffer line that failed UTF-8 validation to
+// stdout. `bad` must point inside `buffer` (the offending token/value); `kind`
+// describes where it came from (e.g. "help" or "label_value"). It is a
+// diagnostic aid: the Go buffer is mutated in place during parsing, so the
+// offending bytes can only be inspected reliably here, before they are encoded.
+inline void log_invalid_utf8(std::string_view buffer, std::string_view bad, std::string_view kind) noexcept {
+  const char* const begin = buffer.data();
+  const char* const end = begin + buffer.size();
+
+  const char* pos = bad.data();
+  if (pos < begin || pos > end) {
+    pos = begin;
+  }
+
+  const char* line_start = pos;
+  while (line_start > begin && *(line_start - 1) != '\n') {
+    --line_start;
+  }
+  const char* line_end = pos;
+  while (line_end < end && *line_end != '\n') {
+    ++line_end;
+  }
+
+  std::cout << "[scraper] invalid utf8 in " << kind << " buffer_size=" << buffer.size() << " line_offset=" << static_cast<size_t>(line_start - begin)
+            << " line=" << std::string_view(line_start, static_cast<size_t>(line_end - line_start)) << std::endl;
+}
 
 template <ParserInterface Parser>
 class Scraper {
@@ -147,6 +176,7 @@ class Scraper {
     }
 
     if (type == Token::kHelp && !simdutf::validate_utf8(text.data(), text.size())) [[unlikely]] {
+      log_invalid_utf8(tokenizer.buffer(), text, "help");
       return Error::kInvalidUtf8;
     }
 
@@ -271,6 +301,7 @@ class Scraper {
     value.remove_suffix(value.size() - (copy_to - value.data()));
 
     if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
+      log_invalid_utf8(tokenizer.buffer(), value, "label_value");
       return Error::kInvalidUtf8;
     }
 
