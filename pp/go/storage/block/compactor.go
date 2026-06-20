@@ -21,6 +21,9 @@ type CompactorOptions struct {
 	// MinBlockDuration is the smallest block range, used to derive the
 	// exponential compaction ranges. If zero, tsdb.DefaultBlockDuration is used.
 	MinBlockDuration int64
+	// MaxBlockDuration limits the largest compaction range. If zero, no limit is
+	// applied and all exponential ranges are used.
+	MaxBlockDuration int64
 	// MaxBlockChunkSegmentSize is the max block chunk segment size.
 	MaxBlockChunkSegmentSize int64
 	// EnableOverlappingCompaction enables compaction of overlapping blocks.
@@ -80,7 +83,7 @@ func NewCompactor(
 		interval = compactionInterval
 	}
 
-	rngs := tsdb.ExponentialBlockRanges(minBlockDuration, 10, 3)
+	rngs := compactionRanges(minBlockDuration, opts.MaxBlockDuration)
 	leveled, err := tsdb.NewLeveledCompactorWithOptions(ctx, r, logger, rngs, chunkenc.NewPool(), tsdb.LeveledCompactorOptions{
 		MaxBlockChunkSegmentSize:    opts.MaxBlockChunkSegmentSize,
 		EnableOverlappingCompaction: opts.EnableOverlappingCompaction,
@@ -138,6 +141,11 @@ func (c *Compactor) Close() {
 // It does not reload blocks: the periodic reload loop of the block source loads
 // the new block and deletes the compacted parents.
 func (c *Compactor) compactBlocks() error {
+	logger := c.logger
+	if logger == nil {
+		logger = log.NewNopLogger()
+	}
+
 	plan, err := c.compactor.Plan(c.dir)
 	if err != nil {
 		return fmt.Errorf("plan compaction: %w", err)
@@ -145,6 +153,14 @@ func (c *Compactor) compactBlocks() error {
 	if len(plan) == 0 {
 		return nil
 	}
+	openBlocks := c.source.Blocks()
+	start := time.Now()
+	level.Info(logger).Log(
+		"msg", "starting on-disk block compaction",
+		"plan_len", len(plan),
+		"plan", plan,
+		"open_blocks", len(openBlocks),
+	)
 
 	select {
 	case <-c.stopc:
@@ -152,10 +168,37 @@ func (c *Compactor) compactBlocks() error {
 	default:
 	}
 
-	if _, err := c.compactor.Compact(c.dir, plan, c.source.Blocks()); err != nil {
+	uids, err := c.compactor.Compact(c.dir, plan, openBlocks)
+	if err != nil {
 		return fmt.Errorf("compact %s: %w", plan, err)
 	}
+	level.Info(logger).Log(
+		"msg", "finished on-disk block compaction",
+		"plan_len", len(plan),
+		"plan", plan,
+		"open_blocks", len(openBlocks),
+		"result_blocks", len(uids),
+		"duration", time.Since(start),
+	)
 	return nil
+}
+
+func compactionRanges(minBlockDuration, maxBlockDuration int64) []int64 {
+	if maxBlockDuration > 0 && maxBlockDuration < minBlockDuration {
+		maxBlockDuration = minBlockDuration
+	}
+
+	rngs := tsdb.ExponentialBlockRanges(minBlockDuration, 10, 3)
+	if maxBlockDuration <= 0 {
+		return rngs
+	}
+
+	for i, v := range rngs {
+		if v > maxBlockDuration {
+			return rngs[:i]
+		}
+	}
+	return rngs
 }
 
 //

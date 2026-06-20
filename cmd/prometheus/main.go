@@ -856,6 +856,7 @@ func main() {
 		compactCtx, compactCancel = context.WithCancel(context.Background())
 		blockCompactor, err = block.NewCompactor(compactCtx, localStoragePath, &block.CompactorOptions{
 			MinBlockDuration:            int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+			MaxBlockDuration:            int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
 			MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
 			EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 		}, blockManager, log.With(logger, "component", "blockcompactor"), prometheus.DefaultRegisterer)

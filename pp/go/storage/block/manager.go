@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -81,10 +82,10 @@ func NewManager(
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
 		chunkPool:      chunkenc.NewPool(),
-		metrics:        newMetrics(r),
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}
+	m.metrics = newMetrics(m, r)
 
 	if err := m.reloadBlocks(); err != nil {
 		return nil, fmt.Errorf("initial reload blocks: %w", err)
@@ -269,8 +270,9 @@ func (m *Manager) reloadBlocks() (err error) {
 	}
 
 	var (
-		toLoad     []*tsdb.Block
-		blocksSize int64
+		toLoad             []*tsdb.Block
+		blocksSize         int64
+		blocksByDurationMS = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -282,8 +284,14 @@ func (m *Manager) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
+		durationMS := block.Meta().MaxTime - block.Meta().MinTime
+		blocksByDurationMS[durationMS]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
+	m.metrics.loadedBlocksByDuration.Reset()
+	for durationMS, count := range blocksByDurationMS {
+		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMS, 10)).Set(float64(count))
+	}
 
 	slices.SortFunc(toLoad, func(a, b *tsdb.Block) int {
 		switch {
@@ -363,14 +371,41 @@ func (m *Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration)
 //
 
 type metrics struct {
-	reloads         prometheus.Counter
-	reloadsFailed   prometheus.Counter
-	corruptedBlocks prometheus.Gauge
-	blocksBytes     prometheus.Gauge
+	loadedBlocks           prometheus.GaugeFunc
+	loadedBlocksByDuration *prometheus.GaugeVec
+	symbolTableSize        prometheus.GaugeFunc
+	reloads                prometheus.Counter
+	reloadsFailed          prometheus.Counter
+	corruptedBlocks        prometheus.Gauge
+	blocksBytes            prometheus.Gauge
 }
 
-func newMetrics(r prometheus.Registerer) *metrics {
+func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 	m := &metrics{
+		loadedBlocks: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_blocks_loaded",
+			Help: "Number of currently loaded data blocks.",
+		}, func() float64 {
+			manager.mtx.RLock()
+			defer manager.mtx.RUnlock()
+			return float64(len(manager.blocks))
+		}),
+		loadedBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_blocks_loaded_by_duration",
+			Help: "Number of currently loaded blocks grouped by block duration in milliseconds.",
+		}, []string{"duration_milliseconds"}),
+		symbolTableSize: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_symbol_table_size_bytes",
+			Help: "Size of symbol table in memory for loaded blocks.",
+		}, func() float64 {
+			manager.mtx.RLock()
+			defer manager.mtx.RUnlock()
+			var symTblSize uint64
+			for _, b := range manager.blocks {
+				symTblSize += b.GetSymbolTableSize()
+			}
+			return float64(symTblSize)
+		}),
 		reloads: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "prometheus_tsdb_reloads_total",
 			Help: "Number of times the database reloaded block data from disk.",
@@ -391,6 +426,9 @@ func newMetrics(r prometheus.Registerer) *metrics {
 
 	if r != nil {
 		r.MustRegister(
+			m.loadedBlocks,
+			m.loadedBlocksByDuration,
+			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,
 			m.corruptedBlocks,

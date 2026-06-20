@@ -64,6 +64,46 @@ func TestCompactorLoopTriggersCompactions(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestCompactionRanges(t *testing.T) {
+	t.Parallel()
+
+	t.Run("without max duration", func(t *testing.T) {
+		t.Parallel()
+		ranges := compactionRanges(2*60*60*1000, 0)
+		require.Equal(t, []int64{
+			2 * 60 * 60 * 1000,
+			6 * 60 * 60 * 1000,
+			18 * 60 * 60 * 1000,
+			54 * 60 * 60 * 1000,
+			162 * 60 * 60 * 1000,
+			486 * 60 * 60 * 1000,
+			1458 * 60 * 60 * 1000,
+			4374 * 60 * 60 * 1000,
+			13122 * 60 * 60 * 1000,
+			39366 * 60 * 60 * 1000,
+		}, ranges)
+	})
+
+	t.Run("with max duration", func(t *testing.T) {
+		t.Parallel()
+		ranges := compactionRanges(2*60*60*1000, 31*24*60*60*1000)
+		require.Equal(t, []int64{
+			2 * 60 * 60 * 1000,
+			6 * 60 * 60 * 1000,
+			18 * 60 * 60 * 1000,
+			54 * 60 * 60 * 1000,
+			162 * 60 * 60 * 1000,
+			486 * 60 * 60 * 1000,
+		}, ranges)
+	})
+
+	t.Run("max lower than min is normalized", func(t *testing.T) {
+		t.Parallel()
+		ranges := compactionRanges(2*60*60*1000, 60*60*1000)
+		require.Equal(t, []int64{2 * 60 * 60 * 1000}, ranges)
+	})
+}
+
 type fakeBlockSource struct {
 	blocks []*tsdb.Block
 }
