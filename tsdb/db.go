@@ -281,22 +281,22 @@ type DB struct {
 }
 
 type dbMetrics struct {
-	loadedBlocks         prometheus.GaugeFunc
-	loadedBlocksBySize   *prometheus.GaugeVec
-	symbolTableSize      prometheus.GaugeFunc
-	reloads              prometheus.Counter
-	reloadsFailed        prometheus.Counter
-	compactionsFailed    prometheus.Counter
-	compactionsTriggered prometheus.Counter
-	compactionsSkipped   prometheus.Counter
-	sizeRetentionCount   prometheus.Counter
-	timeRetentionCount   prometheus.Counter
-	startTime            prometheus.GaugeFunc
-	tombCleanTimer       prometheus.Histogram
-	blocksBytes          prometheus.Gauge
-	maxBytes             prometheus.Gauge
-	retentionDuration    prometheus.Gauge
-	corruptedBlocks      prometheus.Gauge
+	loadedBlocks           prometheus.GaugeFunc
+	loadedBlocksByDuration *prometheus.GaugeVec
+	symbolTableSize        prometheus.GaugeFunc
+	reloads                prometheus.Counter
+	reloadsFailed          prometheus.Counter
+	compactionsFailed      prometheus.Counter
+	compactionsTriggered   prometheus.Counter
+	compactionsSkipped     prometheus.Counter
+	sizeRetentionCount     prometheus.Counter
+	timeRetentionCount     prometheus.Counter
+	startTime              prometheus.GaugeFunc
+	tombCleanTimer         prometheus.Histogram
+	blocksBytes            prometheus.Gauge
+	maxBytes               prometheus.Gauge
+	retentionDuration      prometheus.Gauge
+	corruptedBlocks        prometheus.Gauge
 }
 
 func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
@@ -310,10 +310,10 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 		defer db.mtx.RUnlock()
 		return float64(len(db.blocks))
 	})
-	m.loadedBlocksBySize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "prometheus_tsdb_blocks_loaded_by_size",
-		Help: "Number of currently loaded blocks grouped by block size in bytes.",
-	}, []string{"size_bytes"})
+	m.loadedBlocksByDuration = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "prometheus_tsdb_blocks_loaded_by_duration",
+		Help: "Number of currently loaded blocks grouped by block duration in milliseconds.",
+	}, []string{"duration_milliseconds"})
 	m.symbolTableSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "prometheus_tsdb_symbol_table_size_bytes",
 		Help: "Size of symbol table in memory for loaded blocks",
@@ -393,7 +393,7 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 	if r != nil {
 		r.MustRegister(
 			m.loadedBlocks,
-			m.loadedBlocksBySize,
+			m.loadedBlocksByDuration,
 			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,
@@ -1641,9 +1641,9 @@ func (db *DB) reloadBlocks() (err error) {
 	// PP_CHANGES.md: rebuild on cpp end
 
 	var (
-		toLoad       []*Block
-		blocksSize   int64
-		blocksBySize = map[int64]int{}
+		toLoad           []*Block
+		blocksSize       int64
+		blocksByDuration = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -1654,14 +1654,14 @@ func (db *DB) reloadBlocks() (err error) {
 		}
 
 		toLoad = append(toLoad, block)
-		size := block.Size()
-		blocksSize += size
-		blocksBySize[size]++
+		blocksSize += block.Size()
+		durationMS := block.Meta().MaxTime - block.Meta().MinTime
+		blocksByDuration[durationMS]++
 	}
 	db.metrics.blocksBytes.Set(float64(blocksSize))
-	db.metrics.loadedBlocksBySize.Reset()
-	for size, count := range blocksBySize {
-		db.metrics.loadedBlocksBySize.WithLabelValues(strconv.FormatInt(size, 10)).Set(float64(count))
+	db.metrics.loadedBlocksByDuration.Reset()
+	for durationMS, count := range blocksByDuration {
+		db.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMS, 10)).Set(float64(count))
 	}
 
 	slices.SortFunc(toLoad, func(a, b *Block) int {
