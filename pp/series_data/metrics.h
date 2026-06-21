@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include "common.h"
 #include "metrics/storage.h"
 #include "series_data/encoder/timestamp/encoder.h"
@@ -10,21 +13,27 @@ template <class Reallocator>
 struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   using metrics::MetricsPage<Metrics>::MetricsPage;
 
-  PROMPP_ALWAYS_INLINE explicit Metrics(const encoder::timestamp::Encoder<Reallocator>& timestamp_encoder, const PromPP::Primitives::LabelViewSet& labels)
+  // address_label is moved into the page and owned by it. Every metric below stores a non-owning view (Go::String) of the
+  // label value, so the backing storage must outlive the page. Keeping the string inside the page (instead of in the
+  // DataStorage that registered it) ties the value's lifetime to the page itself, which is reclaimed only by
+  // metrics::Storage::remove_unused_pages(). This avoids a use-after-free where a concurrent scrape reads the label after
+  // the owning DataStorage has already been destroyed.
+  PROMPP_ALWAYS_INLINE explicit Metrics(const encoder::timestamp::Encoder<Reallocator>& timestamp_encoder, std::string address_label)
       : metrics::MetricsPage<Metrics>(outdated_samples_count_),
         timestamp_encoder_(&timestamp_encoder),
-        outdated_samples_count_{labels, "prompp_data_storage_outdated_samples_count"},
-        outdated_chunks_count_{labels, "prompp_data_storage_outdated_chunks_count"},
-        finalized_chunks_count_{labels, "prompp_data_storage_finalized_chunks_count"},
-        timestamp_states_count_{labels, "prompp_data_storage_timestamp_states_count"},
-        uint32_constants_count_{labels, "prompp_data_storage_uint32_constants_count"},
-        float32_constants_count_{labels, "prompp_data_storage_float32_constants_count"},
-        double_constants_count_{labels, "prompp_data_storage_double_constants_count"},
-        two_double_constants_count_{labels, "prompp_data_storage_two_double_constants_count"},
-        asc_int_count_{labels, "prompp_data_storage_asc_int_count"},
-        asc_int_then_values_gorilla_count_{labels, "prompp_data_storage_asc_int_then_values_gorilla_count"},
-        values_gorilla_count_{labels, "prompp_data_storage_values_gorilla_count"},
-        gorilla_count_{labels, "prompp_data_storage_gorilla_count"} {}
+        address_label_(std::move(address_label)),
+        outdated_samples_count_{label_set(), "prompp_data_storage_outdated_samples_count"},
+        outdated_chunks_count_{label_set(), "prompp_data_storage_outdated_chunks_count"},
+        finalized_chunks_count_{label_set(), "prompp_data_storage_finalized_chunks_count"},
+        timestamp_states_count_{label_set(), "prompp_data_storage_timestamp_states_count"},
+        uint32_constants_count_{label_set(), "prompp_data_storage_uint32_constants_count"},
+        float32_constants_count_{label_set(), "prompp_data_storage_float32_constants_count"},
+        double_constants_count_{label_set(), "prompp_data_storage_double_constants_count"},
+        two_double_constants_count_{label_set(), "prompp_data_storage_two_double_constants_count"},
+        asc_int_count_{label_set(), "prompp_data_storage_asc_int_count"},
+        asc_int_then_values_gorilla_count_{label_set(), "prompp_data_storage_asc_int_then_values_gorilla_count"},
+        values_gorilla_count_{label_set(), "prompp_data_storage_values_gorilla_count"},
+        gorilla_count_{label_set(), "prompp_data_storage_gorilla_count"} {}
 
   void refresh_metrics() noexcept override { timestamp_states_count_.set(timestamp_encoder_->states_count()); }
 
@@ -49,6 +58,7 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
 
  private:
   const encoder::timestamp::Encoder<Reallocator>* timestamp_encoder_;
+  const std::string address_label_;
 
   metrics::Counter outdated_samples_count_;
   metrics::Counter outdated_chunks_count_;
@@ -63,6 +73,10 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   metrics::Gauge asc_int_then_values_gorilla_count_;
   metrics::Gauge values_gorilla_count_;
   metrics::Gauge gorilla_count_;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::LabelViewSet label_set() const {
+    return PromPP::Primitives::LabelViewSet{{"address", address_label_}};
+  }
 
   template <class Handler>
   PROMPP_ALWAYS_INLINE decltype(auto) get_chunk_count(EncodingType encoding_type, Handler&& handler) noexcept {

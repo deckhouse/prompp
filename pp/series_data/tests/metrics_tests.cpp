@@ -1,5 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <bit>
+#include <string>
+#include <string_view>
+
+#include "metrics/storage.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"
 
@@ -236,6 +241,38 @@ TEST_F(DataStorageMetricsMergeFinalizedTestFixture, MergeFinalizedChunkPreserves
   EXPECT_EQ(1, outdated_chunks_count());
   EXPECT_EQ(1, finalized_chunks_count());
   EXPECT_EQ(2, chunk_count(EncodingType::kUint32Constant));
+}
+
+[[nodiscard]] std::string read_address_label(const metrics::MetricsPageControlBlock& page) {
+  for (const metrics::Metric* metric : page) {
+    for (const auto* label_pair : metric->go_metric()->metric->labels) {
+      if (static_cast<std::string_view>(*label_pair->name) == "address") {
+        return std::string{static_cast<std::string_view>(*label_pair->value)};
+      }
+    }
+  }
+  return {};
+}
+
+// Regression test for a use-after-free where the "address" label value was a non-owning view into a string stored in the
+// DataStorage. After the DataStorage was destroyed the metrics page was only detached (not yet removed), so a concurrent
+// scrape still holding the page would read freed memory and emit an invalid (non-UTF-8) label value. The label string is
+// now owned by the page, so it stays valid until the page itself is reclaimed by remove_unused_pages().
+TEST(DataStorageMetricsLifetimeTest, AddressLabelOwnedByPageSurvivesStorageDestruction) {
+  // Arrange
+  auto* storage = new DataStorage();
+  auto* page = storage->metrics;
+  const auto expected = std::to_string(std::bit_cast<uint64_t>(storage));
+  ASSERT_EQ(expected, read_address_label(*page));
+
+  // Act: destroy the storage. The page is only detached, not physically removed yet.
+  delete storage;
+
+  // Assert: the page still owns a valid "address" string (no dangling view / use-after-free).
+  EXPECT_EQ(expected, read_address_label(*page));
+
+  // Cleanup: reclaim the detached page.
+  metrics::storage.remove_unused_pages();
 }
 
 }  // namespace
