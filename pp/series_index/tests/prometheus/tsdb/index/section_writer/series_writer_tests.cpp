@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <string>
+#include <string_view>
+
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -26,6 +29,13 @@ class SeriesWriterFixture : public testing::Test {
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using SeriesWriter = series_index::prometheus::tsdb::index::section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
 
+  // In a real index the series section is always preceded by the symbols table, so a written
+  // series never starts at offset 0. Offset 0 maps to section_ref == 0 == kUnwrittenSeriesReference,
+  // which PostingsWriter treats as the "not written" sentinel and SeriesWriter asserts against.
+  // Seed the stream with a stub standing in for the preceding sections so the first series lands
+  // at a non-zero, aligned offset, matching production.
+  static constexpr uint32_t kPrecedingSectionsStubSize = PromPP::Prometheus::tsdb::index::kSeriesAlignment;
+
   Stream stream_;
   StreamWriter stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
@@ -41,7 +51,11 @@ class SeriesWriterFixture : public testing::Test {
     index_write_context_.rebuild();
 
     series_references_.resize(lss_.next_item_index(), kUnwrittenSeriesReference);
+
+    stream_writer_.write(std::string(kPrecedingSectionsStubSize, '\0'));
   }
+
+  [[nodiscard]] std::string_view written_series() const { return stream_.view().substr(kPrecedingSectionsStubSize); }
 };
 
 TEST_F(SeriesWriterFixture, OneChunk) {
@@ -66,7 +80,7 @@ TEST_F(SeriesWriterFixture, OneChunk) {
       "\x00"
 
       "\xE3\x66\x88\x29"sv,
-      stream_.view());
+      written_series());
 }
 
 TEST_F(SeriesWriterFixture, MultiplySeriesMultiplyChunks) {
@@ -132,7 +146,7 @@ TEST_F(SeriesWriterFixture, MultiplySeriesMultiplyChunks) {
 
       "\xC1\x26\xD2\xEE"
       "\x00\x00\x00\x00\x00\x00\x00"sv,
-      stream_.view());
+      written_series());
 }
 
 }  // namespace
