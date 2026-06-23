@@ -9,7 +9,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -170,6 +169,10 @@ func NewQuerier[
 	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	if metrics == nil {
+		metrics = NewMetrics(nil, "queryable_unknown")
+	}
+
 	return newQuerierWithSelectFuncOptimize(
 		head,
 		deduplicatorCtor,
@@ -195,6 +198,10 @@ func NewQuerierWithOutSelectFuncOptimize[
 	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	if metrics == nil {
+		metrics = NewMetrics(nil, "queryable_unknown")
+	}
+
 	return newQuerierWithSelectFuncOptimize(
 		head,
 		deduplicatorCtor,
@@ -321,11 +328,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer release()
 
 	defer func() {
-		if q.metrics != nil {
-			q.metrics.SelectDuration.With(
-				prometheus.Labels{"query_type": "instant"},
-			).Observe(float64(time.Since(start).Microseconds()))
-		}
+		q.metrics.SelectDuration.WithLabelValues("instant").Observe(float64(time.Since(start).Microseconds()))
 	}()
 
 	poolProvider := q.head.PoolProvider()
@@ -412,11 +415,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer release()
 
 	defer func() {
-		if q.metrics != nil {
-			q.metrics.SelectDuration.With(
-				prometheus.Labels{"query_type": "range"},
-			).Observe(float64(time.Since(start).Microseconds()))
-		}
+		q.metrics.SelectDuration.WithLabelValues("range").Observe(float64(time.Since(start).Microseconds()))
 	}()
 
 	poolProvider := q.head.PoolProvider()
@@ -440,13 +439,16 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
 	if isCrossSeriesFunc(hints) {
+		q.metrics.OptimizationType.WithLabelValues("cross_series").Inc()
 		return q.makeCrossSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
 	if isAggregationSeriesFunc(hints) {
+		q.metrics.OptimizationType.WithLabelValues("aggregation").Inc()
 		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
 	}
 
+	q.metrics.OptimizationType.WithLabelValues("none").Inc()
 	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
 }
 
