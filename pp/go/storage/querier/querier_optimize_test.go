@@ -486,7 +486,6 @@ func (s *querierOptimize) setup(
 
 	s.head = s.mustCreateHead(0)
 	s.fillHead(ctx)
-	s.fillHeadWithCounter(ctx, 0, querier.DefaultCountOfSeriesToOptimize)
 
 	s.lookbackDelta = 5 * time.Minute
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
@@ -724,6 +723,7 @@ func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
 		defaultStep,
 		defaultCountOfSteps,
 	)
+
 	querier.IsPossibleToOptimize = func(
 		[]*cppbridge.LSSQueryResult,
 		*prom_storage.SelectHints,
@@ -748,15 +748,6 @@ func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
 	s.subQueries = defaultSubQueries
 	s.modifiers = defaultModifiers
 	s.offsets = defaultOffsets
-
-	q, err := s.Querier(s.start.UnixMilli(), s.end.UnixMilli())
-	s.Require().NoError(err)
-
-	names, _, err := q.LabelValues(s.T().Context(), "__name__", &prom_storage.LabelHints{})
-	s.Require().NoError(err)
-
-	s.metricNames = querier.DeduplicateAndSortStringSlices(names)
-	s.Require().NoError(q.Close())
 }
 
 func (s *MatrixQuerierOptimizeSuiteSuite) TearDownSuite() {
@@ -1289,15 +1280,15 @@ func BenchmarkRangeQueryOverTime(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	// querier.IsPossibleToOptimize = func(
-	// 	[]*cppbridge.LSSQueryResult,
-	// 	*prom_storage.SelectHints,
-	// 	int64, int64,
-	// ) func() bool {
-	// 	return func() bool {
-	// 		return true
-	// 	}
-	// }
+	querier.IsPossibleToOptimize = func(
+		[]*cppbridge.LSSQueryResult,
+		*prom_storage.SelectHints,
+		int64, int64,
+	) func() bool {
+		return func() bool {
+			return true
+		}
+	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
