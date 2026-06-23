@@ -77,6 +77,9 @@ const (
 // DefaultCountOfSeriesToOptimize is the default count of series to optimize.
 const DefaultCountOfSeriesToOptimize = 11
 
+// optimizeAggregationRatio is the ratio to optimize the aggregation function.
+const optimizeAggregationRatio = 3.3
+
 // defaultOptimizeType is the default option for selecting functions optimization.
 var defaultOptimizeType = noneOptimizeType
 
@@ -125,6 +128,13 @@ var emptySelectHints = &storage.SelectHints{}
 // emptySeriesSet is an empty series set.
 var emptySeriesSet = &SeriesSet{}
 
+// IsPossibleToOptimize is the function to check if the query possible to optimization.
+var IsPossibleToOptimize func(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	hints *storage.SelectHints,
+	scrapeIntervalMS, shiftMS int64,
+) func() bool = DefaultIsPossibleToOptimize
+
 //
 // Querier
 //
@@ -139,7 +149,8 @@ type Querier[
 ] struct {
 	mint             int64
 	maxt             int64
-	scrapeInterval   int64
+	scrapeIntervalMS int64
+	headMinTSMS      int64
 	head             THead
 	deduplicatorCtor deduplicatorCtor
 	metrics          *Metrics
@@ -156,7 +167,7 @@ func NewQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeInterval int64,
+	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return newQuerierWithSelectFuncOptimize(
@@ -164,7 +175,8 @@ func NewQuerier[
 		deduplicatorCtor,
 		mint,
 		maxt,
-		scrapeInterval,
+		scrapeIntervalMS,
+		headMinTSMS,
 		metrics,
 		selectFuncOptimize,
 	)
@@ -180,7 +192,7 @@ func NewQuerierWithOutSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeInterval int64,
+	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return newQuerierWithSelectFuncOptimize(
@@ -188,7 +200,8 @@ func NewQuerierWithOutSelectFuncOptimize[
 		deduplicatorCtor,
 		mint,
 		maxt,
-		scrapeInterval,
+		scrapeIntervalMS,
+		headMinTSMS,
 		metrics,
 		selectFuncOptimize&dropPointOptimizeType,
 	)
@@ -204,14 +217,15 @@ func newQuerierWithSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeInterval int64,
+	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 	queryOptimize queryOptimizeType,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
-		scrapeInterval:   scrapeInterval,
+		scrapeIntervalMS: scrapeIntervalMS,
+		headMinTSMS:      headMinTSMS,
 		head:             head,
 		deduplicatorCtor: deduplicatorCtor,
 		metrics:          metrics,
@@ -416,7 +430,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = SwitchFuncOptimize(hints, isPossibleToOptimize(lssQueryResults, hints, q.scrapeInterval), q.queryOptimize)
+	hints = SwitchFuncOptimize(
+		hints,
+		IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
+		q.queryOptimize,
+	)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
@@ -606,11 +624,11 @@ func SwitchFuncOptimize(
 	return emptySelectHints
 }
 
-// isPossibleToOptimize checks if the query possible to optimization.
-func isPossibleToOptimize(
+// DefaultIsPossibleToOptimize checks if the query possible to optimization.
+func DefaultIsPossibleToOptimize(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	hints *storage.SelectHints,
-	scrapeInterval int64,
+	scrapeIntervalMS, headMinTSMS int64,
 ) func() bool {
 	return func() bool {
 		countOfSeries := 0
@@ -623,17 +641,21 @@ func isPossibleToOptimize(
 		}
 
 		if isCrossSeriesFunc(hints) {
-			return isPossibleToOptimizeCrossSeriesFunc(hints, scrapeInterval, countOfSeries)
+			return isPossibleToOptimizeCrossSeriesFunc(hints, scrapeIntervalMS, countOfSeries)
 		}
 
-		return true
+		if isAggregationSeriesFunc(hints) {
+			return isPossibleToOptimizeAggregationFunc(hints, scrapeIntervalMS, headMinTSMS)
+		}
+
+		return false
 	}
 }
 
 // isPossibleToOptimizeCrossSeriesFunc checks if the cross series function is possible to optimize.
 func isPossibleToOptimizeCrossSeriesFunc(
 	hints *storage.SelectHints,
-	scrapeInterval int64,
+	scrapeIntervalMS int64,
 	countOfSeries int,
 ) bool {
 	// for cross series functions for instant query, we don't need to optimize the query
@@ -649,51 +671,52 @@ func isPossibleToOptimizeCrossSeriesFunc(
 		return true
 	}
 
-	hintStep := hints.Step * 1e6 //revive:disable-line:add-constant // ms to ns
-
 	// grouping by
-	if hintStep == scrapeInterval && countOfSeries > DefaultCountOfSeriesToOptimize+1 {
+	if hints.Step == scrapeIntervalMS && countOfSeries > DefaultCountOfSeriesToOptimize+1 {
 		return true
 	}
 
 	//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
-	if hintStep >= scrapeInterval*2 && countOfSeries >= DefaultCountOfSeriesToOptimize {
+	if hints.Step >= scrapeIntervalMS*2 && countOfSeries >= DefaultCountOfSeriesToOptimize {
 		return true
 	}
 
 	//revive:disable-next-line:add-constant // x3 scrape interval are required to enable optimization
-	if hintStep >= scrapeInterval*3 && countOfSeries > DefaultCountOfSeriesToOptimize {
+	if hints.Step >= scrapeIntervalMS*3 && countOfSeries > DefaultCountOfSeriesToOptimize {
 		return true
 	}
 
 	return false
 }
 
+// isPossibleToOptimizeAggregationFunc checks if the aggregation function is possible to optimize.
 func isPossibleToOptimizeAggregationFunc(
 	hints *storage.SelectHints,
-	scrapeInterval, shift int64,
+	scrapeIntervalMS, headMinTSMS int64,
 ) bool {
-	hintStep := hints.Step * 1e6 //revive:disable-line:add-constant // ms to ns
-	if hintStep <= scrapeInterval {
+	if hints.Step <= scrapeIntervalMS {
 		return false
 	}
 
-	// instant query, shift is x5 scrape interval and range is x5 scrape interval
 	if hints.Step == 0 {
-		return hintStep >= scrapeInterval*5 && hints.Range >= scrapeInterval*5
+		// instant query, shift is x5 scrape interval and range is x5 scrape interval
+		//revive:disable-next-line:add-constant // x5 scrape interval
+		return hints.Start-headMinTSMS >= scrapeIntervalMS*5 && hints.Range >= scrapeIntervalMS*5
 	}
 
-	hintRange := hints.Range * 1e6 //revive:disable-line:add-constant // ms to ns
-	if hintRange < scrapeInterval {
+	if hints.Range < scrapeIntervalMS {
 		return false
 	}
 
-	//revive:disable-next-line:add-constant // check if the range is even
-	if hintRange/scrapeInterval%2 != 0 {
-		return false
+	if hints.Step > hints.Range {
+		return true
 	}
 
-	return true
+	if float64(hints.Step)/float64(scrapeIntervalMS) >= optimizeAggregationRatio {
+		return true
+	}
+
+	return false
 }
 
 // isNotWithpout checks if the hints is not without by.

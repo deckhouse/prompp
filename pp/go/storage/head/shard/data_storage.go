@@ -135,6 +135,15 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) cppbridge.TimeInterval
 	return result
 }
 
+// TimeIntervalWithValidateCache gets time interval from [DataStorage] with validate cache.
+func (ds *DataStorage) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) cppbridge.TimeInterval {
+	ds.locker.RLock()
+	result := ds.dataStorage.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
+	ds.locker.RUnlock()
+
+	return result
+}
+
 // CreateUnusedSeriesDataUnloader create unused series data unloader
 func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader {
 	return ds.dataStorage.CreateUnusedSeriesDataUnloader()

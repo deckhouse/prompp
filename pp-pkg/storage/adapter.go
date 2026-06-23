@@ -21,6 +21,9 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+// defaultCacheCheckIntervalMs is the default cache check interval in milliseconds.
+const defaultCacheCheckIntervalMs = int64(5*time.Minute) / 1e6 // ns to ms
+
 //
 // Adapter
 //
@@ -256,7 +259,7 @@ func (ar *Adapter) ApplyConfig(cfg *config.Config) error {
 		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit), // #nosec G115 // no overflow
 	}
 	ar.hashdexLimits.Store(limits)
-	ar.scrapeInterval.Store(int64(cfg.GlobalConfig.ScrapeInterval))
+	ar.scrapeInterval.Store(int64(cfg.GlobalConfig.ScrapeInterval / 1e6)) // ns to ms
 	return nil
 }
 
@@ -269,12 +272,15 @@ func (ar *Adapter) Close() error {
 
 // HeadQuerier returns [storage.Querier] from active head.
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
+	ahead := ar.proxy.Get()
+	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
 	return querier.NewQuerier(
-		ar.proxy.Get(),
+		ahead,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
 		maxt,
 		ar.scrapeInterval.Load(),
+		aTimeInterval.MinT,
 		ar.activeQuerierMetrics,
 	), nil
 }
@@ -299,6 +305,7 @@ func (ar *Adapter) MergeOutOfOrderChunks() {
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
+	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
 	queriers = append(
 		queriers,
 		querier.NewQuerier(
@@ -307,6 +314,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			mint,
 			maxt,
 			ar.scrapeInterval.Load(),
+			aTimeInterval.MinT,
 			ar.activeQuerierMetrics,
 		),
 	)
@@ -329,6 +337,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				mint,
 				maxt,
 				ar.scrapeInterval.Load(),
+				aTimeInterval.MinT,
 				ar.storageQuerierMetrics,
 			),
 		)
@@ -348,6 +357,18 @@ func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for _, shard := range head.Shards() {
 		interval := shard.TimeInterval(false)
+		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
+		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
+	}
+
+	return timeInterval
+}
+
+// headTimeIntervalWithValidateCache returns [cppbridge.TimeInterval] from [pp_storage.Head] with validate cache.
+func headTimeIntervalWithValidateCache(head *pp_storage.Head, cacheCheckIntervalMs int64) cppbridge.TimeInterval {
+	timeInterval := cppbridge.NewInvalidTimeInterval()
+	for _, shard := range head.Shards() {
+		interval := shard.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
 		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
 		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
 	}

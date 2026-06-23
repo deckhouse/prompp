@@ -12,7 +12,10 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/promql"
+	prom_storage "github.com/prometheus/prometheus/storage"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -231,7 +234,23 @@ func TestQuickQuerierOptimizeSuite(t *testing.T) {
 }
 
 func (s *QuickQuerierOptimizeSuite) SetupSuite() {
-	s.querierOptimize.setup(s.T().Context(), s.T().TempDir(), s.Require().NoError)
+	s.querierOptimize.setup(
+		s.T().Context(),
+		s.T().TempDir(),
+		s.Require().NoError,
+		time.UnixMilli(defaultStartMs),
+		defaultStep,
+		defaultCountOfSteps,
+	)
+	querier.IsPossibleToOptimize = func(
+		[]*cppbridge.LSSQueryResult,
+		*prom_storage.SelectHints,
+		int64, int64,
+	) func() bool {
+		return func() bool {
+			return true
+		}
+	}
 
 	s.quickQE = promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
