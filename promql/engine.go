@@ -769,7 +769,6 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 		query.matrix = mat
 		switch s.Expr.Type() {
 		case parser.ValueTypeVector:
-			ng.sortMatrixResult(ctx, query, mat)
 			// Convert matrix with one value per series into vector.
 			vector := make(Vector, len(mat))
 			for i, s := range mat {

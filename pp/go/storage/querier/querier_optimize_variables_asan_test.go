@@ -15,7 +15,6 @@ const (
 
 // defaultSteps is the default steps.
 var defaultSteps = []time.Duration{
-	defaultStep - time.Second,
 	defaultStep * 2,
 }
 

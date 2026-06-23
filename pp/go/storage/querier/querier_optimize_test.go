@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -998,6 +999,14 @@ func vectorEqual(exp, act promql.Vector) (bool, string) {
 	msg := strings.Builder{}
 	_, _ = msg.WriteString("vector:\n")
 	isEqual := true
+
+	// we are sorting, because the sorting is broken on instant requests
+	slices.SortFunc(exp, func(a, b promql.Sample) int {
+		return labels.Compare(a.Metric, b.Metric)
+	})
+	slices.SortFunc(act, func(a, b promql.Sample) int {
+		return labels.Compare(a.Metric, b.Metric)
+	})
 
 	for i, v := range exp {
 		if eq, result := sampleEqual(v, act[i]); !eq {
