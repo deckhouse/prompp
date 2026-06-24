@@ -37,10 +37,11 @@ func (s *Storage) Writer(blockID uuid.UUID, shardID uint16, shardLog, segmentEnc
 		fileFn: func() (*os.File, error) {
 			fileName := path.Join(s.dir, fmt.Sprintf("%s-%d", blockID.String(), shardID))
 			dir := filepath.Dir(fileName)
-			if err := os.MkdirAll(dir, 0o744); err != nil {
+			if err := os.MkdirAll(dir, 0o750); err != nil {
 				return nil, err
 			}
-			return os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+			//nolint:gosec // fileName is derived from the configured storage dir and block/shard IDs
+			return os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 		},
 		blockHeader: storage.BlockHeader{
 			FileVersion:            FileVersion,

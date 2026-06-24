@@ -97,7 +97,7 @@ func (fs *FileStorage) ReadAt(b []byte, off int64) (int, error) {
 	return fs.fileDescriptor.ReadAt(b, off)
 }
 
-// Close - implements os.Close
+// Close - implements os.Close.
 func (fs *FileStorage) Close() error {
 	if fs.fileDescriptor == nil {
 		return nil
@@ -131,17 +131,17 @@ func (fs *FileStorage) GetPath() string {
 	return filepath.Join(fs.dir, fs.fileName)
 }
 
-// Rename file
+// Rename file.
 func (fs *FileStorage) Rename(name string) error {
 	return fs.renameFile(name + refillFileExtension)
 }
 
-// IntermediateRename renames file with temporary extension
+// IntermediateRename renames file with temporary extension.
 func (fs *FileStorage) IntermediateRename(name string) error {
 	return fs.renameFile(name + refillIntermediateFileExtension)
 }
 
-// GetIntermediateName returns true with name if file has temporary extension
+// GetIntermediateName returns true with name if file has temporary extension.
 func (fs *FileStorage) GetIntermediateName() (string, bool) {
 	if strings.HasSuffix(fs.fileName, refillIntermediateFileExtension) {
 		return strings.TrimSuffix(fs.fileName, refillIntermediateFileExtension), true

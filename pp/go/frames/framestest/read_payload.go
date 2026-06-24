@@ -5,18 +5,19 @@ import (
 	"context"
 	"io"
 
-	"github.com/prometheus/prometheus/pp/go/frames"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/prometheus/prometheus/pp/go/frames"
 )
 
-// ReadPayload reads payload to bytes
+// ReadPayload reads payload to bytes.
 func ReadPayload(p frames.WritePayload) ([]byte, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, p.Size()))
 	_, err := p.WriteTo(buf)
 	return buf.Bytes(), err
 }
 
-// ReadFrame convert WriteFrame into ReadFrame
+// ReadFrame convert WriteFrame into ReadFrame.
 func ReadFrame(ctx context.Context, f *frames.WriteFrame) (*frames.ReadFrame, error) {
 	r, w := io.Pipe()
 	g := new(errgroup.Group)

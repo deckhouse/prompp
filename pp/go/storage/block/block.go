@@ -54,12 +54,12 @@ type ChunkIterator struct {
 // NewChunkIterator init new [ChunkIterator].
 func NewChunkIterator(
 	lss *cppbridge.LabelSetStorage,
-	lsIdBatchSize uint32,
+	lsIDBatchSize uint32,
 	ds *cppbridge.DataStorage,
 	minT, maxT int64,
 ) ChunkIterator {
 	return ChunkIterator{
-		r:           cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT}),
+		r:           cppbridge.NewChunkRecoder(lss, lsIDBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT}),
 		hasMoreData: true,
 	}
 }

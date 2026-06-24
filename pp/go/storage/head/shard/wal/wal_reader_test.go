@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"github.com/go-faker/faker/v4"
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 )
 
 type SegmentWalReaderSuite struct {

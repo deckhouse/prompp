@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -14,13 +13,14 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/grafana/regexp"
 	"github.com/prometheus/common/model"
 )
 
 // NullTimestamp the timestamp that is used as the nil value.
 const NullTimestamp = math.MinInt64
 
-// ErrLSSNullPointer - error when lss is null pointer
+// ErrLSSNullPointer - error when lss is null pointer.
 var ErrLSSNullPointer = errors.New("lss is null pointer")
 
 //
@@ -405,7 +405,7 @@ type RelabeledSeries struct {
 	trackStaleNans CppRoaringBitset
 }
 
-// IsEmpty - true if empty
+// IsEmpty - true if empty.
 func (rss *RelabeledSeries) IsEmpty() bool {
 	return rss.size == 0
 }
@@ -492,7 +492,7 @@ func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
 	return series
 }
 
-// IsEmpty return true if all elements are empty
+// IsEmpty return true if all elements are empty.
 func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 	for i := range sd.series {
 		if !sd.series[i].IsEmpty() {
@@ -1110,7 +1110,7 @@ func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
 	return stats, ok, handleException(exception)
 }
 
-// PerGoroutineRelabelerTrackStaleNans add stale nans samples if needed
+// PerGoroutineRelabelerTrackStaleNans add stale nans samples if needed.
 func PerGoroutineRelabelerTrackStaleNans(
 	innerSeries []InnerSeries,
 	state *StateV2,

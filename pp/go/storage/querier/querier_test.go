@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
@@ -19,7 +21,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	prom_storage "github.com/prometheus/prometheus/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 const (

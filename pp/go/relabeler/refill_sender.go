@@ -661,7 +661,7 @@ func (sm *SendMap) Append(dname string, shardID uint16, segmentID uint32) {
 	sm.m[dname][shardID] = append(list, segmentID)
 }
 
-// Remove destination-shard data
+// Remove destination-shard data.
 func (sm *SendMap) Remove(dname string, shardID uint16) {
 	sm.m[dname][shardID] = nil
 }

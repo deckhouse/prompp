@@ -1,6 +1,10 @@
 package util
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"errors"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // UnconflictRegisterer is a prometheus.UnconflictRegisterer wrap to avoid duplicates errors.
 type UnconflictRegisterer struct {
@@ -22,7 +26,7 @@ func (cr UnconflictRegisterer) NewCounter(opts prometheus.CounterOpts) prometheu
 	return c.With(constLabels)
 }
 
-// NewCounterVec create new prometheus.CounterVec and register it in wrapped registerer
+// NewCounterVec create new prometheus.CounterVec and register it in wrapped registerer.
 func (cr UnconflictRegisterer) NewCounterVec(opts prometheus.CounterOpts, labelNames []string) *prometheus.CounterVec {
 	constLabels := opts.ConstLabels
 	opts.ConstLabels = nil
@@ -32,7 +36,7 @@ func (cr UnconflictRegisterer) NewCounterVec(opts prometheus.CounterOpts, labelN
 	return c.MustCurryWith(constLabels)
 }
 
-// NewGauge create new prometheus.Gauge and register it in wrapped registerer
+// NewGauge create new prometheus.Gauge and register it in wrapped registerer.
 func (cr UnconflictRegisterer) NewGauge(opts prometheus.GaugeOpts) prometheus.Gauge {
 	constLabels := opts.ConstLabels
 	opts.ConstLabels = nil
@@ -42,7 +46,7 @@ func (cr UnconflictRegisterer) NewGauge(opts prometheus.GaugeOpts) prometheus.Ga
 	return c.With(constLabels)
 }
 
-// NewGaugeVec create new prometheus.GaugeVec and register it in wrapped registerer
+// NewGaugeVec create new prometheus.GaugeVec and register it in wrapped registerer.
 func (cr UnconflictRegisterer) NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *prometheus.GaugeVec {
 	constLabels := opts.ConstLabels
 	opts.ConstLabels = nil
@@ -57,9 +61,8 @@ func (cr UnconflictRegisterer) NewGaugeFunc(opts prometheus.GaugeOpts, fn func()
 	return mustRegisterOrGet(cr.Registerer, prometheus.NewGaugeFunc(opts, fn))
 }
 
-// NewHistogramVec create new prometheus.HistogramVec and register it in wrapped registerer
+// NewHistogramVec create new prometheus.HistogramVec and register it in wrapped registerer.
 func (cr UnconflictRegisterer) NewHistogramVec(
-	//nolint:gocritic // should be compatible with prometheus.NewHistogramVec
 	opts prometheus.HistogramOpts, labelNames []string,
 ) *prometheus.HistogramVec {
 	constLabels := opts.ConstLabels
@@ -70,9 +73,8 @@ func (cr UnconflictRegisterer) NewHistogramVec(
 	return h.MustCurryWith(constLabels).(*prometheus.HistogramVec)
 }
 
-// NewHistogram create new prometheus.Histogram and register it in wrapped registerer
+// NewHistogram create new prometheus.Histogram and register it in wrapped registerer.
 func (cr UnconflictRegisterer) NewHistogram(
-	//nolint:gocritic // should be compatible with prometheus.NewHistogramVec
 	opts prometheus.HistogramOpts,
 ) prometheus.Histogram {
 	constLabels := opts.ConstLabels
@@ -104,7 +106,8 @@ func mustRegisterOrGet[Collector prometheus.Collector](r prometheus.Registerer, 
 	if err == nil {
 		return c
 	}
-	if arErr, ok := err.(prometheus.AlreadyRegisteredError); ok {
+	var arErr prometheus.AlreadyRegisteredError
+	if errors.As(err, &arErr) {
 		return arErr.ExistingCollector.(Collector)
 	}
 	panic(err)

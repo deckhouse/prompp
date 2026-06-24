@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -18,8 +19,8 @@ const (
 	DefaultBlockDuration = 2 * time.Hour
 )
 
-// LsIdBatchSize is the batch size for label set ID.
-var LsIdBatchSize uint32 = 100000
+// LsIDBatchSize is the batch size for label set ID.
+var LsIDBatchSize uint32 = 100000
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
@@ -66,8 +67,8 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 			return err
 		}
 		defer func() {
-			if err := writers.Close(); err != nil {
-				logger.Warnf("Failed to close block writers: %v", err)
+			if closeErr := writers.Close(); closeErr != nil {
+				logger.Warnf("Failed to close block writers: %v", closeErr)
 			}
 		}()
 
@@ -101,7 +102,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 
 		var chunkIterator ChunkIterator
 		_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIdBatchSize, sd.DataStorage().Raw(), minT, maxT)
+			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIDBatchSize, sd.DataStorage().Raw(), minT, maxT)
 			return nil
 		})
 
@@ -125,7 +126,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
 	_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
+		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIDBatchSize)
 		return nil
 	})
 

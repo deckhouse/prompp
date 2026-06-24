@@ -7,6 +7,7 @@ import (
 
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/fileutil"

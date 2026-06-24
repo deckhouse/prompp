@@ -43,7 +43,7 @@ func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.Inner
 // and add to encoder [cppbridge.HeadEncoder], returns createTs, encodeTs.
 //
 //revive:disable-next-line:confusing-results // returns createTs, encodeTs
-//nolint:gocritic // returns createTs, encodeTs
+
 func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []byte) (int64, int64, error) {
 	return decoder.DecodeToDataStorage(data, ds.encoder)
 }
@@ -133,22 +133,22 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) cppbridge.TimeInterval
 	return result
 }
 
-// CreateUnusedSeriesDataUnloader create unused series data unloader
+// CreateUnusedSeriesDataUnloader create unused series data unloader.
 func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader {
 	return ds.dataStorage.CreateUnusedSeriesDataUnloader()
 }
 
-// CreateLoader create series data unloader
+// CreateLoader create series data unloader.
 func (ds *DataStorage) CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader {
 	return ds.dataStorage.CreateLoader(queriers)
 }
 
-// CreateRevertableLoader create series data revertable unloader
+// CreateRevertableLoader create series data revertable unloader.
 func (ds *DataStorage) CreateRevertableLoader(
 	lss *cppbridge.LabelSetStorage,
-	lsIdBatchSize uint32,
+	lsIDBatchSize uint32,
 ) *cppbridge.UnloadedDataRevertableLoader {
-	return ds.dataStorage.CreateRevertableLoader(lss, lsIdBatchSize)
+	return ds.dataStorage.CreateRevertableLoader(lss, lsIDBatchSize)
 }
 
 // GetQueriedSeriesBitset gets the queried series bitset memory.

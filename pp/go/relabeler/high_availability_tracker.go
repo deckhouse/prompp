@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 var (

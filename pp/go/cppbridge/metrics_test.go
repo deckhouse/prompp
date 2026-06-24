@@ -39,7 +39,7 @@ func (s *CppMetricsSuite) TestNoMetricPages() {
 	metrics := s.getMetrics()
 
 	// Assert
-	s.Len(metrics, 0)
+	s.Empty(metrics)
 }
 
 func (s *CppMetricsSuite) TestOneMetricsPage() {

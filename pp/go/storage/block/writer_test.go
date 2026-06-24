@@ -236,7 +236,7 @@ func (s *WriterSuite) TestWrite() {
 	s.fillHead()
 
 	// Act
-	block.LsIdBatchSize = 2
+	block.LsIDBatchSize = 2
 	blocks, err := s.blockWriter.Write(s.shard())
 
 	// Assert
@@ -248,7 +248,7 @@ func (s *WriterSuite) TestWriteInBatches() {
 	s.fillHead()
 
 	// Act
-	block.LsIdBatchSize = 1
+	block.LsIDBatchSize = 1
 	blocks, err := s.blockWriter.Write(s.shard())
 
 	// Assert
@@ -261,7 +261,7 @@ func (s *WriterSuite) TestWriteWithDataUnloading() {
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 
 	// Act
-	block.LsIdBatchSize = 2
+	block.LsIDBatchSize = 2
 	blocks, err := s.blockWriter.Write(s.shard())
 
 	// Assert
@@ -274,7 +274,7 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 
 	// Act
-	block.LsIdBatchSize = 1
+	block.LsIDBatchSize = 1
 	blocks, err := s.blockWriter.Write(s.shard())
 
 	// Assert

@@ -15,18 +15,18 @@ import (
 // ErrMustImplementCptrable - error on sharded data must implement cptrable interface.
 var ErrMustImplementCptrable = errors.New("sharded data must implement cptrable interface")
 
-// SegmentKey is a key to store segment data in Exchange and Refill
+// SegmentKey is a key to store segment data in Exchange and Refill.
 type SegmentKey struct {
 	ShardID uint16
 	Segment uint32
 }
 
-// IsFirst returns true if it is a first segment in shard
+// IsFirst returns true if it is a first segment in shard.
 func (key SegmentKey) IsFirst() bool {
 	return key.Segment == 0
 }
 
-// Prev returns key to previous segment in the same shard
+// Prev returns key to previous segment in the same shard.
 func (key SegmentKey) Prev() SegmentKey {
 	return SegmentKey{
 		ShardID: key.ShardID,
@@ -34,7 +34,7 @@ func (key SegmentKey) Prev() SegmentKey {
 	}
 }
 
-// String implements fmt.Stringer interface
+// String implements fmt.Stringer interface.
 func (key SegmentKey) String() string {
 	return fmt.Sprintf("%d:%d", key.ShardID, key.Segment)
 }
@@ -97,7 +97,7 @@ func (s WALEncoderStats) Series() uint32 {
 	return s.series
 }
 
-// Segment - encoded data segment
+// Segment - encoded data segment.
 type Segment interface {
 	// WritePayload - is a payload to write in frame.
 	frames.WritePayload
@@ -141,7 +141,7 @@ func (s *EncodedSegment) WriteTo(w io.Writer) (int64, error) {
 	return int64(n), err
 }
 
-// SourceState - pointer to source state (null on first call)
+// SourceState - pointer to source state (null on first call).
 type SourceState struct {
 	pointer uintptr
 }

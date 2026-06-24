@@ -10,8 +10,9 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/model"
 
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 type LSSSuite struct {
@@ -901,7 +902,7 @@ func (s *RotateLSSSuite) makeRotatedLSS(lName string) *rotatedLSS {
 
 	var lsid uint32
 	for i, labelSet := range s.labelSets {
-		labelSet.Range(func(lname string, lvalue string) bool {
+		labelSet.Range(func(lname, lvalue string) bool {
 			if !slices.Contains(rLSS.oldNames, lname) {
 				rLSS.oldNames = append(rLSS.oldNames, lname)
 			}
@@ -920,7 +921,7 @@ func (s *RotateLSSSuite) makeRotatedLSS(lName string) *rotatedLSS {
 		rLSS.oldLabelSetIDs = append(rLSS.oldLabelSetIDs, rLSS.oldLSS.FindOrEmplace(labelSet).LabelSetID)
 		rLSS.expectedLSes = append(rLSS.expectedLSes, labelSet)
 		rLSS.newLabelSetIDs = append(rLSS.newLabelSetIDs, lsid)
-		labelSet.Range(func(lname string, lvalue string) bool {
+		labelSet.Range(func(lname, lvalue string) bool {
 			if !slices.Contains(rLSS.newNames, lname) {
 				rLSS.newNames = append(rLSS.newNames, lname)
 			}
@@ -954,7 +955,6 @@ func (s *RotateLSSSuite) convertQueryResultToLabelSets(
 
 	actualLabelSets := make([]cppbridge.Labels, 0, len(res.IDs()))
 	for _, lsid := range res.IDs() {
-
 		ls := cppbridge.Labels{}
 		snapshot.RangeLabelSet(lsid, func(l cppbridge.Label) error {
 			ls = append(ls, cppbridge.Label{

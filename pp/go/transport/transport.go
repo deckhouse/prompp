@@ -7,9 +7,10 @@ import (
 	"net"
 	"time"
 
+	"golang.org/x/net/websocket"
+
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"golang.org/x/net/websocket"
 )
 
 const (
@@ -88,7 +89,7 @@ func (nt *NetTransport) Write(ctx context.Context, fe *frames.ReadFrame) error {
 	return nil
 }
 
-// Writer returns new io.Writer with given context canceling
+// Writer returns new io.Writer with given context canceling.
 func (nt *NetTransport) Writer(ctx context.Context) io.Writer {
 	return util.FnWriter(func(data []byte) (int, error) {
 		if nt.conn == nil {
