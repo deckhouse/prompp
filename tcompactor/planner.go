@@ -2,12 +2,19 @@ package tcompactor
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"maps"
+	"math"
+	"path/filepath"
 
 	"github.com/go-kit/log"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/thanos-io/objstore"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
+
+	"github.com/prometheus/prometheus/tcompactor/block"
 )
 
 //
@@ -18,6 +25,22 @@ import (
 type NoCompactionMarkFilter interface {
 	// NoCompactMarkedBlocks returns block ids that were marked for no compaction.
 	NoCompactMarkedBlocks() map[ulid.ULID]*metadata.NoCompactMark
+}
+
+//
+// BlockWorker
+//
+
+// BlockWorker is a worker that can work with blocks.
+type BlockWorker interface {
+	// Attributes returns information about the specified object.
+	Attributes(ctx context.Context, name string) (objstore.ObjectAttributes, error)
+
+	// Exists checks if the given object exists in the destination.
+	Exists(ctx context.Context, name string) (bool, error)
+
+	// Upload uploads the given object to the destination.
+	Upload(ctx context.Context, name string, r io.Reader) error
 }
 
 //
@@ -36,24 +59,24 @@ func (NoopNoCompactionMark) NoCompactMarkedBlocks() map[ulid.ULID]*metadata.NoCo
 // TsdbBasedPlanner
 //
 
-var _ Planner = (*tsdbBasedPlanner)(nil)
+var _ Planner = (*TsdbBasedPlanner)(nil)
 
-// tsdbBasedPlanner is a Thanos planner with the same functionality as Prometheus' TSDB
+// TsdbBasedPlanner is a Thanos planner with the same functionality as Prometheus' TSDB
 // plus special handling of excluded blocks. It's the same functionality just without accessing filesystem,
 // and special handling of excluded blocks.
-type tsdbBasedPlanner struct {
+type TsdbBasedPlanner struct {
 	logger           log.Logger
 	ranges           []int64
 	noCompBlocksFunc func() map[ulid.ULID]*metadata.NoCompactMark
 }
 
 // NewPlanner initializes a new [tsdbBasedPlanner].
-func NewPlanner(logger log.Logger, ranges []int64, noCompBlocks NoCompactionMarkFilter) *tsdbBasedPlanner {
-	return &tsdbBasedPlanner{logger: logger, ranges: ranges, noCompBlocksFunc: noCompBlocks.NoCompactMarkedBlocks}
+func NewPlanner(logger log.Logger, ranges []int64, noCompBlocks NoCompactionMarkFilter) *TsdbBasedPlanner {
+	return &TsdbBasedPlanner{logger: logger, ranges: ranges, noCompBlocksFunc: noCompBlocks.NoCompactMarkedBlocks}
 }
 
 // Plan is the main function that plans the compaction of the blocks.
-func (p *tsdbBasedPlanner) Plan(
+func (p *TsdbBasedPlanner) Plan(
 	_ context.Context,
 	metasByMinTime []*metadata.Meta,
 	_ chan error,
@@ -63,7 +86,7 @@ func (p *tsdbBasedPlanner) Plan(
 }
 
 // plan is the main function that plans the compaction of the blocks.
-func (p *tsdbBasedPlanner) plan(
+func (p *TsdbBasedPlanner) plan(
 	noCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
 ) ([]*metadata.Meta, error) {
@@ -104,32 +127,6 @@ func (p *tsdbBasedPlanner) plan(
 	}
 
 	return nil, nil
-}
-
-// selectOverlappingMetas returns all dirs with overlapping time ranges.
-// It expects sorted input by mint and returns the overlapping dirs in the same order as received.
-func selectOverlappingMetas(metasByMinTime []*metadata.Meta) []*metadata.Meta {
-	if len(metasByMinTime) < 2 {
-		return nil
-	}
-	var overlappingMetas []*metadata.Meta
-	globalMaxt := metasByMinTime[0].MaxTime
-	for i, m := range metasByMinTime[1:] {
-		if m.MinTime < globalMaxt {
-			if len(overlappingMetas) == 0 {
-				// When it is the first overlap, need to add the last one as well.
-				overlappingMetas = append(overlappingMetas, metasByMinTime[i])
-			}
-			overlappingMetas = append(overlappingMetas, m)
-		} else if len(overlappingMetas) > 0 {
-			break
-		}
-
-		if m.MaxTime > globalMaxt {
-			globalMaxt = m.MaxTime
-		}
-	}
-	return overlappingMetas
 }
 
 // selectMetas returns the dir metas that should be compacted into a single new block.
@@ -244,23 +241,232 @@ func splitByRange(metasByMinTime []*metadata.Meta, tr int64) [][]*metadata.Meta 
 }
 
 //
-// AttributeReader
-//
-
-// AttributeReader is a reader that can read attributes from an object.
-type AttributeReader interface {
-	// Attributes returns information about the specified object.
-	Attributes(ctx context.Context, name string) (objstore.ObjectAttributes, error)
-}
-
-//
 // largeTotalIndexSizeFilter
 //
 
-type largeTotalIndexSizeFilter struct {
-	*tsdbBasedPlanner
+var _ Planner = (*largeTotalIndexSizeFilter)(nil)
 
-	aReader                AttributeReader
-	markedForNoCompact     prometheus.Counter
+// largeTotalIndexSizeFilter is a planner that plans the compaction of the blocks without large index file size.
+type largeTotalIndexSizeFilter struct {
+	*TsdbBasedPlanner
+
+	bw                     BlockWorker
 	totalMaxIndexSizeBytes int64
+	markedForNoCompact     prometheus.Counter
+}
+
+// WithLargeTotalIndexSizeFilter wraps Planner with largeTotalIndexSizeFilter that checks the given plans
+// and estimates total index size. When found, it marks block for no compaction by placing no-compact-mark.json
+// and updating cache. NOTE: The estimation is very rough as it assumes extreme cases of indexes sharing no bytes,
+// thus summing all source index sizes. Adjust limit accordingly reducing to some % of actual limit you want to give.
+func WithLargeTotalIndexSizeFilter(
+	with *TsdbBasedPlanner,
+	bw BlockWorker,
+	totalMaxIndexSizeBytes int64,
+	markedForNoCompact prometheus.Counter,
+) *largeTotalIndexSizeFilter { //revive:disable-line:unexported-return // used as [Planner]
+	return &largeTotalIndexSizeFilter{
+		TsdbBasedPlanner:       with,
+		bw:                     bw,
+		totalMaxIndexSizeBytes: totalMaxIndexSizeBytes,
+		markedForNoCompact:     markedForNoCompact,
+	}
+}
+
+// Plan is the main function that plans the compaction of the blocks without large index file size.
+func (t *largeTotalIndexSizeFilter) Plan(
+	ctx context.Context,
+	metasByMinTime []*metadata.Meta,
+	_ chan error,
+	_ any,
+) ([]*metadata.Meta, error) {
+	return t.plan(ctx, nil, metasByMinTime)
+}
+
+// plan is the main function that plans the compaction of the blocks without large index file size.
+func (t *largeTotalIndexSizeFilter) plan(
+	ctx context.Context,
+	extraNoCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
+	metasByMinTime []*metadata.Meta,
+) ([]*metadata.Meta, error) {
+	noCompactMarked := t.noCompBlocksFunc()
+	copiedNoCompactMarked := make(map[ulid.ULID]*metadata.NoCompactMark, len(noCompactMarked)+len(extraNoCompactMarked))
+	maps.Copy(copiedNoCompactMarked, noCompactMarked)
+	maps.Copy(copiedNoCompactMarked, extraNoCompactMarked)
+
+PlanLoop:
+	for {
+		plan, err := t.TsdbBasedPlanner.plan(copiedNoCompactMarked, metasByMinTime)
+		if err != nil {
+			return nil, err
+		}
+
+		var totalIndexBytes, maxIndexSize int64 = 0, math.MinInt64
+		var biggestIndex int
+		for i, p := range plan {
+			indexSize := int64(-1)
+			for _, f := range p.Thanos.Files {
+				if f.RelPath == block.IndexFilename {
+					indexSize = f.SizeBytes
+				}
+			}
+
+			if indexSize <= 0 {
+				// Get size from bkt instead.
+				attr, err := t.bw.Attributes(ctx, filepath.Join(p.ULID.String(), block.IndexFilename))
+				if err != nil {
+					return nil, fmt.Errorf(
+						"get attr of %v: %w",
+						filepath.Join(p.ULID.String(), block.IndexFilename),
+						err,
+					)
+				}
+
+				indexSize = attr.Size
+			}
+
+			if maxIndexSize < indexSize {
+				maxIndexSize = indexSize
+				biggestIndex = i
+			}
+			totalIndexBytes += indexSize
+
+			// Leave 15% headroom for index compaction bloat.
+			if totalIndexBytes >= int64(float64(t.totalMaxIndexSizeBytes)*0.85) {
+				// Marking blocks for no compact to limit size.
+				if err := block.MarkForNoCompact(
+					ctx,
+					t.logger,
+					t.bw,
+					plan[biggestIndex].ULID,
+					metadata.IndexSizeExceedingNoCompactReason,
+					fmt.Sprintf(
+						"largeTotalIndexSizeFilter: Total compacted block's index size could exceed: %v.",
+						t.totalMaxIndexSizeBytes,
+					),
+					t.markedForNoCompact,
+				); err != nil {
+					return nil, fmt.Errorf("mark %v for no compaction: %w", plan[biggestIndex].ULID.String(), err)
+				}
+
+				// Make sure wrapped planner exclude this block.
+				copiedNoCompactMarked[plan[biggestIndex].ULID] = &metadata.NoCompactMark{
+					ID:      plan[biggestIndex].ULID,
+					Version: metadata.NoCompactMarkVersion1,
+				}
+				continue PlanLoop
+			}
+		}
+
+		// Planned blocks should not exceed limit.
+		return plan, nil
+	}
+}
+
+//
+// verticalCompactionDownsampleFilter
+//
+
+var _ Planner = (*verticalCompactionDownsampleFilter)(nil)
+
+// verticalCompactionDownsampleFilter is a planner that plans the compaction of the blocks
+// without vertical compaction downsampling.
+type verticalCompactionDownsampleFilter struct {
+	*largeTotalIndexSizeFilter
+
+	bw                 BlockWorker
+	markedForNoCompact prometheus.Counter
+}
+
+// WithVerticalCompactionDownsampleFilter wraps Planner with verticalCompactionDownsampleFilter that plans
+// the compaction of the blocks without vertical compaction downsampling.
+func WithVerticalCompactionDownsampleFilter(
+	with *largeTotalIndexSizeFilter,
+	bw BlockWorker,
+	markedForNoCompact prometheus.Counter,
+) *verticalCompactionDownsampleFilter { //revive:disable-line:unexported-return // used as [Planner]
+	return &verticalCompactionDownsampleFilter{
+		largeTotalIndexSizeFilter: with,
+		bw:                        bw,
+		markedForNoCompact:        markedForNoCompact,
+	}
+}
+
+// Plan is the main function that plans the compaction of the blocks without vertical compaction downsampling.
+func (v *verticalCompactionDownsampleFilter) Plan(
+	ctx context.Context,
+	metasByMinTime []*metadata.Meta,
+	_ chan error,
+	_ any,
+) ([]*metadata.Meta, error) {
+	noCompactMarked := make(map[ulid.ULID]*metadata.NoCompactMark, 0)
+
+PlanLoop:
+	for {
+		plan, err := v.plan(ctx, noCompactMarked, metasByMinTime)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(selectOverlappingMetas(plan)) == 0 {
+			return plan, nil
+		}
+
+		// If we have downsampled blocks, we need to mark them as no compact because it's impossible
+		// to do that with vertical compaction. Technically, the resolution is part of the group key but
+		// do not attach ourselves to that level of detail.
+		marked := false
+		for _, m := range plan {
+			if m.Thanos.Downsample.Resolution == 0 {
+				continue
+			}
+
+			if err := block.MarkForNoCompact(
+				ctx,
+				v.logger,
+				v.bw,
+				m.ULID,
+				metadata.DownsampleVerticalCompactionNoCompactReason,
+				"verticalCompactionDownsampleFilter: Downsampled block",
+				v.markedForNoCompact,
+			); err != nil {
+				return nil, fmt.Errorf("mark %v for no compaction: %w", m.ULID.String(), err)
+			}
+
+			noCompactMarked[m.ULID] = &metadata.NoCompactMark{ID: m.ULID, Version: metadata.NoCompactMarkVersion1}
+			marked = true
+		}
+
+		if marked {
+			continue PlanLoop
+		}
+
+		return plan, nil
+	}
+}
+
+// selectOverlappingMetas returns all dirs with overlapping time ranges.
+// It expects sorted input by mint and returns the overlapping dirs in the same order as received.
+func selectOverlappingMetas(metasByMinTime []*metadata.Meta) []*metadata.Meta {
+	if len(metasByMinTime) < 2 {
+		return nil
+	}
+	var overlappingMetas []*metadata.Meta
+	globalMaxt := metasByMinTime[0].MaxTime
+	for i, m := range metasByMinTime[1:] {
+		if m.MinTime < globalMaxt {
+			if len(overlappingMetas) == 0 {
+				// When it is the first overlap, need to add the last one as well.
+				overlappingMetas = append(overlappingMetas, metasByMinTime[i])
+			}
+			overlappingMetas = append(overlappingMetas, m)
+		} else if len(overlappingMetas) > 0 {
+			break
+		}
+
+		if m.MaxTime > globalMaxt {
+			globalMaxt = m.MaxTime
+		}
+	}
+	return overlappingMetas
 }
