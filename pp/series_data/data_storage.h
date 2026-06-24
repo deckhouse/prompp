@@ -366,7 +366,11 @@ struct DataStorage {
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
     // The address label string is owned by the metrics page (not by DataStorage) so that its lifetime matches the page and a
     // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
-    metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(timestamp_encoder, std::to_string(std::bit_cast<uint64_t>(this)));
+    metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
+
+    // The timestamp states count is pushed into a page-owned gauge on state creation instead of being pulled from the
+    // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
+    timestamp_encoder.set_states_count_gauge(&metrics->timestamp_states());
   }
 
   ~DataStorage() { destructor_impl<Reallocator>(); }

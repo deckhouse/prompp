@@ -18,9 +18,8 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   // DataStorage that registered it) ties the value's lifetime to the page itself, which is reclaimed only by
   // metrics::Storage::remove_unused_pages(). This avoids a use-after-free where a concurrent scrape reads the label after
   // the owning DataStorage has already been destroyed.
-  PROMPP_ALWAYS_INLINE explicit Metrics(const encoder::timestamp::Encoder<Reallocator>& timestamp_encoder, std::string address_label)
+  PROMPP_ALWAYS_INLINE explicit Metrics(std::string address_label)
       : metrics::MetricsPage<Metrics>(outdated_samples_count_),
-        timestamp_encoder_(&timestamp_encoder),
         address_label_(std::move(address_label)),
         outdated_samples_count_{label_set(), "prompp_data_storage_outdated_samples_count"},
         outdated_chunks_count_{label_set(), "prompp_data_storage_outdated_chunks_count"},
@@ -34,8 +33,6 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
         asc_int_then_values_gorilla_count_{label_set(), "prompp_data_storage_asc_int_then_values_gorilla_count"},
         values_gorilla_count_{label_set(), "prompp_data_storage_values_gorilla_count"},
         gorilla_count_{label_set(), "prompp_data_storage_gorilla_count"} {}
-
-  void refresh_metrics() noexcept override { timestamp_states_count_.set(timestamp_encoder_->states_count()); }
 
   PROMPP_ALWAYS_INLINE void inc_chunk_count(EncodingType encoding_type) noexcept {
     get_chunk_count(encoding_type, [](metrics::Gauge& gauge) PROMPP_LAMBDA_INLINE { gauge.inc(); });
@@ -54,10 +51,10 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   PROMPP_ALWAYS_INLINE metrics::Counter& outdated_samples() noexcept { return outdated_samples_count_; }
   PROMPP_ALWAYS_INLINE metrics::Counter& outdated_chunks() noexcept { return outdated_chunks_count_; }
   PROMPP_ALWAYS_INLINE metrics::Gauge& finalized_chunks() noexcept { return finalized_chunks_count_; }
+  PROMPP_ALWAYS_INLINE metrics::Gauge& timestamp_states() noexcept { return timestamp_states_count_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE double timestamp_states_count() const noexcept { return timestamp_states_count_.value(); }
 
  private:
-  const encoder::timestamp::Encoder<Reallocator>* timestamp_encoder_;
   const std::string address_label_;
 
   metrics::Counter outdated_samples_count_;

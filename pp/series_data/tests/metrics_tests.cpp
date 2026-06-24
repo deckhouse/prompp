@@ -31,10 +31,8 @@ class DataStorageMetricsTestTrait {
 
   [[nodiscard]] double outdated_chunks_count() const { return storage_.metrics->outdated_chunks().value(); }
 
-  [[nodiscard]] double timestamp_states_count() const {
-    storage_.metrics->refresh_metrics();
-    return storage_.metrics->timestamp_states_count();
-  }
+  // The gauge is pushed on every state create/erase, so it always reflects the encoder without an explicit refresh.
+  [[nodiscard]] double timestamp_states_count() const { return storage_.metrics->timestamp_states_count(); }
 };
 
 class DataStorageMetricsTestFixture : public DataStorageMetricsTestTrait<>, public testing::Test {};
@@ -195,6 +193,21 @@ TEST_F(DataStorageMetricsFinalizeTestFixture, FinalizeIncrementsFinalizedChunksC
   // Arrange
   EXPECT_EQ(1, finalized_chunks_count());
   EXPECT_EQ(2, chunk_count(EncodingType::kUint32Constant));
+}
+
+// The timestamp_states gauge is pushed on state creation (states_.size() only grows there; erase just marks a hole and
+// does not change states_.size()). The gauge must therefore stay equal to encoder.states_count() across encode and
+// finalize, without any scrape-time pull from the encoder.
+TEST_F(DataStorageMetricsFinalizeTestFixture, TimestampStatesCountMatchesEncoder) {
+  // Arrange & Act: encode enough samples to create states and trigger finalize/erase.
+  for (int i = 1; i <= 12; ++i) {
+    encoder_.encode(0, i, static_cast<double>(i));
+    encoder_.encode(1, i, static_cast<double>(i));
+    EXPECT_EQ(storage_.timestamp_encoder.states_count(), timestamp_states_count());
+  }
+
+  // Assert: the gauge mirrors the encoder after the dust settles.
+  EXPECT_EQ(storage_.timestamp_encoder.states_count(), timestamp_states_count());
 }
 
 template <uint8_t kSamplesPerChunk = series_data::kSamplesPerChunkDefault>
