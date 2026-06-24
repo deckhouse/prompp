@@ -513,14 +513,14 @@ class GorillaSampleDecoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
                                                                Primitives::Timestamp timestamp,
                                                                BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc& crc) noexcept {
+                                                               SampleCrc& crc) {
     return decode_impl(ls_id, timestamp, value_sequence, crc);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
                                                                BareBones::BitSequenceReader& timestamp_sequence,
                                                                BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc& crc) noexcept {
+                                                               SampleCrc& crc) {
     return decode_impl(ls_id, timestamp_sequence, value_sequence, crc);
   }
 
