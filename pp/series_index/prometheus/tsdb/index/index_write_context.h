@@ -1,11 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cstring>
 #include <limits>
 #include <string_view>
-#include <vector>
 
 #include "bare_bones/vector.h"
 #include "parallel_hashmap/phmap.h"
@@ -167,7 +167,7 @@ class IndexWriteContext {
     // Group the ids that resolve to the same string using intrusive singly-linked lists
     // over a single pre-allocated pool (exactly one node per collected id). The map keeps
     // the head index of each list; ids are resolved once and prepended to their list.
-    std::vector<SymbolIdNode> nodes;
+    BareBones::Vector<SymbolIdNode> nodes;
     nodes.reserve(symbol_ids.size());
     phmap::flat_hash_map<std::string_view, int32_t> heads;
     heads.reserve(symbol_ids.size());
@@ -175,7 +175,7 @@ class IndexWriteContext {
     for (const auto& symbol_id : symbol_ids) {
       const auto node_index = static_cast<int32_t>(nodes.size());
       auto [it, inserted] = heads.try_emplace(resolve_symbol(symbol_id), node_index);
-      nodes.push_back({.id = symbol_id, .next = inserted ? kNoNode : it->second});
+      nodes.emplace_back(symbol_id, inserted ? kNoNode : it->second);
       if (!inserted) {
         it->second = node_index;
       }
@@ -186,10 +186,10 @@ class IndexWriteContext {
     // comparisons are resolved by the inline prefix without chasing the string_view into
     // the scattered LSS memory; only equal prefixes fall back to a full string compare.
     // The list head is carried along too, which removes the per-symbol hash lookup below.
-    std::vector<SortEntry> sorted;
+    BareBones::Vector<SortEntry> sorted;
     sorted.reserve(heads.size());
     for (const auto& [symbol, head] : heads) {
-      sorted.push_back({.prefix = load_prefix(symbol), .symbol = symbol, .head = head});
+      sorted.emplace_back(load_prefix(symbol), symbol, head);
     }
     std::ranges::sort(sorted, [](const SortEntry& lhs, const SortEntry& rhs) noexcept {
       return lhs.prefix != rhs.prefix ? lhs.prefix < rhs.prefix : lhs.symbol < rhs.symbol;
@@ -214,7 +214,7 @@ class IndexWriteContext {
     if (symbol.size() >= sizeof(uint64_t)) {
       uint64_t prefix = 0;
       std::memcpy(&prefix, symbol.data(), sizeof(uint64_t));
-      return __builtin_bswap64(prefix);
+      return std::byteswap(prefix);
     }
     uint64_t prefix = 0;
     for (size_t i = 0; i < symbol.size(); ++i) {

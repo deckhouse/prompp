@@ -1,5 +1,7 @@
 #include "index_writer.h"
 
+#include <memory>
+
 #include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
@@ -28,6 +30,8 @@ struct IndexWriterHandle {
   }
 };
 
+using IndexWriterHandlePtr = std::unique_ptr<IndexWriterHandle>;
+
 }  // namespace
 
 extern "C" void prompp_index_writer_ctor(void* args, void* res) {
@@ -35,22 +39,25 @@ extern "C" void prompp_index_writer_ctor(void* args, void* res) {
     entrypoint::head::LssVariantPtr lss;
   };
   struct Result {
-    IndexWriterHandle* writer;
+    IndexWriterHandlePtr writer;
     PromPP::Primitives::Go::Slice<char>* buffer;
     uint8_t* has_more_postings;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto* handle = new IndexWriterHandle(std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss));
-  *static_cast<Result*>(res) = Result{.writer = handle, .buffer = &handle->buffer, .has_more_postings = &handle->has_more_postings};
+  auto handle = std::make_unique<IndexWriterHandle>(std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss));
+  // Capture the interior pointers before moving the handle into the result (the move nulls it).
+  auto* buffer = &handle->buffer;
+  auto* has_more_postings = &handle->has_more_postings;
+  new (res) Result{.writer = std::move(handle), .buffer = buffer, .has_more_postings = has_more_postings};
 }
 
 extern "C" void prompp_index_writer_dtor(void* args) {
   struct Arguments {
-    IndexWriterHandle* writer;
+    IndexWriterHandlePtr writer;
   };
 
-  delete static_cast<Arguments*>(args)->writer;
+  static_cast<Arguments*>(args)->~Arguments();
 }
 
 extern "C" void prompp_index_writer_write_header(void* writer) {
