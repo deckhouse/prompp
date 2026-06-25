@@ -31,12 +31,12 @@ type Planner interface {
 	) ([]*metadata.Meta, error)
 }
 
-var _ tsdb.Compactor = (*ThanosCompactor)(nil)
+var _ tsdb.Compactor = (*TCompactor)(nil)
 
-type ThanosCompactor struct {
+type TCompactor struct {
 	lCompactor *tsdb.LeveledCompactor
-	bCompactor *compact.BucketCompactor
-	grouper    *compact.DefaultGrouper
+	grouper    *DefaultGrouper
+	planner    Planner
 }
 
 func NewThanosCompactor(
@@ -46,7 +46,7 @@ func NewThanosCompactor(
 	ranges []int64,
 	pool chunkenc.Pool,
 	opts tsdb.LeveledCompactorOptions,
-) (*ThanosCompactor, error) {
+) (*TCompactor, error) {
 	// TODO:
 	// mergeFunc storage.VerticalChunkSeriesMergeFunc
 	// pool downsample.NewPool()
@@ -113,21 +113,26 @@ func NewThanosCompactor(
 	// 	return nil, fmt.Errorf("create bucket compactor: %w", err)
 	// }
 
-	return &ThanosCompactor{
+	return &TCompactor{
 		lCompactor: lCompactor,
 		// bCompactor: bCompactor,
 		// grouper:    grouper,
 	}, nil
 }
 
-func (c *ThanosCompactor) Plan(dir string) ([]string, error) {
+func (c *TCompactor) Plan(dir string) ([]string, error) {
 	return c.lCompactor.Plan(dir)
 }
 
-func (c *ThanosCompactor) Write(dest string, b tsdb.BlockReader, mint, maxt int64, base *tsdb.BlockMeta) ([]ulid.ULID, error) {
+func (c *TCompactor) Write(dest string, b tsdb.BlockReader, mint, maxt int64, base *tsdb.BlockMeta) ([]ulid.ULID, error) {
 	return c.lCompactor.Write(dest, b, mint, maxt, base)
 }
 
-func (c *ThanosCompactor) Compact(dest string, dirs []string, open []*tsdb.Block) ([]ulid.ULID, error) {
+func (c *TCompactor) Compact(dest string, dirs []string, open []*tsdb.Block) ([]ulid.ULID, error) {
 	return c.lCompactor.Compact(dest, dirs, open)
+}
+
+// Close stops the compaction loop and waits for it to finish.
+func (c *TCompactor) Close() {
+	// TODO: implement
 }

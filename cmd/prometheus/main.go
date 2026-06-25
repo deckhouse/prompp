@@ -1763,6 +1763,12 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 	return eu, nil
 }
 
+// BlockCompactor is the interface for the block compactor.
+type BlockCompactor interface {
+	// Close stops the compaction loop and waits for it to finish.
+	Close()
+}
+
 // blockStorage adapts a read-only block.Manager (persisted blocks) to
 // storage.Storage so it can be used as a fanout secondary. Appends are dropped:
 // the head adapter is the fanout primary that stores samples.
