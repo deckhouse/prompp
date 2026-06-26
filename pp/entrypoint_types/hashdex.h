@@ -1,8 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <variant>
 
-#include "head/lss.h"
+#include "entrypoint_types/lss.h"
 #include "wal/hashdex/basic_decoder.h"
 #include "wal/hashdex/go_head.h"
 #include "wal/hashdex/go_model.h"
@@ -12,7 +13,7 @@
 /**
  * used for indexing HashdexVariant.
  */
-enum HashdexType : uint8_t {
+enum HashdexType : uint8_t { 
   kProtobuf = 0,
   kGoModel,
   kDecoder,
@@ -21,7 +22,7 @@ enum HashdexType : uint8_t {
   kGoHead,
 };
 
-using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint::head::QueryableEncodingBimap>;
+using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint_types::QueryableEncodingBimap>;
 
 using HashdexVariant = std::variant<PromPP::WAL::hashdex::Protobuf,
                                     PromPP::WAL::hashdex::GoModel,

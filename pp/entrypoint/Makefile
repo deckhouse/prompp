@@ -75,6 +75,9 @@ install: $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a
 install: $(prefixed_archives)
 	@install $^ $(install_dir)
 
-$(result_dir)/entrypoint.h: $(headers) entrypoint.h.template ## Concat all headers in one
+# Shared type/layout contracts that the Go side reads via cgo (e.g. Sizeof_* macros).
+type_headers := ../entrypoint_types/go_constants.h
+
+$(result_dir)/entrypoint.h: $(type_headers) $(headers) entrypoint.h.template ## Concat all headers in one
 	@mkdir -p ${@D}
 	@cat $^ > $@

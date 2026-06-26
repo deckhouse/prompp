@@ -183,6 +183,22 @@ cc_test(
 )
 
 cc_library(
+    name = "entrypoint_types",
+    hdrs = glob([
+        "entrypoint_types/**/*.h",
+    ]),
+    linkstatic = True,
+    deps = [
+        ":bare_bones",
+        ":head",
+        ":primitives",
+        ":series_data",
+        ":series_index",
+        ":wal",
+    ],
+)
+
+cc_library(
     name = "entrypoint",
     srcs = glob(
         include = ["entrypoint/**/*.cpp"],
@@ -198,6 +214,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":bare_bones",
+        ":entrypoint_types",
         ":head",
         ":metrics",
         ":primitives",

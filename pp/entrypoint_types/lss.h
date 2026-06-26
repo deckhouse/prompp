@@ -1,15 +1,22 @@
 #pragma once
 
-#include <cassert>
+#include <cstdint>
 #include <memory>
+#include <type_traits>
 #include <variant>
 
+#include "bare_bones/allocator.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/exception.h"
+#include "bare_bones/memory.h"
+#include "bare_bones/preprocess.h"
+#include "bare_bones/vector.h"
 #include "primitives/primitives.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
+#include "series_index/sorting_index.h"
 
-namespace entrypoint::head {
+namespace entrypoint_types {
 
 using LsIdsSlice = BareBones::Vector<PromPP::Primitives::LabelSetID>;
 using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
@@ -185,4 +192,4 @@ inline SnapshotLSSVariantPtr create_snapshot_lss(LssVariant& lss_variant) {
   }
 }
 
-}  // namespace entrypoint::head
+}  // namespace entrypoint_types

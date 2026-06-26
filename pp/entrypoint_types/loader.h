@@ -1,17 +1,22 @@
 #pragma once
 
+#include <cstdint>
+#include <span>
+
 #include "bare_bones/iterator.h"
-#include "entrypoint/head/lss.h"
+#include "bare_bones/preprocess.h"
+#include "entrypoint_types/lss.h"
+#include "series_data/data_storage.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/reverter.h"
 
-namespace entrypoint::series_data {
+namespace entrypoint_types {
 
 class RevertableLoader {
  public:
   RevertableLoader(::series_data::DataStorage& storage,
-                   head::QueryableEncodingBimap::LsIdSetIterator ls_id_begin,
-                   head::QueryableEncodingBimap::LsIdSetIterator ls_id_end,
+                   QueryableEncodingBimap::LsIdSetIterator ls_id_begin,
+                   QueryableEncodingBimap::LsIdSetIterator ls_id_end,
                    uint32_t ls_id_batch_size)
       : loader_(storage), reverter_(storage), iterator_(ls_id_begin, ls_id_batch_size), end_iterator_(ls_id_end) {
     add_series();
@@ -37,8 +42,8 @@ class RevertableLoader {
  private:
   ::series_data::unloading::Loader loader_;
   ::series_data::unloading::LoadReverter reverter_;
-  BareBones::iterator::BatchIterator<head::QueryableEncodingBimap::LsIdSetIterator, head::QueryableEncodingBimap::LsIdSetIterator> iterator_;
-  [[no_unique_address]] head::QueryableEncodingBimap::LsIdSetIterator end_iterator_;
+  BareBones::iterator::BatchIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator> iterator_;
+  [[no_unique_address]] QueryableEncodingBimap::LsIdSetIterator end_iterator_;
 
   void add_series() {
     loader_.add_series_to_load(iterator_, end_iterator_, iterator_.batch_size());
@@ -46,4 +51,4 @@ class RevertableLoader {
   }
 };
 
-}  // namespace entrypoint::series_data
+}  // namespace entrypoint_types

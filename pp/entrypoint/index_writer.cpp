@@ -2,13 +2,13 @@
 
 #include <memory>
 
-#include "head/lss.h"
+#include "entrypoint_types/lss.h"
 #include "primitives/go_slice.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
 
 using PromPP::Primitives::Go::SliceView;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
-using IndexWriter = series_index::prometheus::tsdb::index::IndexWriter<entrypoint::head::QueryableEncodingBimap, PromPP::Primitives::Go::BytesStream>;
+using IndexWriter = series_index::prometheus::tsdb::index::IndexWriter<entrypoint_types::QueryableEncodingBimap, PromPP::Primitives::Go::BytesStream>;
 using IndexWriterPtr = std::unique_ptr<IndexWriter>;
 
 static_assert(sizeof(IndexWriterPtr) == sizeof(void*));
@@ -20,14 +20,14 @@ static PromPP::Primitives::Go::BytesStream create_bytes_stream(PromPP::Primitive
 
 extern "C" void prompp_index_writer_ctor(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::LssVariantPtr lss;
+    entrypoint_types::LssVariantPtr lss;
   };
   struct Result {
     IndexWriterPtr writer;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  new (res) Result{.writer = std::make_unique<IndexWriter>(std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss))};
+  new (res) Result{.writer = std::make_unique<IndexWriter>(std::get<entrypoint_types::QueryableEncodingBimap>(*in->lss))};
 }
 
 extern "C" void prompp_index_writer_dtor(void* args) {
