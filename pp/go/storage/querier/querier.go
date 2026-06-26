@@ -74,7 +74,7 @@ const (
 )
 
 // DefaultCountOfSeriesToOptimize is the default count of series to optimize.
-const DefaultCountOfSeriesToOptimize = 11
+const DefaultCountOfSeriesToOptimize = 10
 
 // optimizeAggregationRatio is the ratio to optimize the aggregation function.
 const optimizeAggregationRatio = 3.3
@@ -674,17 +674,18 @@ func isPossibleToOptimizeCrossSeriesFunc(
 	}
 
 	// grouping by
-	if hints.Step == scrapeIntervalMS && countOfSeries > DefaultCountOfSeriesToOptimize+1 {
+	//revive:disable-next-line:add-constant // +2 is required to enable optimization
+	if hints.Step == scrapeIntervalMS && countOfSeries > DefaultCountOfSeriesToOptimize+2 {
 		return true
 	}
 
 	//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
-	if hints.Step >= scrapeIntervalMS*2 && countOfSeries >= DefaultCountOfSeriesToOptimize {
+	if hints.Step >= scrapeIntervalMS*2 && countOfSeries > DefaultCountOfSeriesToOptimize+2 {
 		return true
 	}
 
 	//revive:disable-next-line:add-constant // x3 scrape interval are required to enable optimization
-	if hints.Step >= scrapeIntervalMS*3 && countOfSeries > DefaultCountOfSeriesToOptimize {
+	if hints.Step >= scrapeIntervalMS*3 && countOfSeries > DefaultCountOfSeriesToOptimize+1 {
 		return true
 	}
 

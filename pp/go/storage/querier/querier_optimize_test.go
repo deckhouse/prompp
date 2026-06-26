@@ -659,7 +659,7 @@ func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, start, counte
 
 	for i := start; i < start+counter; i++ {
 		timeSeries = append(timeSeries, storagetest.TimeSeries{
-			Labels:  labels.FromStrings("__name__", "sin_cos_metric", "value", "sin_cos", "counter", strconv.Itoa(i)),
+			Labels:  labels.FromStrings("__name__", "sin_cos_metric", "value", "sin_cos", "zvallue", strconv.Itoa(i)),
 			Samples: make([]cppbridge.Sample, 0, countOfSamples),
 		})
 	}
@@ -1001,6 +1001,7 @@ func vectorEqual(exp, act promql.Vector) (bool, string) {
 	isEqual := true
 
 	// we are sorting, because the sorting is broken on instant requests
+	// there are no guarantees for the order by groups in cross series set
 	slices.SortFunc(exp, func(a, b promql.Sample) int {
 		return labels.Compare(a.Metric, b.Metric)
 	})
@@ -1179,6 +1180,7 @@ func BenchmarkRangeQuerySum(b *testing.B) {
 		qo.step,
 		qo.step * 2,
 		qo.step * 3,
+		qo.step * 4,
 	}
 
 	series := 6
@@ -1246,6 +1248,7 @@ func BenchmarkRangeQuerySumBy(b *testing.B) {
 		qo.step,
 		qo.step * 2,
 		qo.step * 3,
+		qo.step * 4,
 	}
 
 	series := 7

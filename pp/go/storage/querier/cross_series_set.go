@@ -16,6 +16,16 @@ import (
 )
 
 //
+// labelSetsForGroup
+//
+
+// labelSetsForGroup is a label set for a group.
+type labelSetsForGroup struct {
+	ls      labels.Labels
+	groupID int
+}
+
+//
 // CrossSeriesSet
 //
 
@@ -27,10 +37,8 @@ type CrossSeriesSet struct {
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	seriesGroups     *cppbridge.SeriesGroups
 	mint, maxt       int64
-	grouping         []string
-	headID           string
-	shardID          uint16
 
+	labelsGroups   []labelSetsForGroup
 	series         []CrossSeries
 	nextGroupIndex int
 }
@@ -45,15 +53,25 @@ func NewCrossSeriesSet(
 	headID string,
 	shardID uint16,
 ) *CrossSeriesSet {
+	labelsGroups := make([]labelSetsForGroup, 0, len(seriesGroups.Groups))
+	builder := builderPool.Get().(*labels.ScratchBuilder)
+	for i := range seriesGroups.Groups {
+		builder.Reset()
+		labelsGroups = append(labelsGroups, labelSetsForGroup{
+			ls:      crossLabelSetCtor(builder, labelSetSnapshot, grouping, headID, seriesGroups.Groups[i][0], shardID),
+			groupID: i,
+		})
+	}
+	builderPool.Put(builder)
+	slices.SortFunc(labelsGroups, func(a, b labelSetsForGroup) int { return labels.Compare(a.ls, b.ls) })
+
 	return &CrossSeriesSet{
 		serializedData:   serializedData,
 		labelSetSnapshot: labelSetSnapshot,
 		seriesGroups:     seriesGroups,
 		mint:             mint,
 		maxt:             maxt,
-		grouping:         grouping,
-		headID:           headID,
-		shardID:          shardID,
+		labelsGroups:     labelsGroups,
 		series:           make([]CrossSeries, 0, len(seriesGroups.Groups)),
 	}
 }
@@ -81,24 +99,14 @@ func (ss *CrossSeriesSet) Next() bool {
 		return false
 	}
 
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
 	ss.series = append(ss.series, NewCrossSeries(
-		crossLabelSetCtor(
-			builder,
-			ss.labelSetSnapshot,
-			ss.grouping,
-			ss.headID,
-			ss.seriesGroups.Groups[ss.nextGroupIndex][0], // 0 is the first series ID
-			ss.shardID,
-		),
+		ss.labelsGroups[ss.nextGroupIndex].ls,
 		ss.serializedData,
 		ss.seriesGroups,
-		ss.nextGroupIndex,
+		ss.labelsGroups[ss.nextGroupIndex].groupID,
 		ss.mint,
 		ss.maxt,
 	))
-	builderPool.Put(builder)
 	ss.nextGroupIndex++
 
 	return true
