@@ -10,6 +10,12 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
+// postingsBatchSize bounds the bytes produced by one WriteNextPostingsBatch call, capping the
+// writer's transient buffer instead of materialising the whole postings section (tens of MiB) at
+// once. The bound is checked only between whole postings, so individual large postings (the
+// all-series posting and hot label values) are emitted atomically and can still exceed it.
+const postingsBatchSize = 1 << 16
+
 // Chunk represents a recoded chunk.
 type Chunk struct {
 	rc *cppbridge.RecodedChunk
@@ -111,7 +117,7 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 	}
 
 	for {
-		data, hasMoreData := iw.cppIndexWriter.WriteNextPostingsBatch(1 << 20)
+		data, hasMoreData := iw.cppIndexWriter.WriteNextPostingsBatch(postingsBatchSize)
 		bytesWritten, err = w.Write(data)
 		if err != nil {
 			return n, fmt.Errorf("failed to write postings: %w", err)
