@@ -1,0 +1,2 @@
+# Local benchmark fixtures (LSS dumps, etc.), not part of the repo.
+/test_data/
