@@ -11,14 +11,16 @@ namespace series_index {
 template <class ValueType>
 class PostShrinkSnapshotResolver {
  public:
-  using ForEachSymbolIdCallback = std::function<void(uint32_t name_id, uint32_t value_id)>;
+  using ForEachKeyIdCallback = std::function<void(uint32_t name_id)>;
+  using ForEachValueIdCallback = std::function<void(uint32_t name_id, uint32_t value_id)>;
 
   virtual ~PostShrinkSnapshotResolver() = default;
 
   [[nodiscard]] virtual std::unique_ptr<PostShrinkSnapshotResolver<ValueType>> clone() const = 0;
   [[nodiscard]] virtual ValueType at(uint32_t id) const = 0;
   [[nodiscard]] virtual std::string_view symbol(uint32_t name_id, uint32_t value_id) const = 0;
-  virtual void for_each_symbol_id(const ForEachSymbolIdCallback& callback) const = 0;
+  virtual void for_each_key_id(const ForEachKeyIdCallback& callback) const = 0;
+  virtual void for_each_value_id(const ForEachValueIdCallback& callback) const = 0;
 };
 
 template <class Snapshot, class ValueType>
@@ -45,7 +47,14 @@ class TypedPostShrinkSnapshotResolver final : public PostShrinkSnapshotResolver<
     return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
   }
 
-  void for_each_symbol_id(const typename PostShrinkSnapshotResolver<ValueType>::ForEachSymbolIdCallback& callback) const override {
+  void for_each_key_id(const typename PostShrinkSnapshotResolver<ValueType>::ForEachKeyIdCallback& callback) const override {
+    const auto view = snapshot_.data_view();
+    for (auto it = view.keys().begin(), e = view.keys().end(); it != e; ++it) {
+      callback(it.id());
+    }
+  }
+
+  void for_each_value_id(const typename PostShrinkSnapshotResolver<ValueType>::ForEachValueIdCallback& callback) const override {
     const auto view = snapshot_.data_view();
     for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
       callback(it.key_id(), it.value_id());
