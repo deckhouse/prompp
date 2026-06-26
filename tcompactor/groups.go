@@ -22,13 +22,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb"
 )
 
-// CompactionLifecycleCallback is a callback for the compaction lifecycle.
-// It is used to get the [tsdb.BlockPopulator] for the compaction.
-type CompactionLifecycleCallback interface {
-	// GetBlockPopulator returns the [tsdb.BlockPopulator] for the compaction.
-	GetBlockPopulator(ctx context.Context, logger log.Logger, group *Group) (tsdb.BlockPopulator, error)
-}
-
 // Compactor is the interface for the [tsdb.LeveledCompactor].
 type Compactor interface {
 	// Compact runs compaction against the provided directories. Must
@@ -56,14 +49,11 @@ type Compactor interface {
 // DefaultGrouper groups blocks by their origin labels and downsampling resolution.
 type DefaultGrouper struct {
 	logger                   log.Logger
-	bw                       BlockWorker
 	compactions              *prometheus.CounterVec
 	compactionRunsStarted    *prometheus.CounterVec
 	compactionRunsCompleted  *prometheus.CounterVec
 	compactionFailures       *prometheus.CounterVec
 	verticalCompactions      *prometheus.CounterVec
-	blocksMarkedForNoCompact prometheus.Counter
-	hashFunc                 metadata.HashFunc
 	acceptMalformedIndex     bool
 	enableVerticalCompaction bool
 }
@@ -71,41 +61,33 @@ type DefaultGrouper struct {
 // NewDefaultGrouper initializes a new [DefaultGrouper].
 func NewDefaultGrouper(
 	logger log.Logger,
-	bw BlockWorker,
 	reg prometheus.Registerer,
-	blocksMarkedForNoCompact prometheus.Counter,
-	hashFunc metadata.HashFunc,
-	blockFilesConcurrency int,
-	compactBlocksFetchConcurrency int,
 	acceptMalformedIndex bool,
 	enableVerticalCompaction bool,
 ) *DefaultGrouper {
 	return &DefaultGrouper{
-		bw:     bw,
 		logger: logger,
 		compactions: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_compact_group_compactions_total",
+			Name: "prometeus_tcompact_group_compactions_total",
 			Help: "Total number of group compaction attempts that resulted in a new block.",
 		}, []string{"resolution"}),
 		compactionRunsStarted: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_compact_group_compaction_runs_started_total",
+			Name: "prometeus_tcompact_group_compaction_runs_started_total",
 			Help: "Total number of group compaction attempts.",
 		}, []string{"resolution"}),
 		compactionRunsCompleted: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_compact_group_compaction_runs_completed_total",
+			Name: "prometeus_tcompact_group_compaction_runs_completed_total",
 			Help: "Total number of group completed compaction runs. " +
 				"This also includes compactor group runs that resulted with no compaction.",
 		}, []string{"resolution"}),
 		compactionFailures: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_compact_group_compactions_failures_total",
+			Name: "prometeus_tcompact_group_compactions_failures_total",
 			Help: "Total number of failed group compactions.",
 		}, []string{"resolution"}),
 		verticalCompactions: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_compact_group_vertical_compactions_total",
+			Name: "prometeus_tcompact_group_vertical_compactions_total",
 			Help: "Total number of group compaction attempts that resulted in a new block based on overlapping blocks.",
 		}, []string{"resolution"}),
-		blocksMarkedForNoCompact: blocksMarkedForNoCompact,
-		hashFunc:                 hashFunc,
 		acceptMalformedIndex:     acceptMalformedIndex,
 		enableVerticalCompaction: enableVerticalCompaction,
 	}
@@ -123,7 +105,6 @@ func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Gro
 			resolutionLabel := m.Thanos.ResolutionString()
 			group = NewGroup(
 				log.With(g.logger, "group", fmt.Sprintf("%s@%v", resolutionLabel, lbls.String()), "groupKey", groupKey),
-				g.bw,
 				groupKey,
 				lbls,
 				m.Thanos.Downsample.Resolution,
@@ -132,8 +113,6 @@ func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Gro
 				g.compactionRunsCompleted.WithLabelValues(resolutionLabel),
 				g.compactionFailures.WithLabelValues(resolutionLabel),
 				g.verticalCompactions.WithLabelValues(resolutionLabel),
-				g.blocksMarkedForNoCompact,
-				g.hashFunc,
 				g.acceptMalformedIndex,
 				g.enableVerticalCompaction,
 			)
@@ -162,7 +141,6 @@ func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Gro
 // Those blocks generally contain the same series and can thus efficiently be compacted.
 type Group struct {
 	logger                   log.Logger
-	bw                       BlockWorker
 	key                      string
 	labels                   labels.Labels
 	resolution               int64
@@ -173,8 +151,6 @@ type Group struct {
 	compactionRunsCompleted  prometheus.Counter
 	compactionFailures       prometheus.Counter
 	verticalCompactions      prometheus.Counter
-	blocksMarkedForNoCompact prometheus.Counter
-	hashFunc                 metadata.HashFunc
 	acceptMalformedIndex     bool
 	enableVerticalCompaction bool
 }
@@ -182,7 +158,6 @@ type Group struct {
 // NewGroup initializes a new [Group].
 func NewGroup(
 	logger log.Logger,
-	bw BlockWorker,
 	key string,
 	lset labels.Labels,
 	resolution int64,
@@ -191,8 +166,6 @@ func NewGroup(
 	compactionRunsCompleted prometheus.Counter,
 	compactionFailures prometheus.Counter,
 	verticalCompactions prometheus.Counter,
-	blocksMarkedForNoCompact prometheus.Counter,
-	hashFunc metadata.HashFunc,
 	acceptMalformedIndex bool,
 	enableVerticalCompaction bool,
 ) *Group {
@@ -202,7 +175,6 @@ func NewGroup(
 
 	return &Group{
 		logger:                   logger,
-		bw:                       bw,
 		key:                      key,
 		labels:                   lset,
 		resolution:               resolution,
@@ -211,8 +183,6 @@ func NewGroup(
 		compactionRunsCompleted:  compactionRunsCompleted,
 		compactionFailures:       compactionFailures,
 		verticalCompactions:      verticalCompactions,
-		blocksMarkedForNoCompact: blocksMarkedForNoCompact,
-		hashFunc:                 hashFunc,
 		acceptMalformedIndex:     acceptMalformedIndex,
 		enableVerticalCompaction: enableVerticalCompaction,
 	}
@@ -250,11 +220,11 @@ func (cg *Group) Compact(
 	dir string,
 	planner Planner,
 	comp Compactor,
-	compactionLifecycleCallback CompactionLifecycleCallback,
+	blockPopulator tsdb.BlockPopulator,
 ) ([]ulid.ULID, error) {
 	cg.compactionRunsStarted.Inc()
 
-	compIDs, err := cg.runCompact(ctx, dir, planner, comp, compactionLifecycleCallback)
+	compIDs, err := cg.runCompact(ctx, dir, planner, comp, blockPopulator)
 	if err != nil {
 		cg.compactionFailures.Inc()
 		return compIDs, err
@@ -271,7 +241,7 @@ func (cg *Group) runCompact(
 	dir string,
 	planner Planner,
 	comp Compactor,
-	compactionLifecycleCallback CompactionLifecycleCallback,
+	blockPopulator tsdb.BlockPopulator,
 ) ([]ulid.ULID, error) {
 	cg.mtx.Lock()
 	defer cg.mtx.Unlock()
@@ -298,12 +268,7 @@ func (cg *Group) runCompact(
 	sourceBlockStr := fmt.Sprintf("%v", toCompactDirs)
 
 	begin := time.Now()
-	populateBlockFunc, err := compactionLifecycleCallback.GetBlockPopulator(ctx, cg.logger, cg)
-	if err != nil {
-		return nil, fmt.Errorf("get block populator: %w", err)
-	}
-
-	compIDs, err := comp.CompactWithBlockPopulator(dir, toCompactDirs, nil, populateBlockFunc)
+	compIDs, err := comp.CompactWithBlockPopulator(dir, toCompactDirs, nil, blockPopulator)
 	if err != nil {
 		return nil, fmt.Errorf("compact blocks: %w", err)
 	}
