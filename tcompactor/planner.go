@@ -65,31 +65,46 @@ var _ Planner = (*TsdbBasedPlanner)(nil)
 // plus special handling of excluded blocks. It's the same functionality just without accessing filesystem,
 // and special handling of excluded blocks.
 type TsdbBasedPlanner struct {
-	logger           log.Logger
-	ranges           []int64
-	noCompBlocksFunc func() map[ulid.ULID]*metadata.NoCompactMark
+	logger                      log.Logger
+	ranges                      []int64
+	noCompBlocksFunc            func() map[ulid.ULID]*metadata.NoCompactMark
+	enableOverlappingCompaction bool
 }
 
 // NewPlanner initializes a new [tsdbBasedPlanner].
-func NewPlanner(logger log.Logger, ranges []int64, noCompBlocks NoCompactionMarkFilter) *TsdbBasedPlanner {
-	return &TsdbBasedPlanner{logger: logger, ranges: ranges, noCompBlocksFunc: noCompBlocks.NoCompactMarkedBlocks}
+func NewPlanner(
+	logger log.Logger,
+	ranges []int64,
+	noCompBlocks NoCompactionMarkFilter,
+	enableOverlappingCompaction bool,
+) (*TsdbBasedPlanner, error) {
+	if len(ranges) == 0 {
+		return nil, fmt.Errorf("at least one range must be provided")
+	}
+
+	if logger == nil {
+		logger = log.NewNopLogger()
+	}
+
+	return &TsdbBasedPlanner{
+		logger:                      logger,
+		ranges:                      ranges,
+		noCompBlocksFunc:            noCompBlocks.NoCompactMarkedBlocks,
+		enableOverlappingCompaction: enableOverlappingCompaction,
+	}, nil
 }
 
 // Plan is the main function that plans the compaction of the blocks.
-func (p *TsdbBasedPlanner) Plan(
-	_ context.Context,
-	metasByMinTime []*metadata.Meta,
-	_ chan error,
-	_ any,
-) ([]*metadata.Meta, error) {
-	return p.plan(p.noCompBlocksFunc(), metasByMinTime)
+func (p *TsdbBasedPlanner) Plan(_ context.Context, metasByMinTime []*metadata.Meta) ([]*metadata.Meta, bool, error) {
+	metas, overlappingBlocks := p.plan(p.noCompBlocksFunc(), metasByMinTime)
+	return metas, overlappingBlocks, nil
 }
 
 // plan is the main function that plans the compaction of the blocks.
 func (p *TsdbBasedPlanner) plan(
 	noCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
-) ([]*metadata.Meta, error) {
+) ([]*metadata.Meta, bool) {
 	notExcludedMetasByMinTime := make([]*metadata.Meta, 0, len(metasByMinTime))
 	for _, meta := range metasByMinTime {
 		if _, excluded := noCompactMarked[meta.ULID]; excluded {
@@ -98,9 +113,9 @@ func (p *TsdbBasedPlanner) plan(
 		notExcludedMetasByMinTime = append(notExcludedMetasByMinTime, meta)
 	}
 
-	res := selectOverlappingMetas(notExcludedMetasByMinTime)
+	res := p.selectOverlappingMetas(notExcludedMetasByMinTime)
 	if len(res) > 0 {
-		return res, nil
+		return res, true
 	}
 	// No overlapping blocks, do compaction the usual way.
 
@@ -112,7 +127,7 @@ func (p *TsdbBasedPlanner) plan(
 	metasByMinTime = metasByMinTime[:len(metasByMinTime)-1]
 	res = append(res, selectMetas(p.ranges, noCompactMarked, metasByMinTime)...)
 	if len(res) > 0 {
-		return res, nil
+		return res, false
 	}
 
 	// Compact any blocks with big enough time range that have >5% tombstones.
@@ -122,11 +137,43 @@ func (p *TsdbBasedPlanner) plan(
 			break
 		}
 		if float64(meta.Stats.NumTombstones)/float64(meta.Stats.NumSeries+1) > 0.05 {
-			return []*metadata.Meta{notExcludedMetasByMinTime[i]}, nil
+			return []*metadata.Meta{notExcludedMetasByMinTime[i]}, false
 		}
 	}
 
-	return nil, nil
+	return nil, false
+}
+
+// selectOverlappingMetas returns all dirs with overlapping time ranges.
+// It expects sorted input by mint and returns the overlapping dirs in the same order as received.
+func (p *TsdbBasedPlanner) selectOverlappingMetas(metasByMinTime []*metadata.Meta) []*metadata.Meta {
+	if !p.enableOverlappingCompaction {
+		return nil
+	}
+
+	if len(metasByMinTime) < 2 {
+		return nil
+	}
+
+	var overlappingMetas []*metadata.Meta
+	globalMaxt := metasByMinTime[0].MaxTime
+	for i, m := range metasByMinTime[1:] {
+		if m.MinTime < globalMaxt {
+			if len(overlappingMetas) == 0 {
+				// When it is the first overlap, need to add the last one as well.
+				overlappingMetas = append(overlappingMetas, metasByMinTime[i])
+			}
+			overlappingMetas = append(overlappingMetas, m)
+		} else if len(overlappingMetas) > 0 {
+			break
+		}
+
+		if m.MaxTime > globalMaxt {
+			globalMaxt = m.MaxTime
+		}
+	}
+
+	return overlappingMetas
 }
 
 // selectMetas returns the dir metas that should be compacted into a single new block.
@@ -277,9 +324,7 @@ func WithLargeTotalIndexSizeFilter(
 func (t *largeTotalIndexSizeFilter) Plan(
 	ctx context.Context,
 	metasByMinTime []*metadata.Meta,
-	_ chan error,
-	_ any,
-) ([]*metadata.Meta, error) {
+) ([]*metadata.Meta, bool, error) {
 	return t.plan(ctx, nil, metasByMinTime)
 }
 
@@ -288,7 +333,7 @@ func (t *largeTotalIndexSizeFilter) plan(
 	ctx context.Context,
 	extraNoCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
-) ([]*metadata.Meta, error) {
+) ([]*metadata.Meta, bool, error) {
 	noCompactMarked := t.noCompBlocksFunc()
 	copiedNoCompactMarked := make(map[ulid.ULID]*metadata.NoCompactMark, len(noCompactMarked)+len(extraNoCompactMarked))
 	maps.Copy(copiedNoCompactMarked, noCompactMarked)
@@ -296,10 +341,7 @@ func (t *largeTotalIndexSizeFilter) plan(
 
 PlanLoop:
 	for {
-		plan, err := t.TsdbBasedPlanner.plan(copiedNoCompactMarked, metasByMinTime)
-		if err != nil {
-			return nil, err
-		}
+		plan, overlappingBlocks := t.TsdbBasedPlanner.plan(copiedNoCompactMarked, metasByMinTime)
 
 		var totalIndexBytes, maxIndexSize int64 = 0, math.MinInt64
 		var biggestIndex int
@@ -315,7 +357,7 @@ PlanLoop:
 				// Get size from bkt instead.
 				attr, err := t.bw.Attributes(ctx, filepath.Join(p.ULID.String(), block.IndexFilename))
 				if err != nil {
-					return nil, fmt.Errorf(
+					return nil, overlappingBlocks, fmt.Errorf(
 						"get attr of %v: %w",
 						filepath.Join(p.ULID.String(), block.IndexFilename),
 						err,
@@ -346,7 +388,11 @@ PlanLoop:
 					),
 					t.markedForNoCompact,
 				); err != nil {
-					return nil, fmt.Errorf("mark %v for no compaction: %w", plan[biggestIndex].ULID.String(), err)
+					return nil, overlappingBlocks, fmt.Errorf(
+						"mark %v for no compaction: %w",
+						plan[biggestIndex].ULID.String(),
+						err,
+					)
 				}
 
 				// Make sure wrapped planner exclude this block.
@@ -359,7 +405,7 @@ PlanLoop:
 		}
 
 		// Planned blocks should not exceed limit.
-		return plan, nil
+		return plan, overlappingBlocks, nil
 	}
 }
 
@@ -396,20 +442,18 @@ func WithVerticalCompactionDownsampleFilter(
 func (v *verticalCompactionDownsampleFilter) Plan(
 	ctx context.Context,
 	metasByMinTime []*metadata.Meta,
-	_ chan error,
-	_ any,
-) ([]*metadata.Meta, error) {
+) ([]*metadata.Meta, bool, error) {
 	noCompactMarked := make(map[ulid.ULID]*metadata.NoCompactMark, 0)
 
 PlanLoop:
 	for {
-		plan, err := v.plan(ctx, noCompactMarked, metasByMinTime)
+		plan, overlappingBlocks, err := v.plan(ctx, noCompactMarked, metasByMinTime)
 		if err != nil {
-			return nil, err
+			return nil, overlappingBlocks, err
 		}
 
-		if len(selectOverlappingMetas(plan)) == 0 {
-			return plan, nil
+		if overlappingBlocks {
+			return plan, overlappingBlocks, nil
 		}
 
 		// If we have downsampled blocks, we need to mark them as no compact because it's impossible
@@ -430,7 +474,7 @@ PlanLoop:
 				"verticalCompactionDownsampleFilter: Downsampled block",
 				v.markedForNoCompact,
 			); err != nil {
-				return nil, fmt.Errorf("mark %v for no compaction: %w", m.ULID.String(), err)
+				return nil, overlappingBlocks, fmt.Errorf("mark %v for no compaction: %w", m.ULID.String(), err)
 			}
 
 			noCompactMarked[m.ULID] = &metadata.NoCompactMark{ID: m.ULID, Version: metadata.NoCompactMarkVersion1}
@@ -441,32 +485,6 @@ PlanLoop:
 			continue PlanLoop
 		}
 
-		return plan, nil
+		return plan, overlappingBlocks, nil
 	}
-}
-
-// selectOverlappingMetas returns all dirs with overlapping time ranges.
-// It expects sorted input by mint and returns the overlapping dirs in the same order as received.
-func selectOverlappingMetas(metasByMinTime []*metadata.Meta) []*metadata.Meta {
-	if len(metasByMinTime) < 2 {
-		return nil
-	}
-	var overlappingMetas []*metadata.Meta
-	globalMaxt := metasByMinTime[0].MaxTime
-	for i, m := range metasByMinTime[1:] {
-		if m.MinTime < globalMaxt {
-			if len(overlappingMetas) == 0 {
-				// When it is the first overlap, need to add the last one as well.
-				overlappingMetas = append(overlappingMetas, metasByMinTime[i])
-			}
-			overlappingMetas = append(overlappingMetas, m)
-		} else if len(overlappingMetas) > 0 {
-			break
-		}
-
-		if m.MaxTime > globalMaxt {
-			globalMaxt = m.MaxTime
-		}
-	}
-	return overlappingMetas
 }

@@ -1,20 +1,33 @@
 package tcompactor
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/tcompactor/block"
 	"github.com/prometheus/prometheus/tsdb"
 )
+
+// CompactionLifecycleCallback is a callback for the compaction lifecycle.
+// It is used to get the [tsdb.BlockPopulator] for the compaction.
+type CompactionLifecycleCallback interface {
+	// GetBlockPopulator returns the [tsdb.BlockPopulator] for the compaction.
+	GetBlockPopulator(ctx context.Context, logger log.Logger, group *Group) (tsdb.BlockPopulator, error)
+}
 
 // Compactor is the interface for the [tsdb.LeveledCompactor].
 type Compactor interface {
@@ -153,7 +166,7 @@ type Group struct {
 	key                      string
 	labels                   labels.Labels
 	resolution               int64
-	mtx                      sync.Mutex
+	mtx                      sync.Mutex // TODO: not need
 	metasByMinTime           []*metadata.Meta
 	compactions              prometheus.Counter
 	compactionRunsStarted    prometheus.Counter
@@ -231,227 +244,137 @@ func (cg *Group) Key() string {
 	return cg.key
 }
 
-// func (cg *Group) compact(
-// 	ctx context.Context,
-// 	dir string,
-// 	planner Planner,
-// 	comp Compactor,
-// 	compactionLifecycleCallback CompactionLifecycleCallback,
-// 	errChan chan error,
-// ) (bool, []ulid.ULID, error) {
-// 	cg.mtx.Lock()
-// 	defer cg.mtx.Unlock()
+// Compact plans and runs a single compaction against the group.
+func (cg *Group) Compact(
+	ctx context.Context,
+	dir string,
+	planner Planner,
+	comp Compactor,
+	compactionLifecycleCallback CompactionLifecycleCallback,
+) ([]ulid.ULID, error) {
+	cg.compactionRunsStarted.Inc()
 
-// 	// Check for overlapped blocks.
-// 	overlappingBlocks := false
-// 	if err := cg.areBlocksOverlapping(nil); err != nil {
-// 		// TODO(bwplotka): It would really nice if we could still check for other overlaps than replica. In fact this should be checked
-// 		// in syncer itself. Otherwise with vertical compaction enabled we will sacrifice this important check.
-// 		if !cg.enableVerticalCompaction {
-// 			return false, nil, halt(errors.Wrap(err, "pre compaction overlap check"))
-// 		}
+	compIDs, err := cg.runCompact(ctx, dir, planner, comp, compactionLifecycleCallback)
+	if err != nil {
+		cg.compactionFailures.Inc()
+		return compIDs, err
+	}
 
-// 		overlappingBlocks = true
-// 	}
+	cg.compactionRunsCompleted.Inc()
 
-// 	var toCompact []*metadata.Meta
-// 	if err := tracing.DoInSpanWithErr(ctx, "compaction_planning", func(ctx context.Context) (e error) {
-// 		toCompact, e = planner.Plan(ctx, cg.metasByMinTime, errChan, cg.extensions)
-// 		return e
-// 	}); err != nil {
-// 		return false, nil, errors.Wrap(err, "plan compaction")
-// 	}
-// 	if len(toCompact) == 0 {
-// 		// Nothing to do.
-// 		return false, nil, nil
-// 	}
+	return compIDs, nil
+}
 
-// 	level.Info(cg.logger).Log("msg", "compaction available and planned", "plan", fmt.Sprintf("%v", toCompact))
+// runCompact plans and runs a single compaction against the group.
+func (cg *Group) runCompact(
+	ctx context.Context,
+	dir string,
+	planner Planner,
+	comp Compactor,
+	compactionLifecycleCallback CompactionLifecycleCallback,
+) ([]ulid.ULID, error) {
+	cg.mtx.Lock()
+	defer cg.mtx.Unlock()
 
-// 	// Once we have a plan we need to download the actual data.
-// 	groupCompactionBegin := time.Now()
-// 	begin := groupCompactionBegin
+	toCompact, overlappingBlocks, err := planner.Plan(ctx, cg.metasByMinTime)
+	if err != nil {
+		return nil, fmt.Errorf("plan compaction: %w", err)
+	}
 
-// 	if err := compactionLifecycleCallback.PreCompactionCallback(ctx, cg.logger, cg, toCompact); err != nil {
-// 		return false, nil, errors.Wrapf(err, "failed to run pre compaction callback for plan: %s", fmt.Sprintf("%v", toCompact))
-// 	}
-// 	level.Info(cg.logger).Log("msg", "finished running pre compaction callback; downloading blocks", "duration", time.Since(begin), "duration_ms", time.Since(begin).Milliseconds(), "plan", fmt.Sprintf("%v", toCompact))
+	if len(toCompact) == 0 {
+		// Nothing to do.
+		return nil, nil
+	}
 
-// 	begin = time.Now()
-// 	g, errCtx := errgroup.WithContext(ctx)
-// 	g.SetLimit(cg.compactBlocksFetchConcurrency)
+	level.Info(cg.logger).Log("msg", "compaction available and planned", "plan", fmt.Sprintf("%v", toCompact))
 
-// 	toCompactDirs := make([]string, 0, len(toCompact))
-// 	for _, m := range toCompact {
-// 		bdir := filepath.Join(dir, m.ULID.String())
-// 		func(ctx context.Context, meta *metadata.Meta) {
-// 			g.Go(func() error {
-// 				start := time.Now()
-// 				if err := tracing.DoInSpanWithErr(ctx, "compaction_block_download", func(ctx context.Context) error {
-// 					return block.Download(ctx, cg.logger, cg.bkt, meta.ULID, bdir, objstore.WithFetchConcurrency(cg.blockFilesConcurrency))
-// 				}, opentracing.Tags{"block.id": meta.ULID}); err != nil {
-// 					return retry(errors.Wrapf(err, "download block %s", meta.ULID))
-// 				}
-// 				level.Debug(cg.logger).Log("msg", "downloaded block", "block", meta.ULID.String(), "duration", time.Since(start), "duration_ms", time.Since(start).Milliseconds())
+	// Once we have a plan we need to download the actual data.
+	groupCompactionBegin := time.Now()
 
-// 				start = time.Now()
-// 				// Ensure all input blocks are valid.
-// 				var stats block.HealthStats
-// 				if err := tracing.DoInSpanWithErr(ctx, "compaction_block_health_stats", func(ctx context.Context) (e error) {
-// 					stats, e = block.GatherIndexHealthStats(ctx, cg.logger, filepath.Join(bdir, block.IndexFilename), meta.MinTime, meta.MaxTime)
-// 					return e
-// 				}, opentracing.Tags{"block.id": meta.ULID}); err != nil {
-// 					return errors.Wrapf(err, "gather index issues for block %s", bdir)
-// 				}
+	toCompactDirs := make([]string, 0, len(toCompact))
+	for _, m := range toCompact {
+		toCompactDirs = append(toCompactDirs, filepath.Join(dir, m.ULID.String()))
+	}
+	sourceBlockStr := fmt.Sprintf("%v", toCompactDirs)
 
-// 				if err := stats.CriticalErr(); err != nil {
-// 					return halt(errors.Wrapf(err, "block with not healthy index found %s; Compaction level %v; Labels: %v", bdir, meta.Compaction.Level, meta.Thanos.Labels))
-// 				}
+	begin := time.Now()
+	populateBlockFunc, err := compactionLifecycleCallback.GetBlockPopulator(ctx, cg.logger, cg)
+	if err != nil {
+		return nil, fmt.Errorf("get block populator: %w", err)
+	}
 
-// 				if err := stats.OutOfOrderChunksErr(); err != nil {
-// 					return outOfOrderChunkError(errors.Wrapf(err, "blocks with out-of-order chunks are dropped from compaction:  %s", bdir), meta.ULID)
-// 				}
+	compIDs, err := comp.CompactWithBlockPopulator(dir, toCompactDirs, nil, populateBlockFunc)
+	if err != nil {
+		return nil, fmt.Errorf("compact blocks: %w", err)
+	}
 
-// 				if err := stats.Issue347OutsideChunksErr(); err != nil {
-// 					return issue347Error(errors.Wrapf(err, "invalid, but reparable block %s", bdir), meta.ULID)
-// 				}
+	// TODO: handle empty compIDs
+	if len(compIDs) == 0 {
+		// No compacted blocks means all compacted blocks are of no sample.
+		// Even though no compacted blocks, there may be more work to do.
+		return nil, nil
+	}
 
-// 				if err := stats.OutOfOrderLabelsErr(); !cg.acceptMalformedIndex && err != nil {
-// 					return errors.Wrapf(err,
-// 						"block id %s, try running with --debug.accept-malformed-index", meta.ULID)
-// 				}
-// 				level.Debug(cg.logger).Log("msg", "verified block", "block", meta.ULID.String(), "duration", time.Since(start), "duration_ms", time.Since(start).Milliseconds())
-// 				return nil
-// 			})
-// 		}(errCtx, m)
+	cg.compactions.Inc()
+	if overlappingBlocks {
+		cg.verticalCompactions.Inc()
+	}
 
-// 		toCompactDirs = append(toCompactDirs, bdir)
-// 	}
-// 	sourceBlockStr := fmt.Sprintf("%v", toCompactDirs)
+	compIDStrings := make([]string, 0, len(compIDs))
+	for _, compID := range compIDs {
+		compIDStrings = append(compIDStrings, compID.String())
+	}
+	compIDStrs := fmt.Sprintf("%v", compIDStrings)
+	level.Info(cg.logger).Log(
+		"msg", "compacted blocks",
+		"new", compIDStrs,
+		"duration", time.Since(begin),
+		"overlapping_blocks", overlappingBlocks,
+		"blocks", sourceBlockStr,
+	)
 
-// 	if err := g.Wait(); err != nil {
-// 		return false, nil, err
-// 	}
+	for _, compID := range compIDs {
+		bdir := filepath.Join(dir, compID.String())
+		index := filepath.Join(bdir, block.IndexFilename)
 
-// 	level.Info(cg.logger).Log("msg", "downloaded and verified blocks; compacting blocks", "duration", time.Since(begin), "duration_ms", time.Since(begin).Milliseconds(), "plan", sourceBlockStr)
+		if err := os.Remove(filepath.Join(bdir, "tombstones")); err != nil {
+			return nil, fmt.Errorf("remove tombstones: %w", err)
+		}
 
-// 	begin = time.Now()
-// 	var compIDs []ulid.ULID
-// 	if err := tracing.DoInSpanWithErr(ctx, "compaction", func(ctx context.Context) (e error) {
-// 		populateBlockFunc, e := compactionLifecycleCallback.GetBlockPopulator(ctx, cg.logger, cg)
-// 		if e != nil {
-// 			return e
-// 		}
-// 		compIDs, e = comp.CompactWithBlockPopulator(dir, toCompactDirs, nil, populateBlockFunc)
-// 		return e
-// 	}); err != nil {
-// 		return false, nil, halt(errors.Wrapf(err, "compact blocks %v", toCompactDirs))
-// 	}
-// 	if len(compIDs) == 0 {
-// 		// No compacted blocks means all compacted blocks are of no sample.
-// 		level.Info(cg.logger).Log("msg", "no compacted blocks, deleting source blocks", "blocks", sourceBlockStr)
-// 		for _, meta := range toCompact {
-// 			if meta.Stats.NumSamples == 0 {
-// 				if err := cg.deleteBlock(meta.ULID, filepath.Join(dir, meta.ULID.String()), blockDeletableChecker); err != nil {
-// 					level.Warn(cg.logger).Log("msg", "failed to mark for deletion an empty block found during compaction", "block", meta.ULID)
-// 				}
-// 			}
-// 		}
-// 		// Even though no compacted blocks, there may be more work to do.
-// 		return true, nil, nil
-// 	}
-// 	cg.compactions.Inc()
-// 	if overlappingBlocks {
-// 		cg.verticalCompactions.Inc()
-// 	}
-// 	compIDStrings := make([]string, 0, len(compIDs))
-// 	for _, compID := range compIDs {
-// 		compIDStrings = append(compIDStrings, compID.String())
-// 	}
-// 	compIDStrs := fmt.Sprintf("%v", compIDStrings)
-// 	level.Info(cg.logger).Log("msg", "compacted blocks", "new", compIDStrs,
-// 		"duration", time.Since(begin), "duration_ms", time.Since(begin).Milliseconds(), "overlapping_blocks", overlappingBlocks, "blocks", sourceBlockStr)
+		newMeta, err := metadata.ReadFromDir(bdir)
+		if err != nil {
+			return nil, fmt.Errorf("read new meta: %w", err)
+		}
 
-// 	for _, compID := range compIDs {
-// 		bdir := filepath.Join(dir, compID.String())
-// 		index := filepath.Join(bdir, block.IndexFilename)
+		// Ensure the output block is valid.
+		stats, err := block.GatherIndexHealthStats(ctx, cg.logger, index, newMeta.MinTime, newMeta.MaxTime)
+		if !cg.acceptMalformedIndex && errors.Join(err, stats.AnyErr()) != nil {
+			return nil, fmt.Errorf("invalid result block %s: %w", bdir, errors.Join(err, stats.AnyErr()))
+		}
 
-// 		if err := os.Remove(filepath.Join(bdir, "tombstones")); err != nil {
-// 			return false, nil, errors.Wrap(err, "remove tombstones")
-// 		}
+		if _, err = metadata.InjectThanos(
+			cg.logger,
+			bdir,
+			metadata.Thanos{
+				Labels:       cg.labels.Map(),
+				Downsample:   metadata.ThanosDownsample{Resolution: cg.resolution},
+				Source:       metadata.CompactorSource,
+				SegmentFiles: block.GetSegmentFiles(bdir),
+				IndexStats:   metadata.IndexStats{ChunkMaxSize: stats.ChunkMaxSize, SeriesMaxSize: stats.SeriesMaxSize},
+			},
+			nil,
+		); err != nil {
+			return nil, fmt.Errorf("failed to finalize the block %s: %w", bdir, err)
+		}
+		// TODO: log info
+	}
 
-// 		newMeta, err := metadata.ReadFromDir(bdir)
-// 		if err != nil {
-// 			return false, nil, errors.Wrap(err, "read new meta")
-// 		}
+	level.Info(cg.logger).Log(
+		"msg", "finished compacting blocks",
+		"duration", time.Since(groupCompactionBegin),
+		"result_blocks", compIDStrs,
+		"source_blocks", sourceBlockStr,
+	)
 
-// 		var stats block.HealthStats
-// 		// Ensure the output block is valid.
-// 		err = tracing.DoInSpanWithErr(ctx, "compaction_verify_index", func(ctx context.Context) error {
-// 			stats, err = block.GatherIndexHealthStats(ctx, cg.logger, index, newMeta.MinTime, newMeta.MaxTime)
-// 			if err != nil {
-// 				return err
-// 			}
-// 			return stats.AnyErr()
-// 		})
-// 		if !cg.acceptMalformedIndex && err != nil {
-// 			return false, nil, halt(errors.Wrapf(err, "invalid result block %s", bdir))
-// 		}
-
-// 		thanosMeta := metadata.Thanos{
-// 			Labels:       cg.labels.Map(),
-// 			Downsample:   metadata.ThanosDownsample{Resolution: cg.resolution},
-// 			Source:       metadata.CompactorSource,
-// 			SegmentFiles: block.GetSegmentFiles(bdir),
-// 			Extensions:   cg.extensions,
-// 		}
-// 		if stats.ChunkMaxSize > 0 {
-// 			thanosMeta.IndexStats.ChunkMaxSize = stats.ChunkMaxSize
-// 		}
-// 		if stats.SeriesMaxSize > 0 {
-// 			thanosMeta.IndexStats.SeriesMaxSize = stats.SeriesMaxSize
-// 		}
-// 		newMeta, err = metadata.InjectThanos(cg.logger, bdir, thanosMeta, nil)
-// 		if err != nil {
-// 			return false, nil, errors.Wrapf(err, "failed to finalize the block %s", bdir)
-// 		}
-// 		// Ensure the output block is not overlapping with anything else,
-// 		// unless vertical compaction is enabled.
-// 		if !cg.enableVerticalCompaction {
-// 			if err := cg.areBlocksOverlapping(newMeta, toCompact...); err != nil {
-// 				return false, nil, halt(errors.Wrapf(err, "resulted compacted block %s overlaps with something", bdir))
-// 			}
-// 		}
-
-// 		begin = time.Now()
-
-// 		err = tracing.DoInSpanWithErr(ctx, "compaction_block_upload", func(ctx context.Context) error {
-// 			return block.Upload(ctx, cg.logger, cg.bkt, bdir, cg.hashFunc, objstore.WithUploadConcurrency(cg.blockFilesConcurrency))
-// 		})
-// 		if err != nil {
-// 			return false, nil, retry(errors.Wrapf(err, "upload of %s failed", compID))
-// 		}
-// 		level.Info(cg.logger).Log("msg", "uploaded block", "result_block", compID, "duration", time.Since(begin), "duration_ms", time.Since(begin).Milliseconds())
-// 		level.Info(cg.logger).Log("msg", "running post compaction callback", "result_block", compID)
-// 		if err := compactionLifecycleCallback.PostCompactionCallback(ctx, cg.logger, cg, compID); err != nil {
-// 			return false, nil, retry(errors.Wrapf(err, "failed to run post compaction callback for result block %s", compID))
-// 		}
-// 		level.Info(cg.logger).Log("msg", "finished running post compaction callback", "result_block", compID)
-// 	}
-
-// 	// Mark for deletion the blocks we just compacted from the group and bucket so they do not get included
-// 	// into the next planning cycle.
-// 	// Eventually the block we just uploaded should get synced into the group again (including sync-delay).
-// 	for _, meta := range toCompact {
-// 		if err := tracing.DoInSpanWithErr(ctx, "compaction_block_delete", func(ctx context.Context) error {
-// 			return cg.deleteBlock(meta.ULID, filepath.Join(dir, meta.ULID.String()), blockDeletableChecker)
-// 		}, opentracing.Tags{"block.id": meta.ULID}); err != nil {
-// 			return false, nil, retry(errors.Wrapf(err, "mark old block for deletion from bucket"))
-// 		}
-// 		cg.groupGarbageCollectedBlocks.Inc()
-// 	}
-
-// 	level.Info(cg.logger).Log("msg", "finished compacting blocks", "duration", time.Since(groupCompactionBegin),
-// 		"duration_ms", time.Since(groupCompactionBegin).Milliseconds(), "result_blocks", compIDStrs, "source_blocks", sourceBlockStr)
-// 	return true, compIDs, nil
-// }
+	return compIDs, nil
+}

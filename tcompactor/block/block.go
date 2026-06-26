@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/go-kit/log"
@@ -19,6 +21,9 @@ import (
 const (
 	// IndexFilename is the known index file for block index.
 	IndexFilename = "index"
+
+	// ChunksDirname is the known dir name for chunks with compressed samples.
+	ChunksDirname = "chunks"
 )
 
 //
@@ -81,4 +86,20 @@ func MarkForNoCompact(
 	level.Info(logger).Log("msg", "block has been marked for no compaction", "block", id)
 
 	return nil
+}
+
+// GetSegmentFiles returns list of segment files for given block. Paths are relative to the chunks directory.
+// In case of errors, nil is returned.
+func GetSegmentFiles(blockDir string) []string {
+	files, err := os.ReadDir(filepath.Join(blockDir, ChunksDirname))
+	if err != nil {
+		return nil
+	}
+
+	// ReadDir returns files in sorted order already.
+	var result []string
+	for _, f := range files {
+		result = append(result, f.Name())
+	}
+	return result
 }
