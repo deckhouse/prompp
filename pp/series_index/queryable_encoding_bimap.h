@@ -170,12 +170,21 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   template <class Callback>
-  void for_each_snapshot_symbol_id(Callback&& callback) const {
+  void for_each_snapshot_key_id(Callback&& callback) const {
     assert(!is_shrunk() || shrink_state_.post_shrink_snapshot_resolver != nullptr);
     if (!is_shrunk() || !shrink_state_.post_shrink_snapshot_resolver) {
       return;
     }
-    shrink_state_.post_shrink_snapshot_resolver->for_each_symbol_id(std::forward<Callback>(callback));
+    shrink_state_.post_shrink_snapshot_resolver->for_each_key_id(std::forward<Callback>(callback));
+  }
+
+  template <class Callback>
+  void for_each_snapshot_value_id(Callback&& callback) const {
+    assert(!is_shrunk() || shrink_state_.post_shrink_snapshot_resolver != nullptr);
+    if (!is_shrunk() || !shrink_state_.post_shrink_snapshot_resolver) {
+      return;
+    }
+    shrink_state_.post_shrink_snapshot_resolver->for_each_value_id(std::forward<Callback>(callback));
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const ShrinkState& shrink_state() const noexcept { return shrink_state_; }
