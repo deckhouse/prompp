@@ -13,7 +13,7 @@
 /**
  * used for indexing HashdexVariant.
  */
-enum HashdexType : uint8_t { 
+enum HashdexType : uint8_t {
   kProtobuf = 0,
   kGoModel,
   kDecoder,
