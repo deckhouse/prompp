@@ -63,9 +63,11 @@ type Manager struct {
 }
 
 // compactionRunner runs a single compaction pass over the on-disk blocks,
-// reporting whether a compaction was performed. Implemented by *Compactor.
+// reporting whether a compaction was performed and the ULIDs of the blocks it
+// created (so the driver can remove them if the following reload fails).
+// Implemented by *Compactor.
 type compactionRunner interface {
-	Compact() (bool, error)
+	Compact() (uids []ulid.ULID, compacted bool, err error)
 }
 
 // NewManager init new [Manager] and starts its periodic reload loop.
@@ -155,7 +157,7 @@ func (m *Manager) reloadAndCompact() {
 	}
 
 	for {
-		compacted, err := c.Compact()
+		uids, compacted, err := c.Compact()
 		if err != nil {
 			level.Error(m.logger).Log("msg", "compaction failed", "err", err)
 			return
@@ -164,10 +166,25 @@ func (m *Manager) reloadAndCompact() {
 			return
 		}
 		// Reload to load the freshly created block and delete the obsolete
-		// parents before planning the next compaction.
+		// parents before planning the next compaction. If the reload fails,
+		// remove the freshly compacted block(s) so a half-applied compaction
+		// does not leave orphaned blocks on disk (mirroring tsdb).
 		if err := m.reloadBlocks(); err != nil {
 			level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
+			m.deleteCompactedBlocks(uids)
 			return
+		}
+	}
+}
+
+// deleteCompactedBlocks removes the given block directories from disk. It is used
+// to clean up freshly compacted blocks when the reload that would have loaded
+// them fails, so a half-applied compaction does not leave orphaned blocks behind
+// (mirroring tsdb).
+func (m *Manager) deleteCompactedBlocks(uids []ulid.ULID) {
+	for _, uid := range uids {
+		if err := os.RemoveAll(filepath.Join(m.dir, uid.String())); err != nil {
+			level.Error(m.logger).Log("msg", "delete compacted block after failed reload", "block", uid, "err", err)
 		}
 	}
 }

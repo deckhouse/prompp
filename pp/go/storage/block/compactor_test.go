@@ -13,8 +13,10 @@ import (
 func TestCompactorCompactUsesPlanAndSource(t *testing.T) {
 	t.Parallel()
 
+	wantUID := ulid.MustNew(1, nil)
 	fake := &fakeCompactor{
-		plan: []string{"01AAA", "01BBB"},
+		plan:   []string{"01AAA", "01BBB"},
+		result: []ulid.ULID{wantUID},
 	}
 	source := &fakeBlockSource{
 		blocks: []*tsdb.Block{nil, nil},
@@ -27,9 +29,10 @@ func TestCompactorCompactUsesPlanAndSource(t *testing.T) {
 		metrics:   newCompactorMetrics(nil),
 	}
 
-	compacted, err := c.Compact()
+	uids, compacted, err := c.Compact()
 	require.NoError(t, err)
 	require.True(t, compacted)
+	require.Equal(t, []ulid.ULID{wantUID}, uids)
 	require.True(t, fake.compactCalled)
 	require.Equal(t, "/tmp/data", fake.compactDest)
 	require.Equal(t, []string{"01AAA", "01BBB"}, fake.compactDirs)
@@ -47,9 +50,10 @@ func TestCompactorCompactNoPlanIsNoop(t *testing.T) {
 		metrics:   newCompactorMetrics(nil),
 	}
 
-	compacted, err := c.Compact()
+	uids, compacted, err := c.Compact()
 	require.NoError(t, err)
 	require.False(t, compacted)
+	require.Nil(t, uids)
 	require.Equal(t, 1, fake.planCalls)
 	require.False(t, fake.compactCalled)
 }
@@ -105,7 +109,8 @@ func (f *fakeBlockSource) Blocks() []*tsdb.Block {
 type fakeCompactor struct {
 	mu sync.Mutex
 
-	plan []string
+	plan   []string
+	result []ulid.ULID
 
 	planCalls int
 
@@ -137,5 +142,5 @@ func (f *fakeCompactor) Compact(dest string, dirs []string, open []*tsdb.Block) 
 	f.compactDest = dest
 	f.compactDirs = append([]string(nil), dirs...)
 	f.compactOpen = append([]*tsdb.Block(nil), open...)
-	return nil, nil
+	return append([]ulid.ULID(nil), f.result...), nil
 }
