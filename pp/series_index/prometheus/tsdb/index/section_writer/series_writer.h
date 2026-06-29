@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 #include "bare_bones/preprocess.h"
 #include "prometheus/tsdb/index/stream_writer.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
@@ -15,7 +17,7 @@ class SeriesWriter {
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
   using IndexWriteContext = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>;
 
-  SeriesWriter(const Lss& lss, const IndexWriteContext& index_write_context, SeriesReferencesMap& series_references)
+  SeriesWriter(const Lss& lss, const IndexWriteContext& index_write_context, SeriesReferences& series_references)
       : lss_(lss), index_write_context_(index_write_context), series_references_(series_references) {}
 
   template <class ChunkMetadataContainer>
@@ -34,7 +36,7 @@ class SeriesWriter {
  private:
   const Lss& lss_;
   const IndexWriteContext& index_write_context_;
-  SeriesReferencesMap& series_references_;
+  SeriesReferences& series_references_;
 
   StringWriter series_writer_;
 
@@ -72,8 +74,12 @@ class SeriesWriter {
   }
 
   PROMPP_ALWAYS_INLINE void emplace_series_reference(PromPP::Primitives::LabelSetID ls_id, size_t position) const {
-    auto section_ref = position / PromPP::Prometheus::tsdb::index::kSeriesAlignment;
-    series_references_.try_emplace(ls_id, section_ref);
+    const auto section_ref = position / PromPP::Prometheus::tsdb::index::kSeriesAlignment;
+    // The symbols table precedes the series section, so a written reference is never zero,
+    // which lets PostingsWriter use zero as the "not written" sentinel.
+    assert(section_ref != kUnwrittenSeriesReference);
+    assert(ls_id < series_references_.size());
+    series_references_[ls_id] = static_cast<PromPP::Prometheus::tsdb::index::SeriesReference>(section_ref);
   }
 
   void write_serialized_series(StreamWriter& writer) const {

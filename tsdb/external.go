@@ -1,26 +1,13 @@
 package tsdb
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/go-kit/log"
+	"github.com/oklog/ulid"
 
-// DBOpts exposes db.opts (usage: pp-pkg/tsdb).
-func DBOpts(db *DB) *Options {
-	return db.opts
-}
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
+)
 
-// DBTimeRetentionCount exposes time retention metric (usage: pp-pkg/tsdb).
-func DBTimeRetentionCount(db *DB) prometheus.Counter {
-	return db.metrics.timeRetentionCount
-}
-
-// DBSizeRetentionCount exposes size retention metric (usage: pp-pkg/tsdb).
-func DBSizeRetentionCount(db *DB) prometheus.Counter {
-	return db.metrics.sizeRetentionCount
-}
-
-// DBSetBlocksToDelete safely injects blocksToDelete closure (usage cmd/prometheus/main.go).
-func DBSetBlocksToDelete(db *DB, blocksToDelete BlocksToDeleteFunc) {
-	db.cmtx.Lock()
-	defer db.cmtx.Unlock()
-
-	db.blocksToDelete = blocksToDelete
+// OpenBlocks loads all blocks from dir, reusing already-loaded ones (usage: pp/go/storage/block).
+func OpenBlocks(l log.Logger, dir string, loaded []*Block, chunkPool chunkenc.Pool) ([]*Block, map[ulid.ULID]error, error) {
+	return openBlocks(l, dir, loaded, chunkPool)
 }
