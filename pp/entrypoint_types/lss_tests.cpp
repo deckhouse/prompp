@@ -22,10 +22,52 @@ using entrypoint_types::ShrinkAwareSnapshotLSS;
 using entrypoint_types::SnapshotLSS;
 using PromPP::Primitives::LabelViewSet;
 
+TEST(LssTest, CreateLssEncodingBimapSelectsExpectedAlternative) {
+  // Arrange
+
+  // Act
+  const auto lss = create_lss(LssType::kEncodingBimap);
+
+  // Assert
+  EXPECT_TRUE(std::holds_alternative<EncodingBimap>(*lss));
+}
+
+TEST(LssTest, CreateLssQueryableEncodingBimapSelectsExpectedAlternative) {
+  // Arrange
+
+  // Act
+  const auto lss = create_lss(LssType::kQueryableEncodingBimap);
+
+  // Assert
+  EXPECT_TRUE(std::holds_alternative<QueryableEncodingBimap>(*lss));
+}
+
+TEST(LssTest, CreateLssRejectsUnknownType) {
+  // Arrange
+  const auto unknown_type = static_cast<LssType>(-1);
+
+  // Act
+
+  // Assert
+  EXPECT_THROW((void)create_lss(unknown_type), BareBones::Exception);
+}
+
+TEST(LssTest, CreateSnapshotFromEncodingBimapProducesPlainSnapshot) {
+  // Arrange
+  auto lss = create_lss(LssType::kEncodingBimap);
+  std::get<EncodingBimap>(*lss).find_or_emplace(LabelViewSet{{"job", "a"}});
+
+  // Act
+  const auto snapshot = create_snapshot_lss(*lss);
+
+  // Assert
+  EXPECT_TRUE(std::holds_alternative<SnapshotLSS>(*snapshot));
+}
+
 template <class DecodingTable, class SortingIndex, class SeriesIds, class LsIdVector>
 using QueryableEncodingBimapCopier = series_index::QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
-class SnapshotFixture : public testing::Test {
+class SnapshotLssFixture : public testing::Test {
  protected:
   static constexpr uint32_t kShrinkBoundary = 3U;
 
@@ -89,49 +131,7 @@ class SnapshotFixture : public testing::Test {
   }
 };
 
-TEST(LssTest, CreateLssEncodingBimapSelectsExpectedAlternative) {
-  // Arrange
-
-  // Act
-  const auto lss = create_lss(LssType::kEncodingBimap);
-
-  // Assert
-  EXPECT_TRUE(std::holds_alternative<EncodingBimap>(*lss));
-}
-
-TEST(LssTest, CreateLssQueryableEncodingBimapSelectsExpectedAlternative) {
-  // Arrange
-
-  // Act
-  const auto lss = create_lss(LssType::kQueryableEncodingBimap);
-
-  // Assert
-  EXPECT_TRUE(std::holds_alternative<QueryableEncodingBimap>(*lss));
-}
-
-TEST(LssTest, CreateLssRejectsUnknownType) {
-  // Arrange
-  const auto unknown_type = static_cast<LssType>(-1);
-
-  // Act
-
-  // Assert
-  EXPECT_THROW((void)create_lss(unknown_type), BareBones::Exception);
-}
-
-TEST(LssTest, CreateSnapshotFromEncodingBimapProducesPlainSnapshot) {
-  // Arrange
-  auto lss = create_lss(LssType::kEncodingBimap);
-  std::get<EncodingBimap>(*lss).find_or_emplace(LabelViewSet{{"job", "a"}});
-
-  // Act
-  const auto snapshot = create_snapshot_lss(*lss);
-
-  // Assert
-  EXPECT_TRUE(std::holds_alternative<SnapshotLSS>(*snapshot));
-}
-
-TEST_F(SnapshotFixture, SnapshotResolvesNormalQueryableLss) {
+TEST_F(SnapshotLssFixture, ResolvesNormalQueryableLss) {
   // Arrange
   auto lss = create_queryable_lss();
 
@@ -144,7 +144,7 @@ TEST_F(SnapshotFixture, SnapshotResolvesNormalQueryableLss) {
   EXPECT_EQ(ls4_, std::get<SnapshotLSS>(*snapshot)[4]);
 }
 
-TEST_F(SnapshotFixture, SnapshotFromFixedQueryableLssIsShrinkAware) {
+TEST_F(SnapshotLssFixture, FromFixedQueryableLssIsShrinkAware) {
   // Arrange
   auto lss = create_fixed_lss();
 
@@ -155,7 +155,7 @@ TEST_F(SnapshotFixture, SnapshotFromFixedQueryableLssIsShrinkAware) {
   EXPECT_TRUE(std::holds_alternative<entrypoint_types::ShrinkAwareSnapshotLSS>(*snapshot));
 }
 
-TEST_F(SnapshotFixture, ShrinkAwareSnapshotResolvesSurvivingPreBoundarySeries) {
+TEST_F(SnapshotLssFixture, ShrinkAwareResolvesSurvivingPreBoundarySeries) {
   // Arrange
   auto lss = create_shrunk_lss();
 
@@ -167,7 +167,7 @@ TEST_F(SnapshotFixture, ShrinkAwareSnapshotResolvesSurvivingPreBoundarySeries) {
   EXPECT_EQ(ls1_, std::get<ShrinkAwareSnapshotLSS>(*snapshot)[1]);
 }
 
-TEST_F(SnapshotFixture, ShrinkAwareSnapshotHidesDroppedPreBoundarySeries) {
+TEST_F(SnapshotLssFixture, ShrinkAwareHidesDroppedPreBoundarySeries) {
   // Arrange
   auto lss = create_shrunk_lss();
 
@@ -180,7 +180,7 @@ TEST_F(SnapshotFixture, ShrinkAwareSnapshotHidesDroppedPreBoundarySeries) {
   EXPECT_EQ(0U, std::get<ShrinkAwareSnapshotLSS>(*snapshot)[2].size());
 }
 
-TEST_F(SnapshotFixture, ShrinkAwareSnapshotResolvesPostBoundarySeries) {
+TEST_F(SnapshotLssFixture, ShrinkAwareResolvesPostBoundarySeries) {
   // Arrange
   auto lss = create_shrunk_lss();
 
@@ -193,7 +193,7 @@ TEST_F(SnapshotFixture, ShrinkAwareSnapshotResolvesPostBoundarySeries) {
   EXPECT_EQ(ls4_, std::get<ShrinkAwareSnapshotLSS>(*snapshot)[4]);
 }
 
-TEST(LssTest, ReallocationsDetectorReportsReallocOnEmplace) {
+TEST(ReallocationsDetectorTest, ReportsReallocOnEmplace) {
   // Arrange
   QueryableEncodingBimap lss;
   ReallocationsDetector detector(lss);
@@ -205,7 +205,7 @@ TEST(LssTest, ReallocationsDetectorReportsReallocOnEmplace) {
   EXPECT_TRUE(detector.has_reallocations());
 }
 
-TEST(LssTest, ReallocationsDetectorStaysQuietWithoutChanges) {
+TEST(ReallocationsDetectorTest, StaysQuietWithoutChanges) {
   // Arrange
   QueryableEncodingBimap lss;
   lss.find_or_emplace(LabelViewSet{{"job", "a"}});
