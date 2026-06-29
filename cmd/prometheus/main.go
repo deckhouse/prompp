@@ -824,10 +824,10 @@ func main() {
 	scraper := &readyScrapeManager{}
 
 	// PP_CHANGES.md: rebuild on cpp start
-	// Server mode supports two historical-block storage schemes selected by
-	// --storage.prompp.use-block-manager:
-	// 1) true  (default): block.Manager + block.Compactor for persisted blocks.
-	// 2) false: pre-PR-377 mode with tsdb.DB serving persisted blocks.
+	// Server mode supports two historical-block storage schemes selected by the
+	// PROMPP_FEATURES=enable_block_manager feature flag:
+	// 1) enabled:  block.Manager + block.Compactor for persisted blocks.
+	// 2) disabled (default): pre-PR-377 mode with tsdb.DB serving persisted blocks.
 	// In both modes, PP head manager + adapter remain the write path.
 	var (
 		blockManager     *block.Manager
