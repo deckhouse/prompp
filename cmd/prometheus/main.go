@@ -67,9 +67,11 @@ import (
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/tcompactor"
+	"github.com/prometheus/prometheus/tcompactor/manger"
 
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
-	block "github.com/prometheus/prometheus/pp/go/storage/block"  // PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
+	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
@@ -828,9 +830,9 @@ func main() {
 	// adapter; localStorage stays an empty stub. In agent mode the secondary is
 	// still localStorage (agent.DB set later).
 	var (
-		blockManager     *block.Manager
-		blockCompactor   *block.Compactor
-		compactCancel    context.CancelFunc
+		// blockManager     *block.Manager
+		// blockCompactor   *block.Compactor
+		// compactCancel    context.CancelFunc
 		persistedStorage storage.Storage       = localStorage
 		startTimeFn      func() (int64, error) = localStorage.StartTime
 	)
@@ -842,32 +844,68 @@ func main() {
 			pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
 			prometheus.DefaultRegisterer,
 		)
-		blockManager, err = block.NewManager(localStoragePath, &block.Options{
-			RetentionDuration:           retentionMs,
-			CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
-			EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-		}, blocksToDelete, log.With(logger, "component", "blockmanager"), prometheus.DefaultRegisterer)
+
+		compactCtx, compactCancel := context.WithCancel(context.Background())
+		blockCompactor, err := tcompactor.NewTCompactor(
+			compactCtx,
+			log.With(logger, "component", "tcompactor"),
+			localStoragePath,
+			tcompactor.Options{
+				TsdbOptions: tsdb.LeveledCompactorOptions{
+					MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
+					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+				},
+				MinBlockDuration: int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+				MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
+			}, prometheus.DefaultRegisterer)
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to create tcompactor", "err", err)
+			os.Exit(1)
+		}
+
+		blockManager, err := manger.NewManager(
+			localStoragePath,
+			&manger.Options{
+				RetentionDuration:           retentionMs,
+				CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
+				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+			},
+			blockCompactor,
+			blocksToDelete,
+			log.With(logger, "component", "blockmanager"),
+			prometheus.DefaultRegisterer,
+		)
 		if err != nil {
 			level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
 			os.Exit(1)
 		}
 
-		var compactCtx context.Context
-		compactCtx, compactCancel = context.WithCancel(context.Background())
-		blockCompactor, err = block.NewCompactor(compactCtx, localStoragePath, &block.CompactorOptions{
-			MinBlockDuration:            int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
-			MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
-			EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-		}, blockManager, log.With(logger, "component", "blockcompactor"), prometheus.DefaultRegisterer)
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to create block compactor", "err", err)
-			os.Exit(1)
-		}
+		// blockManager, err = block.NewManager(localStoragePath, &block.Options{
+		// 	RetentionDuration:           retentionMs,
+		// 	CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
+		// 	EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+		// }, blocksToDelete, log.With(logger, "component", "blockmanager"), prometheus.DefaultRegisterer)
+		// if err != nil {
+		// 	level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
+		// 	os.Exit(1)
+		// }
+
+		// var compactCtx context.Context
+		// compactCtx, compactCancel = context.WithCancel(context.Background())
+		// blockCompactor, err = block.NewCompactor(compactCtx, localStoragePath, &block.CompactorOptions{
+		// 	MinBlockDuration:            int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+		// 	MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
+		// 	EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+		// }, blockManager, log.With(logger, "component", "blockcompactor"), prometheus.DefaultRegisterer)
+		// if err != nil {
+		// 	level.Error(logger).Log("msg", "failed to create block compactor", "err", err)
+		// 	os.Exit(1)
+		// }
 
 		bs := &blockStorage{m: blockManager, onClose: func() error {
+			compactCancel()
 			blockCompactor.Close()
 			blockManager.Close()
-			compactCancel()
 			return nil
 		}}
 		persistedStorage = bs
@@ -1774,7 +1812,8 @@ type BlockCompactor interface {
 // the head adapter is the fanout primary that stores samples.
 // PP_CHANGES.md: rebuild on cpp
 type blockStorage struct {
-	m       *block.Manager
+	// m       *block.Manager
+	m       *manger.Manager
 	onClose func() error
 }
 

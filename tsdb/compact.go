@@ -464,6 +464,18 @@ func (c *LeveledCompactor) Compact(dest string, dirs []string, open []*Block) ([
 }
 
 func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string, open []*Block, blockPopulator BlockPopulator) ([]ulid.ULID, error) {
+	return c.CompactWithBlockPopulatorWithWriteMetaFile(dest, dirs, open, blockPopulator, writeMetaFile)
+}
+
+// CompactWithBlockPopulatorWithWriteMetaFile creates a new block in the compactor's directory from the blocks in the
+// provided directories. It uses the provided writeMetaFileFn to write the meta file.
+func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
+	dest string,
+	dirs []string,
+	open []*Block,
+	blockPopulator BlockPopulator,
+	writeMetaFileFn func(logger log.Logger, dir string, meta *BlockMeta) (int64, error),
+) ([]ulid.ULID, error) {
 	var (
 		blocks []BlockReader
 		bs     []*Block
@@ -522,7 +534,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)
-	err := c.write(dest, meta, blockPopulator, blocks...)
+	err := c.write(dest, meta, blockPopulator, writeMetaFileFn, blocks...)
 	if err == nil {
 		if meta.Stats.NumSamples == 0 {
 			for _, b := range bs {
@@ -591,7 +603,7 @@ func (c *LeveledCompactor) Write(dest string, b BlockReader, mint, maxt int64, b
 		}
 	}
 
-	err := c.write(dest, meta, DefaultBlockPopulator{}, b)
+	err := c.write(dest, meta, DefaultBlockPopulator{}, writeMetaFile, b)
 	if err != nil {
 		return nil, err
 	}
@@ -637,7 +649,13 @@ func (w *instrumentedChunkWriter) WriteChunks(chunks ...chunks.Meta) error {
 }
 
 // write creates a new block that is the union of the provided blocks into dir.
-func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator BlockPopulator, blocks ...BlockReader) (err error) {
+func (c *LeveledCompactor) write(
+	dest string,
+	meta *BlockMeta,
+	blockPopulator BlockPopulator,
+	writeMetaFileFn func(logger log.Logger, dir string, meta *BlockMeta) (int64, error),
+	blocks ...BlockReader,
+) (err error) {
 	dir := filepath.Join(dest, meta.ULID.String())
 	tmp := dir + tmpForCreationBlockDirSuffix
 	var closers []io.Closer
@@ -713,7 +731,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		return nil
 	}
 
-	if _, err = writeMetaFile(c.logger, tmp, meta); err != nil {
+	if _, err = writeMetaFileFn(c.logger, tmp, meta); err != nil {
 		return fmt.Errorf("write merged meta: %w", err)
 	}
 

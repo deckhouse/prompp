@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -34,11 +33,12 @@ type Compactor interface {
 	//  * No block is written.
 	//  * The source dirs are marked Deletable.
 	//  * Block is not included in the result.
-	CompactWithBlockPopulator(
+	CompactWithBlockPopulatorWithWriteMetaFile(
 		dest string,
 		dirs []string,
 		open []*tsdb.Block,
 		blockPopulator tsdb.BlockPopulator,
+		writeMetaFileFn func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error),
 	) ([]ulid.ULID, error)
 }
 
@@ -48,14 +48,13 @@ type Compactor interface {
 
 // DefaultGrouper groups blocks by their origin labels and downsampling resolution.
 type DefaultGrouper struct {
-	logger                   log.Logger
-	compactions              *prometheus.CounterVec
-	compactionRunsStarted    *prometheus.CounterVec
-	compactionRunsCompleted  *prometheus.CounterVec
-	compactionFailures       *prometheus.CounterVec
-	verticalCompactions      *prometheus.CounterVec
-	acceptMalformedIndex     bool
-	enableVerticalCompaction bool
+	logger                  log.Logger
+	compactions             *prometheus.CounterVec
+	compactionRunsStarted   *prometheus.CounterVec
+	compactionRunsCompleted *prometheus.CounterVec
+	compactionFailures      *prometheus.CounterVec
+	verticalCompactions     *prometheus.CounterVec
+	acceptMalformedIndex    bool
 }
 
 // NewDefaultGrouper initializes a new [DefaultGrouper].
@@ -63,7 +62,6 @@ func NewDefaultGrouper(
 	logger log.Logger,
 	reg prometheus.Registerer,
 	acceptMalformedIndex bool,
-	enableVerticalCompaction bool,
 ) *DefaultGrouper {
 	return &DefaultGrouper{
 		logger: logger,
@@ -88,8 +86,7 @@ func NewDefaultGrouper(
 			Name: "prometeus_tcompact_group_vertical_compactions_total",
 			Help: "Total number of group compaction attempts that resulted in a new block based on overlapping blocks.",
 		}, []string{"resolution"}),
-		acceptMalformedIndex:     acceptMalformedIndex,
-		enableVerticalCompaction: enableVerticalCompaction,
+		acceptMalformedIndex: acceptMalformedIndex,
 	}
 }
 
@@ -114,7 +111,6 @@ func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Gro
 				g.compactionFailures.WithLabelValues(resolutionLabel),
 				g.verticalCompactions.WithLabelValues(resolutionLabel),
 				g.acceptMalformedIndex,
-				g.enableVerticalCompaction,
 			)
 
 			groups[groupKey] = group
@@ -140,19 +136,18 @@ func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Gro
 // Group captures a set of blocks that have the same origin labels and downsampling resolution.
 // Those blocks generally contain the same series and can thus efficiently be compacted.
 type Group struct {
-	logger                   log.Logger
-	key                      string
-	labels                   labels.Labels
-	resolution               int64
-	mtx                      sync.Mutex // TODO: not need
-	metasByMinTime           []*metadata.Meta
-	compactions              prometheus.Counter
-	compactionRunsStarted    prometheus.Counter
-	compactionRunsCompleted  prometheus.Counter
-	compactionFailures       prometheus.Counter
-	verticalCompactions      prometheus.Counter
-	acceptMalformedIndex     bool
-	enableVerticalCompaction bool
+	logger                  log.Logger
+	key                     string
+	labels                  labels.Labels
+	resolution              int64
+	mtx                     sync.Mutex // TODO: not need
+	metasByMinTime          []*metadata.Meta
+	compactions             prometheus.Counter
+	compactionRunsStarted   prometheus.Counter
+	compactionRunsCompleted prometheus.Counter
+	compactionFailures      prometheus.Counter
+	verticalCompactions     prometheus.Counter
+	acceptMalformedIndex    bool
 }
 
 // NewGroup initializes a new [Group].
@@ -167,24 +162,22 @@ func NewGroup(
 	compactionFailures prometheus.Counter,
 	verticalCompactions prometheus.Counter,
 	acceptMalformedIndex bool,
-	enableVerticalCompaction bool,
 ) *Group {
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
 
 	return &Group{
-		logger:                   logger,
-		key:                      key,
-		labels:                   lset,
-		resolution:               resolution,
-		compactions:              compactions,
-		compactionRunsStarted:    compactionRunsStarted,
-		compactionRunsCompleted:  compactionRunsCompleted,
-		compactionFailures:       compactionFailures,
-		verticalCompactions:      verticalCompactions,
-		acceptMalformedIndex:     acceptMalformedIndex,
-		enableVerticalCompaction: enableVerticalCompaction,
+		logger:                  logger,
+		key:                     key,
+		labels:                  lset,
+		resolution:              resolution,
+		compactions:             compactions,
+		compactionRunsStarted:   compactionRunsStarted,
+		compactionRunsCompleted: compactionRunsCompleted,
+		compactionFailures:      compactionFailures,
+		verticalCompactions:     verticalCompactions,
+		acceptMalformedIndex:    acceptMalformedIndex,
 	}
 }
 
@@ -221,10 +214,11 @@ func (cg *Group) Compact(
 	planner Planner,
 	comp Compactor,
 	blockPopulator tsdb.BlockPopulator,
+	open []*tsdb.Block,
 ) ([]ulid.ULID, error) {
 	cg.compactionRunsStarted.Inc()
 
-	compIDs, err := cg.runCompact(ctx, dir, planner, comp, blockPopulator)
+	compIDs, err := cg.runCompact(ctx, dir, planner, comp, blockPopulator, open)
 	if err != nil {
 		cg.compactionFailures.Inc()
 		return compIDs, err
@@ -242,6 +236,7 @@ func (cg *Group) runCompact(
 	planner Planner,
 	comp Compactor,
 	blockPopulator tsdb.BlockPopulator,
+	open []*tsdb.Block,
 ) ([]ulid.ULID, error) {
 	cg.mtx.Lock()
 	defer cg.mtx.Unlock()
@@ -258,9 +253,6 @@ func (cg *Group) runCompact(
 
 	level.Info(cg.logger).Log("msg", "compaction available and planned", "plan", fmt.Sprintf("%v", toCompact))
 
-	// Once we have a plan we need to download the actual data.
-	groupCompactionBegin := time.Now()
-
 	toCompactDirs := make([]string, 0, len(toCompact))
 	for _, m := range toCompact {
 		toCompactDirs = append(toCompactDirs, filepath.Join(dir, m.ULID.String()))
@@ -268,12 +260,17 @@ func (cg *Group) runCompact(
 	sourceBlockStr := fmt.Sprintf("%v", toCompactDirs)
 
 	begin := time.Now()
-	compIDs, err := comp.CompactWithBlockPopulator(dir, toCompactDirs, nil, blockPopulator)
+	compIDs, err := comp.CompactWithBlockPopulatorWithWriteMetaFile(
+		dir,
+		toCompactDirs,
+		open,
+		blockPopulator,
+		block.WriteThanosMetaFile(ctx, cg.resolution, cg.labels, cg.acceptMalformedIndex),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("compact blocks: %w", err)
 	}
 
-	// TODO: handle empty compIDs
 	if len(compIDs) == 0 {
 		// No compacted blocks means all compacted blocks are of no sample.
 		// Even though no compacted blocks, there may be more work to do.
@@ -289,55 +286,12 @@ func (cg *Group) runCompact(
 	for _, compID := range compIDs {
 		compIDStrings = append(compIDStrings, compID.String())
 	}
-	compIDStrs := fmt.Sprintf("%v", compIDStrings)
+
 	level.Info(cg.logger).Log(
 		"msg", "compacted blocks",
-		"new", compIDStrs,
+		"new", fmt.Sprintf("%v", compIDStrings),
 		"duration", time.Since(begin),
 		"overlapping_blocks", overlappingBlocks,
-		"blocks", sourceBlockStr,
-	)
-
-	for _, compID := range compIDs {
-		bdir := filepath.Join(dir, compID.String())
-		index := filepath.Join(bdir, block.IndexFilename)
-
-		if err := os.Remove(filepath.Join(bdir, "tombstones")); err != nil {
-			return nil, fmt.Errorf("remove tombstones: %w", err)
-		}
-
-		newMeta, err := metadata.ReadFromDir(bdir)
-		if err != nil {
-			return nil, fmt.Errorf("read new meta: %w", err)
-		}
-
-		// Ensure the output block is valid.
-		stats, err := block.GatherIndexHealthStats(ctx, cg.logger, index, newMeta.MinTime, newMeta.MaxTime)
-		if !cg.acceptMalformedIndex && errors.Join(err, stats.AnyErr()) != nil {
-			return nil, fmt.Errorf("invalid result block %s: %w", bdir, errors.Join(err, stats.AnyErr()))
-		}
-
-		if _, err = metadata.InjectThanos(
-			cg.logger,
-			bdir,
-			metadata.Thanos{
-				Labels:       cg.labels.Map(),
-				Downsample:   metadata.ThanosDownsample{Resolution: cg.resolution},
-				Source:       metadata.CompactorSource,
-				SegmentFiles: block.GetSegmentFiles(bdir),
-				IndexStats:   metadata.IndexStats{ChunkMaxSize: stats.ChunkMaxSize, SeriesMaxSize: stats.SeriesMaxSize},
-			},
-			nil,
-		); err != nil {
-			return nil, fmt.Errorf("failed to finalize the block %s: %w", bdir, err)
-		}
-		// TODO: log info
-	}
-
-	level.Info(cg.logger).Log(
-		"msg", "finished compacting blocks",
-		"duration", time.Since(groupCompactionBegin),
-		"result_blocks", compIDStrs,
 		"source_blocks", sourceBlockStr,
 	)
 

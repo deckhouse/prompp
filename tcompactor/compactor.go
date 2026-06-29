@@ -40,9 +40,6 @@ type Options struct {
 
 	// AcceptMalformedIndex allows the compactor to accept blocks with malformed index.
 	AcceptMalformedIndex bool
-
-	// EnableVerticalCompaction enables vertical compaction.
-	EnableVerticalCompaction bool
 }
 
 //
@@ -89,11 +86,17 @@ func NewTCompactor(
 		return nil, fmt.Errorf("create leveled compactor: %w", err)
 	}
 
+	planner, err := NewPlanner(logger, rngs, NoopNoCompactionMark{}, opts.TsdbOptions.EnableOverlappingCompaction)
+	if err != nil {
+		return nil, fmt.Errorf("create planner: %w", err)
+	}
+
 	return &TCompactor{
 		ctx:            ctx,
 		dir:            dir,
 		lCompactor:     lCompactor,
-		grouper:        NewDefaultGrouper(logger, reg, opts.AcceptMalformedIndex, opts.EnableVerticalCompaction),
+		grouper:        NewDefaultGrouper(logger, reg, opts.AcceptMalformedIndex),
+		planner:        planner,
 		blockPopulator: tsdb.DefaultBlockPopulator{},
 	}, nil
 }
@@ -120,7 +123,7 @@ func (c *TCompactor) Compact(open []*tsdb.Block) ([]ulid.ULID, error) {
 
 	res := make([]ulid.ULID, 0, len(groups))
 	for _, group := range groups {
-		compIDs, err := group.Compact(c.ctx, c.dir, c.planner, c.lCompactor, c.blockPopulator)
+		compIDs, err := group.Compact(c.ctx, c.dir, c.planner, c.lCompactor, c.blockPopulator, open)
 		if err != nil {
 			return res, fmt.Errorf("compact group: %w", err)
 		}
@@ -157,10 +160,6 @@ func compactionRanges(minBlockDuration, maxBlockDuration int64) []int64 {
 }
 
 // TODO: block manager metadata.Meta
-// TODO: compactor meta write
-// TODO:
-// mergeFunc storage.VerticalChunkSeriesMergeFunc
-// pool downsample.NewPool()
 
 // func readMetaFile(dir string) (*BlockMeta, int64, error) {
 // 	b, err := os.ReadFile(filepath.Join(dir, metaFilename))

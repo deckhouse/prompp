@@ -74,6 +74,7 @@ type compactionRunner interface {
 func NewManager(
 	dir string,
 	opts *Options,
+	compactor compactionRunner,
 	blocksToDelete tsdb.BlocksToDeleteFunc,
 	logger log.Logger,
 	r prometheus.Registerer,
@@ -88,6 +89,7 @@ func NewManager(
 	m := &Manager{
 		dir:            dir,
 		opts:           opts,
+		compactor:      compactor,
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
 		chunkPool:      chunkenc.NewPool(),
@@ -125,15 +127,6 @@ func (m *Manager) loop() {
 	}
 }
 
-// SetCompactor sets the compactor driven by the reload loop. Passing nil
-// disables compaction. It is typically called right after construction, before
-// the first tick.
-func (m *Manager) SetCompactor(c compactionRunner) {
-	m.mtx.Lock()
-	m.compactor = c
-	m.mtx.Unlock()
-}
-
 // reloadAndCompact reloads blocks and then compacts repeatedly until there is
 // nothing left to compact, reloading between passes. Everything runs in this one
 // goroutine, so a compaction never races with the deletion of its inputs: after
@@ -146,16 +139,12 @@ func (m *Manager) reloadAndCompact() {
 		level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
 	}
 
-	m.mtx.RLock()
-	c := m.compactor
-	open := m.blocks
-	m.mtx.RUnlock()
-	if c == nil {
-		return
-	}
-
 	for {
-		compacted, err := c.Compact(open)
+		m.mtx.RLock()
+		open := m.blocks
+		m.mtx.RUnlock()
+
+		compacted, err := m.compactor.Compact(open)
 		if err != nil {
 			level.Error(m.logger).Log("msg", "compaction failed", "err", err)
 			return
