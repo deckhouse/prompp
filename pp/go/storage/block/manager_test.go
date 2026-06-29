@@ -3,10 +3,13 @@ package block
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/go-kit/log"
 	"github.com/oklog/ulid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
@@ -70,6 +73,35 @@ func TestManagerReturnsErrorOnInitialReloadFailure(t *testing.T) {
 	m, err := NewManager(notDir, nil, nil, log.NewNopLogger(), nil)
 	require.Error(t, err)
 	require.Nil(t, m)
+}
+
+func TestManagerExportsLoadedBlocksMetrics(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createTestBlock(t, dir, 1000, "metric_a")
+	createTestBlock(t, dir, 5000, "metric_b")
+
+	reg := prometheus.NewRegistry()
+	m, err := NewManager(dir, nil, nil, log.NewNopLogger(), reg)
+	require.NoError(t, err)
+	t.Cleanup(m.Close)
+
+	require.Equal(t, float64(2), testutil.ToFloat64(m.metrics.loadedBlocks))
+	require.Greater(t, testutil.ToFloat64(m.metrics.symbolTableSize), 0.0)
+
+	durationCounts := map[int64]int{}
+	for _, b := range m.Blocks() {
+		duration := normalizeBlockDurationMinutes(b.Meta().MaxTime - b.Meta().MinTime)
+		durationCounts[duration]++
+	}
+	for duration, count := range durationCounts {
+		require.Equal(
+			t,
+			float64(count),
+			testutil.ToFloat64(m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(duration, 10))),
+		)
+	}
 }
 
 func createTestBlock(t *testing.T, dir string, startTS int, metric string) {

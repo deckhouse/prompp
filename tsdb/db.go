@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +61,8 @@ const (
 	tmpForDeletionBlockDirSuffix = ".tmp-for-deletion"
 	tmpForCreationBlockDirSuffix = ".tmp-for-creation"
 	// Pre-2.21 tmp dir suffix, used in clean-up functions.
-	tmpLegacy = ".tmp"
+	tmpLegacy             = ".tmp"
+	blockDurationMinuteMS = int64(time.Minute / time.Millisecond)
 )
 
 // ErrNotReady is returned if the underlying storage is not ready yet.
@@ -280,21 +282,22 @@ type DB struct {
 }
 
 type dbMetrics struct {
-	loadedBlocks         prometheus.GaugeFunc
-	symbolTableSize      prometheus.GaugeFunc
-	reloads              prometheus.Counter
-	reloadsFailed        prometheus.Counter
-	compactionsFailed    prometheus.Counter
-	compactionsTriggered prometheus.Counter
-	compactionsSkipped   prometheus.Counter
-	sizeRetentionCount   prometheus.Counter
-	timeRetentionCount   prometheus.Counter
-	startTime            prometheus.GaugeFunc
-	tombCleanTimer       prometheus.Histogram
-	blocksBytes          prometheus.Gauge
-	maxBytes             prometheus.Gauge
-	retentionDuration    prometheus.Gauge
-	corruptedBlocks      prometheus.Gauge
+	loadedBlocks           prometheus.GaugeFunc
+	loadedBlocksByDuration *prometheus.GaugeVec
+	symbolTableSize        prometheus.GaugeFunc
+	reloads                prometheus.Counter
+	reloadsFailed          prometheus.Counter
+	compactionsFailed      prometheus.Counter
+	compactionsTriggered   prometheus.Counter
+	compactionsSkipped     prometheus.Counter
+	sizeRetentionCount     prometheus.Counter
+	timeRetentionCount     prometheus.Counter
+	startTime              prometheus.GaugeFunc
+	tombCleanTimer         prometheus.Histogram
+	blocksBytes            prometheus.Gauge
+	maxBytes               prometheus.Gauge
+	retentionDuration      prometheus.Gauge
+	corruptedBlocks        prometheus.Gauge
 }
 
 func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
@@ -308,6 +311,10 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 		defer db.mtx.RUnlock()
 		return float64(len(db.blocks))
 	})
+	m.loadedBlocksByDuration = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "prometheus_tsdb_blocks_loaded_by_duration",
+		Help: "Number of currently loaded blocks grouped by block duration in minutes.",
+	}, []string{"duration_minutes"})
 	m.symbolTableSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "prometheus_tsdb_symbol_table_size_bytes",
 		Help: "Size of symbol table in memory for loaded blocks",
@@ -387,6 +394,7 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 	if r != nil {
 		r.MustRegister(
 			m.loadedBlocks,
+			m.loadedBlocksByDuration,
 			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,
@@ -1634,8 +1642,9 @@ func (db *DB) reloadBlocks() (err error) {
 	// PP_CHANGES.md: rebuild on cpp end
 
 	var (
-		toLoad     []*Block
-		blocksSize int64
+		toLoad              []*Block
+		blocksSize          int64
+		blocksByDurationMin = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -1647,8 +1656,14 @@ func (db *DB) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
+		durationMinutes := normalizeBlockDurationMinutes(block.Meta().MaxTime - block.Meta().MinTime)
+		blocksByDurationMin[durationMinutes]++
 	}
 	db.metrics.blocksBytes.Set(float64(blocksSize))
+	db.metrics.loadedBlocksByDuration.Reset()
+	for durationMinutes, count := range blocksByDurationMin {
+		db.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
+	}
 
 	slices.SortFunc(toLoad, func(a, b *Block) int {
 		switch {
@@ -1729,6 +1744,13 @@ func openBlocks(l log.Logger, dir string, loaded []*Block, chunkPool chunkenc.Po
 		blocks = append(blocks, block)
 	}
 	return blocks, corrupted, nil
+}
+
+func normalizeBlockDurationMinutes(durationMS int64) int64 {
+	if durationMS <= 0 {
+		return 0
+	}
+	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
 }
 
 // DefaultBlocksToDelete returns a filter which decides time based and size based
