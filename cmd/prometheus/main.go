@@ -2313,6 +2313,20 @@ func readPromPPFeatures(logger log.Logger) {
 		case "shrink_shard_copier":
 			pp_storage.ShrinkShardCopier = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is enabled.")
+
+		case "select_func_optimization":
+			if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing select_func_optimization value",
+					"err", err,
+				)
+				continue
+			}
+
+			level.Info(logger).Log(
+				"msg", "[FEATURE] Select function optimization is set.",
+				"optimization", fvalue,
+			)
 		}
 	}
 }

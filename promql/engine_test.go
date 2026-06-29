@@ -299,12 +299,13 @@ func (h *hintRecordingQuerier) Select(ctx context.Context, sortSeries bool, hint
 }
 
 func TestSelectHintsSetCorrectly(t *testing.T) {
+	lbdMs := int64(5000)
 	opts := promql.EngineOpts{
 		Logger:           nil,
 		Reg:              nil,
 		MaxSamples:       10,
 		Timeout:          10 * time.Second,
-		LookbackDelta:    5 * time.Second,
+		LookbackDelta:    time.Duration(lbdMs) * time.Millisecond,
 		EnableAtModifier: true,
 	}
 
@@ -321,271 +322,271 @@ func TestSelectHintsSetCorrectly(t *testing.T) {
 		{
 			query: "foo", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 5001, End: 10000},
+				{Start: 5001, End: 10000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo @ 15", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 10001, End: 15000},
+				{Start: 10001, End: 15000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo @ 1", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: -3999, End: 1000},
+				{Start: -3999, End: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m]", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: 80001, End: 200000, Range: 120000},
+				{Start: 80001, End: 200000, Range: 120000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m] @ 180", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: 60001, End: 180000, Range: 120000},
+				{Start: 60001, End: 180000, Range: 120000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m] @ 300", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: 180001, End: 300000, Range: 120000},
+				{Start: 180001, End: 300000, Range: 120000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m] @ 60", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: -59999, End: 60000, Range: 120000},
+				{Start: -59999, End: 60000, Range: 120000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m] offset 2m", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 60001, End: 180000, Range: 120000},
+				{Start: 60001, End: 180000, Range: 120000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m] @ 200 offset 2m", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: -39999, End: 80000, Range: 120000},
+				{Start: -39999, End: 80000, Range: 120000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo[2m:1s]", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 175001, End: 300000, Step: 1000},
+				{Start: 175001, End: 300000, Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s])", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 175001, End: 300000, Func: "count_over_time", Step: 1000},
+				{Start: 175001, End: 300000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] @ 300)", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: 175001, End: 300000, Func: "count_over_time", Step: 1000},
+				{Start: 175001, End: 300000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] @ 200)", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: 75001, End: 200000, Func: "count_over_time", Step: 1000},
+				{Start: 75001, End: 200000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] @ 100)", start: 200000,
 			expected: []*storage.SelectHints{
-				{Start: -24999, End: 100000, Func: "count_over_time", Step: 1000},
+				{Start: -24999, End: 100000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] offset 10s)", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 165001, End: 290000, Func: "count_over_time", Step: 1000},
+				{Start: 165001, End: 290000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time((foo offset 10s)[2m:1s] offset 10s)", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 155001, End: 280000, Func: "count_over_time", Step: 1000},
+				{Start: 155001, End: 280000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			// When the @ is on the vector selector, the enclosing subquery parameters
 			// don't affect the hint ranges.
 			query: "count_over_time((foo @ 200 offset 10s)[2m:1s] offset 10s)", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000},
+				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			// When the @ is on the vector selector, the enclosing subquery parameters
 			// don't affect the hint ranges.
 			query: "count_over_time((foo @ 200 offset 10s)[2m:1s] @ 100 offset 10s)", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000},
+				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time((foo offset 10s)[2m:1s] @ 100 offset 10s)", start: 300000,
 			expected: []*storage.SelectHints{
-				{Start: -44999, End: 80000, Func: "count_over_time", Step: 1000},
+				{Start: -44999, End: 80000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "foo", start: 10000, end: 20000,
 			expected: []*storage.SelectHints{
-				{Start: 5001, End: 20000, Step: 1000},
+				{Start: 5001, End: 20000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo @ 15", start: 10000, end: 20000,
 			expected: []*storage.SelectHints{
-				{Start: 10001, End: 15000, Step: 1000},
+				{Start: 10001, End: 15000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo @ 1", start: 10000, end: 20000,
 			expected: []*storage.SelectHints{
-				{Start: -3999, End: 1000, Step: 1000},
+				{Start: -3999, End: 1000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2m] @ 180)", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 60001, End: 180000, Range: 120000, Func: "rate", Step: 1000},
+				{Start: 60001, End: 180000, Range: 120000, Func: "rate", Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2m] @ 300)", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 180001, End: 300000, Range: 120000, Func: "rate", Step: 1000},
+				{Start: 180001, End: 300000, Range: 120000, Func: "rate", Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2m] @ 60)", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: -59999, End: 60000, Range: 120000, Func: "rate", Step: 1000},
+				{Start: -59999, End: 60000, Range: 120000, Func: "rate", Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2m])", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 80001, End: 500000, Range: 120000, Func: "rate", Step: 1000},
+				{Start: 80001, End: 500000, Range: 120000, Func: "rate", Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2m] offset 2m)", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 60001, End: 380000, Range: 120000, Func: "rate", Step: 1000},
+				{Start: 60001, End: 380000, Range: 120000, Func: "rate", Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2m:1s])", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 175001, End: 500000, Func: "rate", Step: 1000},
+				{Start: 175001, End: 500000, Func: "rate", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s])", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 175001, End: 500000, Func: "count_over_time", Step: 1000},
+				{Start: 175001, End: 500000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] offset 10s)", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 165001, End: 490000, Func: "count_over_time", Step: 1000},
+				{Start: 165001, End: 490000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] @ 300)", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 175001, End: 300000, Func: "count_over_time", Step: 1000},
+				{Start: 175001, End: 300000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] @ 200)", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 75001, End: 200000, Func: "count_over_time", Step: 1000},
+				{Start: 75001, End: 200000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time(foo[2m:1s] @ 100)", start: 200000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: -24999, End: 100000, Func: "count_over_time", Step: 1000},
+				{Start: -24999, End: 100000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time((foo offset 10s)[2m:1s] offset 10s)", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 155001, End: 480000, Func: "count_over_time", Step: 1000},
+				{Start: 155001, End: 480000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			// When the @ is on the vector selector, the enclosing subquery parameters
 			// don't affect the hint ranges.
 			query: "count_over_time((foo @ 200 offset 10s)[2m:1s] offset 10s)", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000},
+				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			// When the @ is on the vector selector, the enclosing subquery parameters
 			// don't affect the hint ranges.
 			query: "count_over_time((foo @ 200 offset 10s)[2m:1s] @ 100 offset 10s)", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000},
+				{Start: 185001, End: 190000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "count_over_time((foo offset 10s)[2m:1s] @ 100 offset 10s)", start: 300000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: -44999, End: 80000, Func: "count_over_time", Step: 1000},
+				{Start: -44999, End: 80000, Func: "count_over_time", Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "sum by (dim1) (foo)", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 5001, End: 10000, Func: "sum", By: true, Grouping: []string{"dim1"}},
+				{Start: 5001, End: 10000, Func: "sum", By: true, Grouping: []string{"dim1"}, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "sum without (dim1) (foo)", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 5001, End: 10000, Func: "sum", Grouping: []string{"dim1"}},
+				{Start: 5001, End: 10000, Func: "sum", Grouping: []string{"dim1"}, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "sum by (dim1) (avg_over_time(foo[1s]))", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 9001, End: 10000, Func: "avg_over_time", Range: 1000},
+				{Start: 9001, End: 10000, Func: "avg_over_time", Range: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "sum by (dim1) (max by (dim2) (foo))", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 5001, End: 10000, Func: "max", By: true, Grouping: []string{"dim2"}},
+				{Start: 5001, End: 10000, Func: "max", By: true, Grouping: []string{"dim2"}, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "(max by (dim1) (foo))[5s:1s]", start: 10000,
 			expected: []*storage.SelectHints{
-				{Start: 1, End: 10000, Func: "max", By: true, Grouping: []string{"dim1"}, Step: 1000},
+				{Start: 1, End: 10000, Func: "max", By: true, Grouping: []string{"dim1"}, Step: 1000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "(sum(http_requests{group=~\"p.*\"})+max(http_requests{group=~\"c.*\"}))[20s:5s]", start: 120000,
 			expected: []*storage.SelectHints{
-				{Start: 95001, End: 120000, Func: "sum", By: true, Step: 5000},
-				{Start: 95001, End: 120000, Func: "max", By: true, Step: 5000},
+				{Start: 95001, End: 120000, Func: "sum", By: true, Step: 5000, LookbackDelta: lbdMs, IsSubquery: true},
+				{Start: 95001, End: 120000, Func: "max", By: true, Step: 5000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, {
 			query: "foo @ 50 + bar @ 250 + baz @ 900", start: 100000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 45001, End: 50000, Step: 1000},
-				{Start: 245001, End: 250000, Step: 1000},
-				{Start: 895001, End: 900000, Step: 1000},
+				{Start: 45001, End: 50000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 245001, End: 250000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 895001, End: 900000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "foo @ 50 + bar + baz @ 900", start: 100000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 45001, End: 50000, Step: 1000},
-				{Start: 95001, End: 500000, Step: 1000},
-				{Start: 895001, End: 900000, Step: 1000},
+				{Start: 45001, End: 50000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 95001, End: 500000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 895001, End: 900000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2s] @ 50) + bar @ 250 + baz @ 900", start: 100000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 48001, End: 50000, Step: 1000, Func: "rate", Range: 2000},
-				{Start: 245001, End: 250000, Step: 1000},
-				{Start: 895001, End: 900000, Step: 1000},
+				{Start: 48001, End: 50000, Step: 1000, Func: "rate", Range: 2000, LookbackDelta: lbdMs},
+				{Start: 245001, End: 250000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 895001, End: 900000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2s:1s] @ 50) + bar + baz", start: 100000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 43001, End: 50000, Step: 1000, Func: "rate"},
-				{Start: 95001, End: 500000, Step: 1000},
-				{Start: 95001, End: 500000, Step: 1000},
+				{Start: 43001, End: 50000, Step: 1000, Func: "rate", LookbackDelta: lbdMs, IsSubquery: true},
+				{Start: 95001, End: 500000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 95001, End: 500000, Step: 1000, LookbackDelta: lbdMs},
 			},
 		}, {
 			query: "rate(foo[2s:1s] @ 50) + bar + rate(baz[2m:1s] @ 900 offset 2m) ", start: 100000, end: 500000,
 			expected: []*storage.SelectHints{
-				{Start: 43001, End: 50000, Step: 1000, Func: "rate"},
-				{Start: 95001, End: 500000, Step: 1000},
-				{Start: 655001, End: 780000, Step: 1000, Func: "rate"},
+				{Start: 43001, End: 50000, Step: 1000, Func: "rate", LookbackDelta: lbdMs, IsSubquery: true},
+				{Start: 95001, End: 500000, Step: 1000, LookbackDelta: lbdMs},
+				{Start: 655001, End: 780000, Step: 1000, Func: "rate", LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, { // Hints are based on the inner most subquery timestamp.
 			query: `sum_over_time(sum_over_time(metric{job="1"}[100s])[100s:25s] @ 50)[3s:1s] @ 3000`, start: 100000,
 			expected: []*storage.SelectHints{
-				{Start: -149999, End: 50000, Range: 100000, Func: "sum_over_time", Step: 25000},
+				{Start: -149999, End: 50000, Range: 100000, Func: "sum_over_time", Step: 25000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		}, { // Hints are based on the inner most subquery timestamp.
 			query: `sum_over_time(sum_over_time(metric{job="1"}[100s])[100s:25s] @ 3000)[3s:1s] @ 50`,
 			expected: []*storage.SelectHints{
-				{Start: 2800001, End: 3000000, Range: 100000, Func: "sum_over_time", Step: 25000},
+				{Start: 2800001, End: 3000000, Range: 100000, Func: "sum_over_time", Step: 25000, LookbackDelta: lbdMs, IsSubquery: true},
 			},
 		},
 	} {

@@ -311,7 +311,14 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 
 		queriers = append(
 			queriers,
-			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
+			querier.NewQuerierWithOutSelectFuncOptimize(
+				head,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				nil,
+				ar.storageQuerierMetrics,
+			),
 		)
 	}
 

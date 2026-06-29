@@ -41,6 +41,74 @@ const (
 )
 
 //
+// queryOptimizeType
+//
+
+// queryOptimizeType is the type for query optimization.
+type queryOptimizeType uint8
+
+const (
+	// dropPointOptimizeType is the option for drop point functions optimization.
+	dropPointOptimizeType queryOptimizeType = 1 << iota
+
+	// newPointOptimizeType is the option for new point functions optimization.
+	// Optimization creates a new point at the end of the window or step.
+	newPointOptimizeType
+
+	// crossSeriesOptimizeType is the option for cross-series functions optimization.
+	// A new series is created.
+	crossSeriesOptimizeType
+)
+
+const (
+	// noneOptimizeType is the option without any optimization.
+	noneOptimizeType queryOptimizeType = 0
+
+	// allOptimizeType is the option for all functions optimization.
+	allOptimizeType queryOptimizeType = dropPointOptimizeType | newPointOptimizeType | crossSeriesOptimizeType
+)
+
+// SetSelectFuncOptimize sets the select func optimization option by name.
+func SetSelectFuncOptimize(opt string) error {
+	switch opt {
+	case "none":
+		selectFuncOptimize = noneOptimizeType
+		return nil
+
+	case "drop_point":
+		selectFuncOptimize = dropPointOptimizeType
+		return nil
+
+	case "new_point":
+		selectFuncOptimize = newPointOptimizeType
+		return nil
+
+	case "cross":
+		selectFuncOptimize = crossSeriesOptimizeType
+		return nil
+
+	case "all":
+		selectFuncOptimize = allOptimizeType
+		return nil
+
+	default:
+		return fmt.Errorf(
+			"invalid select func optimization option: '%s', valid options are: "+
+				"'none', 'drop_point', 'new_point', 'cross', 'all'", opt,
+		)
+	}
+}
+
+// selectFuncOptimize is the option for selecting functions optimization.
+var selectFuncOptimize = noneOptimizeType
+
+// emptySelectHints is an empty select hints, it's used when no optimization is needed.
+var emptySelectHints = &storage.SelectHints{}
+
+// emptySeriesSet is an empty series set.
+var emptySeriesSet = &SeriesSet{}
+
+//
 // Querier
 //
 
@@ -58,6 +126,7 @@ type Querier[
 	deduplicatorCtor deduplicatorCtor
 	closer           func() error
 	metrics          *Metrics
+	queryOptimize    queryOptimizeType
 }
 
 // NewQuerier init new [Querier].
@@ -74,6 +143,49 @@ func NewQuerier[
 	closer func() error,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, selectFuncOptimize)
+}
+
+// NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
+func NewQuerierWithOutSelectFuncOptimize[
+	TTask Task,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
+](
+	head THead,
+	deduplicatorCtor deduplicatorCtor,
+	mint, maxt int64,
+	closer func() error,
+	metrics *Metrics,
+) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	return newQuerierWithSelectFuncOptimize(
+		head,
+		deduplicatorCtor,
+		mint,
+		maxt,
+		closer,
+		metrics,
+		selectFuncOptimize&dropPointOptimizeType,
+	)
+}
+
+// newQuerierWithSelectFuncOptimize init new [Querier] with select func optimization.
+func newQuerierWithSelectFuncOptimize[
+	TTask Task,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
+](
+	head THead,
+	deduplicatorCtor deduplicatorCtor,
+	mint, maxt int64,
+	closer func() error,
+	metrics *Metrics,
+	queryOptimize queryOptimizeType,
+) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
@@ -81,6 +193,7 @@ func NewQuerier[
 		deduplicatorCtor: deduplicatorCtor,
 		closer:           closer,
 		metrics:          metrics,
+		queryOptimize:    queryOptimize,
 	}
 }
 
@@ -253,7 +366,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
@@ -288,9 +401,53 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	hints = SwitchFuncOptimize(hints, q.queryOptimize)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
-	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt)
+	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
+
+	if isAggregationSeriesFunc(hints) {
+		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+	}
+
+	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+}
+
+// makeAggrSeriesSet makes the aggregated series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
+
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData != nil {
+			seriesSets[shardID] = NewAggrSeriesSet(
+				snapshots[shardID],
+				serializedData,
+				lssQueryResults[shardID],
+				q.mint,
+				q.maxt,
+			)
+			continue
+		}
+
+		seriesSets[shardID] = emptySeriesSet
+	}
+
+	return NewMergeShardSeriesSet(seriesSets)
+}
+
+// makeSeriesSet makes the series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+) storage.SeriesSet {
+	poolProvider := q.head.PoolProvider()
 
 	seriesSets := poolProvider.GetSeriesSet()
 	defer poolProvider.PutSeriesSet(seriesSets)
@@ -305,10 +462,65 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 			)
 			continue
 		}
-		seriesSets[shardID] = &SeriesSet{}
+
+		seriesSets[shardID] = emptySeriesSet
 	}
 
 	return NewMergeShardSeriesSet(seriesSets)
+}
+
+// SwitchFuncOptimize switch the function optimization hints.
+func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeType) *storage.SelectHints {
+	if hints == nil {
+		return emptySelectHints
+	}
+
+	if hints.IsSubquery {
+		return emptySelectHints
+	}
+
+	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithpout(hints) {
+		return hints
+	}
+
+	return emptySelectHints
+}
+
+// isNotWithpout checks if the hints is not without by.
+func isNotWithpout(hints *storage.SelectHints) bool {
+	return hints.By || len(hints.Grouping) == 0
+}
+
+// funcOptimizeMap is the map of the function to the query optimization type.
+var funcOptimizeMap = func() map[string]queryOptimizeType {
+	optimizeType := func(Type cppbridge.PromqlCppFunctionType) queryOptimizeType {
+		switch Type {
+		case cppbridge.PromqlCppThinningFunction:
+			return dropPointOptimizeType
+		case cppbridge.PromqlCppSynthesizingFunction:
+			return newPointOptimizeType
+		case cppbridge.PromqlCppCrossSeriesSynthesizingFunction:
+			return crossSeriesOptimizeType
+
+		default:
+			return noneOptimizeType
+		}
+	}
+
+	cppFunctions := cppbridge.GetPromqlCppFunctions()
+	functions := make(map[string]queryOptimizeType, len(cppFunctions))
+	for _, function := range cppFunctions {
+		if oType := optimizeType(function.Type); oType != noneOptimizeType {
+			functions[function.Name] = oType
+		}
+	}
+
+	return functions
+}()
+
+// isAggregationSeriesFunc checks if the function is an aggregation series function.
+func isAggregationSeriesFunc(hints *storage.SelectHints) bool {
+	return funcOptimizeMap[hints.Func]&dropPointOptimizeType == dropPointOptimizeType
 }
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
@@ -336,6 +548,7 @@ func queryDataStorage[
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	mint, maxt int64,
+	hints *storage.SelectHints,
 ) {
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
@@ -347,11 +560,15 @@ func queryDataStorage[
 				return nil
 			}
 
-			result := s.DataStorage().Query(cppbridge.DataStorageQuery{
-				StartTimestampMs: mint,
-				EndTimestampMs:   maxt,
-				LabelSetIDs:      lssQueryResult.IDs(),
-			})
+			result := s.DataStorage().Query(
+				cppbridge.DataStorageQuery{
+					StartTimestampMs: mint,
+					EndTimestampMs:   maxt,
+					LabelSetIDs:      lssQueryResult.IDs(),
+				},
+				cppbridge.NoDownsampling,
+				hints,
+			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}

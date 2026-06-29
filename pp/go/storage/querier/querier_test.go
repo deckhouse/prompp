@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
@@ -19,7 +21,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	prom_storage "github.com/prometheus/prometheus/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -119,7 +120,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
 	// Act
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -147,7 +148,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
 	// Act
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal([]storagetest.TimeSeries{}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -202,7 +203,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	// Act
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 	s.appendTimeSeries(timeSeriesAfterUnload)
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
@@ -238,7 +239,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
 	// Act
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -293,7 +294,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 	// Act
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 	s.appendTimeSeries(timeSeriesAfterUnload)
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal([]storagetest.TimeSeries{
