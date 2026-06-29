@@ -224,9 +224,6 @@ struct DataStorage {
     BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
   };
 
-  union {
-    const std::string address_label_{std::to_string(std::bit_cast<uint64_t>(this))};
-  };
   Metrics<Reallocator>* metrics;
 
   BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
@@ -367,7 +364,13 @@ struct DataStorage {
     constructor_impl<Reallocator>();
 
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
-    metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(timestamp_encoder, PromPP::Primitives::LabelViewSet{{"address", address_label_}});
+    // The address label string is owned by the metrics page (not by DataStorage) so that its lifetime matches the page and a
+    // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
+    metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
+
+    // The timestamp states count is pushed into a page-owned gauge on state creation instead of being pulled from the
+    // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
+    timestamp_encoder.set_states_count_gauge(&metrics->timestamp_states());
   }
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
@@ -450,8 +453,6 @@ struct DataStorage {
       std::destroy_at(&unloaded_series_bitmap);
       std::destroy_at(&queried_series_bitmap);
     }
-
-    std::destroy_at(&address_label_);
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
