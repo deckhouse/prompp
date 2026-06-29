@@ -1,0 +1,74 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://deckhouse.io/vex/prompp/images/prompp",
+  "author": "Deckhouse <contact@deckhouse.io>",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-42154"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Remote-read snappy DoS (GHSA-8rm2-7qqf-34qm). The fix is backported to Prom++ from upstream Prometheus: /api/v1/read now rejects snappy-compressed requests whose declared uncompressed length exceeds the 32 MiB decode limit before allocation. Scanners map findings to upstream Prometheus versions, while Prom++ is a fork with independent versioning, so this CVE may still be reported by version matching even though it is fixed in Prom++.",
+      "timestamp": "2026-06-02T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-42151"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Azure AD remote-write client_secret redaction (GHSA-wg65-39gg-5wfj). The fix is backported to Prom++ from upstream Prometheus: OAuthConfig.ClientSecret in storage/remote/azuread now uses config.Secret and is redacted as <secret> when exposed via /-/config. Scanners map findings to upstream Prometheus versions, while Prom++ is a fork with independent versioning, so this CVE may still be reported by version matching even though it is fixed in Prom++.",
+      "timestamp": "2026-06-02T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-40179"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Stored XSS in the React web UI (GHSA-vffh-x6r8-xx99, GHSA-fw8g-cg8f-9j28). The fix is backported to Prom++ from upstream Prometheus: graph tooltips, Metrics Explorer fuzzy results, and heatmap tooltip/axis labels now escape metric names and label values via escapeHTML before injecting into innerHTML. Scanners map findings to upstream Prometheus versions, while Prom++ is a fork with independent versioning, so this CVE may still be reported by version matching even though it is fixed in Prom++.",
+      "timestamp": "2026-06-02T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-44903"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Stored XSS in the React web UI (GHSA-vffh-x6r8-xx99, GHSA-fw8g-cg8f-9j28). The fix is backported to Prom++ from upstream Prometheus: user-controlled values are escaped with escapeHTML before insertion into innerHTML, and fuzzy-search output on the Flags page is additionally HTML-escaped before passing to sanitize-html. Scanners map findings to upstream Prometheus versions, while Prom++ is a fork with independent versioning, so this CVE may still be reported by version matching even though it is fixed in Prom++.",
+      "timestamp": "2026-06-02T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-44990"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Stored XSS in the React web UI (GHSA-vffh-x6r8-xx99, GHSA-fw8g-cg8f-9j28). The fix is backported to Prom++ from upstream Prometheus: metric names and label values (including le) are escaped with escapeHTML before insertion into innerHTML in tooltips and axis labels. Scanners map findings to upstream Prometheus versions, while Prom++ is a fork with independent versioning, so this CVE may still be reported by version matching even though it is fixed in Prom++.",
+      "timestamp": "2026-06-02T00:00:00Z"
+    }
+  ],
+  "timestamp": "2026-06-02T00:00:00Z"
+}

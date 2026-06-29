@@ -23,7 +23,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file"
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "add971c7cb497d40985b48641891bf9b51423730",
+        commit = "0b1e895ba4226c2fda5ee0178c9b5b1195a741aa",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -142,12 +142,9 @@ def _third_party_deps_impl(_ctx):
 
     git_repository(
         name = "snappy",
-        commit = "27f34a580be4a3becf5f8c0cba13433f53c21337",
-        patches = [
-            Label("//third_party/patches/snappy:0001-svacer_fixes.patch"),
-        ],
+        commit = "27ab5f7f518430a021239bc26a5b2fd64affbc7b",
         remote = "https://github.com/google/snappy",
-        shallow_since = "1689185568 -0700",
+        shallow_since = "1778353109 +0000",
     )
 
     http_archive(

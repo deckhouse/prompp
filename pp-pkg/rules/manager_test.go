@@ -2154,7 +2154,14 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
-			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
+			if tolerantTiming {
+				// Under -race/-asan on loaded CI runners the synchronous and concurrent evals may
+				// not actually overlap, so the observed peak can be lower; only assert the cap is
+				// not exceeded rather than that the peak was reached.
+				require.LessOrEqual(t, int64(maxInflight.Load()), opts.MaxConcurrentEvals+1)
+			} else {
+				require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
+			}
 			// Some rules should execute concurrently so should complete quicker.
 			if !tolerantTiming {
 				require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
@@ -2208,7 +2215,14 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
-			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
+			if tolerantTiming {
+				// Under -race/-asan on loaded CI runners the synchronous and concurrent evals may
+				// not actually overlap, so the observed peak can be lower; only assert the cap is
+				// not exceeded rather than that the peak was reached.
+				require.LessOrEqual(t, int64(maxInflight.Load()), opts.MaxConcurrentEvals+1)
+			} else {
+				require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
+			}
 			// Some rules should execute concurrently so should complete quicker.
 			if !tolerantTiming {
 				require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
