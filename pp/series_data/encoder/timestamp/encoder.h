@@ -162,6 +162,8 @@ class Encoder {
     return state.reference_count == 1 && state.child_count == 0;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t states_count() const noexcept { return states_.size(); }
+
  private:
   BareBones::VectorWithHoles<State, Reallocator> states_;
   StateTransitions state_transitions_{states_};

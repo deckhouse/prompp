@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -40,6 +41,19 @@ type WriterSuite struct {
 	blockWriter *block.Writer[*shard.Shard]
 }
 
+func TestMain(m *testing.M) {
+	code := m.Run()
+	// The head's data storage, encoders and index writer are C++-backed objects owned through
+	// runtime finalizers. Under -asan LeakSanitizer runs its check at process exit, where these
+	// finalizers may not have run yet, so it reports the still-alive C++ allocations as leaks.
+	// Force a few GC cycles and give the finalizer goroutine a chance to free them first.
+	for i := 0; i < 3; i++ {
+		runtime.GC()
+		time.Sleep(50 * time.Millisecond)
+	}
+	os.Exit(code)
+}
+
 func TestWriterSuite(t *testing.T) {
 	suite.Run(t, new(WriterSuite))
 }
@@ -53,6 +67,16 @@ func (s *WriterSuite) SetupTest() {
 		blockDuration,
 		prometheus.DefaultRegisterer,
 	)
+}
+
+func (s *WriterSuite) TearDownTest() {
+	// Close the head so its background goroutines stop and release the references that keep the
+	// C++-backed shards, data storage and encoders alive; otherwise they are never collected and
+	// their finalizers never run, which -asan LeakSanitizer reports as leaks at process exit.
+	if s.head != nil {
+		s.Require().NoError(s.head.Close())
+		s.head = nil
+	}
 }
 
 func (s *WriterSuite) createDataDirectory() string {

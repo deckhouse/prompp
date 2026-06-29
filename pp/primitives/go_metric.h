@@ -29,23 +29,23 @@ struct LabelPair {
 using LabelPairsList = std::vector<LabelPair>;
 
 struct Gauge {
-  explicit Gauge(double* counter) : value(counter) {}
+  explicit Gauge(const double* counter) : value(counter) {}
 
   MessageState state{};
   CacheSize size_cache{};
   UnknownFields unknown_fields{};
 
-  double* value{};
+  const double* value{};
 };
 
 struct Counter {
-  explicit Counter(double* counter) : value(counter) {}
+  explicit Counter(const double* counter) : value(counter) {}
 
   MessageState state{};
   CacheSize size_cache{};
   UnknownFields unknown_fields{};
 
-  double* value{};
+  const double* value{};
   void* exemplar{};
   void* created_timestamp{};
 };
