@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -262,4 +263,164 @@ func (s *HeadSuite) TestQueryFirstTimestampsInFinalizedChunk() {
 
 	// Assert
 	s.Equal([]int64{5}, timestamps)
+}
+
+type DataStorageSerializedDataMultiSeriesIteratorSuite struct {
+	suite.Suite
+	lss *cppbridge.LabelSetStorage
+	ds  *cppbridge.DataStorage
+	enc *cppbridge.HeadEncoder
+}
+
+func TestDataStorageSerializedDataMultiSeriesIteratorSuite(t *testing.T) {
+	suite.Run(t, new(DataStorageSerializedDataMultiSeriesIteratorSuite))
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
+	s.lss = cppbridge.NewQueryableLssStorage()
+	s.ds = cppbridge.NewDataStorage()
+	s.enc = cppbridge.NewHeadEncoderWithDataStorage(s.ds)
+
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
+}
+
+type createIteratorMethod = func(*cppbridge.DataStorageSerializedData, []uint32) cppbridge.DataStorageSerializedDataMultiSeriesIterator
+
+var createMultiSeriesIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator
+var createAndResetMultiSeriesIterator = func(
+	serializedData *cppbridge.DataStorageSerializedData,
+	seriesIDs []uint32,
+) cppbridge.DataStorageSerializedDataMultiSeriesIterator {
+	it := createMultiSeriesIterator(serializedData, seriesIDs)
+	for it.HasData() {
+		it.Next()
+	}
+	it.Reset(serializedData, seriesIDs)
+	return it
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
+	hints storage.SelectHints,
+	seriesToSerialize []uint32,
+	series []uint32,
+	createIterator createIteratorMethod,
+) []cppbridge.Sample {
+	result := s.ds.Query(cppbridge.DataStorageQuery{
+		StartTimestampMs: hints.Start,
+		EndTimestampMs:   hints.End,
+		LabelSetIDs:      seriesToSerialize,
+	}, cppbridge.NoDownsampling, unsafe.Pointer(&hints))
+
+	it := createIterator(result.SerializedData, series)
+	defer it.Close()
+
+	out := make([]cppbridge.Sample, 0)
+	for it.HasData() {
+		out = append(out, cppbridge.Sample{Timestamp: it.Timestamp(), Value: it.Value()})
+		it.Next()
+	}
+
+	runtime.KeepAlive(result.SerializedData)
+	return out
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSum() {
+	s.testSum(createMultiSeriesIterator)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSumWithIteratorReset() {
+	s.testSum(createAndResetMultiSeriesIterator)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) testSum(method createIteratorMethod) {
+	// Arrange
+	s.enc.Encode(0, 50, 10.0)
+	s.enc.Encode(1, 80, 20.0)
+	s.enc.Encode(0, 150, 20.0)
+	s.enc.Encode(1, 180, 30.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start:         1,
+		End:           200,
+		Step:          100,
+		LookbackDelta: 100,
+		Func:          "sum",
+	}, []uint32{0, 1}, []uint32{0, 1}, method)
+
+	// Assert
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 100, Value: 30.0},
+		{Timestamp: 200, Value: 50.0},
+	}, samples)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
+	// Arrange
+	s.enc.Encode(0, 50, 10.0)
+	s.enc.Encode(1, 130, 20.0)
+	s.enc.Encode(0, 150, 30.0)
+	s.enc.Encode(1, 180, 20.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start:         1,
+		End:           200,
+		Step:          100,
+		LookbackDelta: 50,
+		Func:          "min",
+	}, []uint32{0, 1}, []uint32{0, 1}, createMultiSeriesIterator)
+
+	// Assert
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 50, Value: 10.0},
+		{Timestamp: 150, Value: 20.0},
+		{Timestamp: 200, Value: 20.0},
+	}, samples)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
+	// Arrange
+	s.enc.Encode(0, 50, 20.0)
+	s.enc.Encode(1, 80, 10.0)
+	s.enc.Encode(0, 150, 20.0)
+	s.enc.Encode(1, 180, 30.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start:         1,
+		End:           200,
+		Step:          100,
+		LookbackDelta: 50,
+		Func:          "max",
+	}, []uint32{0, 1}, []uint32{0, 1}, createMultiSeriesIterator)
+
+	// Assert
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 50, Value: 20.0},
+		{Timestamp: 150, Value: 20.0},
+		{Timestamp: 200, Value: 30.0},
+	}, samples)
+}
+
+func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestNoSeries() {
+	// Arrange
+	s.enc.Encode(0, 50, 20.0)
+	s.enc.Encode(1, 80, 10.0)
+	s.enc.Encode(0, 150, 20.0)
+	s.enc.Encode(1, 180, 30.0)
+	s.enc.Encode(2, 180, 30.0)
+
+	// Act
+	samples := s.collectSamples(storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Step:  100,
+		Range: 100,
+		Func:  "max",
+	}, []uint32{0, 1}, []uint32{2}, createMultiSeriesIterator)
+
+	// Assert
+	s.Equal([]cppbridge.Sample{}, samples)
 }

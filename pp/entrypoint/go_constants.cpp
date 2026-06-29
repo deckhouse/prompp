@@ -16,6 +16,7 @@ static_assert(sizeof(PromPP::Prometheus::Relabel::InnerSeries) == Sizeof_InnerSe
 
 static_assert(sizeof(entrypoint::series_data::SamplesIterator) == Sizeof_SerializedDataSamplesIterator);
 static_assert(sizeof(entrypoint::series_data::AggregationIterator) == Sizeof_SerializedDataAggregationIterator);
+static_assert(sizeof(entrypoint::series_data::MultiSeriesDecodeIterator) == Sizeof_MultiSeriesDecodeIterator);
 
 static_assert(sizeof(metrics::Storage::Iterator) == Sizeof_MetricsIterator);
 

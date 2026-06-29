@@ -1,6 +1,7 @@
 #pragma once
 
 #include "prometheus/promql/window_function.h"
+#include "select_hints.h"
 #include "series_data/decoder/decorator/changes_iterator.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
@@ -191,11 +192,6 @@ class AggregationIterator {
   } iterator_;
 
   Type type_;
-};
-
-struct SelectHints {
-  ::series_data::decoder::decorator::WindowFunctionParameters function_parameters;
-  PromPP::Prometheus::promql::WindowFunction window_function{PromPP::Prometheus::promql::WindowFunction::kNone};
 };
 
 PROMPP_ALWAYS_INLINE AggregationIterator create_aggregation_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,

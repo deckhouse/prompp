@@ -8,10 +8,13 @@ class LastOverStep {
  public:
   explicit LastOverStep(encoder::Sample& sample, const PromPP::Primitives::TimeInterval& interval) : sample_(sample), interval_(interval) {}
 
-  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp, double value) const noexcept { sample_.value = value; }
+  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp, double value) noexcept {
+    sample_.value = value;
+    has_value_ = true;
+  }
 
   ~LastOverStep() {
-    if (!BareBones::Encoding::Gorilla::isstalenan(sample_.value)) [[likely]] {
+    if (has_value_) [[likely]] {
       sample_.timestamp = interval_.max;
     }
   }
@@ -19,9 +22,10 @@ class LastOverStep {
  private:
   encoder::Sample& sample_;
   const PromPP::Primitives::TimeInterval& interval_;
+  bool has_value_{};
 };
 
 template <class Iterator = UniversalDecodeIterator>
-using LastOverStepIterator = OverTimeFuncIterator<LastOverStep, Iterator>;
+using LastOverStepIterator = OverTimeFuncIterator<LastOverStep, Iterator, true>;
 
 }  // namespace series_data::decoder::decorator

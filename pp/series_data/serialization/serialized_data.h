@@ -420,6 +420,19 @@ class SerializedDataView {
     return {get_buffer_view(), get_chunks_view(), series_first_chunk_id};
   }
 
+  template <class SeriesChunkHandler>
+  void enumerate_series(const SeriesChunkHandler& handler) {
+    const auto& chunks = get_chunks_view();
+    for (auto it = chunks.begin(); it != chunks.end();) {
+      handler(*it, it - chunks.begin());
+
+      const auto series_id = it->label_set_id;
+      do {
+        ++it;
+      } while (it != chunks.end() && it->label_set_id == series_id);
+    }
+  }
+
  private:
   const SerializedData& data_;
   uint32_t series_first_chunk_id_{kNoMoreSeries};

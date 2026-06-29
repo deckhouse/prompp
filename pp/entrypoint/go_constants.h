@@ -7,6 +7,7 @@
 
 #define Sizeof_SerializedDataSamplesIterator 152
 #define Sizeof_SerializedDataAggregationIterator 208
+#define Sizeof_MultiSeriesDecodeIterator 48
 
 #define Sizeof_MetricsIterator 24
 

@@ -305,6 +305,18 @@ type DataStorageSerializedDataAggregationIteratorControlBlock struct {
 	value     float64
 }
 
+func (it *DataStorageSerializedDataAggregationIteratorControlBlock) HasData() bool {
+	return it.timestamp != math.MinInt64
+}
+
+func (it *DataStorageSerializedDataAggregationIteratorControlBlock) Timestamp() int64 {
+	return it.timestamp
+}
+
+func (it *DataStorageSerializedDataAggregationIteratorControlBlock) Value() float64 {
+	return it.value
+}
+
 type DataStorageSerializedDataAggregationIterator struct {
 	DataStorageSerializedDataAggregationIteratorControlBlock
 	cppInternalData [unsafe.Sizeof(CppSerializedDataAggregationIterator{}) - unsafe.Sizeof(DataStorageSerializedDataAggregationIteratorControlBlock{})]byte
@@ -324,16 +336,27 @@ func (it *DataStorageSerializedDataAggregationIterator) Reset(serializedData *Da
 	seriesDataSerializedDataAggregationIteratorReset(it, serializedData.serializedData, chunkRef)
 }
 
-func (it *DataStorageSerializedDataAggregationIterator) HasData() bool {
-	return it.timestamp != math.MinInt64
+type DataStorageSerializedDataMultiSeriesIterator struct {
+	DataStorageSerializedDataAggregationIteratorControlBlock
+	cppInternalData [unsafe.Sizeof(CppSerializedDataMultiSeriesIterator{}) - unsafe.Sizeof(DataStorageSerializedDataAggregationIteratorControlBlock{})]byte
 }
 
-func (it *DataStorageSerializedDataAggregationIterator) Timestamp() int64 {
-	return it.timestamp
+func NewDataStorageSerializedDataMultiSeriesIterator(serializedData *DataStorageSerializedData, seriesIDs []uint32) DataStorageSerializedDataMultiSeriesIterator {
+	it := DataStorageSerializedDataMultiSeriesIterator{}
+	seriesDataSerializedDataMultiSeriesIteratorCtor(&it, serializedData.serializedData, seriesIDs)
+	return it
 }
 
-func (it *DataStorageSerializedDataAggregationIterator) Value() float64 {
-	return it.value
+func (it *DataStorageSerializedDataMultiSeriesIterator) Next() {
+	seriesDataSerializedDataMultiSeriesIteratorNext(it)
+}
+
+func (it *DataStorageSerializedDataMultiSeriesIterator) Reset(serializedData *DataStorageSerializedData, seriesIDs []uint32) {
+	seriesDataSerializedDataMultiSeriesIteratorReset(it, serializedData.serializedData, seriesIDs)
+}
+
+func (it *DataStorageSerializedDataMultiSeriesIterator) Close() {
+	seriesDataSerializedDataMultiSeriesIteratorDtor(it)
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.
