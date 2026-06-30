@@ -198,6 +198,19 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "entrypoint_types_test",
+    srcs = glob(["entrypoint/types/**/*_tests.cpp"]),
+    deps = [
+        ":bare_bones",
+        ":entrypoint_types",
+        ":metrics",
+        ":prometheus",
+        ":wal",
+        "@gtest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "entrypoint_bridge",
     srcs = glob(

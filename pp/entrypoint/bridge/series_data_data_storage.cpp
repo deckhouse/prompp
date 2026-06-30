@@ -16,7 +16,6 @@
 #include "series_data/querier/querier.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
-#include "series_index/querier/selector_querier.h"
 
 using entrypoint::types::DataStoragePtr;
 using entrypoint::types::QueryableEncodingBimap;
