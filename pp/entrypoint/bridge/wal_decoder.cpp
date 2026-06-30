@@ -54,7 +54,7 @@ extern "C" void prompp_wal_decoder_decode(void* args, void* res) {
     in->decoder->decode(in->segment, out->protobuf, *out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -90,7 +90,7 @@ extern "C" void prompp_wal_decoder_decode_to_hashdex(void* args, void* res) {
     out->replica.reset_to(replica.data(), replica.size());
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -143,7 +143,7 @@ extern "C" void prompp_wal_decoder_decode_to_hashdex_with_metric_injection(void*
     out->replica.reset_to(replica.data(), replica.size());
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -164,7 +164,7 @@ extern "C" void prompp_wal_decoder_decode_dry(void* args, void* res) {
     in->decoder->decode_dry(in->segment, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -187,7 +187,7 @@ extern "C" void prompp_wal_decoder_restore_from_stream(void* args, void* res) {
     in->decoder->restore_from_stream(in->stream, in->segment_id, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -195,9 +195,9 @@ extern "C" void prompp_wal_decoder_restore_from_stream(void* args, void* res) {
 // OutputDecoder
 //
 
-using entrypoint_types::LssVariantPtr;
+using entrypoint::types::LssVariantPtr;
 
-using OutputDecoder = PromPP::WAL::OutputDecoder<entrypoint_types::EncodingBimap>;
+using OutputDecoder = PromPP::WAL::OutputDecoder<entrypoint::types::EncodingBimap>;
 using OutputDecoderPtr = std::unique_ptr<OutputDecoder>;
 
 static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
@@ -263,7 +263,7 @@ extern "C" void prompp_wal_output_decoder_ctor(void* args, void* res) {
   };
 
   auto* in = static_cast<Arguments*>(args);
-  auto& output_lss = std::get<entrypoint_types::EncodingBimap>(*in->output_lss);
+  auto& output_lss = std::get<entrypoint::types::EncodingBimap>(*in->output_lss);
   new (res) Result{.decoder = std::make_unique<OutputDecoder>(*in->stateless_relabeler, output_lss, in->external_labels,
                                                               static_cast<PromPP::WAL::BasicEncoderVersion>(in->encoder_version))};
 }
@@ -294,7 +294,7 @@ extern "C" void prompp_wal_output_decoder_dump_to(void* args, void* res) {
     in->decoder->dump_to(bytes_stream);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -316,7 +316,7 @@ extern "C" void prompp_wal_output_decoder_load_from(void* args, void* res) {
     in->decoder->load_from(bytes_stream);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -366,6 +366,6 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
     out->sample_count = in->samples_storage->samples_count() - prev_sample_count;
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }

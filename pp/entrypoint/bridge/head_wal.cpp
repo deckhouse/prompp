@@ -11,15 +11,15 @@
 #include "wal/encoder.h"
 #include "wal/wal.h"
 
-using Encoder = PromPP::WAL::GenericEncoder<PromPP::WAL::BasicEncoder<entrypoint_types::QueryableEncodingBimap&>>;
+using Encoder = PromPP::WAL::GenericEncoder<PromPP::WAL::BasicEncoder<entrypoint::types::QueryableEncodingBimap&>>;
 using EncoderPtr = std::unique_ptr<Encoder>;
-using Decoder = PromPP::WAL::GenericDecoder<entrypoint_types::QueryableEncodingBimap&>;
+using Decoder = PromPP::WAL::GenericDecoder<entrypoint::types::QueryableEncodingBimap&>;
 using DecoderPtr = std::unique_ptr<Decoder>;
 static_assert(sizeof(EncoderPtr) == sizeof(void*));
 static_assert(sizeof(DecoderPtr) == sizeof(void*));
 
 extern "C" void prompp_head_wal_encoder_ctor(void* args, void* res) {
-  using entrypoint_types::LssVariantPtr;
+  using entrypoint::types::LssVariantPtr;
 
   struct Arguments {
     uint16_t shard_id;
@@ -32,7 +32,7 @@ extern "C" void prompp_head_wal_encoder_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<entrypoint_types::QueryableEncodingBimap>(*in->lss);
+  auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
   new (res) Result{.encoder = std::make_unique<Encoder>(lss, in->shard_id, in->log_shards)};
 }
 
@@ -86,7 +86,7 @@ extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) 
     in->encoder->add_inner_series(in->incoming_inner_series, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -110,7 +110,7 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
     in->encoder->finalize(out, out_stream);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -129,7 +129,7 @@ extern "C" void prompp_head_wal_encoder_max_written_item_index(void* args, void*
 }
 
 extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {
-  using entrypoint_types::LssVariantPtr;
+  using entrypoint::types::LssVariantPtr;
 
   struct Arguments {
     LssVariantPtr lss;
@@ -141,7 +141,7 @@ extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<entrypoint_types::QueryableEncodingBimap>(*in->lss);
+  auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
   new (res) Result{.decoder = std::make_unique<Decoder>(lss, in->encoder_version)};
 }
 
@@ -182,7 +182,7 @@ extern "C" void prompp_head_wal_decoder_decode(void* args, void* res) {
     }
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -190,7 +190,7 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   struct Arguments {
     DecoderPtr decoder;
     PromPP::Primitives::Go::SliceView<char> segment;
-    entrypoint_types::SeriesDataEncoderWrapperPtr encoder_wrapper;
+    entrypoint::types::SeriesDataEncoderWrapperPtr encoder_wrapper;
   };
 
   struct Result {
@@ -213,6 +213,6 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
     out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }

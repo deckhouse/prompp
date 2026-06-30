@@ -7,7 +7,7 @@
 #include "bare_bones/exception.h"
 #include "bare_bones/preprocess.h"
 
-namespace entrypoint_types {
+namespace entrypoint::types {
 
 PROMPP_ALWAYS_INLINE void handle_current_exception(std::ostream& out, const std::source_location location = std::source_location::current()) {
   out << location.function_name() << ": ";
@@ -23,4 +23,4 @@ PROMPP_ALWAYS_INLINE void handle_current_exception(std::ostream& out, const std:
   }
 }
 
-}  // namespace entrypoint_types
+}  // namespace entrypoint::types

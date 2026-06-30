@@ -7,7 +7,7 @@
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serialized_data.h"
 
-namespace entrypoint_types {
+namespace entrypoint::types {
 
 class SerializedDataGo {
  public:
@@ -30,4 +30,4 @@ using SerializedDataIterator = series_data::serialization::SerializedDataView::S
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 
-}  // namespace entrypoint_types
+}  // namespace entrypoint::types
