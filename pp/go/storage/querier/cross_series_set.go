@@ -55,10 +55,23 @@ func NewCrossSeriesSet(
 ) *CrossSeriesSet {
 	labelsGroups := make([]labelSetsForGroup, 0, len(seriesGroups.Groups))
 	builder := builderPool.Get().(*labels.ScratchBuilder)
+	lvalue := fmt.Sprintf("%s__%d", headID, shardID)
+
+	// grouping must be sorted
+	var sortedGrouping []string
+	if len(grouping) <= 1 {
+		sortedGrouping = grouping
+	} else {
+		sortedGrouping = groupingPool.Get(len(grouping))
+		defer groupingPool.Put(sortedGrouping)
+		copy(sortedGrouping, grouping)
+		slices.Sort(sortedGrouping)
+	}
+
 	for i := range seriesGroups.Groups {
 		builder.Reset()
 		labelsGroups = append(labelsGroups, labelSetsForGroup{
-			ls:      crossLabelSetCtor(builder, labelSetSnapshot, grouping, headID, seriesGroups.Groups[i][0], shardID),
+			ls:      crossLabelSetCtor(builder, labelSetSnapshot, sortedGrouping, lvalue, seriesGroups.Groups[i][0]),
 			groupID: i,
 		})
 	}
@@ -319,27 +332,14 @@ var (
 func crossLabelSetCtor(
 	sb *labels.ScratchBuilder,
 	snapshot *cppbridge.LabelSetSnapshot,
-	grouping []string,
-	headID string,
+	sortedGrouping []string,
+	lvalue string,
 	seriesID uint32,
-	shardID uint16,
 ) labels.Labels {
-	sb.Add(labelHeadIDShardID, fmt.Sprintf("%s__%d", headID, shardID))
+	sb.Add(labelHeadIDShardID, lvalue)
 
-	if len(grouping) == 0 {
+	if len(sortedGrouping) == 0 {
 		return sb.Labels()
-	}
-
-	// grouping must be sorted
-	var sortedGrouping []string
-	if len(grouping) == 1 {
-		sortedGrouping = grouping
-	} else {
-		sortedGrouping = groupingPool.Get(len(grouping))
-		defer groupingPool.Put(sortedGrouping)
-
-		copy(sortedGrouping, grouping)
-		slices.Sort(sortedGrouping)
 	}
 
 	i := 0

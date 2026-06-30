@@ -1,6 +1,8 @@
 package pool
 
 import (
+	"slices"
+
 	"github.com/prometheus/prometheus/util/zeropool"
 )
 
@@ -16,6 +18,7 @@ func NewSlicePool[T any](sizes []int) SlicePool[T] {
 		panic("invalid sizes")
 	}
 
+	slices.Sort(sizes)
 	for _, size := range sizes {
 		if size < 0 {
 			panic("invalid size")

@@ -492,16 +492,17 @@ func (s *querierOptimize) setup(
 	s.queryOpts = promql.NewPrometheusQueryOpts(false, s.lookbackDelta)
 
 	s.queryFuncs = []queryFunc{
-		{name: "min_over_time", needRange: true},   // +
-		{name: "max_over_time", needRange: true},   // +
-		{name: "last_over_time", needRange: true},  // +
-		{name: "changes", needRange: true},         // +
-		{name: "min", needRange: false},            // +
-		{name: "min by(value) ", needRange: false}, // +
-		{name: "max", needRange: false},            // +
-		{name: "max by(value) ", needRange: false}, // +
-		{name: "sum", needRange: false},            // +
-		{name: "sum by(value) ", needRange: false}, // +
+		{name: "min_over_time", needRange: true},        // +
+		{name: "max_over_time", needRange: true},        // +
+		{name: "last_over_time", needRange: true},       // +
+		{name: "changes", needRange: true},              // +
+		{name: "min", needRange: false},                 // +
+		{name: "min by(value) ", needRange: false},      // +
+		{name: "max", needRange: false},                 // +
+		{name: "max by(value) ", needRange: false},      // +
+		{name: "sum", needRange: false},                 // +
+		{name: "sum by(value) ", needRange: false},      // +
+		{name: "sum by(value, inc) ", needRange: false}, // +
 
 		// {name: "rate", needRange: true}, // -
 		// {name: "irate", needRange: true}, // -
@@ -1183,7 +1184,7 @@ func BenchmarkRangeQuerySum(b *testing.B) {
 		qo.step * 4,
 	}
 
-	series := 6
+	series := 5
 	qo.fillHeadWithCounter(ctx, 0, series)
 
 	// 3 - default series for counter_metric

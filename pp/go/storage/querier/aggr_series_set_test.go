@@ -17,9 +17,8 @@ import (
 type AggrSeriesSetSuite struct {
 	suite.Suite
 
-	timeSeries []storagetest.TimeSeries
-	lss        *shard.LSS
-	ds         *shard.DataStorage
+	lss *shard.LSS
+	ds  *shard.DataStorage
 }
 
 func TestAggrSeriesSetSuite(t *testing.T) {
@@ -30,7 +29,7 @@ func (s *AggrSeriesSetSuite) SetupTest() {
 	s.lss = shard.NewLSS()
 	s.ds = shard.NewDataStorage()
 
-	s.timeSeries = []storagetest.TimeSeries{
+	timeSeries := []storagetest.TimeSeries{
 		{
 			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
@@ -60,6 +59,8 @@ func (s *AggrSeriesSetSuite) SetupTest() {
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 2}},
 		},
 	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries...)
 }
 
 func (s *AggrSeriesSetSuite) query(
@@ -129,18 +130,13 @@ func (s *AggrSeriesSetSuite) TestMaxOverTimeFunc() {
 		},
 	}
 
-	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
-
 	// Act
 	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
 	s.Require().Equal(len(expected), len(actual))
-	for i := range expected {
-		s.Require().Equal(expected[i].Labels, actual[i].Labels)
-		s.Require().Equal(expected[i].Samples, actual[i].Samples)
-	}
+	s.Equal(expected, actual)
 }
 
 func (s *AggrSeriesSetSuite) TestMinOverTimeFunc() {
@@ -172,18 +168,13 @@ func (s *AggrSeriesSetSuite) TestMinOverTimeFunc() {
 		},
 	}
 
-	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
-
 	// Act
 	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
 	s.Require().Equal(len(expected), len(actual))
-	for i := range expected {
-		s.Require().Equal(expected[i].Labels, actual[i].Labels)
-		s.Require().Equal(expected[i].Samples, actual[i].Samples)
-	}
+	s.Equal(expected, actual)
 }
 
 func (s *AggrSeriesSetSuite) TestLastOverTimeFunc() {
@@ -215,16 +206,11 @@ func (s *AggrSeriesSetSuite) TestLastOverTimeFunc() {
 		},
 	}
 
-	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
-
 	// Act
 	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, hints, matcher)
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
 	s.Require().Equal(len(expected), len(actual))
-	for i := range expected {
-		s.Require().Equal(expected[i].Labels, actual[i].Labels)
-		s.Require().Equal(expected[i].Samples, actual[i].Samples)
-	}
+	s.Equal(expected, actual)
 }

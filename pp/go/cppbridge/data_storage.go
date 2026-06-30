@@ -59,8 +59,6 @@ func (ds *DataStorage) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64)
 			ds.lastUpdateTime.Store(now)
 		}
 		ds.m.Unlock()
-
-		runtime.KeepAlive(ds)
 	}
 
 	return *ds.timeInterval.Load()

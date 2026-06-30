@@ -172,10 +172,6 @@ func NewQuerier[
 	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	if metrics == nil {
-		metrics = NewMetrics(nil, "queryable_unknown")
-	}
-
 	return newQuerierWithSelectFuncOptimize(
 		head,
 		deduplicatorCtor,
@@ -201,10 +197,6 @@ func NewQuerierWithOutSelectFuncOptimize[
 	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	if metrics == nil {
-		metrics = NewMetrics(nil, "queryable_unknown")
-	}
-
 	return newQuerierWithSelectFuncOptimize(
 		head,
 		deduplicatorCtor,
@@ -335,6 +327,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer release()
 
 	defer func() {
+		if q.metrics == nil {
+			return
+		}
+
 		q.metrics.SelectDuration.WithLabelValues("instant").Observe(float64(time.Since(start).Microseconds()))
 	}()
 
@@ -422,6 +418,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer release()
 
 	defer func() {
+		if q.metrics == nil {
+			return
+		}
+
 		q.metrics.SelectDuration.WithLabelValues("range").Observe(float64(time.Since(start).Microseconds()))
 	}()
 
@@ -446,16 +446,22 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
 	if isCrossSeriesFunc(hints) {
-		q.metrics.OptimizationType.WithLabelValues("cross_series").Inc()
+		if q.metrics != nil {
+			q.metrics.OptimizationType.WithLabelValues("cross_series").Inc()
+		}
 		return q.makeCrossSeriesSet(lssQueryResults, snapshots, shardedSerializedData, hints)
 	}
 
 	if isAggregationSeriesFunc(hints) {
-		q.metrics.OptimizationType.WithLabelValues("aggregation").Inc()
+		if q.metrics != nil {
+			q.metrics.OptimizationType.WithLabelValues("aggregation").Inc()
+		}
 		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
 	}
 
-	q.metrics.OptimizationType.WithLabelValues("none").Inc()
+	if q.metrics != nil {
+		q.metrics.OptimizationType.WithLabelValues("none").Inc()
+	}
 	return q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
 }
 
@@ -524,14 +530,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 ) storage.SeriesSet {
 	poolProvider := q.head.PoolProvider()
 	timestamps := poolProvider.GetSliceOfTimestamps()
-	defer poolProvider.PutSliceOfTimestamps(timestamps)
 	for i := range timestamps {
 		if lssQueryResults[i] == nil {
 			continue
 		}
 
 		timestamps[i] = poolProvider.GetTimestamps(lssQueryResults[i].Len())
-		defer poolProvider.PutTimestamps(timestamps[i])
 	}
 
 	tds := q.head.CreateTask(
@@ -551,7 +555,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	q.head.Enqueue(tds)
 
 	seriesGroups := poolProvider.GetSeriesGroups()
-	defer poolProvider.PutSeriesGroups(seriesGroups)
 	tlss := q.head.CreateTask(
 		lssGroupSeriesByLabelNames,
 		func(shard TShard) error {
@@ -577,9 +580,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	q.head.PutTask(tlss)
 
 	seriesSets := poolProvider.GetSeriesSet()
-	defer poolProvider.PutSeriesSet(seriesSets)
 	sNaNSeriesSets := poolProvider.GetSeriesSet()
-	defer poolProvider.PutSeriesSet(sNaNSeriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData == nil {
 			sNaNSeriesSets[shardID] = emptySeriesSet
@@ -606,7 +607,19 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 		)
 	}
 
-	return NewMergeManyShardSeriesSets(seriesSets, sNaNSeriesSets)
+	resultSeriesSets := NewMergeManyShardSeriesSets(seriesSets, sNaNSeriesSets)
+
+	poolProvider.PutSeriesSet(sNaNSeriesSets)
+	poolProvider.PutSeriesSet(seriesSets)
+	poolProvider.PutSeriesGroups(seriesGroups)
+	for i := range timestamps {
+		if timestamps[i] != nil {
+			poolProvider.PutTimestamps(timestamps[i])
+		}
+	}
+	poolProvider.PutSliceOfTimestamps(timestamps)
+
+	return resultSeriesSets
 }
 
 // SwitchFuncOptimize switch the function optimization hints.
@@ -682,17 +695,12 @@ func isPossibleToOptimizeCrossSeriesFunc(
 
 	// grouping by
 	//revive:disable-next-line:add-constant // +2 is required to enable optimization
-	if hints.Step == scrapeIntervalMS && countOfSeries > DefaultCountOfSeriesToOptimize+2 {
+	if hints.Step == scrapeIntervalMS && countOfSeries > DefaultCountOfSeriesToOptimize+3 {
 		return true
 	}
 
 	//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
 	if hints.Step >= scrapeIntervalMS*2 && countOfSeries > DefaultCountOfSeriesToOptimize+2 {
-		return true
-	}
-
-	//revive:disable-next-line:add-constant // x3 scrape interval are required to enable optimization
-	if hints.Step >= scrapeIntervalMS*3 && countOfSeries > DefaultCountOfSeriesToOptimize+1 {
 		return true
 	}
 
@@ -881,9 +889,10 @@ func queryLabelNames[
 	defer release()
 
 	defer func() {
-		if metrics != nil {
-			metrics.LabelNamesDuration.Observe(float64(time.Since(start).Microseconds()))
+		if metrics == nil {
+			return
 		}
+		metrics.LabelNamesDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
 	dedup := deduplicatorCtor(head.NumberOfShards())
@@ -949,9 +958,11 @@ func queryLabelValues[
 	defer release()
 
 	defer func() {
-		if metrics != nil {
-			metrics.LabelValuesDuration.Observe(float64(time.Since(start).Microseconds()))
+		if metrics == nil {
+			return
 		}
+
+		metrics.LabelValuesDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
 	dedup := deduplicatorCtor(head.NumberOfShards())

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include "primitives/primitives.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 
