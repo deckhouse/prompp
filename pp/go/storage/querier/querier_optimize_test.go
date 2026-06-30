@@ -501,7 +501,6 @@ func (s *querierOptimize) setup(
 		{name: "max", needRange: false},                 // +
 		{name: "max by(value) ", needRange: false},      // +
 		{name: "sum", needRange: false},                 // +
-		{name: "sum by(value) ", needRange: false},      // +
 		{name: "sum by(value, inc) ", needRange: false}, // +
 
 		// {name: "rate", needRange: true}, // -
