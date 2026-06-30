@@ -64,7 +64,7 @@ func NewHead[TShard Shard, TGShard Shard](
 }
 
 // AcquireQuery implementation of the working [Head], no blocking.
-func (*Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (func(), error) {
+func (*Head[TShard, TGShard]) AcquireQuery(context.Context) (func(), error) {
 	return noopRelease, nil
 }
 
@@ -96,6 +96,11 @@ func (h *Head[TShard, TGShard]) EnqueueOnShard(t *task.Generic[TGShard], _ uint1
 // Generation returns current generation of [Head].
 func (*Head[TShard, TGShard]) Generation() uint64 {
 	return 0
+}
+
+// ID returns the [Head] ID.
+func (h *Head[TShard, TGShard]) ID() string {
+	return h.id
 }
 
 // NumberOfShards returns current number of shards in to [Head].

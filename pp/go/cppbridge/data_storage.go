@@ -2,23 +2,25 @@ package cppbridge
 
 import (
 	"runtime"
+	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
 type DataStorage struct {
-	dataStorage       uintptr
-	gcDestroyDetector *uint64
-	timeInterval      atomic.Pointer[TimeInterval]
+	dataStorage    uintptr
+	timeInterval   atomic.Pointer[TimeInterval]
+	lastUpdateTime atomic.Int64
+	m              sync.Mutex
 }
 
 // NewDataStorage - constructor.
 func NewDataStorage() *DataStorage {
 	ds := &DataStorage{
-		dataStorage:       seriesDataDataStorageCtor(),
-		gcDestroyDetector: &gcDestroyDetector,
-		timeInterval:      atomic.Pointer[TimeInterval]{},
+		dataStorage:  seriesDataDataStorageCtor(),
+		timeInterval: atomic.Pointer[TimeInterval]{},
 	}
 	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 
@@ -40,6 +42,23 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
 		ds.timeInterval.Store(&timeInterval)
 		runtime.KeepAlive(ds)
+	}
+
+	return *ds.timeInterval.Load()
+}
+
+// TimeIntervalWithValidateCache gets time interval from [DataStorage] with validate cache.
+func (ds *DataStorage) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) TimeInterval {
+	now := time.Now().UnixMilli()
+	if now-ds.lastUpdateTime.Load() > cacheCheckIntervalMs {
+		// slow path
+		ds.m.Lock()
+		if now-ds.lastUpdateTime.Load() > cacheCheckIntervalMs {
+			timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
+			ds.timeInterval.Store(&timeInterval)
+			ds.lastUpdateTime.Store(now)
+		}
+		ds.m.Unlock()
 	}
 
 	return *ds.timeInterval.Load()
@@ -121,8 +140,8 @@ func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32,
 }
 
 // QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs
-func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64) {
-	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs, timestamps)
+func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64, notFoundTimestampValue int64) {
+	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, notFoundTimestampValue, seriesIDs, timestamps)
 	runtime.KeepAlive(ds)
 }
 

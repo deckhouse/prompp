@@ -133,7 +133,7 @@ func (s *HeadLoadSuite) lockFileForCreation(fileName string) {
 }
 
 func (s *HeadLoadSuite) appendTimeSeries(head *storage.Head, timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, head, timeSeries)
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, timeSeries)
 }
 
 func (*HeadLoadSuite) shards(head *storage.Head) (result []*shard.Shard) {

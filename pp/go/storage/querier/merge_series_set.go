@@ -40,6 +40,38 @@ func NewMergeShardSeriesSet(sets []storage.SeriesSet) storage.SeriesSet {
 	return s
 }
 
+// NewMergeManyShardSeriesSets merges many [storage.SeriesSet] together from different shards.
+// The implementation assumes only our shard-local sets are passed in:
+//   - always no nil sets;
+//   - always no Err()/Warnings() - because shards should not have any errors and warnings;
+//   - always sorted output sets;
+//   - always no identical label sets across shards.
+func NewMergeManyShardSeriesSets(ssets ...[]storage.SeriesSet) storage.SeriesSet {
+	if len(ssets) == 0 {
+		return emptySeriesSet
+	}
+
+	length := 0
+	for _, sets := range ssets {
+		length += len(sets)
+	}
+
+	s := &mergeShardSeriesSet{
+		heap: make(seriesSetHeap, 0, length),
+	}
+
+	for _, sets := range ssets {
+		for _, set := range sets {
+			// shard series don't have errors and not nil, so we can safely call Next
+			if set.Next() {
+				heap.Push(&s.heap, set)
+			}
+		}
+	}
+
+	return s
+}
+
 // At returns the current [storage.Series], implement [storage.SeriesSet] interface.
 func (s *mergeShardSeriesSet) At() storage.Series {
 	return s.currentSet.At()

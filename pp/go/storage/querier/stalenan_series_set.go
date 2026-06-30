@@ -15,16 +15,6 @@ import (
 // floatStaleNaN is the float64 representation of the [value.StaleNaN] value.
 var floatStaleNaN = math.Float64frombits(value.StaleNaN)
 
-// MakeTimestampsSliceWithDefault creates a slice with the default timestamp.
-func MakeTimestampsSliceWithDefault(size int, defaultTimestamp int64) []int64 {
-	timestamps := make([]int64, size)
-	for i := range timestamps {
-		timestamps[i] = defaultTimestamp
-	}
-
-	return timestamps
-}
-
 // NewStaleNaNSeriesSliceFromTimestamps creates [StaleNaNSeries] slice from timestamps.
 func NewStaleNaNSeriesSliceFromTimestamps(timestamps []int64) []StaleNaNSeries {
 	seriesSlice := make([]StaleNaNSeries, len(timestamps))

@@ -66,8 +66,6 @@ type Head[TShard Shard, TGShard Shard] struct {
 	// for tasks metrics
 	tasksCreated *prometheus.CounterVec
 	tasksDone    *prometheus.CounterVec
-	tasksLive    *prometheus.CounterVec
-	tasksExecute *prometheus.CounterVec
 
 	// pools for reusable objects
 	headPool *poolprovider.HeadPool[TGShard]
@@ -89,9 +87,9 @@ func NewHead[TShard Shard, TGShard Shard](
 	concurrency := calculateHeadConcurrency(numberOfShards) // current head workers concurrency
 	for shardID := range numberOfShards {
 		// append and query can create 2 tasks per request, so minimal length of channel is
-		// cap(querySemaphore)*2+cap(appendSemaphore)*2 = 2*concurrency*2+2*concurrency*2 = 8*concurrency
-		// add extra slots to channel for safety = x9 for back pressure
-		taskChs[shardID] = make(chan *task.Generic[TGShard], 9*concurrency)
+		// cap(querySemaphore)*4+cap(appendSemaphore)*2 = 2*concurrency*4+2*concurrency*2 = 12*concurrency
+		// add extra slots to channel for safety = x13 for back pressure
+		taskChs[shardID] = make(chan *task.Generic[TGShard], 13*concurrency)
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)

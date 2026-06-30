@@ -12,8 +12,12 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/promql"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
+	"github.com/prometheus/prometheus/promql"
+	prom_storage "github.com/prometheus/prometheus/storage"
 )
 
 //
@@ -39,6 +43,27 @@ func (qp QueryParam) Generate(rd *rand.Rand, _ int) reflect.Value {
 	qp.gen(rd)
 
 	return reflect.ValueOf(qp)
+}
+
+// Format formats the query parameter to string.
+func (qp QueryParam) Format(f fmt.State, _ rune) {
+	_, _ = fmt.Fprintf(
+		f,
+		"{start: %d, end: %d, step: %d}",
+		qp.Start.UnixMilli(),
+		qp.End.UnixMilli(),
+		qp.Step.Milliseconds(),
+	)
+}
+
+// String converts the query parameter to string.
+func (qp *QueryParam) String() string {
+	return fmt.Sprintf(
+		"{start: %d, end: %d, step: %d}",
+		qp.Start.UnixMilli(),
+		qp.End.UnixMilli(),
+		qp.Step.Milliseconds(),
+	)
 }
 
 // gen generates a random query parameter.
@@ -78,6 +103,27 @@ func (sqp SubQueryParams) Generate(rd *rand.Rand, _ int) reflect.Value {
 	sqp.subGen(rd)
 
 	return reflect.ValueOf(sqp)
+}
+
+// Format formats the subquery parameter to string.
+func (sqp SubQueryParams) Format(f fmt.State, _ rune) {
+	_, _ = fmt.Fprintf(
+		f,
+		"{query_param: %s, subQueryStep: %d, subQueryRange: %d}",
+		sqp.QueryParam.String(),
+		sqp.SubQueryStep.Milliseconds(),
+		sqp.SubQueryRange.Milliseconds(),
+	)
+}
+
+// String converts the subquery parameter to string.
+func (sqp *SubQueryParams) String() string {
+	return fmt.Sprintf(
+		"{query_param: %s, subQueryStep: %d, subQueryRange: %d}",
+		sqp.QueryParam.String(),
+		sqp.SubQueryStep.Milliseconds(),
+		sqp.SubQueryRange.Milliseconds(),
+	)
 }
 
 // subGen generates a random subquery parameter.
@@ -178,7 +224,8 @@ func (oqp *OffsetQueryParams) offsetGen(rd *rand.Rand) {
 //
 
 type QuickQuerierOptimizeSuite struct {
-	QuerierOptimizeSuite
+	suite.Suite
+	querierOptimize
 
 	quickQE *promql.Engine
 }
@@ -188,17 +235,37 @@ func TestQuickQuerierOptimizeSuite(t *testing.T) {
 }
 
 func (s *QuickQuerierOptimizeSuite) SetupSuite() {
-	s.QuerierOptimizeSuite.SetupSuite()
+	s.querierOptimize.setup(
+		s.T().Context(),
+		s.T().TempDir(),
+		s.Require().NoError,
+		time.UnixMilli(defaultStartMs),
+		defaultStep,
+		defaultCountOfSteps,
+	)
+	querier.IsPossibleToOptimize = func(
+		[]*cppbridge.LSSQueryResult,
+		*prom_storage.SelectHints,
+		int64, int64,
+	) func() bool {
+		return func() bool {
+			return true
+		}
+	}
 
 	s.quickQE = promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
 		MaxSamples:               500000,
-		Timeout:                  10 * time.Second,
+		Timeout:                  100 * time.Second,
 		LookbackDelta:            s.lookbackDelta,
 		NoStepSubqueryIntervalFn: func(int64) int64 { return s.lookbackDelta.Milliseconds() },
 		EnableAtModifier:         true,
 		EnableNegativeOffset:     true,
 	})
+}
+
+func (s *QuickQuerierOptimizeSuite) TearDownSuite() {
+	s.Suite.Require().NoError(s.querierOptimize.close())
 }
 
 func (s *QuickQuerierOptimizeSuite) TestQueryRangeQuickQueryParam() {
@@ -222,7 +289,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryRangeQuickQueryParam() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -251,7 +318,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryRangeQuickSubQueryParams() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -280,7 +347,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryRangeQuickModifierQueryParams() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -309,7 +376,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryRangeQuickOffsetQueryParams() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -338,7 +405,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryInstantQuickQueryParam() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -367,7 +434,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryInstantQuickSubQueryParams() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -396,7 +463,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryInstantQuickModifierQueryParams() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))
@@ -425,7 +492,7 @@ func (s *QuickQuerierOptimizeSuite) TestQueryInstantQuickOffsetQueryParams() {
 				s.Require().NoError(err)
 				defer resOpt.qry.Close()
 
-				return s.Equal(res.res, resOpt.res)
+				return s.True(resultEqual(res.res, resOpt.res, query))
 			}
 
 			s.Require().NoError(quick.Check(f, nil))

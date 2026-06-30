@@ -52,13 +52,15 @@ func (s *LabelSetSnapshotSuite) TestGroupSeriesByLabelNames_ByJob() {
 	idA0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "m").Set("job", "a").Set("instance", "i0").Build()).LabelSetID
 	idA1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "m").Set("job", "a").Set("instance", "i1").Build()).LabelSetID
 	idB := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "m").Set("job", "b").Set("instance", "i2").Build()).LabelSetID
+	names := []string{"job"}
+	nameIDs := make([]uint32, len(names))
 
-	jobId := s.lss.GetLabelNameIDs([]string{"job"})
+	s.lss.LabelNameToIDs(names, nameIDs)
 
 	snap := s.lss.CreateLabelSetSnapshot()
 
 	// Act
-	groupedSeries := snap.GroupSeriesByLabelNames([]uint32{idA0, idA1, idB}, jobId)
+	groupedSeries := snap.GroupSeriesByLabelNames([]uint32{idA0, idA1, idB}, nameIDs)
 
 	// Assert
 	s.Equal([][]uint32{{idA0, idA1}, {idB}}, groupedSeries.Groups)
@@ -69,10 +71,12 @@ func (s *LabelSetSnapshotSuite) TestGroupSeriesByLabelNames_ByJobAndInstance() {
 	idSame0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "m1").Set("job", "a").Set("instance", "i0").Build()).LabelSetID
 	idOther := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "m2").Set("job", "a").Set("instance", "i1").Build()).LabelSetID
 	idSame1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "m3").Set("job", "a").Set("instance", "i0").Build()).LabelSetID
+	names := []string{"job", "instance"}
+	nameIDs := make([]uint32, len(names))
 
-	ids := s.lss.GetLabelNameIDs([]string{"job", "instance"})
-	jobID := ids[0]
-	instanceID := ids[1]
+	s.lss.LabelNameToIDs(names, nameIDs)
+	jobID := nameIDs[0]
+	instanceID := nameIDs[1]
 
 	snap := s.lss.CreateLabelSetSnapshot()
 

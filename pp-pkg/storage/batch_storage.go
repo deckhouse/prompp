@@ -84,11 +84,31 @@ func (bs *BatchStorage) Commit(ctx context.Context) error {
 // CommitWithState adds aggregated series from [pp_storage.TransactionHead] to the [Head] with [cppbridge.StateV2].
 func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.StateV2) error {
 	s := bs.transactionHead.Shards()[0]
-	_, err := bs.adapter.AppendGoHeadHashdex(ctx, cppbridge.NewGoHeadHashdex(s.LSS().Target(), s.DataStorage().Raw()), state, false)
+	_, err := bs.adapter.AppendGoHeadHashdex(
+		ctx,
+		cppbridge.NewGoHeadHashdex(s.LSS().Target(), s.DataStorage().Raw()),
+		state,
+		false,
+	)
 	return err
 }
 
 // Querier calls f() with the given parameters. Returns a [querier.Querier].
 func (bs *BatchStorage) Querier(mint, maxt int64) (storage.Querier, error) {
-	return querier.NewQuerier(bs.transactionHead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
+	aTimeInterval := cppbridge.NewInvalidTimeInterval()
+	for _, shard := range bs.transactionHead.Shards() {
+		interval := shard.TimeIntervalWithValidateCache(defaultCacheCheckIntervalMs)
+		aTimeInterval.MinT = min(interval.MinT, aTimeInterval.MinT)
+		aTimeInterval.MaxT = max(interval.MaxT, aTimeInterval.MaxT)
+	}
+
+	return querier.NewQuerier(
+		bs.transactionHead,
+		querier.NewNoOpShardedDeduplicator,
+		mint,
+		maxt,
+		bs.adapter.scrapeInterval.Load(),
+		aTimeInterval.MinT,
+		nil,
+	), nil
 }

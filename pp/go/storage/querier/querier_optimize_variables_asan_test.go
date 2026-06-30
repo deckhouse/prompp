@@ -15,14 +15,13 @@ const (
 
 // defaultSteps is the default steps.
 var defaultSteps = []time.Duration{
-	defaultStep - time.Second, // [14s]
-	defaultStep * 2,           // [30s]
+	defaultStep * 2,
 }
 
 // defaultSubQueries is the default subqueries.
 var defaultSubQueries = []subQuery{
-	{window: model.Duration(defaultStep), step: 0},                 // [15s]
-	{window: model.Duration(defaultStep*4 + time.Second), step: 0}, // [61s]
+	{window: model.Duration(defaultStep), step: 0},
+	{window: model.Duration(defaultStep*4 + time.Second), step: 0},
 }
 
 // defaultModifiers is the default modifiers.

@@ -186,6 +186,11 @@ func (s *Shard) TimeInterval(invalidateCache bool) cppbridge.TimeInterval {
 	return s.dataStorage.TimeInterval(invalidateCache)
 }
 
+// TimeIntervalWithValidateCache gets time interval from [DataStorage] with validate cache.
+func (s *Shard) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) cppbridge.TimeInterval {
+	return s.dataStorage.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
+}
+
 // UnloadedDataStorage get unloaded data storage
 func (s *Shard) UnloadedDataStorage() *UnloadedDataStorage {
 	return s.unloadedDataStorage
