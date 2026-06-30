@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_slice.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
 

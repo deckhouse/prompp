@@ -4,7 +4,7 @@
 
 #include "bare_bones/bitset.h"
 #include "bare_bones/vector.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 #include "series_index/querier/label_names_querier.h"

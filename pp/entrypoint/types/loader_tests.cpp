@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "bare_bones/streams.h"
-#include "entrypoint_types/loader.h"
+#include "entrypoint/types/loader.h"
 #include "primitives/label_set.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"

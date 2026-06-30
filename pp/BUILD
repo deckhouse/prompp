@@ -185,7 +185,7 @@ cc_test(
 cc_library(
     name = "entrypoint_types",
     hdrs = glob([
-        "entrypoint_types/**/*.h",
+        "entrypoint/types/**/*.h",
     ]),
     linkstatic = True,
     deps = [
@@ -212,17 +212,14 @@ cc_test(
 )
 
 cc_library(
-    name = "entrypoint",
+    name = "entrypoint_bridge",
     srcs = glob(
-        include = ["entrypoint/**/*.cpp"],
-        exclude = [
-            "entrypoint/init/**",
-            "entrypoint/**/*_tests.cpp",
-        ],
+        include = ["entrypoint/bridge/**/*.cpp"],
+        exclude = ["entrypoint/bridge/**/*_tests.cpp"],
     ),
     hdrs = glob([
-        "entrypoint/**/*.h",
-        "entrypoint/**/*.hpp",
+        "entrypoint/bridge/**/*.h",
+        "entrypoint/bridge/**/*.hpp",
     ]),
     linkstatic = True,
     deps = [
@@ -241,7 +238,7 @@ cc_library(
 cc_static_library(
     name = "entrypoint_aio",
     deps = [
-        ":entrypoint",
+        ":entrypoint_bridge",
     ],
 )
 
@@ -249,8 +246,8 @@ cc_library(
     name = "entrypoint_init",
     srcs = glob(["entrypoint/init/*.cpp"]),
     hdrs = glob([
-        "entrypoint/init/*.h",
-        "entrypoint/init/*.hpp",
+        "entrypoint/init/**/*.h",
+        "entrypoint/init/**/*.hpp",
     ]),
     linkstatic = True,
 )

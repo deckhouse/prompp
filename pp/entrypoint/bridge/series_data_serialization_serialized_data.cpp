@@ -1,6 +1,6 @@
 #include "series_data_serialization_serialized_data.h"
 
-#include "entrypoint_types/serialized_data.h"
+#include "entrypoint/types/serialized_data.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
   struct Arguments {

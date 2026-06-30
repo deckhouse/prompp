@@ -3,11 +3,11 @@
 #include <cassert>
 #include <spanstream>
 
-#include "entrypoint_types/data_storage.h"
-#include "entrypoint_types/loader.h"
-#include "entrypoint_types/lss.h"
-#include "entrypoint_types/querier.h"
-#include "entrypoint_types/serialized_data.h"
+#include "entrypoint/types/data_storage.h"
+#include "entrypoint/types/loader.h"
+#include "entrypoint/types/lss.h"
+#include "entrypoint/types/querier.h"
+#include "entrypoint/types/serialized_data.h"
 #include "head/chunk_recoder.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"

@@ -6,7 +6,7 @@
 
 #include "bare_bones/exception.h"
 #include "bare_bones/vector.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/label_set.h"
 #include "series_index/queryable_encoding_bimap.h"
 

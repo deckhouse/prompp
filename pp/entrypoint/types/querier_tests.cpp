@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "bare_bones/streams.h"
-#include "entrypoint_types/querier.h"
+#include "entrypoint/types/querier.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
 #include "series_data/unloading/loader.h"

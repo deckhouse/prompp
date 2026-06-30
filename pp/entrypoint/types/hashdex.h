@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <variant>
 
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "wal/hashdex/basic_decoder.h"
 #include "wal/hashdex/go_head.h"
 #include "wal/hashdex/go_model.h"

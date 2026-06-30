@@ -8,7 +8,7 @@ else
 sed := sed
 endif
 
-# All headers in entrypoint
+# All C API headers in entrypoint/bridge
 #
 # This headers combined to result header-file.
 # Symbols from this files used to build runtime entrypoint.
@@ -16,7 +16,7 @@ endif
 #
 # We separate .h and .hpp files here, because we need _helper.hpp file with no exported symbols,
 # but with internal re-used code.
-headers := $(wildcard *.h)
+headers := $(wildcard bridge/*.h)
 
 # Platform detected from host
 #
@@ -76,7 +76,7 @@ install: $(prefixed_archives)
 	@install $^ $(install_dir)
 
 # Shared type/layout contracts that the Go side reads via cgo (e.g. Sizeof_* macros).
-type_headers := ../entrypoint_types/go_constants.h
+type_headers := ../entrypoint/types/go_constants.h
 
 $(result_dir)/entrypoint.h: $(type_headers) $(headers) entrypoint.h.template ## Concat all headers in one
 	@mkdir -p ${@D}

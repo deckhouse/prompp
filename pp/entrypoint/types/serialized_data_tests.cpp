@@ -2,7 +2,7 @@
 
 #include <iterator>
 
-#include "entrypoint_types/serialized_data.h"
+#include "entrypoint/types/serialized_data.h"
 #include "series_data/chunk_finalizer.h"
 #include "series_data/decoder/traits.h"
 #include "series_data/encoder.h"
