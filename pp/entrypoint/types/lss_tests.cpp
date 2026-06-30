@@ -12,14 +12,14 @@
 
 namespace {
 
-using entrypoint_types::create_lss;
-using entrypoint_types::create_snapshot_lss;
-using entrypoint_types::EncodingBimap;
-using entrypoint_types::LssType;
-using entrypoint_types::QueryableEncodingBimap;
-using entrypoint_types::ReallocationsDetector;
-using entrypoint_types::ShrinkAwareSnapshotLSS;
-using entrypoint_types::SnapshotLSS;
+using entrypoint::types::create_lss;
+using entrypoint::types::create_snapshot_lss;
+using entrypoint::types::EncodingBimap;
+using entrypoint::types::LssType;
+using entrypoint::types::QueryableEncodingBimap;
+using entrypoint::types::ReallocationsDetector;
+using entrypoint::types::ShrinkAwareSnapshotLSS;
+using entrypoint::types::SnapshotLSS;
 using PromPP::Primitives::LabelViewSet;
 
 TEST(LssTest, CreateLssEncodingBimapSelectsExpectedAlternative) {
@@ -77,7 +77,7 @@ class SnapshotLssFixture : public testing::Test {
   const LabelViewSet ls3_{{"job", "d"}};
   const LabelViewSet ls4_{{"job", "e"}};
 
-  entrypoint_types::LssVariantPtr create_queryable_lss() const {
+  entrypoint::types::LssVariantPtr create_queryable_lss() const {
     auto lss = create_lss(LssType::kQueryableEncodingBimap);
     auto& bimap = std::get<QueryableEncodingBimap>(*lss);
 
@@ -92,14 +92,14 @@ class SnapshotLssFixture : public testing::Test {
     return lss;
   }
 
-  entrypoint_types::LssVariantPtr create_fixed_lss() const {
+  entrypoint::types::LssVariantPtr create_fixed_lss() const {
     auto lss = create_queryable_lss();
     std::get<QueryableEncodingBimap>(*lss).set_pending_shrink_boundary(kShrinkBoundary);
 
     return lss;
   }
 
-  entrypoint_types::LssVariantPtr create_shrunk_lss() const {
+  entrypoint::types::LssVariantPtr create_shrunk_lss() const {
     QueryableEncodingBimap seeded_lss;
     seeded_lss.find_or_emplace(ls0_);
     seeded_lss.find_or_emplace(ls1_);
@@ -152,7 +152,7 @@ TEST_F(SnapshotLssFixture, FromFixedQueryableLssIsShrinkAware) {
   const auto snapshot = create_snapshot_lss(*lss);
 
   // Assert
-  EXPECT_TRUE(std::holds_alternative<entrypoint_types::ShrinkAwareSnapshotLSS>(*snapshot));
+  EXPECT_TRUE(std::holds_alternative<entrypoint::types::ShrinkAwareSnapshotLSS>(*snapshot));
 }
 
 TEST_F(SnapshotLssFixture, ShrinkAwareResolvesSurvivingPreBoundarySeries) {

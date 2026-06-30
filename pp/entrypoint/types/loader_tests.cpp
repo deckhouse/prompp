@@ -10,7 +10,7 @@
 
 namespace {
 
-using entrypoint_types::QueryableEncodingBimap;
+using entrypoint::types::QueryableEncodingBimap;
 using PromPP::Primitives::LabelViewSet;
 using series_data::DataStorage;
 using series_data::Decoder;
@@ -62,7 +62,7 @@ TEST_F(RevertableLoaderFixture, LoadFinalizeRestoresUnloadedOpenChunk) {
   unloader_.unload();
 
   // Act
-  entrypoint_types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 1};
+  entrypoint::types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 1};
   loader.load_next(stream_.span<const uint8_t>());
   loader.load_finalize();
 
@@ -77,7 +77,7 @@ TEST_F(RevertableLoaderFixture, RevertRestoresUnloadedOpenChunk) {
   unloader_.unload();
   const auto trimmed_stream = open_chunk_stream(0);
 
-  entrypoint_types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 1};
+  entrypoint::types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 1};
   loader.load_next(stream_.span<const uint8_t>());
   loader.load_finalize();
 
@@ -98,7 +98,7 @@ TEST_F(RevertableLoaderFixture, LoadFinalizeLoadsSeriesByBatch) {
   unloader_.create_snapshot(stream_);
   unloader_.unload();
 
-  entrypoint_types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 2};
+  entrypoint::types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 2};
 
   // Act
   loader.load_next(stream_.span<const uint8_t>());
@@ -134,7 +134,7 @@ TEST_F(RevertableLoaderFixture, RevertRestoresSeriesLoadedAcrossBatches) {
   const auto trimmed_stream1 = open_chunk_stream(1);
   const auto trimmed_stream2 = open_chunk_stream(2);
 
-  entrypoint_types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 2};
+  entrypoint::types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 2};
 
   loader.load_next(stream_.span<const uint8_t>());
   loader.load_finalize();

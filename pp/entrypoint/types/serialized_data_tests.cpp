@@ -27,7 +27,7 @@ class SerializedDataGoFixture : public testing::Test {
   Encoder<> encoder_{storage_};
   Querier querier_{storage_};
 
-  [[nodiscard]] static SampleList decode_chunk(const entrypoint_types::SerializedDataGo& data, uint32_t chunk_id) {
+  [[nodiscard]] static SampleList decode_chunk(const entrypoint::types::SerializedDataGo& data, uint32_t chunk_id) {
     SampleList decoded;
     std::ranges::copy(data.iterator(chunk_id), DecodeIteratorSentinel{}, std::back_inserter(decoded));
     return decoded;
@@ -38,7 +38,7 @@ TEST_F(SerializedDataGoFixture, EmptyQueriedChunkListProducesNoChunks) {
   // Arrange
 
   // Act
-  entrypoint_types::SerializedDataGo data{storage_, {}};
+  entrypoint::types::SerializedDataGo data{storage_, {}};
 
   // Assert
   EXPECT_EQ(0U, data.get_chunks_view().size());
@@ -56,7 +56,7 @@ TEST_F(SerializedDataGoFixture, RoundTripsQueriedOpenChunk) {
   const auto& queried_chunks = querier_.query(Query{.time_interval{.min = 1, .max = 5}, .label_set_ids = {0}});
 
   // Act
-  entrypoint_types::SerializedDataGo data{storage_, queried_chunks};
+  entrypoint::types::SerializedDataGo data{storage_, queried_chunks};
   const auto next_series = data.next();
   const auto decoded = decode_chunk(data, 0);
 
@@ -80,7 +80,7 @@ TEST_F(SerializedDataGoFixture, RoundTripsQueriedFinalizedChunk) {
   const auto& queried_chunks = querier_.query(Query{.time_interval{.min = 1, .max = 5}, .label_set_ids = {0}});
 
   // Act
-  entrypoint_types::SerializedDataGo data{storage_, queried_chunks};
+  entrypoint::types::SerializedDataGo data{storage_, queried_chunks};
   const auto next_series = data.next();
   const auto decoded = decode_chunk(data, 0);
 
@@ -103,7 +103,7 @@ TEST_F(SerializedDataGoFixture, NextReturnsChunkIdsForAllQueriedSeries) {
   const auto& queried_chunks = querier_.query(Query{.time_interval{.min = 1, .max = 3}, .label_set_ids = {0, 1}});
 
   // Act
-  entrypoint_types::SerializedDataGo data{storage_, queried_chunks};
+  entrypoint::types::SerializedDataGo data{storage_, queried_chunks};
   const auto series0 = data.next();
   const auto series1 = data.next();
   const auto end = data.next();
