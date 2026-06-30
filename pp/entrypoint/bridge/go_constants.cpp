@@ -1,5 +1,5 @@
-#include "entrypoint_types/go_constants.h"
-#include "entrypoint_types/serialized_data.h"
+#include "entrypoint/types/go_constants.h"
+#include "entrypoint/types/serialized_data.h"
 #include "metrics/storage.h"
 #include "prometheus/relabeler.h"
 #include "wal/output_decoder.h"

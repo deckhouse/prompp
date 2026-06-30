@@ -2,7 +2,7 @@
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/iterator.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 

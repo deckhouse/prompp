@@ -1,7 +1,7 @@
 #include "head_status.h"
 
-#include "entrypoint_types/data_storage.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/data_storage.h"
+#include "entrypoint/types/lss.h"
 #include "head/status.h"
 #include "primitives/go_slice.h"
 

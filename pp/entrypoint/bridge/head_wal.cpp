@@ -2,10 +2,10 @@
 
 #include <variant>
 
-#include "entrypoint_types/encoder.h"
-#include "entrypoint_types/exception.h"
-#include "entrypoint_types/hashdex.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/encoder.h"
+#include "entrypoint/types/exception.h"
+#include "entrypoint/types/hashdex.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_slice.h"
 #include "wal/decoder.h"
 #include "wal/encoder.h"

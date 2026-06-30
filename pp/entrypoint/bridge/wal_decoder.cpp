@@ -1,8 +1,8 @@
 #include "wal_decoder.h"
 
-#include "entrypoint_types/exception.h"
-#include "entrypoint_types/hashdex.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/exception.h"
+#include "entrypoint/types/hashdex.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_slice.h"
 #include "primitives/go_slice_protozero.h"
 #include "wal/decoder.h"

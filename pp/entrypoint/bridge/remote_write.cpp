@@ -1,4 +1,4 @@
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "wal/output_decoder.h"
 
 extern "C" void prompp_remote_write_message_list_dtor(void* args) {

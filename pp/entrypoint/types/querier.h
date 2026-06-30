@@ -8,8 +8,8 @@
 
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
-#include "entrypoint_types/go_constants.h"
-#include "entrypoint_types/serialized_data.h"
+#include "entrypoint/types/go_constants.h"
+#include "entrypoint/types/serialized_data.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "series_data/data_storage.h"

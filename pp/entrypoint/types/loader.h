@@ -5,7 +5,7 @@
 
 #include "bare_bones/iterator.h"
 #include "bare_bones/preprocess.h"
-#include "entrypoint_types/lss.h"
+#include "entrypoint/types/lss.h"
 #include "series_data/data_storage.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/reverter.h"
