@@ -16,7 +16,7 @@
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/sorting_index.h"
 
-namespace entrypoint_types {
+namespace entrypoint::types {
 
 using LsIdsSlice = BareBones::Vector<PromPP::Primitives::LabelSetID>;
 using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
@@ -192,4 +192,4 @@ inline SnapshotLSSVariantPtr create_snapshot_lss(LssVariant& lss_variant) {
   }
 }
 
-}  // namespace entrypoint_types
+}  // namespace entrypoint::types

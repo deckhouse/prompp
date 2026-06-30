@@ -63,7 +63,7 @@ extern "C" void prompp_wal_encoder_add(void* args, void* res) {
     std::visit(lmb, *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -89,7 +89,7 @@ extern "C" void prompp_wal_encoder_add_inner_series(void* args, void* res) {
     in->encoder->add_inner_series(in->incoming_inner_series, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -116,7 +116,7 @@ extern "C" void prompp_wal_encoder_add_relabeled_series(void* args, void* res) {
     in->encoder->add_relabeled_series(in->incoming_relabeled_series, in->relabeler_state_update, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -146,7 +146,7 @@ extern "C" void prompp_wal_encoder_add_with_stale_nans(void* args, void* res) {
     std::visit(lmb, *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -173,7 +173,7 @@ extern "C" void prompp_wal_encoder_collect_source(void* args, void* res) {
     in->encoder->collect_source(out, in->stale_ts, in->source_state);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -201,7 +201,7 @@ extern "C" void prompp_wal_encoder_finalize(void* args, void* res) {
     in->encoder->finalize(out, out_stream);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -273,7 +273,7 @@ extern "C" void prompp_wal_encoder_lightweight_add(void* args, void* res) {
     std::visit(lmb, *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -316,7 +316,7 @@ extern "C" void prompp_wal_encoder_lightweight_add_inner_series(void* args, void
     in->encoder->add_inner_series(in->incoming_inner_series, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -361,7 +361,7 @@ extern "C" void prompp_wal_encoder_lightweight_add_relabeled_series(void* args, 
     in->encoder->add_relabeled_series(in->incoming_relabeled_series, in->relabeler_state_update, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -405,6 +405,6 @@ extern "C" void prompp_wal_encoder_lightweight_finalize(void* args, void* res) {
     in->encoder->finalize(out, out_stream);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint_types::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }

@@ -6,8 +6,8 @@
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 
-using entrypoint_types::LssVariantPtr;
-using entrypoint_types::SnapshotLSSVariantPtr;
+using entrypoint::types::LssVariantPtr;
+using entrypoint::types::SnapshotLSSVariantPtr;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
 

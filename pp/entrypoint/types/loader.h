@@ -10,7 +10,7 @@
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/reverter.h"
 
-namespace entrypoint_types {
+namespace entrypoint::types {
 
 class RevertableLoader {
  public:
@@ -51,4 +51,4 @@ class RevertableLoader {
   }
 };
 
-}  // namespace entrypoint_types
+}  // namespace entrypoint::types

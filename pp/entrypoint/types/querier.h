@@ -18,7 +18,7 @@
 #include "series_data/querier/querier.h"
 #include "series_data/querier/query.h"
 
-namespace entrypoint_types {
+namespace entrypoint::types {
 
 template <class Querier>
 concept QuerierInterface = requires(Querier querier) {
@@ -105,7 +105,7 @@ enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQue
 using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapperV2>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
 
-}  // namespace entrypoint_types
+}  // namespace entrypoint::types
 
-static_assert(entrypoint_types::QuerierInterface<entrypoint_types::InstantQuerierWithArgumentsWrapperEntrypoint>);
-static_assert(entrypoint_types::QuerierInterface<entrypoint_types::RangeQuerierWithArgumentsWrapperV2>);
+static_assert(entrypoint::types::QuerierInterface<entrypoint::types::InstantQuerierWithArgumentsWrapperEntrypoint>);
+static_assert(entrypoint::types::QuerierInterface<entrypoint::types::RangeQuerierWithArgumentsWrapperV2>);

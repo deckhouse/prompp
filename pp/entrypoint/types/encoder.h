@@ -6,7 +6,7 @@
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"
 
-namespace entrypoint_types {
+namespace entrypoint::types {
 
 using Encoder = series_data::Encoder<>;
 using OutdatedChunkMerger = series_data::OutdatedChunkMerger<Encoder>;
@@ -21,4 +21,4 @@ using SeriesDataEncoderWrapperPtr = std::unique_ptr<SeriesDataEncoderWrapper>;
 
 static_assert(sizeof(SeriesDataEncoderWrapperPtr) == sizeof(void*));
 
-}  // namespace entrypoint_types
+}  // namespace entrypoint::types
