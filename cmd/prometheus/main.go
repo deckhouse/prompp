@@ -60,7 +60,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/manger"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
@@ -892,9 +892,9 @@ func main() {
 				os.Exit(1)
 			}
 
-			blockManager, err := manger.NewManager(
+			blockManager, err := manager.NewManager(
 				localStoragePath,
-				&manger.Options{
+				&manager.Options{
 					RetentionDuration:           retentionMs,
 					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
@@ -1787,7 +1787,7 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 // storage.Storage so it can be used as a fanout secondary. Appends are dropped:
 // the head adapter is the fanout primary that stores samples.
 type blockStorage struct {
-	m       *manger.Manager
+	m       *manager.Manager
 	onClose func() error
 }
 

@@ -17,6 +17,16 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
+// LeveledCompactor is the interface for the leveled compactor.
+// It is used to plan and compact the blocks in the given directory.
+type LeveledCompactor interface {
+	// Plan plans a compaction of the blocks in the given directory.
+	Plan(dir string) ([]string, error)
+
+	// Compact compacts the blocks in the given directories into the given destination directory.
+	Compact(dest string, dirs []string, open []*block.Block) ([]ulid.ULID, error)
+}
+
 // Options configures the persisted-blocks compactor.
 type Options struct {
 	// MinBlockDuration is the smallest block range, used to derive the
@@ -40,7 +50,7 @@ type Options struct {
 // (mirroring tsdb's single-goroutine compact/reload loop).
 type Compactor struct {
 	dir       string
-	compactor *lcompactor.LeveledCompactor
+	compactor LeveledCompactor
 	logger    log.Logger
 	metrics   *compactorMetrics
 }
@@ -67,12 +77,11 @@ func NewCompactor(
 		minBlockDuration = block.DefaultBlockDuration
 	}
 
-	rngs := lcompactor.CompactionRanges(minBlockDuration, opts.MaxBlockDuration)
 	leveled, err := lcompactor.NewLeveledCompactorWithOptions(
 		ctx,
 		r,
 		logger,
-		rngs,
+		lcompactor.CompactionRanges(minBlockDuration, opts.MaxBlockDuration),
 		chunkenc.NewPool(),
 		lcompactor.LeveledCompactorOptions{
 			MaxBlockChunkSegmentSize:    opts.MaxBlockChunkSegmentSize,
@@ -88,6 +97,25 @@ func NewCompactor(
 		logger:    logger,
 		metrics:   newCompactorMetrics(r),
 	}, nil
+}
+
+// NewCompactorWithLeveledCompactor builds a [Compactor] from a [LeveledCompactor].
+func NewCompactorWithLeveledCompactor(
+	dir string,
+	lCompactor LeveledCompactor,
+	logger log.Logger,
+	r prometheus.Registerer,
+) *Compactor {
+	if logger == nil {
+		logger = log.NewNopLogger()
+	}
+
+	return &Compactor{
+		dir:       dir,
+		compactor: lCompactor,
+		logger:    logger,
+		metrics:   newCompactorMetrics(r),
+	}
 }
 
 // Compact runs a single compaction pass: it plans one group of eligible on-disk

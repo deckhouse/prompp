@@ -77,10 +77,7 @@ func NewBlocksToDelete(
 	m := NewMetrics(r)
 
 	// Report the configured retention constraints
-	limitBytes := maxBytes
-	if limitBytes < 0 {
-		limitBytes = 0
-	}
+	limitBytes := max(maxBytes, 0)
 	m.maxBytes.Set(float64(limitBytes))
 	m.retentionDuration.Set((time.Duration(retentionDuration) * time.Millisecond).Seconds())
 
