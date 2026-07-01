@@ -58,6 +58,10 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manger"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
@@ -67,16 +71,12 @@ import (
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/tcompactor"
-	"github.com/prometheus/prometheus/tcompactor/manger"
-
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
-	// PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"             // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"                // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"              // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/querier"                // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/ready"                  // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"           // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -833,15 +833,15 @@ func main() {
 		// blockManager     *block.Manager
 		// blockCompactor   *block.Compactor
 		// compactCancel    context.CancelFunc
-		persistedStorage storage.Storage       = localStorage
-		startTimeFn      func() (int64, error) = localStorage.StartTime
+		persistedStorage storage.Storage = localStorage
+		startTimeFn                      = localStorage.StartTime
 	)
 	if !agentMode {
 		retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-		blocksToDelete := pp_pkg_tsdb.NewBlocksToDelete(
+		blocksToDelete := block.NewBlocksToDelete(
 			retentionMs,
 			int64(cfg.tsdb.MaxBytes),
-			pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
+			block.CatalogHeadsExtraSize(dataDir, headCatalog),
 			prometheus.DefaultRegisterer,
 		)
 
@@ -851,7 +851,7 @@ func main() {
 			log.With(logger, "component", "tcompactor"),
 			localStoragePath,
 			tcompactor.Options{
-				TsdbOptions: tsdb.LeveledCompactorOptions{
+				TsdbOptions: lcompactor.LeveledCompactorOptions{
 					MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 				},
@@ -904,7 +904,6 @@ func main() {
 
 		bs := &blockStorage{m: blockManager, onClose: func() error {
 			compactCancel()
-			blockCompactor.Close()
 			blockManager.Close()
 			return nil
 		}}

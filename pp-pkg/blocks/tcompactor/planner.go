@@ -14,7 +14,8 @@ import (
 	"github.com/thanos-io/objstore"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 
-	"github.com/prometheus/prometheus/tcompactor/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor/tblock"
 )
 
 //
@@ -96,12 +97,12 @@ func NewPlanner(
 
 // Plan is the main function that plans the compaction of the blocks.
 func (p *TsdbBasedPlanner) Plan(_ context.Context, metasByMinTime []*metadata.Meta) ([]*metadata.Meta, bool, error) {
-	metas, overlappingBlocks := p.plan(p.noCompBlocksFunc(), metasByMinTime)
+	metas, overlappingBlocks := p.getPlan(p.noCompBlocksFunc(), metasByMinTime)
 	return metas, overlappingBlocks, nil
 }
 
-// plan is the main function that plans the compaction of the blocks.
-func (p *TsdbBasedPlanner) plan(
+// getPlan is the main function that plans the compaction of the blocks.
+func (p *TsdbBasedPlanner) getPlan(
 	noCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
 ) ([]*metadata.Meta, bool) {
@@ -133,9 +134,12 @@ func (p *TsdbBasedPlanner) plan(
 	// Compact any blocks with big enough time range that have >5% tombstones.
 	for i := len(notExcludedMetasByMinTime) - 1; i >= 0; i-- {
 		meta := notExcludedMetasByMinTime[i]
+		//revive:disable-next-line:add-constant // half ranges length
 		if meta.MaxTime-meta.MinTime < p.ranges[len(p.ranges)/2] {
 			break
 		}
+
+		//revive:disable-next-line:add-constant // calculate tombstones percentage
 		if float64(meta.Stats.NumTombstones)/float64(meta.Stats.NumSeries+1) > 0.05 {
 			return []*metadata.Meta{notExcludedMetasByMinTime[i]}, false
 		}
@@ -151,6 +155,7 @@ func (p *TsdbBasedPlanner) selectOverlappingMetas(metasByMinTime []*metadata.Met
 		return nil
 	}
 
+	//revive:disable-next-line:add-constant // check if metasByMinTime is valid
 	if len(metasByMinTime) < 2 {
 		return nil
 	}
@@ -178,11 +183,16 @@ func (p *TsdbBasedPlanner) selectOverlappingMetas(metasByMinTime []*metadata.Met
 
 // selectMetas returns the dir metas that should be compacted into a single new block.
 // If only a single block range is configured, the result is always nil.
+//
+//revive:disable-next-line:cognitive-complexity // selecting metas for compaction is a complex task
+//revive:disable-next-line:function-length // selecting metas for compaction is a complex task
+//revive:disable-next-line:cyclomatic // selecting metas for compaction is a complex task
 func selectMetas(
 	ranges []int64,
 	noCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
 ) []*metadata.Meta {
+	//revive:disable-next-line:add-constant // check if ranges and metasByMinTime are valid
 	if len(ranges) < 2 || len(metasByMinTime) < 1 {
 		return nil
 	}
@@ -203,6 +213,7 @@ func selectMetas(
 				}
 			}
 
+			//revive:disable-next-line:add-constant // check if part has at least 2 blocks
 			if len(p) < 2 {
 				continue
 			}
@@ -210,16 +221,17 @@ func selectMetas(
 			mint := p[0].MinTime
 			maxt := p[len(p)-1].MaxTime
 
-			// Pick the range of blocks if it spans the full range (potentially with gaps) or is before the most recent block.
-			// This ensures we don't compact blocks prematurely when another one of the same size still would fits in the range
-			// after upload.
+			// Pick the range of blocks if it spans the full range (potentially with gaps) or
+			// is before the most recent block. This ensures we don't compact blocks prematurely
+			// when another one of the same size still would fits in the range after upload.
 			if maxt-mint != iv && maxt > highTime {
 				continue
 			}
 
-			// Check if any of resulted blocks are excluded. Exclude them in a way that does not introduce gaps to the system
-			// as well as preserve the ranges that would be used if they were not excluded.
-			// This is meant as short-term workaround to create ability for marking some blocks to not be touched for compaction.
+			// Check if any of resulted blocks are excluded.
+			// Exclude them in a way that does not introduce gaps to the system as well as preserve the ranges
+			// that would be used if they were not excluded. This is meant as short-term workaround to create
+			// ability for marking some blocks to not be touched for compaction.
 			lastExcluded := 0
 			for i, id := range p {
 				if _, excluded := noCompactMarked[id.ULID]; !excluded {
@@ -325,11 +337,14 @@ func (t *largeTotalIndexSizeFilter) Plan(
 	ctx context.Context,
 	metasByMinTime []*metadata.Meta,
 ) ([]*metadata.Meta, bool, error) {
-	return t.plan(ctx, nil, metasByMinTime)
+	return t.getPlan(ctx, nil, metasByMinTime)
 }
 
-// plan is the main function that plans the compaction of the blocks without large index file size.
-func (t *largeTotalIndexSizeFilter) plan(
+// getPlan is the main function that plans the compaction of the blocks without large index file size.
+//
+//revive:disable-next-line:cognitive-complexity // planning compaction is a complex task
+//revive:disable-next-line:function-length // planning compaction is a complex task
+func (t *largeTotalIndexSizeFilter) getPlan(
 	ctx context.Context,
 	extraNoCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
@@ -341,7 +356,7 @@ func (t *largeTotalIndexSizeFilter) plan(
 
 PlanLoop:
 	for {
-		plan, overlappingBlocks := t.TsdbBasedPlanner.plan(copiedNoCompactMarked, metasByMinTime)
+		plan, overlappingBlocks := t.TsdbBasedPlanner.getPlan(copiedNoCompactMarked, metasByMinTime)
 
 		var totalIndexBytes, maxIndexSize int64 = 0, math.MinInt64
 		var biggestIndex int
@@ -376,7 +391,7 @@ PlanLoop:
 			// Leave 15% headroom for index compaction bloat.
 			if totalIndexBytes >= int64(float64(t.totalMaxIndexSizeBytes)*0.85) {
 				// Marking blocks for no compact to limit size.
-				if err := block.MarkForNoCompact(
+				if err := tblock.MarkForNoCompact(
 					ctx,
 					t.logger,
 					t.bw,
@@ -445,9 +460,8 @@ func (v *verticalCompactionDownsampleFilter) Plan(
 ) ([]*metadata.Meta, bool, error) {
 	noCompactMarked := make(map[ulid.ULID]*metadata.NoCompactMark, 0)
 
-PlanLoop:
 	for {
-		plan, overlappingBlocks, err := v.plan(ctx, noCompactMarked, metasByMinTime)
+		plan, overlappingBlocks, err := v.getPlan(ctx, noCompactMarked, metasByMinTime)
 		if err != nil {
 			return nil, overlappingBlocks, err
 		}
@@ -465,7 +479,7 @@ PlanLoop:
 				continue
 			}
 
-			if err := block.MarkForNoCompact(
+			if err := tblock.MarkForNoCompact(
 				ctx,
 				v.logger,
 				v.bw,
@@ -482,7 +496,7 @@ PlanLoop:
 		}
 
 		if marked {
-			continue PlanLoop
+			continue
 		}
 
 		return plan, overlappingBlocks, nil

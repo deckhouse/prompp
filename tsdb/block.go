@@ -227,6 +227,34 @@ func (bm *BlockMetaCompaction) FromOutOfOrder() bool {
 	return bm.containsHint(CompactionHintFromOutOfOrder)
 }
 
+// IsCorrupted returns true if the block marked as corrupted.
+func (bm *BlockMetaCompaction) IsCorrupted() bool {
+	return bm.containsHint(CompactionHintCorrupted)
+}
+
+// SetCorrupted marks the block as corrupted.
+func (bm *BlockMetaCompaction) SetCorrupted() bool {
+	if bm.containsHint(CompactionHintCorrupted) {
+		return false
+	}
+
+	bm.Hints = append(bm.Hints, CompactionHintCorrupted)
+	slices.Sort(bm.Hints)
+
+	return true
+}
+
+// UnsetCorrupted unmarks the block as corrupted.
+func (bm *BlockMetaCompaction) UnsetCorrupted() bool {
+	if !bm.containsHint(CompactionHintCorrupted) {
+		return false
+	}
+
+	bm.deleteHint(CompactionHintCorrupted)
+
+	return true
+}
+
 func (bm *BlockMetaCompaction) addHint(hint string) {
 	if bm.containsHint(hint) {
 		return
@@ -485,9 +513,11 @@ func (pb *Block) GetSymbolTableSize() uint64 {
 	return pb.symbolTableSize
 }
 
-func (pb *Block) setCompactionFailed() error {
+func (pb *Block) setCompactionFailed(
+	writeMetaFileFn func(logger log.Logger, dir string, meta *BlockMeta) (int64, error),
+) error {
 	pb.meta.Compaction.Failed = true
-	n, err := writeMetaFile(pb.logger, pb.dir, &pb.meta)
+	n, err := writeMetaFileFn(pb.logger, pb.dir, &pb.meta)
 	if err != nil {
 		return err
 	}

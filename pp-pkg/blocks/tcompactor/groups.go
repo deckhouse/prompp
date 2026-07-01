@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -17,7 +17,9 @@ import (
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/tcompactor/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor/tblock"
 	"github.com/prometheus/prometheus/tsdb"
 )
 
@@ -36,8 +38,8 @@ type Compactor interface {
 	CompactWithBlockPopulatorWithWriteMetaFile(
 		dest string,
 		dirs []string,
-		open []*tsdb.Block,
-		blockPopulator tsdb.BlockPopulator,
+		open []*block.Block,
+		blockPopulator lcompactor.BlockPopulator,
 		writeMetaFileFn func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error),
 	) ([]ulid.ULID, error)
 }
@@ -92,19 +94,20 @@ func NewDefaultGrouper(
 
 // Groups returns the compaction groups for all blocks currently known to the syncer.
 // It creates all groups from the scratch on every call.
-func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Group, err error) {
+func (g *DefaultGrouper) Groups(blocks []*block.Block) (res []*Group, err error) {
 	groups := map[string]*Group{}
-	for _, m := range blocks {
-		groupKey := m.Thanos.GroupKey()
+	for _, b := range blocks {
+		meta := b.Metadata()
+		groupKey := meta.Thanos.GroupKey()
 		group, ok := groups[groupKey]
 		if !ok {
-			lbls := labels.FromMap(m.Thanos.Labels)
-			resolutionLabel := m.Thanos.ResolutionString()
+			lbls := labels.FromMap(meta.Thanos.Labels)
+			resolutionLabel := meta.Thanos.ResolutionString()
 			group = NewGroup(
-				log.With(g.logger, "group", fmt.Sprintf("%s@%v", resolutionLabel, lbls.String()), "groupKey", groupKey),
+				log.With(g.logger, "group", fmt.Sprintf("%s@%s", resolutionLabel, lbls.String())),
 				groupKey,
 				lbls,
-				m.Thanos.Downsample.Resolution,
+				meta.Thanos.Downsample.Resolution,
 				g.compactions.WithLabelValues(resolutionLabel),
 				g.compactionRunsStarted.WithLabelValues(resolutionLabel),
 				g.compactionRunsCompleted.WithLabelValues(resolutionLabel),
@@ -117,7 +120,7 @@ func (g *DefaultGrouper) Groups(blocks map[ulid.ULID]*metadata.Meta) (res []*Gro
 			res = append(res, group)
 		}
 
-		if err := group.AppendMeta(m); err != nil {
+		if err := group.AppendMeta(meta); err != nil {
 			return nil, fmt.Errorf("add compaction group: %w", err)
 		}
 	}
@@ -140,7 +143,6 @@ type Group struct {
 	key                     string
 	labels                  labels.Labels
 	resolution              int64
-	mtx                     sync.Mutex // TODO: not need
 	metasByMinTime          []*metadata.Meta
 	compactions             prometheus.Counter
 	compactionRunsStarted   prometheus.Counter
@@ -183,9 +185,6 @@ func NewGroup(
 
 // AppendMeta the block with the given meta to the group.
 func (cg *Group) AppendMeta(meta *metadata.Meta) error {
-	cg.mtx.Lock()
-	defer cg.mtx.Unlock()
-
 	if !labels.Equal(cg.labels, labels.FromMap(meta.Thanos.Labels)) {
 		return errors.New("block and group labels do not match")
 	}
@@ -213,8 +212,8 @@ func (cg *Group) Compact(
 	dir string,
 	planner Planner,
 	comp Compactor,
-	blockPopulator tsdb.BlockPopulator,
-	open []*tsdb.Block,
+	blockPopulator lcompactor.BlockPopulator,
+	open []*block.Block,
 ) ([]ulid.ULID, error) {
 	cg.compactionRunsStarted.Inc()
 
@@ -229,18 +228,94 @@ func (cg *Group) Compact(
 	return compIDs, nil
 }
 
+// OverlappingBlocks returns all overlapping blocks from given meta files.
+//
+//revive:disable-next-line:cyclomatic // this is a complex algorithm
+//revive:disable-next-line:cognitive-complexity // this is a complex algorithm
+//revive:disable-next-line:function-length // this is a complex algorithm
+func (cg *Group) OverlappingBlocks(overlapGroups block.Overlaps) {
+	if len(cg.metasByMinTime) <= 1 {
+		return
+	}
+
+	var (
+		overlaps [][]tsdb.BlockMeta
+		// pending contains not ended blocks in regards to "current" timestamp.
+		pending = []tsdb.BlockMeta{cg.metasByMinTime[0].BlockMeta}
+		// continuousPending helps to aggregate same overlaps to single group.
+		continuousPending = true
+	)
+
+	// We have here blocks sorted by minTime.
+	// We iterate over each block and treat its minTime as our "current" timestamp.
+	// We check if any of the pending block finished (blocks that we have seen before,
+	// but their maxTime was still ahead current timestamp).
+	// If not, it means they overlap with our current block. In the same time current block is assumed pending.
+	metas := cg.metasByMinTime[1:]
+	for i := range metas {
+		var newPending []tsdb.BlockMeta
+
+		meta := metas[i].BlockMeta
+		for j := range pending {
+			// "meta.MinTime" is our current time.
+			if meta.MinTime >= pending[j].MaxTime {
+				continuousPending = false
+				continue
+			}
+
+			// "p" overlaps with "b" and "p" is still pending.
+			newPending = append(newPending, pending[j])
+		}
+
+		// Our block "b" is now pending.
+		pending = append(newPending, meta) //nolint:gocritic // appendAssign: reuse at next iteration
+		if len(newPending) == 0 {
+			// No overlaps.
+			continue
+		}
+
+		if continuousPending && len(overlaps) > 0 {
+			overlaps[len(overlaps)-1] = append(overlaps[len(overlaps)-1], meta)
+			continue
+		}
+		overlaps = append(overlaps, append(newPending, meta))
+		// Start new pendings.
+		continuousPending = true
+	}
+
+	// Fetch the critical overlapped time range foreach overlap groups.
+	for _, overlap := range overlaps {
+		minRange := block.TimeRange{Min: 0, Max: math.MaxInt64, Key: cg.String()}
+		for j := range overlap {
+			if minRange.Max > overlap[j].MaxTime {
+				minRange.Max = overlap[j].MaxTime
+			}
+
+			if minRange.Min < overlap[j].MinTime {
+				minRange.Min = overlap[j].MinTime
+			}
+		}
+
+		overlapGroups[minRange] = overlap
+	}
+}
+
+// String returns a human readable string representation of the group.
+func (cg *Group) String() string {
+	return fmt.Sprintf("%d@%s", cg.resolution, cg.labels.String())
+}
+
 // runCompact plans and runs a single compaction against the group.
+//
+//revive:disable-next-line:function-length // running compaction is a complex task
 func (cg *Group) runCompact(
 	ctx context.Context,
 	dir string,
 	planner Planner,
 	comp Compactor,
-	blockPopulator tsdb.BlockPopulator,
-	open []*tsdb.Block,
+	blockPopulator lcompactor.BlockPopulator,
+	open []*block.Block,
 ) ([]ulid.ULID, error) {
-	cg.mtx.Lock()
-	defer cg.mtx.Unlock()
-
 	toCompact, overlappingBlocks, err := planner.Plan(ctx, cg.metasByMinTime)
 	if err != nil {
 		return nil, fmt.Errorf("plan compaction: %w", err)
@@ -251,7 +326,7 @@ func (cg *Group) runCompact(
 		return nil, nil
 	}
 
-	level.Info(cg.logger).Log("msg", "compaction available and planned", "plan", fmt.Sprintf("%v", toCompact))
+	_ = level.Info(cg.logger).Log("msg", "compaction available and planned", "plan", fmt.Sprintf("%v", toCompact))
 
 	toCompactDirs := make([]string, 0, len(toCompact))
 	for _, m := range toCompact {
@@ -265,7 +340,7 @@ func (cg *Group) runCompact(
 		toCompactDirs,
 		open,
 		blockPopulator,
-		block.WriteThanosMetaFile(ctx, cg.resolution, cg.labels, cg.acceptMalformedIndex),
+		tblock.WriteThanosMetaFileAdapter(ctx, cg.resolution, cg.labels, cg.acceptMalformedIndex),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("compact blocks: %w", err)
@@ -287,9 +362,9 @@ func (cg *Group) runCompact(
 		compIDStrings = append(compIDStrings, compID.String())
 	}
 
-	level.Info(cg.logger).Log(
+	_ = level.Info(cg.logger).Log(
 		"msg", "compacted blocks",
-		"new", fmt.Sprintf("%v", compIDStrings),
+		"new", fmt.Sprintf("%v", compIDStrings), //revive:disable-line:add-constant // to string value
 		"duration", time.Since(begin),
 		"overlapping_blocks", overlappingBlocks,
 		"source_blocks", sourceBlockStr,

@@ -1,4 +1,4 @@
-package block
+package tblock
 
 import (
 	"context"
@@ -86,7 +86,7 @@ type HealthStats struct {
 // OutOfOrderLabelsErr returns an error if the HealthStats object indicates
 // postings with out of order labels.  This is corrected by Prometheus Issue
 // #5372 and affects Prometheus versions 2.8.0 and below.
-func (i HealthStats) OutOfOrderLabelsErr() error {
+func (i *HealthStats) OutOfOrderLabelsErr() error {
 	if i.OutOfOrderLabels > 0 {
 		return fmt.Errorf("index contains %d postings with out of order labels", i.OutOfOrderLabels)
 	}
@@ -96,7 +96,7 @@ func (i HealthStats) OutOfOrderLabelsErr() error {
 
 // Issue347OutsideChunksErr returns error if stats indicates issue347 block issue,
 // that is repaired explicitly before compaction (on plan block).
-func (i HealthStats) Issue347OutsideChunksErr() error {
+func (i *HealthStats) Issue347OutsideChunksErr() error {
 	if i.Issue347OutsideChunks > 0 {
 		return fmt.Errorf(
 			"found %d chunks outside the block time range introduced by https://github.com/prometheus/tsdb/issues/347",
@@ -109,7 +109,7 @@ func (i HealthStats) Issue347OutsideChunksErr() error {
 
 // OutOfOrderChunksErr returns an error if the HealthStats object indicates
 // series with out of order chunks.
-func (i HealthStats) OutOfOrderChunksErr() error {
+func (i *HealthStats) OutOfOrderChunksErr() error {
 	if i.OutOfOrderChunks > 0 {
 		return fmt.Errorf(
 			"%d/%d series have an average of %.3f out-of-order chunks: "+
@@ -125,7 +125,7 @@ func (i HealthStats) OutOfOrderChunksErr() error {
 }
 
 // CriticalErr returns error if stats indicates critical block issue, that might solved only by manual repair procedure.
-func (i HealthStats) CriticalErr() error {
+func (i *HealthStats) CriticalErr() error {
 	var errMsg []string
 
 	n := i.OutsideChunks - (i.CompleteOutsideChunks + i.Issue347OutsideChunks)
@@ -148,7 +148,7 @@ func (i HealthStats) CriticalErr() error {
 }
 
 // AnyErr returns error if stats indicates any block issue.
-func (i HealthStats) AnyErr() error {
+func (i *HealthStats) AnyErr() error {
 	var errMsg []string
 
 	if err := i.CriticalErr(); err != nil {
@@ -215,6 +215,21 @@ func (n *minMaxSumInt64) Avg() int64 {
 	return n.sum / n.cnt
 }
 
+// MaxMillisecond returns the maximum value in the minMaxSumInt64 struct as a time.Duration.
+func (n *minMaxSumInt64) MaxMillisecond() time.Duration {
+	return time.Duration(n.max) * time.Millisecond
+}
+
+// MinMillisecond returns the minimum value in the minMaxSumInt64 struct as a time.Duration.
+func (n *minMaxSumInt64) MinMillisecond() time.Duration {
+	return time.Duration(n.min) * time.Millisecond
+}
+
+// AvgMillisecond returns the average value in the minMaxSumInt64 struct as a time.Duration.
+func (n *minMaxSumInt64) AvgMillisecond() time.Duration {
+	return time.Duration(n.Avg()) * time.Millisecond
+}
+
 //
 // Functions
 //
@@ -223,6 +238,10 @@ func (n *minMaxSumInt64) Avg() int64 {
 // helps to assess index health.
 // It considers https://github.com/prometheus/tsdb/issues/347 as something that Thanos can handle.
 // See HealthStats.Issue347OutsideChunks for details.
+//
+//revive:disable-next-line:cyclomatic // calculating health stats is a complex task
+//revive:disable-next-line:function-length // calculating health stats is a complex task
+//revive:disable-next-line:cognitive-complexity // calculating health stats is a complex task
 func GatherIndexHealthStats(
 	ctx context.Context,
 	logger log.Logger,
@@ -272,8 +291,8 @@ func GatherIndexHealthStats(
 	// we get have to account for that to get the correct offset.
 	offsetMultiplier := 1
 	version := r.Version()
-	if version >= 2 {
-		offsetMultiplier = 16
+	if version >= index.FormatV2 {
+		offsetMultiplier = 16 //revive:disable-line:add-constant // offset multiplier is constant
 	}
 
 	// Per series.
@@ -284,12 +303,12 @@ func GatherIndexHealthStats(
 		id := p.At()
 		if prevID != 0 {
 			// Approximate size.
-			seriesSize.Add(int64(id-prevID) * int64(offsetMultiplier))
+			seriesSize.Add(int64(id-prevID) * int64(offsetMultiplier)) // #nosec G115 // no overflow
 		}
 		prevID = id
 		stats.TotalSeries++
 
-		if err := r.Series(id, &builder, &chks); err != nil {
+		if err = r.Series(id, &builder, &chks); err != nil {
 			return stats, fmt.Errorf("read series: %w", err)
 		}
 
@@ -307,7 +326,7 @@ func GatherIndexHealthStats(
 			if l0 != nil {
 				if l.Name < l0.Name {
 					stats.OutOfOrderLabels++
-					level.Warn(logger).Log(
+					_ = level.Warn(logger).Log(
 						"msg", "out-of-order label set: known bug in Prometheus 2.8.0 and below",
 						"labelset", lset.String(),
 						"series", fmt.Sprintf("%d", id),
@@ -336,7 +355,7 @@ func GatherIndexHealthStats(
 			}
 
 			// Approximate size.
-			if i < len(chks)-2 {
+			if i < len(chks)-2 { //revive:disable-line:add-constant // prev check is for the last chunk
 				sgmIndex, chkStart := chunks.BlockChunkRef(c.Ref).Unpack()
 				sgmIndex2, chkStart2 := chunks.BlockChunkRef(chks[i+1].Ref).Unpack()
 				// Skip the case where two chunks are spread into 2 files.
@@ -380,7 +399,7 @@ func GatherIndexHealthStats(
 		if ooo > 0 {
 			stats.OutOfOrderSeries++
 			stats.OutOfOrderChunks += ooo
-			level.Debug(logger).Log("msg", "found out of order series", "labels", lset)
+			_ = level.Debug(logger).Log("msg", "found out of order series", "labels", lset)
 		}
 
 		seriesChunks.Add(int64(len(chks)))
@@ -396,13 +415,13 @@ func GatherIndexHealthStats(
 		return stats, fmt.Errorf("walk postings: %w", err)
 	}
 
-	stats.SeriesMaxLifeDuration = time.Duration(seriesLifeDuration.max) * time.Millisecond
-	stats.SeriesAvgLifeDuration = time.Duration(seriesLifeDuration.Avg()) * time.Millisecond
-	stats.SeriesMinLifeDuration = time.Duration(seriesLifeDuration.min) * time.Millisecond
+	stats.SeriesMaxLifeDuration = seriesLifeDuration.MaxMillisecond()
+	stats.SeriesAvgLifeDuration = seriesLifeDuration.AvgMillisecond()
+	stats.SeriesMinLifeDuration = seriesLifeDuration.MinMillisecond()
 
-	stats.SeriesMaxLifeDurationWithoutSingleSampleSeries = time.Duration(seriesLifeDurationWithoutSingleSampleSeries.max) * time.Millisecond
-	stats.SeriesAvgLifeDurationWithoutSingleSampleSeries = time.Duration(seriesLifeDurationWithoutSingleSampleSeries.Avg()) * time.Millisecond
-	stats.SeriesMinLifeDurationWithoutSingleSampleSeries = time.Duration(seriesLifeDurationWithoutSingleSampleSeries.min) * time.Millisecond
+	stats.SeriesMaxLifeDurationWithoutSingleSampleSeries = seriesLifeDurationWithoutSingleSampleSeries.MaxMillisecond()
+	stats.SeriesAvgLifeDurationWithoutSingleSampleSeries = seriesLifeDurationWithoutSingleSampleSeries.AvgMillisecond()
+	stats.SeriesMinLifeDurationWithoutSingleSampleSeries = seriesLifeDurationWithoutSingleSampleSeries.MinMillisecond()
 
 	stats.SeriesMaxChunks = seriesChunks.max
 	stats.SeriesAvgChunks = seriesChunks.Avg()
@@ -416,9 +435,9 @@ func GatherIndexHealthStats(
 	stats.SeriesAvgSize = seriesSize.Avg()
 	stats.SeriesMinSize = seriesSize.min
 
-	stats.ChunkMaxDuration = time.Duration(chunkDuration.max) * time.Millisecond
-	stats.ChunkAvgDuration = time.Duration(chunkDuration.Avg()) * time.Millisecond
-	stats.ChunkMinDuration = time.Duration(chunkDuration.min) * time.Millisecond
+	stats.ChunkMaxDuration = chunkDuration.MaxMillisecond()
+	stats.ChunkAvgDuration = chunkDuration.AvgMillisecond()
+	stats.ChunkMinDuration = chunkDuration.MinMillisecond()
 
 	return stats, nil
 }

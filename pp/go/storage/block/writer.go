@@ -2,6 +2,7 @@ package block
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,9 +24,12 @@ var LsIdBatchSize uint32 = 100000
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
+	DataStorage() *shard.DataStorage
+
 	LSS() *shard.LSS
 
-	DataStorage() *shard.DataStorage
+	// ShardID returns the shard ID.
+	ShardID() uint16
 
 	UnloadedDataStorage() *shard.UnloadedDataStorage
 }
@@ -66,8 +70,8 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 			return err
 		}
 		defer func() {
-			if err := writers.Close(); err != nil {
-				logger.Warnf("Failed to close block writers: %v", err)
+			if errClose := writers.Close(); errClose != nil {
+				logger.Warnf("Failed to close block writers: %v", errClose)
 			}
 		}()
 
@@ -89,6 +93,8 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 
 	timeInterval := sd.DataStorage().TimeInterval(false)
 
+	//revive:disable-next-line:add-constant // it's base 10
+	tLabels := map[string]string{"shard_id": strconv.FormatUint(uint64(sd.ShardID()), 10)}
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -110,6 +116,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			w.maxBlockChunkSegmentSize,
 			NewIndexWriter(sd.LSS().Target()),
 			chunkIterator,
+			tLabels,
 		)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())

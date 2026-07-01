@@ -513,13 +513,13 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 				)
 
 				// mark as corrupted for skipping
-				meta.Compaction.addHint(CompactionHintCorrupted)
-				if _, err := writeMetaFile(c.logger, d, meta); err != nil {
-					return nil, fmt.Errorf("write meta file: %w", err)
+				if meta.Compaction.SetCorrupted() {
+					if _, err := writeMetaFileFn(c.logger, d, meta); err != nil {
+						return nil, fmt.Errorf("write meta file: %w", err)
+					}
 				}
 
 				continue
-				// return nil, err
 				// PP_CHANGES.md: rebuild on cpp end
 			}
 			defer b.Close()
@@ -539,7 +539,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 		if meta.Stats.NumSamples == 0 {
 			for _, b := range bs {
 				b.meta.Compaction.Deletable = true
-				n, err := writeMetaFile(c.logger, b.dir, &b.meta)
+				n, err := writeMetaFileFn(c.logger, b.dir, &b.meta)
 				if err != nil {
 					level.Error(c.logger).Log(
 						"msg", "Failed to write 'Deletable' to meta file after compaction",
@@ -572,7 +572,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 	errs := tsdb_errors.NewMulti(err)
 	if !errors.Is(err, context.Canceled) {
 		for _, b := range bs {
-			if err := b.setCompactionFailed(); err != nil {
+			if err := b.setCompactionFailed(writeMetaFileFn); err != nil {
 				errs.Add(fmt.Errorf("setting compaction failed for block: %s: %w", b.Dir(), err))
 			}
 		}

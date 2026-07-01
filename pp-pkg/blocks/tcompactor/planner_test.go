@@ -18,8 +18,8 @@ import (
 	"github.com/thanos-io/objstore"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 
-	"github.com/prometheus/prometheus/tcompactor"
-	"github.com/prometheus/prometheus/tcompactor/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	"github.com/prometheus/prometheus/tsdb"
 )
 
@@ -708,6 +708,7 @@ func (s *TsdbBasedPlannerSuite) TestPlanCompatibilityDisabledOverlappingCompacti
 	}
 }
 
+//revive:disable-next-line:cognitive-complexity // this is test
 func (s *TsdbBasedPlannerSuite) TestLargeTotalIndexSizeFilterPlan() {
 	bkt := objstore.NewInMemBucket()
 	marked := promauto.With(nil).NewCounter(prometheus.CounterOpts{})
@@ -960,7 +961,11 @@ func (s *TsdbBasedPlannerSuite) TestLargeTotalIndexSizeFilterPlan() {
 				})
 
 				for _, m := range metasByMinTime {
-					s.Require().NoError(bkt.Upload(context.Background(), filepath.Join(m.ULID.String(), block.IndexFilename), bytes.NewReader(make([]byte, m.Thanos.Files[0].SizeBytes))))
+					s.Require().NoError(bkt.Upload(
+						s.T().Context(),
+						filepath.Join(m.ULID.String(), block.IndexFilename),
+						bytes.NewReader(make([]byte, m.Thanos.Files[0].SizeBytes))),
+					)
 					m.Thanos = metadata.Thanos{}
 				}
 

@@ -1,4 +1,4 @@
-package block
+package tblock
 
 import (
 	"bytes"
@@ -15,15 +15,9 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
-)
-
-const (
-	// IndexFilename is the known index file for block index.
-	IndexFilename = "index"
-
-	// ChunksDirname is the known dir name for chunks with compressed samples.
-	ChunksDirname = "chunks"
 )
 
 //
@@ -60,7 +54,7 @@ func MarkForNoCompact(
 	}
 
 	if noCompactMarkExists {
-		level.Warn(logger).Log(
+		_ = level.Warn(logger).Log(
 			"msg", "requested to mark for no compaction, but file already exists; this should not happen; investigate",
 			"err", fmt.Errorf("file %s already exists in bucket", m),
 		)
@@ -83,7 +77,7 @@ func MarkForNoCompact(
 	}
 
 	markedForNoCompact.Inc()
-	level.Info(logger).Log("msg", "block has been marked for no compaction", "block", id)
+	_ = level.Info(logger).Log("msg", "block has been marked for no compaction", "block", id)
 
 	return nil
 }
@@ -91,7 +85,7 @@ func MarkForNoCompact(
 // GetSegmentFiles returns list of segment files for given block. Paths are relative to the chunks directory.
 // In case of errors, nil is returned.
 func GetSegmentFiles(blockDir string) []string {
-	files, err := os.ReadDir(filepath.Join(blockDir, ChunksDirname))
+	files, err := os.ReadDir(filepath.Join(blockDir, block.ChunksDirname))
 	if err != nil {
 		return nil
 	}

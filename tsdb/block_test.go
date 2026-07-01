@@ -62,7 +62,7 @@ func TestSetCompactionFailed(t *testing.T) {
 	b, err := OpenBlock(nil, blockDir, nil)
 	require.NoError(t, err)
 	require.False(t, b.meta.Compaction.Failed)
-	require.NoError(t, b.setCompactionFailed())
+	require.NoError(t, b.setCompactionFailed(writeMetaFile))
 	require.True(t, b.meta.Compaction.Failed)
 	require.NoError(t, b.Close())
 
