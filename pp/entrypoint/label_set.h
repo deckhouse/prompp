@@ -31,6 +31,30 @@ void prompp_label_set_length(void* args, void* res);
 void prompp_label_set_serialize_from_snapshot(void* args, void* res);
 
 /**
+ * @brief get serialized label set buffer length by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     labelSetID uint32                       // series id
+ *     length     uint32                       // serialized buffer length
+ * }
+ *
+ */
+void prompp_label_set_serialize_from_snapshot_length(void* args);
+
+/**
+ * @brief serialize label set into buffer by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     buffer     [] byte                      // allocated buffer
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ */
+void prompp_label_set_serialize_from_snapshot_to_buffer(void* args);
+
+/**
  * @brief free label set returned by prompp_label_set_serialize_from_snapshot
  *
  * @param args {

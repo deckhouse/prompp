@@ -71,14 +71,7 @@ func (ss *InstantSeriesSet) Next() bool {
 	}
 
 	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
-	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(
-		ss.labelSetSnapshot,
-		lsID,
-		builder,
-	)
-	builderPool.Put(builder)
+	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(ss.labelSetSnapshot, lsID)
 
 	ss.nextSeriesIndex++
 	return true

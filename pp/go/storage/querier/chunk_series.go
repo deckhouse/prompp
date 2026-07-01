@@ -88,13 +88,10 @@ func (css *ChunkSeriesSet) Next() bool {
 		css.index++
 	}
 
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, builder),
+		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID),
 		recodedChunks: recodedChunks,
 	}
-	builderPool.Put(builder)
 
 	return true
 }
