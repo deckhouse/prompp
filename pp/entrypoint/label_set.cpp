@@ -2,6 +2,7 @@
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/iterator.h"
+#include "bare_bones/varint.h"
 #include "entrypoint/head/lss.h"
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
@@ -25,7 +26,7 @@ void prompp_label_set_length(void* args, void* res) {
   std::visit([in, res](auto& lss) { new (res) Result{.length = lss[in->series_id].size()}; }, *in->lss);
 }
 
-void prompp_label_set_serialize_from_snapshot(void* args, void* res) {
+extern "C" void prompp_label_set_serialize_from_snapshot(void* args, void* res) {
   using PromPP::Primitives::Go::Label;
   using PromPP::Primitives::Go::String;
 
@@ -47,6 +48,55 @@ void prompp_label_set_serialize_from_snapshot(void* args, void* res) {
         out_label_set.reserve(in_label_set.size());
         std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
                                [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
+      },
+      *in->snapshot);
+}
+
+extern "C" void prompp_label_set_serialize_from_snapshot_length(void* args) {
+  using BareBones::Encoding::VarInt;
+
+  struct Arguments {
+    SnapshotLSSVariantPtr snapshot;
+    uint32_t series_id;
+    uint32_t length;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  std::visit(
+      [in](auto& snapshot) {
+        uint32_t length{};
+        for (const auto label_set = snapshot[in->series_id]; auto label : label_set) {
+          length += VarInt::length(label.first.size()) + label.first.size() + VarInt::length(label.second.size()) + label.second.size();
+        }
+        in->length = length;
+      },
+      *in->snapshot);
+}
+
+extern "C" void prompp_label_set_serialize_from_snapshot_to_buffer(void* args) {
+  using BareBones::Encoding::VarInt;
+
+  struct Arguments {
+    SnapshotLSSVariantPtr snapshot;
+    Slice<uint8_t> buffer;
+    uint32_t series_id;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  std::visit(
+      [in](auto& snapshot) {
+        auto buffer = in->buffer.data();
+        for (const auto label_set = snapshot[in->series_id]; auto label : label_set) {
+          buffer += VarInt::write(buffer, static_cast<uint64_t>(label.first.size()));
+          std::memcpy(buffer, label.first.data(), label.first.size());
+          buffer += label.first.size();
+
+          buffer += VarInt::write(buffer, static_cast<uint64_t>(label.second.size()));
+          std::memcpy(buffer, label.second.data(), label.second.size());
+          buffer += label.second.size();
+        }
       },
       *in->snapshot);
 }

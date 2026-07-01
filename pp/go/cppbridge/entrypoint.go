@@ -3263,6 +3263,37 @@ func labelSetSerializeFromSnapshot(snapshot uintptr, labelSetID uint32) []Label 
 	return res.labelSet
 }
 
+func labelSetSerializeFromSnapshotLength(snapshot uintptr, labelSetID uint32) uint32 {
+	args := struct {
+		snapshot   uintptr
+		labelSetID uint32
+		length     uint32
+	}{snapshot, labelSetID, 0}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_label_set_serialize_from_snapshot_length,
+		uintptr(unsafe.Pointer(&args)),
+	)
+
+	return args.length
+}
+
+func labelSetSerializeFromSnapshotToBuffer(snapshot uintptr, labelSetID uint32, buffer []byte) {
+	args := struct {
+		snapshot   uintptr
+		buffer     []byte
+		labelSetID uint32
+	}{snapshot, buffer, labelSetID}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_label_set_serialize_from_snapshot_to_buffer,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(buffer)
+}
+
 func labelSetFree(labelSet []Label) {
 	if labelSet == nil {
 		return
