@@ -26,6 +26,9 @@ import (
 )
 
 const (
+	// DefaultBlockDuration in milliseconds.
+	DefaultBlockDuration = int64(2 * time.Hour / time.Millisecond)
+
 	// ChunksDirname is the known dir name for chunks with compressed samples.
 	ChunksDirname = "chunks"
 

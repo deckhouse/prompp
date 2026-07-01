@@ -63,7 +63,9 @@ type Manager struct {
 }
 
 // compactionRunner runs a single compaction pass over the on-disk blocks,
-// reporting whether a compaction was performed. Implemented by *Compactor.
+// reporting whether a compaction was performed and the ULIDs of the blocks it
+// created (so the driver can remove them if the following reload fails).
+// Implemented by *Compactor.
 type compactionRunner interface {
 	// Compact creates a new block in the compactor's directory from the blocks in the provided directories.
 	Compact(open []*block.Block) ([]ulid.ULID, error)
@@ -155,10 +157,13 @@ func (m *Manager) reloadAndCompact() {
 			return
 		}
 		// Reload to load the freshly created block and delete the obsolete
-		// parents before planning the next compaction.
+		// parents before planning the next compaction. If the reload fails,
+		// remove the freshly compacted block(s) so a half-applied compaction
+		// does not leave orphaned blocks on disk (mirroring tsdb).
 		if err := m.reloadBlocks(); err != nil {
 			//revive:disable-next-line:add-constant // this is log
 			_ = level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
+			m.deleteCompactedBlocks(compacted)
 			return
 		}
 	}
@@ -252,8 +257,7 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 	), nil
 }
 
-// Blocks returns a snapshot of the currently loaded blocks. It implements
-// [BlockSource].
+// Blocks returns a snapshot of the currently loaded blocks. It implements [BlockSource].
 func (m *Manager) Blocks() []*block.Block {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
@@ -359,15 +363,15 @@ func (m *Manager) reloadBlocks() (err error) {
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time
 	// as there might be loadable ready to be removed (replaced by compacted block).
-	for _, b := range loadable {
-		if _, ok := deletable[b.Meta().ULID]; ok {
-			deletable[b.Meta().ULID] = b
+	for _, blk := range loadable {
+		if _, ok := deletable[blk.Meta().ULID]; ok {
+			deletable[blk.Meta().ULID] = blk
 			continue
 		}
 
-		toLoad = append(toLoad, b)
-		blocksSize += b.Size()
-		durationMinutes := normalizeBlockDurationMinutes(b.Meta().MaxTime - b.Meta().MinTime)
+		toLoad = append(toLoad, blk)
+		blocksSize += blk.Size()
+		durationMinutes := normalizeBlockDurationMinutes(blk.Meta().MaxTime - blk.Meta().MinTime)
 		blocksByDurationMins[durationMinutes]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
@@ -393,11 +397,6 @@ func (m *Manager) reloadBlocks() (err error) {
 
 	// Only check overlapping blocks when overlapping compaction is enabled.
 	if m.opts.EnableOverlappingCompaction {
-		// blockMetas := make([]tsdb.BlockMeta, 0, len(toLoad))
-		// for _, b := range toLoad {
-		// 	blockMetas = append(blockMetas, b.Meta())
-		// }
-
 		overlaps, err := m.compactor.OverlappingBlocks(toLoad)
 		if err != nil {
 			_ = level.Error(m.logger).Log("msg", "get overlapping blocks failed", "err", err)
@@ -424,9 +423,9 @@ func (m *Manager) reloadBlocks() (err error) {
 }
 
 func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*block.Block) error {
-	for uid, b := range blocks {
-		if b != nil {
-			if err := b.Close(); err != nil {
+	for uid, blk := range blocks {
+		if blk != nil {
+			if err := blk.Close(); err != nil {
 				//revive:disable-next-line:add-constant // this is log
 				_ = level.Warn(m.logger).Log("msg", "Closing block failed", "err", err, "block", uid)
 			}
@@ -455,6 +454,18 @@ func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*block.Block) error {
 	}
 
 	return nil
+}
+
+// deleteCompactedBlocks removes the given block directories from disk. It is used
+// to clean up freshly compacted blocks when the reload that would have loaded
+// them fails, so a half-applied compaction does not leave orphaned blocks behind
+// (mirroring tsdb).
+func (m *Manager) deleteCompactedBlocks(uids []ulid.ULID) {
+	for _, uid := range uids {
+		if err := os.RemoveAll(filepath.Join(m.dir, uid.String())); err != nil {
+			_ = level.Error(m.logger).Log("msg", "delete compacted block after failed reload", "block", uid, "err", err)
+		}
+	}
 }
 
 // isOutdatedBlock checks if a block is outdated based on its ULID and retention duration.

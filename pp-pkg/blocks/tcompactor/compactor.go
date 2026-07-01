@@ -12,7 +12,6 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
-	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
@@ -56,6 +55,7 @@ type TCompactor struct {
 	grouper        *DefaultGrouper
 	planner        Planner
 	blockPopulator lcompactor.BlockPopulator
+	metrics        *metrics
 }
 
 // NewTCompactor creates a new [TCompactor].
@@ -72,7 +72,7 @@ func NewTCompactor(
 
 	minBlockDuration := opts.MinBlockDuration
 	if minBlockDuration <= 0 {
-		minBlockDuration = tsdb.DefaultBlockDuration
+		minBlockDuration = block.DefaultBlockDuration
 	}
 
 	rngs := lcompactor.CompactionRanges(minBlockDuration, opts.MaxBlockDuration)
@@ -100,6 +100,7 @@ func NewTCompactor(
 		grouper:        NewDefaultGrouper(logger, reg, opts.AcceptMalformedIndex),
 		planner:        planner,
 		blockPopulator: lcompactor.DefaultBlockPopulator{},
+		metrics:        newMetrics(reg),
 	}, nil
 }
 
@@ -109,8 +110,10 @@ func NewTCompactor(
 //  2. The compactor compacts the blocks in the plan.
 //  3. The compactor returns the ULIDs of the compacted blocks.
 func (c *TCompactor) Compact(open []*block.Block) ([]ulid.ULID, error) {
+	c.metrics.compactionsTriggered.Inc()
 	groups, err := c.grouper.Groups(open)
 	if err != nil {
+		c.metrics.compactionsFailed.Inc()
 		return nil, fmt.Errorf("group blocks: %w", err)
 	}
 
@@ -118,6 +121,7 @@ func (c *TCompactor) Compact(open []*block.Block) ([]ulid.ULID, error) {
 	for _, group := range groups {
 		compIDs, err := group.Compact(c.ctx, c.dir, c.planner, c.lCompactor, c.blockPopulator, open)
 		if err != nil {
+			c.metrics.compactionsFailed.Inc()
 			return res, fmt.Errorf("compact group: %w", err)
 		}
 
@@ -147,4 +151,37 @@ func (c *TCompactor) OverlappingBlocks(open []*block.Block) (block.Overlaps, err
 	}
 
 	return overlaps, nil
+}
+
+//
+// metrics
+//
+
+// metrics collects metrics for the compactor.
+type metrics struct {
+	compactionsTriggered prometheus.Counter
+	compactionsFailed    prometheus.Counter
+}
+
+// newMetrics creates new [metrics] for the compactor.
+func newMetrics(r prometheus.Registerer) *metrics {
+	m := &metrics{
+		compactionsTriggered: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "prometheus_tsdb_compactions_triggered_total",
+			Help: "Total number of triggered compactions for the partition.",
+		}),
+		compactionsFailed: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "prometheus_tsdb_compactions_failed_total",
+			Help: "Total number of compactions that failed for the partition.",
+		}),
+	}
+
+	if r != nil {
+		r.MustRegister(
+			m.compactionsTriggered,
+			m.compactionsFailed,
+		)
+	}
+
+	return m
 }
