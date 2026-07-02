@@ -1231,7 +1231,11 @@ func BenchmarkCompaction(b *testing.B) {
 				blockDirs := make([]string, 0, len(c.ranges))
 				var blocks []*block.Block
 				for _, r := range c.ranges {
-					block, err := block.OpenBlock(nil, testutils.CreateBlock(b, dir, testutils.GenSeries(nSeries, 10, r[0], r[1])), nil)
+					block, err := block.OpenBlock(
+						nil,
+						testutils.CreateBlock(b, dir, testutils.GenSeries(nSeries, 10, r[0], r[1])),
+						nil,
+					)
 					require.NoError(b, err)
 					blocks = append(blocks, block)
 					defer func() {
