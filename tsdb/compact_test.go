@@ -446,7 +446,7 @@ func TestCompactionFailWillCleanUpTempDir(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	require.Error(t, compactor.write(tmpdir, &BlockMeta{}, DefaultBlockPopulator{}, writeMetaFile, erringBReader{}))
+	require.Error(t, compactor.write(tmpdir, &BlockMeta{}, DefaultBlockPopulator{}, erringBReader{}))
 	_, err = os.Stat(filepath.Join(tmpdir, BlockMeta{}.ULID.String()) + tmpForCreationBlockDirSuffix)
 	require.True(t, os.IsNotExist(err), "directory is not cleaned up")
 }

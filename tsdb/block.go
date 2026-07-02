@@ -513,11 +513,9 @@ func (pb *Block) GetSymbolTableSize() uint64 {
 	return pb.symbolTableSize
 }
 
-func (pb *Block) setCompactionFailed(
-	writeMetaFileFn func(logger log.Logger, dir string, meta *BlockMeta) (int64, error),
-) error {
+func (pb *Block) setCompactionFailed() error {
 	pb.meta.Compaction.Failed = true
-	n, err := writeMetaFileFn(pb.logger, pb.dir, &pb.meta)
+	n, err := writeMetaFile(pb.logger, pb.dir, &pb.meta)
 	if err != nil {
 		return err
 	}
