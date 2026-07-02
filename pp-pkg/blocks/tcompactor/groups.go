@@ -23,7 +23,7 @@ import (
 	"github.com/prometheus/prometheus/tsdb"
 )
 
-// Compactor is the interface for the [tsdb.LeveledCompactor].
+// Compactor is the interface for the [lcompactor.LeveledCompactor].
 type Compactor interface {
 	// Compact runs compaction against the provided directories. Must
 	// only be called concurrently with results of Plan().

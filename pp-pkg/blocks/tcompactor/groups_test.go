@@ -1,9 +1,11 @@
 package tcompactor_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/go-kit/log"
+	"github.com/oklog/ulid"
 	"github.com/stretchr/testify/suite"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 
@@ -11,8 +13,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor/mock"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 type GrouperSuite struct {
@@ -60,6 +66,190 @@ func (s *GrouperSuite) TestTwoGroupsByResolution() {
 }
 
 //
+// GroupCompactSuite
+//
+
+type GroupCompactSuite struct {
+	suite.Suite
+}
+
+func TestGroupCompactSuite(t *testing.T) {
+	suite.Run(t, new(GroupCompactSuite))
+}
+
+func (s *GroupCompactSuite) TestHappyPath() {
+	noopCounter := promauto.With(nil).NewCounter(prometheus.CounterOpts{Name: "noop", Help: "noop"})
+	ls := map[string]string{"foo": "bar"}
+
+	blks := []*block.Block{{}, {}}
+	blks[0].Metadata().Thanos.Labels = ls
+	blks[1].Metadata().Thanos.Labels = ls
+
+	group := tcompactor.NewGroup(
+		log.NewNopLogger(),
+		s.T().Name(),
+		labels.FromMap(ls),
+		0,
+		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
+		false,
+	)
+
+	for i := range blks {
+		s.Require().NoError(group.AppendMeta(blks[i].Metadata()))
+	}
+
+	planner := &mock.PlannerMock{
+		PlanFunc: func(_ context.Context, metasByMinTime []*metadata.Meta) ([]*metadata.Meta, bool, error) {
+			s.Len(metasByMinTime, len(blks))
+			return metasByMinTime, false, nil
+		},
+	}
+
+	compactor := &mock.CompactorMock{
+		CompactWithBlockPopulatorWithWriteMetaFileFunc: func(
+			_ string,
+			dirs []string,
+			open []*block.Block,
+			populator lcompactor.BlockPopulator,
+			_ func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error),
+		) ([]ulid.ULID, error) {
+			s.Len(dirs, len(blks))
+			s.Len(open, len(blks))
+			brs := make([]tsdb.BlockReader, len(open))
+			for i := range open {
+				brs[i] = open[i]
+			}
+
+			s.Require().NoError(populator.PopulateBlock(s.T().Context(), nil, nil, nil, nil, brs, nil, nil, nil, nil))
+			return []ulid.ULID{ulid.MustNew(1, nil)}, nil
+		},
+	}
+
+	blockPopulator := &mock.BlockPopulatorMock{
+		PopulateBlockFunc: func(
+			_ context.Context,
+			_ *lcompactor.CompactorMetrics,
+			_ log.Logger,
+			_ chunkenc.Pool,
+			_ storage.VerticalChunkSeriesMergeFunc,
+			blocks []tsdb.BlockReader,
+			_ *tsdb.BlockMeta,
+			_ tsdb.IndexWriter,
+			_ tsdb.ChunkWriter,
+			_ tsdb.IndexReaderPostingsFunc,
+		) error {
+			s.Len(blocks, len(blks))
+			return nil
+		},
+	}
+
+	ulids, err := group.Compact(s.T().Context(), "test-dir", planner, compactor, blockPopulator, blks)
+	s.Require().NoError(err)
+	s.Len(ulids, 1)
+	s.Len(planner.PlanCalls(), 1)
+	s.Len(compactor.CompactWithBlockPopulatorWithWriteMetaFileCalls(), 1)
+	s.Len(blockPopulator.PopulateBlockCalls(), 1)
+}
+
+func (s *GroupCompactSuite) TestNoPlan() {
+	noopCounter := promauto.With(nil).NewCounter(prometheus.CounterOpts{Name: "noop", Help: "noop"})
+	ls := map[string]string{"foo": "bar"}
+
+	blks := []*block.Block{{}, {}}
+	blks[0].Metadata().Thanos.Labels = ls
+	blks[1].Metadata().Thanos.Labels = ls
+
+	group := tcompactor.NewGroup(
+		log.NewNopLogger(),
+		s.T().Name(),
+		labels.FromMap(ls),
+		0,
+		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
+		false,
+	)
+
+	for i := range blks {
+		s.Require().NoError(group.AppendMeta(blks[i].Metadata()))
+	}
+
+	planner := &mock.PlannerMock{
+		PlanFunc: func(_ context.Context, metasByMinTime []*metadata.Meta) ([]*metadata.Meta, bool, error) {
+			s.Len(metasByMinTime, len(blks))
+			return nil, false, nil
+		},
+	}
+
+	compactor := &mock.CompactorMock{
+		CompactWithBlockPopulatorWithWriteMetaFileFunc: func(
+			_ string,
+			dirs []string,
+			open []*block.Block,
+			_ lcompactor.BlockPopulator,
+			_ func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error),
+		) ([]ulid.ULID, error) {
+			s.Len(dirs, len(blks))
+			s.Len(open, len(blks))
+			return nil, nil
+		},
+	}
+
+	ulids, err := group.Compact(s.T().Context(), "test-dir", planner, compactor, nil, blks)
+	s.Require().NoError(err)
+	s.Empty(ulids)
+	s.Len(planner.PlanCalls(), 1)
+	s.Empty(compactor.CompactWithBlockPopulatorWithWriteMetaFileCalls())
+}
+
+func (s *GroupCompactSuite) TestNoCompact() {
+	noopCounter := promauto.With(nil).NewCounter(prometheus.CounterOpts{Name: "noop", Help: "noop"})
+	ls := map[string]string{"foo": "bar"}
+
+	blks := []*block.Block{{}, {}}
+	blks[0].Metadata().Thanos.Labels = ls
+	blks[1].Metadata().Thanos.Labels = ls
+
+	group := tcompactor.NewGroup(
+		log.NewNopLogger(),
+		s.T().Name(),
+		labels.FromMap(ls),
+		0,
+		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
+		false,
+	)
+
+	for i := range blks {
+		s.Require().NoError(group.AppendMeta(blks[i].Metadata()))
+	}
+
+	planner := &mock.PlannerMock{
+		PlanFunc: func(_ context.Context, metasByMinTime []*metadata.Meta) ([]*metadata.Meta, bool, error) {
+			s.Len(metasByMinTime, len(blks))
+			return metasByMinTime, false, nil
+		},
+	}
+
+	compactor := &mock.CompactorMock{
+		CompactWithBlockPopulatorWithWriteMetaFileFunc: func(
+			_ string,
+			dirs []string,
+			open []*block.Block,
+			_ lcompactor.BlockPopulator,
+			_ func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error),
+		) ([]ulid.ULID, error) {
+			s.Len(dirs, len(blks))
+			s.Len(open, len(blks))
+			return nil, nil
+		},
+	}
+
+	ulids, err := group.Compact(s.T().Context(), "test-dir", planner, compactor, nil, blks)
+	s.Require().NoError(err)
+	s.Empty(ulids)
+	s.Len(planner.PlanCalls(), 1)
+	s.Len(compactor.CompactWithBlockPopulatorWithWriteMetaFileCalls(), 1)
+}
+
+//
 // GroupOverlappingBlocksSuite
 //
 
@@ -67,8 +257,7 @@ type GroupOverlappingBlocksSuite struct {
 	suite.Suite
 
 	group *tcompactor.Group
-
-	ls map[string]string
+	ls    map[string]string
 }
 
 func TestGroupOverlappingBlocksSuite(t *testing.T) {
