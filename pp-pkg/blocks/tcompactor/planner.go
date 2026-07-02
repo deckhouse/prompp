@@ -136,6 +136,10 @@ func (p *TsdbBasedPlanner) getPlan(
 		meta := notExcludedMetasByMinTime[i]
 		//revive:disable-next-line:add-constant // half ranges length
 		if meta.MaxTime-meta.MinTime < p.ranges[len(p.ranges)/2] {
+			// If the block is entirely deleted, then we don't care about the block being big enough.
+			if meta.Stats.NumTombstones > 0 && meta.Stats.NumTombstones >= meta.Stats.NumSeries {
+				return []*metadata.Meta{notExcludedMetasByMinTime[i]}, false
+			}
 			break
 		}
 

@@ -51,10 +51,8 @@ type Manager struct {
 	chunkPool      chunkenc.Pool
 	metrics        *metrics
 
-	mtx    sync.RWMutex
-	blocks []*block.Block
-	// compactor, when set via SetCompactor, runs a single compaction pass after
-	// each reload in the loop goroutine. Guarded by mtx.
+	mtx       sync.RWMutex
+	blocks    []*block.Block
 	compactor compactionRunner
 
 	stopc    chan struct{}
@@ -65,7 +63,6 @@ type Manager struct {
 // compactionRunner runs a single compaction pass over the on-disk blocks,
 // reporting whether a compaction was performed and the ULIDs of the blocks it
 // created (so the driver can remove them if the following reload fails).
-// Implemented by *Compactor.
 type compactionRunner interface {
 	// Compact creates a new block in the compactor's directory from the blocks in the provided directories.
 	Compact(open []*block.Block) ([]ulid.ULID, error)

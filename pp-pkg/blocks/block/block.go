@@ -82,7 +82,7 @@ type Block struct {
 	numBytesMeta      int64
 }
 
-// OpenBlocks loads all blocks from dir, reusing already-loaded ones (usage: pp-pkg/blocks/manger).
+// OpenBlocks loads all blocks from dir, reusing already-loaded ones (usage: pp-pkg/blocks/manager).
 func OpenBlocks(
 	l log.Logger,
 	dir string,
@@ -120,6 +120,7 @@ func OpenBlocks(
 
 		if meta.Compaction.UnsetCorrupted() {
 			// unmark block as corrupted
+			block.Metadata().Compaction.UnsetCorrupted()
 			if _, err := WriteThanosMetaFile(l, bDir, meta); err != nil {
 				_ = level.Error(l).Log(
 					"msg", "Failed to update meta.json for a block during reloadBlocks",

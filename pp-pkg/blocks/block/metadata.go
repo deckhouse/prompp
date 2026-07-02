@@ -79,7 +79,7 @@ func ReadFromDir(dir string) (*metadata.Meta, int64, error) {
 	}
 
 	if version != metadata.ThanosVersion1 {
-		return nil, 0, fmt.Errorf("unexpected meta file Thanos section version %d", m.Version)
+		return nil, 0, fmt.Errorf("unexpected meta file Thanos section version %d", version)
 	}
 
 	if m.Thanos.Labels == nil {

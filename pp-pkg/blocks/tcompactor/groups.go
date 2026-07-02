@@ -68,24 +68,24 @@ func NewDefaultGrouper(
 	return &DefaultGrouper{
 		logger: logger,
 		compactions: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_tcompact_group_compactions_total",
+			Name: "prometheus_tcompact_group_compactions_total",
 			Help: "Total number of group compaction attempts that resulted in a new block.",
 		}, []string{"resolution"}),
 		compactionRunsStarted: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_tcompact_group_compaction_runs_started_total",
+			Name: "prometheus_tcompact_group_compaction_runs_started_total",
 			Help: "Total number of group compaction attempts.",
 		}, []string{"resolution"}),
 		compactionRunsCompleted: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_tcompact_group_compaction_runs_completed_total",
+			Name: "prometheus_tcompact_group_compaction_runs_completed_total",
 			Help: "Total number of group completed compaction runs. " +
 				"This also includes compactor group runs that resulted with no compaction.",
 		}, []string{"resolution"}),
 		compactionFailures: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_tcompact_group_compactions_failures_total",
+			Name: "prometheus_tcompact_group_compactions_failures_total",
 			Help: "Total number of failed group compactions.",
 		}, []string{"resolution"}),
 		verticalCompactions: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-			Name: "prometeus_tcompact_group_vertical_compactions_total",
+			Name: "prometheus_tcompact_group_vertical_compactions_total",
 			Help: "Total number of group compaction attempts that resulted in a new block based on overlapping blocks.",
 		}, []string{"resolution"}),
 		acceptMalformedIndex: acceptMalformedIndex,
