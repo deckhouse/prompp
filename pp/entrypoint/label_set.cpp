@@ -65,7 +65,7 @@ extern "C" void prompp_label_set_serialize_from_snapshot_length(void* args) {
 
   std::visit(
       [in](auto& snapshot) {
-        uint32_t length{};
+        uint32_t length = 0;
         for (const auto label_set = snapshot[in->series_id]; auto label : label_set) {
           length += VarInt::length(label.first.size()) + label.first.size() + VarInt::length(label.second.size()) + label.second.size();
         }
