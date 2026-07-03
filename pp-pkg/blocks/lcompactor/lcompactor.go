@@ -120,12 +120,9 @@ func (DefaultBlockPopulator) PopulateBlock(
 		overlapping bool
 	)
 	defer func() {
-		errs := make([]error, 0, len(closers)+1)
-		errs = append(errs, err)
 		if cerr := block.CloseAll(closers); cerr != nil {
-			errs = append(errs, fmt.Errorf("close: %w", cerr))
+			err = errors.Join(err, fmt.Errorf("close: %w", cerr))
 		}
-		err = errors.Join(errs...)
 		metrics.PopulatingBlocks.Set(0)
 	}()
 	metrics.PopulatingBlocks.Set(1)
@@ -885,13 +882,9 @@ func (c *LeveledCompactor) write(
 	// though these are covered under defer. This is because in Windows,
 	// you cannot delete these unless they are closed and the defer is to
 	// make sure they are closed if the function exits due to an error above.
-	errs := make([]error, 0, len(closers))
-	for _, w := range closers {
-		errs = append(errs, w.Close())
-	}
-
+	err = block.CloseAll(closers)
 	closers = closers[:0] // Avoid closing the writers twice in the defer.
-	if err = errors.Join(errs...); err != nil {
+	if err != nil {
 		return err
 	}
 

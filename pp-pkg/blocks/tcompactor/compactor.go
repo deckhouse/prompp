@@ -64,6 +64,7 @@ func NewTCompactor(
 	logger log.Logger,
 	dir string,
 	opts Options,
+	chunkPool chunkenc.Pool,
 	reg prometheus.Registerer,
 ) (*TCompactor, error) {
 	if logger == nil {
@@ -81,7 +82,7 @@ func NewTCompactor(
 		reg,
 		logger,
 		rngs,
-		chunkenc.NewPool(),
+		chunkPool,
 		opts.TsdbOptions,
 	)
 	if err != nil {

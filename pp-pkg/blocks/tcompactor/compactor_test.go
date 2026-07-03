@@ -38,7 +38,7 @@ func (s *TCompactorSuite) TestHappyPath() {
 	}()
 
 	opts := tcompactor.Options{TsdbOptions: lcompactor.LeveledCompactorOptions{EnableOverlappingCompaction: true}}
-	compactor, err := tcompactor.NewTCompactor(s.T().Context(), logger, dir, opts, nil)
+	compactor, err := tcompactor.NewTCompactor(s.T().Context(), logger, dir, opts, nil, nil)
 	s.Require().NoError(err)
 
 	ulids, err := compactor.Compact(blks)
@@ -69,7 +69,7 @@ func (s *TCompactorSuite) TestNoCompact() {
 	}()
 
 	opts := tcompactor.Options{TsdbOptions: lcompactor.LeveledCompactorOptions{EnableOverlappingCompaction: true}}
-	compactor, err := tcompactor.NewTCompactor(s.T().Context(), logger, dir, opts, nil)
+	compactor, err := tcompactor.NewTCompactor(s.T().Context(), logger, dir, opts, nil, nil)
 	s.Require().NoError(err)
 
 	ulids, err := compactor.Compact(blks)

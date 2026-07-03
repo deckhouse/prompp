@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 )
 
@@ -25,6 +26,7 @@ type ManagerSuite struct {
 	dir       string
 	compactor noopCompactor
 	logger    log.Logger
+	chunkPool chunkenc.Pool
 }
 
 func TestManagerSuite(t *testing.T) {
@@ -37,10 +39,11 @@ func (s *ManagerSuite) SetupTest() {
 	s.createTestBlock(s.dir, 5000, "metric_b")
 
 	s.logger = log.NewNopLogger()
+	s.chunkPool = chunkenc.NewPool()
 }
 
 func (s *ManagerSuite) TestManagerLoadsExistingBlocksOnStartup() {
-	m, err := NewManager(s.dir, nil, s.compactor, nil, s.logger, nil)
+	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, s.logger, nil)
 	s.Require().NoError(err)
 	s.T().Cleanup(m.Close)
 
@@ -61,7 +64,7 @@ func (s *ManagerSuite) TestManagerAppliesBlocksToDeleteOnInitialReload() {
 		return map[ulid.ULID]struct{}{marked: {}}
 	}
 
-	m, err := NewManager(s.dir, nil, s.compactor, blocksToDelete, s.logger, nil)
+	m, err := NewManager(s.dir, nil, s.compactor, blocksToDelete, s.chunkPool, s.logger, nil)
 	s.Require().NoError(err)
 	s.T().Cleanup(m.Close)
 
@@ -78,14 +81,14 @@ func (s *ManagerSuite) TestManagerReturnsErrorOnInitialReloadFailure() {
 	notDir := filepath.Join(tmp, "not-a-directory")
 	s.Require().NoError(os.WriteFile(notDir, []byte("x"), 0o600))
 
-	m, err := NewManager(notDir, nil, s.compactor, nil, s.logger, nil)
+	m, err := NewManager(notDir, nil, s.compactor, nil, s.chunkPool, s.logger, nil)
 	s.Require().Error(err)
 	s.Require().Nil(m)
 }
 
 func (s *ManagerSuite) TestManagerExportsLoadedBlocksMetrics() {
 	reg := prometheus.NewRegistry()
-	m, err := NewManager(s.dir, nil, s.compactor, nil, s.logger, reg)
+	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, s.logger, reg)
 	s.Require().NoError(err)
 	s.T().Cleanup(m.Close)
 

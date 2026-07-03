@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 	// Force a few GC cycles and give the finalizer goroutine a chance to free them first.
 	for i := 0; i < 3; i++ {
 		runtime.GC()
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	os.Exit(code)
 }

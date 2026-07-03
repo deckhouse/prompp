@@ -245,10 +245,10 @@ func (n *minMaxSumInt64) AvgMillisecond() time.Duration {
 func GatherIndexHealthStats(
 	ctx context.Context,
 	logger log.Logger,
-	fn string,
+	fileName string,
 	minTime, maxTime int64,
 ) (stats HealthStats, err error) {
-	r, err := index.NewFileReader(fn)
+	r, err := index.NewFileReader(fileName)
 	if err != nil {
 		return stats, fmt.Errorf("open index file: %w", err)
 	}

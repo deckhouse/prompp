@@ -80,6 +80,7 @@ func NewManager(
 	opts *Options,
 	compactor compactionRunner,
 	blocksToDelete block.BlocksToDeleteFunc,
+	chunkPool chunkenc.Pool,
 	logger log.Logger,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -96,7 +97,7 @@ func NewManager(
 		compactor:      compactor,
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
-		chunkPool:      chunkenc.NewPool(),
+		chunkPool:      chunkPool,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}

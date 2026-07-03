@@ -96,6 +96,7 @@ import (
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/wlog"
 	"github.com/prometheus/prometheus/util/documentcli"
 	"github.com/prometheus/prometheus/util/logging"
@@ -874,6 +875,7 @@ func main() {
 				prometheus.DefaultRegisterer,
 			)
 
+			chunkPool := chunkenc.NewPool()
 			compactCtx, compactCancel := context.WithCancel(context.Background())
 			blockCompactor, err := tcompactor.NewTCompactor(
 				compactCtx,
@@ -886,7 +888,7 @@ func main() {
 					},
 					MinBlockDuration: int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
 					MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
-				}, prometheus.DefaultRegisterer)
+				}, chunkPool, prometheus.DefaultRegisterer)
 			if err != nil {
 				level.Error(logger).Log("msg", "failed to create tcompactor", "err", err)
 				os.Exit(1)
@@ -901,6 +903,7 @@ func main() {
 				},
 				blockCompactor,
 				blocksToDelete,
+				chunkPool,
 				log.With(logger, "component", "blockmanager"),
 				prometheus.DefaultRegisterer,
 			)
