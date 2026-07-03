@@ -45,6 +45,7 @@ RUN set -eux; \
     printf 'Package: *\nPin: release a=sid\nPin-Priority: 100\n' > /etc/apt/preferences.d/sid; \
     apt-get update; \
     apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21 libclang-21-dev; \
+    apt-get install -y --no-install-recommends -t sid gcc-16 g++-16 libstdc++-16-dev; \
     ln -sf /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy; \
     ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
     rm -rf /var/lib/apt/lists/*
@@ -68,9 +69,8 @@ ENV PATH="$PATH:/usr/local/go/bin:/opt/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/prometheus/promu@latest
 
-# Install gcc-16 after promu
-RUN apt-get install -y --no-install-recommends -t sid gcc-16 g++-16 libstdc++-16-dev; \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100; \
+# Set gcc-16 as default compiler after installing promu
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100; \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-16 100; \
     update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-16 100;
 
