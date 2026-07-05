@@ -37,7 +37,7 @@ class Decoder {
   template <chunk::DataChunk::Type chunk_type, class Callback>
   PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
     create_decode_iterator<chunk_type>(storage, chunk,
-                                       [&callback](auto&& begin, auto&& end) { std::ranges::all_of(begin, end, std::forward<Callback>(callback)); });
+                                       [&callback](auto&& begin, auto&& end) { std::ranges::for_each(begin, end, std::forward<Callback>(callback)); });
   }
 
   static uint8_t get_samples_count(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {

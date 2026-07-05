@@ -25,13 +25,16 @@ class UniversalDecodeIterator {
   DECODE_ITERATOR_TYPE_TRAITS();
 
 #define DEFINE_CONSTRUCTOR(DecodeIterator, field, type)                                                                                                        \
+  PRAGMA_DIAGNOSTIC(push)                                                                                                                                      \
+  PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_MAYBE_UNINITIALIZED)                                                                                                    \
   template <class... Args>                                                                                                                                     \
   explicit UniversalDecodeIterator(std::in_place_type_t<DecodeIterator>, Args&&... args) : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} { \
     struct SampleIsFirstIteratorField : DecodeIterator {                                                                                                       \
       static_assert(decoder::DecodeIteratorData<decltype(SampleIsFirstIteratorField::data_)>,                                                                  \
                     #DecodeIterator "::data_ must comply with the DecodeIteratorData concept");                                                                \
     };                                                                                                                                                         \
-  }
+  }                                                                                                                                                            \
+  PRAGMA_DIAGNOSTIC(pop)
 
   DEFINE_CONSTRUCTOR(ConstantDecodeIterator, constant, kConstant)
   DEFINE_CONSTRUCTOR(TwoDoubleConstantDecodeIterator, two_double_constant, kTwoDoubleConstant)

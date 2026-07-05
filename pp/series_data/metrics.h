@@ -19,7 +19,7 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   // metrics::Storage::remove_unused_pages(). This avoids a use-after-free where a concurrent scrape reads the label after
   // the owning DataStorage has already been destroyed.
   PROMPP_ALWAYS_INLINE explicit Metrics(std::string address_label)
-      : metrics::MetricsPage<Metrics>(outdated_samples_count_),
+      : metrics::MetricsPage<Metrics>(&Metrics::outdated_samples_count_),
         address_label_(std::move(address_label)),
         outdated_samples_count_{label_set(), "prompp_data_storage_outdated_samples_count"},
         outdated_chunks_count_{label_set(), "prompp_data_storage_outdated_chunks_count"},
