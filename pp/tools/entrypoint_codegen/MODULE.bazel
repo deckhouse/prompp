@@ -1,0 +1,10 @@
+module(name = "entrypoint_codegen")
+
+bazel_dep(
+    name = "googletest",
+    repo_name = "gtest",
+    version = "1.11.0",
+)
+
+libclang = use_extension("//:libclang_repository.bzl", "libclang_extension")
+use_repo(libclang, "system_libclang")
