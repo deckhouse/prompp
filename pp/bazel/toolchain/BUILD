@@ -49,17 +49,17 @@ string_flag(
 )
 
 cc_toolchain_suite(
-    name = "g++-14",
+    name = "g++-16",
     toolchains = {
-        "k8": ":g++-14_toolchain_x86_64",
-        "aarch64": ":g++-14_toolchain_aarch64",
+        "k8": ":g++-16_toolchain_x86_64",
+        "aarch64": ":g++-16_toolchain_aarch64",
     },
 )
 
 filegroup(name = "empty")
 
 cc_toolchain(
-    name = "g++-14_toolchain_x86_64",
+    name = "g++-16_toolchain_x86_64",
     all_files = ":empty",
     compiler_files = ":empty",
     dwp_files = ":empty",
@@ -67,12 +67,12 @@ cc_toolchain(
     objcopy_files = ":empty",
     strip_files = ":empty",
     supports_param_files = 0,
-    toolchain_config = ":g++-14_toolchain_config_x86_64",
-    toolchain_identifier = "g++-14_toolchain",
+    toolchain_config = ":g++-16_toolchain_config_x86_64",
+    toolchain_identifier = "g++-16_toolchain",
 )
 
 cc_toolchain(
-    name = "g++-14_toolchain_aarch64",
+    name = "g++-16_toolchain_aarch64",
     all_files = ":empty",
     compiler_files = ":empty",
     dwp_files = ":empty",
@@ -80,13 +80,13 @@ cc_toolchain(
     objcopy_files = ":empty",
     strip_files = ":empty",
     supports_param_files = 0,
-    toolchain_config = ":g++-14_toolchain_config_aarch64",
-    toolchain_identifier = "g++-14_toolchain",
+    toolchain_config = ":g++-16_toolchain_config_aarch64",
+    toolchain_identifier = "g++-16_toolchain",
 )
 
 toolchain(
-    name = "cc_toolchain_for_g++-14_toolchain_x86_64",
-    toolchain = ":g++-14_toolchain_x86_64",
+    name = "cc_toolchain_for_g++-16_toolchain_x86_64",
+    toolchain = ":g++-16_toolchain_x86_64",
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
@@ -99,8 +99,8 @@ toolchain(
 )
 
 toolchain(
-    name = "cc_toolchain_for_g++-14_toolchain_aarch64",
-    toolchain = ":g++-14_toolchain_aarch64",
+    name = "cc_toolchain_for_g++-16_toolchain_aarch64",
+    toolchain = ":g++-16_toolchain_aarch64",
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:aarch64",
@@ -113,9 +113,9 @@ toolchain(
 )
 
 cc_toolchain_config(
-    name = "g++-14_toolchain_config_x86_64",
+    name = "g++-16_toolchain_config_x86_64",
     builtin_include_directories = [
-        "/usr/lib/gcc/x86_64-linux-gnu/14",
+        "/usr/lib/gcc/x86_64-linux-gnu/16",
         "/usr/include",
         "/usr/lib/linux",
     ],
@@ -127,9 +127,9 @@ cc_toolchain_config(
 )
 
 cc_toolchain_config(
-    name = "g++-14_toolchain_config_aarch64",
+    name = "g++-16_toolchain_config_aarch64",
     builtin_include_directories = [
-        "/usr/lib/gcc/aarch64-linux-gnu/14",
+        "/usr/lib/gcc/aarch64-linux-gnu/16",
         "/usr/include",
         "/usr/lib/linux",
     ],

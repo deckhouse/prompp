@@ -1,0 +1,11 @@
+--- a/src/jemalloc_cpp.cpp
++++ b/src/jemalloc_cpp.cpp
+@@ -87,7 +87,7 @@
+ 	}
+ 
+ 	if (ptr == nullptr && !nothrow)
+-		std::__throw_bad_alloc();
++		std::bad_alloc();
+ 	return ptr;
+ }
+ 
