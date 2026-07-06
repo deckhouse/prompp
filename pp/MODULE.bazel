@@ -64,8 +64,8 @@ git_override(
 register_toolchains(
     "@rules_foreign_cc//toolchains:preinstalled_make_toolchain",
     "@rules_foreign_cc//toolchains:preinstalled_pkgconfig_toolchain",
-    "//bazel/toolchain:cc_toolchain_for_g++-14_toolchain_aarch64",
-    "//bazel/toolchain:cc_toolchain_for_g++-14_toolchain_x86_64",
+    "//bazel/toolchain:cc_toolchain_for_g++-16_toolchain_aarch64",
+    "//bazel/toolchain:cc_toolchain_for_g++-16_toolchain_x86_64",
 )
 
 # --- Third-party C/C++ libraries (local module extension) ---------------------
