@@ -29,8 +29,7 @@ class EntrypointFacts::Impl {
         functions_(memory_resource),
         params_(memory_resource),
         layouts_(memory_resource),
-        fields_(memory_resource),
-        diagnostics_(memory_resource) {}
+        fields_(memory_resource) {}
 
   StringId add_string(std::string_view value) { return strings_.add(value); }
 
@@ -75,8 +74,6 @@ class EntrypointFacts::Impl {
     return id;
   }
 
-  void add_diagnostic(Diagnostic diagnostic) { diagnostics_.push_back(diagnostic); }
-
   [[nodiscard]] std::string_view string(StringId id) const { return strings_.get(id); }
 
   [[nodiscard]] const SourceFileDecl& source_file(SourceFileId id) const {
@@ -108,10 +105,6 @@ class EntrypointFacts::Impl {
 
   [[nodiscard]] std::span<const FieldDecl> fields(FieldRange range) const { return range_span(fields_, range.begin.get(), range.count); }
 
-  [[nodiscard]] std::span<const Diagnostic> diagnostics() const { return diagnostics_; }
-
-  [[nodiscard]] uint32_t diagnostic_count() const noexcept { return static_cast<uint32_t>(diagnostics_.size()); }
-
  private:
   StringTable strings_;
 
@@ -120,13 +113,18 @@ class EntrypointFacts::Impl {
   std::pmr::vector<ParamDecl> params_;
   std::pmr::vector<LayoutDecl> layouts_;
   std::pmr::vector<FieldDecl> fields_;
-  std::pmr::vector<Diagnostic> diagnostics_;
 };
 
 EntrypointFacts::EntrypointFacts(std::pmr::memory_resource* memory_resource) : memory_resource_(memory_resource) {
   std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
   impl_ = allocator.allocate(1);
-  allocator.construct(impl_, memory_resource_);
+  try {
+    allocator.construct(impl_, memory_resource_);
+  } catch (...) {
+    allocator.deallocate(impl_, 1);
+    impl_ = nullptr;
+    throw;
+  }
 }
 
 EntrypointFacts::~EntrypointFacts() {
@@ -181,10 +179,6 @@ FunctionId EntrypointFacts::add_function(FunctionDecl function) {
   return impl_->add_function(function);
 }
 
-void EntrypointFacts::add_diagnostic(Diagnostic diagnostic) {
-  impl_->add_diagnostic(diagnostic);
-}
-
 std::string_view EntrypointFacts::string(StringId id) const {
   return impl_->string(id);
 }
@@ -227,14 +221,6 @@ std::span<const FieldDecl> EntrypointFacts::fields(LayoutId id) const {
 
 std::span<const FieldDecl> EntrypointFacts::fields(FieldRange range) const {
   return impl_->fields(range);
-}
-
-std::span<const Diagnostic> EntrypointFacts::diagnostics() const {
-  return impl_->diagnostics();
-}
-
-uint32_t EntrypointFacts::diagnostic_count() const noexcept {
-  return impl_->diagnostic_count();
 }
 
 }  // namespace entrypoint_codegen::facts

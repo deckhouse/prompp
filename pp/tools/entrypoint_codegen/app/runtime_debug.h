@@ -1,6 +1,6 @@
 #pragma once
 
-#include "facts/entrypoint_facts.h"
+#include "diagnostics/diagnostics.h"
 
 #include <cstddef>
 
@@ -12,6 +12,6 @@ struct RuntimeDebugSnapshot {
   size_t peak_live_bytes;
 };
 
-void append_runtime_debug_diagnostics(facts::EntrypointFacts& facts, RuntimeDebugSnapshot snapshot);
+void append_runtime_debug_diagnostics(diagnostics::DiagnosticSet& diagnostic_set, RuntimeDebugSnapshot snapshot);
 
 }  // namespace entrypoint_codegen::app

@@ -1,6 +1,6 @@
 #include "emit/json.h"
 
-#include "emit/diagnostic_text.h"
+#include "diagnostics/diagnostic_catalog.h"
 
 #include <ostream>
 #include <stdexcept>
@@ -12,9 +12,11 @@ namespace entrypoint_codegen::emit {
 namespace {
 
 std::string json_escape(std::string_view input) {
+  constexpr char kHexDigits[] = "0123456789abcdef";
+
   std::string out;
   out.reserve(input.size() + 8);
-  for (const char ch : input) {
+  for (const unsigned char ch : input) {
     switch (ch) {
       case '\\': {
         out += "\\\\";
@@ -37,7 +39,13 @@ std::string json_escape(std::string_view input) {
         break;
       }
       default: {
-        out.push_back(ch);
+        if (ch < 0x20) {
+          out += "\\u00";
+          out.push_back(kHexDigits[ch >> 4]);
+          out.push_back(kHexDigits[ch & 0x0F]);
+          break;
+        }
+        out.push_back(static_cast<char>(ch));
       }
     }
   }
@@ -84,21 +92,6 @@ std::string_view layout_kind_name(facts::LayoutKind kind) {
     }
   }
   return "unknown";
-}
-
-std::string_view severity_name(facts::Severity severity) {
-  switch (severity) {
-    case facts::Severity::kInfo: {
-      return "info";
-    }
-    case facts::Severity::kWarning: {
-      return "warning";
-    }
-    case facts::Severity::kError: {
-      return "error";
-    }
-  }
-  return "error";
 }
 
 void write_location(std::ostream& out, const facts::EntrypointFacts& facts, facts::SourceLocation location) {
@@ -203,7 +196,7 @@ void write_functions(std::ostream& out, const facts::EntrypointFacts& facts) {
   out << "  ]";
 }
 
-void write_diagnostic_function(std::ostream& out, const facts::EntrypointFacts& facts, const facts::Diagnostic& diagnostic) {
+void write_diagnostic_function(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::Diagnostic& diagnostic) {
   if (diagnostic.function.has_value()) {
     out << "\"" << json_escape(facts.string(facts.function(*diagnostic.function).name)) << "\"";
     return;
@@ -211,25 +204,29 @@ void write_diagnostic_function(std::ostream& out, const facts::EntrypointFacts& 
   out << "null";
 }
 
-void write_diagnostic(std::ostream& out, const facts::EntrypointFacts& facts, const facts::Diagnostic& diagnostic) {
-  const std::string_view message = diagnostic_message(facts, diagnostic);
+void write_diagnostic(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::Diagnostic& diagnostic) {
+  const std::string_view message = diagnostics::diagnostic_message(diagnostic);
   out << "    {"
-      << "\"code\": \"" << json_escape(diagnostic_code_name(diagnostic.code)) << "\", "
+      << "\"code\": \"" << json_escape(diagnostics::diagnostic_code_name(diagnostic.code)) << "\", "
       << "\"message\": \"" << json_escape(message) << "\", "
-      << "\"severity\": \"" << severity_name(diagnostic.severity) << "\", "
+      << "\"severity\": \"" << diagnostics::severity_name(diagnostic.severity) << "\", "
       << "\"function\": ";
   write_diagnostic_function(out, facts, diagnostic);
   out << ", \"location\": ";
-  write_location(out, facts, diagnostic.location);
+  if (diagnostic.location.has_value()) {
+    write_location(out, facts, *diagnostic.location);
+  } else {
+    out << "null";
+  }
   out << "}";
 }
 
-void write_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts) {
+void write_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   out << "  \"diagnostics\": [\n";
-  const auto diagnostics = facts.diagnostics();
-  for (size_t i = 0; i < diagnostics.size(); ++i) {
-    write_diagnostic(out, facts, diagnostics[i]);
-    if (i + 1 != diagnostics.size()) {
+  const auto diagnostic_values = diagnostic_set.diagnostics();
+  for (size_t i = 0; i < diagnostic_values.size(); ++i) {
+    write_diagnostic(out, facts, diagnostic_values[i]);
+    if (i + 1 != diagnostic_values.size()) {
       out << ",";
     }
     out << "\n";
@@ -239,7 +236,7 @@ void write_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts) {
 
 }  // namespace
 
-void write_json(std::ostream& out, const facts::EntrypointFacts& facts) {
+void write_json(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   if (!out) {
     throw std::runtime_error("output stream is not writable");
   }
@@ -249,7 +246,7 @@ void write_json(std::ostream& out, const facts::EntrypointFacts& facts) {
   out << ",\n";
   write_functions(out, facts);
   out << ",\n";
-  write_diagnostics(out, facts);
+  write_diagnostics(out, facts, diagnostic_set);
   out << "\n";
   out << "}\n";
 }

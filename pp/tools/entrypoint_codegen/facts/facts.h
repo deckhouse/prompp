@@ -3,7 +3,6 @@
 #include "tagged_index.h"
 
 #include <cstdint>
-#include <optional>
 
 namespace entrypoint_codegen::facts {
 
@@ -46,30 +45,6 @@ enum class LayoutKind : uint8_t {
   kResult,
 };
 
-enum class Severity : uint8_t {
-  kInfo,
-  kWarning,
-  kError,
-};
-
-enum class DiagnosticCode : uint8_t {
-  kClangDiagnostic,
-  kUnsupportedReturnType,
-  kUnsupportedParamCount,
-  kUnsupportedParamType,
-  kUnknownParamRole,
-  kInvalidTwoParamOrder,
-  kInvalidSecondParamRole,
-  kMissingArgumentsLayout,
-  kMissingResultLayout,
-  kUnexpectedArgumentsLayout,
-  kUnexpectedResultLayout,
-  kMissingNamePrefix,
-  kMissingCLinkage,
-  kMissingEntrypointAttribute,
-  kRuntimeMemoryUsage,
-};
-
 struct SourceLocation {
   SourceFileId file;
   uint32_t line;
@@ -108,14 +83,6 @@ struct FunctionDecl {
   LayoutRange layouts;
   SourceLocation location;
   bool has_c_linkage;
-};
-
-struct Diagnostic {
-  DiagnosticCode code;
-  std::optional<StringId> message;
-  Severity severity;
-  std::optional<FunctionId> function;
-  SourceLocation location;
 };
 
 }  // namespace entrypoint_codegen::facts

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "diagnostics/diagnostics.h"
 #include "facts/entrypoint_facts.h"
 
 #include <filesystem>
@@ -15,6 +16,6 @@ struct ParseOptions {
   std::pmr::memory_resource* memory_resource = std::pmr::get_default_resource();
 };
 
-facts::EntrypointFacts parse_files(const ParseOptions& options);
+facts::EntrypointFacts parse_files(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set);
 
 }  // namespace entrypoint_codegen::clang_adapter

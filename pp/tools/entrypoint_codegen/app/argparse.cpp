@@ -21,7 +21,7 @@ std::vector<std::filesystem::path> collect_input_files(const std::vector<std::fi
   std::vector<std::filesystem::path> files;
   for (const std::filesystem::path& input : inputs) {
     if (!std::filesystem::exists(input)) {
-      continue;
+      throw std::runtime_error("input path does not exist: " + input.string());
     }
     if (std::filesystem::is_regular_file(input)) {
       if (has_cpp_extension(input)) {
@@ -30,7 +30,7 @@ std::vector<std::filesystem::path> collect_input_files(const std::vector<std::fi
       continue;
     }
     if (std::filesystem::is_directory(input)) {
-      for (const auto& entry : std::filesystem::directory_iterator(input)) {
+      for (const auto& entry : std::filesystem::recursive_directory_iterator(input)) {
         if (entry.is_regular_file() && has_cpp_extension(entry.path())) {
           files.push_back(std::filesystem::absolute(entry.path()).lexically_normal());
         }
@@ -72,7 +72,7 @@ OutputMode parse_output_mode(std::string_view value) {
 
 void write_help(std::ostream& out) {
   out << "entrypoint_codegen [options] <file_or_dir> [...] -- <clang_arg> [...]\n";
-  out << "  --source=PATH           Additional source path, file or directory.\n";
+  out << "  --source=PATH           Additional source path, file or recursive directory.\n";
   out << "  --input=PATH            Alias for --source=PATH.\n";
   out << "  --output=PATH           JSON output path. Defaults to ./entrypoint_facts.json.\n";
   out << "  --output-dir=PATH       Directory for entrypoint_facts.json.\n";

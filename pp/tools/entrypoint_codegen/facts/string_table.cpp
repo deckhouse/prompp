@@ -61,7 +61,13 @@ class StringTable::Impl {
 StringTable::StringTable(std::pmr::memory_resource* memory_resource) : memory_resource_(memory_resource) {
   std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
   impl_ = allocator.allocate(1);
-  allocator.construct(impl_, memory_resource_);
+  try {
+    allocator.construct(impl_, memory_resource_);
+  } catch (...) {
+    allocator.deallocate(impl_, 1);
+    impl_ = nullptr;
+    throw;
+  }
 }
 
 StringTable::~StringTable() {

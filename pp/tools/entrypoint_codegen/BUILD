@@ -30,20 +30,93 @@ cc_test(
 )
 
 cc_library(
-    name = "clang_adapter",
-    srcs = [
-        "clang_adapter/cursor_reader.hpp",
-        "clang_adapter/function_extractor.hpp",
-        "clang_adapter/parse.cpp",
-        "clang_adapter/session.hpp",
+    name = "diagnostics",
+    srcs = ["diagnostics/diagnostics.cpp"],
+    hdrs = ["diagnostics/diagnostics.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [":facts"],
+)
+
+cc_test(
+    name = "diagnostics_test",
+    srcs = ["diagnostics/diagnostics_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":diagnostics",
+        ":facts",
+        "@gtest//:gtest_main",
     ],
-    hdrs = [
-        "clang_adapter/parse.h",
+)
+
+cc_library(
+    name = "diagnostic_catalog",
+    srcs = ["diagnostics/diagnostic_catalog.cpp"],
+    hdrs = ["diagnostics/diagnostic_catalog.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [":diagnostics"],
+)
+
+cc_test(
+    name = "diagnostic_catalog_test",
+    srcs = ["diagnostics/diagnostic_catalog_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":diagnostic_catalog",
+        ":diagnostics",
+        ":facts",
+        "@gtest//:gtest_main",
     ],
+)
+
+cc_library(
+    name = "entrypoint_contract",
+    srcs = ["contract/entrypoint_contract.cpp"],
+    hdrs = ["contract/entrypoint_contract.h"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
         ":facts",
+    ],
+)
+
+cc_test(
+    name = "entrypoint_contract_test",
+    srcs = ["contract/entrypoint_contract_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":entrypoint_contract",
+        ":facts",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "clang_adapter",
+    srcs = [
+        "clang_adapter/aggregate_source.cpp",
+        "clang_adapter/aggregate_source.h",
+        "clang_adapter/clang_runtime.h",
+        "clang_adapter/clang_runtime.cpp",
+        "clang_adapter/parse.cpp",
+    ],
+    hdrs = ["clang_adapter/parse.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":diagnostics",
+        ":entrypoint_contract",
+        ":facts",
         "@system_libclang//:libclang",
+    ],
+)
+
+cc_test(
+    name = "clang_adapter_test",
+    srcs = ["clang_adapter/parse_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":clang_adapter",
+        ":diagnostics",
+        ":facts",
+        "@gtest//:gtest_main",
     ],
 )
 
@@ -52,7 +125,11 @@ cc_library(
     srcs = ["validate/validate.cpp"],
     hdrs = ["validate/validate.h"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
-    deps = [":facts"],
+    deps = [
+        ":diagnostics",
+        ":entrypoint_contract",
+        ":facts",
+    ],
 )
 
 cc_test(
@@ -60,29 +137,9 @@ cc_test(
     srcs = ["validate/validate_tests.cpp"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":diagnostics",
         ":facts",
         ":validate",
-        "@gtest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "diagnostic_text",
-    srcs = ["emit/diagnostic_text.cpp"],
-    hdrs = ["emit/diagnostic_text.h"],
-    copts = ENTRYPOINT_CODEGEN_COPTS,
-    deps = [
-        ":facts",
-    ],
-)
-
-cc_test(
-    name = "diagnostic_text_test",
-    srcs = ["emit/diagnostic_text_tests.cpp"],
-    copts = ENTRYPOINT_CODEGEN_COPTS,
-    deps = [
-        ":diagnostic_text",
-        ":facts",
         "@gtest//:gtest_main",
     ],
 )
@@ -93,7 +150,8 @@ cc_library(
     hdrs = ["emit/json.h"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
-        ":diagnostic_text",
+        ":diagnostic_catalog",
+        ":diagnostics",
         ":facts",
     ],
 )
@@ -103,6 +161,7 @@ cc_test(
     srcs = ["emit/json_tests.cpp"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":diagnostics",
         ":emit_json",
         ":facts",
         "@gtest//:gtest_main",
@@ -115,7 +174,8 @@ cc_library(
     hdrs = ["emit/diagnostics.h"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
-        ":diagnostic_text",
+        ":diagnostic_catalog",
+        ":diagnostics",
         ":facts",
     ],
 )
@@ -125,6 +185,7 @@ cc_test(
     srcs = ["emit/diagnostics_tests.cpp"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":diagnostics",
         ":emit_diagnostics",
         ":facts",
         "@gtest//:gtest_main",
@@ -132,24 +193,82 @@ cc_test(
 )
 
 cc_library(
-    name = "app",
+    name = "app_options",
+    hdrs = ["app/options.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+)
+
+cc_library(
+    name = "app_argparse",
     srcs = [
         "app/argparse.cpp",
-        "app/run.cpp",
-        "app/runtime_debug.cpp",
     ],
     hdrs = [
         "app/argparse.h",
-        "app/run.h",
-        "app/runtime_debug.h",
     ],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":app_options",
+    ],
+)
+
+cc_library(
+    name = "app_runtime_debug",
+    srcs = ["app/runtime_debug.cpp"],
+    hdrs = ["app/runtime_debug.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":diagnostics",
+    ],
+)
+
+cc_library(
+    name = "app_run",
+    srcs = ["app/run.cpp"],
+    hdrs = [
+        "app/run.h",
+    ],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":app_options",
+        ":app_runtime_debug",
         ":clang_adapter",
+        ":diagnostics",
         ":emit_diagnostics",
         ":emit_json",
         ":facts",
         ":validate",
+    ],
+)
+
+cc_test(
+    name = "argparse_test",
+    srcs = ["app/argparse_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":app_argparse",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "runtime_debug_test",
+    srcs = ["app/runtime_debug_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":app_runtime_debug",
+        ":diagnostics",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "run_test",
+    srcs = ["app/run_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":app_run",
+        "@gtest//:gtest_main",
     ],
 )
 
@@ -158,5 +277,8 @@ cc_binary(
     srcs = ["app/main.cpp"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     visibility = ["//visibility:public"],
-    deps = [":app"],
+    deps = [
+        ":app_argparse",
+        ":app_run",
+    ],
 )

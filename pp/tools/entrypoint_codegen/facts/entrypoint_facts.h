@@ -26,7 +26,6 @@ class EntrypointFacts {
   FieldRange add_fields(std::span<const FieldDecl> fields);
   LayoutRange add_layouts(std::span<const LayoutDecl> layouts);
   FunctionId add_function(FunctionDecl function);
-  void add_diagnostic(Diagnostic diagnostic);
 
   [[nodiscard]] std::string_view string(StringId id) const;
 
@@ -44,9 +43,6 @@ class EntrypointFacts {
 
   [[nodiscard]] std::span<const FieldDecl> fields(LayoutId id) const;
   [[nodiscard]] std::span<const FieldDecl> fields(FieldRange range) const;
-
-  [[nodiscard]] std::span<const Diagnostic> diagnostics() const;
-  [[nodiscard]] uint32_t diagnostic_count() const noexcept;
 
  private:
   class Impl;
