@@ -3267,16 +3267,20 @@ func labelSetSerializeFromSnapshotLength(snapshot uintptr, labelSetID uint32) ui
 	args := struct {
 		snapshot   uintptr
 		labelSetID uint32
-		length     uint32
-	}{snapshot, labelSetID, 0}
+	}{snapshot, labelSetID}
+
+	var res struct {
+		length uint32
+	}
 
 	testGC()
-	fastcgo.UnsafeCall1(
+	fastcgo.UnsafeCall2(
 		C.prompp_label_set_serialize_from_snapshot_length,
 		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return args.length
+	return res.length
 }
 
 func labelSetSerializeFromSnapshotToBuffer(snapshot uintptr, labelSetID uint32, buffer []byte) {

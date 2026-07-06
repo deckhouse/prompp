@@ -52,24 +52,28 @@ extern "C" void prompp_label_set_serialize_from_snapshot(void* args, void* res) 
       *in->snapshot);
 }
 
-extern "C" void prompp_label_set_serialize_from_snapshot_length(void* args) {
+extern "C" void prompp_label_set_serialize_from_snapshot_length(void* args, void* res) {
   using BareBones::Encoding::VarInt;
 
   struct Arguments {
     SnapshotLSSVariantPtr snapshot;
     uint32_t series_id;
+  };
+
+  struct Result {
     uint32_t length;
   };
 
   auto in = static_cast<Arguments*>(args);
+  auto out = static_cast<Result*>(res);
 
   std::visit(
-      [in](auto& snapshot) {
+      [in, out](auto& snapshot) {
         uint32_t length = 0;
         for (const auto label_set = snapshot[in->series_id]; auto label : label_set) {
           length += VarInt::length(label.first.size()) + label.first.size() + VarInt::length(label.second.size()) + label.second.size();
         }
-        in->length = length;
+        out->length = length;
       },
       *in->snapshot);
 }
