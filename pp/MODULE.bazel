@@ -13,8 +13,16 @@ module(
 # --- Bazel rule sets (from BCR) -----------------------------------------------
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.11")
-bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "rules_cc", version = "0.2.16")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
+
+# Local standalone component. It can be built independently from
+# tools/entrypoint_codegen, and pp consumes it as an external module.
+bazel_dep(name = "entrypoint_codegen", version = "0", dev_dependency = True)
+local_path_override(
+    module_name = "entrypoint_codegen",
+    path = "tools/entrypoint_codegen",
+)
 
 # --- Tools not published to BCR (use git_override) ----------------------------
 # bazel_clang_tidy is only used by `make tidy` (clang-tidy aspect); it never

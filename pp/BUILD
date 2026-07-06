@@ -1,4 +1,5 @@
 load("//:bazel/rules/cc_static_library.bzl", "cc_static_library")
+load("//:bazel/rules/entrypoint_codegen.bzl", "entrypoint_fact_checking")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -206,6 +207,29 @@ cc_library(
         "//bazel/toolchain:with_asan": [],
         "//conditions:default": ["@jemalloc"],
     }),
+)
+
+entrypoint_fact_checking(
+    name = "entrypoint_fact_checking",
+    inputs = glob([
+        "bare_bones/**/*.h",
+        "entrypoint/**/*.h",
+        "entrypoint/**/*.hpp",
+        "head/**/*.h",
+        "metrics/**/*.h",
+        "primitives/**/*.h",
+        "prometheus/**/*.h",
+        "series_data/**/*.h",
+        "series_index/**/*.h",
+        "wal/**/*.h",
+    ]),
+    srcs = glob(
+        include = ["entrypoint/**/*.cpp"],
+        exclude = [
+            "entrypoint/init/**",
+            "entrypoint/**/*_tests.cpp",
+        ],
+    ),
 )
 
 cc_static_library(

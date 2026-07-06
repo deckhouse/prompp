@@ -1,0 +1,58 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "entrypoint_codegen_lib",
+    srcs = glob(
+        include = [
+            "app/*.cpp",
+            "clang_adapter/*.cpp",
+            "contract/*.cpp",
+            "diagnostics/*.cpp",
+            "emit/*.cpp",
+            "facts/*.cpp",
+            "validate/*.cpp",
+        ],
+        exclude = [
+            "app/main.cpp",
+            "**/*_tests.cpp",
+        ],
+    ),
+    hdrs = glob([
+        "app/*.h",
+        "clang_adapter/*.h",
+        "contract/*.h",
+        "diagnostics/*.h",
+        "emit/*.h",
+        "facts/*.h",
+        "validate/*.h",
+    ]),
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        "@system_libclang//:libclang",
+    ],
+)
+
+cc_binary(
+    name = "entrypoint_codegen",
+    srcs = ["app/main.cpp"],
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":entrypoint_codegen_lib",
+    ],
+)
+
+cc_test(
+    name = "entrypoint_codegen_test",
+    srcs = glob(["**/*_tests.cpp"]),
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":entrypoint_codegen_lib",
+        "@googletest//:gtest_main",
+    ],
+)

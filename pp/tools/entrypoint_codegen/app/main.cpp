@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
       std::cerr << " (" << report.diagnostics.warnings << " warnings, " << report.diagnostics.infos << " info)";
     }
     std::cerr << "\n";
-    return 2;
+    return 1;
   }
   return 0;
 }
