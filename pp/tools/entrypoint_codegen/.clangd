@@ -1,5 +1,0 @@
-CompileFlags:
-  Add:
-    - "-std=c++2b"
-    - "-I/workspaces/prompp/pp/tools/entrypoint_codegen"
-    - "-isystem/usr/lib/llvm-21/include"

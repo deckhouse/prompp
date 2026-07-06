@@ -1,4 +1,0 @@
-bazel-bin
-bazel-entrypoint_codegen
-bazel-out
-bazel-testlogs
