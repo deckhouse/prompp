@@ -35,7 +35,7 @@ func (s *GrouperSuite) TestOneGroup() {
 	blks[0].Metadata().Thanos.Labels = ls
 	blks[1].Metadata().Thanos.Labels = ls
 
-	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil, false).Groups(blks)
+	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil).Groups(blks)
 	s.Require().NoError(err)
 	s.Len(groups, 1)
 }
@@ -47,7 +47,7 @@ func (s *GrouperSuite) TestTwoGroupsByLabels() {
 	blks[0].Metadata().Thanos.Labels = ls1
 	blks[1].Metadata().Thanos.Labels = ls2
 
-	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil, false).Groups(blks)
+	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil).Groups(blks)
 	s.Require().NoError(err)
 	s.Len(groups, 2)
 }
@@ -60,7 +60,7 @@ func (s *GrouperSuite) TestTwoGroupsByResolution() {
 	blks[0].Metadata().Thanos.Downsample.Resolution = 10
 	blks[1].Metadata().Thanos.Downsample.Resolution = 20
 
-	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil, false).Groups(blks)
+	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil).Groups(blks)
 	s.Require().NoError(err)
 	s.Len(groups, 2)
 }
@@ -91,7 +91,6 @@ func (s *GroupCompactSuite) TestHappyPath() {
 		labels.FromMap(ls),
 		0,
 		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
-		false,
 	)
 
 	for i := range blks {
@@ -165,7 +164,6 @@ func (s *GroupCompactSuite) TestNoPlan() {
 		labels.FromMap(ls),
 		0,
 		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
-		false,
 	)
 
 	for i := range blks {
@@ -214,7 +212,6 @@ func (s *GroupCompactSuite) TestNoCompact() {
 		labels.FromMap(ls),
 		0,
 		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
-		false,
 	)
 
 	for i := range blks {
@@ -274,7 +271,6 @@ func (s *GroupOverlappingBlocksSuite) SetupTest() {
 		labels.FromMap(s.ls),
 		0,
 		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
-		false,
 	)
 	for i := 10; i >= 0; i-- {
 		s.Require().NoError(s.group.AppendMeta(&metadata.Meta{
@@ -446,7 +442,6 @@ func (s *GroupOverlappingBlocksSuite) TestOverlappingBlocks_additional_case() {
 		labels.FromMap(s.ls),
 		0,
 		noopCounter, noopCounter, noopCounter, noopCounter, noopCounter,
-		false,
 	)
 
 	expBMs := []tsdb.BlockMeta{

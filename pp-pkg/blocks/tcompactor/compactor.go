@@ -38,9 +38,6 @@ type Options struct {
 	// MaxBlockDuration limits the largest compaction range. If zero, no limit is
 	// applied and all exponential ranges are used.
 	MaxBlockDuration int64
-
-	// AcceptMalformedIndex allows the compactor to accept blocks with malformed index.
-	AcceptMalformedIndex bool
 }
 
 //
@@ -98,7 +95,7 @@ func NewTCompactor(
 		ctx:            ctx,
 		dir:            dir,
 		lCompactor:     lCompactor,
-		grouper:        NewDefaultGrouper(logger, reg, opts.AcceptMalformedIndex),
+		grouper:        NewDefaultGrouper(logger, reg),
 		planner:        planner,
 		blockPopulator: lcompactor.DefaultBlockPopulator{},
 		metrics:        newMetrics(reg),

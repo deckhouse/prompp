@@ -56,14 +56,12 @@ type DefaultGrouper struct {
 	compactionRunsCompleted *prometheus.CounterVec
 	compactionFailures      *prometheus.CounterVec
 	verticalCompactions     *prometheus.CounterVec
-	acceptMalformedIndex    bool
 }
 
 // NewDefaultGrouper initializes a new [DefaultGrouper].
 func NewDefaultGrouper(
 	logger log.Logger,
 	reg prometheus.Registerer,
-	acceptMalformedIndex bool,
 ) *DefaultGrouper {
 	return &DefaultGrouper{
 		logger: logger,
@@ -88,7 +86,6 @@ func NewDefaultGrouper(
 			Name: "prometheus_tcompact_group_vertical_compactions_total",
 			Help: "Total number of group compaction attempts that resulted in a new block based on overlapping blocks.",
 		}, []string{"resolution"}),
-		acceptMalformedIndex: acceptMalformedIndex,
 	}
 }
 
@@ -113,7 +110,6 @@ func (g *DefaultGrouper) Groups(blocks []*block.Block) (res []*Group, err error)
 				g.compactionRunsCompleted.WithLabelValues(resolutionLabel),
 				g.compactionFailures.WithLabelValues(resolutionLabel),
 				g.verticalCompactions.WithLabelValues(resolutionLabel),
-				g.acceptMalformedIndex,
 			)
 
 			groups[groupKey] = group
@@ -149,7 +145,6 @@ type Group struct {
 	compactionRunsCompleted prometheus.Counter
 	compactionFailures      prometheus.Counter
 	verticalCompactions     prometheus.Counter
-	acceptMalformedIndex    bool
 }
 
 // NewGroup initializes a new [Group].
@@ -163,7 +158,6 @@ func NewGroup(
 	compactionRunsCompleted prometheus.Counter,
 	compactionFailures prometheus.Counter,
 	verticalCompactions prometheus.Counter,
-	acceptMalformedIndex bool,
 ) *Group {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -179,7 +173,6 @@ func NewGroup(
 		compactionRunsCompleted: compactionRunsCompleted,
 		compactionFailures:      compactionFailures,
 		verticalCompactions:     verticalCompactions,
-		acceptMalformedIndex:    acceptMalformedIndex,
 	}
 }
 
@@ -340,7 +333,7 @@ func (cg *Group) runCompact(
 		toCompactDirs,
 		open,
 		blockPopulator,
-		tblock.WriteThanosMetaFileAdapter(ctx, cg.resolution, cg.labels, cg.acceptMalformedIndex),
+		tblock.WriteThanosMetaFileAdapter(cg.resolution, cg.labels),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("compact blocks: %w", err)
