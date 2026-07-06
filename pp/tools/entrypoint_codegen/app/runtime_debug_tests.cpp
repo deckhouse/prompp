@@ -8,7 +8,7 @@
 
 namespace {
 
-using entrypoint_codegen::app::RuntimeDebugSnapshot;
+using entrypoint_codegen::app::MemoryUsageSnapshot;
 using entrypoint_codegen::diagnostics::DiagnosticCode;
 using entrypoint_codegen::diagnostics::DiagnosticSet;
 using entrypoint_codegen::diagnostics::Severity;
@@ -20,12 +20,11 @@ class RuntimeDebugTest : public testing::Test {
 
 TEST_F(RuntimeDebugTest, AppendsMemoryUsageDiagnostic) {
   // Act
-  entrypoint_codegen::app::append_runtime_debug_diagnostics(diagnostics_,
-                                                            RuntimeDebugSnapshot{
-                                                                .allocated_bytes = 11,
-                                                                .deallocated_bytes = 7,
-                                                                .peak_live_bytes = 9,
-                                                            });
+  entrypoint_codegen::app::append_runtime_debug_diagnostics(diagnostics_, MemoryUsageSnapshot{
+                                                                              .allocated_bytes = 11,
+                                                                              .deallocated_bytes = 7,
+                                                                              .peak_live_bytes = 9,
+                                                                          });
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert

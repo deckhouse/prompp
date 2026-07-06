@@ -4,6 +4,10 @@
 
 namespace entrypoint_codegen::diagnostics {
 
+bool SeverityCounts::has_errors() const noexcept {
+  return errors != 0;
+}
+
 DiagnosticSet::DiagnosticSet(std::pmr::memory_resource* memory_resource) : diagnostics_(memory_resource) {}
 
 void DiagnosticSet::add(Diagnostic diagnostic) {
@@ -20,6 +24,28 @@ uint32_t DiagnosticSet::count() const noexcept {
 
 bool DiagnosticSet::empty() const noexcept {
   return diagnostics_.empty();
+}
+
+SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set) {
+  SeverityCounts counts;
+  for (const Diagnostic& diagnostic : diagnostic_set.diagnostics()) {
+    ++counts.total;
+    switch (diagnostic.severity) {
+      case Severity::kInfo: {
+        ++counts.infos;
+        break;
+      }
+      case Severity::kWarning: {
+        ++counts.warnings;
+        break;
+      }
+      case Severity::kError: {
+        ++counts.errors;
+        break;
+      }
+    }
+  }
+  return counts;
 }
 
 }  // namespace entrypoint_codegen::diagnostics

@@ -89,7 +89,7 @@ void write_help(std::ostream& out) {
 CliOptions parse_arguments(int argc, char** argv) {
   std::vector<std::filesystem::path> inputs;
   CliOptions options;
-  options.run_options.output_path = std::filesystem::current_path() / "entrypoint_facts.json";
+  options.run_options.output.output_path = std::filesystem::current_path() / "entrypoint_facts.json";
 
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -98,39 +98,39 @@ CliOptions parse_arguments(int argc, char** argv) {
       return options;
     }
     if (arg.rfind("--output=", 0) == 0) {
-      options.run_options.output_path = arg.substr(std::string("--output=").size());
+      options.run_options.output.output_path = arg.substr(std::string("--output=").size());
       continue;
     }
     if (arg.rfind("--output-dir=", 0) == 0) {
-      options.run_options.output_path = std::filesystem::path(arg.substr(std::string("--output-dir=").size())) / "entrypoint_facts.json";
+      options.run_options.output.output_path = std::filesystem::path(arg.substr(std::string("--output-dir=").size())) / "entrypoint_facts.json";
       continue;
     }
     if (arg.rfind("--mode=", 0) == 0) {
-      options.run_options.output_mode = parse_output_mode(arg.substr(std::string("--mode=").size()));
+      options.run_options.output.output_mode = parse_output_mode(arg.substr(std::string("--mode=").size()));
       continue;
     }
     if (arg.rfind("--format=", 0) == 0) {
-      options.run_options.output_mode = parse_output_mode(arg.substr(std::string("--format=").size()));
+      options.run_options.output.output_mode = parse_output_mode(arg.substr(std::string("--format=").size()));
       continue;
     }
     if (arg == "--no-output") {
-      options.run_options.output_mode = OutputMode::kCheck;
+      options.run_options.output.output_mode = OutputMode::kCheck;
       continue;
     }
     if (arg == "--runtime-debug") {
-      options.run_options.runtime_debug = true;
+      options.run_options.runtime.debug_diagnostics = true;
       continue;
     }
     if (arg.rfind("--clang-arg=", 0) == 0) {
-      options.run_options.clang_args.push_back(arg.substr(std::string("--clang-arg=").size()));
+      options.run_options.analysis.clang_args.push_back(arg.substr(std::string("--clang-arg=").size()));
       continue;
     }
     if (arg.rfind("--extra-arg=", 0) == 0) {
-      options.run_options.clang_args.push_back(arg.substr(std::string("--extra-arg=").size()));
+      options.run_options.analysis.clang_args.push_back(arg.substr(std::string("--extra-arg=").size()));
       continue;
     }
     if (arg.rfind("--clang-args-file=", 0) == 0) {
-      append_clang_args_file(arg.substr(std::string("--clang-args-file=").size()), options.run_options.clang_args);
+      append_clang_args_file(arg.substr(std::string("--clang-args-file=").size()), options.run_options.analysis.clang_args);
       continue;
     }
     if (arg.rfind("--source=", 0) == 0) {
@@ -143,14 +143,14 @@ CliOptions parse_arguments(int argc, char** argv) {
     }
     if (arg == "--") {
       for (++i; i < argc; ++i) {
-        options.run_options.clang_args.emplace_back(argv[i]);
+        options.run_options.analysis.clang_args.emplace_back(argv[i]);
       }
       break;
     }
     inputs.emplace_back(arg);
   }
 
-  options.run_options.source_files = collect_input_files(inputs);
+  options.run_options.analysis.source_files = collect_input_files(inputs);
   return options;
 }
 

@@ -193,6 +193,12 @@ cc_test(
 )
 
 cc_library(
+    name = "app_memory_usage",
+    hdrs = ["app/memory_usage.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+)
+
+cc_library(
     name = "app_options",
     hdrs = ["app/options.h"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
@@ -213,11 +219,30 @@ cc_library(
 )
 
 cc_library(
+    name = "app_memory_tracking",
+    srcs = ["app/memory_tracking.cpp"],
+    hdrs = ["app/memory_tracking.h"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [":app_memory_usage"],
+)
+
+cc_test(
+    name = "memory_tracking_test",
+    srcs = ["app/memory_tracking_tests.cpp"],
+    copts = ENTRYPOINT_CODEGEN_COPTS,
+    deps = [
+        ":app_memory_tracking",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "app_runtime_debug",
     srcs = ["app/runtime_debug.cpp"],
     hdrs = ["app/runtime_debug.h"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":app_memory_usage",
         ":diagnostics",
     ],
 )
@@ -230,6 +255,8 @@ cc_library(
     ],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":app_memory_usage",
+        ":app_memory_tracking",
         ":app_options",
         ":app_runtime_debug",
         ":clang_adapter",
@@ -256,6 +283,7 @@ cc_test(
     srcs = ["app/runtime_debug_tests.cpp"],
     copts = ENTRYPOINT_CODEGEN_COPTS,
     deps = [
+        ":app_memory_usage",
         ":app_runtime_debug",
         ":diagnostics",
         "@gtest//:gtest_main",

@@ -46,4 +46,39 @@ TEST_F(DiagnosticSetTest, StoresDiagnosticsAndCountsThem) {
   EXPECT_EQ(stored[0].location->column, location.column);
 }
 
+TEST_F(DiagnosticSetTest, CountsDiagnosticsBySeverity) {
+  // Arrange
+  diagnostics_.add(Diagnostic{
+      .code = DiagnosticCode::kRuntimeMemoryUsage,
+      .message = std::nullopt,
+      .severity = Severity::kInfo,
+      .function = std::nullopt,
+      .location = std::nullopt,
+  });
+  diagnostics_.add(Diagnostic{
+      .code = DiagnosticCode::kClangDiagnostic,
+      .message = std::nullopt,
+      .severity = Severity::kWarning,
+      .function = std::nullopt,
+      .location = std::nullopt,
+  });
+  diagnostics_.add(Diagnostic{
+      .code = DiagnosticCode::kMissingNamePrefix,
+      .message = std::nullopt,
+      .severity = Severity::kError,
+      .function = std::nullopt,
+      .location = std::nullopt,
+  });
+
+  // Act
+  const entrypoint_codegen::diagnostics::SeverityCounts counts = entrypoint_codegen::diagnostics::count_by_severity(diagnostics_);
+
+  // Assert
+  EXPECT_EQ(counts.total, 3);
+  EXPECT_EQ(counts.errors, 1);
+  EXPECT_EQ(counts.warnings, 1);
+  EXPECT_EQ(counts.infos, 1);
+  EXPECT_TRUE(counts.has_errors());
+}
+
 }  // namespace

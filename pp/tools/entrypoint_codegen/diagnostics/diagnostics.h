@@ -43,6 +43,15 @@ struct Diagnostic {
   std::optional<facts::SourceLocation> location;
 };
 
+struct SeverityCounts {
+  uint32_t total = 0;
+  uint32_t errors = 0;
+  uint32_t warnings = 0;
+  uint32_t infos = 0;
+
+  [[nodiscard]] bool has_errors() const noexcept;
+};
+
 class DiagnosticSet {
  public:
   explicit DiagnosticSet(std::pmr::memory_resource* memory_resource = std::pmr::get_default_resource());
@@ -56,5 +65,7 @@ class DiagnosticSet {
  private:
   std::pmr::vector<Diagnostic> diagnostics_;
 };
+
+[[nodiscard]] SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set);
 
 }  // namespace entrypoint_codegen::diagnostics

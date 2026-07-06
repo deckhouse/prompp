@@ -26,10 +26,17 @@ std::filesystem::path write_source_file(std::string_view name, std::string_view 
 
 entrypoint_codegen::app::RunOptions check_options_for(std::filesystem::path source_file) {
   return entrypoint_codegen::app::RunOptions{
-      .source_files = {std::move(source_file)},
-      .clang_args = {"-std=c++2b"},
-      .output_path = {},
-      .output_mode = entrypoint_codegen::app::OutputMode::kCheck,
+      .analysis =
+          entrypoint_codegen::app::AnalysisOptions{
+              .source_files = {std::move(source_file)},
+              .clang_args = {"-std=c++2b"},
+          },
+      .output =
+          entrypoint_codegen::app::OutputOptions{
+              .output_path = {},
+              .output_mode = entrypoint_codegen::app::OutputMode::kCheck,
+          },
+      .runtime = entrypoint_codegen::app::RuntimeOptions{},
   };
 }
 
@@ -45,8 +52,8 @@ TEST(RunTest, CheckModeSucceedsForValidAnnotatedEntrypoint) {
 
   // Assert
   EXPECT_EQ(report.decision, entrypoint_codegen::app::ExitDecision::kSuccess);
-  EXPECT_EQ(report.error_count, 0);
-  EXPECT_EQ(report.diagnostic_count, 0);
+  EXPECT_EQ(report.diagnostics.errors, 0);
+  EXPECT_EQ(report.diagnostics.total, 0);
 }
 
 TEST(RunTest, CheckModeFailsWhenValidationReportsErrors) {
@@ -61,8 +68,8 @@ TEST(RunTest, CheckModeFailsWhenValidationReportsErrors) {
 
   // Assert
   EXPECT_EQ(report.decision, entrypoint_codegen::app::ExitDecision::kAnalysisFailed);
-  EXPECT_EQ(report.error_count, 1);
-  EXPECT_EQ(report.diagnostic_count, 1);
+  EXPECT_EQ(report.diagnostics.errors, 1);
+  EXPECT_EQ(report.diagnostics.total, 1);
 }
 
 }  // namespace

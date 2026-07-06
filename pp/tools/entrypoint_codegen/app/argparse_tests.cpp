@@ -47,7 +47,7 @@ TEST(ArgparseTest, ReturnsHelpForHelpFlag) {
 
   // Assert
   EXPECT_TRUE(options.help);
-  EXPECT_TRUE(options.run_options.source_files.empty());
+  EXPECT_TRUE(options.run_options.analysis.source_files.empty());
 }
 
 TEST(ArgparseTest, CollectsExistingCppInputFiles) {
@@ -57,7 +57,7 @@ TEST(ArgparseTest, CollectsExistingCppInputFiles) {
 
   // Act
   const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", source_file.string()});
-  const auto source_files = options.run_options.source_files;
+  const auto source_files = options.run_options.analysis.source_files;
 
   // Assert
   ASSERT_EQ(source_files.size(), 1);
@@ -74,7 +74,7 @@ TEST(ArgparseTest, CollectsCppInputFilesRecursivelyFromDirectory) {
 
   // Act
   const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", root.string()});
-  const auto source_files = options.run_options.source_files;
+  const auto source_files = options.run_options.analysis.source_files;
 
   // Assert
   ASSERT_EQ(source_files.size(), 1);
@@ -98,7 +98,7 @@ TEST(ArgparseTest, ParsesOutputDirectoryAsFactsFilePath) {
   const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--output-dir=" + output_dir.string()});
 
   // Assert
-  EXPECT_EQ(options.run_options.output_path, output_dir / "entrypoint_facts.json");
+  EXPECT_EQ(options.run_options.output.output_path, output_dir / "entrypoint_facts.json");
 }
 
 TEST(ArgparseTest, ParsesCheckModeAlias) {
@@ -106,13 +106,13 @@ TEST(ArgparseTest, ParsesCheckModeAlias) {
   const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--no-output"});
 
   // Assert
-  EXPECT_EQ(options.run_options.output_mode, entrypoint_codegen::app::OutputMode::kCheck);
+  EXPECT_EQ(options.run_options.output.output_mode, entrypoint_codegen::app::OutputMode::kCheck);
 }
 
 TEST(ArgparseTest, CollectsClangArgsFromFlagAndSeparator) {
   // Act
   const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--clang-arg=-I.", "--", "-std=c++2b"});
-  const auto clang_args = options.run_options.clang_args;
+  const auto clang_args = options.run_options.analysis.clang_args;
 
   // Assert
   ASSERT_EQ(clang_args.size(), 2);
@@ -122,6 +122,14 @@ TEST(ArgparseTest, CollectsClangArgsFromFlagAndSeparator) {
 
 TEST(ArgparseTest, RejectsUnknownOutputMode) {
   EXPECT_THROW(parse_args({"entrypoint_codegen", "--mode=xml"}), std::runtime_error);
+}
+
+TEST(ArgparseTest, ParsesRuntimeDebugPolicy) {
+  // Act
+  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--runtime-debug"});
+
+  // Assert
+  EXPECT_TRUE(options.run_options.runtime.debug_diagnostics);
 }
 
 }  // namespace
