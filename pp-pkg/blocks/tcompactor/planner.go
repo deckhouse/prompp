@@ -102,6 +102,8 @@ func (p *TsdbBasedPlanner) Plan(_ context.Context, metasByMinTime []*metadata.Me
 }
 
 // getPlan is the main function that plans the compaction of the blocks.
+//
+//revive:disable-next-line:cyclomatic // selecting metas for compaction is a complex task
 func (p *TsdbBasedPlanner) getPlan(
 	noCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
