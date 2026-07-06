@@ -13,6 +13,7 @@ FROM debian:trixie-slim
 # (2026-04-15), so the fix first shipped in Go 1.25.10 / Go 1.26.3.
 # Once GO_VERSION below is bumped to >=1.25.10 or >=1.26.3, this package can
 # be dropped (see https://github.com/golang/go/issues/78405).
+# gcc-16/g++-16: not yet in Trixie; install from sid with apt pinning (default compiler).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -20,12 +21,9 @@ RUN set -eux; \
         curl \
         wget \
         gnupg \
-        gcc-14 \
-        g++-14 \
-        binutils-gold \
+        binutils \
         libunwind-dev \
         liblzma-dev \
-        libstdc++-14-dev \
         jq \
         bash \
         nodejs \
@@ -43,13 +41,13 @@ RUN set -eux; \
     gpg --dearmor -o /usr/share/keyrings/apt-llvm-org.gpg /tmp/llvm-snapshot.gpg.key; \
     rm -f /tmp/llvm-snapshot.gpg.key; \
     echo "deb [signed-by=/usr/share/keyrings/apt-llvm-org.gpg] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-21 main" > /etc/apt/sources.list.d/llvm.list; \
+    echo "deb [signed-by=/usr/share/keyrings/debian-archive-keyring.pgp] http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list; \
+    printf 'Package: *\nPin: release a=sid\nPin-Priority: 100\n' > /etc/apt/preferences.d/sid; \
     apt-get update; \
-    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21; \
+    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21 libclang-21-dev; \
+    apt-get install -y --no-install-recommends -t sid gcc-16 g++-16 libstdc++-16-dev; \
     ln -sf /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy; \
     ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100; \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100; \
-    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100; \
     rm -rf /var/lib/apt/lists/*
 
 # Bazel
@@ -70,6 +68,12 @@ ENV GOPATH="/opt/go"
 ENV PATH="$PATH:/usr/local/go/bin:/opt/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/prometheus/promu@latest
+
+# Set gcc-16 as default compiler after installing promu
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100; \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-16 100; \
+    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-16 100;
+
 # goyacc for generating promql/parser (make test, make build)
 ARG GOYACC_VERSION=v0.6.0
 RUN go install golang.org/x/tools/cmd/goyacc@${GOYACC_VERSION}

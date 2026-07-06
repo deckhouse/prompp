@@ -1,5 +1,6 @@
 #pragma once
 
+#include "metrics/metric.h"
 #include "state.h"
 
 namespace series_data::encoder::timestamp {
@@ -91,11 +92,11 @@ class Encoder {
 
     const auto previous_state_id = state_id;
     if (state_id == kInvalidStateId) [[unlikely]] {
-      auto& state = states_.emplace_back(state_id);
+      auto& state = emplace_state(state_id);
       TimestampEncoder::encode_first(state.encoder, timestamp, state.stream_data.stream);
       state_id = states_.index_of(state);
     } else {
-      auto& new_state = states_.emplace_back(state_id);
+      auto& new_state = emplace_state(state_id);
 
       auto& state = states_[state_id];
       ++state.child_count;
@@ -164,9 +165,33 @@ class Encoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t states_count() const noexcept { return states_.size(); }
 
+  // Binds the gauge that mirrors states_count(). The gauge is owned by the metrics page (which outlives this encoder), so
+  // the count is pushed eagerly on state creation instead of being pulled from this encoder at scrape time. That removes a
+  // use-after-free where a scrape could read states_count() through a dangling pointer after the owning DataStorage (and
+  // this encoder) had been destroyed.
+  PROMPP_ALWAYS_INLINE void set_states_count_gauge(metrics::Gauge* states_count_gauge) noexcept {
+    states_count_gauge_ = states_count_gauge;
+    if (states_count_gauge_ != nullptr) [[likely]] {
+      states_count_gauge_->set(states_.size());
+    }
+  }
+
  private:
   BareBones::VectorWithHoles<State, Reallocator> states_;
   StateTransitions state_transitions_{states_};
+  metrics::Gauge* states_count_gauge_{};
+
+  // states_.size() (== states_count()) counts allocated slots and only ever grows here, when emplace_back appends a new
+  // slot; erase just marks a hole and emplace_back reuses holes, so neither changes states_.size(). Therefore the gauge
+  // only needs to be refreshed on state creation (not on erase). Pushing the exact size() keeps the gauge correct even
+  // when a hole is reused, and doing it here (on the writer thread) means the scrape never touches the encoder.
+  PROMPP_ALWAYS_INLINE State& emplace_state(StateId previous_state_id) {
+    auto& state = states_.emplace_back(previous_state_id);
+    if (states_count_gauge_ != nullptr) [[likely]] {
+      states_count_gauge_->set(states_.size());
+    }
+    return state;
+  }
 
   PROMPP_ALWAYS_INLINE void decrease_reference_count(State& state, StateId state_id) noexcept {
     if (--state.reference_count == 0) {
