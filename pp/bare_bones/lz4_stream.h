@@ -158,22 +158,22 @@ class basic_ostream final : public std::ostream {
 
       const int orig_size = static_cast<int>(pptr() - pbase());
       pbump(-orig_size);
-      const size_t ret = LZ4F_compressUpdate(ctx_, &dest_buf_.front(), dest_buf_.capacity(), pbase(), orig_size, nullptr);
+      const size_t ret = LZ4F_compressUpdate(ctx_, dest_buf_.data(), dest_buf_.capacity(), pbase(), orig_size, nullptr);
       if (LZ4F_isError(ret) != 0) {
         throw std::runtime_error(std::string("LZ4 compression failed: ") + LZ4F_getErrorName(ret));
       }
-      stream_->write(&dest_buf_.front(), ret);
+      stream_->write(dest_buf_.data(), ret);
     }
 
     PROMPP_ALWAYS_INLINE void flush() {
       assert(!closed_);
       assert(stream_ != nullptr);
 
-      const size_t ret = LZ4F_flush(ctx_, &dest_buf_.front(), dest_buf_.capacity(), nullptr);
+      const size_t ret = LZ4F_flush(ctx_, dest_buf_.data(), dest_buf_.capacity(), nullptr);
       if (LZ4F_isError(ret) != 0) {
         throw std::runtime_error(std::string("LZ4 flush failed: ") + LZ4F_getErrorName(ret));
       }
-      stream_->write(&dest_buf_.front(), ret);
+      stream_->write(dest_buf_.data(), ret);
     }
 
     PROMPP_ALWAYS_INLINE void write_header() {
@@ -185,13 +185,13 @@ class basic_ostream final : public std::ostream {
       }
 
       if (!is_initialized_) {
-        const size_t ret = LZ4F_compressBegin(ctx_, &dest_buf_.front(), dest_buf_.capacity(), &preferences_);
+        const size_t ret = LZ4F_compressBegin(ctx_, dest_buf_.data(), dest_buf_.capacity(), &preferences_);
         if (LZ4F_isError(ret) != 0) {
           throw std::runtime_error(std::string("Failed to start LZ4 compression: ") + LZ4F_getErrorName(ret));
         }
 
         if (!header_written_) {
-          stream_->write(&dest_buf_.front(), ret);
+          stream_->write(dest_buf_.data(), ret);
           header_written_ = true;
         }
 
@@ -316,15 +316,15 @@ class basic_istream final : public std::istream {
 
       ++data_block_count_;
       src_buf_.reserve(data_block_size);
-      memcpy(&src_buf_.front(), &data_block_header_.front(), header_size);
+      memcpy(src_buf_.data(), &data_block_header_.front(), header_size);
 
       const auto read_size = data_block_size - header_size;
-      stream_->read(&src_buf_.front() + header_size, read_size);
+      stream_->read(src_buf_.data() + header_size, read_size);
       if (static_cast<size_t>(stream_->gcount()) != read_size) {
         return false;
       }
 
-      source_buffer_view_ = {&src_buf_.front(), header_size + stream_->gcount()};
+      source_buffer_view_ = {src_buf_.data(), header_size + stream_->gcount()};
       return true;
     }
 
