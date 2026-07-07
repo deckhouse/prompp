@@ -135,6 +135,7 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/com_google_absl:0002-svacer_fixes.patch"),
             Label("//third_party/patches/com_google_absl:0003-null_dereference_fixes.patch"),
             Label("//third_party/patches/com_google_absl:0004-array_bounds_fixes.patch"),
+            Label("//third_party/patches/com_google_absl:0005-gcc-16_fixes.patch"),
         ],
         sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
         strip_prefix = "abseil-cpp-20240116.rc1/",

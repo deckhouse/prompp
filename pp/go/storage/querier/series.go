@@ -2,7 +2,6 @@ package querier
 
 import (
 	"math"
-	"sync"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -11,14 +10,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
 )
-
-// builderPool builders pool for reuse in SeriesSet.
-var builderPool = sync.Pool{
-	New: func() any {
-		b := labels.NewScratchBuilder(10)
-		return &b
-	},
-}
 
 // ChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type ChunkIterator struct {
@@ -203,16 +194,13 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
 	s.series = append(s.series, NewSeries(
 		s.mint,
 		s.maxt,
-		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, builder),
+		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID),
 		s.serializedData,
 		chunkRef,
 	))
-	builderPool.Put(builder)
 
 	return true
 }
