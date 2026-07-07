@@ -13,9 +13,15 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-// defaultCoolingInterval the interval after which the rotation should have
-// taken place to eliminate errors in the selection from the catalog.
-const defaultCoolingInterval = 60 * time.Second
+const (
+	// defaultCoolingInterval the interval after which the rotation should have
+	// taken place to eliminate errors in the selection from the catalog.
+	defaultCoolingInterval = 60 * time.Second
+
+	// defaultTsdbRetentionPeriod is the default retention period for tsdb.
+	// Used only when tsdbRetentionPeriod is zero.
+	defaultTsdbRetentionPeriod = 15 * 24 * time.Hour
+)
 
 //
 // Persistener
@@ -217,6 +223,10 @@ func NewPersistenerService[
 	retentionPeriod time.Duration,
 	registerer prometheus.Registerer,
 ) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader] {
+	if tsdbRetentionPeriod == 0 {
+		tsdbRetentionPeriod = defaultTsdbRetentionPeriod
+	}
+
 	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader]{
 		persistener: NewPersistener[TTask, TShard, TGoShard, THeadBlockWriter, THead](
 			hcatalog,
