@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"sync"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -23,6 +24,14 @@ import (
 type labelSetsForGroup struct {
 	ls      labels.Labels
 	groupID int
+}
+
+// builderPool builders pool for reuse in SeriesSet.
+var builderPool = sync.Pool{
+	New: func() any {
+		b := labels.NewScratchBuilder(5)
+		return &b
+	},
 }
 
 //
