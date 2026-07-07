@@ -68,16 +68,13 @@ func (ss *AggrSeriesSet) Next() bool {
 		return false
 	}
 
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
 	ss.series = append(ss.series, NewAggrSeries(
-		labels.NewLabelsWithLSS(ss.labelSetSnapshot, seriesID, builder),
+		labels.NewLabelsWithLSS(ss.labelSetSnapshot, seriesID),
 		ss.serializedData,
 		ss.mint,
 		ss.maxt,
 		chunkRef,
 	))
-	builderPool.Put(builder)
 
 	return true
 }

@@ -125,11 +125,10 @@ class Regexp {
     std::vector<RE2::Arg*> re_args_ptr;
     re_args_ptr.reserve(n);
     for (int i = 1; i <= n; ++i) {
-      re_args.emplace_back(&res[i]);
-      re_args_ptr.emplace_back(&re_args[i - 1]);
+      re_args_ptr.emplace_back(&re_args.emplace_back(&res[i]));
     }
 
-    if (!RE2::FullMatchN(src, *re_, &re_args_ptr[0], n)) {
+    if (!RE2::FullMatchN(src, *re_, re_args_ptr.data(), n)) {
       res.clear();
       return false;
     }
@@ -280,6 +279,12 @@ class RelabelConfig {
         break;
       }
       p.remove_prefix(i + 1);
+
+      if (p.empty()) [[unlikely]] {
+        src_parts.emplace_back(tmpl.substr(tmpl.size() - 1, 1));
+        break;
+      }
+
       switch (p[0]) {
         // if contains '$$'
         case '$': {

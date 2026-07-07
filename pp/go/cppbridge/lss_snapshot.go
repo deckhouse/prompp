@@ -2,6 +2,7 @@ package cppbridge
 
 import (
 	"runtime"
+	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -68,6 +69,18 @@ func (lss *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) 
 	labelSetFree(labelSet)
 
 	return nil
+}
+
+func (lss *LabelSetSnapshot) Serialize(lsID uint32) string {
+	length := labelSetSerializeFromSnapshotLength(lss.pointer, lsID)
+	if length == 0 {
+		return ""
+	}
+
+	buf := make([]byte, length)
+	labelSetSerializeFromSnapshotToBuffer(lss.pointer, lsID, buf)
+	runtime.KeepAlive(lss)
+	return unsafe.String(unsafe.SliceData(buf), length)
 }
 
 // Query returns a LSSQueryResult that matches the given selector.
