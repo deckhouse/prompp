@@ -25,7 +25,7 @@ TEST_P(SetMergerFixture, Test) {
 
   auto offsets = GetParam().offsets;
   const auto temp_memory_ptr = std::make_unique<uint32_t[]>(expected.size());
-  auto memory = const_cast<uint32_t*>(&GetParam().ids[0]);
+  auto memory = const_cast<uint32_t*>(GetParam().ids.data());
   auto temp_memory = temp_memory_ptr.get();
 
   // Act

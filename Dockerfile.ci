@@ -2,17 +2,7 @@ FROM debian:trixie-slim
 
 # Align with Deckhouse module (debian-trixie) and libunwind+lzma static link expectations.
 # LLVM 21 from apt.llvm.org (trixie toolchain).
-# binutils-gold: needed only on linux/arm64 because every currently released Go
-# (1.25.x with x<=9 and 1.26.x with x<=2) unconditionally forces `-fuse-ld=gold`
-# for cgo dynamic/PIE links and aborts with "ARM64 external linker must be gold"
-# otherwise (see https://github.com/golang/go/issues/15696 and
-# https://github.com/golang/go/issues/22040). The underlying GNU bfd bug was
-# fixed in binutils 2.36 (we ship 2.44), but Go itself only learned to detect
-# that and fall back to bfd in CL 740480; the backports landed in
-# release-branch.go1.{25,26} on 2026-04-17, *after* the cut of go1.26.2
-# (2026-04-15), so the fix first shipped in Go 1.25.10 / Go 1.26.3.
-# Once GO_VERSION below is bumped to >=1.25.10 or >=1.26.3, this package can
-# be dropped (see https://github.com/golang/go/issues/78405).
+# gcc-16/g++-16: not yet in Trixie; install from sid with apt pinning (default compiler).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -20,12 +10,8 @@ RUN set -eux; \
         curl \
         wget \
         gnupg \
-        gcc-14 \
-        g++-14 \
-        binutils-gold \
         libunwind-dev \
         liblzma-dev \
-        libstdc++-14-dev \
         jq \
         bash \
         nodejs \
@@ -43,13 +29,17 @@ RUN set -eux; \
     gpg --dearmor -o /usr/share/keyrings/apt-llvm-org.gpg /tmp/llvm-snapshot.gpg.key; \
     rm -f /tmp/llvm-snapshot.gpg.key; \
     echo "deb [signed-by=/usr/share/keyrings/apt-llvm-org.gpg] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-21 main" > /etc/apt/sources.list.d/llvm.list; \
+    echo "deb [signed-by=/usr/share/keyrings/debian-archive-keyring.pgp] http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list; \
+    printf 'Package: *\nPin: release a=sid\nPin-Priority: 100\n' > /etc/apt/preferences.d/sid; \
     apt-get update; \
-    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21; \
+    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21 libclang-21-dev; \
+    apt-get install -y --no-install-recommends -t sid gcc-16 g++-16 libstdc++-16-dev; \
+    apt-get install -y binutils; \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100; \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-16 100; \
+    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-16 100; \
     ln -sf /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy; \
     ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100; \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100; \
-    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100; \
     rm -rf /var/lib/apt/lists/*
 
 # Bazel
@@ -59,10 +49,6 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-# TODO: now that GO_VERSION is >=1.25.10 and >=1.26.3, drop the
-# `binutils-gold` package above — those Go releases no longer require gold on
-# linux/arm64 when GNU ld is 2.36+. See the comment near `binutils-gold` and
-# https://github.com/golang/go/issues/22040 (issue #78405 for the 1.25 backport).
 ARG GO_VERSION=1.26.4
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
@@ -70,6 +56,7 @@ ENV GOPATH="/opt/go"
 ENV PATH="$PATH:/usr/local/go/bin:/opt/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/prometheus/promu@latest
+
 # goyacc for generating promql/parser (make test, make build)
 ARG GOYACC_VERSION=v0.6.0
 RUN go install golang.org/x/tools/cmd/goyacc@${GOYACC_VERSION}

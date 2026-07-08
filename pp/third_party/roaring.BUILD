@@ -13,6 +13,7 @@ cmake(
     lib_source = ":src",
     generate_args = [
         "-DENABLE_ROARING_TESTS=OFF",
+        "-DCMAKE_INSTALL_LIBDIR=lib",
     ],
     copts = [],
     build_args = ["-j `nproc`"],
