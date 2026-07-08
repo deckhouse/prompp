@@ -73,9 +73,9 @@ class Scraper {
     }
   }
 
-  class MetricsWrapper {
+  class FloatsWrapper {
    public:
-    explicit MetricsWrapper(const Scraper& scraper) : scraper_(scraper) {}
+    explicit FloatsWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
     [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
@@ -100,10 +100,8 @@ class Scraper {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return metric_buffer_.items_count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return metric_buffer_.begin(parser_.tokenizer().buffer(), default_timestamp_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsWrapper metrics() const noexcept { return MetricsWrapper{*this}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }

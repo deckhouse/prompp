@@ -12,21 +12,21 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
 using PromPP::Prometheus::MetadataType;
+using PromPP::WAL::hashdex::FloatMetric;
 using PromPP::WAL::hashdex::Metadata;
-using PromPP::WAL::hashdex::Metric;
 using std::operator""sv;
 
 struct ProtobufCase {
   std::string_view protobuf;
   std::vector<Metadata> metadata{};
-  std::vector<Metric> metrics{};
+  std::vector<FloatMetric> floats{};
 };
 
 class ProtobufFixture : public ::testing::TestWithParam<ProtobufCase> {
  protected:
   PromPP::WAL::hashdex::Protobuf hashdex_;
 
-  void SetUp() override { calculate_labelset_hash(const_cast<ProtobufCase&>(GetParam()).metrics); }
+  void SetUp() override { calculate_labelset_hash(const_cast<ProtobufCase&>(GetParam()).floats); }
 };
 
 TEST_P(ProtobufFixture, Test) {
@@ -34,11 +34,11 @@ TEST_P(ProtobufFixture, Test) {
 
   // Act
   hashdex_.presharding(GetParam().protobuf);
-  const auto metrics = get_metrics(hashdex_);
-  const auto metadata = get_metadata(hashdex_.metadata());
+  const auto floats = get_floats(hashdex_);
+  const auto metadata = get_metadata(hashdex_);
 
   // Assert
-  EXPECT_EQ(GetParam().metrics, metrics);
+  EXPECT_EQ(GetParam().floats, floats);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
 
@@ -54,11 +54,11 @@ INSTANTIATE_TEST_SUITE_P(
         .metadata = {Metadata{.metric_name = "test1", .text = "test counter", .type = MetadataType::kHelp},
                      Metadata{.metric_name = "test2", .text = "test unit", .type = MetadataType::kUnit},
                      Metadata{.metric_name = "test3", .text = "COUNTER", .type = MetadataType::kType}},
-        .metrics = {Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "test"},
-                                              {"__replica__", "replica-1"},
-                                              {"cluster", "cluster-0"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{-1654608420000, 4444}}}}}}));
+        .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "test"},
+                                                  {"__replica__", "replica-1"},
+                                                  {"cluster", "cluster-0"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{-1654608420000, 4444}}}}}}));
 
 }  // namespace

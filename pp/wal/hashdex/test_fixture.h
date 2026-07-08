@@ -2,10 +2,11 @@
 
 #include "metric.h"
 #include "primitives/hash.h"
+#include "prometheus/hashdex.h"
 
 namespace PromPP::WAL::hashdex {
 
-inline std::ostream& operator<<(std::ostream& stream, const Metric& item) {
+inline std::ostream& operator<<(std::ostream& stream, const FloatMetric& item) {
   stream << "hash: " << item.hash << ", labels: { ";
 
   for (const auto& [name, value] : item.timeseries.label_set()) {
@@ -28,31 +29,31 @@ inline std::ostream& operator<<(std::ostream& stream, const Metadata& item) {
   return stream;
 }
 
-inline void calculate_labelset_hash(std::vector<Metric>& metrics) noexcept {
-  for (auto& item : metrics) {
+inline void calculate_labelset_hash(std::vector<FloatMetric>& floats) noexcept {
+  for (auto& item : floats) {
     item.hash = Primitives::hash::hash_of_label_set(item.timeseries.label_set());
   }
 }
 
-template <class Metrics>
-[[nodiscard]] std::vector<Metric> get_metrics(const Metrics& metrics) noexcept {
-  std::vector<Metric> items;
-  items.reserve(metrics.size());
+template <Prometheus::hashdex::HashdexInterface Hashdex>
+[[nodiscard]] std::vector<FloatMetric> get_floats(const Hashdex& hashdex) noexcept {
+  std::vector<FloatMetric> items;
+  items.reserve(hashdex.size());
 
-  for (auto& item : metrics) {
-    auto& scraped_item = items.emplace_back(Metric{.hash = item.hash()});
+  for (auto& item : hashdex.floats()) {
+    auto& scraped_item = items.emplace_back(FloatMetric{.hash = item.hash()});
     item.read(scraped_item.timeseries);
   }
 
   return items;
 }
 
-template <class MetadataType>
-[[nodiscard]] std::vector<Metadata> get_metadata(const MetadataType& metadata) noexcept {
+template <Prometheus::hashdex::HashdexInterface Hashdex>
+[[nodiscard]] std::vector<Metadata> get_metadata(const Hashdex& hashdex) noexcept {
   std::vector<Metadata> items;
-  items.reserve(metadata.size());
+  items.reserve(hashdex.metadata().size());
 
-  for (auto& item : metadata) {
+  for (auto& item : hashdex.metadata()) {
     if constexpr (std::is_same_v<decltype(item), const Metadata&>) {
       items.emplace_back(Metadata{.metric_name = item.metric_name, .text = item.text, .type = item.type});
     } else {

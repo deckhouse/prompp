@@ -35,15 +35,20 @@ class Abstract {
   }
 };
 
+template <class Floats>
+concept HashdexFloats = requires(const Floats& const_floats) {
+  { const_floats.size() } -> std::convertible_to<size_t>;
+
+  { std::forward_iterator<decltype(const_floats.begin())> };
+  { const_floats.begin() == const_floats.end() };
+};
+
 template <class Hashdex>
 concept HashdexInterface = requires(const Hashdex& const_hashdex) {
   { const_hashdex.size() } -> std::convertible_to<size_t>;
 
-  { std::forward_iterator<decltype(const_hashdex.begin())> };
-  { const_hashdex.begin() == const_hashdex.end() };
-
   { const_hashdex.metadata() };
-  { const_hashdex.metrics() };
+  { const_hashdex.floats() } -> HashdexFloats;
 };
 
 }  // namespace PromPP::Prometheus::hashdex

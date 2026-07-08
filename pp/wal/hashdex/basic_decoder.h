@@ -36,21 +36,19 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
   };
 
  private:
-  std::vector<Item> items_;
+  std::vector<Item> floats_;
   uint32_t series_{0};
 
   // metrics_injection injection of additional metrics with Heartbeat.
   void metric_injection(const MetaInjection& meta) {
     HeartbeatMetricsInserter inserter({.agent_uuid = meta.agent_uuid, .hostname = meta.hostname});
     inserter.insert(meta.now, meta.sent_at, [this](const auto& timeseries) PROMPP_LAMBDA_INLINE {
-      items_.emplace_back(timeseries.label_set(), timeseries.samples()[0]);
+      floats_.emplace_back(timeseries.label_set(), timeseries.samples()[0]);
       ++series_;
     });
   }
 
  public:
-  using const_iterator = std::vector<Item>::const_iterator;
-
   // presharding from decoder make presharding slice with hash and TimeseriesSemiview.
   PROMPP_ALWAYS_INLINE void presharding(WAL::BasicDecoder<>& decoder) {
     WAL::BasicDecoder<>::label_set_value_type ls_view;  // composite_type
@@ -62,9 +60,9 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
         last_ls_id = ls_id;
         ++series_;
       }
-      items_.emplace_back(ls_view, Primitives::Sample(ts, value));
+      floats_.emplace_back(ls_view, Primitives::Sample(ts, value));
     });
-    if (!items_.empty()) [[likely]] {
+    if (!floats_.empty()) [[likely]] {
       set_cluser_and_replica_values(ls_view);
     }
   }
@@ -80,7 +78,7 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
   PROMPP_ALWAYS_INLINE void write_stats(WAL::BasicDecoder<>& decoder, Stats& stats) {
     stats.created_at = decoder.created_at_tsns();
     stats.encoded_at = decoder.encoded_at_tsns();
-    stats.samples = items_.size();
+    stats.samples = floats_.size();
     stats.series = series_;
     stats.earliest_block_sample = decoder.earliest_sample();
     stats.latest_block_sample = decoder.latest_sample();
@@ -89,12 +87,10 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return std::begin(items_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return std::end(items_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series() const noexcept { return series_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return items_.size(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return floats_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return items_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
     struct Stub {};
     return Stub{};
