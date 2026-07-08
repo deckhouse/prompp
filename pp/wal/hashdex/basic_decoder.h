@@ -88,7 +88,6 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series() const noexcept { return series_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return floats_.size(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {

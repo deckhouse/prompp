@@ -45,8 +45,6 @@ concept HashdexFloats = requires(const Floats& const_floats) {
 
 template <class Hashdex>
 concept HashdexInterface = requires(const Hashdex& const_hashdex) {
-  { const_hashdex.size() } -> std::convertible_to<size_t>;
-
   { const_hashdex.metadata() };
   { const_hashdex.floats() } -> HashdexFloats;
 };

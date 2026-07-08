@@ -21,7 +21,6 @@ class Protobuf : public Prometheus::hashdex::Abstract {
             .max_timeseries_count = limits.max_timeseries_count,
         } {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return floats_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& limits() const noexcept { return limits_; }
 
   void presharding(std::string_view protobuf) {

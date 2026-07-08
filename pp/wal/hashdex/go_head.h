@@ -87,8 +87,6 @@ class GoHead : public Prometheus::hashdex::Abstract {
     const series_data::DataStorage* data_storage_{};
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return floats_.size(); }
-
   PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, series_data::DataStorage* data_storage) {
     series_data::Encoder encoder(*data_storage);
     series_data::OutdatedChunkMerger{encoder}.merge();

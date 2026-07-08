@@ -12,7 +12,6 @@ class GoModel : public Prometheus::hashdex::Abstract {
   PROMPP_ALWAYS_INLINE GoModel() = default;
   explicit PROMPP_ALWAYS_INLINE GoModel(const Prometheus::hashdex::Limits& limits) noexcept : limits_(limits) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return floats_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Prometheus::hashdex::Limits& limits() const noexcept { return limits_; }
 
   PROMPP_ALWAYS_INLINE void presharding(const Primitives::Go::SliceView<Primitives::Go::TimeSeries>& go_timeseries) {
