@@ -7,16 +7,14 @@
 2. **Disable core dumps feature flag.** Added `PROMPP_FEATURES=disable_coredumps`, which sets `RLIMIT_CORE` to 0 at startup so the kernel does not write core dumps into the working directory on crash. Lowering the limit needs no extra privileges, so it works in unprivileged Kubernetes pods.
 
 ### Enhancements
-1. **Default TSDB retention period.** The tsdb default time retention (15d) is now applied to the PP head manager and catalog GC when no time retention is configured (e.g. only `storage.tsdb.retention.size` is set), matching upstream tsdb behavior. Retention stays at 0 in agent mode.
-2. **DataStorage metrics.** Exposed a new family of `prompp_data_storage_*` metrics — per-encoder-type counts, finalized chunk counts, and timestamp state counts — giving operators visibility into the C++ data storage internals.
+1. **DataStorage metrics.** Exposed a new family of `prompp_data_storage_*` metrics — per-encoder-type counts, finalized chunk counts, and timestamp state counts — giving operators visibility into the C++ data storage internals.
 
 ### Performance
 1. **Faster `NewLabelsWithLSS`.** Added a dedicated `serialize_from_snapshot_to_buffer` binding so building Go label sets from an LSS snapshot serializes directly into a buffer, cutting allocations and copies on the hot path.
 2. **Index writer optimization.** Reworked snapshot symbol collection to emit each label name once instead of once per value (a single hot name previously reached ~4.7k copies on a real LSS), cutting `write_symbols` time after shrink by a further ~16% on top of the btree change.
 
 ### Fixes
-1. **Use-after-free of DataStorage metrics `address` label.** The `address` label of `prompp_data_storage_*` metrics was a non-owning view into a string freed on DataStorage destruction, so a concurrent self-scrape could read freed memory and emit invalid (non-UTF-8) values. Ownership of the address string now lives in the metrics page (matching page lifetime), the `timestamp_states_count` gauge is pushed instead of pulled through the encoder, and the whole metrics iteration is serialized under a mutex since `client_golang` does not serialize concurrent scrapes.
-2. **Dependency security updates.** Bumped the Go `go.mongodb.org/mongo-driver` to v1.17.7 and the web UI `ws` (v8.21.0) and `form-data` (v3.0.5) packages, picking up upstream security fixes.
+1. **Dependency security updates.** Bumped the Go `go.mongodb.org/mongo-driver` to v1.17.7 and the web UI `ws` (v8.21.0) and `form-data` (v3.0.5) packages, picking up upstream security fixes.
 
 ### Other
 1. **GCC 16 C++ toolchain.** Upgraded the CI/devcontainer C++ toolchain to GCC 16.
