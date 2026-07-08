@@ -23,6 +23,9 @@ class FactArenaTest : public testing::Test {
 };
 
 TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
+  // // entrypoint.cpp
+  // void prompp_fn();
+
   // Act
   const auto string_id = facts_.add_string("prompp_fn");
   const auto source_file_id = facts_.add_source_file("entrypoint.cpp");
@@ -35,6 +38,9 @@ TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
 }
 
 TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
+  // // entrypoint.cpp
+  // void prompp_fn(void* args, void* res);
+
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 3, .column = 5};
   const std::vector<ParamDecl> params{
@@ -54,12 +60,19 @@ TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
   // Assert
   ASSERT_EQ(stored_params.size(), 2);
   EXPECT_EQ(facts_.string(stored_params[0].name), "args");
+  EXPECT_EQ(facts_.string(stored_params[1].name), "res");
+
+  EXPECT_EQ(stored_params[0].role, ParamRole::kArgs);
   EXPECT_EQ(stored_params[1].role, ParamRole::kRes);
+
   ASSERT_EQ(stored_fields.size(), 1);
   EXPECT_EQ(facts_.string(stored_fields[0].name), "series");
 }
 
 TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
+  // // entrypoint.cpp
+  // void prompp_fn(void* args);
+
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 3, .column = 5};
   const std::vector<ParamDecl> params{
@@ -89,13 +102,17 @@ TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
   // Assert
   ASSERT_EQ(functions.size(), 1);
   EXPECT_EQ(facts_.string(facts_.function(function_id).name), "prompp_fn");
+
   ASSERT_EQ(stored_params.size(), 1);
   EXPECT_EQ(facts_.string(stored_params[0].name), "args");
+  
   ASSERT_EQ(stored_layouts.size(), 1);
   EXPECT_EQ(stored_layouts[0].kind, LayoutKind::kArguments);
 }
 
 TEST_F(FactArenaTest, MoveTransfersStoredFacts) {
+  // void prompp_fn();
+
   // Arrange
   const auto string_id = facts_.add_string("prompp_fn");
 
