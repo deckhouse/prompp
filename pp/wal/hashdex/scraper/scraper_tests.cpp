@@ -862,13 +862,6 @@ INSTANTIATE_TEST_SUITE_P(NullByte,
                                                                                                {"a", "abc\x00"sv},
                                                                                            },
                                                                                            BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-                                         ScraperCase{.buffer = "null_byte_metric{a=\"abc\x00\"} 1\n# EOF\n"sv,
-                                                     .result = Error::kNoError,
-                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
-                                                                                               {"__name__", "null_byte_metric"},
-                                                                                               {"a", "abc\x00"sv},
-                                                                                           },
-                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
                                          ScraperCase{.buffer = "a{b=\"\x00\"} 1\n# EOF\n"sv,
                                                      .result = Error::kNoError,
                                                      .floats = {FloatMetric{.timeseries = {LabelViewSet{
