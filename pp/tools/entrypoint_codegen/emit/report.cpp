@@ -1,6 +1,4 @@
-#include "emit/json.h"
-
-#include "diagnostics/diagnostic_catalog.h"
+#include "emit/report.h"
 
 #include <ostream>
 #include <stdexcept>
@@ -221,7 +219,7 @@ void write_diagnostic(std::ostream& out, const facts::EntrypointFacts& facts, co
   out << "}";
 }
 
-void write_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   out << "  \"diagnostics\": [\n";
   const auto diagnostic_values = diagnostic_set.diagnostics();
   for (size_t i = 0; i < diagnostic_values.size(); ++i) {
@@ -234,9 +232,7 @@ void write_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, c
   out << "  ]";
 }
 
-}  // namespace
-
-void write_json(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_report(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   if (!out) {
     throw std::runtime_error("output stream is not writable");
   }
@@ -246,9 +242,35 @@ void write_json(std::ostream& out, const facts::EntrypointFacts& facts, const di
   out << ",\n";
   write_functions(out, facts);
   out << ",\n";
-  write_diagnostics(out, facts, diagnostic_set);
+  write_json_diagnostics(out, facts, diagnostic_set);
   out << "\n";
   out << "}\n";
+}
+
+void write_compiler_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+  for (const diagnostics::Diagnostic& diagnostic : diagnostic_set.diagnostics()) {
+    if (diagnostic.location.has_value()) {
+      const facts::SourceLocation location = *diagnostic.location;
+      out << facts.string(facts.source_file(location.file).path) << ":" << location.line << ":" << location.column << ": ";
+    }
+    out << diagnostics::severity_name(diagnostic.severity) << ": " << diagnostics::diagnostic_message(diagnostic) << " ["
+        << diagnostics::diagnostic_code_name(diagnostic.code) << "]\n";
+  }
+}
+
+}  // namespace
+
+void write_report(std::ostream& out, ReportFormat format, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+  switch (format) {
+    case ReportFormat::kJson: {
+      write_json_report(out, facts, diagnostic_set);
+      break;
+    }
+    case ReportFormat::kCompilerDiagnostics: {
+      write_compiler_diagnostics(out, facts, diagnostic_set);
+      break;
+    }
+  }
 }
 
 }  // namespace entrypoint_codegen::emit

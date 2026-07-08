@@ -10,7 +10,6 @@ cc_library(
             "diagnostics/*.cpp",
             "emit/*.cpp",
             "facts/*.cpp",
-            "validate/*.cpp",
         ],
         exclude = [
             "app/main.cpp",
@@ -24,7 +23,6 @@ cc_library(
         "diagnostics/*.h",
         "emit/*.h",
         "facts/*.h",
-        "validate/*.h",
     ]),
     copts = [
         "-std=c++2b",

@@ -1,8 +1,9 @@
-#include "validate/validate.h"
+#include "contract/entrypoint_contract.h"
 
 #include <gtest/gtest.h>
 
 #include "diagnostics/diagnostics.h"
+#include "facts/entrypoint_facts.h"
 
 #include <optional>
 #include <vector>
@@ -42,7 +43,7 @@ TEST_F(ValidateEntrypointsTest, AcceptsValidCgoFunction) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -72,7 +73,7 @@ TEST_F(ValidateEntrypointsTest, AcceptsValidFastCgoFunction) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -94,7 +95,7 @@ TEST_F(ValidateEntrypointsTest, ReportsMissingEntrypointPrefix) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -121,7 +122,7 @@ TEST_F(ValidateEntrypointsTest, ReportsMissingCLinkage) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -144,7 +145,7 @@ TEST_F(ValidateEntrypointsTest, ReportsMissingEntrypointAttribute) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -167,7 +168,7 @@ TEST_F(ValidateEntrypointsTest, ReportsUnsupportedFastCgoReturnType) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -199,7 +200,7 @@ TEST_F(ValidateEntrypointsTest, ReportsUnsupportedFastCgoParamCount) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -228,7 +229,7 @@ TEST_F(ValidateEntrypointsTest, ReportsUnsupportedFastCgoParamType) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -254,7 +255,7 @@ TEST_F(ValidateEntrypointsTest, ReportsUnknownFastCgoParamRole) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -284,7 +285,7 @@ TEST_F(ValidateEntrypointsTest, ReportsInvalidTwoParamOrder) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -314,7 +315,7 @@ TEST_F(ValidateEntrypointsTest, ReportsInvalidSecondParamRole) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -340,7 +341,7 @@ TEST_F(ValidateEntrypointsTest, ReportsMissingArgumentsLayout) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -366,7 +367,7 @@ TEST_F(ValidateEntrypointsTest, ReportsMissingResultLayout) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -392,7 +393,7 @@ TEST_F(ValidateEntrypointsTest, ReportsUnexpectedArgumentsLayout) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert
@@ -418,7 +419,7 @@ TEST_F(ValidateEntrypointsTest, ReportsUnexpectedResultLayout) {
   });
 
   // Act
-  entrypoint_codegen::validate::validate_entrypoints(facts_, diagnostics_);
+  entrypoint_codegen::contract::validate_entrypoints(facts_, diagnostics_);
   const auto diagnostics = diagnostics_.diagnostics();
 
   // Assert

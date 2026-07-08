@@ -7,6 +7,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace entrypoint_codegen::diagnostics {
@@ -67,5 +68,9 @@ class DiagnosticSet {
 };
 
 [[nodiscard]] SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set);
+[[nodiscard]] std::string_view diagnostic_code_name(DiagnosticCode code);
+[[nodiscard]] std::string_view diagnostic_default_message(DiagnosticCode code);
+[[nodiscard]] std::string_view diagnostic_message(const Diagnostic& diagnostic);
+[[nodiscard]] std::string_view severity_name(Severity severity);
 
 }  // namespace entrypoint_codegen::diagnostics

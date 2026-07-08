@@ -5,6 +5,14 @@
 #include <optional>
 #include <string_view>
 
+namespace entrypoint_codegen::diagnostics {
+class DiagnosticSet;
+}
+
+namespace entrypoint_codegen::facts {
+class EntrypointFacts;
+}
+
 namespace entrypoint_codegen::contract {
 
 constexpr std::string_view kFunctionNamePrefix = "prompp_";
@@ -22,5 +30,7 @@ constexpr std::string_view kResParamName = "res";
 [[nodiscard]] facts::BridgeKind bridge_kind_for_annotation(std::string_view annotation);
 [[nodiscard]] facts::ParamRole param_role_for_name(std::string_view name);
 [[nodiscard]] std::optional<facts::LayoutKind> layout_kind_for_name(std::string_view name);
+
+void validate_entrypoints(const facts::EntrypointFacts& facts, diagnostics::DiagnosticSet& diagnostic_set);
 
 }  // namespace entrypoint_codegen::contract

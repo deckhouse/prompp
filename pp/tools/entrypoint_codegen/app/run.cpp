@@ -3,10 +3,9 @@
 #include "app/memory_tracking.h"
 #include "app/runtime_debug.h"
 #include "clang_adapter/parse.h"
+#include "contract/entrypoint_contract.h"
 #include "diagnostics/diagnostics.h"
-#include "emit/diagnostics.h"
-#include "emit/json.h"
-#include "validate/validate.h"
+#include "emit/report.h"
 
 #include <filesystem>
 #include <fstream>
@@ -26,12 +25,12 @@ void write_json_output(const OutputOptions& options, const facts::EntrypointFact
   if (!output) {
     throw std::runtime_error("failed to open output file: " + options.output_path.string());
   }
-  emit::write_json(output, facts, diagnostic_set);
+  emit::write_report(output, emit::ReportFormat::kJson, facts, diagnostic_set);
 }
 
 void write_lint_output(const OutputOptions& options, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   std::ostream& output = options.diagnostics_output == nullptr ? std::cout : *options.diagnostics_output;
-  emit::write_diagnostics(output, facts, diagnostic_set);
+  emit::write_report(output, emit::ReportFormat::kCompilerDiagnostics, facts, diagnostic_set);
 }
 
 }  // namespace
@@ -47,7 +46,7 @@ RunReport run(const RunOptions& options) {
       },
       diagnostic_set);
 
-  validate::validate_entrypoints(facts, diagnostic_set);
+  contract::validate_entrypoints(facts, diagnostic_set);
 
   if (options.runtime.debug_diagnostics) {
     append_runtime_debug_diagnostics(diagnostic_set, memory_resource.snapshot());

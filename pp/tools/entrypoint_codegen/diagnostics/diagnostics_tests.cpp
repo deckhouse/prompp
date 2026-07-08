@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <optional>
+#include <string_view>
 
 namespace {
 
@@ -79,6 +80,82 @@ TEST_F(DiagnosticSetTest, CountsDiagnosticsBySeverity) {
   EXPECT_EQ(counts.warnings, 1);
   EXPECT_EQ(counts.infos, 1);
   EXPECT_TRUE(counts.has_errors());
+}
+
+TEST(DiagnosticsTest, NamesDiagnosticCode) {
+  // Act
+  const std::string_view code = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kMissingNamePrefix);
+
+  // Assert
+  EXPECT_EQ(code, "missing_name_prefix");
+}
+
+TEST(DiagnosticsTest, NamesParameterRoleDiagnosticsWithDistinctCodes) {
+  // Act
+  const std::string_view unknown_role = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kUnknownParamRole);
+  const std::string_view invalid_order = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kInvalidTwoParamOrder);
+  const std::string_view invalid_second = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kInvalidSecondParamRole);
+
+  // Assert
+  EXPECT_EQ(unknown_role, "unknown_param_role");
+  EXPECT_EQ(invalid_order, "invalid_two_param_order");
+  EXPECT_EQ(invalid_second, "invalid_second_param_role");
+}
+
+TEST(DiagnosticsTest, ProvidesDefaultMessageForDiagnosticCode) {
+  // Act
+  const std::string_view message = entrypoint_codegen::diagnostics::diagnostic_default_message(DiagnosticCode::kMissingNamePrefix);
+
+  // Assert
+  EXPECT_EQ(message, "entrypoint function must use prompp_ prefix");
+}
+
+TEST(DiagnosticsTest, UsesDiagnosticMessageWhenPresent) {
+  // Arrange
+  const SourceLocation location{.file = SourceFileId(0), .line = 1, .column = 1};
+  const Diagnostic diagnostic{
+      .code = DiagnosticCode::kClangDiagnostic,
+      .message = "clang says no",
+      .severity = Severity::kError,
+      .function = std::nullopt,
+      .location = location,
+  };
+
+  // Act
+  const std::string_view message = entrypoint_codegen::diagnostics::diagnostic_message(diagnostic);
+
+  // Assert
+  EXPECT_EQ(message, "clang says no");
+}
+
+TEST(DiagnosticsTest, FallsBackToDefaultMessageWhenDiagnosticMessageIsAbsent) {
+  // Arrange
+  const SourceLocation location{.file = SourceFileId(0), .line = 1, .column = 1};
+  const Diagnostic diagnostic{
+      .code = DiagnosticCode::kMissingNamePrefix,
+      .message = std::nullopt,
+      .severity = Severity::kError,
+      .function = std::nullopt,
+      .location = location,
+  };
+
+  // Act
+  const std::string_view message = entrypoint_codegen::diagnostics::diagnostic_message(diagnostic);
+
+  // Assert
+  EXPECT_EQ(message, "entrypoint function must use prompp_ prefix");
+}
+
+TEST(DiagnosticsTest, NamesSeverityValues) {
+  // Act
+  const std::string_view info = entrypoint_codegen::diagnostics::severity_name(Severity::kInfo);
+  const std::string_view warning = entrypoint_codegen::diagnostics::severity_name(Severity::kWarning);
+  const std::string_view error = entrypoint_codegen::diagnostics::severity_name(Severity::kError);
+
+  // Assert
+  EXPECT_EQ(info, "info");
+  EXPECT_EQ(warning, "warning");
+  EXPECT_EQ(error, "error");
 }
 
 }  // namespace
