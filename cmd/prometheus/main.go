@@ -58,6 +58,10 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
@@ -69,7 +73,6 @@ import (
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
 
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
-	block "github.com/prometheus/prometheus/pp/go/storage/block"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
@@ -93,6 +96,7 @@ import (
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/wlog"
 	"github.com/prometheus/prometheus/util/documentcli"
 	"github.com/prometheus/prometheus/util/logging"
@@ -830,12 +834,9 @@ func main() {
 	// 2) disabled (default): pre-PR-377 mode with tsdb.DB serving persisted blocks.
 	// In both modes, PP head manager + adapter remain the write path.
 	var (
-		blockManager     *block.Manager
-		blockCompactor   *block.Compactor
 		tsdbHistorical   *tsdbHistoricalStorage
-		compactCancel    context.CancelFunc
-		persistedStorage storage.Storage       = localStorage
-		startTimeFn      func() (int64, error) = localStorage.StartTime
+		persistedStorage storage.Storage = localStorage
+		startTimeFn                      = localStorage.StartTime
 	)
 	if !agentMode {
 		// Storage is constructed eagerly here for both schemes. The historical
@@ -867,37 +868,49 @@ func main() {
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
 			retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-			blocksToDelete := pp_pkg_tsdb.NewBlocksToDelete(
+			blocksToDelete := block.NewBlocksToDelete(
 				retentionMs,
 				int64(cfg.tsdb.MaxBytes),
-				pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
+				block.CatalogHeadsExtraSize(dataDir, headCatalog),
 				prometheus.DefaultRegisterer,
 			)
-			blockManager, err = block.NewManager(localStoragePath, &block.Options{
-				RetentionDuration:           retentionMs,
-				CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
-				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-			}, blocksToDelete, log.With(logger, "component", "blockmanager"), prometheus.DefaultRegisterer)
+
+			chunkPool := chunkenc.NewPool()
+			compactCtx, compactCancel := context.WithCancel(context.Background())
+			blockCompactor, err := tcompactor.NewTCompactor(
+				compactCtx,
+				log.With(logger, "component", "tcompactor"),
+				localStoragePath,
+				tcompactor.Options{
+					TsdbOptions: lcompactor.LeveledCompactorOptions{
+						MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
+						EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+					},
+					MinBlockDuration: int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+					MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
+				}, chunkPool, prometheus.DefaultRegisterer)
+			if err != nil {
+				level.Error(logger).Log("msg", "failed to create tcompactor", "err", err)
+				os.Exit(1)
+			}
+
+			blockManager, err := manager.NewManager(
+				localStoragePath,
+				&manager.Options{
+					RetentionDuration:           retentionMs,
+					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
+					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+				},
+				blockCompactor,
+				blocksToDelete,
+				chunkPool,
+				log.With(logger, "component", "blockmanager"),
+				prometheus.DefaultRegisterer,
+			)
 			if err != nil {
 				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
 				os.Exit(1)
 			}
-
-			var compactCtx context.Context
-			compactCtx, compactCancel = context.WithCancel(context.Background())
-			blockCompactor, err = block.NewCompactor(compactCtx, localStoragePath, &block.CompactorOptions{
-				MinBlockDuration:            int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
-				MaxBlockDuration:            int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
-				MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
-				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-			}, blockManager, log.With(logger, "component", "blockcompactor"), prometheus.DefaultRegisterer)
-			if err != nil {
-				level.Error(logger).Log("msg", "failed to create block compactor", "err", err)
-				os.Exit(1)
-			}
-			// Drive compaction from the manager's single reload loop so compact
-			// and block deletion never run concurrently.
-			blockManager.SetCompactor(blockCompactor)
 
 			bs := &blockStorage{m: blockManager, onClose: func() error {
 				// Cancel any in-flight leveled compaction first so the manager
@@ -1772,12 +1785,12 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 	return eu, nil
 }
 
+// PP_CHANGES.md: rebuild on cpp
 // blockStorage adapts a read-only block.Manager (persisted blocks) to
 // storage.Storage so it can be used as a fanout secondary. Appends are dropped:
 // the head adapter is the fanout primary that stores samples.
-// PP_CHANGES.md: rebuild on cpp
 type blockStorage struct {
-	m       *block.Manager
+	m       *manager.Manager
 	onClose func() error
 }
 
@@ -1831,10 +1844,10 @@ func (s *tsdbHistoricalStorage) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
+// PP_CHANGES.md: rebuild on cpp
 // noopAppender silently drops samples and reports success, so that the fanout
 // appender (which appends to every secondary) does not fail on the read-only
 // blockStorage secondary.
-// PP_CHANGES.md: rebuild on cpp
 type noopAppender struct{}
 
 func (noopAppender) Append(storage.SeriesRef, labels.Labels, int64, float64) (storage.SeriesRef, error) {

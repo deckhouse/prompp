@@ -10,41 +10,37 @@ import (
 	"path/filepath"
 
 	"github.com/oklog/ulid"
+	"github.com/thanos-io/thanos/pkg/block/metadata"
 
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
-
-	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
 const (
 	tmpForCreationBlockDirSuffix = ".tmp-for-creation"
-
-	indexFilename = "index"
-	metaFilename  = "meta.json"
-
-	metaVersion1 = 1
 )
 
 // WrittenBlock represents a written block.
 type WrittenBlock struct {
 	Dir  string
-	Meta tsdb.BlockMeta
+	Meta metadata.Meta
 }
 
 // ChunkDir returns the chunk directory.
-func (block *WrittenBlock) ChunkDir() string {
-	return filepath.Join(block.Dir, "chunks")
+func (wb *WrittenBlock) ChunkDir() string {
+	return filepath.Join(wb.Dir, block.ChunksDirname)
 }
 
 // IndexFilename returns the index filename.
-func (block *WrittenBlock) IndexFilename() string {
-	return filepath.Join(block.Dir, indexFilename)
+func (wb *WrittenBlock) IndexFilename() string {
+	return filepath.Join(wb.Dir, block.IndexFilename)
 }
 
 // MetaFilename returns the meta filename.
-func (block *WrittenBlock) MetaFilename() string {
-	return filepath.Join(block.Dir, metaFilename)
+func (wb *WrittenBlock) MetaFilename() string {
+	return filepath.Join(wb.Dir, block.MetaFilename)
 }
 
 type blockWriter struct {
@@ -63,6 +59,7 @@ func newBlockWriter(
 	maxBlockChunkSegmentSize int64,
 	indexWriter IndexWriter,
 	chunkIterator ChunkIterator,
+	tLabels map[string]string,
 ) (writer blockWriter, err error) {
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 	writer.Dir = filepath.Join(dir, uid.String()) + tmpForCreationBlockDirSuffix
@@ -75,14 +72,21 @@ func newBlockWriter(
 		return writer, err
 	}
 
-	writer.Meta = tsdb.BlockMeta{
-		ULID:    uid,
-		MinTime: math.MaxInt64,
-		MaxTime: math.MinInt64,
-		Version: metaVersion1,
-		Compaction: tsdb.BlockMetaCompaction{
-			Level:   1,
-			Sources: []ulid.ULID{uid},
+	writer.Meta = metadata.Meta{
+		BlockMeta: tsdb.BlockMeta{
+			ULID:    uid,
+			MinTime: math.MaxInt64,
+			MaxTime: math.MinInt64,
+			Version: block.MetaVersion1,
+			Compaction: tsdb.BlockMetaCompaction{
+				Level:   1,
+				Sources: []ulid.ULID{uid},
+			},
+		},
+		Thanos: metadata.Thanos{
+			Version: metadata.ThanosVersion1,
+			Labels:  tLabels,
+			Source:  "pp_block_writer",
 		},
 	}
 
@@ -141,7 +145,7 @@ func (writer *blockWriter) Close() error {
 }
 
 func (writer *blockWriter) recodeAndWriteChunksBatch() error {
-	return writer.chunkRecoder.recode(writer.chunkWriter, &writer.Meta, writer.writeSeries)
+	return writer.chunkRecoder.recode(writer.chunkWriter, &writer.Meta.BlockMeta, writer.writeSeries)
 }
 
 func (writer *blockWriter) writeRestOfRecodedChunks() error {
@@ -164,7 +168,7 @@ func (writer *blockWriter) writeIndex() error {
 	}
 
 	writer.Meta.MaxTime++
-	if _, err := writeBlockMetaFile(writer.MetaFilename(), &writer.Meta); err != nil {
+	if _, err := block.WriteThanosMetaFile(logger.Log, writer.Dir, &writer.Meta); err != nil {
 		return fmt.Errorf("failed to write block meta file: %w", err)
 	}
 
@@ -307,6 +311,7 @@ func adjustBlockMetaTimeRange(blockMeta *tsdb.BlockMeta, mint, maxt int64) {
 	}
 }
 
+// TODO: Delete this function
 func writeBlockMetaFile(fileName string, blockMeta *tsdb.BlockMeta) (int64, error) {
 	tmp := fileName + ".tmp"
 	defer func() {

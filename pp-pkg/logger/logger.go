@@ -30,4 +30,6 @@ func InitLogHandler(l log.Logger) {
 	logger.Errorf = func(template string, args ...any) {
 		_ = level.Error(l).Log(msg, fmt.Sprintf(template, args...))
 	}
+
+	logger.Log = l
 }

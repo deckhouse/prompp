@@ -1,4 +1,4 @@
-package block
+package manager
 
 import (
 	"fmt"
@@ -14,6 +14,7 @@ import (
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -23,7 +24,6 @@ import (
 var (
 	_ storage.Queryable      = (*Manager)(nil)
 	_ storage.ChunkQueryable = (*Manager)(nil)
-	_ BlockSource            = (*Manager)(nil)
 )
 
 const (
@@ -46,15 +46,13 @@ type Options struct {
 type Manager struct {
 	dir            string
 	opts           *Options
-	blocksToDelete tsdb.BlocksToDeleteFunc
+	blocksToDelete block.BlocksToDeleteFunc
 	logger         log.Logger
 	chunkPool      chunkenc.Pool
 	metrics        *metrics
 
-	mtx    sync.RWMutex
-	blocks []*tsdb.Block
-	// compactor, when set via SetCompactor, runs a single compaction pass after
-	// each reload in the loop goroutine. Guarded by mtx.
+	mtx       sync.RWMutex
+	blocks    []*block.Block
 	compactor compactionRunner
 
 	stopc    chan struct{}
@@ -65,9 +63,12 @@ type Manager struct {
 // compactionRunner runs a single compaction pass over the on-disk blocks,
 // reporting whether a compaction was performed and the ULIDs of the blocks it
 // created (so the driver can remove them if the following reload fails).
-// Implemented by *Compactor.
 type compactionRunner interface {
-	Compact() (uids []ulid.ULID, compacted bool, err error)
+	// Compact creates a new block in the compactor's directory from the blocks in the provided directories.
+	Compact(open []*block.Block) ([]ulid.ULID, error)
+
+	// OverlappingBlocks returns all overlapping blocks from given blocks.
+	OverlappingBlocks(blocks []*block.Block) (block.Overlaps, error)
 }
 
 // NewManager init new [Manager] and starts its periodic reload loop.
@@ -77,7 +78,9 @@ type compactionRunner interface {
 func NewManager(
 	dir string,
 	opts *Options,
-	blocksToDelete tsdb.BlocksToDeleteFunc,
+	compactor compactionRunner,
+	blocksToDelete block.BlocksToDeleteFunc,
+	chunkPool chunkenc.Pool,
 	logger log.Logger,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -91,9 +94,10 @@ func NewManager(
 	m := &Manager{
 		dir:            dir,
 		opts:           opts,
+		compactor:      compactor,
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
-		chunkPool:      chunkenc.NewPool(),
+		chunkPool:      chunkPool,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}
@@ -104,7 +108,7 @@ func NewManager(
 	}
 	m.logLoadedBlocks()
 
-	level.Info(logger).Log("msg", "Block manager started", "dir", dir)
+	_ = level.Info(logger).Log("msg", "Block manager started", "dir", dir)
 	go m.loop()
 	return m, nil
 }
@@ -128,15 +132,6 @@ func (m *Manager) loop() {
 	}
 }
 
-// SetCompactor sets the compactor driven by the reload loop. Passing nil
-// disables compaction. It is typically called right after construction, before
-// the first tick.
-func (m *Manager) SetCompactor(c compactionRunner) {
-	m.mtx.Lock()
-	m.compactor = c
-	m.mtx.Unlock()
-}
-
 // reloadAndCompact reloads blocks and then compacts repeatedly until there is
 // nothing left to compact, reloading between passes. Everything runs in this one
 // goroutine, so a compaction never races with the deletion of its inputs: after
@@ -146,23 +141,17 @@ func (m *Manager) SetCompactor(c compactionRunner) {
 // waiting a full ticker interval per compaction step.
 func (m *Manager) reloadAndCompact() {
 	if err := m.reloadBlocks(); err != nil {
-		level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
-	}
-
-	m.mtx.RLock()
-	c := m.compactor
-	m.mtx.RUnlock()
-	if c == nil {
-		return
+		_ = level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
 	}
 
 	for {
-		uids, compacted, err := c.Compact()
+		compacted, err := m.compactor.Compact(m.blocks)
 		if err != nil {
-			level.Error(m.logger).Log("msg", "compaction failed", "err", err)
+			//revive:disable-next-line:add-constant // this is log
+			_ = level.Error(m.logger).Log("msg", "compaction failed", "err", err)
 			return
 		}
-		if !compacted {
+		if len(compacted) == 0 {
 			return
 		}
 		// Reload to load the freshly created block and delete the obsolete
@@ -170,21 +159,10 @@ func (m *Manager) reloadAndCompact() {
 		// remove the freshly compacted block(s) so a half-applied compaction
 		// does not leave orphaned blocks on disk (mirroring tsdb).
 		if err := m.reloadBlocks(); err != nil {
-			level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
-			m.deleteCompactedBlocks(uids)
+			//revive:disable-next-line:add-constant // this is log
+			_ = level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
+			m.deleteCompactedBlocks(compacted)
 			return
-		}
-	}
-}
-
-// deleteCompactedBlocks removes the given block directories from disk. It is used
-// to clean up freshly compacted blocks when the reload that would have loaded
-// them fails, so a half-applied compaction does not leave orphaned blocks behind
-// (mirroring tsdb).
-func (m *Manager) deleteCompactedBlocks(uids []ulid.ULID) {
-	for _, uid := range uids {
-		if err := os.RemoveAll(filepath.Join(m.dir, uid.String())); err != nil {
-			level.Error(m.logger).Log("msg", "delete compacted block after failed reload", "block", uid, "err", err)
 		}
 	}
 }
@@ -195,14 +173,17 @@ func (m *Manager) Close() {
 		close(m.stopc)
 	})
 	<-m.stoppedc
-	level.Info(m.logger).Log("msg", "Block manager closed")
+
+	_ = level.Info(m.logger).Log("msg", "Block manager closed")
+
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	for _, b := range m.blocks {
 		if err := b.Close(); err != nil {
-			level.Warn(m.logger).Log("msg", "Closing block failed", "err", err, "block", b.Meta().ULID)
+			_ = level.Warn(m.logger).Log("msg", "Closing block failed", "err", err, "block", b.Meta().ULID)
 		}
 	}
+
 	m.blocks = nil
 }
 
@@ -226,10 +207,12 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		if !b.OverlapsClosedInterval(mint, maxt) {
 			continue
 		}
+
 		q, err := tsdb.NewBlockQuerier(b, mint, maxt)
 		if err != nil {
 			return nil, fmt.Errorf("open querier for block %s: %w", b, err)
 		}
+
 		blockQueriers = append(blockQueriers, q)
 	}
 
@@ -256,10 +239,12 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 		if !b.OverlapsClosedInterval(mint, maxt) {
 			continue
 		}
+
 		q, err := tsdb.NewBlockChunkQuerier(b, mint, maxt)
 		if err != nil {
 			return nil, fmt.Errorf("open chunk querier for block %s: %w", b, err)
 		}
+
 		blockQueriers = append(blockQueriers, q)
 	}
 
@@ -270,9 +255,8 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 	), nil
 }
 
-// Blocks returns a snapshot of the currently loaded blocks. It implements
-// [BlockSource].
-func (m *Manager) Blocks() []*tsdb.Block {
+// Blocks returns a snapshot of the currently loaded blocks. It implements [BlockSource].
+func (m *Manager) Blocks() []*block.Block {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
 	return slices.Clone(m.blocks)
@@ -287,7 +271,7 @@ func (m *Manager) logLoadedBlocks() {
 
 	for _, b := range m.blocks {
 		meta := b.Meta()
-		level.Info(m.logger).Log(
+		_ = level.Info(m.logger).Log(
 			"msg", "Found healthy block",
 			"mint", meta.MinTime,
 			"maxt", meta.MaxTime,
@@ -300,6 +284,8 @@ func (m *Manager) logLoadedBlocks() {
 // reloadBlocks reloads blocks from disk and deletes the ones past retention.
 //
 //revive:disable-next-line:cyclomatic // ported from tsdb.DB.reloadBlocks.
+//revive:disable-next-line:cognitive-complexity // ported from tsdb.DB.reloadBlocks.
+//revive:disable-next-line:function-length // ported from tsdb.DB.reloadBlocks.
 func (m *Manager) reloadBlocks() (err error) {
 	defer func() {
 		if err != nil {
@@ -311,7 +297,7 @@ func (m *Manager) reloadBlocks() (err error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	loadable, corrupted, err := tsdb.OpenBlocks(m.logger, m.dir, m.blocks, m.chunkPool)
+	loadable, corrupted, err := block.OpenBlocks(m.logger, m.dir, m.blocks, m.chunkPool)
 	if err != nil {
 		return err
 	}
@@ -320,19 +306,26 @@ func (m *Manager) reloadBlocks() (err error) {
 	if m.blocksToDelete != nil {
 		deletableULIDs = m.blocksToDelete(loadable)
 	}
-	deletable := make(map[ulid.ULID]*tsdb.Block, len(deletableULIDs))
+	deletable := make(map[ulid.ULID]*block.Block, len(deletableULIDs))
 
-	// Mark all parents of loaded blocks as deletable (no matter if they exists). This makes it resilient against the process
-	// crashing towards the end of a compaction but before deletions. By doing that, we can pick up the deletion where it left off during a crash.
-	for _, block := range loadable {
-		if _, ok := deletableULIDs[block.Meta().ULID]; ok {
-			deletable[block.Meta().ULID] = block
+	// Mark all parents of loaded blocks as deletable (no matter if they exists).
+	// This makes it resilient against the process crashing towards the end of a compaction,
+	// but before deletions. By doing that, we can pick up the deletion where it left off during a crash.
+	for _, blk := range loadable {
+		if _, ok := deletableULIDs[blk.Meta().ULID]; ok {
+			deletable[blk.Meta().ULID] = blk
 		}
-		for _, b := range block.Meta().Compaction.Parents {
+
+		for _, b := range blk.Meta().Compaction.Parents {
 			if _, ok := corrupted[b.ULID]; ok {
 				delete(corrupted, b.ULID)
-				level.Warn(m.logger).Log("msg", "Found corrupted block, but replaced by compacted one so it's safe to delete. This should not happen with atomic deletes.", "block", b.ULID)
+				_ = level.Warn(m.logger).Log(
+					//revive:disable-next-line:line-length-limit // this is log
+					"msg", "Found corrupted block, but replaced by compacted one so it's safe to delete. This should not happen with atomic deletes.",
+					"block", b.ULID,
+				)
 			}
+
 			deletable[b.ULID] = nil
 		}
 	}
@@ -352,7 +345,7 @@ func (m *Manager) reloadBlocks() (err error) {
 			deletable[uid] = nil
 		}
 
-		level.Warn(m.logger).Log(
+		_ = level.Warn(m.logger).Log(
 			"msg", "corrupted block",
 			"ulid", uid.String(),
 			"err", cerr,
@@ -361,21 +354,22 @@ func (m *Manager) reloadBlocks() (err error) {
 	}
 
 	var (
-		toLoad               []*tsdb.Block
+		toLoad               = make([]*block.Block, 0, len(loadable))
 		blocksSize           int64
 		blocksByDurationMins = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
-	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
-	for _, block := range loadable {
-		if _, ok := deletable[block.Meta().ULID]; ok {
-			deletable[block.Meta().ULID] = block
+	// NOTE: We need to loop through loadable one more time
+	// as there might be loadable ready to be removed (replaced by compacted block).
+	for _, blk := range loadable {
+		if _, ok := deletable[blk.Meta().ULID]; ok {
+			deletable[blk.Meta().ULID] = blk
 			continue
 		}
 
-		toLoad = append(toLoad, block)
-		blocksSize += block.Size()
-		durationMinutes := normalizeBlockDurationMinutes(block.Meta().MaxTime - block.Meta().MinTime)
+		toLoad = append(toLoad, blk)
+		blocksSize += blk.Size()
+		durationMinutes := normalizeBlockDurationMinutes(blk.Meta().MaxTime - blk.Meta().MinTime)
 		blocksByDurationMins[durationMinutes]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
@@ -384,7 +378,7 @@ func (m *Manager) reloadBlocks() (err error) {
 		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
 	}
 
-	slices.SortFunc(toLoad, func(a, b *tsdb.Block) int {
+	slices.SortFunc(toLoad, func(a, b *block.Block) int {
 		switch {
 		case a.Meta().MinTime < b.Meta().MinTime:
 			return -1
@@ -401,12 +395,14 @@ func (m *Manager) reloadBlocks() (err error) {
 
 	// Only check overlapping blocks when overlapping compaction is enabled.
 	if m.opts.EnableOverlappingCompaction {
-		blockMetas := make([]tsdb.BlockMeta, 0, len(toLoad))
-		for _, b := range toLoad {
-			blockMetas = append(blockMetas, b.Meta())
-		}
-		if overlaps := tsdb.OverlappingBlocks(blockMetas); len(overlaps) > 0 {
-			level.Warn(m.logger).Log("msg", "Overlapping blocks found during reloadBlocks", "detail", overlaps.String())
+		overlaps, err := m.compactor.OverlappingBlocks(toLoad)
+		if err != nil {
+			_ = level.Error(m.logger).Log("msg", "get overlapping blocks failed", "err", err)
+		} else if len(overlaps) > 0 {
+			_ = level.Warn(m.logger).Log(
+				"msg", "Overlapping blocks found during reloadBlocks",
+				"detail", overlaps.String(),
+			)
 		}
 	}
 
@@ -416,17 +412,20 @@ func (m *Manager) reloadBlocks() (err error) {
 			deletable[b.Meta().ULID] = b
 		}
 	}
+
 	if err := m.deleteBlocks(deletable); err != nil {
 		return fmt.Errorf("delete %v blocks: %w", len(deletable), err)
 	}
+
 	return nil
 }
 
-func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*tsdb.Block) error {
-	for uid, block := range blocks {
-		if block != nil {
-			if err := block.Close(); err != nil {
-				level.Warn(m.logger).Log("msg", "Closing block failed", "err", err, "block", uid)
+func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*block.Block) error {
+	for uid, blk := range blocks {
+		if blk != nil {
+			if err := blk.Close(); err != nil {
+				//revive:disable-next-line:add-constant // this is log
+				_ = level.Warn(m.logger).Log("msg", "Closing block failed", "err", err, "block", uid)
 			}
 		}
 
@@ -444,23 +443,41 @@ func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*tsdb.Block) error {
 		if err := fileutil.Replace(toDelete, tmpToDelete); err != nil {
 			return fmt.Errorf("replace of obsolete block for deletion %s: %w", uid, err)
 		}
+
 		if err := os.RemoveAll(tmpToDelete); err != nil {
 			return fmt.Errorf("delete obsolete block %s: %w", uid, err)
 		}
-		level.Info(m.logger).Log("msg", "Deleting obsolete block", "block", uid)
+
+		_ = level.Info(m.logger).Log("msg", "Deleting obsolete block", "block", uid)
 	}
 
 	return nil
 }
 
-func (m *Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration) bool {
-	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli())
+// deleteCompactedBlocks removes the given block directories from disk. It is used
+// to clean up freshly compacted blocks when the reload that would have loaded
+// them fails, so a half-applied compaction does not leave orphaned blocks behind
+// (mirroring tsdb).
+func (m *Manager) deleteCompactedBlocks(uids []ulid.ULID) {
+	for _, uid := range uids {
+		if err := os.RemoveAll(filepath.Join(m.dir, uid.String())); err != nil {
+			_ = level.Error(m.logger).Log("msg", "delete compacted block after failed reload", "block", uid, "err", err)
+		}
+	}
 }
 
+// isOutdatedBlock checks if a block is outdated based on its ULID and retention duration.
+func (*Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration) bool {
+	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli()) // #nosec G115 // no overflow
+}
+
+// normalizeBlockDurationMinutes normalizes a block duration in milliseconds to minutes.
 func normalizeBlockDurationMinutes(durationMS int64) int64 {
 	if durationMS <= 0 {
 		return 0
 	}
+
+	//revive:disable-next-line:add-constant // half minute rounding
 	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
 }
 
@@ -468,6 +485,7 @@ func normalizeBlockDurationMinutes(durationMS int64) int64 {
 // metrics
 //
 
+// metrics collects metrics for the block manager.
 type metrics struct {
 	loadedBlocks           prometheus.GaugeFunc
 	loadedBlocksByDuration *prometheus.GaugeVec
@@ -478,6 +496,9 @@ type metrics struct {
 	blocksBytes            prometheus.Gauge
 }
 
+// newMetrics creates new [metrics] for the block manager.
+//
+//revive:disable-next-line:function-length // constructor metrics
 func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 	m := &metrics{
 		loadedBlocks: prometheus.NewGaugeFunc(prometheus.GaugeOpts{

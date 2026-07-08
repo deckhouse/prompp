@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,7 +13,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 
-	pplogger "github.com/prometheus/prometheus/pp/go/logger"
+	pppkglogger "github.com/prometheus/prometheus/pp-pkg/logger"
 )
 
 func main() {
@@ -80,17 +79,5 @@ func initLogger(verbose bool) log.Logger {
 }
 
 func initLogHandler(logger log.Logger) {
-	logger = log.With(logger, "op_caller", log.Caller(4))
-	pplogger.Debugf = func(template string, args ...interface{}) {
-		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	pplogger.Infof = func(template string, args ...interface{}) {
-		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	pplogger.Warnf = func(template string, args ...interface{}) {
-		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	pplogger.Errorf = func(template string, args ...interface{}) {
-		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
+	pppkglogger.InitLogHandler(logger)
 }

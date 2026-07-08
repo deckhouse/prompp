@@ -227,6 +227,34 @@ func (bm *BlockMetaCompaction) FromOutOfOrder() bool {
 	return bm.containsHint(CompactionHintFromOutOfOrder)
 }
 
+// IsCorrupted returns true if the block marked as corrupted.
+func (bm *BlockMetaCompaction) IsCorrupted() bool {
+	return bm.containsHint(CompactionHintCorrupted)
+}
+
+// SetCorrupted marks the block as corrupted.
+func (bm *BlockMetaCompaction) SetCorrupted() bool {
+	if bm.containsHint(CompactionHintCorrupted) {
+		return false
+	}
+
+	bm.Hints = append(bm.Hints, CompactionHintCorrupted)
+	slices.Sort(bm.Hints)
+
+	return true
+}
+
+// UnsetCorrupted unmarks the block as corrupted.
+func (bm *BlockMetaCompaction) UnsetCorrupted() bool {
+	if !bm.containsHint(CompactionHintCorrupted) {
+		return false
+	}
+
+	bm.deleteHint(CompactionHintCorrupted)
+
+	return true
+}
+
 func (bm *BlockMetaCompaction) addHint(hint string) {
 	if bm.containsHint(hint) {
 		return
