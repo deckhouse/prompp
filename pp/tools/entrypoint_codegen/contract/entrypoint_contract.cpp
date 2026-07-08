@@ -1,12 +1,12 @@
 #include "contract/entrypoint_contract.h"
 
 #include "diagnostics/diagnostics.h"
-#include "facts/entrypoint_facts.h"
+#include "facts/fact_arena.h"
 
 #include <cstddef>
 #include <cstdint>
 
-namespace entrypoint_codegen::contract {
+namespace epgen::contract {
 
 namespace {
 
@@ -23,7 +23,7 @@ void add_diagnostic(diagnostics::DiagnosticSet& diagnostic_set,
   });
 }
 
-bool has_layout(const facts::EntrypointFacts& facts, const facts::FunctionDecl& function, facts::LayoutKind kind) {
+bool has_layout(const facts::FactArena& facts, const facts::FunctionDecl& function, facts::LayoutKind kind) {
   for (const facts::LayoutDecl& layout : facts.layouts(function.layouts)) {
     if (layout.kind == kind) {
       return true;
@@ -32,7 +32,7 @@ bool has_layout(const facts::EntrypointFacts& facts, const facts::FunctionDecl& 
   return false;
 }
 
-void validate_fastcgo_function(const facts::EntrypointFacts& facts,
+void validate_fastcgo_function(const facts::FactArena& facts,
                                diagnostics::DiagnosticSet& diagnostic_set,
                                facts::FunctionId function_id,
                                const facts::FunctionDecl& function) {
@@ -126,7 +126,7 @@ std::optional<facts::LayoutKind> layout_kind_for_name(std::string_view name) {
   return std::nullopt;
 }
 
-void validate_entrypoints(const facts::EntrypointFacts& facts, diagnostics::DiagnosticSet& diagnostic_set) {
+void validate_entrypoints(const facts::FactArena& facts, diagnostics::DiagnosticSet& diagnostic_set) {
   const auto functions = facts.functions();
   for (size_t i = 0; i < functions.size(); ++i) {
     const auto function_id = facts::FunctionId(static_cast<uint32_t>(i));
@@ -148,4 +148,4 @@ void validate_entrypoints(const facts::EntrypointFacts& facts, diagnostics::Diag
   }
 }
 
-}  // namespace entrypoint_codegen::contract
+}  // namespace epgen::contract

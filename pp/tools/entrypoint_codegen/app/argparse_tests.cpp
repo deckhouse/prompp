@@ -12,7 +12,7 @@
 
 namespace {
 
-entrypoint_codegen::app::CliOptions parse_args(std::initializer_list<std::string_view> args) {
+epgen::app::CliOptions parse_args(std::initializer_list<std::string_view> args) {
   std::vector<std::string> argv_storage;
   argv_storage.reserve(args.size());
   for (std::string_view arg : args) {
@@ -25,7 +25,7 @@ entrypoint_codegen::app::CliOptions parse_args(std::initializer_list<std::string
     argv.push_back(arg.data());
   }
 
-  return entrypoint_codegen::app::parse_arguments(static_cast<int>(argv.size()), argv.data());
+  return epgen::app::parse_arguments(static_cast<int>(argv.size()), argv.data());
 }
 
 std::filesystem::path test_tmp_dir() {
@@ -43,7 +43,7 @@ std::filesystem::path touch_file(std::string_view name) {
 
 TEST(ArgparseTest, ReturnsHelpForHelpFlag) {
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--help"});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", "--help"});
 
   // Assert
   EXPECT_TRUE(options.help);
@@ -56,7 +56,7 @@ TEST(ArgparseTest, CollectsExistingCppInputFiles) {
   touch_file("entrypoint_argparse.txt");
 
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", source_file.string()});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", source_file.string()});
   const auto source_files = options.run_options.analysis.source_files;
 
   // Assert
@@ -73,7 +73,7 @@ TEST(ArgparseTest, CollectsCppInputFilesRecursivelyFromDirectory) {
   std::ofstream out(source_file, std::ios::trunc);
 
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", root.string()});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", root.string()});
   const auto source_files = options.run_options.analysis.source_files;
 
   // Assert
@@ -95,7 +95,7 @@ TEST(ArgparseTest, ParsesOutputDirectoryAsFactsFilePath) {
   const std::filesystem::path output_dir = test_tmp_dir() / "facts";
 
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--output-dir=" + output_dir.string()});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", "--output-dir=" + output_dir.string()});
 
   // Assert
   EXPECT_EQ(options.run_options.output.output_path, output_dir / "entrypoint_facts.json");
@@ -103,15 +103,15 @@ TEST(ArgparseTest, ParsesOutputDirectoryAsFactsFilePath) {
 
 TEST(ArgparseTest, ParsesCheckModeAlias) {
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--no-output"});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", "--no-output"});
 
   // Assert
-  EXPECT_EQ(options.run_options.output.output_mode, entrypoint_codegen::app::OutputMode::kCheck);
+  EXPECT_EQ(options.run_options.output.output_mode, epgen::app::OutputMode::kCheck);
 }
 
 TEST(ArgparseTest, CollectsClangArgsFromFlagAndSeparator) {
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--clang-arg=-I.", "--", "-std=c++2b"});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", "--clang-arg=-I.", "--", "-std=c++2b"});
   const auto clang_args = options.run_options.analysis.clang_args;
 
   // Assert
@@ -126,7 +126,7 @@ TEST(ArgparseTest, RejectsUnknownOutputMode) {
 
 TEST(ArgparseTest, ParsesRuntimeDebugPolicy) {
   // Act
-  const entrypoint_codegen::app::CliOptions options = parse_args({"entrypoint_codegen", "--runtime-debug"});
+  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", "--runtime-debug"});
 
   // Assert
   EXPECT_TRUE(options.run_options.runtime.debug_diagnostics);

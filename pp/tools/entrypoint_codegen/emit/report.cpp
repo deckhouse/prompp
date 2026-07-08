@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace entrypoint_codegen::emit {
+namespace epgen::emit {
 
 namespace {
 
@@ -92,16 +92,16 @@ std::string_view layout_kind_name(facts::LayoutKind kind) {
   return "unknown";
 }
 
-void write_location(std::ostream& out, const facts::EntrypointFacts& facts, facts::SourceLocation location) {
+void write_location(std::ostream& out, const facts::FactArena& facts, facts::SourceLocation location) {
   out << "{"
       << "\"file\": \"" << json_escape(facts.string(facts.source_file(location.file).path)) << "\", "
       << "\"line\": " << location.line << ", "
       << "\"column\": " << location.column << "}";
 }
 
-void write_params(std::ostream& out, const facts::EntrypointFacts& facts, facts::ParamRange range) {
+void write_params(std::ostream& out, const facts::FactArena& facts, facts::ParamListId id) {
   out << "[";
-  const auto params = facts.params(range);
+  const auto params = facts.params(id);
   for (size_t i = 0; i < params.size(); ++i) {
     if (i != 0) {
       out << ", ";
@@ -118,9 +118,9 @@ void write_params(std::ostream& out, const facts::EntrypointFacts& facts, facts:
   out << "]";
 }
 
-void write_layouts(std::ostream& out, const facts::EntrypointFacts& facts, facts::LayoutRange range) {
+void write_layouts(std::ostream& out, const facts::FactArena& facts, facts::LayoutListId id) {
   out << "[";
-  const auto layouts = facts.layouts(range);
+  const auto layouts = facts.layouts(id);
   for (size_t i = 0; i < layouts.size(); ++i) {
     if (i != 0) {
       out << ", ";
@@ -149,7 +149,7 @@ void write_layouts(std::ostream& out, const facts::EntrypointFacts& facts, facts
   out << "]";
 }
 
-void write_source_files(std::ostream& out, const facts::EntrypointFacts& facts) {
+void write_source_files(std::ostream& out, const facts::FactArena& facts) {
   out << "  \"source_files\": [\n";
   const auto source_files = facts.source_files();
   for (size_t i = 0; i < source_files.size(); ++i) {
@@ -162,7 +162,7 @@ void write_source_files(std::ostream& out, const facts::EntrypointFacts& facts) 
   out << "  ]";
 }
 
-void write_function(std::ostream& out, const facts::EntrypointFacts& facts, const facts::FunctionDecl& function) {
+void write_function(std::ostream& out, const facts::FactArena& facts, const facts::FunctionDecl& function) {
   out << "    {\n";
   out << "      \"name\": \"" << json_escape(facts.string(function.name)) << "\",\n";
   out << "      \"return_type\": \"" << json_escape(facts.string(function.return_type_spelling)) << "\",\n";
@@ -181,7 +181,7 @@ void write_function(std::ostream& out, const facts::EntrypointFacts& facts, cons
   out << "    }";
 }
 
-void write_functions(std::ostream& out, const facts::EntrypointFacts& facts) {
+void write_functions(std::ostream& out, const facts::FactArena& facts) {
   out << "  \"functions\": [\n";
   const auto functions = facts.functions();
   for (size_t i = 0; i < functions.size(); ++i) {
@@ -194,7 +194,7 @@ void write_functions(std::ostream& out, const facts::EntrypointFacts& facts) {
   out << "  ]";
 }
 
-void write_diagnostic_function(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::Diagnostic& diagnostic) {
+void write_diagnostic_function(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
   if (diagnostic.function.has_value()) {
     out << "\"" << json_escape(facts.string(facts.function(*diagnostic.function).name)) << "\"";
     return;
@@ -202,7 +202,7 @@ void write_diagnostic_function(std::ostream& out, const facts::EntrypointFacts& 
   out << "null";
 }
 
-void write_diagnostic(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::Diagnostic& diagnostic) {
+void write_diagnostic(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
   const std::string_view message = diagnostics::diagnostic_message(diagnostic);
   out << "    {"
       << "\"code\": \"" << json_escape(diagnostics::diagnostic_code_name(diagnostic.code)) << "\", "
@@ -219,7 +219,7 @@ void write_diagnostic(std::ostream& out, const facts::EntrypointFacts& facts, co
   out << "}";
 }
 
-void write_json_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_diagnostics(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   out << "  \"diagnostics\": [\n";
   const auto diagnostic_values = diagnostic_set.diagnostics();
   for (size_t i = 0; i < diagnostic_values.size(); ++i) {
@@ -232,7 +232,7 @@ void write_json_diagnostics(std::ostream& out, const facts::EntrypointFacts& fac
   out << "  ]";
 }
 
-void write_json_report(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_report(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   if (!out) {
     throw std::runtime_error("output stream is not writable");
   }
@@ -247,7 +247,7 @@ void write_json_report(std::ostream& out, const facts::EntrypointFacts& facts, c
   out << "}\n";
 }
 
-void write_compiler_diagnostics(std::ostream& out, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_compiler_diagnostics(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   for (const diagnostics::Diagnostic& diagnostic : diagnostic_set.diagnostics()) {
     if (diagnostic.location.has_value()) {
       const facts::SourceLocation location = *diagnostic.location;
@@ -260,7 +260,7 @@ void write_compiler_diagnostics(std::ostream& out, const facts::EntrypointFacts&
 
 }  // namespace
 
-void write_report(std::ostream& out, ReportFormat format, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_report(std::ostream& out, ReportFormat format, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   switch (format) {
     case ReportFormat::kJson: {
       write_json_report(out, facts, diagnostic_set);
@@ -273,4 +273,4 @@ void write_report(std::ostream& out, ReportFormat format, const facts::Entrypoin
   }
 }
 
-}  // namespace entrypoint_codegen::emit
+}  // namespace epgen::emit

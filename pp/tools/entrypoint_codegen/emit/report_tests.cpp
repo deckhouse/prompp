@@ -11,14 +11,14 @@
 
 namespace {
 
-using entrypoint_codegen::diagnostics::Diagnostic;
-using entrypoint_codegen::diagnostics::DiagnosticCode;
-using entrypoint_codegen::diagnostics::DiagnosticSet;
-using entrypoint_codegen::diagnostics::Severity;
-using entrypoint_codegen::facts::BridgeKind;
-using entrypoint_codegen::facts::EntrypointFacts;
-using entrypoint_codegen::facts::FunctionDecl;
-using entrypoint_codegen::facts::SourceLocation;
+using epgen::diagnostics::Diagnostic;
+using epgen::diagnostics::DiagnosticCode;
+using epgen::diagnostics::DiagnosticSet;
+using epgen::diagnostics::Severity;
+using epgen::facts::BridgeKind;
+using epgen::facts::FactArena;
+using epgen::facts::FunctionDecl;
+using epgen::facts::SourceLocation;
 
 bool has_unescaped_control_character_in_string(std::string_view json) {
   bool in_string = false;
@@ -52,7 +52,7 @@ bool has_unescaped_control_character_in_string(std::string_view json) {
 
 class EmitReportTest : public testing::Test {
  protected:
-  EntrypointFacts facts_;
+  FactArena facts_;
   DiagnosticSet diagnostics_;
   std::ostringstream output_;
 };
@@ -72,7 +72,7 @@ TEST_F(EmitReportTest, WritesJsonFunctionFacts) {
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kJson, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
   const std::string json = output_.str();
   const bool has_function_name = json.find("\"name\": \"prompp_store\"") != std::string::npos;
   const bool has_bridge_kind = json.find("\"bridge_kind\": \"cgo\"") != std::string::npos;
@@ -96,7 +96,7 @@ TEST_F(EmitReportTest, EscapesJsonStringFieldsInOutput) {
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kJson, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
   const std::string json = output_.str();
   const bool has_escaped_path = json.find("\"path\": \"entry\\\"point.cpp\"") != std::string::npos;
   const bool has_escaped_message = json.find("\"message\": \"line\\nmessage\"") != std::string::npos;
@@ -122,7 +122,7 @@ TEST_F(EmitReportTest, EscapesNonWhitespaceControlCharactersInJsonStringFields) 
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kJson, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
   const std::string json = output_.str();
 
   // Assert
@@ -144,7 +144,7 @@ TEST_F(EmitReportTest, WritesJsonDiagnosticLocationObjectWhenPresent) {
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kJson, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
   const std::string json = output_.str();
   const bool has_location = json.find("\"location\": {\"file\": \"entrypoint.cpp\", \"line\": 7, \"column\": 9}") != std::string::npos;
 
@@ -163,7 +163,7 @@ TEST_F(EmitReportTest, WritesNullJsonDiagnosticLocationWhenAbsent) {
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kJson, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
   const std::string json = output_.str();
   const bool has_null_location = json.find("\"location\": null") != std::string::npos;
 
@@ -183,7 +183,7 @@ TEST_F(EmitReportTest, WritesCompilerStyleDiagnosticLine) {
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kCompilerDiagnostics, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kCompilerDiagnostics, facts_, diagnostics_);
 
   // Assert
   EXPECT_EQ(output_.str(), "entrypoint.cpp:7:9: error: entrypoint function must use prompp_ prefix [missing_name_prefix]\n");
@@ -200,7 +200,7 @@ TEST_F(EmitReportTest, WritesLocationlessDiagnosticLine) {
   });
 
   // Act
-  entrypoint_codegen::emit::write_report(output_, entrypoint_codegen::emit::ReportFormat::kCompilerDiagnostics, facts_, diagnostics_);
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kCompilerDiagnostics, facts_, diagnostics_);
 
   // Assert
   EXPECT_EQ(output_.str(), "info: runtime memory usage [runtime_memory_usage]\n");

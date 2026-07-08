@@ -1,6 +1,6 @@
 #include "clang_adapter/aggregate_source.h"
 
-namespace entrypoint_codegen::clang_adapter {
+namespace epgen::clang_adapter {
 
 AggregateSource build_aggregate_source(std::span<const std::filesystem::path> source_files, std::pmr::memory_resource* memory_resource) {
   AggregateSource source{
@@ -16,4 +16,4 @@ AggregateSource build_aggregate_source(std::span<const std::filesystem::path> so
   return source;
 }
 
-}  // namespace entrypoint_codegen::clang_adapter
+}  // namespace epgen::clang_adapter

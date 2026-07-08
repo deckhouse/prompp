@@ -6,7 +6,7 @@
 #include <memory_resource>
 #include <string_view>
 
-namespace entrypoint_codegen::facts {
+namespace epgen::facts {
 
 class StringTable {
  public:
@@ -31,4 +31,4 @@ class StringTable {
   std::pmr::memory_resource* memory_resource_{};
 };
 
-}  // namespace entrypoint_codegen::facts
+}  // namespace epgen::facts

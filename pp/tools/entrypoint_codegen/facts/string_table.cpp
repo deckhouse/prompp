@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-namespace entrypoint_codegen::facts {
+namespace epgen::facts {
 
 class StringTable::Impl {
  public:
@@ -114,4 +114,4 @@ bool StringTable::empty() const noexcept {
   return impl_->empty();
 }
 
-}  // namespace entrypoint_codegen::facts
+}  // namespace epgen::facts

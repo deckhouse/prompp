@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 void append_runtime_debug_diagnostics(diagnostics::DiagnosticSet& diagnostic_set, MemoryUsageSnapshot snapshot) {
   const std::string message = "App PMR allocations: allocated=" + std::to_string(snapshot.allocated_bytes) +
@@ -18,4 +18,4 @@ void append_runtime_debug_diagnostics(diagnostics::DiagnosticSet& diagnostic_set
   });
 }
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

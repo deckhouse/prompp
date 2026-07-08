@@ -5,15 +5,15 @@
 #include <optional>
 #include <string_view>
 
-namespace entrypoint_codegen::diagnostics {
+namespace epgen::diagnostics {
 class DiagnosticSet;
 }
 
-namespace entrypoint_codegen::facts {
-class EntrypointFacts;
+namespace epgen::facts {
+class FactArena;
 }
 
-namespace entrypoint_codegen::contract {
+namespace epgen::contract {
 
 constexpr std::string_view kFunctionNamePrefix = "prompp_";
 constexpr std::string_view kCGoAnnotation = "prompp.entrypoint.cgo";
@@ -31,6 +31,6 @@ constexpr std::string_view kResParamName = "res";
 [[nodiscard]] facts::ParamRole param_role_for_name(std::string_view name);
 [[nodiscard]] std::optional<facts::LayoutKind> layout_kind_for_name(std::string_view name);
 
-void validate_entrypoints(const facts::EntrypointFacts& facts, diagnostics::DiagnosticSet& diagnostic_set);
+void validate_entrypoints(const facts::FactArena& facts, diagnostics::DiagnosticSet& diagnostic_set);
 
-}  // namespace entrypoint_codegen::contract
+}  // namespace epgen::contract

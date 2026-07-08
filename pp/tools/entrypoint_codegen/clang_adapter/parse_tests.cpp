@@ -29,10 +29,10 @@ std::filesystem::path write_source_file(std::string_view name, std::string_view 
 }
 
 TEST(ClangAdapterParseTest, RejectsEmptyInputList) {
-  const entrypoint_codegen::clang_adapter::ParseOptions options;
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  const epgen::clang_adapter::ParseOptions options;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
-  EXPECT_THROW(entrypoint_codegen::clang_adapter::parse_files(options, diagnostics), std::invalid_argument);
+  EXPECT_THROW(epgen::clang_adapter::parse_files(options, diagnostics), std::invalid_argument);
 }
 
 TEST(ClangAdapterParseTest, ExtractsFastCgoFunctionFactsFromSourceFile) {
@@ -47,40 +47,39 @@ TEST(ClangAdapterParseTest, ExtractsFastCgoFunctionFactsFromSourceFile) {
       };
     }
   )cpp");
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  entrypoint_codegen::facts::EntrypointFacts facts = entrypoint_codegen::clang_adapter::parse_files(
-      entrypoint_codegen::clang_adapter::ParseOptions{
+  epgen::facts::FactArena facts = epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
           .source_files = {source_file},
           .clang_args = {"-std=c++2b"},
       },
       diagnostics);
   const auto functions = facts.functions();
-  const entrypoint_codegen::facts::FunctionDecl* function = functions.empty() ? nullptr : &functions[0];
-  const std::span<const entrypoint_codegen::facts::ParamDecl> params =
-      function == nullptr ? std::span<const entrypoint_codegen::facts::ParamDecl>() : facts.params(function->params);
-  const std::span<const entrypoint_codegen::facts::LayoutDecl> layouts =
-      function == nullptr ? std::span<const entrypoint_codegen::facts::LayoutDecl>() : facts.layouts(function->layouts);
-  const std::span<const entrypoint_codegen::facts::FieldDecl> argument_fields =
-      layouts.empty() ? std::span<const entrypoint_codegen::facts::FieldDecl>() : facts.fields(layouts[0].fields);
-  const std::span<const entrypoint_codegen::facts::FieldDecl> result_fields =
-      layouts.size() < 2 ? std::span<const entrypoint_codegen::facts::FieldDecl>() : facts.fields(layouts[1].fields);
+  const epgen::facts::FunctionDecl* function = functions.empty() ? nullptr : &functions[0];
+  const std::span<const epgen::facts::ParamDecl> params = function == nullptr ? std::span<const epgen::facts::ParamDecl>() : facts.params(function->params);
+  const std::span<const epgen::facts::LayoutDecl> layouts =
+      function == nullptr ? std::span<const epgen::facts::LayoutDecl>() : facts.layouts(function->layouts);
+  const std::span<const epgen::facts::FieldDecl> argument_fields =
+      layouts.empty() ? std::span<const epgen::facts::FieldDecl>() : facts.fields(layouts[0].fields);
+  const std::span<const epgen::facts::FieldDecl> result_fields =
+      layouts.size() < 2 ? std::span<const epgen::facts::FieldDecl>() : facts.fields(layouts[1].fields);
 
   // Assert
   ASSERT_EQ(functions.size(), 1);
   ASSERT_NE(function, nullptr);
   EXPECT_EQ(facts.string(function->name), "prompp_store");
-  EXPECT_EQ(function->bridge_kind, entrypoint_codegen::facts::BridgeKind::kFastCGo);
+  EXPECT_EQ(function->bridge_kind, epgen::facts::BridgeKind::kFastCGo);
   EXPECT_TRUE(function->has_c_linkage);
   ASSERT_EQ(params.size(), 2);
   EXPECT_EQ(facts.string(params[0].name), "args");
-  EXPECT_EQ(params[0].role, entrypoint_codegen::facts::ParamRole::kArgs);
+  EXPECT_EQ(params[0].role, epgen::facts::ParamRole::kArgs);
   EXPECT_EQ(facts.string(params[1].name), "res");
-  EXPECT_EQ(params[1].role, entrypoint_codegen::facts::ParamRole::kRes);
+  EXPECT_EQ(params[1].role, epgen::facts::ParamRole::kRes);
   ASSERT_EQ(layouts.size(), 2);
-  EXPECT_EQ(layouts[0].kind, entrypoint_codegen::facts::LayoutKind::kArguments);
-  EXPECT_EQ(layouts[1].kind, entrypoint_codegen::facts::LayoutKind::kResult);
+  EXPECT_EQ(layouts[0].kind, epgen::facts::LayoutKind::kArguments);
+  EXPECT_EQ(layouts[1].kind, epgen::facts::LayoutKind::kResult);
   ASSERT_EQ(argument_fields.size(), 1);
   EXPECT_EQ(facts.string(argument_fields[0].name), "series");
   EXPECT_EQ(facts.string(argument_fields[0].type_spelling), "int");
@@ -92,11 +91,11 @@ TEST(ClangAdapterParseTest, ExtractsFastCgoFunctionFactsFromSourceFile) {
 TEST(ClangAdapterParseTest, RecordsClangDiagnosticsSeparately) {
   // Arrange
   const std::filesystem::path source_file = write_source_file("entrypoint_codegen_invalid_parse_test.cpp", "int broken = ;\n");
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  entrypoint_codegen::clang_adapter::parse_files(
-      entrypoint_codegen::clang_adapter::ParseOptions{
+  epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
           .source_files = {source_file},
           .clang_args = {"-std=c++2b"},
       },
@@ -105,8 +104,8 @@ TEST(ClangAdapterParseTest, RecordsClangDiagnosticsSeparately) {
 
   // Assert
   ASSERT_EQ(diagnostic_values.size(), 1);
-  EXPECT_EQ(diagnostic_values[0].code, entrypoint_codegen::diagnostics::DiagnosticCode::kClangDiagnostic);
-  EXPECT_EQ(diagnostic_values[0].severity, entrypoint_codegen::diagnostics::Severity::kError);
+  EXPECT_EQ(diagnostic_values[0].code, epgen::diagnostics::DiagnosticCode::kClangDiagnostic);
+  EXPECT_EQ(diagnostic_values[0].severity, epgen::diagnostics::Severity::kError);
 }
 
 TEST(ClangAdapterParseTest, ExtractsFunctionsFromMultipleInputFiles) {
@@ -117,11 +116,11 @@ TEST(ClangAdapterParseTest, ExtractsFunctionsFromMultipleInputFiles) {
   const std::filesystem::path second_source_file = write_source_file("entrypoint_codegen_batch_second.cpp", R"cpp(
     extern "C" __attribute__((annotate("prompp.entrypoint.cgo"))) void prompp_second() {}
   )cpp");
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  entrypoint_codegen::facts::EntrypointFacts facts = entrypoint_codegen::clang_adapter::parse_files(
-      entrypoint_codegen::clang_adapter::ParseOptions{
+  epgen::facts::FactArena facts = epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
           .source_files = {first_source_file, second_source_file},
           .clang_args = {"-std=c++2b"},
       },
@@ -153,11 +152,11 @@ TEST(ClangAdapterParseTest, ReportsAggregateTranslationUnitInternalLinkageCollis
       (void)helper();
     }
   )cpp");
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  entrypoint_codegen::clang_adapter::parse_files(
-      entrypoint_codegen::clang_adapter::ParseOptions{
+  epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
           .source_files = {first_source_file, second_source_file},
           .clang_args = {"-std=c++2b"},
       },
@@ -166,8 +165,8 @@ TEST(ClangAdapterParseTest, ReportsAggregateTranslationUnitInternalLinkageCollis
 
   // Assert
   ASSERT_FALSE(diagnostic_values.empty());
-  EXPECT_EQ(diagnostic_values[0].code, entrypoint_codegen::diagnostics::DiagnosticCode::kClangDiagnostic);
-  EXPECT_EQ(diagnostic_values[0].severity, entrypoint_codegen::diagnostics::Severity::kError);
+  EXPECT_EQ(diagnostic_values[0].code, epgen::diagnostics::DiagnosticCode::kClangDiagnostic);
+  EXPECT_EQ(diagnostic_values[0].severity, epgen::diagnostics::Severity::kError);
 }
 
 TEST(ClangAdapterParseTest, IgnoresUnannotatedExternCFunctionWithoutEntrypointPrefix) {
@@ -175,11 +174,11 @@ TEST(ClangAdapterParseTest, IgnoresUnannotatedExternCFunctionWithoutEntrypointPr
   const std::filesystem::path source_file = write_source_file("entrypoint_codegen_c_helper.cpp", R"cpp(
     extern "C" void helper_for_c_abi() {}
   )cpp");
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  entrypoint_codegen::facts::EntrypointFacts facts = entrypoint_codegen::clang_adapter::parse_files(
-      entrypoint_codegen::clang_adapter::ParseOptions{
+  epgen::facts::FactArena facts = epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
           .source_files = {source_file},
           .clang_args = {"-std=c++2b"},
       },
@@ -194,11 +193,11 @@ TEST(ClangAdapterParseTest, ExtractsAnnotatedFunctionWithoutEntrypointPrefix) {
   const std::filesystem::path source_file = write_source_file("entrypoint_codegen_annotated_without_prefix.cpp", R"cpp(
     extern "C" __attribute__((annotate("prompp.entrypoint.cgo"))) void store() {}
   )cpp");
-  entrypoint_codegen::diagnostics::DiagnosticSet diagnostics;
+  epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  entrypoint_codegen::facts::EntrypointFacts facts = entrypoint_codegen::clang_adapter::parse_files(
-      entrypoint_codegen::clang_adapter::ParseOptions{
+  epgen::facts::FactArena facts = epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
           .source_files = {source_file},
           .clang_args = {"-std=c++2b"},
       },
@@ -208,7 +207,7 @@ TEST(ClangAdapterParseTest, ExtractsAnnotatedFunctionWithoutEntrypointPrefix) {
   // Assert
   ASSERT_EQ(functions.size(), 1);
   EXPECT_EQ(facts.string(functions[0].name), "store");
-  EXPECT_EQ(functions[0].bridge_kind, entrypoint_codegen::facts::BridgeKind::kCGo);
+  EXPECT_EQ(functions[0].bridge_kind, epgen::facts::BridgeKind::kCGo);
 }
 
 }  // namespace

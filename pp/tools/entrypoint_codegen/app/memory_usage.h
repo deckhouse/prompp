@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 struct MemoryUsageSnapshot {
   size_t allocated_bytes = 0;
@@ -10,4 +10,4 @@ struct MemoryUsageSnapshot {
   size_t peak_live_bytes = 0;
 };
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

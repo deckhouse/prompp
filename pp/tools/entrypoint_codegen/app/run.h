@@ -4,7 +4,7 @@
 #include "app/options.h"
 #include "diagnostics/diagnostics.h"
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 struct RunReport {
   ExitDecision decision;
@@ -14,4 +14,4 @@ struct RunReport {
 
 RunReport run(const RunOptions& options);
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 enum class OutputMode : uint8_t {
   kJson,
@@ -40,4 +40,4 @@ enum class ExitDecision : uint8_t {
   kAnalysisFailed,
 };
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace entrypoint_codegen::facts {
+namespace epgen::facts {
 
 using SourceFileId = TaggedIndex<struct SourceFileTag>;
 using FunctionId = TaggedIndex<struct FunctionTag>;
@@ -13,20 +13,9 @@ using ParamId = TaggedIndex<struct ParamTag>;
 using FieldId = TaggedIndex<struct FieldTag>;
 using StringId = TaggedIndex<struct StringTag>;
 
-struct ParamRange {
-  ParamId begin;
-  uint32_t count;
-};
-
-struct LayoutRange {
-  LayoutId begin;
-  uint32_t count;
-};
-
-struct FieldRange {
-  FieldId begin;
-  uint32_t count;
-};
+using ParamListId = TaggedIndex<struct ParamListTag>;
+using LayoutListId = TaggedIndex<struct LayoutListTag>;
+using FieldListId = TaggedIndex<struct FieldListTag>;
 
 enum class BridgeKind : uint8_t {
   kUnknown,
@@ -70,7 +59,7 @@ struct FieldDecl {
 
 struct LayoutDecl {
   LayoutKind kind;
-  FieldRange fields;
+  FieldListId fields;
   SourceLocation location;
 };
 
@@ -79,10 +68,10 @@ struct FunctionDecl {
   StringId return_type_spelling;
   StringId documentation;
   BridgeKind bridge_kind;
-  ParamRange params;
-  LayoutRange layouts;
+  ParamListId params;
+  LayoutListId layouts;
   SourceLocation location;
   bool has_c_linkage;
 };
 
-}  // namespace entrypoint_codegen::facts
+}  // namespace epgen::facts

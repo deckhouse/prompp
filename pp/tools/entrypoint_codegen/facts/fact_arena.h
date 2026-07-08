@@ -7,24 +7,24 @@
 #include <span>
 #include <string_view>
 
-namespace entrypoint_codegen::facts {
+namespace epgen::facts {
 
-class EntrypointFacts {
+class FactArena {
  public:
-  explicit EntrypointFacts(std::pmr::memory_resource* memory_resource = std::pmr::get_default_resource());
-  ~EntrypointFacts();
+  explicit FactArena(std::pmr::memory_resource* memory_resource = std::pmr::get_default_resource());
+  ~FactArena();
 
-  EntrypointFacts(EntrypointFacts&&) noexcept;
-  EntrypointFacts& operator=(EntrypointFacts&&) noexcept;
+  FactArena(FactArena&&) noexcept;
+  FactArena& operator=(FactArena&&) noexcept;
 
-  EntrypointFacts(const EntrypointFacts&) = delete;
-  EntrypointFacts& operator=(const EntrypointFacts&) = delete;
+  FactArena(const FactArena&) = delete;
+  FactArena& operator=(const FactArena&) = delete;
 
   StringId add_string(std::string_view value);
   SourceFileId add_source_file(std::string_view path);
-  ParamRange add_params(std::span<const ParamDecl> params);
-  FieldRange add_fields(std::span<const FieldDecl> fields);
-  LayoutRange add_layouts(std::span<const LayoutDecl> layouts);
+  ParamListId add_params(std::span<const ParamDecl> params);
+  FieldListId add_fields(std::span<const FieldDecl> fields);
+  LayoutListId add_layouts(std::span<const LayoutDecl> layouts);
   FunctionId add_function(FunctionDecl function);
 
   [[nodiscard]] std::string_view string(StringId id) const;
@@ -36,13 +36,13 @@ class EntrypointFacts {
   [[nodiscard]] std::span<const FunctionDecl> functions() const;
 
   [[nodiscard]] std::span<const ParamDecl> params(FunctionId id) const;
-  [[nodiscard]] std::span<const ParamDecl> params(ParamRange range) const;
+  [[nodiscard]] std::span<const ParamDecl> params(ParamListId id) const;
 
   [[nodiscard]] std::span<const LayoutDecl> layouts(FunctionId id) const;
-  [[nodiscard]] std::span<const LayoutDecl> layouts(LayoutRange range) const;
+  [[nodiscard]] std::span<const LayoutDecl> layouts(LayoutListId id) const;
 
   [[nodiscard]] std::span<const FieldDecl> fields(LayoutId id) const;
-  [[nodiscard]] std::span<const FieldDecl> fields(FieldRange range) const;
+  [[nodiscard]] std::span<const FieldDecl> fields(FieldListId id) const;
 
  private:
   class Impl;
@@ -50,4 +50,4 @@ class EntrypointFacts {
   std::pmr::memory_resource* memory_resource_ = std::pmr::get_default_resource();
 };
 
-}  // namespace entrypoint_codegen::facts
+}  // namespace epgen::facts

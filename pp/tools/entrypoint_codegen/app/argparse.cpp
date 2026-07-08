@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 namespace {
 
@@ -154,4 +154,4 @@ CliOptions parse_arguments(int argc, char** argv) {
   return options;
 }
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

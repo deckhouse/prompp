@@ -4,7 +4,7 @@
 #include <concepts>
 #include <cstdint>
 
-namespace entrypoint_codegen::facts {
+namespace epgen::facts {
 
 template <class Tag, std::unsigned_integral UInt = uint32_t>
 class TaggedIndex {
@@ -24,4 +24,4 @@ class TaggedIndex {
   UInt value_{};
 };
 
-}  // namespace entrypoint_codegen::facts
+}  // namespace epgen::facts

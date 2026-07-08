@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace entrypoint_codegen::clang_adapter {
+namespace epgen::clang_adapter {
 
 namespace {
 
@@ -19,7 +19,7 @@ struct ParamNameAndRole {
   facts::ParamRole role;
 };
 
-ParamNameAndRole add_param_name_and_role(facts::EntrypointFacts& facts, CursorView cursor) {
+ParamNameAndRole add_param_name_and_role(facts::FactArena& facts, CursorView cursor) {
   const std::string name = cursor.spelling();
   return ParamNameAndRole{
       .name = facts.add_string(name),
@@ -295,12 +295,12 @@ void scan_translation_unit(ParseSession& session) {
 
 }  // namespace
 
-facts::EntrypointFacts parse_files(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set) {
+facts::FactArena parse_files(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set) {
   if (options.source_files.empty()) {
     throw std::invalid_argument("no source files provided");
   }
 
-  facts::EntrypointFacts facts(options.memory_resource);
+  facts::FactArena facts(options.memory_resource);
   const AggregateSource aggregate_source = build_aggregate_source(options.source_files, options.memory_resource);
   ParseSession session(options, diagnostic_set, facts, options.source_files, aggregate_source.path, aggregate_source.contents);
   session.add_clang_diagnostics();
@@ -309,4 +309,4 @@ facts::EntrypointFacts parse_files(const ParseOptions& options, diagnostics::Dia
   return facts;
 }
 
-}  // namespace entrypoint_codegen::clang_adapter
+}  // namespace epgen::clang_adapter

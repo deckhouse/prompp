@@ -1,4 +1,4 @@
-#include "facts/entrypoint_facts.h"
+#include "facts/fact_arena.h"
 
 #include <gtest/gtest.h>
 
@@ -7,22 +7,22 @@
 
 namespace {
 
-using entrypoint_codegen::facts::BridgeKind;
-using entrypoint_codegen::facts::EntrypointFacts;
-using entrypoint_codegen::facts::FieldDecl;
-using entrypoint_codegen::facts::FunctionDecl;
-using entrypoint_codegen::facts::LayoutDecl;
-using entrypoint_codegen::facts::LayoutKind;
-using entrypoint_codegen::facts::ParamDecl;
-using entrypoint_codegen::facts::ParamRole;
-using entrypoint_codegen::facts::SourceLocation;
+using epgen::facts::BridgeKind;
+using epgen::facts::FactArena;
+using epgen::facts::FieldDecl;
+using epgen::facts::FunctionDecl;
+using epgen::facts::LayoutDecl;
+using epgen::facts::LayoutKind;
+using epgen::facts::ParamDecl;
+using epgen::facts::ParamRole;
+using epgen::facts::SourceLocation;
 
-class EntrypointFactsTest : public testing::Test {
+class FactArenaTest : public testing::Test {
  protected:
-  EntrypointFacts facts_;
+  FactArena facts_;
 };
 
-TEST_F(EntrypointFactsTest, StoresStringsAndSourceFiles) {
+TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
   // Act
   const auto string_id = facts_.add_string("prompp_fn");
   const auto source_file_id = facts_.add_source_file("entrypoint.cpp");
@@ -34,7 +34,7 @@ TEST_F(EntrypointFactsTest, StoresStringsAndSourceFiles) {
   EXPECT_EQ(facts_.string(facts_.source_file(source_file_id).path), "entrypoint.cpp");
 }
 
-TEST_F(EntrypointFactsTest, ResolvesContiguousRangesToStoredRecords) {
+TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 3, .column = 5};
   const std::vector<ParamDecl> params{
@@ -46,10 +46,10 @@ TEST_F(EntrypointFactsTest, ResolvesContiguousRangesToStoredRecords) {
   };
 
   // Act
-  const auto param_range = facts_.add_params(params);
-  const auto field_range = facts_.add_fields(fields);
-  const auto stored_params = facts_.params(param_range);
-  const auto stored_fields = facts_.fields(field_range);
+  const auto param_list_id = facts_.add_params(params);
+  const auto field_list_id = facts_.add_fields(fields);
+  const auto stored_params = facts_.params(param_list_id);
+  const auto stored_fields = facts_.fields(field_list_id);
 
   // Assert
   ASSERT_EQ(stored_params.size(), 2);
@@ -59,7 +59,7 @@ TEST_F(EntrypointFactsTest, ResolvesContiguousRangesToStoredRecords) {
   EXPECT_EQ(facts_.string(stored_fields[0].name), "series");
 }
 
-TEST_F(EntrypointFactsTest, ResolvesFunctionOwnedRanges) {
+TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 3, .column = 5};
   const std::vector<ParamDecl> params{
@@ -68,8 +68,8 @@ TEST_F(EntrypointFactsTest, ResolvesFunctionOwnedRanges) {
   const std::vector<LayoutDecl> layouts{
       LayoutDecl{.kind = LayoutKind::kArguments, .fields = facts_.add_fields({}), .location = location},
   };
-  const auto param_range = facts_.add_params(params);
-  const auto layout_range = facts_.add_layouts(layouts);
+  const auto param_list_id = facts_.add_params(params);
+  const auto layout_list_id = facts_.add_layouts(layouts);
 
   // Act
   const auto function_id = facts_.add_function(FunctionDecl{
@@ -77,8 +77,8 @@ TEST_F(EntrypointFactsTest, ResolvesFunctionOwnedRanges) {
       .return_type_spelling = facts_.add_string("void"),
       .documentation = facts_.add_string(""),
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = param_range,
-      .layouts = layout_range,
+      .params = param_list_id,
+      .layouts = layout_list_id,
       .location = location,
       .has_c_linkage = true,
   });
@@ -95,12 +95,12 @@ TEST_F(EntrypointFactsTest, ResolvesFunctionOwnedRanges) {
   EXPECT_EQ(stored_layouts[0].kind, LayoutKind::kArguments);
 }
 
-TEST_F(EntrypointFactsTest, MoveTransfersStoredFacts) {
+TEST_F(FactArenaTest, MoveTransfersStoredFacts) {
   // Arrange
   const auto string_id = facts_.add_string("prompp_fn");
 
   // Act
-  EntrypointFacts moved = std::move(facts_);
+  FactArena moved = std::move(facts_);
 
   // Assert
   EXPECT_EQ(moved.string(string_id), "prompp_fn");

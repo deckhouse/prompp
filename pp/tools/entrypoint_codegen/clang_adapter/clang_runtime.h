@@ -2,7 +2,7 @@
 
 #include "clang_adapter/parse.h"
 #include "diagnostics/diagnostics.h"
-#include "facts/entrypoint_facts.h"
+#include "facts/fact_arena.h"
 #include "facts/facts.h"
 
 #include <clang-c/Index.h>
@@ -15,7 +15,7 @@
 #include <string_view>
 #include <vector>
 
-namespace entrypoint_codegen::clang_adapter {
+namespace epgen::clang_adapter {
 
 enum class CursorKind : uint8_t {
   kOther,
@@ -75,13 +75,10 @@ void visit_children(CursorView cursor, VisitResult (*visitor)(CursorView cursor,
 
 class ParseSession {
  public:
+  ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactArena& facts, const std::filesystem::path& source_file);
   ParseSession(const ParseOptions& options,
                diagnostics::DiagnosticSet& diagnostic_set,
-               facts::EntrypointFacts& facts,
-               const std::filesystem::path& source_file);
-  ParseSession(const ParseOptions& options,
-               diagnostics::DiagnosticSet& diagnostic_set,
-               facts::EntrypointFacts& facts,
+               facts::FactArena& facts,
                std::span<const std::filesystem::path> source_files,
                std::string_view virtual_source_path,
                std::string_view virtual_source);
@@ -91,8 +88,8 @@ class ParseSession {
   ParseSession& operator=(const ParseSession&) = delete;
 
   [[nodiscard]] std::pmr::memory_resource* memory_resource() const { return memory_resource_; }
-  facts::EntrypointFacts& facts() { return facts_; }
-  [[nodiscard]] const facts::EntrypointFacts& facts() const { return facts_; }
+  facts::FactArena& facts() { return facts_; }
+  [[nodiscard]] const facts::FactArena& facts() const { return facts_; }
 
   void add_clang_diagnostics();
 
@@ -105,8 +102,8 @@ class ParseSession {
 
   std::pmr::memory_resource* memory_resource_;
   diagnostics::DiagnosticSet& diagnostics_;
-  facts::EntrypointFacts& facts_;
+  facts::FactArena& facts_;
   Impl* impl_ = nullptr;
 };
 
-}  // namespace entrypoint_codegen::clang_adapter
+}  // namespace epgen::clang_adapter

@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace entrypoint_codegen::diagnostics {
+namespace epgen::diagnostics {
 
 enum class Severity : uint8_t {
   kInfo,
@@ -73,4 +73,4 @@ class DiagnosticSet {
 [[nodiscard]] std::string_view diagnostic_message(const Diagnostic& diagnostic);
 [[nodiscard]] std::string_view severity_name(Severity severity);
 
-}  // namespace entrypoint_codegen::diagnostics
+}  // namespace epgen::diagnostics

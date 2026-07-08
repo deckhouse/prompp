@@ -5,7 +5,7 @@
 #include <span>
 #include <string>
 
-namespace entrypoint_codegen::clang_adapter {
+namespace epgen::clang_adapter {
 
 struct AggregateSource {
   std::pmr::string path;
@@ -14,4 +14,4 @@ struct AggregateSource {
 
 [[nodiscard]] AggregateSource build_aggregate_source(std::span<const std::filesystem::path> source_files, std::pmr::memory_resource* memory_resource);
 
-}  // namespace entrypoint_codegen::clang_adapter
+}  // namespace epgen::clang_adapter

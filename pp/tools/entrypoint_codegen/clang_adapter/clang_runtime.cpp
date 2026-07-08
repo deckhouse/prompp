@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace entrypoint_codegen::clang_adapter {
+namespace epgen::clang_adapter {
 
 namespace {
 
@@ -440,7 +440,7 @@ class ParseSession::Impl {
 
 ParseSession::ParseSession(const ParseOptions& options,
                            diagnostics::DiagnosticSet& diagnostic_set,
-                           facts::EntrypointFacts& facts,
+                           facts::FactArena& facts,
                            const std::filesystem::path& source_file)
     : memory_resource_(options.memory_resource), diagnostics_(diagnostic_set), facts_(facts) {
   std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
@@ -456,7 +456,7 @@ ParseSession::ParseSession(const ParseOptions& options,
 
 ParseSession::ParseSession(const ParseOptions& options,
                            diagnostics::DiagnosticSet& diagnostic_set,
-                           facts::EntrypointFacts& facts,
+                           facts::FactArena& facts,
                            std::span<const std::filesystem::path> source_files,
                            std::string_view virtual_source_path,
                            std::string_view virtual_source)
@@ -497,4 +497,4 @@ bool ParseSession::is_input_source_file(CursorView cursor) {
   return impl_->is_input_source_file(cursor);
 }
 
-}  // namespace entrypoint_codegen::clang_adapter
+}  // namespace epgen::clang_adapter

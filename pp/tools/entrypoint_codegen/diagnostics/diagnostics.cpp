@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace entrypoint_codegen::diagnostics {
+namespace epgen::diagnostics {
 
 bool SeverityCounts::has_errors() const noexcept {
   return errors != 0;
@@ -172,4 +172,4 @@ std::string_view severity_name(Severity severity) {
   return "error";
 }
 
-}  // namespace entrypoint_codegen::diagnostics
+}  // namespace epgen::diagnostics

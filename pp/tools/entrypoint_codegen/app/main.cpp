@@ -5,7 +5,7 @@
 #include <iostream>
 
 int main(int argc, char** argv) {
-  namespace app = entrypoint_codegen::app;
+  namespace app = epgen::app;
 
   app::CliOptions cli_options;
   try {

@@ -7,12 +7,12 @@
 
 namespace {
 
-using entrypoint_codegen::diagnostics::Diagnostic;
-using entrypoint_codegen::diagnostics::DiagnosticCode;
-using entrypoint_codegen::diagnostics::DiagnosticSet;
-using entrypoint_codegen::diagnostics::Severity;
-using entrypoint_codegen::facts::SourceFileId;
-using entrypoint_codegen::facts::SourceLocation;
+using epgen::diagnostics::Diagnostic;
+using epgen::diagnostics::DiagnosticCode;
+using epgen::diagnostics::DiagnosticSet;
+using epgen::diagnostics::Severity;
+using epgen::facts::SourceFileId;
+using epgen::facts::SourceLocation;
 
 class DiagnosticSetTest : public testing::Test {
  protected:
@@ -72,7 +72,7 @@ TEST_F(DiagnosticSetTest, CountsDiagnosticsBySeverity) {
   });
 
   // Act
-  const entrypoint_codegen::diagnostics::SeverityCounts counts = entrypoint_codegen::diagnostics::count_by_severity(diagnostics_);
+  const epgen::diagnostics::SeverityCounts counts = epgen::diagnostics::count_by_severity(diagnostics_);
 
   // Assert
   EXPECT_EQ(counts.total, 3);
@@ -84,7 +84,7 @@ TEST_F(DiagnosticSetTest, CountsDiagnosticsBySeverity) {
 
 TEST(DiagnosticsTest, NamesDiagnosticCode) {
   // Act
-  const std::string_view code = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kMissingNamePrefix);
+  const std::string_view code = epgen::diagnostics::diagnostic_code_name(DiagnosticCode::kMissingNamePrefix);
 
   // Assert
   EXPECT_EQ(code, "missing_name_prefix");
@@ -92,9 +92,9 @@ TEST(DiagnosticsTest, NamesDiagnosticCode) {
 
 TEST(DiagnosticsTest, NamesParameterRoleDiagnosticsWithDistinctCodes) {
   // Act
-  const std::string_view unknown_role = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kUnknownParamRole);
-  const std::string_view invalid_order = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kInvalidTwoParamOrder);
-  const std::string_view invalid_second = entrypoint_codegen::diagnostics::diagnostic_code_name(DiagnosticCode::kInvalidSecondParamRole);
+  const std::string_view unknown_role = epgen::diagnostics::diagnostic_code_name(DiagnosticCode::kUnknownParamRole);
+  const std::string_view invalid_order = epgen::diagnostics::diagnostic_code_name(DiagnosticCode::kInvalidTwoParamOrder);
+  const std::string_view invalid_second = epgen::diagnostics::diagnostic_code_name(DiagnosticCode::kInvalidSecondParamRole);
 
   // Assert
   EXPECT_EQ(unknown_role, "unknown_param_role");
@@ -104,7 +104,7 @@ TEST(DiagnosticsTest, NamesParameterRoleDiagnosticsWithDistinctCodes) {
 
 TEST(DiagnosticsTest, ProvidesDefaultMessageForDiagnosticCode) {
   // Act
-  const std::string_view message = entrypoint_codegen::diagnostics::diagnostic_default_message(DiagnosticCode::kMissingNamePrefix);
+  const std::string_view message = epgen::diagnostics::diagnostic_default_message(DiagnosticCode::kMissingNamePrefix);
 
   // Assert
   EXPECT_EQ(message, "entrypoint function must use prompp_ prefix");
@@ -122,7 +122,7 @@ TEST(DiagnosticsTest, UsesDiagnosticMessageWhenPresent) {
   };
 
   // Act
-  const std::string_view message = entrypoint_codegen::diagnostics::diagnostic_message(diagnostic);
+  const std::string_view message = epgen::diagnostics::diagnostic_message(diagnostic);
 
   // Assert
   EXPECT_EQ(message, "clang says no");
@@ -140,7 +140,7 @@ TEST(DiagnosticsTest, FallsBackToDefaultMessageWhenDiagnosticMessageIsAbsent) {
   };
 
   // Act
-  const std::string_view message = entrypoint_codegen::diagnostics::diagnostic_message(diagnostic);
+  const std::string_view message = epgen::diagnostics::diagnostic_message(diagnostic);
 
   // Assert
   EXPECT_EQ(message, "entrypoint function must use prompp_ prefix");
@@ -148,9 +148,9 @@ TEST(DiagnosticsTest, FallsBackToDefaultMessageWhenDiagnosticMessageIsAbsent) {
 
 TEST(DiagnosticsTest, NamesSeverityValues) {
   // Act
-  const std::string_view info = entrypoint_codegen::diagnostics::severity_name(Severity::kInfo);
-  const std::string_view warning = entrypoint_codegen::diagnostics::severity_name(Severity::kWarning);
-  const std::string_view error = entrypoint_codegen::diagnostics::severity_name(Severity::kError);
+  const std::string_view info = epgen::diagnostics::severity_name(Severity::kInfo);
+  const std::string_view warning = epgen::diagnostics::severity_name(Severity::kWarning);
+  const std::string_view error = epgen::diagnostics::severity_name(Severity::kError);
 
   // Assert
   EXPECT_EQ(info, "info");

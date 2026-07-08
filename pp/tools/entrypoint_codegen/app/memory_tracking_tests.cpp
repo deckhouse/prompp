@@ -8,16 +8,16 @@ namespace {
 
 TEST(TrackingMemoryResourceTest, SnapshotReportsAllocatedDeallocatedAndPeakLiveBytes) {
   // Arrange
-  entrypoint_codegen::app::TrackingMemoryResource memory_resource;
+  epgen::app::TrackingMemoryResource memory_resource;
 
   // Act
   void* first = memory_resource.allocate(8, alignof(std::max_align_t));
   void* second = memory_resource.allocate(4, alignof(std::max_align_t));
-  const entrypoint_codegen::app::MemoryUsageSnapshot after_allocations = memory_resource.snapshot();
+  const epgen::app::MemoryUsageSnapshot after_allocations = memory_resource.snapshot();
   memory_resource.deallocate(first, 8, alignof(std::max_align_t));
-  const entrypoint_codegen::app::MemoryUsageSnapshot after_first_deallocate = memory_resource.snapshot();
+  const epgen::app::MemoryUsageSnapshot after_first_deallocate = memory_resource.snapshot();
   memory_resource.deallocate(second, 4, alignof(std::max_align_t));
-  const entrypoint_codegen::app::MemoryUsageSnapshot after_all_deallocated = memory_resource.snapshot();
+  const epgen::app::MemoryUsageSnapshot after_all_deallocated = memory_resource.snapshot();
 
   // Assert
   EXPECT_EQ(after_allocations.allocated_bytes, 12);

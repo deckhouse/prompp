@@ -12,11 +12,11 @@
 #include <iostream>
 #include <stdexcept>
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 namespace {
 
-void write_json_output(const OutputOptions& options, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_output(const OutputOptions& options, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   if (options.output_path.has_parent_path()) {
     std::filesystem::create_directories(options.output_path.parent_path());
   }
@@ -28,7 +28,7 @@ void write_json_output(const OutputOptions& options, const facts::EntrypointFact
   emit::write_report(output, emit::ReportFormat::kJson, facts, diagnostic_set);
 }
 
-void write_lint_output(const OutputOptions& options, const facts::EntrypointFacts& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_lint_output(const OutputOptions& options, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   std::ostream& output = options.diagnostics_output == nullptr ? std::cout : *options.diagnostics_output;
   emit::write_report(output, emit::ReportFormat::kCompilerDiagnostics, facts, diagnostic_set);
 }
@@ -38,7 +38,7 @@ void write_lint_output(const OutputOptions& options, const facts::EntrypointFact
 RunReport run(const RunOptions& options) {
   TrackingMemoryResource memory_resource;
   diagnostics::DiagnosticSet diagnostic_set(&memory_resource);
-  facts::EntrypointFacts facts = clang_adapter::parse_files(
+  facts::FactArena facts = clang_adapter::parse_files(
       clang_adapter::ParseOptions{
           .source_files = options.analysis.source_files,
           .clang_args = options.analysis.clang_args,
@@ -75,4 +75,4 @@ RunReport run(const RunOptions& options) {
   };
 }
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

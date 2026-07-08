@@ -1,6 +1,6 @@
 #include "app/memory_tracking.h"
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 TrackingMemoryResource::TrackingMemoryResource(std::pmr::memory_resource* upstream) : upstream_(upstream) {}
 
@@ -32,4 +32,4 @@ bool TrackingMemoryResource::do_is_equal(const std::pmr::memory_resource& other)
   return this == &other;
 }
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app

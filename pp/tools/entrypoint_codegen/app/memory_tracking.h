@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <memory_resource>
 
-namespace entrypoint_codegen::app {
+namespace epgen::app {
 
 class TrackingMemoryResource : public std::pmr::memory_resource {
  public:
@@ -25,4 +25,4 @@ class TrackingMemoryResource : public std::pmr::memory_resource {
   size_t peak_live_bytes_ = 0;
 };
 
-}  // namespace entrypoint_codegen::app
+}  // namespace epgen::app
