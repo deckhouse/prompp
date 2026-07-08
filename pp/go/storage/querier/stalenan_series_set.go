@@ -91,15 +91,8 @@ func (ss *StaleNaNSeriesSet) Next() bool {
 	}
 
 	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
-	ss.series[ss.nextSeriesIndex].labelSet = labels.NewLabelsWithLSS(
-		ss.labelSetSnapshot,
-		lsID,
-		builder,
-	)
+	ss.series[ss.nextSeriesIndex].labelSet = labels.NewLabelsWithLSS(ss.labelSetSnapshot, lsID)
 	ss.nextSeriesIndex++
-	builderPool.Put(builder)
 
 	return true
 }
