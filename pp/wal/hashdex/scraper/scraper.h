@@ -98,7 +98,7 @@ class Scraper {
    private:
     const Scraper& scraper_;
   };
-  
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
 
