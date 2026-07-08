@@ -46,7 +46,7 @@ RunReport run(const RunOptions& options) {
       },
       diagnostic_set);
 
-  contract::validate_entrypoints(facts, diagnostic_set);
+  contract::validate_contract(facts, diagnostic_set);
 
   if (options.runtime.debug_diagnostics) {
     append_runtime_debug_diagnostics(diagnostic_set, memory_resource.snapshot());

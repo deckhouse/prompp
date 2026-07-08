@@ -23,7 +23,7 @@ class FactArenaTest : public testing::Test {
 };
 
 TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
-  // // entrypoint.cpp
+  // Parsed source: entrypoint.cpp
   // void prompp_fn();
 
   // Act
@@ -38,7 +38,7 @@ TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
 }
 
 TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
-  // // entrypoint.cpp
+  // Parsed source: entrypoint.cpp
   // void prompp_fn(void* args, void* res);
 
   // Arrange
@@ -70,7 +70,7 @@ TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
 }
 
 TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
-  // // entrypoint.cpp
+  // Parsed source: entrypoint.cpp
   // void prompp_fn(void* args);
 
   // Arrange
@@ -105,12 +105,13 @@ TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
 
   ASSERT_EQ(stored_params.size(), 1);
   EXPECT_EQ(facts_.string(stored_params[0].name), "args");
-  
+
   ASSERT_EQ(stored_layouts.size(), 1);
   EXPECT_EQ(stored_layouts[0].kind, LayoutKind::kArguments);
 }
 
 TEST_F(FactArenaTest, MoveTransfersStoredFacts) {
+  // Parsed source: entrypoint.cpp
   // void prompp_fn();
 
   // Arrange

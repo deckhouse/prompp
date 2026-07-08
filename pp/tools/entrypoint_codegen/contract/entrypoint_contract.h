@@ -23,7 +23,6 @@ constexpr std::string_view kResultLayoutName = "Result";
 constexpr std::string_view kArgsParamName = "args";
 constexpr std::string_view kResParamName = "res";
 
-[[nodiscard]] bool starts_with(std::string_view value, std::string_view prefix);
 [[nodiscard]] bool is_entrypoint_function_name(std::string_view name);
 [[nodiscard]] bool is_void_pointer_type(std::string_view type);
 
@@ -31,6 +30,6 @@ constexpr std::string_view kResParamName = "res";
 [[nodiscard]] facts::ParamRole param_role_for_name(std::string_view name);
 [[nodiscard]] std::optional<facts::LayoutKind> layout_kind_for_name(std::string_view name);
 
-void validate_entrypoints(const facts::FactArena& facts, diagnostics::DiagnosticSet& diagnostic_set);
+void validate_contract(const facts::FactArena& facts, diagnostics::DiagnosticSet& diagnostic_set);
 
 }  // namespace epgen::contract

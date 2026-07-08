@@ -29,9 +29,13 @@ std::filesystem::path write_source_file(std::string_view name, std::string_view 
 }
 
 TEST(ClangAdapterParseTest, RejectsEmptyInputList) {
+  // Arrange
   const epgen::clang_adapter::ParseOptions options;
   epgen::diagnostics::DiagnosticSet diagnostics;
 
+  // Act
+  
+  //  Assert
   EXPECT_THROW(epgen::clang_adapter::parse_files(options, diagnostics), std::invalid_argument);
 }
 

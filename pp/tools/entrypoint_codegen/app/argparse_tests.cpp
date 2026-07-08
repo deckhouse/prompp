@@ -121,6 +121,7 @@ TEST(ArgparseTest, CollectsClangArgsFromFlagAndSeparator) {
 }
 
 TEST(ArgparseTest, RejectsUnknownOutputMode) {
+  // Act / Assert
   EXPECT_THROW(parse_args({"entrypoint_codegen", "--mode=xml"}), std::runtime_error);
 }
 
