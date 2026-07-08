@@ -100,6 +100,7 @@ class Scraper {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto histograms() const noexcept { return std::span<char>{}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }

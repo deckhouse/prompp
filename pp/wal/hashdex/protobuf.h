@@ -4,7 +4,6 @@
 
 #include "bare_bones/vector.h"
 #include "metric.h"
-#include "primitives/label_set.h"
 #include "prometheus/hashdex.h"
 #include "prometheus/remote_write.h"
 
@@ -61,15 +60,16 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& histograms() const noexcept { return histograms_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
 
  private:
-  class Item {
+  class FloatItem {
     size_t hash_;
     std::string_view data_;
 
    public:
-    PROMPP_ALWAYS_INLINE explicit Item(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
+    PROMPP_ALWAYS_INLINE explicit FloatItem(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
 
     template <class Timeseries>
@@ -78,8 +78,23 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     }
   };
 
+  class HistogramItem {
+    size_t hash_;
+    std::string_view data_;
+
+   public:
+    PROMPP_ALWAYS_INLINE explicit HistogramItem(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+
+    template <class Histogram>
+    PROMPP_ALWAYS_INLINE void read([[maybe_unused]] Histogram& histogram) const {
+      // Prometheus::RemoteWrite::read_histogram(protozero::pbf_reader(data_), timeseries);
+    }
+  };
+
   std::string protobuf_;
-  BareBones::Vector<Item> floats_;
+  BareBones::Vector<FloatItem> floats_;
+  BareBones::Vector<HistogramItem> histograms_;
   BareBones::Vector<Metadata> metadata_;
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
   Primitives::LabelViewSet label_set_;

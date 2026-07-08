@@ -90,6 +90,7 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series() const noexcept { return series_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto histograms() const noexcept { return std::span<char>{}; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
     struct Stub {};
     return Stub{};

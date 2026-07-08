@@ -95,6 +95,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto histograms() const noexcept { return std::span<char>{}; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
     struct Stub {};
     return Stub{};
