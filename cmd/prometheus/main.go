@@ -2370,6 +2370,13 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				cfg.UseBlockManagerStorage = true
 			}
 			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
+
+		case "disable_coredumps":
+			if err := prom_runtime.DisableCoreDumps(); err != nil {
+				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
+				continue
+			}
+			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
 		}
 	}
 }
