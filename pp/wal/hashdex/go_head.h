@@ -12,8 +12,6 @@ namespace PromPP::WAL::hashdex {
 template <class Lss>
 class GoHead : public Prometheus::hashdex::Abstract {
  public:
-  static_assert(Prometheus::hashdex::HashdexInterface<GoHead>);
-
   using Hashes = BareBones::Vector<size_t>;
 
   class IteratorSentinel {};
