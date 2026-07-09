@@ -7,6 +7,7 @@
 
 namespace {
 
+using epgen::facts::StringId;
 using epgen::facts::StringTable;
 
 TEST(StringTableTest, StartsEmpty) {
@@ -60,6 +61,18 @@ TEST(StringTableTest, PreservesEmbeddedNullBytes) {
 
   // Assert
   EXPECT_EQ(table.get(id), std::string_view(value, sizeof(value)));
+}
+
+TEST(StringTableTest, ResolvesInvalidStringIdToPlaceholder) {
+  // Arrange
+  const StringTable table;
+  const StringId id;
+
+  // Act
+  const std::string_view value = table.get(id);
+
+  // Assert
+  EXPECT_EQ(value, epgen::facts::kInvalidValuePlaceholder);
 }
 
 TEST(StringTableTest, MoveTransfersStoredStrings) {

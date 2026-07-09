@@ -3,8 +3,11 @@
 #include "tagged_index.h"
 
 #include <cstdint>
+#include <string_view>
 
 namespace epgen::facts {
+
+inline constexpr std::string_view kInvalidValuePlaceholder = "<invalid>";
 
 using SourceFileId = TaggedIndex<struct SourceFileTag>;
 using FunctionId = TaggedIndex<struct FunctionTag>;

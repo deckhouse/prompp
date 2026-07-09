@@ -381,7 +381,7 @@ class ParseSession::Impl : public AstContext {
 
     std::string path = path_for_file(file);
     if (path.empty()) {
-      path = "<unknown>";
+      path = std::string(facts::kInvalidValuePlaceholder);
     }
     if (SourceFile* source_file = find_source_file_by_path(file, path); source_file != nullptr) {
       return source_file->id;

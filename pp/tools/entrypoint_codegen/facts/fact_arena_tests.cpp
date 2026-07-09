@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -14,7 +16,9 @@ using epgen::facts::FunctionDecl;
 using epgen::facts::LayoutDecl;
 using epgen::facts::LayoutKind;
 using epgen::facts::ParamDecl;
+using epgen::facts::ParamListId;
 using epgen::facts::ParamRole;
+using epgen::facts::SourceFileId;
 using epgen::facts::SourceLocation;
 using epgen::facts::StringId;
 
@@ -134,6 +138,23 @@ TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
 
   ASSERT_EQ(stored_layouts.size(), 1);
   EXPECT_EQ(stored_layouts[0].kind, LayoutKind::kArguments);
+}
+
+TEST_F(FactArenaTest, ResolvesInvalidIdsToSafeFallbackValues) {
+  // Arrange
+  const StringId string_id;
+  const SourceFileId source_file_id;
+  const ParamListId param_list_id;
+
+  // Act
+  const std::string_view string = facts_.string(string_id);
+  const epgen::facts::SourceFileDecl& source_file = facts_.source_file(source_file_id);
+  const std::span<const ParamDecl> params = facts_.params(param_list_id);
+
+  // Assert
+  EXPECT_EQ(string, epgen::facts::kInvalidValuePlaceholder);
+  EXPECT_EQ(facts_.string(source_file.path), epgen::facts::kInvalidValuePlaceholder);
+  EXPECT_TRUE(params.empty());
 }
 
 TEST_F(FactArenaTest, MoveTransfersStoredFacts) {

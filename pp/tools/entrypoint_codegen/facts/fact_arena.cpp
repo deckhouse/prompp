@@ -31,6 +31,7 @@ class FactArena::Impl {
  public:
   explicit Impl(std::pmr::memory_resource* memory_resource)
       : strings_(memory_resource),
+        invalid_source_file_(SourceFileDecl{.path = strings_.add(kInvalidValuePlaceholder)}),
         source_files_(memory_resource),
         functions_(memory_resource),
         params_(memory_resource),
@@ -100,12 +101,16 @@ class FactArena::Impl {
   [[nodiscard]] std::string_view string(StringId id) const { return strings_.get(id); }
 
   [[nodiscard]] const SourceFileDecl& source_file(SourceFileId id) const {
-    assert(id.get() < source_files_.size());
+    if (!id.is_valid() || id.get() >= source_files_.size()) {
+      return invalid_source_file_;
+    }
     return source_files_[id.get()];
   }
 
   [[nodiscard]] const FunctionDecl& function(FunctionId id) const {
-    assert(id.get() < functions_.size());
+    if (!id.is_valid() || id.get() >= functions_.size()) {
+      return invalid_function_;
+    }
     return functions_[id.get()];
   }
 
@@ -116,7 +121,9 @@ class FactArena::Impl {
   [[nodiscard]] std::span<const ParamDecl> params(FunctionId id) const { return params(function(id).params); }
 
   [[nodiscard]] std::span<const ParamDecl> params(ParamListId id) const {
-    assert(id.get() < param_lists_.size());
+    if (!id.is_valid() || id.get() >= param_lists_.size()) {
+      return {};
+    }
     const StoredList<ParamId> list = param_lists_[id.get()];
     return range_span(params_, list.begin.get(), list.count);
   }
@@ -124,24 +131,32 @@ class FactArena::Impl {
   [[nodiscard]] std::span<const LayoutDecl> layouts(FunctionId id) const { return layouts(function(id).layouts); }
 
   [[nodiscard]] std::span<const LayoutDecl> layouts(LayoutListId id) const {
-    assert(id.get() < layout_lists_.size());
+    if (!id.is_valid() || id.get() >= layout_lists_.size()) {
+      return {};
+    }
     const StoredList<LayoutId> list = layout_lists_[id.get()];
     return range_span(layouts_, list.begin.get(), list.count);
   }
 
   [[nodiscard]] std::span<const FieldDecl> fields(LayoutId id) const {
-    assert(id.get() < layouts_.size());
+    if (!id.is_valid() || id.get() >= layouts_.size()) {
+      return {};
+    }
     return fields(layouts_[id.get()].fields);
   }
 
   [[nodiscard]] std::span<const FieldDecl> fields(FieldListId id) const {
-    assert(id.get() < field_lists_.size());
+    if (!id.is_valid() || id.get() >= field_lists_.size()) {
+      return {};
+    }
     const StoredList<FieldId> list = field_lists_[id.get()];
     return range_span(fields_, list.begin.get(), list.count);
   }
 
  private:
   StringTable strings_;
+  SourceFileDecl invalid_source_file_;
+  FunctionDecl invalid_function_;
 
   std::pmr::vector<SourceFileDecl> source_files_;
   std::pmr::vector<FunctionDecl> functions_;

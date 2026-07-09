@@ -35,7 +35,9 @@ class StringTable::Impl {
 
   [[nodiscard]] std::string_view get(StringId id) const {
     const uint32_t index = id.get();
-    assert(index < strings_.size());
+    if (!id.is_valid() || index >= strings_.size()) {
+      return kInvalidValuePlaceholder;
+    }
     return string_view_for(strings_[index]);
   }
 

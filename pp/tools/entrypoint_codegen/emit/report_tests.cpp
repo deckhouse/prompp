@@ -146,6 +146,29 @@ TEST_F(EmitReportTest, WritesJsonDiagnosticLocationObjectWhenPresent) {
   EXPECT_TRUE(has_location);
 }
 
+TEST_F(EmitReportTest, WritesInvalidJsonLocationFileWhenSourceFileIsAbsent) {
+  // Arrange
+  const SourceLocation location{.file = epgen::facts::SourceFileId{}, .line = 7, .column = 9};
+  facts_.add_function(FunctionDecl{
+      .name = facts_.add_string("prompp_store"),
+      .return_type_spelling = facts_.add_string("void"),
+      .documentation = facts_.add_string(""),
+      .bridge_kind = BridgeKind::kCGo,
+      .params = facts_.add_params({}),
+      .layouts = facts_.add_layouts({}),
+      .location = location,
+      .has_c_linkage = true,
+  });
+
+  // Act
+  epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
+  const std::string json = output_.str();
+  const bool has_location = json.find("\"location\": {\"file\": \"<invalid>\", \"line\": 7, \"column\": 9}") != std::string::npos;
+
+  // Assert
+  EXPECT_TRUE(has_location);
+}
+
 TEST_F(EmitReportTest, WritesNullJsonDiagnosticLocationWhenAbsent) {
   // Arrange
   diagnostics_.add(Diagnostic{
