@@ -1,31 +1,49 @@
+def _prefixed_args(flag, values):
+    return [flag + value for value in values]
+
 def _path_args(flag, paths):
-    return [flag + path for path in paths]
+    return _prefixed_args(flag, [path for path in paths])
+
+def _compilation_args(ctx):
+    target = ctx.attr.target
+    compilation_context = target[CcInfo].compilation_context
+    args = []
+    args.extend(_prefixed_args("-D", compilation_context.defines.to_list()))
+    args.extend(_path_args("-I", compilation_context.includes.to_list()))
+    args.extend(_path_args("-iquote", compilation_context.quote_includes.to_list()))
+    args.extend(_path_args("-isystem", compilation_context.system_includes.to_list()))
+    args.append("-iquote.")
+    args.append("-iquote" + ctx.bin_dir.path)
+    return args
 
 def _entrypoint_fact_checking_impl(ctx):
     output = ctx.actions.declare_file(ctx.label.name + ".json")
     log = ctx.actions.declare_file(ctx.label.name + ".log")
 
-    clang_args = []
-    clang_args.extend(_path_args("-I", ctx.attr.includes))
-    clang_args.extend(_path_args("-iquote", ctx.attr.quote_includes))
-    clang_args.extend(_path_args("-isystem", ctx.attr.system_includes))
+    compilation_context = ctx.attr.target[CcInfo].compilation_context
+    clang_args = list(ctx.attr.clang_args)
+    clang_args.extend(_compilation_args(ctx))
 
     json_args = ctx.actions.args()
     json_args.add("--mode=json")
     json_args.add("--output=" + output.path)
     json_args.add_all(ctx.files.srcs)
     json_args.add("--")
-    json_args.add_all(ctx.attr.clang_args)
     json_args.add_all(clang_args)
 
     lint_args = ctx.actions.args()
     lint_args.add("--mode=lint")
     lint_args.add_all(ctx.files.srcs)
     lint_args.add("--")
-    lint_args.add_all(ctx.attr.clang_args)
     lint_args.add_all(clang_args)
 
-    inputs = depset(ctx.files.srcs + ctx.files.inputs)
+    inputs = depset(
+        direct = ctx.files.srcs,
+        transitive = [
+            compilation_context.headers,
+            ctx.attr.target[DefaultInfo].files,
+        ],
+    )
 
     ctx.actions.run_shell(
         inputs = inputs,
@@ -109,17 +127,13 @@ entrypoint_fact_checking = rule(
         "clang_args": attr.string_list(
             default = ["-std=c++2b"],
         ),
-        "includes": attr.string_list(
-            default = ["."],
-        ),
-        "inputs": attr.label_list(
-            allow_files = True,
-        ),
-        "quote_includes": attr.string_list(),
-        "system_includes": attr.string_list(),
         "srcs": attr.label_list(
             allow_files = [".cc", ".cpp", ".cxx"],
             mandatory = True,
+        ),
+        "target": attr.label(
+            mandatory = True,
+            providers = [CcInfo],
         ),
         "tool": attr.label(
             default = Label("@entrypoint_codegen//:entrypoint_codegen"),

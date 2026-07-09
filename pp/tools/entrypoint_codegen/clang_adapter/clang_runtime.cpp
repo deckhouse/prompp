@@ -123,6 +123,10 @@ diagnostics::Severity diagnostic_severity_for(CXDiagnosticSeverity severity) {
   return diagnostics::Severity::kInfo;
 }
 
+bool should_report_clang_diagnostic(CXDiagnosticSeverity severity) {
+  return severity == CXDiagnostic_Error || severity == CXDiagnostic_Fatal;
+}
+
 enum class SourceFileOrigin : uint8_t {
   kInput,
   kDiscovered,
@@ -290,11 +294,16 @@ class ParseSession::Impl : public AstContext {
     const unsigned count = clang_getNumDiagnostics(translation_unit_.get());
     for (unsigned i = 0; i < count; ++i) {
       CXDiagnostic diagnostic = clang_getDiagnostic(translation_unit_.get(), i);
+      const CXDiagnosticSeverity severity = clang_getDiagnosticSeverity(diagnostic);
+      if (!should_report_clang_diagnostic(severity)) {
+        clang_disposeDiagnostic(diagnostic);
+        continue;
+      }
 
       owner_.diagnostics_.add(diagnostics::Diagnostic{
           .code = diagnostics::DiagnosticCode::kClangDiagnostic,
           .message = owner_.facts().add_string(diagnostic_message(diagnostic)),
-          .severity = diagnostic_severity_for(clang_getDiagnosticSeverity(diagnostic)),
+          .severity = diagnostic_severity_for(severity),
           .location = source_location_for(clang_getDiagnosticLocation(diagnostic)),
       });
 

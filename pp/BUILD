@@ -211,18 +211,6 @@ cc_library(
 
 entrypoint_fact_checking(
     name = "entrypoint_fact_checking",
-    inputs = glob([
-        "bare_bones/**/*.h",
-        "entrypoint/**/*.h",
-        "entrypoint/**/*.hpp",
-        "head/**/*.h",
-        "metrics/**/*.h",
-        "primitives/**/*.h",
-        "prometheus/**/*.h",
-        "series_data/**/*.h",
-        "series_index/**/*.h",
-        "wal/**/*.h",
-    ]),
     srcs = glob(
         include = ["entrypoint/**/*.cpp"],
         exclude = [
@@ -230,6 +218,7 @@ entrypoint_fact_checking(
             "entrypoint/**/*_tests.cpp",
         ],
     ),
+    target = ":entrypoint",
 )
 
 cc_static_library(

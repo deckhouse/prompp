@@ -123,6 +123,23 @@ TEST(ClangAdapterParseTest, RecordsClangDiagnosticsSeparately) {
   EXPECT_EQ(diagnostic_values[0].severity, epgen::diagnostics::Severity::kError);
 }
 
+TEST(ClangAdapterParseTest, IgnoresClangWarningsFromSourceFile) {
+  // Arrange
+  const std::filesystem::path source_file = testdata_path("warning_source.cpp");
+  epgen::diagnostics::DiagnosticSet diagnostics;
+
+  // Act
+  static_cast<void>(epgen::clang_adapter::parse_files(
+      epgen::clang_adapter::ParseOptions{
+          .source_files = {source_file},
+          .clang_args = {"-std=c++2b", "-Wall"},
+      },
+      diagnostics));
+
+  // Assert
+  EXPECT_TRUE(diagnostics.empty());
+}
+
 TEST(ClangAdapterParseTest, ExtractsFunctionsFromMultipleInputFiles) {
   // Arrange
   const std::filesystem::path first_source_file = testdata_path("batch_first.cpp");
