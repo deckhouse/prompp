@@ -4,7 +4,6 @@
 
 #include "diagnostics/diagnostics.h"
 
-#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -89,9 +88,8 @@ TEST_F(EmitReportTest, EscapesJsonStringFieldsInOutput) {
   const SourceLocation location{.file = facts_.add_source_file("entry\"point.cpp"), .line = 2, .column = 4};
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kClangDiagnostic,
-      .message = "line\nmessage",
+      .message = facts_.add_string("line\nmessage"),
       .severity = Severity::kError,
-      .function = std::nullopt,
       .location = location,
   });
 
@@ -115,10 +113,8 @@ TEST_F(EmitReportTest, EscapesNonWhitespaceControlCharactersInJsonStringFields) 
   message += "after";
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kClangDiagnostic,
-      .message = message,
+      .message = facts_.add_string(message),
       .severity = Severity::kError,
-      .function = std::nullopt,
-      .location = std::nullopt,
   });
 
   // Act
@@ -137,9 +133,7 @@ TEST_F(EmitReportTest, WritesJsonDiagnosticLocationObjectWhenPresent) {
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 9};
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kMissingNamePrefix,
-      .message = std::nullopt,
       .severity = Severity::kError,
-      .function = std::nullopt,
       .location = location,
   });
 
@@ -156,10 +150,7 @@ TEST_F(EmitReportTest, WritesNullJsonDiagnosticLocationWhenAbsent) {
   // Arrange
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kRuntimeMemoryUsage,
-      .message = std::nullopt,
       .severity = Severity::kInfo,
-      .function = std::nullopt,
-      .location = std::nullopt,
   });
 
   // Act
@@ -176,9 +167,7 @@ TEST_F(EmitReportTest, WritesCompilerStyleDiagnosticLine) {
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 9};
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kMissingNamePrefix,
-      .message = std::nullopt,
       .severity = Severity::kError,
-      .function = std::nullopt,
       .location = location,
   });
 
@@ -193,10 +182,7 @@ TEST_F(EmitReportTest, WritesLocationlessDiagnosticLine) {
   // Arrange
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kRuntimeMemoryUsage,
-      .message = std::nullopt,
       .severity = Severity::kInfo,
-      .function = std::nullopt,
-      .location = std::nullopt,
   });
 
   // Act

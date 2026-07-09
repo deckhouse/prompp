@@ -195,15 +195,15 @@ void write_functions(std::ostream& out, const facts::FactArena& facts) {
 }
 
 void write_diagnostic_function(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
-  if (diagnostic.function.has_value()) {
-    out << "\"" << json_escape(facts.string(facts.function(*diagnostic.function).name)) << "\"";
+  if (diagnostic.function.is_valid()) {
+    out << "\"" << json_escape(facts.string(facts.function(diagnostic.function).name)) << "\"";
     return;
   }
   out << "null";
 }
 
 void write_diagnostic(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
-  const std::string_view message = diagnostics::diagnostic_message(diagnostic);
+  const std::string_view message = diagnostics::diagnostic_message(facts, diagnostic);
   out << "    {"
       << "\"code\": \"" << json_escape(diagnostics::diagnostic_code_name(diagnostic.code)) << "\", "
       << "\"message\": \"" << json_escape(message) << "\", "
@@ -211,8 +211,8 @@ void write_diagnostic(std::ostream& out, const facts::FactArena& facts, const di
       << "\"function\": ";
   write_diagnostic_function(out, facts, diagnostic);
   out << ", \"location\": ";
-  if (diagnostic.location.has_value()) {
-    write_location(out, facts, *diagnostic.location);
+  if (diagnostic.location.is_valid()) {
+    write_location(out, facts, diagnostic.location);
   } else {
     out << "null";
   }
@@ -249,11 +249,11 @@ void write_json_report(std::ostream& out, const facts::FactArena& facts, const d
 
 void write_compiler_diagnostics(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   for (const diagnostics::Diagnostic& diagnostic : diagnostic_set.diagnostics()) {
-    if (diagnostic.location.has_value()) {
-      const facts::SourceLocation location = *diagnostic.location;
+    if (diagnostic.location.is_valid()) {
+      const facts::SourceLocation location = diagnostic.location;
       out << facts.string(facts.source_file(location.file).path) << ":" << location.line << ":" << location.column << ": ";
     }
-    out << diagnostics::severity_name(diagnostic.severity) << ": " << diagnostics::diagnostic_message(diagnostic) << " ["
+    out << diagnostics::severity_name(diagnostic.severity) << ": " << diagnostics::diagnostic_message(facts, diagnostic) << " ["
         << diagnostics::diagnostic_code_name(diagnostic.code) << "]\n";
   }
 }

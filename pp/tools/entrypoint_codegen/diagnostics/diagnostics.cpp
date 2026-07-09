@@ -1,5 +1,7 @@
 #include "diagnostics/diagnostics.h"
 
+#include "facts/fact_arena.h"
+
 #include <utility>
 
 namespace epgen::diagnostics {
@@ -150,9 +152,9 @@ std::string_view diagnostic_default_message(DiagnosticCode code) {
   return "unknown diagnostic";
 }
 
-std::string_view diagnostic_message(const Diagnostic& diagnostic) {
-  if (diagnostic.message.has_value()) {
-    return *diagnostic.message;
+std::string_view diagnostic_message(const facts::FactArena& facts, const Diagnostic& diagnostic) {
+  if (diagnostic.message.is_valid()) {
+    return facts.string(diagnostic.message);
   }
   return diagnostic_default_message(diagnostic.code);
 }

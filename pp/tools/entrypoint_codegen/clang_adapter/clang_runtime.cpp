@@ -264,9 +264,8 @@ class ParseSession::Impl {
 
       owner_.diagnostics_.add(diagnostics::Diagnostic{
           .code = diagnostics::DiagnosticCode::kClangDiagnostic,
-          .message = diagnostic_message(diagnostic),
+          .message = owner_.facts().add_string(diagnostic_message(diagnostic)),
           .severity = diagnostic_severity_for(clang_getDiagnosticSeverity(diagnostic)),
-          .function = std::nullopt,
           .location = source_location_for(clang_getDiagnosticLocation(diagnostic)),
       });
 

@@ -186,8 +186,8 @@ TEST_F(ValidateContractTest, ReportsMissingEntrypointPrefix) {
   EXPECT_EQ(diagnostics[0].code, DiagnosticCode::kMissingNamePrefix);
   EXPECT_EQ(diagnostics[0].severity, Severity::kError);
   EXPECT_EQ(diagnostics[0].function, function_id);
-  ASSERT_TRUE(diagnostics[0].location.has_value());
-  EXPECT_EQ(diagnostics[0].location->line, location.line);
+  ASSERT_TRUE(diagnostics[0].location.is_valid());
+  EXPECT_EQ(diagnostics[0].location.line, location.line);
 }
 
 TEST_F(ValidateContractTest, ReportsMissingCLinkage) {
@@ -270,7 +270,7 @@ TEST_F(ValidateContractTest, ReportsMultipleDiagnosticsForOneFunction) {
   const auto diagnostics = diagnostics_.diagnostics();
 
   std::vector<DiagnosticCode> diagnostic_codes;
-  std::vector<std::optional<epgen::facts::FunctionId>> diagnostic_functions;
+  std::vector<epgen::facts::FunctionId> diagnostic_functions;
 
   for (const auto& diagnostic : diagnostics) {
     diagnostic_codes.push_back(diagnostic.code);
@@ -282,7 +282,7 @@ TEST_F(ValidateContractTest, ReportsMultipleDiagnosticsForOneFunction) {
   EXPECT_THAT(diagnostic_codes,
               testing::UnorderedElementsAre(DiagnosticCode::kMissingNamePrefix, DiagnosticCode::kMissingCLinkage, DiagnosticCode::kUnsupportedReturnType,
                                             DiagnosticCode::kUnsupportedParamType, DiagnosticCode::kMissingArgumentsLayout));
-  EXPECT_THAT(diagnostic_functions, testing::Each(std::optional<epgen::facts::FunctionId>(function_id)));
+  EXPECT_THAT(diagnostic_functions, testing::Each(function_id));
 }
 
 TEST_F(ValidateContractTest, ReportsUnsupportedFastCgoReturnType) {

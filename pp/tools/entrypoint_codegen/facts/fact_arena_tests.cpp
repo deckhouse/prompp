@@ -16,11 +16,34 @@ using epgen::facts::LayoutKind;
 using epgen::facts::ParamDecl;
 using epgen::facts::ParamRole;
 using epgen::facts::SourceLocation;
+using epgen::facts::StringId;
 
 class FactArenaTest : public testing::Test {
  protected:
   FactArena facts_;
 };
+
+TEST(FactsTest, DefaultIdsAndFactsAreInvalid) {
+  // Arrange
+  const StringId string_id;
+  const SourceLocation location;
+  const epgen::facts::SourceFileDecl source_file;
+  const ParamDecl param;
+  const FieldDecl field;
+  const LayoutDecl layout;
+  const FunctionDecl function;
+
+  // Assert
+  EXPECT_FALSE(string_id.is_valid());
+  EXPECT_FALSE(static_cast<bool>(string_id));
+  EXPECT_EQ(string_id, StringId::invalid());
+  EXPECT_FALSE(location.is_valid());
+  EXPECT_FALSE(source_file.is_valid());
+  EXPECT_FALSE(param.is_valid());
+  EXPECT_FALSE(field.is_valid());
+  EXPECT_FALSE(layout.is_valid());
+  EXPECT_FALSE(function.is_valid());
+}
 
 TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
   // Parsed source: entrypoint.cpp
@@ -32,6 +55,9 @@ TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
   const auto source_files = facts_.source_files();
 
   // Assert
+  EXPECT_TRUE(string_id.is_valid());
+  EXPECT_TRUE(source_file_id.is_valid());
+  EXPECT_TRUE(facts_.source_file(source_file_id).is_valid());
   EXPECT_EQ(facts_.string(string_id), "prompp_fn");
   ASSERT_EQ(source_files.size(), 1);
   EXPECT_EQ(facts_.string(facts_.source_file(source_file_id).path), "entrypoint.cpp");

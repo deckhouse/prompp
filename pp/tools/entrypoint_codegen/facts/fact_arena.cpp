@@ -43,6 +43,7 @@ class FactArena::Impl {
   StringId add_string(std::string_view value) { return strings_.add(value); }
 
   SourceFileId add_source_file(std::string_view path) {
+    assert(source_files_.size() < SourceFileId::kInvalidValue);
     const auto id = SourceFileId(static_cast<uint32_t>(source_files_.size()));
     source_files_.push_back(SourceFileDecl{
         .path = strings_.add(path),
@@ -51,6 +52,8 @@ class FactArena::Impl {
   }
 
   ParamListId add_params(std::span<const ParamDecl> params) {
+    assert(params_.size() < ParamId::kInvalidValue);
+    assert(param_lists_.size() < ParamListId::kInvalidValue);
     const auto begin = ParamId(static_cast<uint32_t>(params_.size()));
     const auto id = ParamListId(static_cast<uint32_t>(param_lists_.size()));
     params_.insert(params_.end(), params.begin(), params.end());
@@ -62,6 +65,8 @@ class FactArena::Impl {
   }
 
   FieldListId add_fields(std::span<const FieldDecl> fields) {
+    assert(fields_.size() < FieldId::kInvalidValue);
+    assert(field_lists_.size() < FieldListId::kInvalidValue);
     const auto begin = FieldId(static_cast<uint32_t>(fields_.size()));
     const auto id = FieldListId(static_cast<uint32_t>(field_lists_.size()));
     fields_.insert(fields_.end(), fields.begin(), fields.end());
@@ -73,6 +78,8 @@ class FactArena::Impl {
   }
 
   LayoutListId add_layouts(std::span<const LayoutDecl> layouts) {
+    assert(layouts_.size() < LayoutId::kInvalidValue);
+    assert(layout_lists_.size() < LayoutListId::kInvalidValue);
     const auto begin = LayoutId(static_cast<uint32_t>(layouts_.size()));
     const auto id = LayoutListId(static_cast<uint32_t>(layout_lists_.size()));
     layouts_.insert(layouts_.end(), layouts.begin(), layouts.end());
@@ -84,6 +91,7 @@ class FactArena::Impl {
   }
 
   FunctionId add_function(FunctionDecl function) {
+    assert(functions_.size() < FunctionId::kInvalidValue);
     const auto id = FunctionId(static_cast<uint32_t>(functions_.size()));
     functions_.push_back(function);
     return id;

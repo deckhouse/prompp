@@ -4,11 +4,13 @@
 
 #include <cstdint>
 #include <memory_resource>
-#include <optional>
 #include <span>
-#include <string>
 #include <string_view>
 #include <vector>
+
+namespace epgen::facts {
+class FactArena;
+}
 
 namespace epgen::diagnostics {
 
@@ -38,10 +40,10 @@ enum class DiagnosticCode : uint8_t {
 
 struct Diagnostic {
   DiagnosticCode code;
-  std::optional<std::string> message;
+  facts::StringId message{};
   Severity severity;
-  std::optional<facts::FunctionId> function;
-  std::optional<facts::SourceLocation> location;
+  facts::FunctionId function{};
+  facts::SourceLocation location{};
 };
 
 struct SeverityCounts {
@@ -70,7 +72,7 @@ class DiagnosticSet {
 [[nodiscard]] SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set);
 [[nodiscard]] std::string_view diagnostic_code_name(DiagnosticCode code);
 [[nodiscard]] std::string_view diagnostic_default_message(DiagnosticCode code);
-[[nodiscard]] std::string_view diagnostic_message(const Diagnostic& diagnostic);
+[[nodiscard]] std::string_view diagnostic_message(const facts::FactArena& facts, const Diagnostic& diagnostic);
 [[nodiscard]] std::string_view severity_name(Severity severity);
 
 }  // namespace epgen::diagnostics

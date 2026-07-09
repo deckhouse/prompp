@@ -49,7 +49,7 @@ RunReport run(const RunOptions& options) {
   contract::validate_contract(facts, diagnostic_set);
 
   if (options.runtime.debug_diagnostics) {
-    append_runtime_debug_diagnostics(diagnostic_set, memory_resource.snapshot());
+    append_runtime_debug_diagnostics(diagnostic_set, facts, memory_resource.snapshot());
   }
 
   switch (options.output.output_mode) {

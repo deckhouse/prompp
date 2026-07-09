@@ -18,7 +18,6 @@ void add_diagnostic(diagnostics::DiagnosticSet& diagnostic_set,
 
   diagnostic_set.add(diagnostics::Diagnostic{
       .code = code,
-      .message = std::nullopt,
       .severity = Severity::kError,
       .function = function_id,
       .location = location,

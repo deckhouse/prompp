@@ -15,7 +15,7 @@ class StringTable::Impl {
 
   StringId add(std::string_view value) {
     assert(value.size() <= UINT32_MAX);
-    assert(strings_.size() <= UINT32_MAX);
+    assert(strings_.size() < StringId::kInvalidValue);
 
     const auto offset = static_cast<uint32_t>(data_.size());
     const auto length = static_cast<uint32_t>(value.size());
