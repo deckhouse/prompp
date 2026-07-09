@@ -100,19 +100,26 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   Primitives::LabelViewSet label_set_;
 
   void parse_timeseries(protozero::pbf_reader& pb) {
-    if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
+    if (limits_.max_timeseries_count_exceeded(floats_.size())) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
-    auto pb_view = pb.get_view();
-    read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
 
-    if (floats_.empty()) [[unlikely]] {
+    label_set_.clear();
+    auto pb_view = pb.get_view();
+    const auto metrics_type = analyze_timeseries(protozero::pbf_reader{pb_view}, label_set_, limits_);
+
+    if (floats_.empty() && histograms_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);
     }
 
-    floats_.emplace_back(hash_value(label_set_), pb_view);
-
-    label_set_.clear();
+    const auto hash = hash_value(label_set_);
+    if (metrics_type == Prometheus::RemoteWrite::MetricsType::kFloat) [[likely]] {
+      floats_.emplace_back(hash, pb_view);
+    } else if (metrics_type == Prometheus::RemoteWrite::MetricsType::kHistogram) {
+      histograms_.emplace_back(hash, pb_view);
+    } else {
+      throw BareBones::Exception(0x4108761111389831, "No timeseries data");
+    }
   }
 
   void parse_metadata(protozero::pbf_reader pb_metadata) {
