@@ -11,7 +11,6 @@ namespace epgen::app {
 enum class OutputMode : uint8_t {
   kJson,
   kLint,
-  kCheck,
 };
 
 struct AnalysisOptions {

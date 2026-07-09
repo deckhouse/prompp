@@ -96,18 +96,20 @@ cc_library(
 cc_library(
     name = "app",
     srcs = [
+        "app/analysis.cpp",
         "app/argparse.cpp",
         "app/memory_tracking.cpp",
+        "app/output.cpp",
         "app/run.cpp",
-        "app/runtime_debug.cpp",
     ],
     hdrs = [
+        "app/analysis.h",
         "app/argparse.h",
         "app/memory_tracking.h",
         "app/memory_usage.h",
         "app/options.h",
+        "app/output.h",
         "app/run.h",
-        "app/runtime_debug.h",
     ],
     copts = [
         "-std=c++2b",

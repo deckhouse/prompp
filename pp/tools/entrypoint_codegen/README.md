@@ -90,19 +90,7 @@ bazel run //:entrypoint_codegen -- \
   -I/workspaces/prompp/pp
 ```
 
-Run as check-only:
-
-```bash
-bazel run //:entrypoint_codegen -- \
-  --mode=check \
-  /workspaces/prompp/pp/entrypoint/common.cpp \
-  -- \
-  -std=c++2b \
-  -I/workspaces/prompp/pp
-```
-
-Inputs may be files or directories. Directory inputs are scanned recursively for
-`.cpp`, `.cc`, and `.cxx` files.
+Inputs are explicit `.cpp`, `.cc`, or `.cxx` source files.
 
 ## pp Report Target
 
@@ -132,14 +120,10 @@ the JSON output and the text log.
 
 - `--mode=json`: write structured facts and diagnostics to JSON.
 - `--mode=lint`: print compiler-style diagnostics to stdout.
-- `--mode=check`: run analysis without writing facts or diagnostics.
 
 Useful options:
 
-- `--output=PATH`: JSON output path.
-- `--output-dir=PATH`: write `entrypoint_facts.json` in a directory.
-- `--clang-arg=ARG` / `--extra-arg=ARG`: add one libclang parser argument.
-- `--clang-args-file=PATH`: read parser arguments, one per line.
+- `--output=PATH`: JSON output path. Required when `--mode=json`.
 - `--runtime-debug`: append tool-owned runtime diagnostics.
 - `--`: treat remaining arguments as libclang parser arguments.
 
