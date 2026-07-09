@@ -1,21 +1,24 @@
 #pragma once
 
-#include "clang_adapter/parse.h"
+#include "clang_adapter/parse_options.h"
 #include "diagnostics/diagnostics.h"
 #include "facts/fact_arena.h"
 #include "facts/facts.h"
 
-#include <clang-c/Index.h>
-
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory_resource>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace epgen::clang_adapter {
+
+class AstContext;
+class CursorView;
 
 enum class CursorKind : uint8_t {
   kOther,
@@ -32,26 +35,36 @@ enum class VisitResult : uint8_t {
   kRecurse,
 };
 
-[[nodiscard]] std::string normalize_path(std::string path);
+namespace detail {
 
-class CursorView;
+using ChildVisitor = std::function<VisitResult(CursorView, CursorView)>;
+
+void visit_children_impl(CursorView cursor, const ChildVisitor& visitor);
+
+}  // namespace detail
+
+[[nodiscard]] std::string normalize_path(std::string path);
 
 class TypeView {
  public:
-  explicit TypeView(CXType type) : type_(type) {}
+  TypeView() = default;
 
   [[nodiscard]] std::string spelling() const;
   [[nodiscard]] CursorView canonical_declaration() const;
 
  private:
+  friend class AstContext;
   friend class CursorView;
 
-  CXType type_;
+  TypeView(AstContext* context, uint32_t index) : context_(context), index_(index) {}
+
+  AstContext* context_ = nullptr;
+  uint32_t index_ = 0;
 };
 
 class CursorView {
  public:
-  explicit CursorView(CXCursor cursor) : cursor_(cursor) {}
+  CursorView() = default;
 
   [[nodiscard]] std::string spelling() const;
   [[nodiscard]] std::string raw_comment() const;
@@ -65,23 +78,33 @@ class CursorView {
   [[nodiscard]] CursorView argument(int index) const;
 
  private:
+  friend class AstContext;
   friend class ParseSession;
-  friend void visit_children(CursorView cursor, VisitResult (*visitor)(CursorView cursor, CursorView parent, void* data), void* data);
+  friend void detail::visit_children_impl(CursorView cursor, const detail::ChildVisitor& visitor);
 
-  CXCursor cursor_;
+  CursorView(AstContext* context, uint32_t index) : context_(context), index_(index) {}
+
+  AstContext* context_ = nullptr;
+  uint32_t index_ = 0;
 };
 
-void visit_children(CursorView cursor, VisitResult (*visitor)(CursorView cursor, CursorView parent, void* data), void* data);
+template <class Payload, class Callable>
+void visit_children(CursorView cursor, Payload& payload, Callable&& callable) {
+  detail::ChildVisitor visitor = [&payload, fn = std::forward<Callable>(callable)](CursorView child, CursorView parent) mutable {
+    return fn(payload, child, parent);
+  };
+  detail::visit_children_impl(cursor, visitor);
+}
+
+struct VirtualParseInput {
+  std::span<const std::filesystem::path> source_files;
+  std::string_view virtual_source_path;
+  std::string_view virtual_source;
+};
 
 class ParseSession {
  public:
-  ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactArena& facts, const std::filesystem::path& source_file);
-  ParseSession(const ParseOptions& options,
-               diagnostics::DiagnosticSet& diagnostic_set,
-               facts::FactArena& facts,
-               std::span<const std::filesystem::path> source_files,
-               std::string_view virtual_source_path,
-               std::string_view virtual_source);
+  ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactArena& facts, VirtualParseInput input);
   ~ParseSession();
 
   ParseSession(const ParseSession&) = delete;

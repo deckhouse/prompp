@@ -1,7 +1,7 @@
 #include "clang_adapter/parse.h"
 
-#include "clang_adapter/aggregate_source.h"
 #include "clang_adapter/clang_runtime.h"
+#include "clang_adapter/virtual_translation_unit.h"
 #include "contract/entrypoint_contract.h"
 
 #include <optional>
@@ -66,22 +66,18 @@ class FunctionExtractor {
       facts::BridgeKind bridge_kind = facts::BridgeKind::kUnknown;
     } visitor_state;
 
-    visit_children(
-        function_cursor,
-        [](CursorView cursor, CursorView /*parent*/, void* data) {
-          if (cursor.kind() != CursorKind::kAnnotateAttr) {
-            return VisitResult::kContinue;
-          }
+    visit_children(function_cursor, visitor_state, [](BridgeVisitorState& state, CursorView cursor, CursorView /*parent*/) {
+      if (cursor.kind() != CursorKind::kAnnotateAttr) {
+        return VisitResult::kContinue;
+      }
 
-          auto& state = *static_cast<BridgeVisitorState*>(data);
-          const facts::BridgeKind next = bridge_kind_from_annotation_cursor(cursor);
-          if (next != facts::BridgeKind::kUnknown) {
-            state.bridge_kind = next;
-            return VisitResult::kBreak;
-          }
-          return VisitResult::kContinue;
-        },
-        &visitor_state);
+      const facts::BridgeKind next = bridge_kind_from_annotation_cursor(cursor);
+      if (next != facts::BridgeKind::kUnknown) {
+        state.bridge_kind = next;
+        return VisitResult::kBreak;
+      }
+      return VisitResult::kContinue;
+    });
 
     return visitor_state.bridge_kind;
   }
@@ -91,21 +87,17 @@ class FunctionExtractor {
       bool found = false;
     } visitor_state;
 
-    visit_children(
-        function_cursor,
-        [](CursorView cursor, CursorView /*parent*/, void* data) {
-          if (cursor.kind() != CursorKind::kAnnotateAttr) {
-            return VisitResult::kContinue;
-          }
+    visit_children(function_cursor, visitor_state, [](AnnotationVisitorState& state, CursorView cursor, CursorView /*parent*/) {
+      if (cursor.kind() != CursorKind::kAnnotateAttr) {
+        return VisitResult::kContinue;
+      }
 
-          auto& state = *static_cast<AnnotationVisitorState*>(data);
-          if (bridge_kind_from_annotation_cursor(cursor) != facts::BridgeKind::kUnknown) {
-            state.found = true;
-            return VisitResult::kBreak;
-          }
-          return VisitResult::kContinue;
-        },
-        &visitor_state);
+      if (bridge_kind_from_annotation_cursor(cursor) != facts::BridgeKind::kUnknown) {
+        state.found = true;
+        return VisitResult::kBreak;
+      }
+      return VisitResult::kContinue;
+    });
 
     return visitor_state.found;
   }
@@ -141,16 +133,12 @@ class FunctionExtractor {
         .layouts = layouts,
     };
 
-    visit_children(
-        function_cursor,
-        [](CursorView cursor, CursorView /*parent*/, void* data) {
-          auto& state = *static_cast<LayoutVisitorState*>(data);
-          if (state.extractor.try_append_layout(cursor, state.layouts)) {
-            return VisitResult::kContinue;
-          }
-          return VisitResult::kRecurse;
-        },
-        &visitor_state);
+    visit_children(function_cursor, visitor_state, [](LayoutVisitorState& state, CursorView cursor, CursorView /*parent*/) {
+      if (state.extractor.try_append_layout(cursor, state.layouts)) {
+        return VisitResult::kContinue;
+      }
+      return VisitResult::kRecurse;
+    });
     return layouts;
   }
 
@@ -164,22 +152,18 @@ class FunctionExtractor {
         .fields = fields,
     };
 
-    visit_children(
-        struct_cursor,
-        [](CursorView field, CursorView /*parent*/, void* data) {
-          if (field.kind() != CursorKind::kFieldDecl) {
-            return VisitResult::kContinue;
-          }
+    visit_children(struct_cursor, visitor_state, [](FieldVisitorState& state, CursorView field, CursorView /*parent*/) {
+      if (field.kind() != CursorKind::kFieldDecl) {
+        return VisitResult::kContinue;
+      }
 
-          auto& state = *static_cast<FieldVisitorState*>(data);
-          state.fields.push_back(facts::FieldDecl{
-              .name = state.extractor.session_.facts().add_string(field.spelling()),
-              .type_spelling = state.extractor.session_.facts().add_string(field.type().spelling()),
-              .location = state.extractor.session_.source_location_for(field),
-          });
-          return VisitResult::kContinue;
-        },
-        &visitor_state);
+      state.fields.push_back(facts::FieldDecl{
+          .name = state.extractor.session_.facts().add_string(field.spelling()),
+          .type_spelling = state.extractor.session_.facts().add_string(field.type().spelling()),
+          .location = state.extractor.session_.source_location_for(field),
+      });
+      return VisitResult::kContinue;
+    });
     return fields;
   }
 
@@ -194,18 +178,14 @@ class FunctionExtractor {
         .fields = fields,
     };
 
-    visit_children(
-        alias_cursor,
-        [](CursorView child, CursorView /*parent*/, void* data) {
-          auto& state = *static_cast<AliasVisitorState*>(data);
-          if (child.kind() == CursorKind::kStructDecl) {
-            state.fields = state.extractor.extract_fields(child);
-            state.found = true;
-            return VisitResult::kBreak;
-          }
-          return VisitResult::kRecurse;
-        },
-        &visitor_state);
+    visit_children(alias_cursor, visitor_state, [](AliasVisitorState& state, CursorView child, CursorView /*parent*/) {
+      if (child.kind() == CursorKind::kStructDecl) {
+        state.fields = state.extractor.extract_fields(child);
+        state.found = true;
+        return VisitResult::kBreak;
+      }
+      return VisitResult::kRecurse;
+    });
 
     if (visitor_state.found) {
       return fields;
@@ -277,20 +257,16 @@ void scan_translation_unit(ParseSession& session) {
       .extractor = extractor,
   };
 
-  visit_children(
-      session.root_cursor(),
-      [](CursorView function, CursorView /*parent*/, void* data) {
-        auto& state = *static_cast<TranslationUnitScanState*>(data);
-        if (function.kind() != CursorKind::kFunctionDecl || !function.is_definition()) {
-          return VisitResult::kRecurse;
-        }
-        if (!state.session.is_input_source_file(function) || !state.extractor.is_candidate_function(function)) {
-          return VisitResult::kContinue;
-        }
-        state.extractor.add_function(function);
-        return VisitResult::kContinue;
-      },
-      &scan_state);
+  visit_children(session.root_cursor(), scan_state, [](TranslationUnitScanState& state, CursorView function, CursorView /*parent*/) {
+    if (function.kind() != CursorKind::kFunctionDecl || !function.is_definition()) {
+      return VisitResult::kRecurse;
+    }
+    if (!state.session.is_input_source_file(function) || !state.extractor.is_candidate_function(function)) {
+      return VisitResult::kContinue;
+    }
+    state.extractor.add_function(function);
+    return VisitResult::kContinue;
+  });
 }
 
 }  // namespace
@@ -301,8 +277,13 @@ facts::FactArena parse_files(const ParseOptions& options, diagnostics::Diagnosti
   }
 
   facts::FactArena facts(options.memory_resource);
-  const AggregateSource aggregate_source = build_aggregate_source(options.source_files, options.memory_resource);
-  ParseSession session(options, diagnostic_set, facts, options.source_files, aggregate_source.path, aggregate_source.contents);
+  const VirtualTranslationUnit aggregate_source = build_virtual_translation_unit(options.source_files, options.memory_resource);
+  ParseSession session(options, diagnostic_set, facts,
+                       VirtualParseInput{
+                           .source_files = options.source_files,
+                           .virtual_source_path = aggregate_source.path,
+                           .virtual_source = aggregate_source.contents,
+                       });
   session.add_clang_diagnostics();
   scan_translation_unit(session);
 

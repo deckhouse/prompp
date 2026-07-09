@@ -1,34 +1,139 @@
-package(default_visibility = ["//visibility:public"])
+package(default_visibility = ["//visibility:private"])
 
 cc_library(
-    name = "entrypoint_codegen_lib",
-    srcs = glob(
-        include = [
-            "app/*.cpp",
-            "clang_adapter/*.cpp",
-            "contract/*.cpp",
-            "diagnostics/*.cpp",
-            "emit/*.cpp",
-            "facts/*.cpp",
-        ],
-        exclude = [
-            "app/main.cpp",
-            "**/*_tests.cpp",
-        ],
-    ),
-    hdrs = glob([
-        "app/*.h",
-        "clang_adapter/*.h",
-        "contract/*.h",
-        "diagnostics/*.h",
-        "emit/*.h",
-        "facts/*.h",
-    ]),
+    name = "facts",
+    srcs = [
+        "facts/fact_arena.cpp",
+        "facts/string_table.cpp",
+    ],
+    hdrs = [
+        "facts/fact_arena.h",
+        "facts/facts.h",
+        "facts/string_table.h",
+        "facts/tagged_index.h",
+    ],
+    copts = [
+        "-std=c++2b",
+    ],
+)
+
+cc_library(
+    name = "diagnostics",
+    srcs = ["diagnostics/diagnostics.cpp"],
+    hdrs = ["diagnostics/diagnostics.h"],
     copts = [
         "-std=c++2b",
     ],
     deps = [
+        ":facts",
+    ],
+)
+
+cc_library(
+    name = "contract",
+    srcs = ["contract/entrypoint_contract.cpp"],
+    hdrs = ["contract/entrypoint_contract.h"],
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":diagnostics",
+        ":facts",
+    ],
+)
+
+cc_library(
+    name = "clang_adapter_libclang",
+    srcs = ["clang_adapter/clang_runtime.cpp"],
+    hdrs = [
+        "clang_adapter/clang_runtime.h",
+        "clang_adapter/parse_options.h",
+    ],
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":diagnostics",
+        ":facts",
         "@system_libclang//:libclang",
+    ],
+)
+
+cc_library(
+    name = "clang_adapter",
+    srcs = [
+        "clang_adapter/parse.cpp",
+        "clang_adapter/virtual_translation_unit.cpp",
+    ],
+    hdrs = [
+        "clang_adapter/parse.h",
+        "clang_adapter/virtual_translation_unit.h",
+    ],
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":clang_adapter_libclang",
+        ":contract",
+        ":diagnostics",
+        ":facts",
+    ],
+)
+
+cc_library(
+    name = "emit",
+    srcs = ["emit/report.cpp"],
+    hdrs = ["emit/report.h"],
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":diagnostics",
+        ":facts",
+    ],
+)
+
+cc_library(
+    name = "app",
+    srcs = [
+        "app/argparse.cpp",
+        "app/memory_tracking.cpp",
+        "app/run.cpp",
+        "app/runtime_debug.cpp",
+    ],
+    hdrs = [
+        "app/argparse.h",
+        "app/memory_tracking.h",
+        "app/memory_usage.h",
+        "app/options.h",
+        "app/run.h",
+        "app/runtime_debug.h",
+    ],
+    copts = [
+        "-std=c++2b",
+    ],
+    deps = [
+        ":clang_adapter",
+        ":contract",
+        ":diagnostics",
+        ":emit",
+        ":facts",
+    ],
+)
+
+cc_library(
+    name = "entrypoint_codegen_lib",
+    copts = [
+        "-std=c++2b",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":app",
+        ":clang_adapter",
+        ":contract",
+        ":diagnostics",
+        ":emit",
+        ":facts",
     ],
 )
 
@@ -38,19 +143,27 @@ cc_binary(
     copts = [
         "-std=c++2b",
     ],
+    visibility = ["//visibility:public"],
     deps = [
-        ":entrypoint_codegen_lib",
+        ":app",
     ],
 )
 
 cc_test(
     name = "entrypoint_codegen_test",
+    data = glob(["clang_adapter/testdata/*.cpp"]),
     srcs = glob(["**/*_tests.cpp"]),
     copts = [
         "-std=c++2b",
     ],
     deps = [
-        ":entrypoint_codegen_lib",
+        ":app",
+        ":clang_adapter",
+        ":clang_adapter_libclang",
+        ":contract",
+        ":diagnostics",
+        ":emit",
+        ":facts",
         "@googletest//:gtest_main",
     ],
 )

@@ -1,5 +1,7 @@
 #include "clang_adapter/clang_runtime.h"
 
+#include <clang-c/Index.h>
+
 #include <cassert>
 #include <optional>
 #include <span>
@@ -134,6 +136,39 @@ struct SourceFile {
 
 }  // namespace
 
+class AstContext {
+ public:
+  explicit AstContext(std::pmr::memory_resource* memory_resource) : cursors_(memory_resource), types_(memory_resource) {}
+
+  CursorView make_cursor(CXCursor cursor) {
+    const auto index = static_cast<uint32_t>(cursors_.size());
+    cursors_.push_back(cursor);
+    return CursorView(this, index);
+  }
+
+  TypeView make_type(CXType type) {
+    const auto index = static_cast<uint32_t>(types_.size());
+    types_.push_back(type);
+    return TypeView(this, index);
+  }
+
+  [[nodiscard]] CXCursor cx_cursor(CursorView cursor) const {
+    assert(cursor.context_ == this);
+    assert(cursor.index_ < cursors_.size());
+    return cursors_[cursor.index_];
+  }
+
+  [[nodiscard]] CXType cx_type(TypeView type) const {
+    assert(type.context_ == this);
+    assert(type.index_ < types_.size());
+    return types_[type.index_];
+  }
+
+ private:
+  std::pmr::vector<CXCursor> cursors_;
+  std::pmr::vector<CXType> types_;
+};
+
 std::string normalize_path(std::string path) {
   if (path.empty()) {
     return path;
@@ -163,68 +198,80 @@ std::string normalize_path(std::string path) {
 }
 
 std::string TypeView::spelling() const {
-  return clang_string_to_string(clang_getTypeSpelling(type_));
+  return clang_string_to_string(clang_getTypeSpelling(context_->cx_type(*this)));
 }
 
 CursorView TypeView::canonical_declaration() const {
-  return CursorView(clang_getTypeDeclaration(clang_getCanonicalType(type_)));
+  return context_->make_cursor(clang_getTypeDeclaration(clang_getCanonicalType(context_->cx_type(*this))));
 }
 
 std::string CursorView::spelling() const {
-  return clang_string_to_string(clang_getCursorSpelling(cursor_));
+  return clang_string_to_string(clang_getCursorSpelling(context_->cx_cursor(*this)));
 }
 
 std::string CursorView::raw_comment() const {
-  return clang_string_to_string(clang_Cursor_getRawCommentText(cursor_));
+  return clang_string_to_string(clang_Cursor_getRawCommentText(context_->cx_cursor(*this)));
 }
 
 TypeView CursorView::type() const {
-  return TypeView(clang_getCursorType(cursor_));
+  return context_->make_type(clang_getCursorType(context_->cx_cursor(*this)));
 }
 
 TypeView CursorView::result_type() const {
-  return TypeView(clang_getResultType(clang_getCursorType(cursor_)));
+  return context_->make_type(clang_getResultType(clang_getCursorType(context_->cx_cursor(*this))));
 }
 
 CursorKind CursorView::kind() const {
-  return cursor_kind_for(clang_getCursorKind(cursor_));
+  return cursor_kind_for(clang_getCursorKind(context_->cx_cursor(*this)));
 }
 
 bool CursorView::is_null() const {
-  return clang_Cursor_isNull(cursor_);
+  return clang_Cursor_isNull(context_->cx_cursor(*this));
 }
 
 bool CursorView::is_definition() const {
-  return clang_isCursorDefinition(cursor_);
+  return clang_isCursorDefinition(context_->cx_cursor(*this));
 }
 
 bool CursorView::has_c_language() const {
-  return clang_getCursorLanguage(cursor_) == CXLanguage_C;
+  return clang_getCursorLanguage(context_->cx_cursor(*this)) == CXLanguage_C;
 }
 
 int CursorView::argument_count() const {
-  return clang_Cursor_getNumArguments(cursor_);
+  return clang_Cursor_getNumArguments(context_->cx_cursor(*this));
 }
 
 CursorView CursorView::argument(int index) const {
-  return CursorView(clang_Cursor_getArgument(cursor_, index));
+  return context_->make_cursor(clang_Cursor_getArgument(context_->cx_cursor(*this), index));
 }
 
-void visit_children(CursorView cursor, VisitResult (*visitor)(CursorView cursor, CursorView parent, void* data), void* data) {
-  std::pair<VisitResult (*)(CursorView, CursorView, void*), void*> state{visitor, data};
+namespace detail {
+
+void visit_children_impl(CursorView cursor, const ChildVisitor& visitor) {
+  struct VisitState {
+    AstContext& context;
+    const ChildVisitor& visitor;
+  } state{
+      .context = *cursor.context_,
+      .visitor = visitor,
+  };
+
   clang_visitChildren(
-      cursor.cursor_,
+      cursor.context_->cx_cursor(cursor),
       [](CXCursor cursor, CXCursor parent, CXClientData data) {
-        auto& state = *static_cast<std::pair<VisitResult (*)(CursorView, CursorView, void*), void*>*>(data);
-        return child_visit_result_for(state.first(CursorView(cursor), CursorView(parent), state.second));
+        auto& state = *static_cast<VisitState*>(data);
+        return child_visit_result_for(state.visitor(state.context.make_cursor(cursor), state.context.make_cursor(parent)));
       },
       &state);
 }
 
-class ParseSession::Impl {
+}  // namespace detail
+
+class ParseSession::Impl : public AstContext {
  public:
-  Impl(ParseSession& owner, const ParseOptions& options, const std::filesystem::path& source_file)
-      : owner_(owner),
+  Impl(ParseSession& owner, const ParseOptions& options, VirtualParseInput input)
+      : AstContext(options.memory_resource),
+        owner_(owner),
         source_files_(options.memory_resource),
         source_file_by_handle_(options.memory_resource),
         source_file_by_path_(options.memory_resource),
@@ -233,26 +280,8 @@ class ParseSession::Impl {
       throw std::runtime_error("failed to create libclang index");
     }
 
-    register_input_file(source_file);
-    parse_translation_unit(options, source_file);
-  }
-
-  Impl(ParseSession& owner,
-       const ParseOptions& options,
-       std::span<const std::filesystem::path> source_files,
-       std::string_view virtual_source_path,
-       std::string_view virtual_source)
-      : owner_(owner),
-        source_files_(options.memory_resource),
-        source_file_by_handle_(options.memory_resource),
-        source_file_by_path_(options.memory_resource),
-        args_(options.memory_resource) {
-    if (index_.get() == nullptr) {
-      throw std::runtime_error("failed to create libclang index");
-    }
-
-    register_input_files(source_files);
-    parse_translation_unit(options, virtual_source_path, virtual_source);
+    register_input_files(input.source_files);
+    parse_translation_unit(options, input.virtual_source_path, input.virtual_source);
   }
 
   [[nodiscard]] CXTranslationUnit translation_unit() const { return translation_unit_.get(); }
@@ -294,7 +323,7 @@ class ParseSession::Impl {
     unsigned column = 0;
     unsigned offset = 0;
 
-    clang_getSpellingLocation(clang_getCursorLocation(cursor.cursor_), &file, &line, &column, &offset);
+    clang_getSpellingLocation(clang_getCursorLocation(cx_cursor(cursor)), &file, &line, &column, &offset);
 
     if (file == nullptr) {
       return false;
@@ -321,22 +350,6 @@ class ParseSession::Impl {
     for (const std::filesystem::path& file : source_files) {
       register_input_file(file);
     }
-  }
-
-  void parse_translation_unit(const ParseOptions& options, const std::filesystem::path& source_file) {
-    args_.reserve(options.clang_args.size());
-    for (const std::string& arg : options.clang_args) {
-      args_.push_back(arg.c_str());
-    }
-
-    const std::string source_path = std::filesystem::absolute(source_file).lexically_normal().string();
-    CXTranslationUnit raw_tu = nullptr;
-    const CXErrorCode parse_result = clang_parseTranslationUnit2(index_.get(), source_path.c_str(), args_.data(), static_cast<int>(args_.size()), nullptr, 0,
-                                                                 CXTranslationUnit_KeepGoing, &raw_tu);
-    if (parse_result != CXError_Success || raw_tu == nullptr) {
-      throw std::runtime_error("failed to parse libclang translation unit");
-    }
-    translation_unit_.reset(raw_tu);
   }
 
   void parse_translation_unit(const ParseOptions& options, std::string_view virtual_source_path, std::string_view virtual_source) {
@@ -437,33 +450,12 @@ class ParseSession::Impl {
   ClangTranslationUnitWrapper translation_unit_;
 };
 
-ParseSession::ParseSession(const ParseOptions& options,
-                           diagnostics::DiagnosticSet& diagnostic_set,
-                           facts::FactArena& facts,
-                           const std::filesystem::path& source_file)
+ParseSession::ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactArena& facts, VirtualParseInput input)
     : memory_resource_(options.memory_resource), diagnostics_(diagnostic_set), facts_(facts) {
   std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
   impl_ = allocator.allocate(1);
   try {
-    allocator.construct(impl_, *this, options, source_file);
-  } catch (...) {
-    allocator.deallocate(impl_, 1);
-    impl_ = nullptr;
-    throw;
-  }
-}
-
-ParseSession::ParseSession(const ParseOptions& options,
-                           diagnostics::DiagnosticSet& diagnostic_set,
-                           facts::FactArena& facts,
-                           std::span<const std::filesystem::path> source_files,
-                           std::string_view virtual_source_path,
-                           std::string_view virtual_source)
-    : memory_resource_(options.memory_resource), diagnostics_(diagnostic_set), facts_(facts) {
-  std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
-  impl_ = allocator.allocate(1);
-  try {
-    allocator.construct(impl_, *this, options, source_files, virtual_source_path, virtual_source);
+    allocator.construct(impl_, *this, options, input);
   } catch (...) {
     allocator.deallocate(impl_, 1);
     impl_ = nullptr;
@@ -481,7 +473,7 @@ ParseSession::~ParseSession() {
 }
 
 CursorView ParseSession::root_cursor() const {
-  return CursorView(clang_getTranslationUnitCursor(impl_->translation_unit()));
+  return impl_->make_cursor(clang_getTranslationUnitCursor(impl_->translation_unit()));
 }
 
 void ParseSession::add_clang_diagnostics() {
@@ -489,7 +481,7 @@ void ParseSession::add_clang_diagnostics() {
 }
 
 facts::SourceLocation ParseSession::source_location_for(CursorView cursor) {
-  return impl_->source_location_for(clang_getCursorLocation(cursor.cursor_));
+  return impl_->source_location_for(clang_getCursorLocation(impl_->cx_cursor(cursor)));
 }
 
 bool ParseSession::is_input_source_file(CursorView cursor) {
