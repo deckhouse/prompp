@@ -13,6 +13,7 @@ using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
 using PromPP::Prometheus::MetadataType;
 using PromPP::WAL::hashdex::FloatMetric;
+using PromPP::WAL::hashdex::HistogramMetric;
 using PromPP::WAL::hashdex::Metadata;
 using std::operator""sv;
 
@@ -20,13 +21,17 @@ struct ProtobufCase {
   std::string_view protobuf;
   std::vector<Metadata> metadata{};
   std::vector<FloatMetric> floats{};
+  std::vector<HistogramMetric> histograms{};
 };
 
 class ProtobufFixture : public ::testing::TestWithParam<ProtobufCase> {
  protected:
   PromPP::WAL::hashdex::Protobuf hashdex_;
 
-  void SetUp() override { calculate_labelset_hash(const_cast<ProtobufCase&>(GetParam()).floats); }
+  void SetUp() override {
+    calculate_labelset_hash(const_cast<ProtobufCase&>(GetParam()).floats);
+    calculate_labelset_hash(const_cast<ProtobufCase&>(GetParam()).histograms);
+  }
 };
 
 TEST_P(ProtobufFixture, Test) {
@@ -35,10 +40,12 @@ TEST_P(ProtobufFixture, Test) {
   // Act
   hashdex_.presharding(GetParam().protobuf);
   const auto floats = get_floats(hashdex_);
+  const auto histograms = get_histograms(hashdex_);
   const auto metadata = get_metadata(hashdex_);
 
   // Assert
   EXPECT_EQ(GetParam().floats, floats);
+  EXPECT_EQ(GetParam().histograms, histograms);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
 

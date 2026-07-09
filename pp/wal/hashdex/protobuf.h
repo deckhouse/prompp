@@ -87,8 +87,8 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
 
     template <class Histogram>
-    PROMPP_ALWAYS_INLINE void read([[maybe_unused]] Histogram& histogram) const {
-      // Prometheus::RemoteWrite::read_histogram(protozero::pbf_reader(data_), timeseries);
+    PROMPP_ALWAYS_INLINE void read(Histogram& histogram) const {
+      Prometheus::RemoteWrite::read_histogram(protozero::pbf_reader(data_), histogram);
     }
   };
 
@@ -106,7 +106,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
 
     label_set_.clear();
     auto pb_view = pb.get_view();
-    const auto metrics_type = analyze_timeseries(protozero::pbf_reader{pb_view}, label_set_, limits_);
+    const auto metrics_type = preparse_timeseries(protozero::pbf_reader{pb_view}, label_set_, limits_);
 
     if (floats_.empty() && histograms_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);
