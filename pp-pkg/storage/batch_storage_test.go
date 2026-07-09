@@ -115,6 +115,10 @@ func (s *BatchStorageSuite) createManagerAndAdapter() {
 		s.clock,
 		s.manager.Proxy(),
 		s.manager.Builder(),
+		&AdapterOptions{
+			RetentionMS:    14 * 24 * 60 * 60 * 1000, // 14 days
+			DownsamplingMS: 0,
+		},
 		s.manager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)

@@ -37,6 +37,8 @@ type ChunkQuerier[
 	deduplicatorCtor deduplicatorCtor
 	mint             int64
 	maxt             int64
+	retentionMS      int64
+	downsamplingMS   int64
 	closer           func() error
 }
 
@@ -50,7 +52,7 @@ func NewChunkQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
+	mint, maxt, retentionMS, downsamplingMS int64,
 	closer func() error,
 ) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
@@ -58,6 +60,8 @@ func NewChunkQuerier[
 		deduplicatorCtor: deduplicatorCtor,
 		mint:             mint,
 		maxt:             maxt,
+		retentionMS:      retentionMS,
+		downsamplingMS:   downsamplingMS,
 		closer:           closer,
 	}
 }
@@ -120,6 +124,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 // Select returns a chunk set of series that matches the given label matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
+//revive:disable-next-line:function-length // this is a complex algorithm
 func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	_ bool,
@@ -150,8 +155,16 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
-
-	queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
+	queryDataStorage(
+		dsQueryChunkQuerier,
+		q.head,
+		lssQueryResults,
+		shardedSerializedData,
+		q.mint,
+		q.maxt,
+		q.getDownsamplingMs(),
+		hints,
+	)
 
 	chunkSeriesSets := poolProvider.GetChunkSeriesSet()
 	defer poolProvider.PutChunkSeriesSet(chunkSeriesSets)
@@ -169,4 +182,13 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	}
 
 	return NewMergeShardChunkSeriesSet(chunkSeriesSets)
+}
+
+// getDownsamplingMs calculates the downsampling milliseconds based on the time range.
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) getDownsamplingMs() int64 {
+	if q.maxt-q.mint > q.retentionMS {
+		return q.downsamplingMS
+	}
+
+	return cppbridge.NoDownsampling
 }

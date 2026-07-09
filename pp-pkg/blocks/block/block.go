@@ -229,6 +229,11 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 	return blockIndexReader{ir: pb.indexr, b: pb}, nil
 }
 
+// IsDownsamplingBlock returns true if the block is a downsampling block.
+func (pb *Block) IsDownsamplingBlock() bool {
+	return pb.meta.Thanos.Downsample.Resolution > 0
+}
+
 // LabelNames returns all the unique label names present in the Block in sorted order.
 func (pb *Block) LabelNames(ctx context.Context) ([]string, error) {
 	return pb.indexr.LabelNames(ctx)

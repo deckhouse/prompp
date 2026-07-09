@@ -1594,6 +1594,10 @@ func makeAdapter(clock clockwork.Clock, hManager *pp_storage.Manager) *pp_pkg_st
 		clock,
 		hManager.Proxy(),
 		hManager.Builder(),
+		&pp_pkg_storage.AdapterOptions{
+			RetentionMS:    86400000,
+			DownsamplingMS: 0,
+		},
 		hManager.MergeOutOfOrderChunks,
 		nil,
 	)

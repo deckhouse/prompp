@@ -456,11 +456,13 @@ func queryInstant(
 type querierOptimize struct {
 	noErrorFunc storagetest.NoErrorFunc
 
-	dataDir string
-	head    *storage.Head
-	start   time.Time
-	end     time.Time
-	step    time.Duration
+	dataDir        string
+	head           *storage.Head
+	start          time.Time
+	end            time.Time
+	step           time.Duration
+	retentionMS    int64
+	downsamplingMS int64
 
 	lookbackDelta time.Duration
 	queryOpts     promql.QueryOpts
@@ -481,6 +483,7 @@ func (s *querierOptimize) setup(
 	s.start = start
 	s.step = step
 	s.end = s.start.Add(s.step * time.Duration(countOfSteps))
+	s.retentionMS = 86400000
 
 	s.dataDir = filepath.Join(baseDir, "data")
 	s.noErrorFunc(os.MkdirAll(s.dataDir, os.ModeDir))
@@ -692,6 +695,8 @@ func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error
 		maxt,
 		s.step.Milliseconds(),
 		s.start.UnixMilli(),
+		s.retentionMS,
+		s.downsamplingMS,
 		nil,
 	), nil
 }

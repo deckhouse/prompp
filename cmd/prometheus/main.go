@@ -179,6 +179,8 @@ type flagConfig struct {
 	HeadRetentionTimeout    model.Duration
 	UseBlockManagerStorage  bool
 
+	Downsampling model.Duration
+
 	featureList   []string
 	memlimitRatio float64
 	// These options are extracted from featureList
@@ -648,6 +650,17 @@ func main() {
 		cfg.tsdb.OutOfOrderTimeWindow = cfgFile.StorageConfig.TSDBConfig.OutOfOrderTimeWindow
 	}
 
+	// check if the downsampling value is greater than the scrape interval
+	if cfg.Downsampling != 0 && cfg.Downsampling < cfgFile.GlobalConfig.ScrapeInterval {
+		_ = level.Error(logger).Log(
+			"msg", "The downsampling value must be greater than the scrape interval",
+			"scrape_interval", cfgFile.GlobalConfig.ScrapeInterval,
+			"downsampling", cfg.Downsampling,
+		)
+
+		os.Exit(2)
+	}
+
 	// Now that the validity of the config is established, set the config
 	// success metrics accordingly, although the config isn't really loaded
 	// yet. This will happen later (including setting these metrics again),
@@ -781,6 +794,7 @@ func main() {
 		&pp_storage.Options{
 			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
 			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			Downsampling:        time.Duration(cfg.Downsampling),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
@@ -810,10 +824,16 @@ func main() {
 		prometheus.DefaultRegisterer,
 	)
 
+	retentionMS := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
+	downsamplingMS := int64(time.Duration(cfg.Downsampling) / time.Millisecond)
 	adapter := pp_pkg_storage.NewAdapter(
 		clock,
 		hManager.Proxy(),
 		hManager.Builder(),
+		&pp_pkg_storage.AdapterOptions{
+			RetentionMS:    retentionMS,
+			DownsamplingMS: downsamplingMS,
+		},
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
@@ -867,13 +887,6 @@ func main() {
 				"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
-			retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-			blocksToDelete := block.NewBlocksToDelete(
-				retentionMs,
-				int64(cfg.tsdb.MaxBytes),
-				block.CatalogHeadsExtraSize(dataDir, headCatalog),
-				prometheus.DefaultRegisterer,
-			)
 
 			chunkPool := chunkenc.NewPool()
 			compactCtx, compactCancel := context.WithCancel(context.Background())
@@ -894,10 +907,18 @@ func main() {
 				os.Exit(1)
 			}
 
+			blocksToDelete := block.NewBlocksToDelete(
+				retentionMS,
+				int64(cfg.tsdb.MaxBytes),
+				downsamplingMS,
+				block.CatalogHeadsExtraSize(dataDir, headCatalog),
+				prometheus.DefaultRegisterer,
+			)
+
 			blockManager, err := manager.NewManager(
 				localStoragePath,
 				&manager.Options{
-					RetentionDuration:           retentionMs,
+					RetentionDuration:           retentionMS,
 					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 				},
@@ -2384,6 +2405,9 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				"msg", "[FEATURE] Select function optimization is set.",
 				"optimization", fvalue,
 			)
+
+		case "downsampling":
+			parseDownsampling(logger, cfg, strings.TrimSpace(fvalue))
 		}
 	}
 }
@@ -2398,4 +2422,39 @@ func selectFuncOptimization(fvalue string) error {
 	}
 
 	return nil
+}
+
+// parseDownsampling parses the downsampling value and sets the downsampling value in the configuration.
+func parseDownsampling(logger log.Logger, cfg *flagConfig, fvalue string) {
+	if fvalue == "" {
+		_ = level.Error(logger).Log(
+			"msg", "[FEATURE] The downsampling should be setted with duration.",
+		)
+
+		return
+	}
+
+	downsampling, err := model.ParseDuration(fvalue)
+	if err != nil {
+		_ = level.Error(logger).Log(
+			"msg", "[FEATURE] Error parsing downsampling value",
+			"err", err,
+		)
+
+		return
+	}
+
+	if downsampling <= 0 {
+		_ = level.Error(logger).Log(
+			"msg", "[FEATURE] The downsampling value must be greater than 0",
+		)
+
+		return
+	}
+
+	cfg.Downsampling = downsampling
+	_ = level.Info(logger).Log(
+		"msg", "[FEATURE] Downsampling is set.",
+		"downsampling", downsampling,
+	)
 }

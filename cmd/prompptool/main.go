@@ -42,6 +42,10 @@ func main() {
 	var walvanillaCmd cmdWALVanillaToBlock
 	registerCmdWALVanillaToBlock(&walvanillaCmd, walvanillaClause)
 
+	blocksClause := app.Command("blocks", "Converting prometheus wal to tsdb-blocks.")
+	var blocksCmd cmdBlocks
+	registerCmdBlocks(&blocksCmd, blocksClause)
+
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	logger := initLogger(*verbose)
 	logger = log.With(logger, "cmd", cmd)
@@ -56,6 +60,11 @@ func main() {
 	case walvanillaClause.FullCommand():
 		if err := walvanillaCmd.Do(ctx, workingDir, logger); err != nil {
 			level.Error(logger).Log("msg", "fail to convert", "error", err)
+			os.Exit(1)
+		}
+	case blocksClause.FullCommand():
+		if err := blocksCmd.Do(ctx, workingDir, logger, nil); err != nil {
+			level.Error(logger).Log("msg", "fail to list blocks", "error", err)
 			os.Exit(1)
 		}
 	}

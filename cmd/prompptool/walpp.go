@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
@@ -85,6 +86,7 @@ func (cmd *cmdWALPPToBlock) Do(
 	bw := block.NewWriter[*shard.Shard](
 		workingDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		time.Duration(cmd.blockDuration),
 		registerer,
 	)

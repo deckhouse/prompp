@@ -39,13 +39,14 @@ type Writer[TShard Shard] struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
+	downsamplingMs           int64
 	blockWriteDuration       *prometheus.GaugeVec
 }
 
 // NewWriter creates a new [Writer].
 func NewWriter[TShard Shard](
 	dataDir string,
-	maxBlockChunkSegmentSize int64,
+	maxBlockChunkSegmentSize, downsamplingMs int64,
 	blockDuration time.Duration,
 	registerer prometheus.Registerer,
 ) *Writer[TShard] {
@@ -54,6 +55,7 @@ func NewWriter[TShard Shard](
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
+		downsamplingMs:           downsamplingMs,
 		blockWriteDuration: factory.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prompp_block_write_duration",
 			Help: "Block write duration in milliseconds.",
@@ -95,6 +97,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 
 	//revive:disable-next-line:add-constant // it's base 10
 	tLabels := map[string]string{"shard_id": strconv.FormatUint(uint64(sd.ShardID()), 10)}
+	lss := sd.LSS().Target()
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -105,12 +108,23 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			maxT = timeInterval.MaxT
 		}
 
-		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels)
+		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling, tLabels)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
 
 		writers.append(writer)
+
+		if w.downsamplingMs == cppbridge.NoDownsampling {
+			continue
+		}
+
+		downsamplingWriter, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, w.downsamplingMs, tLabels)
+		if err != nil {
+			return blockWriters{}, errors.Join(err, writers.Close())
+		}
+
+		writers.append(downsamplingWriter)
 	}
 
 	return writers, nil
@@ -132,6 +146,7 @@ func (w *Writer[TShard]) createWriter(
 	return newBlockWriter(
 		dataDir,
 		w.maxBlockChunkSegmentSize,
+		downsamplingMs,
 		NewIndexWriter(lss),
 		chunkIterator,
 		tLabels,

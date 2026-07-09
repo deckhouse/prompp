@@ -45,6 +45,8 @@ type QuerierSuite struct {
 
 	hints          *prom_storage.SelectHints
 	scrapeInterval int64
+	retentionMS    int64
+	downsamplingMS int64
 }
 
 func TestQuerierSuite(t *testing.T) {
@@ -61,6 +63,7 @@ func (s *QuerierSuite) SetupTest() {
 		Range: 100,
 	}
 	s.scrapeInterval = 1
+	s.retentionMS = 10000
 }
 
 func (s *QuerierSuite) createDataDirectory() string {
@@ -124,7 +127,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -152,7 +155,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
@@ -205,7 +208,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -243,7 +246,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -296,7 +299,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -340,7 +343,9 @@ func (s *QuerierSuite) TestLabelNames() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -373,7 +378,9 @@ func (s *QuerierSuite) TestLabelNamesWithLimit() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -406,7 +413,9 @@ func (s *QuerierSuite) TestLabelNamesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
 	s.Require().NoError(err)
@@ -439,7 +448,9 @@ func (s *QuerierSuite) TestLabelValues() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
@@ -472,7 +483,9 @@ func (s *QuerierSuite) TestLabelValuesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
 	s.Require().NoError(err)
@@ -505,7 +518,9 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)

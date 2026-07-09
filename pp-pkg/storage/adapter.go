@@ -25,6 +25,19 @@ import (
 const defaultCacheCheckIntervalMs = int64(5*time.Minute) / 1e6 // ns to ms
 
 //
+// AdapterOptions
+//
+
+// AdapterOptions is the options for the Adapter.
+type AdapterOptions struct {
+	// RetentionMS is the retention time in milliseconds.
+	RetentionMS int64
+
+	// DownsamplingMS is the downsampling time in milliseconds.
+	DownsamplingMS int64
+}
+
+//
 // Adapter
 //
 
@@ -40,7 +53,7 @@ type Adapter struct {
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
 	scrapeInterval        atomic.Int64
-
+	opts                  *AdapterOptions
 	// stat
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
@@ -53,6 +66,7 @@ func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
 	builder *pp_storage.Builder,
+	opts *AdapterOptions,
 	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {
@@ -64,6 +78,7 @@ func NewAdapter(
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		transparentState:      cppbridge.NewTransitionStateV2(),
 		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
+		opts:                  opts,
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
 		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		appendDuration: factory.NewHistogram(
@@ -227,27 +242,21 @@ func (ar *Adapter) BatchStorage() storage.BatchStorage {
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(
-		queriers,
-		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
-	)
+	queriers = append(queriers, querier.NewChunkQuerier(
+		ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil,
+	))
 
 	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
 			continue
 		}
 
-		queriers = append(
-			queriers,
-			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
-		)
+		queriers = append(queriers, querier.NewChunkQuerier(
+			head, querier.NewNoOpShardedDeduplicator, mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil,
+		))
 	}
 
-	return storage.NewMergeChunkQuerier(
-		nil,
-		queriers,
-		storage.NewConcatenatingChunkSeriesMerger(),
-	), nil
+	return storage.NewMergeChunkQuerier(nil, queriers, storage.NewConcatenatingChunkSeriesMerger()), nil
 }
 
 // ApplyConfig updates hashdex limits from the global config.
@@ -281,6 +290,8 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		maxt,
 		ar.scrapeInterval.Load(),
 		aTimeInterval.MinT,
+		ar.opts.RetentionMS,
+		ar.opts.DownsamplingMS,
 		ar.activeQuerierMetrics,
 	), nil
 }
@@ -306,8 +317,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	queriers = append(
-		queriers,
+	queriers = append(queriers,
 		querier.NewQuerier(
 			ahead,
 			querier.NewNoOpShardedDeduplicator,
@@ -315,6 +325,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			maxt,
 			ar.scrapeInterval.Load(),
 			aTimeInterval.MinT,
+			ar.opts.RetentionMS,
+			ar.opts.DownsamplingMS,
 			ar.activeQuerierMetrics,
 		),
 	)
@@ -329,8 +341,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
-		queriers = append(
-			queriers,
+		queriers = append(queriers,
 			querier.NewQuerierWithOutSelectFuncOptimize(
 				head,
 				querier.NewNoOpShardedDeduplicator,
@@ -338,6 +349,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				maxt,
 				ar.scrapeInterval.Load(),
 				aTimeInterval.MinT,
+				ar.opts.RetentionMS,
+				ar.opts.DownsamplingMS,
 				ar.storageQuerierMetrics,
 			),
 		)

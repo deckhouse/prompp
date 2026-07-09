@@ -64,6 +64,7 @@ func (s *WriterSuite) SetupTest() {
 	s.blockWriter = block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		prometheus.DefaultRegisterer,
 	)
