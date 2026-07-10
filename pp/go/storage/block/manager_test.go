@@ -24,7 +24,7 @@ func TestManagerLoadsExistingBlocksOnStartup(t *testing.T) {
 	createTestBlock(t, dir, 1000, "metric_a")
 	createTestBlock(t, dir, 5000, "metric_b")
 
-	m, err := NewManager(dir, nil, nil, log.NewNopLogger(), nil)
+	m, err := NewManager(dir, nil, nil, nil, log.NewNopLogger(), nil)
 	require.NoError(t, err)
 	t.Cleanup(m.Close)
 
@@ -51,7 +51,7 @@ func TestManagerAppliesBlocksToDeleteOnInitialReload(t *testing.T) {
 		return map[ulid.ULID]struct{}{marked: {}}
 	}
 
-	m, err := NewManager(dir, nil, blocksToDelete, log.NewNopLogger(), nil)
+	m, err := NewManager(dir, nil, blocksToDelete, nil, log.NewNopLogger(), nil)
 	require.NoError(t, err)
 	t.Cleanup(m.Close)
 
@@ -70,7 +70,7 @@ func TestManagerReturnsErrorOnInitialReloadFailure(t *testing.T) {
 	notDir := filepath.Join(tmp, "not-a-directory")
 	require.NoError(t, os.WriteFile(notDir, []byte("x"), 0o600))
 
-	m, err := NewManager(notDir, nil, nil, log.NewNopLogger(), nil)
+	m, err := NewManager(notDir, nil, nil, nil, log.NewNopLogger(), nil)
 	require.Error(t, err)
 	require.Nil(t, m)
 }
@@ -83,7 +83,7 @@ func TestManagerExportsLoadedBlocksMetrics(t *testing.T) {
 	createTestBlock(t, dir, 5000, "metric_b")
 
 	reg := prometheus.NewRegistry()
-	m, err := NewManager(dir, nil, nil, log.NewNopLogger(), reg)
+	m, err := NewManager(dir, nil, nil, nil, log.NewNopLogger(), reg)
 	require.NoError(t, err)
 	t.Cleanup(m.Close)
 

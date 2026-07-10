@@ -1,6 +1,7 @@
 package block
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -50,6 +51,7 @@ type Manager struct {
 	logger         log.Logger
 	chunkPool      chunkenc.Pool
 	metrics        *metrics
+	lsObserver     LocalStorageObserver
 
 	mtx    sync.RWMutex
 	blocks []*tsdb.Block
@@ -70,6 +72,12 @@ type compactionRunner interface {
 	Compact() (uids []ulid.ULID, compacted bool, err error)
 }
 
+// LocalStorageObserver is the observer of the local storage.
+type LocalStorageObserver interface {
+	// Observe is the function to observe the local storage.
+	Observe(ctx context.Context)
+}
+
 // NewManager init new [Manager] and starts its periodic reload loop.
 //
 // blocksToDelete is the retention filter (e.g. built via pp-pkg/tsdb.NewBlocksToDelete);
@@ -78,6 +86,7 @@ func NewManager(
 	dir string,
 	opts *Options,
 	blocksToDelete tsdb.BlocksToDeleteFunc,
+	lsObserver LocalStorageObserver,
 	logger log.Logger,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -88,12 +97,17 @@ func NewManager(
 		logger = log.NewNopLogger()
 	}
 
+	if lsObserver == nil {
+		lsObserver = noopLocalStorageObserver{}
+	}
+
 	m := &Manager{
 		dir:            dir,
 		opts:           opts,
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
 		chunkPool:      chunkenc.NewPool(),
+		lsObserver:     lsObserver,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}
@@ -116,11 +130,16 @@ func (m *Manager) loop() {
 
 	ticker := time.NewTicker(reloadBlocksInterval)
 	defer ticker.Stop()
+	baseCtx := context.Background()
 
 	for {
 		select {
 		case <-ticker.C:
 			m.reloadAndCompact()
+
+			ctx, cancel := context.WithTimeout(baseCtx, reloadBlocksInterval)
+			m.lsObserver.Observe(ctx)
+			cancel()
 
 		case <-m.stopc:
 			return
@@ -419,6 +438,7 @@ func (m *Manager) reloadBlocks() (err error) {
 	if err := m.deleteBlocks(deletable); err != nil {
 		return fmt.Errorf("delete %v blocks: %w", len(deletable), err)
 	}
+
 	return nil
 }
 
@@ -536,3 +556,13 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 
 	return m
 }
+
+//
+// noopLocalStorageObserver
+//
+
+// noopLocalStorageObserver is the noop implementation of the [LocalStorageObserver].
+type noopLocalStorageObserver struct{}
+
+// Observe is the function to observe the local storage.
+func (noopLocalStorageObserver) Observe(context.Context) {}
