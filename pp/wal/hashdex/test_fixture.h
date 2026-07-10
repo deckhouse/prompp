@@ -37,7 +37,7 @@ inline void calculate_labelset_hash(std::vector<FloatMetric>& floats) noexcept {
 
 inline void calculate_labelset_hash(std::vector<HistogramMetric>& histograms) noexcept {
   for (auto& item : histograms) {
-    item.hash = Primitives::hash::hash_of_label_set(item.label_set);
+    item.hash = Primitives::hash::hash_of_label_set(item.timeseries.label_set);
   }
 }
 
@@ -62,7 +62,7 @@ template <Prometheus::hashdex::HashdexInterface Hashdex>
   for (auto& item : hashdex.histograms()) {
     auto& scraped_item = items.emplace_back();
     scraped_item.hash = item.hash();
-    item.read(scraped_item);
+    item.read(scraped_item.timeseries);
   }
 
   return items;

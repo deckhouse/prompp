@@ -210,21 +210,17 @@ enum HistogramTag : uint8_t {
   kCustomValues = 16,
 };
 
-template <class ProtobufReader, class Span>
-PROMPP_ALWAYS_INLINE void read_histogram_span(ProtobufReader& pb_span, Span& span) {
-  uint8_t parsed = 0;
-
+template <class ProtobufReader>
+PROMPP_ALWAYS_INLINE void read_histogram_span(ProtobufReader& pb_span, Primitives::HistogramSpan& span) {
   while (pb_span.next()) {
     switch (pb_span.tag()) {
       case kSpanOffset: {
         span.offset = pb_span.get_sint32();
-        parsed |= 0b01;
         break;
       }
 
       case kSpanLength: {
         span.length = pb_span.get_uint32();
-        parsed |= 0b10;
         break;
       }
 
@@ -234,7 +230,7 @@ PROMPP_ALWAYS_INLINE void read_histogram_span(ProtobufReader& pb_span, Span& spa
     }
   }
 
-  if (parsed != 0b11) [[unlikely]] {
+  if (!span.is_valid()) [[unlikely]] {
     throw BareBones::Exception(0xa3f2c8e91b047d56, "Protobuf message has incomplete histogram span");
   }
 }
@@ -357,28 +353,21 @@ PROMPP_ALWAYS_INLINE void read_histogram_sample(ProtobufReader& pb_histogram, Hi
   }
 }
 
-template <class ProtobufReader, class Histogram>
-PROMPP_ALWAYS_INLINE void read_histogram(ProtobufReader&& pb_timeseries, Histogram& histogram) {
-  bool has_histogram = false;
-
+template <class ProtobufReader, class HistogramTimeseries>
+PROMPP_ALWAYS_INLINE void read_histogram_timeseries(ProtobufReader&& pb_timeseries, HistogramTimeseries& histogram_timeseries) {
   while (pb_timeseries.next()) {
     switch (pb_timeseries.tag()) {
       case kLabels: {
         auto pb_label = pb_timeseries.get_message();
-        typename std::remove_cvref_t<decltype(histogram.label_set)>::label_type label;
+        typename std::remove_cvref_t<decltype(histogram_timeseries.label_set)>::label_type label;
         read_label(pb_label, label);
-        histogram.label_set.add(label);
+        histogram_timeseries.label_set.add(label);
         break;
       }
 
       case kHistograms: {
-        if (has_histogram) [[unlikely]] {
-          throw BareBones::Exception(0xd6a5f1b24e37a089, "Protobuf message has multiple histograms for label set");
-        }
-
         auto pb_histogram = pb_timeseries.get_message();
-        read_histogram_sample(pb_histogram, histogram);
-        has_histogram = true;
+        read_histogram_sample(pb_histogram, histogram_timeseries.histograms.emplace_back());
         break;
       }
 
@@ -388,7 +377,7 @@ PROMPP_ALWAYS_INLINE void read_histogram(ProtobufReader&& pb_timeseries, Histogr
     }
   }
 
-  if (histogram.label_set.empty() || !has_histogram) {
+  if (histogram_timeseries.label_set.empty() || histogram_timeseries.histograms.empty()) {
     throw BareBones::Exception(0xc5f4e0a13d269f78, "Protobuf message has no histograms for label set");
   }
 }

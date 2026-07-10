@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "primitives/histogram.h"
 #include "primitives/timeseries.h"
 #include "prometheus/metric.h"
@@ -13,7 +15,10 @@ struct FloatMetric {
   bool operator==(const FloatMetric&) const noexcept = default;
 };
 
-struct HistogramMetric : Primitives::BasicHistogram<Primitives::LabelViewSet, BareBones::Vector, BareBones::Vector, BareBones::Vector> {
+struct HistogramMetric {
+  using HistogramTimeseries = Primitives::HistogramTimeseries<Primitives::LabelViewSet, std::vector, BareBones::Vector, BareBones::Vector, BareBones::Vector>;
+
+  HistogramTimeseries timeseries;
   uint64_t hash{};
 
   bool operator==(const HistogramMetric&) const noexcept = default;

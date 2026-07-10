@@ -86,9 +86,9 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     PROMPP_ALWAYS_INLINE explicit HistogramItem(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
 
-    template <class Histogram>
-    PROMPP_ALWAYS_INLINE void read(Histogram& histogram) const {
-      Prometheus::RemoteWrite::read_histogram(protozero::pbf_reader(data_), histogram);
+    template <class HistogramTimeseries>
+    PROMPP_ALWAYS_INLINE void read(HistogramTimeseries& histogram_timeseries) const {
+      Prometheus::RemoteWrite::read_histogram_timeseries(protozero::pbf_reader(data_), histogram_timeseries);
     }
   };
 
