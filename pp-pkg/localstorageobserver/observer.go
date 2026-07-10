@@ -67,7 +67,7 @@ type LocalStorageObserver struct {
 	objectsSize *prometheus.GaugeVec
 }
 
-// NewLocalStorageObserver is the function to create a new [LocalStorageObserver].
+// NewLocalStorageObserver init a new [LocalStorageObserver].
 func NewLocalStorageObserver(dir string, logger log.Logger, reg prometheus.Registerer) *LocalStorageObserver {
 	factory := util.NewUnconflictRegisterer(reg)
 	return &LocalStorageObserver{
@@ -76,7 +76,7 @@ func NewLocalStorageObserver(dir string, logger log.Logger, reg prometheus.Regis
 		lastObjects: make(map[object]int64),
 		objectsSize: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_localstorage_objects",
+				Name: "prompp_localstorage_unknown_bytes",
 				Help: "The size of objects in the local storage in bytes.",
 			},
 			[]string{"name", "type"},
@@ -84,7 +84,7 @@ func NewLocalStorageObserver(dir string, logger log.Logger, reg prometheus.Regis
 	}
 }
 
-// Observe is the function to observe objects in the local storage.
+// Observe to observe the objects in the local storage.
 //
 //revive:disable-next-line:cyclomatic // this is not a complex function
 func (lso *LocalStorageObserver) Observe(ctx context.Context) {
@@ -138,7 +138,7 @@ func (lso *LocalStorageObserver) Observe(ctx context.Context) {
 	lso.lastObjects = newObjects
 }
 
-// isAcceptableDir is the function to check if the directory is acceptable.
+// isAcceptableDir to check if the directory is acceptable.
 func (*LocalStorageObserver) isAcceptableDir(fi fs.DirEntry) bool {
 	if !fi.IsDir() {
 		return false
@@ -155,7 +155,7 @@ func (*LocalStorageObserver) isAcceptableDir(fi fs.DirEntry) bool {
 	return false
 }
 
-// isAcceptableFile is the function to check if the file is acceptable.
+// isAcceptableFile to check if the file is acceptable.
 func (*LocalStorageObserver) isAcceptableFile(fi fs.DirEntry) bool {
 	if fi.IsDir() {
 		return false
@@ -164,7 +164,7 @@ func (*LocalStorageObserver) isAcceptableFile(fi fs.DirEntry) bool {
 	return fi.Name() == "head.log" || fi.Name() == "queries.active" || fi.Name() == "client_id.uuid"
 }
 
-// getDirSize is the function to get the size of the directory.
+// getDirSize to get the size of the directory.
 func (lso *LocalStorageObserver) getDirSize(ctx context.Context, dirName string) (int64, error) {
 	var totalSize int64
 	walkFn := func(path string, d fs.DirEntry, walkErr error) error {
