@@ -36,10 +36,17 @@ const (
 type Options struct {
 	// RetentionDuration is the time retention in milliseconds, used for the corrupted-block outdated check.
 	RetentionDuration int64
+	// DownsamplingMS is the downsampling duration in milliseconds, used for the downsampling block check.
+	DownsamplingMS int64
 	// CorruptedRetentionDuration is the duration of the retention for corrupted blocks.
 	CorruptedRetentionDuration time.Duration
 	// EnableOverlappingCompaction enables warning about overlapping blocks on reload.
 	EnableOverlappingCompaction bool
+}
+
+// needDownsampling checks if the delta is greater than the downsampling duration.
+func (o *Options) needDownsampling(delta int64) bool {
+	return o.DownsamplingMS > 0 && delta > o.DownsamplingMS
 }
 
 // Manager reloads and applies retention to persisted blocks on disk.
@@ -203,7 +210,7 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		}
 	}()
 
-	needDownsampling := maxt-mint > m.opts.RetentionDuration
+	needDownsampling := m.opts.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
 		if !b.OverlapsClosedInterval(mint, maxt) ||
 			needDownsampling && !b.IsDownsamplingBlock() ||
@@ -238,7 +245,7 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 		}
 	}()
 
-	needDownsampling := maxt-mint > m.opts.RetentionDuration
+	needDownsampling := m.opts.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
 		if !b.OverlapsClosedInterval(mint, maxt) ||
 			needDownsampling && !b.IsDownsamplingBlock() ||

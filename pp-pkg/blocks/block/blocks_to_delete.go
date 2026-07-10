@@ -70,7 +70,7 @@ type BlocksToDeleteFunc func(blocks []*Block) map[ulid.ULID]struct{}
 // extraSize reports bytes used outside of the given blocks (e.g. heads + catalog)
 // and may be nil.
 func NewBlocksToDelete(
-	retentionDuration, maxBytes, downsamplingMS int64,
+	retentionDuration, maxBytes int64,
 	extraSize func() int64,
 	r prometheus.Registerer,
 ) BlocksToDeleteFunc {
@@ -80,14 +80,6 @@ func NewBlocksToDelete(
 	limitBytes := max(maxBytes, 0)
 	m.maxBytes.Set(float64(limitBytes))
 	m.retentionDuration.Set((time.Duration(retentionDuration) * time.Millisecond).Seconds())
-
-	if downsamplingMS > 0 {
-		return func(blocks []*Block) map[ulid.ULID]struct{} {
-			return deletableBlocksWithDownsampling(
-				retentionDuration, maxBytes, extraSize, m.timeRetentions, m.sizeRetentions, blocks,
-			)
-		}
-	}
 
 	return func(blocks []*Block) map[ulid.ULID]struct{} {
 		return deletableBlocks(retentionDuration, maxBytes, extraSize, m.timeRetentions, m.sizeRetentions, blocks)
@@ -203,7 +195,9 @@ func BeyondSizeRetention(
 // CatalogHeadsExtraSize adapts [CatalogHeadsSize] into an extraSize function
 // (func() int64) suitable for passing to [NewBlocksToDelete].
 func CatalogHeadsExtraSize(dir string, c *catalog.Catalog) func() int64 {
-	return func() int64 { return CatalogHeadsSize(dir, c) }
+	return func() int64 {
+		return CatalogHeadsSize(dir, c)
+	}
 }
 
 // CatalogHeadsSize returns the on-disk size of the catalog and all of its heads.
@@ -222,63 +216,4 @@ func CatalogHeadsSize(dir string, c *catalog.Catalog) (catalogSize int64) {
 func headSize(dir string) int64 {
 	size, _ := fileutil.DirSize(dir)
 	return size
-}
-
-//
-//
-//
-
-func deletableBlocksWithDownsampling(
-	retentionDuration, maxBytes int64,
-	extraSize func() int64,
-	timeRetentions, sizeRetentions prometheus.Counter,
-	blocks []*Block,
-) map[ulid.ULID]struct{} {
-	deletable := make(map[ulid.ULID]struct{})
-	for _, block := range blocks {
-		if block.Meta().Compaction.Deletable {
-			deletable[block.Meta().ULID] = struct{}{}
-		}
-	}
-
-	rawBlocks, downsampledBlocks := splitBlocks(blocks)
-
-	for u := range BeyondTimeRetention(retentionDuration, timeRetentions, rawBlocks) {
-		deletable[u] = struct{}{}
-	}
-
-	for u := range BeyondSizeRetention(maxBytes, extraSize, sizeRetentions, downsampledBlocks) {
-		deletable[u] = struct{}{}
-	}
-
-	return deletable
-}
-
-// splitBlocks splits the blocks into downsampled and raw blocks.
-func splitBlocks(blocks []*Block) (downsampledBlocks, rawBlocks []*Block) {
-	// Sort the blocks by time - newest to oldest (largest to smallest timestamp).
-	// This ensures that the retentions will remove the oldest  blocks.
-	slices.SortFunc(blocks, func(a, b *Block) int {
-		switch {
-		case b.Meta().MaxTime < a.Meta().MaxTime:
-			return -1
-		case b.Meta().MaxTime > a.Meta().MaxTime:
-			return 1
-		default:
-			return 0
-		}
-	})
-
-	downsampledBlocks = make([]*Block, 0, len(blocks))
-	rawBlocks = make([]*Block, 0, len(blocks))
-	for _, block := range blocks {
-		if block.IsDownsamplingBlock() {
-			downsampledBlocks = append(downsampledBlocks, block)
-			continue
-		}
-
-		rawBlocks = append(rawBlocks, block)
-	}
-
-	return rawBlocks, downsampledBlocks
 }
