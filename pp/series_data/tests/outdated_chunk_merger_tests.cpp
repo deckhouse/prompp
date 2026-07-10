@@ -779,4 +779,65 @@ INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantC
 INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.1));
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(-1.0));
 
+class OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {
+ protected:
+  [[nodiscard]] SampleList decode_series(uint32_t ls_id) {
+    SampleList result;
+    Decoder::decode_series(storage_, ls_id, [&result](const Sample& sample) { result.emplace_back(sample); });
+    return result;
+  }
+};
+
+// Regression: all outdated samples belong to an early finalized chunk, so the samples span
+// becomes empty after merging into it while there are still finalized chunks left to iterate.
+// merge_outdated_samples_in_finalized_chunks must stop instead of dereferencing samples.front()
+// on the empty span (heap-buffer-overflow reported by ASan in production heads).
+TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesNotReadPastEndOfSamples) {
+  // Arrange
+  // 13 in-order samples produce 3 finalized chunks ({2,4,6,8}, {10,12,14,16}, {18,20,22,24})
+  // plus an open chunk ({26}); kSamplesPerChunk == 4.
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 4, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 6, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 8, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 10, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 12, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 14, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 16, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 18, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 20, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 22, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 24, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 26, .value = 1.0}},
+  });
+  // A single outdated sample that lands only in the first finalized chunk (timestamp < 10).
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = 1.0}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 2, .value = 1.0},
+          {.timestamp = 3, .value = 1.0},
+          {.timestamp = 4, .value = 1.0},
+          {.timestamp = 6, .value = 1.0},
+          {.timestamp = 8, .value = 1.0},
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 12, .value = 1.0},
+          {.timestamp = 14, .value = 1.0},
+          {.timestamp = 16, .value = 1.0},
+          {.timestamp = 18, .value = 1.0},
+          {.timestamp = 20, .value = 1.0},
+          {.timestamp = 22, .value = 1.0},
+          {.timestamp = 24, .value = 1.0},
+          {.timestamp = 26, .value = 1.0},
+      },
+      decode_series(0)));
+}
+
 }  // namespace
