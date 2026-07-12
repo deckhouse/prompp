@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "bare_bones/xxhash.h"
 #include "go_model.h"
 #include "label_set.h"
@@ -127,6 +129,16 @@ struct MetricDescriptor {
     return hash.digest();
   }
 };
+
+// The Go side reinterprets MetricDescriptor both as prometheus.Desc and, in cppbridge.cppMetricDescriptor
+// (pp/go/cppbridge/metrics.go), as a read-only view to extract fq_name/help and id/dim_hash. These asserts pin the
+// field offsets so any layout change breaks the C++ build and forces the Go mirror to be updated in lockstep.
+static_assert(offsetof(MetricDescriptor, fq_name) == 0);
+static_assert(offsetof(MetricDescriptor, help) == 16);
+static_assert(offsetof(MetricDescriptor, const_label_pairs) == 32);
+static_assert(offsetof(MetricDescriptor, variable_labels) == 56);
+static_assert(offsetof(MetricDescriptor, id) == 64);
+static_assert(offsetof(MetricDescriptor, dim_hash) == 72);
 
 }  // namespace dto
 
