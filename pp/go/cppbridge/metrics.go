@@ -103,8 +103,9 @@ var (
 )
 
 func CppMetrics(f func(metric *CppMetricCopy) bool) {
-	for _, metric := range collectCppMetricCopies() {
-		if !f(metric) {
+	copies := collectCppMetricCopies()
+	for i := range copies {
+		if !f(&copies[i]) {
 			break
 		}
 	}
@@ -114,7 +115,12 @@ func CppMetrics(f func(metric *CppMetricCopy) bool) {
 // cache entries and returns the copies. The lock is held only while C++ memory is touched; once this returns every
 // referenced byte is Go-owned, so the copies can be read safely after the lock is released (e.g. lazily drained from a
 // buffered channel by prometheus.Registry.Gather).
-func collectCppMetricCopies() []*CppMetricCopy {
+//
+// Copies are returned in a single backing slice so the whole scrape costs one allocation for the values instead of one
+// per metric. A fresh slice is allocated per scrape on purpose: the elements are handed to the collect channel and read
+// asynchronously (and possibly by concurrent Gather calls), so a shared/pooled buffer could be overwritten while still
+// in flight.
+func collectCppMetricCopies() []CppMetricCopy {
 	cppMetricsMu.Lock()
 	defer cppMetricsMu.Unlock()
 
@@ -123,7 +129,7 @@ func collectCppMetricCopies() []*CppMetricCopy {
 
 	iterator := prometheusMetricsIteratorCtor()
 
-	copies := make([]*CppMetricCopy, 0, len(metaCache))
+	copies := make([]CppMetricCopy, 0, len(metaCache))
 	for {
 		metric := prometheusMetricsIteratorNext(&iterator)
 		if metric == nil {
@@ -141,7 +147,7 @@ func collectCppMetricCopies() []*CppMetricCopy {
 		}
 		meta.lastSeenGen = gen
 
-		copies = append(copies, &CppMetricCopy{meta: meta, value: value})
+		copies = append(copies, CppMetricCopy{meta: meta, value: value})
 	}
 
 	// Mark-and-sweep: drop metadata for descriptors that disappeared (e.g. their page was freed). Entries seen in this
