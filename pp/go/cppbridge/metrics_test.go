@@ -1,6 +1,9 @@
 package cppbridge
 
 import (
+	"fmt"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -170,4 +173,57 @@ func (s *CppMetricsSuite) TestCacheEvictsDisappearedMetric() {
 
 	// Assert
 	s.False(cacheContainsMeta(first[0].meta))
+}
+
+// BenchmarkCppMetrics measures reading all metrics from C++ into Go through CppMetrics for a varying number of metric
+// pages. Each page yields a counter and a gauge (2 metrics). The "warm" variant reflects the steady-state scrape path
+// where the per-descriptor meta is already cached and only numeric values are copied; the "cold" variant clears the
+// meta cache before every iteration to measure the full deep-copy (descriptor + labels) build cost.
+func BenchmarkCppMetrics(b *testing.B) {
+	for _, pageCount := range []int{1, 10, 100, 1000} {
+		pages := make([]uintptr, 0, pageCount)
+		for i := 0; i < pageCount; i++ {
+			pages = append(pages, prometheusMetricsPageForTestCtor(
+				Labels{Label{Name: "metrics_page", Value: strconv.Itoa(i)}},
+				"benchmark_counter",
+				uint64(i),
+			))
+		}
+
+		var consumed int
+		consume := func(*CppMetricCopy) bool { consumed++; return true }
+
+		b.Run(fmt.Sprintf("warm/pages=%d", pageCount), func(b *testing.B) {
+			CppMetrics(consume) // warm the meta cache
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				consumed = 0
+				CppMetrics(consume)
+			}
+			b.StopTimer()
+			runtime.KeepAlive(consumed)
+		})
+
+		b.Run(fmt.Sprintf("cold/pages=%d", pageCount), func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				cppMetricsMu.Lock()
+				clear(metaCache)
+				cppMetricsMu.Unlock()
+				b.StartTimer()
+
+				consumed = 0
+				CppMetrics(consume)
+			}
+			b.StopTimer()
+			runtime.KeepAlive(consumed)
+		})
+
+		for _, page := range pages {
+			prometheusMetricsPageForTestDetach(page)
+		}
+	}
 }
