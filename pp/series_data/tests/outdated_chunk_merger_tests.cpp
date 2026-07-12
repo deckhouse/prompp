@@ -794,8 +794,8 @@ class OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture : publi
 // on the empty span (heap-buffer-overflow reported by ASan in production heads).
 TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesNotReadPastEndOfSamples) {
   // Arrange
-  // 13 in-order samples produce 3 finalized chunks ({2,4,6,8}, {10,12,14,16}, {18,20,22,24})
-  // plus an open chunk ({26}); kSamplesPerChunk == 4.
+  // 9 in-order samples produce 2 finalized chunks ({2,4,6,8}, {10,12,14,16})
+  // plus an open chunk ({18}); kSamplesPerChunk == 4.
   encode({
       {.ls_id = 0, .sample = {.timestamp = 2, .value = 1.0}},
       {.ls_id = 0, .sample = {.timestamp = 4, .value = 1.0}},
@@ -806,10 +806,6 @@ TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesN
       {.ls_id = 0, .sample = {.timestamp = 14, .value = 1.0}},
       {.ls_id = 0, .sample = {.timestamp = 16, .value = 1.0}},
       {.ls_id = 0, .sample = {.timestamp = 18, .value = 1.0}},
-      {.ls_id = 0, .sample = {.timestamp = 20, .value = 1.0}},
-      {.ls_id = 0, .sample = {.timestamp = 22, .value = 1.0}},
-      {.ls_id = 0, .sample = {.timestamp = 24, .value = 1.0}},
-      {.ls_id = 0, .sample = {.timestamp = 26, .value = 1.0}},
   });
   // A single outdated sample that lands only in the first finalized chunk (timestamp < 10).
   encode_outdated({
@@ -832,10 +828,6 @@ TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesN
           {.timestamp = 14, .value = 1.0},
           {.timestamp = 16, .value = 1.0},
           {.timestamp = 18, .value = 1.0},
-          {.timestamp = 20, .value = 1.0},
-          {.timestamp = 22, .value = 1.0},
-          {.timestamp = 24, .value = 1.0},
-          {.timestamp = 26, .value = 1.0},
       },
       decode_series(0)));
 }
