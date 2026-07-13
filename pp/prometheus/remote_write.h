@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <string_view>
 
 #define PROTOZERO_USE_VIEW std::string_view
@@ -7,6 +10,7 @@
 #include "third_party/protozero/pbf_reader.hpp"
 
 #include "bare_bones/exception.h"
+#include "bare_bones/vector.h"
 #include "primitives/histogram.h"
 
 namespace PromPP::Prometheus::RemoteWrite {
@@ -186,32 +190,15 @@ PROMPP_ALWAYS_INLINE void read_timeseries(ProtobufReader&& pb_timeseries, Timese
   }
 }
 
-enum HistogramSpanTag : uint8_t {
-  kSpanOffset = 1,
-  kSpanLength = 2,
-};
-
-enum HistogramTag : uint8_t {
-  kCountInt = 1,
-  kCountFloat = 2,
-  kSum = 3,
-  kSchema = 4,
-  kZeroThreshold = 5,
-  kZeroCountInt = 6,
-  kZeroCountFloat = 7,
-  kNegativeSpans = 8,
-  kNegativeDeltas = 9,
-  kNegativeCounts = 10,
-  kPositiveSpans = 11,
-  kPositiveDeltas = 12,
-  kPositiveCounts = 13,
-  kResetHint = 14,
-  kTimestamp = 15,
-  kCustomValues = 16,
-};
+constexpr int8_t kCustomBucketsSchema = -53;
 
 template <class ProtobufReader>
 PROMPP_ALWAYS_INLINE void read_histogram_span(ProtobufReader& pb_span, Primitives::HistogramSpan& span) {
+  enum HistogramSpanTag : uint8_t {
+    kSpanOffset = 1,
+    kSpanLength = 2,
+  };
+
   while (pb_span.next()) {
     switch (pb_span.tag()) {
       case kSpanOffset: {
@@ -235,28 +222,241 @@ PROMPP_ALWAYS_INLINE void read_histogram_span(ProtobufReader& pb_span, Primitive
   }
 }
 
-template <class ProtobufReader, class Histogram>
-PROMPP_ALWAYS_INLINE void read_histogram_sample(ProtobufReader& pb_histogram, Histogram& histogram) {
+template <class ProtobufReader>
+[[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp read_google_protobuf_timestamp(ProtobufReader& pb_timestamp) {
+  enum GoogleProtobufTimestampTag : uint8_t {
+    kSeconds = 1,
+    kNanos = 2,
+  };
+
+  auto seconds = Primitives::kNullTimestamp;
+  int32_t nanos = 0;
+
+  while (pb_timestamp.next()) {
+    switch (pb_timestamp.tag()) {
+      case kSeconds: {
+        seconds = pb_timestamp.get_int64();
+        break;
+      }
+
+      case kNanos: {
+        nanos = pb_timestamp.get_int32();
+        break;
+      }
+
+      default: {
+        pb_timestamp.skip();
+      }
+    }
+  }
+
+  if (seconds == Primitives::kNullTimestamp) {
+    return seconds;
+  }
+
+  using std::chrono::milliseconds;
+  return (milliseconds(std::chrono::seconds(seconds)) + std::chrono::duration_cast<milliseconds>(std::chrono::nanoseconds(nanos))).count();
+}
+
+struct ClassicHistogramBucket {
+  Primitives::HistogramValue cumulative_count{};
+  double upper_bound{};
+  Primitives::ValueType type{Primitives::ValueType::kUnknown};
+};
+
+template <class ProtobufReader>
+PROMPP_ALWAYS_INLINE void read_classic_histogram_bucket(ProtobufReader& pb_bucket, ClassicHistogramBucket& bucket) {
+  enum BucketTag : uint8_t {
+    kCumulativeCount = 1,
+    kUpperBound = 2,
+    kExemplar = 3,
+    kCumulativeCountFloat = 4,
+  };
+
+  while (pb_bucket.next()) {
+    switch (pb_bucket.tag()) {
+      case kCumulativeCount: {
+        bucket.cumulative_count.value = pb_bucket.get_uint64();
+        bucket.type = Primitives::ValueType::kUint;
+        break;
+      }
+
+      case kCumulativeCountFloat: {
+        bucket.cumulative_count.float_value = pb_bucket.get_double();
+        bucket.type = Primitives::ValueType::kFloat;
+        break;
+      }
+
+      case kUpperBound: {
+        bucket.upper_bound = pb_bucket.get_double();
+        break;
+      }
+
+      case kExemplar: {
+        pb_bucket.skip();
+        break;
+      }
+
+      default: {
+        pb_bucket.skip();
+      }
+    }
+  }
+
+  if (bucket.type == Primitives::ValueType::kUnknown) {
+    throw BareBones::Exception(0x1a5298a33044ba0b, "ClassicHistogramBucket is incomplete");
+  }
+}
+
+[[nodiscard]] PROMPP_ALWAYS_INLINE double classic_histogram_bucket_cumulative_count(const ClassicHistogramBucket& bucket) noexcept {
+  if (bucket.type == Primitives::ValueType::kFloat) {
+    return bucket.cumulative_count.float_value;
+  }
+
+  return static_cast<double>(bucket.cumulative_count.value);
+}
+
+template <class BucketsContainer>
+PROMPP_ALWAYS_INLINE void convert_classic_to_native_histogram(Primitives::HistogramType& histogram_type,
+                                                              Primitives::HistogramValue& count,
+                                                              BucketsContainer& classic_buckets,
+                                                              Primitives::HistogramSpan& positive_span,
+                                                              BareBones::Vector<Primitives::HistogramBucketValue>& positive_buckets,
+                                                              BareBones::Vector<double>& custom_values,
+                                                              int8_t& schema) {
+  std::ranges::sort(classic_buckets, [](const ClassicHistogramBucket& a, const ClassicHistogramBucket& b) { return a.upper_bound < b.upper_bound; });
+
+  const auto unique_end = std::unique(classic_buckets.begin(), classic_buckets.end(),
+                                      [](const ClassicHistogramBucket& a, const ClassicHistogramBucket& b) { return a.upper_bound == b.upper_bound; });
+  classic_buckets.erase(unique_end, classic_buckets.end());
+
+  struct SortedBucket {
+    double upper_bound{};
+    double cumulative_count{};
+  };
+
+  BareBones::Vector<SortedBucket> buckets;
+  buckets.reserve(classic_buckets.size());
+  for (const auto& classic_bucket : classic_buckets) {
+    buckets.emplace_back(classic_bucket.upper_bound, classic_histogram_bucket_cumulative_count(classic_bucket));
+  }
+
+  const double inf = std::numeric_limits<double>::infinity();
+  double total_count = histogram_type == Primitives::HistogramType::kFloat ? count.float_value : static_cast<double>(count.value);
+
+  if (total_count == 0 && !buckets.empty()) {
+    total_count = buckets.back().cumulative_count;
+  }
+
+  if (buckets.empty() || buckets.back().upper_bound != inf) {
+    buckets.emplace_back(SortedBucket{.upper_bound = inf, .cumulative_count = total_count});
+  }
+
+  bool use_float = histogram_type == Primitives::HistogramType::kFloat;
+  if (!use_float) {
+    const auto rounded_total = std::round(total_count);
+    if (total_count != rounded_total) {
+      use_float = true;
+    } else {
+      for (const auto& bucket : buckets) {
+        const auto rounded_count = std::round(bucket.cumulative_count);
+        if (bucket.cumulative_count != rounded_count) {
+          use_float = true;
+          break;
+        }
+      }
+    }
+  }
+
+  schema = kCustomBucketsSchema;
+  positive_span = {.offset = 0, .length = static_cast<uint32_t>(buckets.size())};
+  positive_buckets.clear();
+  positive_buckets.reserve(buckets.size());
+  custom_values.clear();
+
+  if (buckets.size() > 1) {
+    custom_values.resize(buckets.size() - 1);
+    for (size_t i = 0; i < buckets.size() - 1; ++i) {
+      if (!std::isinf(buckets[i].upper_bound)) {
+        custom_values[i] = buckets[i].upper_bound;
+      }
+    }
+  }
+
+  if (use_float) {
+    histogram_type = Primitives::HistogramType::kFloat;
+    count.float_value = total_count;
+    double prev_count = 0;
+    for (const auto& bucket : buckets) {
+      positive_buckets.emplace_back().float_value = bucket.cumulative_count - prev_count;
+      prev_count = bucket.cumulative_count;
+    }
+    return;
+  }
+
+  histogram_type = Primitives::HistogramType::kInt;
+  count.value = static_cast<uint64_t>(std::round(total_count));
+
+  int64_t prev_count = 0;
+  int64_t prev_delta = 0;
+  for (const auto& bucket : buckets) {
+    const auto delta = static_cast<int64_t>(std::round(bucket.cumulative_count)) - prev_count;
+    positive_buckets.emplace_back().value = delta - prev_delta;
+    prev_count = static_cast<int64_t>(std::round(bucket.cumulative_count));
+    prev_delta = delta;
+  }
+}
+
+template <class ProtobufReader, class Histogram, class BucketsContainer>
+PROMPP_ALWAYS_INLINE void read_histogram_sample(ProtobufReader& pb_histogram, Histogram& histogram, BucketsContainer& classic_buckets) {
+  enum HistogramTag : uint8_t {
+    kSampleCount = 1,
+    kSampleSum = 2,
+    kBucket = 3,
+    kSampleCountFloat = 4,
+    kSchema = 5,
+    kZeroThreshold = 6,
+    kZeroCountInt = 7,
+    kZeroCountFloat = 8,
+    kNegativeSpans = 9,
+    kNegativeDeltas = 10,
+    kNegativeCounts = 11,
+    kPositiveSpans = 12,
+    kPositiveDeltas = 13,
+    kPositiveCounts = 14,
+    kStartTimestamp = 15,
+    kExemplars = 16,
+  };
+
   bool count_parsed = false;
 
   while (pb_histogram.next()) {
     switch (pb_histogram.tag()) {
-      case kCountInt: {
+      case kSampleCount: {
         histogram.count.value = pb_histogram.get_uint64();
         histogram.type = Primitives::HistogramType::kInt;
         count_parsed = true;
         break;
       }
 
-      case kCountFloat: {
-        histogram.count.float_value = pb_histogram.get_double();
-        histogram.type = Primitives::HistogramType::kFloat;
-        count_parsed = true;
+      case kSampleSum: {
+        histogram.sum = pb_histogram.get_double();
         break;
       }
 
-      case kSum: {
-        histogram.sum = pb_histogram.get_double();
+      case kBucket: {
+        auto pb_bucket = pb_histogram.get_message();
+        read_classic_histogram_bucket(pb_bucket, classic_buckets.emplace_back());
+        break;
+      }
+
+      case kSampleCountFloat: {
+        const auto sample_count_float = pb_histogram.get_double();
+        if (sample_count_float > 0) {
+          histogram.count.float_value = sample_count_float;
+          histogram.type = Primitives::HistogramType::kFloat;
+          count_parsed = true;
+        }
         break;
       }
 
@@ -296,8 +496,8 @@ PROMPP_ALWAYS_INLINE void read_histogram_sample(ProtobufReader& pb_histogram, Hi
 
       case kNegativeCounts: {
         histogram.negative_buckets.clear();
-        for (const auto count : pb_histogram.get_packed_double()) {
-          histogram.negative_buckets.emplace_back().float_value = count;
+        for (const auto bucket_count : pb_histogram.get_packed_double()) {
+          histogram.negative_buckets.emplace_back().float_value = bucket_count;
         }
         break;
       }
@@ -318,27 +518,22 @@ PROMPP_ALWAYS_INLINE void read_histogram_sample(ProtobufReader& pb_histogram, Hi
 
       case kPositiveCounts: {
         histogram.positive_buckets.clear();
-        for (const auto count : pb_histogram.get_packed_double()) {
-          histogram.positive_buckets.emplace_back().float_value = count;
+        for (const auto bucket_count : pb_histogram.get_packed_double()) {
+          histogram.positive_buckets.emplace_back().float_value = bucket_count;
         }
         break;
       }
 
-      case kResetHint: {
-        histogram.counter_reset_hint = static_cast<Primitives::CounterResetHint>(pb_histogram.get_enum());
-        break;
-      }
-
-      case kTimestamp: {
-        histogram.timestamp = pb_histogram.get_int64();
-        break;
-      }
-
-      case kCustomValues: {
-        histogram.custom_values.clear();
-        for (const auto value : pb_histogram.get_packed_double()) {
-          histogram.custom_values.emplace_back(value);
+      case kStartTimestamp: {
+        auto pb_start_timestamp = pb_histogram.get_message();
+        if (const auto timestamp = read_google_protobuf_timestamp(pb_start_timestamp); timestamp != Primitives::kNullTimestamp) {
+          histogram.timestamp = timestamp;
         }
+        break;
+      }
+
+      case kExemplars: {
+        pb_histogram.skip();
         break;
       }
 
@@ -366,8 +561,17 @@ PROMPP_ALWAYS_INLINE void read_histogram_timeseries(ProtobufReader&& pb_timeseri
       }
 
       case kHistograms: {
+        BareBones::Vector<ClassicHistogramBucket> classic_buckets;
         auto pb_histogram = pb_timeseries.get_message();
-        read_histogram_sample(pb_histogram, histogram_timeseries.histograms.emplace_back());
+        auto& histogram = histogram_timeseries.histograms.emplace_back();
+        read_histogram_sample(pb_histogram, histogram, classic_buckets);
+        if (!classic_buckets.empty()) {
+          if (histogram.positive_buckets.empty() && histogram.positive_spans.empty()) {
+            auto& positive_span = histogram.positive_spans.emplace_back();
+            convert_classic_to_native_histogram(histogram.type, histogram.count, classic_buckets, positive_span, histogram.positive_buckets,
+                                                histogram.custom_values, histogram.schema);
+          }
+        }
         break;
       }
 

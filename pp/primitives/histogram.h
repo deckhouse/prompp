@@ -26,6 +26,13 @@ struct HistogramSpan {
   bool operator==(const HistogramSpan& other) const noexcept = default;
 };
 
+enum class ValueType : uint8_t {
+  kUnknown = 0,
+  kInt,
+  kUint = kInt,
+  kFloat,
+};
+
 union HistogramBucketValue {
   int64_t value;
   double float_value;
