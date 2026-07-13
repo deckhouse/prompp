@@ -1,8 +1,21 @@
 #include "series_data_serialization_serialized_data.h"
+#include "annotations.h"
 
 #include "entrypoint/types/serialized_data.h"
 
-extern "C" void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
+/**
+ * @brief Get next series_id in serialized data.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ * @param res {
+ *     series_id uint32 // series id (UINT32_MAX if no more series).
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
   struct Arguments {
     entrypoint::types::SerializedDataPtr serialized_data;
   };
@@ -15,7 +28,16 @@ extern "C" void prompp_series_data_serialization_serialized_data_next(void* args
   std::tie(out->series_id, out->chunk_ref) = static_cast<Arguments*>(args)->serialized_data->next();
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args) {
+/**
+ * @brief Create a decode iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args) {
   struct Arguments {
     entrypoint::types::SerializedDataIterator* iterator;
     entrypoint::types::SerializedDataPtr serialized_data;
@@ -26,13 +48,29 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(v
   new (in->iterator) entrypoint::types::SerializedDataIterator(in->serialized_data->iterator(in->chunk_ref));
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator) {
+/**
+ * @brief Advance decode iterator.
+ *
+ * @param iterator uintptr // pointer to decode iterator
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_iterator_next(void* args) {
   using series_data::decoder::DecodeIteratorSentinel;
+  using Arguments = entrypoint::types::SerializedDataIterator;
 
-  ++(*static_cast<entrypoint::types::SerializedDataIterator*>(iterator));
+  ++(*static_cast<Arguments*>(args));
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(void* args) {
+/**
+ * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to decode iterator
+ *     targetTimestamp int64 // target timestamp
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_iterator_seek(void* args) {
   using series_data::decoder::DecodeIteratorSentinel;
 
   struct Arguments {
@@ -44,7 +82,17 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(v
   in->iterator->seek_to(in->target_timestamp);
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
+/**
+ * @brief Reset a decode iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     iterator uintptr // pointer to decode iterator
+ *     chunkRef uint32 // inner chunk id.
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
   struct Arguments {
     entrypoint::types::SerializedDataIterator* iterator;
     entrypoint::types::SerializedDataPtr serialized_data;
@@ -55,7 +103,15 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(
   in->iterator->reset(in->serialized_data->get_buffer_view(), in->serialized_data->get_chunks_view(), in->chunk_ref);
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_dtor(void* args) {
+/**
+ * @brief Destroy serialized data object.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_dtor(void* args) {
   struct Arguments {
     entrypoint::types::SerializedDataPtr serialized_data;
   };

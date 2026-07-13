@@ -1,4 +1,5 @@
 #include "series_data_data_storage.h"
+#include "annotations.h"
 
 #include <cassert>
 #include <spanstream>
@@ -43,7 +44,14 @@ using entrypoint::types::QuerierType;
 using entrypoint::types::QuerierVariant;
 using entrypoint::types::QuerierVariantPtr;
 
-extern "C" void prompp_series_data_data_storage_ctor(void* res) {
+/**
+ * @brief Construct a new series data DataStorage
+ *
+ * @param res {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_ctor(void* res) {
   using Result = struct {
     DataStoragePtr data_storage;
   };
@@ -51,7 +59,14 @@ extern "C" void prompp_series_data_data_storage_ctor(void* res) {
   new (res) Result{.data_storage = std::make_unique<DataStorage>()};
 }
 
-extern "C" void prompp_series_data_data_storage_reset(void* args) {
+/**
+ * @brief Resets DataStorage to initial state
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_reset(void* args) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -59,7 +74,22 @@ extern "C" void prompp_series_data_data_storage_reset(void* args) {
   static_cast<Arguments*>(args)->data_storage->reset();
 }
 
-extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* res) {
+/**
+ * @brief Get min max timestamps in storage
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     interval struct {
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_time_interval(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -70,7 +100,19 @@ extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* 
   new (res) Result{.interval = series_data::Decoder::get_time_interval(*static_cast<Arguments*>(args)->data_storage)};
 }
 
-extern "C" void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res) {
+/**
+ * @brief Get queried series bitset memory size
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     size uint32 // queried series bitset memory size
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -81,7 +123,19 @@ extern "C" void prompp_series_data_data_storage_queried_series_bitset_size(void*
   new (res) Result{.size = static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.get_write_size()};
 }
 
-extern "C" void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res) {
+/**
+ * @brief Get queried series bitset memory
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     queriedSeries []byte // queried series bitset (memory allocated in c++)
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -93,7 +147,19 @@ extern "C" void prompp_series_data_data_storage_queried_series_bitset(void* args
   static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.write_to(stream);
 }
 
-extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void* res) {
+/**
+ * @brief Get queried series bitset memory
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     queriedSeries []byte // queried series bitset memory
+ * }
+ *
+ * @param res {
+ *     result bool // load result
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
     SliceView<char> queried_series;
@@ -114,7 +180,22 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
   new (res) Result{.result = result};
 }
 
-extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) {
+/**
+ * @brief Queries data storage and serializes result (new serialization model).
+ *
+ * @param args {
+ *     dataStorage    uintptr          // pointer to constructed data storage
+ *     query          DataStorageQuery // query
+ * }
+ *
+ * @param res {
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
+ *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     serializedData uintptr // pointer to serialized data
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_query_v2(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
   using entrypoint::types::RangeQuerierWithArgumentsWrapperV2;
   using series_data::querier::Querier;
@@ -144,7 +225,21 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   }
 }
 
-extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
+/**
+ * @brief return instant series at given timestamp for label sets.
+ *
+ * @param args {
+ *        dataStorage uintptr      // pointer to constructed data storage
+ *        labelSetIDs []uint32     // series ids
+ *        timestamp   int64        // timestamp
+ *        samples     uintptr      // pointer to samples data
+ * }
+ * @param res {
+ *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
+ *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_instant_query(void* args, void* res) {
   using entrypoint::types::InstantQuerierWithArgumentsWrapperEntrypoint;
   using PromPP::Primitives::Timestamp;
   using series_data::InstantQuerier;
@@ -177,7 +272,14 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
   }
 }
 
-extern "C" void prompp_series_data_data_storage_query_final(void* args) {
+/**
+ * @brief finishes all Queriers after data load.
+ *
+ * @param args {
+ *        queriers []uintptr    // slice of pointers to Queriers
+ *        }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_query_final(void* args) {
   using entrypoint::types::QuerierVariantPtr;
 
   struct Arguments {
@@ -191,7 +293,18 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   }
 }
 
-extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res) {
+/**
+ * @brief Get the first sample timestamp per series
+ *
+ * @param args {
+ *        dataStorage uintptr  // pointer to constructed data storage
+ *        seriesIds   []uint32 // series ids
+ * }
+ * @param res {
+ *        timestamps []int64  // same length as seriesIds; filled from storage
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res) {
   using PromPP::Primitives::Timestamp;
   using series_data::Decoder;
 
@@ -214,7 +327,18 @@ extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* arg
                          [&storage](uint32_t series_id) { return Decoder::get_series_min_timestamp(storage, series_id); });
 }
 
-extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
+/**
+ * @brief Queries data storage and serializes result.
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     allocated_memory uint64 // serialized data
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -229,7 +353,14 @@ extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, voi
   out->allocated_memory = in->data_storage->allocated_memory();
 }
 
-extern "C" void prompp_series_data_data_storage_dtor(void* args) {
+/**
+ * @brief series data DataStorage destructor.
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_dtor(void* args) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -237,7 +368,23 @@ extern "C" void prompp_series_data_data_storage_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
+/**
+ * @brief Construct a new ChunkRecoder object for recode all non-empty chunks in dataStorage
+ *
+ * @param args {
+ *     lss uintptr            // pointer to constructed label sets
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
+ *     dataStorage   uintptr  // pointer to constructed data storage
+ *     time_interval struct { closed interval [min, max]
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
     entrypoint::types::LssVariantPtr lss;
     uint32_t ls_id_batch_size;
@@ -258,7 +405,21 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   };
 }
 
-extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
+/**
+ * @brief Construct a new ChunkRecoder object to recode all serialized chunks (new model)
+ *
+ * @param args {
+ *     serializedData *uintptr // pointer to serialized data
+ *     time_interval struct { // closed interval [min, max]
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
     entrypoint::types::SerializedDataPtr* serialized_data;
     PromPP::Primitives::TimeInterval time_interval;
@@ -276,7 +437,24 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
   };
 }
 
-extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res) {
+/**
+ * @brief Get chunk encoded in prometheus format
+ *
+ * @param args {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ * @param res {
+ *     interval struct {
+ *        min int64
+ *        max int64
+ *     }
+ *     series_id     uint32
+ *     samples_count uint8
+ *     has_more_data bool
+ *     data          []byte // SliceView to recoded chunk data
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res) {
   struct Arguments {
     ChunkRecoderVariantPtr chunk_recoder;
   };
@@ -300,7 +478,18 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
       *in->chunk_recoder);
 }
 
-extern "C" void prompp_series_data_chunk_recoder_next_batch(void* args, void* res) {
+/**
+ * @brief Advance ChunkRecoder::ls_id_iterator to next batch
+ *
+ * @param args {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ *
+ * @param res {
+ *     hasMoreData bool  // true if chunk recoder has more
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_chunk_recoder_next_batch(void* args, void* res) {
   struct Arguments {
     ChunkRecoderVariantPtr chunk_recoder;
   };
@@ -312,7 +501,14 @@ extern "C" void prompp_series_data_chunk_recoder_next_batch(void* args, void* re
   new (res) Result{.has_more_data = recoder.chunk_iterator().next_batch()};
 }
 
-extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
+/**
+ * @brief Destruct ChunkRecoder object
+ *
+ * @param args {
+ *     chunk_recoder  uintptr  // pointer to chunk recoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_chunk_recoder_dtor(void* args) {
   struct Arguments {
     ChunkRecoderVariantPtr chunk_recoder;
   };
@@ -330,7 +526,18 @@ struct Unloader {
 using UnloaderPtr = std::unique_ptr<Unloader>;
 static_assert(sizeof(UnloaderPtr) == sizeof(void*));
 
-extern "C" void prompp_series_data_data_storage_unloader_ctor(void* args, void* res) {
+/**
+ * @brief Construct unloader
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_unloader_ctor(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
@@ -342,7 +549,15 @@ extern "C" void prompp_series_data_data_storage_unloader_ctor(void* args, void* 
   new (res) Result{.unloader = std::make_unique<Unloader>(*static_cast<Arguments*>(args)->data_storage)};
 }
 
-extern "C" void prompp_series_data_data_storage_unloader_dtor(void* args) {
+/**
+ * @brief Destruct unloader
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_unloader_dtor(void* args) {
   struct Arguments {
     UnloaderPtr unloader;
   };
@@ -350,7 +565,18 @@ extern "C" void prompp_series_data_data_storage_unloader_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_series_data_data_storage_unloader_create_snapshot(void* args, void* res) {
+/**
+ * @brief Create data snapshot of unused series
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ * @param res {
+ *     unloadedData []byte // encoded unload data
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_unloader_create_snapshot(void* args, void* res) {
   struct Arguments {
     UnloaderPtr unloader;
   };
@@ -368,7 +594,15 @@ extern "C" void prompp_series_data_data_storage_unloader_create_snapshot(void* a
   out->snapshot.reset_to(unloader.snapshot);
 }
 
-extern "C" void prompp_series_data_data_storage_unloader_unload(void* args) {
+/**
+ * @brief Unload data from DataStorage
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_unloader_unload(void* args) {
   struct Arguments {
     UnloaderPtr unloader;
   };
@@ -379,7 +613,19 @@ extern "C" void prompp_series_data_data_storage_unloader_unload(void* args) {
   unloader.unload();
 }
 
-extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
+/**
+ * @brief Construct Loader to load previously unqueried series
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     labelSetIDs []uint32 // label sets from rejected query
+ * }
+ *
+ *  @param res {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
   using series_data::unloading::Loader;
 
   struct Arguments {
@@ -405,7 +651,20 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   }
 }
 
-extern "C" void prompp_series_data_data_storage_revertable_loader_ctor(void* args, void* res) {
+/**
+ * @brief Construct RevertableLoader to load previously unqueried series
+ *
+ * @param args {
+ *     lss uintptr            // pointer to constructed label sets
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
+ *     dataStorage   uintptr  // pointer to constructed data storage
+ * }
+ *
+ *  @param res {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_revertable_loader_ctor(void* args, void* res) {
   struct Arguments {
     entrypoint::types::LssVariantPtr lss;
     uint32_t ls_id_batch_size;
@@ -424,7 +683,16 @@ extern "C" void prompp_series_data_data_storage_revertable_loader_ctor(void* arg
   };
 }
 
-extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
+/**
+ * @brief Loads next previously unloaded snapshot of data
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ *     buffer []byte // SliceView to unloaded snapshot
+ *     is_final bool // flag if this buffer corresponds to the last snapshot
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_loader_load_next(void* args) {
   struct Arguments {
     LoaderVariantPtr loader;
     SliceView<const uint8_t> buffer;
@@ -446,7 +714,18 @@ extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
       *in->loader);
 }
 
-extern "C" void prompp_series_data_data_storage_revertable_loader_next_batch(void* args, void* res) {
+/**
+ * @brief Advance RevertableLoader::iterator to next batch
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ *
+ * @param res {
+ *     hasMoreData bool  // true if chunk recoder has more
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_revertable_loader_next_batch(void* args, void* res) {
   struct Arguments {
     LoaderVariantPtr loader;
   };
@@ -461,7 +740,14 @@ extern "C" void prompp_series_data_data_storage_revertable_loader_next_batch(voi
   new (res) Result{.has_more_data = loader.next_batch()};
 }
 
-extern "C" void prompp_series_data_data_storage_loader_dtor(void* args) {
+/**
+ * @brief Destroy Loader object
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_data_storage_loader_dtor(void* args) {
   struct Arguments {
     LoaderVariantPtr loader;
   };

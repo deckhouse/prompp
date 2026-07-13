@@ -1,5 +1,8 @@
 #pragma once
 
+// Dispatch a PromPP macro category to a function-like implementation.
+#define PROMPP(category, ...) PROMPP_DETAIL_##category(__VA_ARGS__)
+
 #define PROMPP_ATTRIBUTE_INLINE __attribute__((always_inline))
 #define PROMPP_ATTRIBUTE_NOINLINE __attribute__((noinline))
 

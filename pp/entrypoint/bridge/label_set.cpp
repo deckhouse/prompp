@@ -1,4 +1,5 @@
 #include "label_set.h"
+#include "annotations.h"
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/iterator.h"
@@ -12,7 +13,19 @@ using entrypoint::types::SnapshotLSSVariantPtr;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
 
-void prompp_label_set_length(void* args, void* res) {
+/**
+ * @brief get length label set by series id
+ *
+ * @param args {
+ *     lss    uintptr // pointer to constructed lss;
+ *     ls_id  uint32  // series id
+ * }
+ *
+ * @param res {
+ *     length int     // length of label set
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_length(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
@@ -26,7 +39,19 @@ void prompp_label_set_length(void* args, void* res) {
   std::visit([in, res](auto& lss) { new (res) Result{.length = lss[in->series_id].size()}; }, *in->lss);
 }
 
-extern "C" void prompp_label_set_serialize_from_snapshot(void* args, void* res) {
+/**
+ * @brief get label set by series id
+ *
+ * @param args {
+ *     snapshot  uintptr                      // pointer to constructed snapshot;
+ *     ls_id     uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_set []struct{key, value String}  // label sets
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_serialize_from_snapshot(void* args, void* res) {
   using PromPP::Primitives::Go::Label;
   using PromPP::Primitives::Go::String;
 
@@ -52,7 +77,19 @@ extern "C" void prompp_label_set_serialize_from_snapshot(void* args, void* res) 
       *in->snapshot);
 }
 
-extern "C" void prompp_label_set_serialize_from_snapshot_length(void* args, void* res) {
+/**
+ * @brief get serialized label set buffer length by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     length     uint32                       // serialized buffer length
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_serialize_from_snapshot_length(void* args, void* res) {
   using BareBones::Encoding::VarInt;
 
   struct Arguments {
@@ -78,7 +115,17 @@ extern "C" void prompp_label_set_serialize_from_snapshot_length(void* args, void
       *in->snapshot);
 }
 
-extern "C" void prompp_label_set_serialize_from_snapshot_to_buffer(void* args) {
+/**
+ * @brief serialize label set into buffer by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     buffer     [] byte                      // allocated buffer
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_serialize_from_snapshot_to_buffer(void* args) {
   using BareBones::Encoding::VarInt;
 
   struct Arguments {
@@ -105,7 +152,14 @@ extern "C" void prompp_label_set_serialize_from_snapshot_to_buffer(void* args) {
       *in->snapshot);
 }
 
-extern "C" void prompp_label_set_free(void* args) {
+/**
+ * @brief free label set returned by prompp_label_set_serialize_from_snapshot
+ *
+ * @param args {
+ *     label_set []struct{key, value String} // label set
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_free(void* args) {
   using PromPP::Primitives::Go::Label;
   using PromPP::Primitives::Go::Slice;
 
@@ -196,7 +250,19 @@ struct LabelNameLess {
   PROMPP_ALWAYS_INLINE bool operator()(const PromPP::Primitives::Go::String& a, const PromPP::Primitives::Go::String& b) const noexcept { return a < b; }
 };
 
-extern "C" void prompp_label_set_bytes_size(void* args, void* res) {
+/**
+ * @brief get size in bytes needed for Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     size uint32
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_bytes_size(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
@@ -217,7 +283,19 @@ extern "C" void prompp_label_set_bytes_size(void* args, void* res) {
       *in->lss);
 }
 
-extern "C" void prompp_label_set_bytes(void* args, void* res) {
+/**
+ * @brief implementation of Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_bytes(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
@@ -238,7 +316,20 @@ extern "C" void prompp_label_set_bytes(void* args, void* res) {
       *in->lss);
 }
 
-extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
+/**
+ * @brief implementation of BytesWithLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_bytes_with_labels(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
@@ -260,7 +351,20 @@ extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
       *in->lss);
 }
 
-extern "C" void prompp_label_set_bytes_without_labels(void* args, void* res) {
+/**
+ * @brief implementation of BytesWithoutLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_bytes_without_labels(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;

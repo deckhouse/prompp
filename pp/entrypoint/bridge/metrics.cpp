@@ -1,4 +1,5 @@
 #include "metrics.h"
+#include "annotations.h"
 
 #include "metrics/jemalloc_metrics.h"
 #include "metrics/storage.h"
@@ -9,7 +10,10 @@ using PromPP::Primitives::Go::Label;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::Go::String;
 
-extern "C" void prompp_metrics_register() {
+/**
+ * @brief Register cpp metrics
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_metrics_register() {
   [[maybe_unused]] static auto _ = [] {
 #if JEMALLOC_AVAILABLE
     metrics::CreateMetricsPage<metrics::JemallocMetrics>();
@@ -18,13 +22,31 @@ extern "C" void prompp_metrics_register() {
   }();
 }
 
-extern "C" void prompp_metrics_iterator_ctor(void* args) {
+/**
+ * @brief Initialize metrics iterator
+ *
+ * @param args *MetricIterator
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_metrics_iterator_ctor(void* args) {
+  using Arguments = metrics::Storage::Iterator;
+
   metrics::storage.remove_unused_pages();
 
-  std::construct_at(static_cast<metrics::Storage::Iterator*>(args), metrics::storage.begin());
+  std::construct_at(static_cast<Arguments*>(args), metrics::storage.begin());
 }
 
-extern "C" void prompp_metrics_iterator_next(void* args, void* res) {
+/**
+ * @brief Serialize metric into protobuf and advance iterator to next metric
+ *
+ * @param args {
+ *   iterator *MetricIterator // Pointer to constructed iterator
+ * }
+ *
+ * @param res {
+ *   metric *cppbridge.CppMetric // Pointer to go metric
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_metrics_iterator_next(void* args, void* res) {
   struct Arguments {
     metrics::Storage::Iterator* iterator;
   };
@@ -54,7 +76,20 @@ struct MetricsPageForTest final : metrics::MetricsPage<MetricsPageForTest> {
   metrics::Gauge emplace_gauge;
 };
 
-extern "C" void prompp_metrics_page_for_test_ctor(void* args, void* res) {
+/**
+ * @brief Create metrics page for test
+ *
+ * @param args {
+ *   labels []cppbridge.Label  // metric page label set
+ *   counterName string        // label name for uint64 counter
+ *   counterValue uint64       // value for for uint64 counter
+ * }
+ *
+ * @param res {
+ *   page uintptr // Pointer to constructed page
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_metrics_page_for_test_ctor(void* args, void* res) {
   struct Arguments {
     SliceView<Label> labels;
     String counter_name;
@@ -71,7 +106,14 @@ extern "C" void prompp_metrics_page_for_test_ctor(void* args, void* res) {
   };
 }
 
-extern "C" void prompp_metrics_page_for_test_detach(void* args) {
+/**
+ * @brief Detach metrics page from storage
+ *
+ * @param args {
+ *   page uintptr // Pointer to constructed page
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_metrics_page_for_test_detach(void* args) {
   struct Arguments {
     MetricsPageForTest* page;
   };
