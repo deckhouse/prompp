@@ -29,6 +29,11 @@ std::filesystem::path testdata_path(std::string_view name) {
     return apparent_repo_path;
   }
 
+  const std::filesystem::path main_repo_path = std::filesystem::path(test_srcdir) / "_main" / kRunfilesTestDataDir / name;
+  if (std::filesystem::exists(main_repo_path)) {
+    return main_repo_path;
+  }
+
   const std::filesystem::path canonical_repo_path = std::filesystem::path(test_srcdir) / "_main" / "external" / kRunfilesRepo / kRunfilesTestDataDir / name;
   if (std::filesystem::exists(canonical_repo_path)) {
     return canonical_repo_path;

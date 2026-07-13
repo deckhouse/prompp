@@ -209,10 +209,6 @@ class FunctionExtractor {
 
   void append_alias_layout(CursorView alias_cursor, facts::LayoutKind kind, std::pmr::vector<facts::LayoutDecl>& layouts) {
     std::pmr::vector<facts::FieldDecl> fields = extract_fields_from_alias(alias_cursor);
-    if (fields.empty()) {
-      return;
-    }
-
     layouts.push_back(facts::LayoutDecl{
         .kind = kind,
         .fields = session_.facts().add_fields(fields),
