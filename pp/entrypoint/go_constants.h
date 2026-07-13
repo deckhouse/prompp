@@ -7,7 +7,7 @@
 
 #define Sizeof_SerializedDataIterator 152
 
-#define Sizeof_MetricsIterator 24
+#define Sizeof_MetricsIterator 32
 
 #define Sizeof_SegmentSamplesStorage 80
 #define Sizeof_RemoteWriteMessageEncoder 32

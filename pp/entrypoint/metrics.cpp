@@ -19,9 +19,13 @@ extern "C" void prompp_metrics_register() {
 }
 
 extern "C" void prompp_metrics_iterator_ctor(void* args) {
-  metrics::storage.remove_unused_pages();
-
   std::construct_at(static_cast<metrics::Storage::Iterator*>(args), metrics::storage.begin());
+}
+
+// Reclaims pages detached before this scrape. Called after the iteration completes (not in the ctor) so that begin() never
+// frees an address that could be reused and re-observed within the same scrape snapshot.
+extern "C" void prompp_metrics_remove_unused_pages(void* args) {
+  metrics::storage.remove_unused_pages(static_cast<metrics::Storage::Iterator*>(args)->generation());
 }
 
 extern "C" void prompp_metrics_iterator_next(void* args, void* res) {
@@ -76,5 +80,5 @@ extern "C" void prompp_metrics_page_for_test_detach(void* args) {
     MetricsPageForTest* page;
   };
 
-  static_cast<Arguments*>(args)->page->detach();
+  static_cast<Arguments*>(args)->page->detach(metrics::storage.current_generation());
 }

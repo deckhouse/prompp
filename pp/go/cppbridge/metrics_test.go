@@ -24,8 +24,8 @@ func TestCppMetricsSuite(t *testing.T) {
 // per-test metric pages and are filtered out of the suite's view of CppMetrics.
 const jemallocMetricDescPrefix = `Desc{fqName: "prompp_common_jemalloc_`
 
-func (s *CppMetricsSuite) getMetrics() []*CppMetricCopy {
-	metrics := []*CppMetricCopy(nil)
+func (s *CppMetricsSuite) getMetrics() []CppMetricCopy {
+	metrics := []CppMetricCopy(nil)
 	for metric := range CppMetrics {
 		if strings.HasPrefix(metric.meta.desc.String(), jemallocMetricDescPrefix) {
 			continue
@@ -122,7 +122,7 @@ func (s *CppMetricsSuite) TestCopyOutlivesFreedPage() {
 	metrics := s.getMetrics()
 	s.Require().Len(metrics, 2)
 
-	// Act: detach the page and trigger the next iterator ctor, which runs remove_unused_pages() -> delete page.
+	// Act: detach the page and run the next scrape, which reclaims it via remove_unused_pages() -> delete page.
 	prometheusMetricsPageForTestDetach(page)
 	s.getMetrics()
 
@@ -191,7 +191,7 @@ func BenchmarkCppMetrics(b *testing.B) {
 		}
 
 		var consumed int
-		consume := func(*CppMetricCopy) bool { consumed++; return true }
+		consume := func(CppMetricCopy) bool { consumed++; return true }
 
 		b.Run(fmt.Sprintf("warm/pages=%d", pageCount), func(b *testing.B) {
 			CppMetrics(consume) // warm the meta cache

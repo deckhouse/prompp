@@ -297,8 +297,9 @@ TEST(DataStorageMetricsLifetimeTest, AddressLabelOwnedByPageSurvivesStorageDestr
   // Assert: the page still owns a valid "address" string (no dangling view / use-after-free).
   EXPECT_EQ(expected, read_address_label(*page));
 
-  // Cleanup: reclaim the detached page.
-  metrics::storage.remove_unused_pages();
+  // Cleanup: reclaim the detached page. The page was detached at the current generation, so a strictly newer generation makes
+  // it eligible for deletion.
+  metrics::storage.remove_unused_pages(metrics::storage.current_generation() + 1);
 }
 
 }  // namespace

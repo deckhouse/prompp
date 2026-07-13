@@ -3747,6 +3747,18 @@ func prometheusMetricsIteratorCtor() CppMetricsIterator {
 	return iterator
 }
 
+func prometheusMetricsRemoveUnusedPages(iterator *CppMetricsIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_metrics_remove_unused_pages,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+	// This is the last use of the iterator: after the uintptr conversion above the compiler would treat its backing storage
+	// as dead, so a GC (e.g. the one testGC forces) could poison/reclaim it while C is still reading the embedded generation.
+	// KeepAlive extends its lifetime past the C read.
+	runtime.KeepAlive(iterator)
+}
+
 func prometheusMetricsIteratorNext(iterator *CppMetricsIterator) *CppMetric {
 	args := struct {
 		iterator uintptr

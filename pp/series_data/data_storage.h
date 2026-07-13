@@ -433,7 +433,7 @@ struct DataStorage {
 
   template <BareBones::ReallocatorInterface Reallocator>
   PROMPP_ALWAYS_INLINE void destructor_impl() noexcept {
-    metrics->detach();
+    metrics->detach(metrics::storage.current_generation());
 
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
       Reallocator::release_arena(arena_index);

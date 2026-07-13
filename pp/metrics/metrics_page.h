@@ -64,7 +64,15 @@ class MetricsPageControlBlock {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t page_object_size() const noexcept { return page_object_size_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t metric_offset() const noexcept { return metric_offset_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unused() const noexcept { return ref_count_ == 0; }
-  PROMPP_ALWAYS_INLINE void detach() noexcept { ref_count_ = 0; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t detach_generation() const noexcept { return detach_generation_; }
+
+  // Detach records the storage generation at the moment the owning DataStorage is destroyed. remove_unused_pages() defers the
+  // physical deletion until a strictly newer generation, so a page detached during a scrape stays alive (its address is not
+  // reused) until the next scrape, which no longer observes it — keeping pointer-based scrape caches free of ABA aliasing.
+  PROMPP_ALWAYS_INLINE void detach(uint32_t generation) noexcept {
+    detach_generation_ = generation;
+    ref_count_ = 0;
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
@@ -72,6 +80,7 @@ class MetricsPageControlBlock {
  private:
   MetricsPageControlBlock* next_metrics_page_{};
   uint32_t ref_count_{1};
+  uint32_t detach_generation_{};
   const uint32_t page_object_size_;
   const uint32_t metric_offset_{sizeof(MetricsPageControlBlock)};
 };

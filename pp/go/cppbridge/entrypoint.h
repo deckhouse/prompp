@@ -42,7 +42,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 
 #define Sizeof_SerializedDataIterator 152
 
-#define Sizeof_MetricsIterator 24
+#define Sizeof_MetricsIterator 32
 
 #define Sizeof_SegmentSamplesStorage 80
 #define Sizeof_RemoteWriteMessageEncoder 32
@@ -548,6 +548,13 @@ void prompp_metrics_register();
  * @param args *MetricIterator
  */
 void prompp_metrics_iterator_ctor(void* args);
+
+/**
+ * @brief Reclaim pages detached before this scrape. Must be called after the iteration finishes.
+ *
+ * @param args *MetricIterator
+ */
+void prompp_metrics_remove_unused_pages(void* args);
 
 /**
  * @brief Serialize metric into protobuf and advance iterator to next metric

@@ -64,15 +64,18 @@ class MetricsPageList {
     } while (!next_metrics_page_.compare_exchange_weak(current_next_page, page));
   }
 
-  void remove_unused_pages() {
+  // Deletes unused pages that were detached in a generation strictly older than the given (scrape iterator) generation. A page
+  // detached during the current generation is kept alive for one more scrape, so its address cannot be reused before the next
+  // scrape stops observing it — this is what makes descriptor-pointer scrape caches safe from ABA aliasing.
+  void remove_unused_pages(uint32_t generation) {
     MetricsPageControlBlock* page = next_metrics_page_;
     if (page == nullptr) [[unlikely]] {
       return;
     }
 
-    remove_unused_pages(page, page->next_metrics_page());
+    remove_unused_pages(page, page->next_metrics_page(), generation);
 
-    if (page->is_unused()) {
+    if (is_deletable(page, generation)) {
       // If page is first page in list then we delete it. Otherwise, we will delete it at another remove_unused_pages call
       if (next_metrics_page_.compare_exchange_weak(page, page->next_metrics_page())) [[likely]] {
         delete page;
@@ -86,11 +89,17 @@ class MetricsPageList {
  private:
   std::atomic<MetricsPageControlBlock*> next_metrics_page_{};
 
-  static void remove_unused_pages(MetricsPageControlBlock* prev_page, MetricsPageControlBlock* page) {
+  // A page can be physically deleted only when it is unused and was detached in a generation strictly older than the current
+  // one. Unsigned wraparound of the generation counter is handled by comparing the difference as a signed value.
+  static PROMPP_ALWAYS_INLINE bool is_deletable(const MetricsPageControlBlock* page, uint32_t generation) noexcept {
+    return page->is_unused() && static_cast<int32_t>(page->detach_generation() - generation) < 0;
+  }
+
+  static void remove_unused_pages(MetricsPageControlBlock* prev_page, MetricsPageControlBlock* page, uint32_t generation) {
     while (page != nullptr) [[likely]] {
       const auto next_page = page->next_metrics_page();
 
-      if (page->is_unused()) {
+      if (is_deletable(page, generation)) {
         prev_page->set_next_metrics_page(next_page);
         delete page;
       } else {

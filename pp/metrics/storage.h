@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "metrics_page_list.h"
 
 namespace metrics {
@@ -16,7 +18,10 @@ class Storage {
     using pointer = value_type;
     using reference = value_type;
 
-    explicit Iterator(const MetricsPageList& storage) : page_iterator_(storage.begin()), metric_iterator_(*page_iterator_) {}
+    explicit Iterator(const MetricsPageList& storage, uint32_t generation)
+        : page_iterator_(storage.begin()), metric_iterator_(*page_iterator_), generation_(generation) {}
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t generation() const noexcept { return generation_; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return metric_iterator_.operator*(); }
     [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator->() const noexcept { return metric_iterator_.operator->(); }
@@ -40,15 +45,21 @@ class Storage {
    private:
     MetricsPageList::Iterator page_iterator_;
     MetricsPageControlBlock::Iterator metric_iterator_;
+    uint32_t generation_;
   };
 
   PROMPP_ALWAYS_INLINE void add(MetricsPageControlBlock* page) { page_list_.add(page); }
-  PROMPP_ALWAYS_INLINE void remove_unused_pages() { page_list_.remove_unused_pages(); }
+  PROMPP_ALWAYS_INLINE void remove_unused_pages(uint32_t generation) { page_list_.remove_unused_pages(generation); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(page_list_); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t current_generation() const noexcept { return generation_.load(std::memory_order_relaxed); }
+
+  // begin() opens a new scrape: it bumps the storage generation and stamps the iterator with it. Detached pages recorded in
+  // earlier generations become eligible for deletion via remove_unused_pages(iterator.generation()) after the scrape.
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() noexcept { return Iterator(page_list_, generation_.fetch_add(1, std::memory_order_relaxed) + 1); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
 
  private:
+  std::atomic<uint32_t> generation_{0};
   MetricsPageList page_list_;
 };
 

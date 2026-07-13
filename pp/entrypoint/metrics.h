@@ -15,6 +15,13 @@ void prompp_metrics_register();
 void prompp_metrics_iterator_ctor(void* args);
 
 /**
+ * @brief Reclaim pages detached before this scrape. Must be called after the iteration finishes.
+ *
+ * @param args *MetricIterator
+ */
+void prompp_metrics_remove_unused_pages(void* args);
+
+/**
  * @brief Serialize metric into protobuf and advance iterator to next metric
  *
  * @param args {

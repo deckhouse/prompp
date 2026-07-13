@@ -62,9 +62,9 @@ TEST_F(MetricsPageListFixture, TestIteratorWithUsedPages) {
 TEST_F(MetricsPageListFixture, TestIteratorWithUnusedPages) {
   // Arrange
   const MetricsPagesVector metrics_pages{new Metrics(), new Metrics(), new Metrics(), new Metrics()};
-  metrics_pages[0]->detach();
-  metrics_pages[1]->detach();
-  metrics_pages[3]->detach();
+  metrics_pages[0]->detach(0);
+  metrics_pages[1]->detach(0);
+  metrics_pages[3]->detach(0);
 
   add_metrics_pages(metrics_pages);
 
@@ -117,7 +117,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveInEmptyList) {
   // Arrange
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
 }
@@ -130,7 +130,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveWithoutUnusedPages) {
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -143,12 +143,12 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetricsPageInOneP
   // Arrange
   const auto metric = new Metrics();
   metrics_page_list_.add(metric);
-  metric->detach();
+  metric->detach(0);
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -158,12 +158,12 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetricsPageInOneP
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveAllMetricsPages) {
   // Arrange
   auto metrics_pages = fill_4_metric_pages();
-  std::ranges::for_each(metrics_pages, [&](auto metric) { metric->detach(); });
+  std::ranges::for_each(metrics_pages, [&](auto metric) { metric->detach(0); });
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -173,13 +173,13 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveAllMetricsPages) {
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetric) {
   // Arrange
   auto metrics_pages = fill_4_metric_pages();
-  metrics_pages[0]->detach();
+  metrics_pages[0]->detach(0);
   metrics_pages.erase(metrics_pages.begin());
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -191,13 +191,13 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetric) {
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveSecondMetric) {
   // Arrange
   auto metrics_pages = fill_4_metric_pages();
-  metrics_pages[1]->detach();
+  metrics_pages[1]->detach(0);
   metrics_pages.erase(metrics_pages.begin() + 1);
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -209,13 +209,13 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveSecondMetric) {
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveThirdMetric) {
   // Arrange
   auto metrics_pages = fill_4_metric_pages();
-  metrics_pages[2]->detach();
+  metrics_pages[2]->detach(0);
   metrics_pages.erase(metrics_pages.begin() + 2);
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -227,14 +227,14 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveThirdMetric) {
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveSecondAndThirdMetric) {
   // Arrange
   auto metrics_pages = fill_4_metric_pages();
-  metrics_pages[1]->detach();
-  metrics_pages[2]->detach();
+  metrics_pages[1]->detach(0);
+  metrics_pages[2]->detach(0);
   metrics_pages.erase(metrics_pages.begin() + 1, metrics_pages.begin() + 3);
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.remove_unused_pages();
+  metrics_page_list_.remove_unused_pages(1);
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
