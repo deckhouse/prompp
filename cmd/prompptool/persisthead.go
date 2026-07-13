@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/google/uuid"
+	"github.com/grafana/regexp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 
@@ -129,6 +129,7 @@ func (cmd *cmdPersistHead) Do(
 	bw := block.NewWriter[*shard.Shard](
 		outputDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		time.Duration(cmd.blockDuration),
 		registerer,
 	)
