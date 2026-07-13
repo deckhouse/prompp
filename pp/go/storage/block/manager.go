@@ -99,6 +99,13 @@ func NewManager(
 	}
 	m.metrics = newMetrics(m, r)
 
+	// Best-effort cleanup of leftover tmp block dirs (e.g. *.tmp-for-creation) that
+	// may remain after a crash during compaction or persist. Unlike tsdb.DB.Open, the
+	// block Manager never loads these dirs, so without this they would leak on disk.
+	if err := tsdb.RemoveBestEffortTmpDirs(logger, dir); err != nil {
+		level.Warn(logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", dir, "err", err)
+	}
+
 	if err := m.reloadBlocks(); err != nil {
 		return nil, fmt.Errorf("initial reload blocks: %w", err)
 	}
