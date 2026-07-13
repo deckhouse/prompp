@@ -9,6 +9,16 @@
 #include "wal/decoder.h"
 #include "wal/output_decoder.h"
 
+namespace {
+
+using entrypoint::types::LssVariantPtr;
+using OutputDecoder = PromPP::WAL::OutputDecoder<entrypoint::types::EncodingBimap>;
+using OutputDecoderPtr = std::unique_ptr<OutputDecoder>;
+
+static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
+
+}  // namespace
+
 /**
  * @brief Construct a new WAL Decoder
  *
@@ -301,13 +311,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_wal_decoder_restore_from_stre
 //
 // OutputDecoder
 //
-
-using entrypoint::types::LssVariantPtr;
-
-using OutputDecoder = PromPP::WAL::OutputDecoder<entrypoint::types::EncodingBimap>;
-using OutputDecoderPtr = std::unique_ptr<OutputDecoder>;
-
-static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
 
 /**
  * @brief Construct a segment samples storage list

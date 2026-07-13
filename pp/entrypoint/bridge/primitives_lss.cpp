@@ -13,6 +13,8 @@
 #include "series_index/querier/series_operations.h"
 #include "series_index/queryable_encoding_bimap.h"
 
+namespace {
+
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
 using GoSliceOfString = PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::String>;
 using GoSliceViewString = PromPP::Primitives::Go::SliceView<PromPP::Primitives::Go::String>;
@@ -22,6 +24,39 @@ using entrypoint::types::LssType;
 using entrypoint::types::LssVariantPtr;
 using entrypoint::types::QueryableEncodingBimap;
 using entrypoint::types::SnapshotLSSVariantPtr;
+
+struct FindOrEmplaceResult {
+  uint32_t ls_id;
+  bool lss_has_reallocations;
+};
+
+template <class Lss>
+PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    const entrypoint::types::ReallocationsDetector reallocation_detector(lss);
+    const auto ls_id = lss.find_or_emplace(label_set);
+    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
+  }
+}
+
+struct LssQueryResult {
+  PromPP::Primitives::Go::Slice<uint32_t> matches;
+  PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths;
+  uint32_t status;
+};
+
+using Querier = series_index::querier::Querier<PromPP::Primitives::Go::Slice>;
+using SelectorPtr = std::unique_ptr<Querier::Selector>;
+
+struct GroupSeriesByLabelNamesResult {
+  PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::Slice<uint32_t>> groups;
+};
+
+using BitsetPtr = std::unique_ptr<BareBones::Bitset>;
+
+}  // namespace
 
 /**
  * @brief Construct a new Primitives label sets.
@@ -80,22 +115,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_primitives_lss_allocated_memo
   };
 
   std::visit([res](const auto& lss) { new (res) Result{.allocated_memory = lss.allocated_memory()}; }, *static_cast<Arguments*>(args)->lss);
-}
-
-struct FindOrEmplaceResult {
-  uint32_t ls_id;
-  bool lss_has_reallocations;
-};
-
-template <class Lss>
-PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set) {
-  if constexpr (Lss::kIsReadOnly) {
-    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
-  } else {
-    const entrypoint::types::ReallocationsDetector reallocation_detector(lss);
-    const auto ls_id = lss.find_or_emplace(label_set);
-    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
-  }
 }
 
 /**
@@ -165,15 +184,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_primitives_lss_find_or_emplac
       },
       *in->lss));
 }
-
-struct LssQueryResult {
-  PromPP::Primitives::Go::Slice<uint32_t> matches;
-  PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths;
-  uint32_t status;
-};
-
-using Querier = series_index::querier::Querier<PromPP::Primitives::Go::Slice>;
-using SelectorPtr = std::unique_ptr<Querier::Selector>;
 
 /**
  * @brief query selector from lss for label matchers
@@ -255,10 +265,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_primitives_snapshot_query(voi
       },
       snapshot_variant);
 }
-
-struct GroupSeriesByLabelNamesResult {
-  PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::Slice<uint32_t>> groups;
-};
 
 /**
  * @brief group series by label name ids
@@ -516,8 +522,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_primitives_snapshot_dtor(void
 
   static_cast<Arguments*>(args)->~Arguments();
 }
-
-using BitsetPtr = std::unique_ptr<BareBones::Bitset>;
 
 /**
  * @brief returns a copy of the bitset of added series from the lss.

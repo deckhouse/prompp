@@ -12,12 +12,16 @@
 #include "wal/encoder.h"
 #include "wal/wal.h"
 
+namespace {
+
 using Encoder = PromPP::WAL::GenericEncoder<PromPP::WAL::BasicEncoder<entrypoint::types::QueryableEncodingBimap&>>;
 using EncoderPtr = std::unique_ptr<Encoder>;
 using Decoder = PromPP::WAL::GenericDecoder<entrypoint::types::QueryableEncodingBimap&>;
 using DecoderPtr = std::unique_ptr<Decoder>;
 static_assert(sizeof(EncoderPtr) == sizeof(void*));
 static_assert(sizeof(DecoderPtr) == sizeof(void*));
+
+}  // namespace
 
 /**
  * @brief Construct a new Head WAL encoder

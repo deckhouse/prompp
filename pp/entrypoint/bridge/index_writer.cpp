@@ -7,11 +7,11 @@
 #include "primitives/go_slice.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
 
+namespace {
+
 using PromPP::Primitives::Go::SliceView;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using IndexWriter = series_index::prometheus::tsdb::index::IndexWriter<entrypoint::types::QueryableEncodingBimap, PromPP::Primitives::Go::BytesStream>;
-
-namespace {
 
 // The writer keeps its output buffer instead of receiving one from Go. Every write_* method
 // resets the buffer and fills it, so nothing but the writer pointer crosses the cgo boundary.

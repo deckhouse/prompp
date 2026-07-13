@@ -6,9 +6,24 @@
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 
+namespace {
+
 using PromPP::Primitives::Go::Label;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::Go::String;
+
+struct MetricsPageForTest final : metrics::MetricsPage<MetricsPageForTest> {
+  using MetricsPage::MetricsPage;
+
+  MetricsPageForTest(const SliceView<Label>& labels, const String& counter_name, uint64_t counter_value)
+      : emplace_count(labels, static_cast<std::string_view>(counter_name), counter_value),
+        emplace_gauge(labels, static_cast<std::string_view>(counter_name), counter_value) {}
+
+  metrics::Counter emplace_count;
+  metrics::Gauge emplace_gauge;
+};
+
+}  // namespace
 
 /**
  * @brief Register cpp metrics
@@ -64,17 +79,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_metrics_iterator_next(void* a
     ++(*in->iterator);
   }
 }
-
-struct MetricsPageForTest final : metrics::MetricsPage<MetricsPageForTest> {
-  using MetricsPage::MetricsPage;
-
-  MetricsPageForTest(const SliceView<Label>& labels, const String& counter_name, uint64_t counter_value)
-      : emplace_count(labels, static_cast<std::string_view>(counter_name), counter_value),
-        emplace_gauge(labels, static_cast<std::string_view>(counter_name), counter_value) {}
-
-  metrics::Counter emplace_count;
-  metrics::Gauge emplace_gauge;
-};
 
 /**
  * @brief Create metrics page for test

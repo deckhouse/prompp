@@ -8,6 +8,8 @@
 #include "primitives/go_slice.h"
 #include "prometheus/relabeler.h"
 
+namespace {
+
 using entrypoint::types::LssVariantPtr;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Prometheus::Relabel::InnerSeries;
@@ -23,6 +25,17 @@ using CachePtr = std::unique_ptr<Cache>;
 
 using StatelessRelabeler = PromPP::Prometheus::Relabel::StatelessRelabeler;
 using StatelessRelabelerPtr = std::unique_ptr<StatelessRelabeler>;
+
+using PerShardRelabeler = PromPP::Prometheus::Relabel::PerShardRelabeler;
+using PerShardRelabelerPtr = std::unique_ptr<PerShardRelabeler>;
+
+using StaleNaNsState = PromPP::Prometheus::Relabel::StaleNaNsState;
+using StaleNaNsStatePtr = std::unique_ptr<StaleNaNsState>;
+
+using PerGoroutineRelabeler = PromPP::Prometheus::Relabel::PerGoroutineRelabeler<SliceView>;
+using PerGoroutineRelabelerPtr = std::unique_ptr<PerGoroutineRelabeler>;
+
+}  // namespace
 
 /**
  * @brief Construct a new StatelessRelabeler.
@@ -269,9 +282,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeler_state_up
 // PerShardRelabeler
 //
 
-using PerShardRelabeler = PromPP::Prometheus::Relabel::PerShardRelabeler;
-using PerShardRelabelerPtr = std::unique_ptr<PerShardRelabeler>;
-
 /**
  * @brief Construct a new PerShardRelabeler.
  *
@@ -324,9 +334,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_shard_relabele
 
   static_cast<Arguments*>(args)->~Arguments();
 }
-
-using StaleNaNsState = PromPP::Prometheus::Relabel::StaleNaNsState;
-using StaleNaNsStatePtr = std::unique_ptr<StaleNaNsState>;
 
 /**
  * @brief Create StaleNaNsState.
@@ -556,9 +563,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_cache_update(void*
 //
 // PerGoroutineRelabeler
 //
-
-using PerGoroutineRelabeler = PromPP::Prometheus::Relabel::PerGoroutineRelabeler<SliceView>;
-using PerGoroutineRelabelerPtr = std::unique_ptr<PerGoroutineRelabeler>;
 
 /**
  * @brief Construct a new PerGoroutineRelabeler.

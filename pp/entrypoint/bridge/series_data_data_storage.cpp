@@ -18,6 +18,8 @@
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
 
+namespace {
+
 using entrypoint::types::DataStoragePtr;
 using entrypoint::types::QueryableEncodingBimap;
 using entrypoint::types::QueryStatus;
@@ -43,6 +45,18 @@ static_assert(sizeof(LoaderVariantPtr) == sizeof(void*));
 using entrypoint::types::QuerierType;
 using entrypoint::types::QuerierVariant;
 using entrypoint::types::QuerierVariantPtr;
+
+struct Unloader {
+  explicit Unloader(DataStorage& storage) : unloader(storage) {}
+
+  series_data::unloading::Unloader unloader;
+  Slice<char> snapshot;
+};
+
+using UnloaderPtr = std::unique_ptr<Unloader>;
+static_assert(sizeof(UnloaderPtr) == sizeof(void*));
+
+}  // namespace
 
 /**
  * @brief Construct a new series data DataStorage
@@ -515,16 +529,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_chunk_recoder_dto
 
   static_cast<Arguments*>(args)->~Arguments();
 }
-
-struct Unloader {
-  explicit Unloader(DataStorage& storage) : unloader(storage) {}
-
-  series_data::unloading::Unloader unloader;
-  Slice<char> snapshot;
-};
-
-using UnloaderPtr = std::unique_ptr<Unloader>;
-static_assert(sizeof(UnloaderPtr) == sizeof(void*));
 
 /**
  * @brief Construct unloader

@@ -2,6 +2,12 @@
 #include "annotations.h"
 #include "wal/output_decoder.h"
 
+namespace {
+
+using MessageEncoder = PromPP::WAL::ProtobufEncoder;
+
+}  // namespace
+
 /**
  * @brief destroy message list
  *
@@ -16,8 +22,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_remote_write_message_list_dto
 
   static_cast<Arguments*>(args)->~Arguments();
 }
-
-using MessageEncoder = PromPP::WAL::ProtobufEncoder;
 
 /**
  * @brief create message encoders list

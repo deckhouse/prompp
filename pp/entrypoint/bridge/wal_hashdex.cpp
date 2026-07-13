@@ -7,6 +7,8 @@
 #include "primitives/go_slice.h"
 #include "wal/decoder.h"
 
+namespace {
+
 using PromPP::WAL::hashdex::scraper::OpenMetricsScraper;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;
 using ScraperError = PromPP::WAL::hashdex::scraper::Error;
@@ -41,6 +43,39 @@ void get_metadata(void* args, void* res) {
     out->metadata.emplace_back(m);
   }
 }
+
+template <size_t hashdex_type>
+PROMPP_ALWAYS_INLINE void scraper_hashdex_ctor(void* res) {
+  struct Result {
+    HashdexVariant* hashdex;
+  };
+
+  new (res) Result{.hashdex = new HashdexVariant{std::in_place_index<hashdex_type>}};
+}
+
+template <class Scraper>
+PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
+  struct Arguments {
+    HashdexVariant* hashdex;
+    PromPP::Primitives::Go::SliceView<char> buffer;
+    PromPP::Primitives::Timestamp default_timestamp;
+  };
+  struct Result {
+    ScraperError error{ScraperError::kNoError};
+    uint32_t scraped{};
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res) Result{.error = std::get<Scraper>(*in->hashdex).parse({const_cast<char*>(in->buffer.data()), in->buffer.size()}, in->default_timestamp),
+                   .scraped = static_cast<uint32_t>(std::get<Scraper>(*in->hashdex).size())};
+}
+
+template <class Scraper>
+PROMPP_ALWAYS_INLINE void scraper_hashdex_get_metadata(void* args, void* res) {
+  get_metadata<Scraper>(args, res);
+}
+
+}  // namespace
 
 //
 // ProtobufHashdex
@@ -230,37 +265,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_wal_go_model_hashdex_preshard
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::types::handle_current_exception(err_stream);
   }
-}
-
-template <size_t hashdex_type>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_ctor(void* res) {
-  struct Result {
-    HashdexVariant* hashdex;
-  };
-
-  new (res) Result{.hashdex = new HashdexVariant{std::in_place_index<hashdex_type>}};
-}
-
-template <class Scraper>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
-  struct Arguments {
-    HashdexVariant* hashdex;
-    PromPP::Primitives::Go::SliceView<char> buffer;
-    PromPP::Primitives::Timestamp default_timestamp;
-  };
-  struct Result {
-    ScraperError error{ScraperError::kNoError};
-    uint32_t scraped{};
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  new (res) Result{.error = std::get<Scraper>(*in->hashdex).parse({const_cast<char*>(in->buffer.data()), in->buffer.size()}, in->default_timestamp),
-                   .scraped = static_cast<uint32_t>(std::get<Scraper>(*in->hashdex).size())};
-}
-
-template <class Scraper>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_get_metadata(void* args, void* res) {
-  get_metadata<Scraper>(args, res);
 }
 
 /**

@@ -8,10 +8,94 @@
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 
+namespace {
+
 using entrypoint::types::LssVariantPtr;
 using entrypoint::types::SnapshotLSSVariantPtr;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
+
+namespace Bytes {
+
+static constexpr uint8_t kLabelSeparator = '\xFE';
+static constexpr uint8_t kNameValueSeparator = '\xFF';
+
+class SizeCalculator {
+ public:
+  template <class Label>
+  PROMPP_ALWAYS_INLINE SizeCalculator& operator=(const Label& label) noexcept {
+    operator()(label);
+    return *this;
+  }
+
+  template <class Label>
+  PROMPP_ALWAYS_INLINE void operator()(const Label& label) noexcept {
+    label_size_ += label.first.size() + label.second.size();
+    ++label_count_;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept {
+    uint32_t size = sizeof(kLabelSeparator);
+    if (label_count_ > 0) {
+      size += label_size_ + sizeof(kNameValueSeparator) * label_count_ * 2 - 1;
+    }
+
+    return size;
+  }
+
+ private:
+  uint32_t label_size_{};
+  uint32_t label_count_{};
+};
+
+class Writer {
+ public:
+  explicit Writer(uint8_t* bytes) : bytes_(bytes) { *bytes_++ = kLabelSeparator; }
+
+  template <class Label>
+  PROMPP_ALWAYS_INLINE Writer& operator=(const Label& label) noexcept {
+    operator()(label);
+    return *this;
+  }
+
+  template <class Label>
+  PROMPP_ALWAYS_INLINE void operator()(const Label& label) noexcept {
+    if (++label_count_ > 1) [[likely]] {
+      *bytes_++ = kNameValueSeparator;
+    }
+
+    std::memcpy(bytes_, label.first.data(), label.first.size());
+    bytes_ += label.first.size();
+
+    *bytes_++ = kNameValueSeparator;
+
+    std::memcpy(bytes_, label.second.data(), label.second.size());
+    bytes_ += label.second.size();
+  }
+
+  PROMPP_ALWAYS_INLINE uint32_t written_bytes(const uint8_t* start_bytes) const noexcept { return static_cast<uint32_t>(bytes_ - start_bytes); }
+
+ private:
+  uint8_t* bytes_;
+  uint32_t label_count_{};
+};
+
+}  // namespace Bytes
+
+struct LabelNameLess {
+  using Label = const std::pair<std::string_view, std::string_view>;
+
+  PROMPP_ALWAYS_INLINE bool operator()(const Label& label, const PromPP::Primitives::Go::String& name) const noexcept {
+    return label.first < static_cast<std::string_view>(name);
+  }
+  PROMPP_ALWAYS_INLINE bool operator()(const Label& a, const Label& b) const noexcept { return a.first < b.first; }
+  PROMPP_ALWAYS_INLINE bool operator()(const PromPP::Primitives::Go::String& name, const Label& label) const noexcept {
+    return static_cast<std::string_view>(name) < label.first;
+  }
+  PROMPP_ALWAYS_INLINE bool operator()(const PromPP::Primitives::Go::String& a, const PromPP::Primitives::Go::String& b) const noexcept { return a < b; }
+};
+
+}  // namespace
 
 /**
  * @brief get length label set by series id
@@ -169,86 +253,6 @@ extern "C" PROMPP(entrypoint, fastcgo) void prompp_label_set_free(void* args) {
 
   static_cast<Arguments*>(args)->~Arguments();
 }
-
-namespace Bytes {
-
-static constexpr uint8_t kLabelSeparator = '\xFE';
-static constexpr uint8_t kNameValueSeparator = '\xFF';
-
-class SizeCalculator {
- public:
-  template <class Label>
-  PROMPP_ALWAYS_INLINE SizeCalculator& operator=(const Label& label) noexcept {
-    operator()(label);
-    return *this;
-  }
-
-  template <class Label>
-  PROMPP_ALWAYS_INLINE void operator()(const Label& label) noexcept {
-    label_size_ += label.first.size() + label.second.size();
-    ++label_count_;
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept {
-    uint32_t size = sizeof(kLabelSeparator);
-    if (label_count_ > 0) {
-      size += label_size_ + sizeof(kNameValueSeparator) * label_count_ * 2 - 1;
-    }
-
-    return size;
-  }
-
- private:
-  uint32_t label_size_{};
-  uint32_t label_count_{};
-};
-
-class Writer {
- public:
-  explicit Writer(uint8_t* bytes) : bytes_(bytes) { *bytes_++ = kLabelSeparator; }
-
-  template <class Label>
-  PROMPP_ALWAYS_INLINE Writer& operator=(const Label& label) noexcept {
-    operator()(label);
-    return *this;
-  }
-
-  template <class Label>
-  PROMPP_ALWAYS_INLINE void operator()(const Label& label) noexcept {
-    if (++label_count_ > 1) [[likely]] {
-      *bytes_++ = kNameValueSeparator;
-    }
-
-    std::memcpy(bytes_, label.first.data(), label.first.size());
-    bytes_ += label.first.size();
-
-    *bytes_++ = kNameValueSeparator;
-
-    std::memcpy(bytes_, label.second.data(), label.second.size());
-    bytes_ += label.second.size();
-  }
-
-  PROMPP_ALWAYS_INLINE uint32_t written_bytes(const uint8_t* start_bytes) const noexcept { return static_cast<uint32_t>(bytes_ - start_bytes); }
-
- private:
-  uint8_t* bytes_;
-  uint32_t label_count_{};
-};
-
-};  // namespace Bytes
-
-struct LabelNameLess {
-  using Label = const std::pair<std::string_view, std::string_view>;
-
-  PROMPP_ALWAYS_INLINE bool operator()(const Label& label, const PromPP::Primitives::Go::String& name) const noexcept {
-    return label.first < static_cast<std::string_view>(name);
-  }
-  PROMPP_ALWAYS_INLINE bool operator()(const Label& a, const Label& b) const noexcept { return a.first < b.first; }
-  PROMPP_ALWAYS_INLINE bool operator()(const PromPP::Primitives::Go::String& name, const Label& label) const noexcept {
-    return static_cast<std::string_view>(name) < label.first;
-  }
-  PROMPP_ALWAYS_INLINE bool operator()(const PromPP::Primitives::Go::String& a, const PromPP::Primitives::Go::String& b) const noexcept { return a < b; }
-};
 
 /**
  * @brief get size in bytes needed for Bytes method

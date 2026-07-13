@@ -6,10 +6,14 @@
 #include "head/status.h"
 #include "primitives/go_slice.h"
 
+namespace {
+
 using entrypoint::types::DataStoragePtr;
 using entrypoint::types::LssVariantPtr;
 
 using Status = head::Status<PromPP::Primitives::Go::String, PromPP::Primitives::Go::Slice>;
+
+}  // namespace
 
 /**
  * @brief Return head status from lss.
