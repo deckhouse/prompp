@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/suite"
 )
@@ -30,7 +31,7 @@ func (s *CppMetricsSuite) getMetrics() []CppMetricCopy {
 		if strings.HasPrefix(metric.meta.desc.String(), jemallocMetricDescPrefix) {
 			continue
 		}
-		metrics = append(metrics, metric)
+		metrics = append(metrics, *metric)
 	}
 
 	return metrics
@@ -176,9 +177,12 @@ func (s *CppMetricsSuite) TestCacheEvictsDisappearedMetric() {
 }
 
 // BenchmarkCppMetrics measures reading all metrics from C++ into Go through CppMetrics for a varying number of metric
-// pages. Each page yields a counter and a gauge (2 metrics). The "warm" variant reflects the steady-state scrape path
-// where the per-descriptor meta is already cached and only numeric values are copied; the "cold" variant clears the
-// meta cache before every iteration to measure the full deep-copy (descriptor + labels) build cost.
+// pages. Each page yields a counter and a gauge (2 metrics). Variants:
+//   - "warm"    — steady-state scrape: meta is cached, only the numeric values are copied (build cost only);
+//   - "collect" — steady-state scrape plus the real CppMetricsCollector.Collect hand-off, where every metric is converted
+//     to the prometheus.Metric interface (exactly what `ch <- metric` does). This is the number that matters in
+//     production; with a *CppMetricCopy the interface conversion does not allocate, so it stays close to "warm";
+//   - "cold"    — meta cache cleared before every iteration: full deep-copy (descriptor + labels) build cost.
 func BenchmarkCppMetrics(b *testing.B) {
 	for _, pageCount := range []int{1, 10, 100, 1000} {
 		pages := make([]uintptr, 0, pageCount)
@@ -191,7 +195,12 @@ func BenchmarkCppMetrics(b *testing.B) {
 		}
 
 		var consumed int
-		consume := func(CppMetricCopy) bool { consumed++; return true }
+		consume := func(*CppMetricCopy) bool { consumed++; return true }
+
+		// sink mirrors CppMetricsCollector.Collect handing each metric to a chan<- prometheus.Metric: the *CppMetricCopy is
+		// converted to the prometheus.Metric interface here, exactly as `ch <- metric` would.
+		var sink []prometheus.Metric
+		collect := func(m *CppMetricCopy) bool { sink = append(sink, m); return true }
 
 		b.Run(fmt.Sprintf("warm/pages=%d", pageCount), func(b *testing.B) {
 			CppMetrics(consume) // warm the meta cache
@@ -203,6 +212,19 @@ func BenchmarkCppMetrics(b *testing.B) {
 			}
 			b.StopTimer()
 			runtime.KeepAlive(consumed)
+		})
+
+		b.Run(fmt.Sprintf("collect/pages=%d", pageCount), func(b *testing.B) {
+			CppMetrics(consume) // warm the meta cache
+			sink = make([]prometheus.Metric, 0, pageCount*2)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				sink = sink[:0]
+				CppMetrics(collect)
+			}
+			b.StopTimer()
+			runtime.KeepAlive(sink)
 		})
 
 		b.Run(fmt.Sprintf("cold/pages=%d", pageCount), func(b *testing.B) {

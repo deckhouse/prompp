@@ -11,8 +11,8 @@ import (
 
 // CppMetric is the raw view returned by the C++ metrics iterator. Its descriptor/metric pointers and every string and
 // value they reference live inside a C++ metrics page that may be physically freed after the scrape (see
-// prompp_metrics_remove_unused_pages, called at the end of CppMetrics). It must never be handed to Go consumers
-// directly; it is only used, under cppMetricsMu, to build a fully Go-owned CppMetricCopy.
+// prompp_metrics_remove_unused_pages, called at the end of collectCppMetricCopies). It must never be handed to Go
+// consumers directly; it is only used, under cppMetricsMu, to build a fully Go-owned CppMetricCopy.
 type CppMetric struct {
 	descriptor *prometheus.Desc
 	metric     *dto.Metric
@@ -56,16 +56,21 @@ type CppMetricMeta struct {
 
 // CppMetricCopy is a per-scrape, fully Go-owned snapshot of a single metric. It implements prometheus.Metric and is
 // therefore safe to buffer in the collect channel and read after cppMetricsMu has been released.
+//
+// Methods use a pointer receiver on purpose: CppMetricsCollector.Collect hands every metric to a chan<- prometheus.Metric.
+// A *CppMetricCopy converts to the interface without a heap allocation (the interface just wraps the existing pointer into
+// the backing slice), whereas a value receiver would box every metric into the interface — one allocation per metric per
+// scrape. See collectCppMetricCopies for the single-allocation backing slice.
 type CppMetricCopy struct {
 	meta  *CppMetricMeta
 	value float64
 }
 
-func (m CppMetricCopy) Desc() *prometheus.Desc {
+func (m *CppMetricCopy) Desc() *prometheus.Desc {
 	return m.meta.desc
 }
 
-func (m CppMetricCopy) Write(out *dto.Metric) error {
+func (m *CppMetricCopy) Write(out *dto.Metric) error {
 	out.Label = m.meta.labelPairs
 	switch m.meta.kind {
 	case cppMetricCounter:
@@ -92,14 +97,31 @@ var (
 	metaCacheGen uint64
 )
 
-// CppMetrics iterates the C++ metric pages under cppMetricsMu, builds a fully Go-owned CppMetricCopy for every metric
-// and passes it by value to f. Iteration stops early if f returns false.
+// CppMetrics builds a fully Go-owned copy of every C++ metric and passes a *CppMetricCopy for each to f. Iteration stops
+// early if f returns false. The pointers handed to f are stable for the whole call (they point into a single backing
+// slice, see collectCppMetricCopies), so f may forward them straight to a chan<- prometheus.Metric without boxing.
+func CppMetrics(f func(metric *CppMetricCopy) bool) {
+	copies := collectCppMetricCopies()
+	for i := range copies {
+		if !f(&copies[i]) {
+			return
+		}
+	}
+}
+
+// collectCppMetricCopies iterates the C++ metric pages under cppMetricsMu, builds fully Go-owned copies, reclaims freed
+// pages, evicts stale cache entries and returns the copies. The lock is held only while C++ memory is touched; once this
+// returns every referenced byte is Go-owned, so the copies can be read safely after the lock is released (e.g. lazily
+// drained from a buffered channel by prometheus.Registry.Gather).
 //
-// The lock is held for the entire call, f included: the C++ storage is not safe for concurrent readers (see
-// cppMetricsMu), so the whole iteration must run as a single reader. Each CppMetricCopy is fully Go-owned, so f may
-// retain it and read it after CppMetrics returns (e.g. buffer it in prometheus' collect channel and drain it later).
-// Passing the copy by value lets callers forward it straight to a consumer without allocating a per-scrape slice.
-func CppMetrics(f func(metric CppMetricCopy) bool) {
+// The lock spans the whole C++ iteration: the storage is not safe for concurrent readers (see cppMetricsMu), so the whole
+// scrape must run as a single reader.
+//
+// Copies are returned in a single backing slice so the whole scrape costs one allocation for the values instead of one
+// per metric. A fresh slice is allocated per scrape on purpose: the elements are handed to the collect channel and read
+// asynchronously (and possibly by concurrent Gather calls), so a shared/pooled buffer could be overwritten while still
+// in flight.
+func collectCppMetricCopies() []CppMetricCopy {
 	cppMetricsMu.Lock()
 	defer cppMetricsMu.Unlock()
 
@@ -108,6 +130,7 @@ func CppMetrics(f func(metric CppMetricCopy) bool) {
 
 	iterator := prometheusMetricsIteratorCtor()
 
+	copies := make([]CppMetricCopy, 0, len(metaCache))
 	for {
 		metric := prometheusMetricsIteratorNext(&iterator)
 		if metric == nil {
@@ -125,11 +148,7 @@ func CppMetrics(f func(metric CppMetricCopy) bool) {
 		}
 		meta.lastSeenGen = gen
 
-		if !f(CppMetricCopy{meta: meta, value: value}) {
-			// Early stop: not every page was visited, so skip both the page reclamation and the mark-and-sweep below.
-			// Nothing is freed and nothing is evicted, so no cache entry can dangle; the next full scrape cleans up.
-			return
-		}
+		copies = append(copies, CppMetricCopy{meta: meta, value: value})
 	}
 
 	// Reclaim pages detached before this scrape (their deletion was deferred one generation on the C++ side). Freeing an
@@ -143,6 +162,8 @@ func CppMetrics(f func(metric CppMetricCopy) bool) {
 			delete(metaCache, key)
 		}
 	}
+
+	return copies
 }
 
 // buildMeta deep-copies the descriptor and label pairs from the C++ page into Go-owned memory. Every string is cloned
