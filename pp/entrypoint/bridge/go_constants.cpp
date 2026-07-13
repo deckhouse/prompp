@@ -1,3 +1,6 @@
+#include <vector>
+
+#include "bare_bones/vector.h"
 #include "entrypoint/types/go_constants.h"
 #include "entrypoint/types/serialized_data.h"
 #include "metrics/storage.h"
