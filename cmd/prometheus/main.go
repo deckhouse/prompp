@@ -788,6 +788,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The PP head manager and the catalog GC apply time-based retention only;
+	// unlike tsdb they cannot fall back to size-based retention for heads. When
+	// no time retention is configured (e.g. only storage.tsdb.retention.size is
+	// set, leaving RetentionDuration == 0) we would otherwise treat every head
+	// as outdated and delete it before it is persisted. Restore the tsdb default
+	// retention in that case, mirroring tsdb's default handling. In agent mode
+	// there is no block/head retention, so keep it at 0 (as tsdb does).
+	ppRetentionPeriod := time.Duration(cfg.tsdb.RetentionDuration)
+	if !agentMode && ppRetentionPeriod == 0 {
+		ppRetentionPeriod = time.Duration(defaultRetentionDuration)
+		level.Info(logger).Log("msg", "No time retention set for PP head storage so using the default time retention", "duration", defaultRetentionDuration)
+	}
+
 	removedHeadTriggerNotifier := pp_storage.NewTriggerNotifier()
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
@@ -796,7 +809,7 @@ func main() {
 			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
 			Downsampling:        time.Duration(cfg.Downsampling),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
-			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
+			MaxRetentionPeriod:  ppRetentionPeriod,
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
 			KeeperCapacity:      2,
 			DataDir:             localStoragePath,
@@ -1342,7 +1355,7 @@ func main() {
 		clock,
 		multiNotifiable,
 		removedHeadTriggerNotifier,
-		time.Duration(cfg.tsdb.RetentionDuration),
+		ppRetentionPeriod,
 	)
 
 	var g run.Group
@@ -2401,6 +2414,13 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				cfg.UseBlockManagerStorage = true
 			}
 			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
+
+		case "disable_coredumps":
+			if err := prom_runtime.DisableCoreDumps(); err != nil {
+				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
+				continue
+			}
+			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
 
 		case "select_func_optimization":
 			if err := selectFuncOptimization(strings.TrimSpace(fvalue)); err != nil {
