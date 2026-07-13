@@ -137,7 +137,7 @@ func (m *Manager) loop() {
 		case <-ticker.C:
 			m.reloadAndCompact()
 
-			ctx, cancel := context.WithTimeout(baseCtx, reloadBlocksInterval)
+			ctx, cancel := context.WithTimeout(baseCtx, reloadBlocksInterval/2)
 			m.lsObserver.Observe(ctx)
 			cancel()
 

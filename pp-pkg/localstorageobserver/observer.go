@@ -2,84 +2,57 @@ package localstorageobserver
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/google/uuid"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-//
-// objectType
-//
-
 const (
-	// unknownType is the type of the unknown object.
-	unknownType objectType = 0
-	// dirType is the type of the directory object.
-	dirType objectType = 1
-	// fileType is the type of the file object.
-	fileType objectType = 2
+	// cutSuffix is the suffix to cut the name.
+	cutSuffix = "..."
+
+	// defaultMaxLength is the default max length of the name.
+	defaultMaxLength = 128
 )
 
-// objectType is the type of the object.
-type objectType int64
-
-// String returns the string representation of the object type.
-func (t objectType) String() string {
-	switch t {
-	case unknownType:
-		return "unknown"
-	case dirType:
-		return "dir"
-	case fileType:
-		return "file"
-	default:
-		return fmt.Sprintf("unknown object type: %d", t)
-	}
-}
-
 //
-// object
-//
-
-// object is the object in the local storage.
-type object struct {
-	name string
-	t    objectType
-}
-
-//
-// LocalStorage
+// LocalStorageObserver
 //
 
 // LocalStorageObserver is the observer of the local storage.
 type LocalStorageObserver struct {
 	dir         string
+	c           *catalog.Catalog
 	logger      log.Logger
-	lastObjects map[object]int64
-	objectsSize *prometheus.GaugeVec
+	objectsSize prometheus.Gauge
 }
 
 // NewLocalStorageObserver init a new [LocalStorageObserver].
-func NewLocalStorageObserver(dir string, logger log.Logger, reg prometheus.Registerer) *LocalStorageObserver {
+func NewLocalStorageObserver(
+	dir string,
+	c *catalog.Catalog,
+	logger log.Logger,
+	reg prometheus.Registerer,
+) *LocalStorageObserver {
 	factory := util.NewUnconflictRegisterer(reg)
 	return &LocalStorageObserver{
-		dir:         dir,
-		logger:      logger,
-		lastObjects: make(map[object]int64),
-		objectsSize: factory.NewGaugeVec(
+		dir:    dir,
+		c:      c,
+		logger: logger,
+		objectsSize: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "prompp_localstorage_unknown_bytes",
-				Help: "The size of objects in the local storage in bytes.",
+				Help: "The summary size of unknown or unexpected objects in the local storage in bytes.",
 			},
-			[]string{"name", "type"},
 		),
 	}
 }
@@ -94,88 +67,27 @@ func (lso *LocalStorageObserver) Observe(ctx context.Context) {
 		return
 	}
 
-	newObjects := make(map[object]int64, len(lso.lastObjects))
-	for _, f := range files {
-		if lso.isAcceptableDir(f) || lso.isAcceptableFile(f) {
-			continue
-		}
-
-		name := f.Name()
-		info, err := f.Info()
-		if err != nil {
-			// revive:disable-next-line:add-constant // this is logger
-			_ = level.Error(lso.logger).Log("msg", "failed to get file info", "dir", lso.dir, "file", name, "err", err)
-			continue
-		}
-
-		if !info.IsDir() {
-			newObjects[object{name: name, t: fileType}] = info.Size()
-			continue
-		}
-
-		lsSize, err := lso.getDirSize(ctx, filepath.Join(lso.dir, name))
-		if err != nil {
-			_ = level.Error(lso.logger).Log(
-				// revive:disable-next-line:add-constant // this is logger
-				"msg", "failed to get directory size", "dir", lso.dir, "file", name, "err", err,
-			)
-			continue
-		}
-
-		newObjects[object{name: name, t: dirType}] = lsSize
-	}
-
-	for obj, size := range newObjects {
-		lso.objectsSize.WithLabelValues(obj.name, obj.t.String()).Set(float64(size))
-	}
-
-	for obj := range lso.lastObjects {
-		if _, ok := newObjects[obj]; !ok {
-			lso.objectsSize.DeleteLabelValues(obj.name, obj.t.String())
-		}
-	}
-
-	lso.lastObjects = newObjects
+	names, totalSize := lso.observeObjects(ctx, files)
+	lso.objectsSize.Set(float64(totalSize))
+	_ = level.Debug(lso.logger).Log(
+		"msg", "observed objects",
+		"names", names,
+		"totalSize", totalSize,
+	)
 }
 
-// isAcceptableDir to check if the directory is acceptable.
-func (*LocalStorageObserver) isAcceptableDir(fi fs.DirEntry) bool {
-	if !fi.IsDir() {
-		return false
-	}
-
-	if _, err := ulid.ParseStrict(fi.Name()); err == nil {
-		return true
-	}
-
-	if _, err := uuid.Parse(fi.Name()); err == nil {
-		return true
-	}
-
-	return false
-}
-
-// isAcceptableFile to check if the file is acceptable.
-func (*LocalStorageObserver) isAcceptableFile(fi fs.DirEntry) bool {
-	if fi.IsDir() {
-		return false
-	}
-
-	return fi.Name() == "head.log" || fi.Name() == "queries.active" || fi.Name() == "client_id.uuid"
-}
-
-// getDirSize to get the size of the directory.
-func (lso *LocalStorageObserver) getDirSize(ctx context.Context, dirName string) (int64, error) {
+// getSizeDir to get the size of the directory.
+func (lso *LocalStorageObserver) getSizeDir(ctx context.Context, dirName string) (int64, error) {
 	var totalSize int64
 	walkFn := func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			_ = level.Error(lso.logger).Log(
-				"msg", "failed to walk directory",
+				"msg", "failed to walk directory", // revive:disable-line:add-constant // this is logger
 				"dir", lso.dir,
 				"path", path,
 				"err", walkErr,
 			)
-			return filepath.SkipDir
+			return nil
 		}
 
 		select {
@@ -207,4 +119,133 @@ func (lso *LocalStorageObserver) getDirSize(ctx context.Context, dirName string)
 	err := filepath.WalkDir(dirName, walkFn)
 
 	return totalSize, err
+}
+
+// getSizeObject to get the size of the object.
+func (lso *LocalStorageObserver) getSizeObject(ctx context.Context, info fs.FileInfo) int64 {
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return 0 // skip symlink
+	}
+
+	if !info.IsDir() {
+		return info.Size()
+	}
+
+	lsSize, err := lso.getSizeDir(ctx, filepath.Join(lso.dir, info.Name()))
+	if err != nil {
+		_ = level.Error(lso.logger).Log(
+			// revive:disable-next-line:add-constant // this is logger
+			"msg", "failed to get directory size", "dir", lso.dir, "file", info.Name(), "err", err,
+		)
+
+		return 0
+	}
+
+	return lsSize
+}
+
+// isKnownHead to check if the head is known.
+func (lso *LocalStorageObserver) isKnownHead(de fs.DirEntry) bool {
+	if !de.IsDir() {
+		return false
+	}
+
+	name := de.Name()
+	if _, err := uuid.Parse(name); err != nil {
+		return false
+	}
+
+	if lso.c != nil {
+		if _, err := lso.c.Get(name); err != nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+// observeObjects to list the objects in the local storage.
+//
+//revive:disable-next-line:function-length // this is not a complex function
+//nolint:gocritic // unnamedResult // returns names as string and total size as int64.
+func (lso *LocalStorageObserver) observeObjects(ctx context.Context, files []os.DirEntry) (string, int64) {
+	var totalSize int64
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		select {
+		case <-ctx.Done():
+			return "", 0
+		default:
+		}
+
+		if isAcceptableBlockName(f) || lso.isKnownHead(f) || isAcceptableFile(f) {
+			continue
+		}
+
+		name := f.Name()
+		info, err := f.Info()
+		if err != nil {
+			_ = level.Error(lso.logger).Log("msg", "failed to get file info", "dir", lso.dir, "file", name, "err", err)
+			continue
+		}
+
+		totalSize += lso.getSizeObject(ctx, info)
+		names = append(names, cutName(name))
+	}
+
+	return convertNamesToString(names), totalSize
+}
+
+// convertNamesToString to convert the names to a string.
+func convertNamesToString(names []string) string {
+	if len(names) > defaultMaxLength {
+		return strings.Join(names[:defaultMaxLength], ";") + cutSuffix
+	}
+
+	return strings.Join(names, ";")
+}
+
+// cutName to cut the name to the max length.
+func cutName(name string) string {
+	if len(name) > defaultMaxLength {
+		return name[:defaultMaxLength-len(cutSuffix)] + cutSuffix
+	}
+
+	return name
+}
+
+// isAcceptableBlockName to check if the directory is acceptable.
+func isAcceptableBlockName(de fs.DirEntry) bool {
+	if !de.IsDir() {
+		return false
+	}
+
+	_, err := ulid.ParseStrict(trimTMPSuffix(de.Name()))
+	return err == nil
+}
+
+// isAcceptableFile to check if the file is acceptable.
+func isAcceptableFile(de fs.DirEntry) bool {
+	if de.IsDir() {
+		return false
+	}
+
+	return de.Name() == "head.log" || de.Name() == "queries.active" || de.Name() == "client_id.uuid"
+}
+
+// trimTMPSuffix to trim the .tmp-for-creation, .tmp-for-deletion, and .tmp suffix from the name.
+func trimTMPSuffix(name string) string {
+	if before, ok := strings.CutSuffix(name, ".tmp-for-creation"); ok {
+		return before
+	}
+
+	if before, ok := strings.CutSuffix(name, ".tmp-for-deletion"); ok {
+		return before
+	}
+
+	if before, ok := strings.CutSuffix(name, ".tmp"); ok {
+		return before
+	}
+
+	return name
 }

@@ -873,7 +873,8 @@ func main() {
 
 		if cfg.UseBlockManagerStorage {
 			level.Info(logger).Log("msg", "Using block-manager storage scheme")
-			level.Debug(logger).Log("msg", "Block storage options",
+			level.Debug(logger).Log(
+				"msg", "Block storage options",
 				"MinBlockDuration", cfg.tsdb.MinBlockDuration,
 				"MaxBytes", cfg.tsdb.MaxBytes,
 				"RetentionDuration", cfg.tsdb.RetentionDuration,
@@ -897,6 +898,7 @@ func main() {
 				blocksToDelete,
 				localstorageobserver.NewLocalStorageObserver(
 					localStoragePath,
+					headCatalog,
 					log.With(logger, "component", "localstorageobserver"),
 					prometheus.DefaultRegisterer,
 				),
@@ -945,7 +947,8 @@ func main() {
 			persistedStorage = tsdbHistorical
 			startTimeFn = tsdbHistorical.StartTime
 			level.Info(logger).Log("msg", "TSDB storage started")
-			level.Debug(logger).Log("msg", "TSDB options",
+			level.Debug(logger).Log(
+				"msg", "TSDB options",
 				"MinBlockDuration", cfg.tsdb.MinBlockDuration,
 				"MaxBlockDuration", cfg.tsdb.MaxBlockDuration,
 				"MaxBytes", cfg.tsdb.MaxBytes,
@@ -1544,7 +1547,8 @@ func main() {
 				}
 
 				level.Info(logger).Log("msg", "Agent WAL storage started")
-				level.Debug(logger).Log("msg", "Agent WAL storage options",
+				level.Debug(logger).Log(
+					"msg", "Agent WAL storage options",
 					"WALSegmentSize", cfg.agent.WALSegmentSize,
 					"WALCompression", cfg.agent.WALCompression,
 					"StripeSize", cfg.agent.StripeSize,
@@ -2343,7 +2347,8 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing federation_split_families value",
-					"err", err)
+					"err", err,
+				)
 				continue
 			}
 			_ = level.Info(logger).Log(
@@ -2358,7 +2363,8 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
-					"err", err)
+					"err", err,
+				)
 				continue
 			}
 
