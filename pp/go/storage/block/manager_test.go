@@ -104,6 +104,31 @@ func TestManagerExportsLoadedBlocksMetrics(t *testing.T) {
 	}
 }
 
+func TestManagerRemovesLeftoverTmpDirsOnStartup(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createTestBlock(t, dir, 1000, "metric_a")
+
+	// Simulate leftovers from a crash during compaction/persist.
+	const validULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	tmpCreation := filepath.Join(dir, validULID+tmpForCreationBlockDirSuffix)
+	tmpDeletion := filepath.Join(dir, validULID+tmpForDeletionBlockDirSuffix)
+	require.NoError(t, os.Mkdir(tmpCreation, 0o777))
+	require.NoError(t, os.Mkdir(tmpDeletion, 0o777))
+
+	m, err := NewManager(dir, nil, nil, log.NewNopLogger(), nil)
+	require.NoError(t, err)
+	t.Cleanup(m.Close)
+
+	require.Len(t, m.Blocks(), 1)
+
+	_, err = os.Stat(tmpCreation)
+	require.True(t, os.IsNotExist(err), "expected leftover tmp-for-creation dir to be removed")
+	_, err = os.Stat(tmpDeletion)
+	require.True(t, os.IsNotExist(err), "expected leftover tmp-for-deletion dir to be removed")
+}
+
 func createTestBlock(t *testing.T, dir string, startTS int, metric string) {
 	t.Helper()
 
