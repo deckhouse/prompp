@@ -174,7 +174,7 @@ func (lso *LocalStorageObserver) observeObjects(ctx context.Context, files []os.
 	for _, f := range files {
 		select {
 		case <-ctx.Done():
-			return "", 0
+			return convertNamesToString(names), totalSize
 		default:
 		}
 
