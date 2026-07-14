@@ -200,6 +200,7 @@ cc_library(
 
 cc_test(
     name = "entrypoint_types_test",
+    size = "small",
     srcs = glob(["entrypoint/types/**/*_tests.cpp"]),
     deps = [
         ":bare_bones",
