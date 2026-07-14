@@ -1,8 +1,7 @@
-#include "go_constants.h"
-
+#include "entrypoint/types/go_constants.h"
+#include "entrypoint/types/serialization.h"
 #include "metrics/storage.h"
 #include "prometheus/relabeler.h"
-#include "series_data/serialization.h"
 #include "wal/output_decoder.h"
 #include "wal/segment_samples_storage.h"
 
@@ -14,9 +13,9 @@ static_assert(sizeof(roaring::Roaring) == Sizeof_RoaringBitset);
 
 static_assert(sizeof(PromPP::Prometheus::Relabel::InnerSeries) == Sizeof_InnerSeries);
 
-static_assert(sizeof(entrypoint::series_data::SamplesIterator) == Sizeof_SerializedDataSamplesIterator);
-static_assert(sizeof(entrypoint::series_data::AggregationIterator) == Sizeof_SerializedDataAggregationIterator);
-static_assert(sizeof(entrypoint::series_data::MultiSeriesDecodeIterator) == Sizeof_MultiSeriesDecodeIterator);
+static_assert(sizeof(entrypoint::types::SamplesIterator) == Sizeof_SerializedDataSamplesIterator);
+static_assert(sizeof(entrypoint::types::AggregationIterator) == Sizeof_SerializedDataAggregationIterator);
+static_assert(sizeof(entrypoint::types::MultiSeriesDecodeIterator) == Sizeof_MultiSeriesDecodeIterator);
 
 static_assert(sizeof(metrics::Storage::Iterator) == Sizeof_MetricsIterator);
 

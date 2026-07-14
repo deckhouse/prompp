@@ -3,24 +3,24 @@
 #include <cassert>
 #include <spanstream>
 
+#include "entrypoint/types/data_storage.h"
+#include "entrypoint/types/loader.h"
+#include "entrypoint/types/lss.h"
+#include "entrypoint/types/querier.h"
+#include "entrypoint/types/serialization.h"
 #include "head/chunk_recoder.h"
-#include "head/data_storage.h"
-#include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
-#include "series_data/loader.h"
-#include "series_data/querier.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
-#include "series_data/serialization.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
 #include "series_index/querier/selector_querier.h"
 
-using entrypoint::head::DataStoragePtr;
-using entrypoint::head::QueryableEncodingBimap;
-using entrypoint::series_data::QueryStatus;
+using entrypoint::types::DataStoragePtr;
+using entrypoint::types::QueryableEncodingBimap;
+using entrypoint::types::QueryStatus;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Go::BytesStream;
 using PromPP::Primitives::Go::Slice;
@@ -34,15 +34,15 @@ using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::Serialized
 using ChunkRecoderVariant = std::variant<ChunkRecoder, SerializedChunkRecoder>;
 using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
-using entrypoint::series_data::RevertableLoader;
+using entrypoint::types::RevertableLoader;
 
 using LoaderVariant = std::variant<series_data::unloading::Loader, RevertableLoader>;
 using LoaderVariantPtr = std::unique_ptr<LoaderVariant>;
 static_assert(sizeof(LoaderVariantPtr) == sizeof(void*));
 
-using entrypoint::series_data::QuerierType;
-using entrypoint::series_data::QuerierVariant;
-using entrypoint::series_data::QuerierVariantPtr;
+using entrypoint::types::QuerierType;
+using entrypoint::types::QuerierVariant;
+using entrypoint::types::QuerierVariantPtr;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
   using Result = struct {
@@ -141,27 +141,27 @@ extern "C" void prompp_get_promql_optimized_functions(void* res) {
 
 extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
-  using entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2;
+  using entrypoint::types::RangeQuerierWithArgumentsWrapperV2;
   using series_data::querier::Querier;
 
   struct Arguments {
     DataStoragePtr data_storage;
     Query query;
     PromPP::Primitives::Timestamp downsampling_ms;
-    entrypoint::series_data::GoSelectHints* hints;
+    entrypoint::types::GoSelectHints* hints;
   };
 
   struct Result {
     QuerierVariantPtr querier{};
     QueryStatus status{};
-    entrypoint::series_data::SerializedDataPtr* serialized_data{};
+    entrypoint::types::SerializedDataPtr* serialized_data{};
   };
 
   const auto in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, in->hints ? *in->hints : entrypoint::series_data::GoSelectHints{},
-                                             out->serialized_data, in->downsampling_ms);
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, in->hints ? *in->hints : entrypoint::types::GoSelectHints{}, out->serialized_data,
+                                             in->downsampling_ms);
   querier.query();
 
   if (querier.need_loading()) {
@@ -174,7 +174,7 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
 
 extern "C" void prompp_series_data_serialized_data_next(void* args, void* res) {
   struct Arguments {
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::SerializedDataPtr serialized_data;
   };
 
   using Result = struct {
@@ -187,14 +187,14 @@ extern "C" void prompp_series_data_serialized_data_next(void* args, void* res) {
 
 extern "C" void prompp_series_data_serialized_data_dtor(void* args) {
   struct Arguments {
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::SerializedDataPtr serialized_data;
   };
 
   static_cast<Arguments*>(args)->~Arguments();
 }
 
 extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
-  using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint;
+  using entrypoint::types::InstantQuerierWithArgumentsWrapperEntrypoint;
   using PromPP::Primitives::Timestamp;
   using series_data::InstantQuerier;
 
@@ -202,7 +202,7 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
     DataStoragePtr data_storage;
     SliceView<LabelSetID> label_set_ids;
     Timestamp timestamp;
-    entrypoint::series_data::SampleWithGoLabels* samples;
+    entrypoint::types::SampleWithGoLabels* samples;
   };
 
   using Result = struct {
@@ -227,7 +227,7 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
 }
 
 extern "C" void prompp_series_data_data_storage_query_final(void* args) {
-  using entrypoint::series_data::QuerierVariantPtr;
+  using entrypoint::types::QuerierVariantPtr;
 
   struct Arguments {
     Slice<QuerierVariantPtr> queriers;
@@ -288,7 +288,7 @@ extern "C" void prompp_series_data_data_storage_dtor(void* args) {
 
 extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::LssVariantPtr lss;
+    entrypoint::types::LssVariantPtr lss;
     uint32_t ls_id_batch_size;
     DataStoragePtr data_storage;
     PromPP::Primitives::TimeInterval time_interval;
@@ -311,7 +311,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
 extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
-    entrypoint::series_data::SerializedDataPtr* serialized_data;
+    entrypoint::types::SerializedDataPtr* serialized_data;
     PromPP::Primitives::TimeInterval time_interval;
   };
   struct Result {
@@ -458,7 +458,7 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
 
 extern "C" void prompp_series_data_data_storage_revertable_loader_ctor(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::LssVariantPtr lss;
+    entrypoint::types::LssVariantPtr lss;
     uint32_t ls_id_batch_size;
     DataStoragePtr data_storage;
   };
