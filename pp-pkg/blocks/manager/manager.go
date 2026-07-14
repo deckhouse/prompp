@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -50,6 +51,7 @@ type Manager struct {
 	logger         log.Logger
 	chunkPool      chunkenc.Pool
 	metrics        *metrics
+	lsObserver     LocalStorageObserver
 
 	mtx       sync.RWMutex
 	blocks    []*block.Block
@@ -71,6 +73,12 @@ type compactionRunner interface {
 	OverlappingBlocks(blocks []*block.Block) (block.Overlaps, error)
 }
 
+// LocalStorageObserver is the observer of the local storage.
+type LocalStorageObserver interface {
+	// Observe is the function to observe the local storage.
+	Observe(ctx context.Context)
+}
+
 // NewManager init new [Manager] and starts its periodic reload loop.
 //
 // blocksToDelete is the retention filter (e.g. built via pp-pkg/tsdb.NewBlocksToDelete);
@@ -81,6 +89,7 @@ func NewManager(
 	compactor compactionRunner,
 	blocksToDelete block.BlocksToDeleteFunc,
 	chunkPool chunkenc.Pool,
+	lsObserver LocalStorageObserver,
 	logger log.Logger,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -91,6 +100,10 @@ func NewManager(
 		logger = log.NewNopLogger()
 	}
 
+	if lsObserver == nil {
+		lsObserver = noopLocalStorageObserver{}
+	}
+
 	m := &Manager{
 		dir:            dir,
 		opts:           opts,
@@ -98,10 +111,18 @@ func NewManager(
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
 		chunkPool:      chunkPool,
+		lsObserver:     lsObserver,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}
 	m.metrics = newMetrics(m, r)
+
+	// Best-effort cleanup of leftover tmp block dirs (e.g. *.tmp-for-creation) that
+	// may remain after a crash during compaction or persist. Unlike tsdb.DB.Open, the
+	// block Manager never loads these dirs, so without this they would leak on disk.
+	if err := tsdb.RemoveBestEffortTmpDirs(logger, dir); err != nil {
+		level.Warn(logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", dir, "err", err)
+	}
 
 	if err := m.reloadBlocks(); err != nil {
 		return nil, fmt.Errorf("initial reload blocks: %w", err)
@@ -120,11 +141,16 @@ func (m *Manager) loop() {
 
 	ticker := time.NewTicker(reloadBlocksInterval)
 	defer ticker.Stop()
+	baseCtx := context.Background()
 
 	for {
 		select {
 		case <-ticker.C:
 			m.reloadAndCompact()
+
+			ctx, cancel := context.WithTimeout(baseCtx, reloadBlocksInterval/2)
+			m.lsObserver.Observe(ctx)
+			cancel()
 
 		case <-m.stopc:
 			return
@@ -557,3 +583,13 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 
 	return m
 }
+
+//
+// noopLocalStorageObserver
+//
+
+// noopLocalStorageObserver is the noop implementation of the [LocalStorageObserver].
+type noopLocalStorageObserver struct{}
+
+// Observe is the function to observe the local storage.
+func (noopLocalStorageObserver) Observe(context.Context) {}

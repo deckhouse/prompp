@@ -183,21 +183,49 @@ cc_test(
 )
 
 cc_library(
-    name = "entrypoint",
-    srcs = glob(
-        include = ["entrypoint/**/*.cpp"],
-        exclude = [
-            "entrypoint/init/**",
-            "entrypoint/**/*_tests.cpp",
-        ],
-    ),
+    name = "entrypoint_types",
     hdrs = glob([
-        "entrypoint/**/*.h",
-        "entrypoint/**/*.hpp",
+        "entrypoint/types/**/*.h",
     ]),
     linkstatic = True,
     deps = [
         ":bare_bones",
+        ":head",
+        ":primitives",
+        ":series_data",
+        ":series_index",
+        ":wal",
+    ],
+)
+
+cc_test(
+    name = "entrypoint_types_test",
+    size = "small",
+    srcs = glob(["entrypoint/types/**/*_tests.cpp"]),
+    deps = [
+        ":bare_bones",
+        ":entrypoint_types",
+        ":metrics",
+        ":prometheus",
+        ":wal",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "entrypoint_bridge",
+    srcs = glob(
+        include = ["entrypoint/bridge/**/*.cpp"],
+        exclude = ["entrypoint/bridge/**/*_tests.cpp"],
+    ),
+    hdrs = glob([
+        "entrypoint/bridge/**/*.h",
+        "entrypoint/bridge/**/*.hpp",
+    ]),
+    linkstatic = True,
+    deps = [
+        ":bare_bones",
+        ":entrypoint_types",
         ":head",
         ":metrics",
         ":primitives",
@@ -211,7 +239,7 @@ cc_library(
 cc_static_library(
     name = "entrypoint_aio",
     deps = [
-        ":entrypoint",
+        ":entrypoint_bridge",
     ],
 )
 
@@ -219,8 +247,8 @@ cc_library(
     name = "entrypoint_init",
     srcs = glob(["entrypoint/init/*.cpp"]),
     hdrs = glob([
-        "entrypoint/init/*.h",
-        "entrypoint/init/*.hpp",
+        "entrypoint/init/**/*.h",
+        "entrypoint/init/**/*.hpp",
     ]),
     linkstatic = True,
 )
