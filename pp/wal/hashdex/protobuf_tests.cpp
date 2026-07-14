@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <cmath>
+#include <string>
 
 #include "metric.h"
 #include "protobuf.h"
@@ -7,14 +9,17 @@
 #include "primitives/histogram.h"
 #include "primitives/label_set.h"
 #include "primitives/sample.h"
+#include "prometheus/remote_write.h"
 
 namespace {
 
-using PromPP::Primitives::CounterResetHint;
+using PromPP::Primitives::ClassicHistogramBucket;
 using PromPP::Primitives::HistogramBucketValue;
 using PromPP::Primitives::HistogramSpan;
 using PromPP::Primitives::HistogramType;
 using PromPP::Primitives::HistogramValue;
+using PromPP::Primitives::HistogramValueType;
+using PromPP::Primitives::kCustomBucketsSchema;
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
 using PromPP::Primitives::Timestamp;
@@ -64,7 +69,7 @@ struct ProtobufCase {
   return kStartTimestamp + (kStep * i);
 }
 
-[[nodiscard]] Histogram make_int_histogram(int i, Timestamp timestamp, CounterResetHint hint = CounterResetHint::kUnknown) {
+[[nodiscard]] Histogram make_int_histogram(int i, Timestamp timestamp) {
   return {
       .timestamp = timestamp,
       .zero_threshold = 0.001,
@@ -77,11 +82,10 @@ struct ProtobufCase {
       .negative_buckets = int_buckets(i),
       .type = HistogramType::kInt,
       .schema = 1,
-      .counter_reset_hint = hint,
   };
 }
 
-[[nodiscard]] Histogram make_float_histogram(int i, Timestamp timestamp, CounterResetHint hint = CounterResetHint::kUnknown) {
+[[nodiscard]] Histogram make_float_histogram(int i, Timestamp timestamp) {
   return {
       .timestamp = timestamp,
       .zero_threshold = 0.001,
@@ -94,7 +98,6 @@ struct ProtobufCase {
       .negative_buckets = float_buckets(i),
       .type = HistogramType::kFloat,
       .schema = 1,
-      .counter_reset_hint = hint,
   };
 }
 
@@ -103,18 +106,18 @@ struct ProtobufCase {
       .timestamp = timestamp,
       .count = {.value = static_cast<uint64_t>(5 + i * 4)},
       .sum = 18.4 * static_cast<double>(i + 1),
-      .positive_spans = BareBones::Vector<HistogramSpan>{{.offset = 0, .length = 6}},
-      .positive_buckets = BareBones::Vector<HistogramBucketValue>{
-          {.value = 2},
-          {.value = 1},
-          {.value = -3},
-          {.value = 2},
-          {.value = 0},
-          {.value = -2},
-      },
+      .positive_spans = BareBones::Vector<HistogramSpan>{{.offset = 0, .length = 5}},
+      .positive_buckets =
+          BareBones::Vector<HistogramBucketValue>{
+              {.value = 2},
+              {.value = 1},
+              {.value = -3},
+              {.value = 2},
+              {.value = 0},
+          },
       .custom_values = BareBones::Vector<double>{0, 1, 2, 3, 4},
       .type = HistogramType::kInt,
-      .schema = -53,
+      .schema = kCustomBucketsSchema,
   };
 }
 
@@ -123,18 +126,17 @@ struct ProtobufCase {
       .timestamp = timestamp,
       .count = {.float_value = static_cast<double>(5 + i * 4)},
       .sum = 18.4 * static_cast<double>(i + 1),
-      .positive_spans = BareBones::Vector<HistogramSpan>{{.offset = 0, .length = 6}},
-      .positive_buckets = BareBones::Vector<HistogramBucketValue>{
-          {.float_value = 2},
-          {.float_value = 3},
-          {.float_value = 0},
-          {.float_value = 2},
-          {.float_value = 2},
-          {.float_value = 0},
-      },
+      .positive_spans = BareBones::Vector<HistogramSpan>{{.offset = 0, .length = 2}, {.offset = 1, .length = 2}},
+      .positive_buckets =
+          BareBones::Vector<HistogramBucketValue>{
+              {.float_value = 2},
+              {.float_value = 3},
+              {.float_value = 2},
+              {.float_value = 2},
+          },
       .custom_values = BareBones::Vector<double>{0, 1, 2, 3, 4},
       .type = HistogramType::kFloat,
-      .schema = -53,
+      .schema = kCustomBucketsSchema,
   };
 }
 
@@ -144,14 +146,15 @@ struct ProtobufCase {
       .count = {.value = 10},
       .sum = 18.4,
       .positive_spans = BareBones::Vector<HistogramSpan>{{.offset = 0, .length = 3}},
-      .positive_buckets = BareBones::Vector<HistogramBucketValue>{
-          {.value = 2},
-          {.value = 3},
-          {.value = -2},
-      },
+      .positive_buckets =
+          BareBones::Vector<HistogramBucketValue>{
+              {.value = 2},
+              {.value = 3},
+              {.value = -2},
+          },
       .custom_values = BareBones::Vector<double>{1, 5},
       .type = HistogramType::kInt,
-      .schema = -53,
+      .schema = kCustomBucketsSchema,
   };
 }
 
@@ -161,14 +164,15 @@ struct ProtobufCase {
       .count = {.float_value = 10.5},
       .sum = 18.4,
       .positive_spans = BareBones::Vector<HistogramSpan>{{.offset = 0, .length = 3}},
-      .positive_buckets = BareBones::Vector<HistogramBucketValue>{
-          {.float_value = 2.5},
-          {.float_value = 5.0},
-          {.float_value = 3.0},
-      },
+      .positive_buckets =
+          BareBones::Vector<HistogramBucketValue>{
+              {.float_value = 2.5},
+              {.float_value = 5.0},
+              {.float_value = 3.0},
+          },
       .custom_values = BareBones::Vector<double>{1, 5},
       .type = HistogramType::kFloat,
-      .schema = -53,
+      .schema = kCustomBucketsSchema,
   };
 }
 
@@ -188,11 +192,11 @@ struct ProtobufCase {
 
 [[nodiscard]] FloatMetric make_test_float_metric() {
   return FloatMetric{.timeseries = {LabelViewSet{
-                                         {"__name__", "test"},
-                                         {"__replica__", "replica-1"},
-                                         {"cluster", "cluster-0"},
-                                     },
-                                     BareBones::Vector<Sample>{Sample{-1654608420000, 4444}}}};
+                                        {"__name__", "test"},
+                                        {"__replica__", "replica-1"},
+                                        {"cluster", "cluster-0"},
+                                    },
+                                    BareBones::Vector<Sample>{Sample{-1654608420000, 4444}}}};
 }
 
 [[nodiscard]] HistogramMetric make_histogram_metric(std::initializer_list<Histogram> histogram_timeseries) {
@@ -320,14 +324,15 @@ INSTANTIATE_TEST_SUITE_P(
     MixedIntFloatHistogramTimeseries,
     ProtobufFixture,
     testing::Values(ProtobufCase{
-        .protobuf = "\x0a\x8d\x02\x0a\x1a\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0e\x74\x65\x73\x74\x5f\x68\x69\x73\x74\x6f\x67\x72\x61\x6d\x0a\x0d\x0a"
-                    "\x03\x6a\x6f\x62\x12\x06\x74\x65\x73\x74\x65\x72\x0a\x15\x0a\x08\x69\x6e\x73\x74\x61\x6e\x63\x65\x12\x09\x62\x6c\x61\x62\x6c\x61\x62\x6c"
-                    "\x61\x22\x40\x08\x15\x11\x66\x66\x66\x66\x66\x66\x42\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x38\x03\x4a\x02\x10\x02\x4a\x04\x08"
-                    "\x02\x10\x02\x52\x04\x04\x02\x01\x00\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x6a\x04\x04\x02\x01\x00\x7a\x06\x08\xe0\xa4\xfd\x94\x06\x22"
-                    "\x86\x01\x11\x66\x66\x66\x66\x66\x66\x42\x40\x21\x00\x00\x00\x00\x00\x00\x35\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x41\x00\x00"
-                    "\x00\x00\x00\x00\x08\x40\x4a\x02\x10\x02\x4a\x04\x08\x02\x10\x02\x5a\x20\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x08\x40"
-                    "\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00\x40\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x72\x20\x00\x00\x00\x00\x00\x00"
-                    "\x00\x40\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00\x40\x7a\x06\x08\x9c\xa5\xfd\x94\x06"sv,
+        .protobuf =
+            "\x0a\x8d\x02\x0a\x1a\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0e\x74\x65\x73\x74\x5f\x68\x69\x73\x74\x6f\x67\x72\x61\x6d\x0a\x0d\x0a"
+            "\x03\x6a\x6f\x62\x12\x06\x74\x65\x73\x74\x65\x72\x0a\x15\x0a\x08\x69\x6e\x73\x74\x61\x6e\x63\x65\x12\x09\x62\x6c\x61\x62\x6c\x61\x62\x6c"
+            "\x61\x22\x40\x08\x15\x11\x66\x66\x66\x66\x66\x66\x42\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x38\x03\x4a\x02\x10\x02\x4a\x04\x08"
+            "\x02\x10\x02\x52\x04\x04\x02\x01\x00\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x6a\x04\x04\x02\x01\x00\x7a\x06\x08\xe0\xa4\xfd\x94\x06\x22"
+            "\x86\x01\x11\x66\x66\x66\x66\x66\x66\x42\x40\x21\x00\x00\x00\x00\x00\x00\x35\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x41\x00\x00"
+            "\x00\x00\x00\x00\x08\x40\x4a\x02\x10\x02\x4a\x04\x08\x02\x10\x02\x5a\x20\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x08\x40"
+            "\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00\x40\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x72\x20\x00\x00\x00\x00\x00\x00"
+            "\x00\x40\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00\x40\x7a\x06\x08\x9c\xa5\xfd\x94\x06"sv,
         .histograms = {make_histogram_metric({
             make_int_histogram(1, histogram_timestamp(1)),
             make_float_histogram(1, histogram_timestamp(2)),
@@ -338,16 +343,17 @@ INSTANTIATE_TEST_SUITE_P(
     MultipleHistogramMetrics,
     ProtobufFixture,
     testing::Values(ProtobufCase{
-        .protobuf = "\x0a\x84\x01\x0a\x1a\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0e\x74\x65\x73\x74\x5f\x68\x69\x73\x74\x6f\x67\x72\x61\x6d\x0a\x0d\x0a"
-                    "\x03\x6a\x6f\x62\x12\x06\x74\x65\x73\x74\x65\x72\x0a\x15\x0a\x08\x69\x6e\x73\x74\x61\x6e\x63\x65\x12\x09\x62\x6c\x61\x62\x6c\x61\x62\x6c"
-                    "\x61\x22\x40\x08\x15\x11\x66\x66\x66\x66\x66\x66\x42\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x38\x03\x4a\x02\x10\x02\x4a\x04\x08"
-                    "\x02\x10\x02\x52\x04\x04\x02\x01\x00\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x6a\x04\x04\x02\x01\x00\x7a\x06\x08\xa4\xa4\xfd\x94\x06\x0a"
-                    "\xcb\x01\x0a\x1a\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0e\x74\x65\x73\x74\x5f\x68\x69\x73\x74\x6f\x67\x72\x61\x6d\x0a\x0d\x0a\x03"
-                    "\x6a\x6f\x62\x12\x06\x74\x65\x73\x74\x65\x72\x0a\x15\x0a\x08\x69\x6e\x73\x74\x61\x6e\x63\x65\x12\x09\x62\x6c\x61\x62\x6c\x61\x62\x6c\x61\x22"
-                    "\x86\x01\x11\x99\x99\x99\x99\x99\x99\x4b\x40\x21\x00\x00\x00\x00\x00\x00\x3e\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x41\x00\x00"
-                    "\x00\x00\x00\x00\x10\x40\x4a\x02\x10\x02\x4a\x04\x08\x02\x10\x02\x5a\x20\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x10\x40"
-                    "\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x08\x40\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x72\x20\x00\x00\x00\x00\x00\x00"
-                    "\x08\x40\x00\x00\x00\x00\x00\x00\x10\x40\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x08\x40\x7a\x06\x08\xe0\xa4\xfd\x94\x06"sv,
+        .protobuf =
+            "\x0a\x84\x01\x0a\x1a\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0e\x74\x65\x73\x74\x5f\x68\x69\x73\x74\x6f\x67\x72\x61\x6d\x0a\x0d\x0a"
+            "\x03\x6a\x6f\x62\x12\x06\x74\x65\x73\x74\x65\x72\x0a\x15\x0a\x08\x69\x6e\x73\x74\x61\x6e\x63\x65\x12\x09\x62\x6c\x61\x62\x6c\x61\x62\x6c"
+            "\x61\x22\x40\x08\x15\x11\x66\x66\x66\x66\x66\x66\x42\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x38\x03\x4a\x02\x10\x02\x4a\x04\x08"
+            "\x02\x10\x02\x52\x04\x04\x02\x01\x00\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x6a\x04\x04\x02\x01\x00\x7a\x06\x08\xa4\xa4\xfd\x94\x06\x0a"
+            "\xcb\x01\x0a\x1a\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0e\x74\x65\x73\x74\x5f\x68\x69\x73\x74\x6f\x67\x72\x61\x6d\x0a\x0d\x0a\x03"
+            "\x6a\x6f\x62\x12\x06\x74\x65\x73\x74\x65\x72\x0a\x15\x0a\x08\x69\x6e\x73\x74\x61\x6e\x63\x65\x12\x09\x62\x6c\x61\x62\x6c\x61\x62\x6c\x61\x22"
+            "\x86\x01\x11\x99\x99\x99\x99\x99\x99\x4b\x40\x21\x00\x00\x00\x00\x00\x00\x3e\x40\x28\x02\x31\xfc\xa9\xf1\xd2\x4d\x62\x50\x3f\x41\x00\x00"
+            "\x00\x00\x00\x00\x10\x40\x4a\x02\x10\x02\x4a\x04\x08\x02\x10\x02\x5a\x20\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x10\x40"
+            "\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x08\x40\x62\x02\x10\x02\x62\x04\x08\x02\x10\x02\x72\x20\x00\x00\x00\x00\x00\x00"
+            "\x08\x40\x00\x00\x00\x00\x00\x00\x10\x40\x00\x00\x00\x00\x00\x00\x08\x40\x00\x00\x00\x00\x00\x00\x08\x40\x7a\x06\x08\xe0\xa4\xfd\x94\x06"sv,
         .histograms = {make_histogram_metric({
                            make_int_histogram(1, kStartTimestamp),
                        }),
