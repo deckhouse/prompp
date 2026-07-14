@@ -902,18 +902,22 @@ func main() {
 				"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
-			retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-			blocksToDelete := pp_pkg_tsdb.NewBlocksToDelete(
-				retentionMs,
-				int64(cfg.tsdb.MaxBytes),
-				pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
-				prometheus.DefaultRegisterer,
+
+			chunkPool := chunkenc.NewPool()
+			compactCtx, compactCancel := context.WithCancel(context.Background())
+			blockCompactor, err := tcompactor.NewTCompactor(
+				compactCtx,
+				log.With(logger, "component", "tcompactor"),
+				localStoragePath,
+				tcompactor.Options{
+					TsdbOptions: lcompactor.LeveledCompactorOptions{
+						MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
+						EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+					},
+					MinBlockDuration: int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+					MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
+				}, chunkPool, prometheus.DefaultRegisterer,
 			)
-			blockManager, err = block.NewManager(localStoragePath, &block.Options{
-				RetentionDuration:           retentionMs,
-				CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
-				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-			}, blocksToDelete, log.With(logger, "component", "blockmanager"), prometheus.DefaultRegisterer)
 			if err != nil {
 				level.Error(logger).Log("msg", "failed to create tcompactor", "err", err)
 				os.Exit(1)
@@ -941,6 +945,12 @@ func main() {
 				blockCompactor,
 				blocksToDelete,
 				chunkPool,
+				localstorageobserver.NewLocalStorageObserver(
+					localStoragePath,
+					headCatalog,
+					log.With(logger, "component", "localstorageobserver"),
+					prometheus.DefaultRegisterer,
+				),
 				log.With(logger, "component", "blockmanager"),
 				prometheus.DefaultRegisterer,
 			)
@@ -2432,14 +2442,9 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				"msg", "[FEATURE] Select function optimization is set.",
 				"optimization", fvalue,
 			)
-=========
-		case "disable_coredumps":
-			if err := prom_runtime.DisableCoreDumps(); err != nil {
-				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
-				continue
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
->>>>>>>>> Temporary merge branch 2
+
+		case "downsampling":
+			parseDownsampling(logger, cfg, strings.TrimSpace(fvalue))
 		}
 	}
 }
