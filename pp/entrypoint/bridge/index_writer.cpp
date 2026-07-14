@@ -2,13 +2,13 @@
 
 #include <memory>
 
-#include "head/lss.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_slice.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
 
 using PromPP::Primitives::Go::SliceView;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
-using IndexWriter = series_index::prometheus::tsdb::index::IndexWriter<entrypoint::head::QueryableEncodingBimap, PromPP::Primitives::Go::BytesStream>;
+using IndexWriter = series_index::prometheus::tsdb::index::IndexWriter<entrypoint::types::QueryableEncodingBimap, PromPP::Primitives::Go::BytesStream>;
 
 namespace {
 
@@ -22,7 +22,7 @@ struct IndexWriterHandle {
   // stable pointer from the constructor (like the buffer), so reading it needs no extra cgo call.
   uint8_t has_more_postings{0};
 
-  explicit IndexWriterHandle(entrypoint::head::QueryableEncodingBimap& lss) : writer(lss) {}
+  explicit IndexWriterHandle(entrypoint::types::QueryableEncodingBimap& lss) : writer(lss) {}
 
   PromPP::Primitives::Go::BytesStream reset_buffer() noexcept {
     buffer.resize(0);
@@ -36,7 +36,7 @@ using IndexWriterHandlePtr = std::unique_ptr<IndexWriterHandle>;
 
 extern "C" void prompp_index_writer_ctor(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::LssVariantPtr lss;
+    entrypoint::types::LssVariantPtr lss;
   };
   struct Result {
     IndexWriterHandlePtr writer;
@@ -45,7 +45,7 @@ extern "C" void prompp_index_writer_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto handle = std::make_unique<IndexWriterHandle>(std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss));
+  auto handle = std::make_unique<IndexWriterHandle>(std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss));
   // Capture the interior pointers before moving the handle into the result (the move nulls it).
   auto* buffer = &handle->buffer;
   auto* has_more_postings = &handle->has_more_postings;

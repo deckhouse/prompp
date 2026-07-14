@@ -1,11 +1,11 @@
 #include "samples_iterator.h"
 
-#include "series_data/serialization.h"
+#include "entrypoint/types/serialization.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_ctor(void* args) {
   struct Arguments {
-    entrypoint::series_data::SamplesIterator* iterator;
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::SamplesIterator* iterator;
+    entrypoint::types::SerializedDataPtr serialized_data;
     uint32_t chunk_ref;
   };
 
@@ -16,14 +16,14 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* iterator) {
   using series_data::decoder::DecodeIteratorSentinel;
 
-  ++(*static_cast<entrypoint::series_data::SamplesIterator*>(iterator));
+  ++(*static_cast<entrypoint::types::SamplesIterator*>(iterator));
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_seek(void* args) {
   using series_data::decoder::DecodeIteratorSentinel;
 
   struct Arguments {
-    entrypoint::series_data::SamplesIterator* iterator;
+    entrypoint::types::SamplesIterator* iterator;
     int64_t target_timestamp;
   };
 
@@ -33,8 +33,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_reset(void* args) {
   struct Arguments {
-    entrypoint::series_data::SamplesIterator* iterator;
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::SamplesIterator* iterator;
+    entrypoint::types::SerializedDataPtr serialized_data;
     uint32_t chunk_ref;
   };
 

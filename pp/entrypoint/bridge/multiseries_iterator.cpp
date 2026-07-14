@@ -1,11 +1,11 @@
 #include "multiseries_iterator.h"
 
-#include "series_data/serialization.h"
+#include "entrypoint/types/serialization.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args) {
   struct Arguments {
-    entrypoint::series_data::MultiSeriesDecodeIterator* iterator;
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::MultiSeriesDecodeIterator* iterator;
+    entrypoint::types::SerializedDataPtr serialized_data;
     PromPP::Primitives::Go::SliceView<uint32_t> series_ids;
   };
 
@@ -15,8 +15,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_multi_series_it
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_reset(void* args) {
   struct Arguments {
-    entrypoint::series_data::MultiSeriesDecodeIterator* iterator;
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::MultiSeriesDecodeIterator* iterator;
+    entrypoint::types::SerializedDataPtr serialized_data;
     PromPP::Primitives::Go::SliceView<uint32_t> series_ids;
   };
 
@@ -25,9 +25,9 @@ extern "C" void prompp_series_data_serialization_serialized_data_multi_series_it
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_next(void* iterator) {
-  ++(*static_cast<entrypoint::series_data::MultiSeriesDecodeIterator*>(iterator));
+  ++(*static_cast<entrypoint::types::MultiSeriesDecodeIterator*>(iterator));
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor(void* iterator) {
-  std::destroy_at(static_cast<entrypoint::series_data::MultiSeriesDecodeIterator*>(iterator));
+  std::destroy_at(static_cast<entrypoint::types::MultiSeriesDecodeIterator*>(iterator));
 }
