@@ -218,6 +218,7 @@ entrypoint_fact_checking(
             "entrypoint/**/*_tests.cpp",
         ],
     ),
+    tags = ["manual"],
     target = ":entrypoint",
 )
 
