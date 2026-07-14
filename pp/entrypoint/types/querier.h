@@ -1,16 +1,24 @@
 #pragma once
 
+#include <concepts>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <variant>
+
 #include "bare_bones/bitset.h"
-#include "entrypoint/go_constants.h"
-#include "entrypoint/series_data/aggregation_iterator.h"
+#include "bare_bones/preprocess.h"
+#include "entrypoint/types/go_constants.h"
+#include "entrypoint/types/serialization.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
-#include "prometheus/query.h"
-#include "serialization.h"
+#include "series_data/data_storage.h"
+#include "series_data/encoder/sample.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
+#include "series_data/querier/query.h"
 
-namespace entrypoint::series_data {
+namespace entrypoint::types {
 
 template <class Querier>
 concept QuerierInterface = requires(Querier querier) {
@@ -119,7 +127,7 @@ enum class QuerierType : uint8_t {
 using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapperV2>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
 
-}  // namespace entrypoint::series_data
+}  // namespace entrypoint::types
 
-static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint>);
-static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2>);
+static_assert(entrypoint::types::QuerierInterface<entrypoint::types::InstantQuerierWithArgumentsWrapperEntrypoint>);
+static_assert(entrypoint::types::QuerierInterface<entrypoint::types::RangeQuerierWithArgumentsWrapperV2>);

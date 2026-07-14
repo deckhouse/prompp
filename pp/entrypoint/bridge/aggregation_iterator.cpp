@@ -1,11 +1,11 @@
 #include "aggregation_iterator.h"
 
-#include "series_data/serialization.h"
+#include "entrypoint/types/serialization.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor(void* args) {
   struct Arguments {
-    entrypoint::series_data::AggregationIterator* iterator;
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::AggregationIterator* iterator;
+    entrypoint::types::SerializedDataPtr serialized_data;
     uint32_t chunk_ref;
   };
 
@@ -16,13 +16,13 @@ extern "C" void prompp_series_data_serialization_serialized_data_aggregation_ite
 extern "C" void prompp_series_data_serialization_serialized_data_aggregation_iterator_next(void* iterator) {
   using series_data::decoder::DecodeIteratorSentinel;
 
-  ++(*static_cast<entrypoint::series_data::AggregationIterator*>(iterator));
+  ++(*static_cast<entrypoint::types::AggregationIterator*>(iterator));
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_aggregation_iterator_reset(void* args) {
   struct Arguments {
-    entrypoint::series_data::AggregationIterator* iterator;
-    entrypoint::series_data::SerializedDataPtr serialized_data;
+    entrypoint::types::AggregationIterator* iterator;
+    entrypoint::types::SerializedDataPtr serialized_data;
     uint32_t chunk_ref;
   };
 

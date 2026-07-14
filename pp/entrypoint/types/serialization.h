@@ -1,12 +1,11 @@
 #pragma once
 
 #include "aggregation_iterator.h"
-#include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "prometheus/query.h"
 #include "series_data/serialization/serialized_data.h"
 
-namespace entrypoint::series_data {
+namespace entrypoint::types {
 
 using SamplesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
 
@@ -40,4 +39,4 @@ using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 
-}  // namespace entrypoint::series_data
+}  // namespace entrypoint::types
