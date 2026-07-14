@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.2
+
+### Features
+1. **`prompptool persist-head` command.** Added a `persist-head` command that persists a single Prom++ head to TSDB blocks directly by its directory path, without consulting `head.log`. Useful for recovering or persisting an individual (e.g. corrupted or orphaned) head during incident investigation.
+
+### Enhancements
+1. **Local storage observability.** The block-manager storage scheme now runs a local storage observer that reports the total size of unknown/unexpected objects in the local storage directory via the new `prompp_localstorage_unknown_bytes` gauge, making disk leftovers visible to operators.
+
+### Fixes
+1. **Heap-buffer-overflow in the outdated chunk merger.** `merge_outdated_samples_in_finalized_chunks` could keep iterating finalized chunks and dereference an already-exhausted samples span, causing a heap-buffer-overflow (observed on production heads, flagged by ASan). The merger now bails out as soon as the samples span is empty.
+2. **Leftover temporary block directories cleaned up on startup.** The block `Manager` never loaded `*.tmp-for-creation` / `*.tmp-for-deletion` directories, so leftovers from a crash during compaction or persist leaked on disk forever. Startup now performs a best-effort cleanup of these directories before the initial reload.
+3. **Go 1.26.5 security update.** Bumped the Go toolchain from 1.26.4 to 1.26.5, picking up standard-library fixes for an Encrypted Client Hello privacy leak in `crypto/tls` (GO-2026-5856) and a symlink-based root escape in `os` (GO-2026-4970). The remaining unfixed advisories are in unused code paths of indirect dependencies — the AWS S3 crypto SDK in `github.com/aws/aws-sdk-go` (GO-2022-0635, GO-2022-0646; only EC2 service discovery is used) and the deprecated `golang.org/x/crypto/openpgp` package (GO-2026-5932; not used) — and have no upstream fix available.
+
 ## v0.8.1
 
 ### Features
