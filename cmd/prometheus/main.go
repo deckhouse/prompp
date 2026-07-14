@@ -64,13 +64,14 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/rules"                         // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"         // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"                       // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"       // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote" // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
 
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
@@ -919,6 +920,12 @@ func main() {
 				blockCompactor,
 				blocksToDelete,
 				chunkPool,
+				localstorageobserver.NewLocalStorageObserver(
+					localStoragePath,
+					headCatalog,
+					log.With(logger, "component", "localstorageobserver"),
+					prometheus.DefaultRegisterer,
+				),
 				log.With(logger, "component", "blockmanager"),
 				prometheus.DefaultRegisterer,
 			)

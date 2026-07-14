@@ -121,7 +121,7 @@ func NewManager(
 	// may remain after a crash during compaction or persist. Unlike tsdb.DB.Open, the
 	// block Manager never loads these dirs, so without this they would leak on disk.
 	if err := tsdb.RemoveBestEffortTmpDirs(logger, dir); err != nil {
-		level.Warn(logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", dir, "err", err)
+		_ = level.Warn(logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", dir, "err", err)
 	}
 
 	if err := m.reloadBlocks(); err != nil {
@@ -167,6 +167,7 @@ func (m *Manager) loop() {
 // waiting a full ticker interval per compaction step.
 func (m *Manager) reloadAndCompact() {
 	if err := m.reloadBlocks(); err != nil {
+		//revive:disable-next-line:add-constant // this is log
 		_ = level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
 	}
 
@@ -185,7 +186,6 @@ func (m *Manager) reloadAndCompact() {
 		// remove the freshly compacted block(s) so a half-applied compaction
 		// does not leave orphaned blocks on disk (mirroring tsdb).
 		if err := m.reloadBlocks(); err != nil {
-			//revive:disable-next-line:add-constant // this is log
 			_ = level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
 			m.deleteCompactedBlocks(compacted)
 			return

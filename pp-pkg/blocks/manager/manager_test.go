@@ -43,7 +43,7 @@ func (s *ManagerSuite) SetupTest() {
 }
 
 func (s *ManagerSuite) TestManagerLoadsExistingBlocksOnStartup() {
-	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, s.logger, nil)
+	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, nil, s.logger, nil)
 	s.Require().NoError(err)
 	s.T().Cleanup(m.Close)
 
@@ -64,7 +64,7 @@ func (s *ManagerSuite) TestManagerAppliesBlocksToDeleteOnInitialReload() {
 		return map[ulid.ULID]struct{}{marked: {}}
 	}
 
-	m, err := NewManager(s.dir, nil, s.compactor, blocksToDelete, s.chunkPool, s.logger, nil)
+	m, err := NewManager(s.dir, nil, s.compactor, blocksToDelete, s.chunkPool, nil, s.logger, nil)
 	s.Require().NoError(err)
 	s.T().Cleanup(m.Close)
 
@@ -81,14 +81,14 @@ func (s *ManagerSuite) TestManagerReturnsErrorOnInitialReloadFailure() {
 	notDir := filepath.Join(tmp, "not-a-directory")
 	s.Require().NoError(os.WriteFile(notDir, []byte("x"), 0o600))
 
-	m, err := NewManager(notDir, nil, s.compactor, nil, s.chunkPool, s.logger, nil)
+	m, err := NewManager(notDir, nil, s.compactor, nil, s.chunkPool, nil, s.logger, nil)
 	s.Require().Error(err)
 	s.Require().Nil(m)
 }
 
 func (s *ManagerSuite) TestManagerExportsLoadedBlocksMetrics() {
 	reg := prometheus.NewRegistry()
-	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, s.logger, reg)
+	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, nil, s.logger, reg)
 	s.Require().NoError(err)
 	s.T().Cleanup(m.Close)
 
