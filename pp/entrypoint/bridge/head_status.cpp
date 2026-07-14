@@ -1,12 +1,12 @@
 #include "head_status.h"
 
-#include "head/data_storage.h"
-#include "head/lss.h"
+#include "entrypoint/types/data_storage.h"
+#include "entrypoint/types/lss.h"
 #include "head/status.h"
 #include "primitives/go_slice.h"
 
-using entrypoint::head::DataStoragePtr;
-using entrypoint::head::LssVariantPtr;
+using entrypoint::types::DataStoragePtr;
+using entrypoint::types::LssVariantPtr;
 
 using Status = head::Status<PromPP::Primitives::Go::String, PromPP::Primitives::Go::Slice>;
 
@@ -17,9 +17,9 @@ extern "C" void prompp_get_head_status_lss(void* args, void* res) {
   };
 
   const auto in = static_cast<const Arguments*>(args);
-  const auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
+  const auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
 
-  head::StatusGetterLSS<entrypoint::head::QueryableEncodingBimap, Status>{lss, in->limit}.get(*static_cast<Status*>(res));
+  head::StatusGetterLSS<entrypoint::types::QueryableEncodingBimap, Status>{lss, in->limit}.get(*static_cast<Status*>(res));
 }
 
 extern "C" void prompp_get_head_status_data_storage(void* args, void* res) {
