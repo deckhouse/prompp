@@ -1,0 +1,338 @@
+#include "head_wal.h"
+#include "annotations.h"
+
+#include <variant>
+
+#include "entrypoint/types/encoder.h"
+#include "entrypoint/types/exception.h"
+#include "entrypoint/types/hashdex.h"
+#include "entrypoint/types/lss.h"
+#include "primitives/go_slice.h"
+#include "wal/decoder.h"
+#include "wal/encoder.h"
+#include "wal/wal.h"
+
+namespace {
+
+using Encoder = PromPP::WAL::GenericEncoder<PromPP::WAL::BasicEncoder<entrypoint::types::QueryableEncodingBimap&>>;
+using EncoderPtr = std::unique_ptr<Encoder>;
+using Decoder = PromPP::WAL::GenericDecoder<entrypoint::types::QueryableEncodingBimap&>;
+using DecoderPtr = std::unique_ptr<Decoder>;
+static_assert(sizeof(EncoderPtr) == sizeof(void*));
+static_assert(sizeof(DecoderPtr) == sizeof(void*));
+
+}  // namespace
+
+/**
+ * @brief Construct a new Head WAL encoder
+ *
+ * @param args {
+ *     shardID            uint16  // shard number
+ *     logShards          uint8   // logarithm to the base 2 of total shards count
+ *.    lss                uintptr // pointer to lss
+ * }
+ * @param res {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_encoder_ctor(void* args, void* res) {
+  using entrypoint::types::LssVariantPtr;
+
+  struct Arguments {
+    uint16_t shard_id;
+    uint8_t log_shards;
+    LssVariantPtr lss;
+  };
+
+  struct Result {
+    EncoderPtr encoder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
+  new (res) Result{.encoder = std::make_unique<Encoder>(lss, in->shard_id, in->log_shards)};
+}
+
+/**
+ * @brief Create encoder from decoder
+ *
+ * @param args {
+ *     decoder uintptr // pointer to decoder
+ * }
+ * @param res {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_encoder_ctor_from_decoder(void* args, void* res) {
+  struct Arguments {
+    DecoderPtr decoder;
+  };
+
+  struct Result {
+    EncoderPtr encoder;
+    PromPP::Primitives::Go::Slice<char> error;
+  };
+
+  const auto& generic_decoder = static_cast<Arguments*>(args)->decoder;
+  const auto out = new (res) Result();
+
+  if (generic_decoder->decoder().encoder_version() != PromPP::WAL::Writer::version) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    err_stream << "invalid encoder version" << std::endl;
+    return;
+  }
+
+  const auto& decoder = generic_decoder->decoder();
+  out->encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
+                                           decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1, decoder.sample_decoder().timestamp_base);
+}
+
+/**
+ * @brief Destroy Encoder
+ *
+ * @param args {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_encoder_dtor(void* args) {
+  struct Arguments {
+    EncoderPtr encoder;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+/**
+ * @brief Add inner series to current segment
+ *
+ * @param args {
+ *     incomingInnerSeries []InnerSeries // go slice with inner series;
+ *     encoder  uintptr                  // pointer to constructed encoder;
+ * }
+ * @param res {
+ *     error               []byte         // error string if thrown
+ *     samples             uint32         // number of samples in segment
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_encoder_add_inner_series(void* args, void* res) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> incoming_inner_series;
+    EncoderPtr encoder;
+  };
+
+  struct Result {
+    PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  try {
+    in->encoder->add_inner_series(in->incoming_inner_series, out);
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::types::handle_current_exception(err_stream);
+  }
+}
+
+/**
+ * @brief Flush segment
+ *
+ * @param args {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ * @param res {
+ *     segment            []byte  // segment content
+ *     error              []byte  // error string if thrown
+ *     samples            uint32  // number of samples in segment
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_encoder_finalize(void* args, void* res) {
+  struct Arguments {
+    EncoderPtr encoder;
+  };
+
+  struct Result {
+    PromPP::Primitives::Go::Slice<char> segment;
+    PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  auto out_stream = PromPP::Primitives::Go::BytesStream(&out->segment);
+
+  try {
+    in->encoder->finalize(out, out_stream);
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::types::handle_current_exception(err_stream);
+  }
+}
+
+/**
+ * @brief Exclusive upper bound of series item indices written to WAL.
+ *
+ * @param args {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ * @param res {
+ *     max_written_item_index uint32
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_encoder_max_written_item_index(void* args, void* res) {
+  struct Arguments {
+    EncoderPtr encoder;
+  };
+
+  struct Result {
+    uint32_t max_written_item_index;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto* out = static_cast<Result*>(res);
+  out->max_written_item_index = in->encoder->max_written_item_index();
+}
+
+/**
+ * @brief Construct a new Head WAL Decoder
+ *
+ * @param args {
+ *     lss             uintptr // pointer to lss
+ *     encoder_version uint8_t // basic encoder version
+ * }
+ *
+ * @param res {
+ *     decoder uintptr // pointer to constructed decoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_decoder_ctor(void* args, void* res) {
+  using entrypoint::types::LssVariantPtr;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    PromPP::WAL::BasicEncoderVersion encoder_version;
+  };
+
+  using Result = struct {
+    DecoderPtr decoder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
+  new (res) Result{.decoder = std::make_unique<Decoder>(lss, in->encoder_version)};
+}
+
+/**
+ * @brief Destroy decoder
+ *
+ * @param args {
+ *     decoder uintptr // pointer to constructed decoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_decoder_dtor(void* args) {
+  struct Arguments {
+    DecoderPtr decoder;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+/**
+ * @brief Decode WAL-segment into protobuf message
+ *
+ * @param args {
+ *     decoder uintptr // pointer to constructed decoder
+ *     segment []byte  // segment content
+ *    inner_series *InnerSeries // decoded content
+ * }
+ * @param res {
+ *     created_at int64  // timestamp in ns when data was start writed to encoder
+ *     encoded_at int64  // timestamp in ns when segment was encoded
+ *     samples    uint32 // number of samples in segment
+ *     series     uint32 // number of series in segment
+ *     segment_id uint32 // processed segment id
+ *     earliest_block_sample int64 // min timestamp in block
+ *     latest_block_sample int64 // max timestamp in block
+ *     error      []byte // error string if thrown
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_decoder_decode(void* args, void* res) {
+  struct Arguments {
+    DecoderPtr decoder;
+    PromPP::Primitives::Go::SliceView<char> segment;
+    PromPP::Prometheus::Relabel::InnerSeries* inner_series;
+  };
+
+  struct Result {
+    int64_t created_at;
+    int64_t encoded_at;
+    uint32_t samples;
+    uint32_t series;
+    uint32_t segment_id;
+    PromPP::Primitives::Timestamp earliest_block_sample;
+    PromPP::Primitives::Timestamp latest_block_sample;
+    PromPP::Primitives::Go::Slice<char> error;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  try {
+    in->inner_series->reset();
+    in->decoder->decode_to_inner_series(in->segment, *in->inner_series, out);
+    for (const auto& inner_serie : in->inner_series->data()) {
+      in->decoder->label_set().mark_active(inner_serie.ls_id);
+    }
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::types::handle_current_exception(err_stream);
+  }
+}
+
+/**
+ * @brief Decode WAL-segment into DataStorage
+ *
+ * @param args {
+ *     decoder uintptr // pointer to constructed decoder
+ *     segment []byte  // segment content
+ *     encoder uintptr // pointer to constructed data_storage encoder
+ * }
+ * @param res {
+ *     createTimestamp int64 // timestamp of earliest sample in wal
+ *     encodeTimestamp int64   // timestamp of latest sample in wal
+ *     error      []byte // error string if thrown
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_head_wal_decoder_decode_to_data_storage(void* args, void* res) {
+  struct Arguments {
+    DecoderPtr decoder;
+    PromPP::Primitives::Go::SliceView<char> segment;
+    entrypoint::types::SeriesDataEncoderWrapperPtr encoder_wrapper;
+  };
+
+  struct Result {
+    PromPP::Primitives::Timestamp create_timestamp;
+    PromPP::Primitives::Timestamp encode_timestamp;
+    PromPP::Primitives::Go::Slice<char> error;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  try {
+    const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
+
+    in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
+      in->decoder->label_set().mark_active(ls_id);
+      in->encoder_wrapper->encoder.encode(ls_id, timestamp, value);
+    });
+    out->create_timestamp = in->decoder->decoder().created_at_tsns();
+    out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::types::handle_current_exception(err_stream);
+  }
+}
