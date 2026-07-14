@@ -17,7 +17,7 @@
 #include "series_data/decoder/universal_decode_iterator.h"
 #include "series_data/serialization/serialized_data.h"
 
-namespace entrypoint::series_data {
+namespace entrypoint::types {
 
 template <class Iterator>
 concept invalidatable = requires(Iterator iterator) {
@@ -241,4 +241,4 @@ PROMPP_ALWAYS_INLINE AggregationIterator create_aggregation_iterator(::series_da
   }
 }
 
-}  // namespace entrypoint::series_data
+}  // namespace entrypoint::types

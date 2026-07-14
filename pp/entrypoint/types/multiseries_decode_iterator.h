@@ -10,7 +10,7 @@
 #include "series_data/decoder/universal_decode_iterator.h"
 #include "series_data/serialization/serialized_data.h"
 
-namespace entrypoint::series_data {
+namespace entrypoint::types {
 
 class MultiSeriesDecodeIterator {
  public:
@@ -164,4 +164,4 @@ PROMPP_ALWAYS_INLINE void construct_multi_series_decode_iterator(MultiSeriesDeco
   }
 }
 
-}  // namespace entrypoint::series_data
+}  // namespace entrypoint::types
