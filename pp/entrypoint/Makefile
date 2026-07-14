@@ -76,7 +76,7 @@ install: $(prefixed_archives)
 	@install $^ $(install_dir)
 
 # Shared type/layout contracts that the Go side reads via cgo (e.g. Sizeof_* macros).
-type_headers := ../entrypoint/types/go_constants.h
+type_headers := types/go_constants.h
 
 $(result_dir)/entrypoint.h: $(type_headers) $(headers) entrypoint.h.template ## Concat all headers in one
 	@mkdir -p ${@D}
