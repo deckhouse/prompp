@@ -93,14 +93,10 @@ type LocalStorageObserver interface {
 func NewManager(
 	dir string,
 	opts *Options,
-<<<<<<< HEAD:pp-pkg/blocks/manager/manager.go
 	compactor compactionRunner,
 	blocksToDelete block.BlocksToDeleteFunc,
 	chunkPool chunkenc.Pool,
-=======
-	blocksToDelete tsdb.BlocksToDeleteFunc,
 	lsObserver LocalStorageObserver,
->>>>>>> agg_series_set:pp/go/storage/block/manager.go
 	logger log.Logger,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -121,12 +117,8 @@ func NewManager(
 		compactor:      compactor,
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
-<<<<<<< HEAD:pp-pkg/blocks/manager/manager.go
 		chunkPool:      chunkPool,
-=======
-		chunkPool:      chunkenc.NewPool(),
 		lsObserver:     lsObserver,
->>>>>>> agg_series_set:pp/go/storage/block/manager.go
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
 	}
