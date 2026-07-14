@@ -1,8 +1,8 @@
 #include "wal_hashdex.h"
 
-#include "entrypoint/head/data_storage.h"
-#include "exception.hpp"
-#include "hashdex.hpp"
+#include "entrypoint/types/data_storage.h"
+#include "entrypoint/types/exception.h"
+#include "entrypoint/types/hashdex.h"
 #include "primitives/go_slice.h"
 #include "wal/decoder.h"
 
@@ -89,7 +89,7 @@ extern "C" void prompp_wal_protobuf_hashdex_snappy_presharding(void* args, void*
     out->replica.reset_to(replica.data(), replica.size());
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -136,7 +136,7 @@ extern "C" void prompp_wal_go_model_hashdex_presharding(void* args, void* res) {
     out->replica.reset_to(replica.data(), replica.size());
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -206,10 +206,10 @@ extern "C" void prompp_wal_go_head_hashdex_ctor(void* res) {
 extern "C" void prompp_wal_go_head_hashdex_presharding(void* args) {
   struct Arguments {
     HashdexVariant* hashdex;
-    entrypoint::head::LssVariantPtr lss;
-    entrypoint::head::DataStoragePtr data_storage;
+    entrypoint::types::LssVariantPtr lss;
+    entrypoint::types::DataStoragePtr data_storage;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  std::get<GoHeadHashdex>(*in->hashdex).presharding(&std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss), in->data_storage.get());
+  std::get<GoHeadHashdex>(*in->hashdex).presharding(&std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss), in->data_storage.get());
 }

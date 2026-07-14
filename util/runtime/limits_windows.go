@@ -24,3 +24,8 @@ func FdLimits() string {
 func VMLimits() string {
 	return "N/A"
 }
+
+// DisableCoreDumps is a no-op on Windows, which has no RLIMIT_CORE.
+func DisableCoreDumps() error {
+	return nil
+}
