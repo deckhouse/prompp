@@ -4,9 +4,13 @@
 
 ### Features
 1. **`prompptool persist-head` command.** Added a `persist-head` command that persists a single Prom++ head to TSDB blocks directly by its directory path, without consulting `head.log`. Useful for recovering or persisting an individual (e.g. corrupted or orphaned) head during incident investigation.
+2. **Skip writing blocks beyond retention.** The block writer now skips any block-duration quant whose entire time range already falls outside the retention period, instead of writing blocks that would be deleted on the very next retention pass. This avoids wasted disk writes when persisting shards that span far into the past.
 
 ### Enhancements
 1. **Local storage observability.** The block-manager storage scheme now runs a local storage observer that reports the total size of unknown/unexpected objects in the local storage directory via the new `prompp_localstorage_unknown_bytes` gauge, making disk leftovers visible to operators.
+
+### Performance
+1. **Lazy block index buffer allocation.** Block writers previously allocated a 4 MiB index buffer per block-duration quant up front, including empty quants, which could reach several GiB of allocations on wide or sparse time intervals. The buffer is now allocated lazily on the first write, so empty blocks no longer hold multi-megabyte buffers.
 
 ### Fixes
 1. **Heap-buffer-overflow in the outdated chunk merger.** `merge_outdated_samples_in_finalized_chunks` could keep iterating finalized chunks and dereference an already-exhausted samples span, causing a heap-buffer-overflow (observed on production heads, flagged by ASan). The merger now bails out as soon as the samples span is empty.
