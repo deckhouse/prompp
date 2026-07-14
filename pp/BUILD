@@ -223,11 +223,6 @@ cc_library(
         "entrypoint/bridge/**/*.hpp",
     ]),
     linkstatic = True,
-    # GCC warns about the libclang-only annotate attribute; allow it to ignore
-    # that unknown attribute while preserving the annotation for fact checking.
-    copts = [
-        "-Wno-attributes",
-    ],
     deps = [
         ":bare_bones",
         ":entrypoint_types",
