@@ -1,13 +1,13 @@
 #include "prometheus_relabeler.h"
 
-#include "exception.hpp"
-#include "hashdex.hpp"
-#include "head/lss.h"
+#include "entrypoint/types/exception.h"
+#include "entrypoint/types/hashdex.h"
+#include "entrypoint/types/lss.h"
 
 #include "primitives/go_slice.h"
 #include "prometheus/relabeler.h"
 
-using entrypoint::head::LssVariantPtr;
+using entrypoint::types::LssVariantPtr;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Prometheus::Relabel::InnerSeries;
 using PromPP::Prometheus::Relabel::RelabeledSeries;
@@ -39,7 +39,7 @@ extern "C" void prompp_prometheus_stateless_relabeler_ctor(void* args, void* res
     out->stateless_relabeler = std::make_unique<StatelessRelabeler>(in->go_rcfgs);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -67,7 +67,7 @@ extern "C" void prompp_prometheus_stateless_relabeler_reset_to(void* args, void*
   } catch (...) {
     auto* out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -196,7 +196,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res
     out->per_shard_relabeler = std::make_unique<PerShardRelabeler>(in->external_labels, in->stateless_relabeler, in->number_of_shards, in->shard_id);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -245,7 +245,7 @@ extern "C" void prompp_prometheus_per_shard_single_relabeler_update_relabeler_st
   } catch (...) {
     auto* out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -265,12 +265,12 @@ extern "C" void prompp_prometheus_per_shard_relabeler_output_relabeling(void* ar
   const auto in = static_cast<Arguments*>(args);
 
   try {
-    const auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
+    const auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
     in->per_shard_relabeler->output_relabeling(lss, *in->cache, in->relabeled_series, in->incoming_inner_series, in->encoders_inner_series);
   } catch (...) {
     const auto out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -341,7 +341,7 @@ extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
   } catch (...) {
     auto* out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -401,10 +401,10 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void*
   try {
     std::visit(
         [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+          auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
+          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
-          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
+          const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
                                                         in->shards_inner_series, in->shards_relabeled_series);
           target_lss.build_deferred_indexes();
@@ -413,7 +413,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void*
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -441,8 +441,8 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_
   try {
     std::visit(
         [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+          auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
+          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
           out->ok =
               in->per_goroutine_relabeler->input_relabeling_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series);
@@ -450,7 +450,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -481,10 +481,10 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
   try {
     std::visit(
         [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+          auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
+          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
-          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
+          const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
                                                                        in->shards_inner_series, in->shards_relabeled_series, in->def_timestamp);
           target_lss.build_deferred_indexes();
@@ -493,7 +493,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -522,8 +522,8 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
   try {
     std::visit(
         [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+          auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
+          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
           out->ok = in->per_goroutine_relabeler->input_relabeling_with_stalenans_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out,
                                                                                             in->shards_inner_series, in->def_timestamp);
@@ -531,7 +531,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -556,9 +556,9 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
   try {
     std::visit(
         [in, out](auto& hashdex) {
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
-          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
+          const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_transition_relabeling(target_lss, hashdex, *out, in->shards_inner_series);
           target_lss.build_deferred_indexes();
           out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
@@ -566,7 +566,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -591,14 +591,14 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
   try {
     std::visit(
         [in, out](auto& hashdex) {
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
           out->ok = in->per_goroutine_relabeler->input_transition_relabeling_only_read(target_lss, hashdex, *out, in->shards_inner_series);
         },
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -619,8 +619,8 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
   const auto out = new (res) Result();
 
   try {
-    auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
-    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
+    auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
+    const entrypoint::types::ReallocationsDetector reallocation_detector(lss);
 
     for (size_t id = 0; id != in->shards_relabeled_series.size(); ++id) {
       if (in->shards_relabeled_series[id].size() == 0) {
@@ -634,7 +634,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
     out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
+    entrypoint::types::handle_current_exception(err_stream);
   }
 }
 
@@ -652,7 +652,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void*
 extern "C" void prompp_remap_stale_nans_state(void* args) {
   struct Arguments {
     StaleNaNsStatePtr stale_nans_state;
-    entrypoint::head::LsIdsSlicePtr dst_src_ls_ids_mapping;
+    entrypoint::types::LsIdsSlicePtr dst_src_ls_ids_mapping;
   };
 
   const auto in = static_cast<Arguments*>(args);

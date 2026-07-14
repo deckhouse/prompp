@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.8.1
+
+### Features
+1. **Block-manager historical storage (feature-flagged).** Introduced a standalone `block.Manager`/`block.Compactor` that owns reading persisted blocks, applying retention, and compaction, replacing the embedded TSDB on the read path in server mode. The pre-existing historical TSDB path stays the default; enable the new engine via `PROMPP_FEATURES=enable_block_manager`. Adds compaction plan/result logging, restored block-manager gauges, and block-duration diagnostics metrics (`prometheus_tsdb_blocks_loaded_by_duration`).
+2. **Disable core dumps feature flag.** Added `PROMPP_FEATURES=disable_coredumps`, which sets `RLIMIT_CORE` to 0 at startup so the kernel does not write core dumps into the working directory on crash. Lowering the limit needs no extra privileges, so it works in unprivileged Kubernetes pods.
+
+### Enhancements
+1. **DataStorage metrics.** Exposed a new family of `prompp_data_storage_*` metrics — per-encoder-type counts, finalized chunk counts, and timestamp state counts — giving operators visibility into the C++ data storage internals.
+
+### Performance
+1. **Faster `NewLabelsWithLSS`.** Added a dedicated `serialize_from_snapshot_to_buffer` binding so building Go label sets from an LSS snapshot serializes directly into a buffer, cutting allocations and copies on the hot path.
+2. **Index writer optimization.** Reworked snapshot symbol collection to emit each label name once instead of once per value (a single hot name previously reached ~4.7k copies on a real LSS), cutting `write_symbols` time after shrink by a further ~16% on top of the btree change.
+
+### Fixes
+1. **Dependency security updates.** Bumped the Go `go.mongodb.org/mongo-driver` to v1.17.7 and the web UI `ws` (v8.21.0) and `form-data` (v3.0.5) packages, picking up upstream security fixes.
+
+### Other
+1. **GCC 16 C++ toolchain.** Upgraded the CI/devcontainer C++ toolchain to GCC 16.
+
 ## v0.8.0
 
 ### Features

@@ -14,8 +14,6 @@ RUN set -eux; \
         liblzma-dev \
         jq \
         bash \
-        nodejs \
-        npm \
         bzip2 \
         git \
         autoconf \
@@ -40,6 +38,12 @@ RUN set -eux; \
     update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-16 100; \
     ln -sf /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy; \
     ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
+    rm -rf /var/lib/apt/lists/*
+
+# Node.js 20 from NodeSource. Debian's own npm on trixie/sid is broken
+# ("LRU is not a constructor": npm's semver uses the system node-lru-cache v11).
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
+    apt-get install -y --no-install-recommends nodejs; \
     rm -rf /var/lib/apt/lists/*
 
 # Bazel

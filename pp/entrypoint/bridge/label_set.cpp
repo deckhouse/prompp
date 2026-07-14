@@ -3,12 +3,12 @@
 #include "bare_bones/algorithm.h"
 #include "bare_bones/iterator.h"
 #include "bare_bones/varint.h"
-#include "entrypoint/head/lss.h"
+#include "entrypoint/types/lss.h"
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 
-using entrypoint::head::LssVariantPtr;
-using entrypoint::head::SnapshotLSSVariantPtr;
+using entrypoint::types::LssVariantPtr;
+using entrypoint::types::SnapshotLSSVariantPtr;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
 
