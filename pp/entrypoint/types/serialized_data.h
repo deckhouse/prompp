@@ -1,8 +1,13 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
+
+#include "bare_bones/preprocess.h"
+#include "series_data/querier/querier.h"
 #include "series_data/serialization/serialized_data.h"
 
-namespace entrypoint::head {
+namespace entrypoint::types {
 
 class SerializedDataGo {
  public:
@@ -25,4 +30,4 @@ using SerializedDataIterator = series_data::serialization::SerializedDataView::S
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 
-}  // namespace entrypoint::head
+}  // namespace entrypoint::types
