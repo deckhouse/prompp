@@ -117,7 +117,7 @@ func TestManagerRemovesLeftoverTmpDirsOnStartup(t *testing.T) {
 	require.NoError(t, os.Mkdir(tmpCreation, 0o777))
 	require.NoError(t, os.Mkdir(tmpDeletion, 0o777))
 
-	m, err := NewManager(dir, nil, nil, log.NewNopLogger(), nil)
+	m, err := NewManager(dir, nil, nil, nil, log.NewNopLogger(), nil)
 	require.NoError(t, err)
 	t.Cleanup(m.Close)
 
