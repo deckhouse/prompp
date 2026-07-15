@@ -242,7 +242,7 @@ func headSize(dir string) int64 {
 }
 
 // splitBlocks splits the blocks into downsampled and raw blocks.
-func splitBlocks[TBlock Block](blocks []TBlock) (downsampledBlocks, rawBlocks []TBlock) {
+func splitBlocks[TBlock Block](blocks []TBlock) (rawBlocks, downsampledBlocks []TBlock) {
 	// Sort the blocks by time - newest to oldest (largest to smallest timestamp).
 	// This ensures that the retentions will remove the oldest  blocks.
 	slices.SortFunc(blocks, func(a, b TBlock) int {
@@ -256,8 +256,8 @@ func splitBlocks[TBlock Block](blocks []TBlock) (downsampledBlocks, rawBlocks []
 		}
 	})
 
-	downsampledBlocks = make([]TBlock, 0, len(blocks)/2)
 	rawBlocks = make([]TBlock, 0, len(blocks)/2)
+	downsampledBlocks = make([]TBlock, 0, len(blocks)/2)
 	for _, blk := range blocks {
 		if blk.IsDownsamplingBlock() {
 			downsampledBlocks = append(downsampledBlocks, blk)
