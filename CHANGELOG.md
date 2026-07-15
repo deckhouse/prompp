@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.8.2
+
+### Fixes
+1. **C++ metrics collector disabled by default (use-after-free mitigation).** The Prom++ C++ metrics collector iterates C++ metrics-page memory on every scrape while those pages can be freed concurrently (`remove_unused_pages`), risking a use-after-free. The collector is now off by default and must be opted into via `PROMPP_FEATURES=enable_cpp_metrics`.
+
 ## v0.8.1
 
 ### Features
