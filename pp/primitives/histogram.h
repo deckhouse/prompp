@@ -43,6 +43,16 @@ union HistogramValue {
   bool operator==(const HistogramValue& other) const noexcept { return value == other.value; }
 };
 
+struct ClassicHistogramBucket {
+  HistogramValue cumulative_count{};
+  double upper_bound{};
+  HistogramValueType type{HistogramValueType::kUnknown};
+
+  PROMPP_ALWAYS_INLINE double float_cumulative_count() const noexcept {
+    return type == HistogramValueType::kFloat ? cumulative_count.float_value : static_cast<double>(cumulative_count.value);
+  }
+};
+
 constexpr int8_t kCustomBucketsSchema = -53;
 
 template <template <class> class SpanType, template <class> class BucketsType, template <class> class CustomValuesType>
@@ -68,88 +78,19 @@ struct BasicHistogram {
       return;
     }
 
-    std::ranges::sort(classic_buckets, [](const auto& a, const auto& b) { return a.upper_bound < b.upper_bound; });
-
-    const auto unique_end =
-        std::unique(classic_buckets.begin(), classic_buckets.end(), [](const auto& a, const auto& b) { return a.upper_bound == b.upper_bound; });
-    classic_buckets.erase(unique_end, classic_buckets.end());
-
-    struct SortedBucket {
-      double upper_bound{};
-      double cumulative_count{};
-    };
-
-    BareBones::Vector<SortedBucket> buckets;
-    buckets.reserve(classic_buckets.size());
-    for (const auto& classic_bucket : classic_buckets) {
-      buckets.emplace_back(classic_bucket.upper_bound, classic_histogram_bucket_cumulative_count(classic_bucket));
-    }
-
-    constexpr double inf = std::numeric_limits<double>::infinity();
-    double total_count = type == HistogramType::kFloat ? count.float_value : static_cast<double>(count.value);
-
-    if (total_count == 0 && !buckets.empty()) {
-      total_count = buckets.back().cumulative_count;
-    }
-
-    if (buckets.empty() || buckets.back().upper_bound != inf) {
-      buckets.emplace_back(SortedBucket{.upper_bound = inf, .cumulative_count = total_count});
-    }
-
-    bool use_float = type == HistogramType::kFloat;
-    if (!use_float) {
-      const auto rounded_total = std::round(total_count);
-      if (total_count != rounded_total) {
-        use_float = true;
-      } else {
-        for (const auto& bucket : buckets) {
-          const auto rounded_count = std::round(bucket.cumulative_count);
-          if (bucket.cumulative_count != rounded_count) {
-            use_float = true;
-            break;
-          }
-        }
-      }
-    }
+    prepare_classic_buckets(classic_buckets);
+    const double total_count = append_infinity_bucket(classic_buckets);
 
     schema = kCustomBucketsSchema;
-    positive_spans.emplace_back(HistogramSpan{.offset = 0, .length = static_cast<uint32_t>(buckets.size())});
-    positive_buckets.reserve(buckets.size());
-    custom_values.clear();
+    positive_spans.emplace_back(HistogramSpan{.offset = 0, .length = static_cast<uint32_t>(classic_buckets.size())});
+    positive_buckets.reserve(classic_buckets.size());
+    fill_custom_values(classic_buckets);
 
-    if (buckets.size() > 1) {
-      custom_values.resize(buckets.size() - 1);
-      for (size_t i = 0; i < buckets.size() - 1; ++i) {
-        if (!std::isinf(buckets[i].upper_bound)) {
-          custom_values[i] = buckets[i].upper_bound;
-        }
-      }
+    if (type == HistogramType::kFloat || !all_counts_are_integers(classic_buckets, total_count)) {
+      fill_float_buckets(classic_buckets, total_count);
+    } else {
+      fill_int_buckets(classic_buckets, total_count);
     }
-
-    if (use_float) {
-      type = HistogramType::kFloat;
-      count.float_value = total_count;
-      double prev_count = 0;
-      for (const auto& bucket : buckets) {
-        positive_buckets.emplace_back().float_value = bucket.cumulative_count - prev_count;
-        prev_count = bucket.cumulative_count;
-      }
-      compact_float_histogram_buckets(positive_buckets, positive_spans, 0);
-      return;
-    }
-
-    type = HistogramType::kInt;
-    count.value = static_cast<uint64_t>(std::round(total_count));
-
-    int64_t prev_count = 0;
-    int64_t prev_delta = 0;
-    for (const auto& bucket : buckets) {
-      const auto delta = static_cast<int64_t>(std::round(bucket.cumulative_count)) - prev_count;
-      positive_buckets.emplace_back().value = delta - prev_delta;
-      prev_count = static_cast<int64_t>(std::round(bucket.cumulative_count));
-      prev_delta = delta;
-    }
-    compact_int_histogram_buckets(positive_buckets, positive_spans, 2);
   }
 
   void compact_buckets(int max_empty_buckets) {
@@ -163,6 +104,88 @@ struct BasicHistogram {
   }
 
  private:
+  template <class BucketsContainer>
+  PROMPP_ALWAYS_INLINE static void prepare_classic_buckets(BucketsContainer& classic_buckets) {
+    std::ranges::sort(classic_buckets, [](const auto& a, const auto& b) { return a.upper_bound < b.upper_bound; });
+
+    const auto unique_end =
+        std::unique(classic_buckets.begin(), classic_buckets.end(), [](const auto& a, const auto& b) { return a.upper_bound == b.upper_bound; });
+    classic_buckets.erase(unique_end, classic_buckets.end());
+  }
+
+  template <class BucketsContainer>
+  PROMPP_ALWAYS_INLINE double append_infinity_bucket(BucketsContainer& buckets) const {
+    constexpr double inf = std::numeric_limits<double>::infinity();
+
+    double total_count = type == HistogramType::kFloat ? count.float_value : static_cast<double>(count.value);
+    if (total_count == 0 && !buckets.empty()) {
+      total_count = buckets.back().float_cumulative_count();
+    }
+
+    if (buckets.empty() || buckets.back().upper_bound != inf) {
+      buckets.emplace_back(ClassicHistogramBucket{
+          .cumulative_count = {.float_value = total_count},
+          .upper_bound = inf,
+          .type = HistogramValueType::kFloat,
+      });
+    }
+    return total_count;
+  }
+
+  template <class BucketsContainer>
+  PROMPP_ALWAYS_INLINE static bool all_counts_are_integers(const BucketsContainer& buckets, double total_count) {
+    if (total_count != std::round(total_count)) {
+      return false;
+    }
+
+    return std::ranges::all_of(buckets, [](const auto& bucket) { return bucket.float_cumulative_count() == std::round(bucket.float_cumulative_count()); });
+  }
+
+  template <class BucketsContainer>
+  PROMPP_ALWAYS_INLINE void fill_custom_values(const BucketsContainer& buckets) {
+    custom_values.clear();
+    if (buckets.size() <= 1) {
+      return;
+    }
+
+    custom_values.resize(buckets.size() - 1);
+    for (size_t i = 0; i < buckets.size() - 1; ++i) {
+      if (!std::isinf(buckets[i].upper_bound)) {
+        custom_values[i] = buckets[i].upper_bound;
+      }
+    }
+  }
+
+  template <class BucketsContainer>
+  PROMPP_ALWAYS_INLINE void fill_float_buckets(const BucketsContainer& buckets, double total_count) {
+    type = HistogramType::kFloat;
+    count.float_value = total_count;
+
+    double prev_count = 0;
+    for (const auto& bucket : buckets) {
+      positive_buckets.emplace_back().float_value = bucket.float_cumulative_count() - prev_count;
+      prev_count = bucket.float_cumulative_count();
+    }
+    compact_float_histogram_buckets(positive_buckets, positive_spans, 0);
+  }
+
+  template <class BucketsContainer>
+  PROMPP_ALWAYS_INLINE void fill_int_buckets(const BucketsContainer& buckets, double total_count) {
+    type = HistogramType::kInt;
+    count.value = static_cast<uint64_t>(std::round(total_count));
+
+    int64_t prev_count = 0;
+    int64_t prev_delta = 0;
+    for (const auto& bucket : buckets) {
+      const auto cumulative_count = static_cast<int64_t>(std::round(bucket.float_cumulative_count()));
+      const auto delta = cumulative_count - prev_count;
+      positive_buckets.emplace_back().value = delta - prev_delta;
+      prev_count = cumulative_count;
+      prev_delta = delta;
+    }
+    compact_int_histogram_buckets(positive_buckets, positive_spans, 2);
+  }
+
   PROMPP_ALWAYS_INLINE void compact_int_histogram_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
                                                           BareBones::Vector<HistogramSpan>& spans,
                                                           int max_empty_buckets) {
@@ -415,19 +438,5 @@ struct HistogramTimeseries {
 
   bool operator==(const HistogramTimeseries& a) const noexcept = default;
 };
-
-struct ClassicHistogramBucket {
-  HistogramValue cumulative_count{};
-  double upper_bound{};
-  HistogramValueType type{HistogramValueType::kUnknown};
-};
-
-[[nodiscard]] PROMPP_ALWAYS_INLINE double classic_histogram_bucket_cumulative_count(const ClassicHistogramBucket& bucket) noexcept {
-  if (bucket.type == HistogramValueType::kFloat) {
-    return bucket.cumulative_count.float_value;
-  }
-
-  return static_cast<double>(bucket.cumulative_count.value);
-}
 
 }  // namespace PromPP::Primitives
