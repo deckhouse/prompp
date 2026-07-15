@@ -68,6 +68,7 @@ import (
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
 
+	"github.com/prometheus/prometheus/pp/go/cppbridge"            // PP_CHANGES.md: rebuild on cpp
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
 	block "github.com/prometheus/prometheus/pp/go/storage/block"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
@@ -2370,6 +2371,10 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				cfg.UseBlockManagerStorage = true
 			}
 			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
+
+		case "enable_cpp_metrics":
+			cppbridge.MetricsCollectorEnabled = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] C++ (Prom++) metrics collector is enabled.")
 
 		case "disable_coredumps":
 			if err := prom_runtime.DisableCoreDumps(); err != nil {

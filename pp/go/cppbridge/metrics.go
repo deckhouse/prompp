@@ -53,10 +53,17 @@ func CppMetrics(f func(metric *CppMetric) bool) {
 	}
 }
 
+// MetricsCollectorEnabled gates registration of the C++ (Prom++) metrics collector.
+//
+// The collector iterates C++ metrics-page memory during every scrape while the backing pages can be freed
+// concurrently (remove_unused_pages), which can lead to a use-after-free. Until that is fully addressed the collector
+// is disabled by default and can be opted into via the PROMPP_FEATURES=enable_cpp_metrics flag.
+var MetricsCollectorEnabled bool
+
 type CppMetricsCollector struct{}
 
 func NewCppMetricsCollector(reg prometheus.Registerer) {
-	if reg == nil {
+	if reg == nil || !MetricsCollectorEnabled {
 		return
 	}
 
