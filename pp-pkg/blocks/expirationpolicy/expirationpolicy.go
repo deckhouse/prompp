@@ -6,11 +6,43 @@ import (
 
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
 )
+
+//
+// Block
+//
+
+// Block is the interface for the block.
+type Block interface {
+	// Deletable returns true if the block is deletable.
+	Deletable() bool
+	// IsDownsamplingBlock returns true if the block is a downsampling block.
+	IsDownsamplingBlock() bool
+	// MaxTime returns the maximum time of the block.
+	MaxTime() int64
+	// Size returns the size of the block.
+	Size() int64
+	// ULID returns the ULID of the block.
+	ULID() ulid.ULID
+}
+
+//
+// Catalog
+//
+
+// Catalog is the interface for the catalog.
+type Catalog interface {
+	// OnDiskSize returns the on-disk size of the catalog.
+	OnDiskSize() int64
+	// List returns the list of heads in the catalog.
+	List(
+		filterFn func(record *catalog.Record) bool,
+		sortLess func(lhs *catalog.Record, rhs *catalog.Record) bool,
+	) []*catalog.Record
+}
 
 //
 // Metrics
@@ -69,21 +101,21 @@ type Options struct {
 
 // ExpirationPolicy is the expiration policy for the [block.Block]s.
 // It is used to determine which blocks should be deleted based on the time and size retention policies.
-type ExpirationPolicy struct {
+type ExpirationPolicy[TBlock Block] struct {
 	dir     string
-	c       *catalog.Catalog
+	c       Catalog
 	opts    *Options
 	metrics *Metrics
 }
 
 // NewExpirationPolicy creates a new [ExpirationPolicy].
-func NewExpirationPolicy(
+func NewExpirationPolicy[TBlock Block](
 	dir string,
-	c *catalog.Catalog,
+	c Catalog,
 	opts *Options,
 	r prometheus.Registerer,
-) *ExpirationPolicy {
-	return &ExpirationPolicy{
+) *ExpirationPolicy[TBlock] {
+	return &ExpirationPolicy[TBlock]{
 		dir:     dir,
 		c:       c,
 		opts:    opts,
@@ -94,8 +126,8 @@ func NewExpirationPolicy(
 // BeyondSizeRetention returns those blocks which are beyond the size retention.
 //
 //revive:disable-next-line:cyclomatic // complex logic is necessary for this function
-func (ep *ExpirationPolicy) BeyondSizeRetention(
-	rawBlocks, downsampledBlocks []*block.Block,
+func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
+	rawBlocks, downsampledBlocks []TBlock,
 	deletable map[ulid.ULID]struct{},
 ) {
 	// Size retention is disabled or no blocks to work with.
@@ -112,7 +144,7 @@ func (ep *ExpirationPolicy) BeyondSizeRetention(
 		if blocksSize > ep.opts.MaxBytes {
 			// Add this and all following blocks for deletion.
 			for _, b := range rawBlocks[i:] {
-				deletable[b.Meta().ULID] = struct{}{}
+				deletable[b.ULID()] = struct{}{}
 			}
 
 			reachedLimit = true
@@ -126,7 +158,7 @@ func (ep *ExpirationPolicy) BeyondSizeRetention(
 		if blocksSize > ep.opts.MaxBytes {
 			// Add this and all following blocks for deletion.
 			for _, b := range downsampledBlocks[i:] {
-				deletable[b.Meta().ULID] = struct{}{}
+				deletable[b.ULID()] = struct{}{}
 			}
 
 			reachedLimit = true
@@ -141,7 +173,7 @@ func (ep *ExpirationPolicy) BeyondSizeRetention(
 }
 
 // BeyondTimeRetention returns those blocks which are beyond the time retention.
-func (ep *ExpirationPolicy) BeyondTimeRetention(rawBlocks []*block.Block, deletable map[ulid.ULID]struct{}) bool {
+func (ep *ExpirationPolicy[TBlock]) BeyondTimeRetention(rawBlocks []TBlock, deletable map[ulid.ULID]struct{}) bool {
 	// Time retention is disabled or no blocks to work with.
 	if len(rawBlocks) == 0 || ep.opts.RetentionDuration == 0 {
 		return false
@@ -150,9 +182,9 @@ func (ep *ExpirationPolicy) BeyondTimeRetention(rawBlocks []*block.Block, deleta
 	for i, blk := range rawBlocks {
 		// The difference between the first block and this block is greater than or equal to
 		// the retention period so any blocks after that are added as deletable.
-		if i > 0 && rawBlocks[0].Meta().MaxTime-blk.Meta().MaxTime >= ep.opts.RetentionDuration {
+		if i > 0 && rawBlocks[0].MaxTime()-blk.MaxTime() >= ep.opts.RetentionDuration {
 			for _, b := range rawBlocks[i:] {
-				deletable[b.Meta().ULID] = struct{}{}
+				deletable[b.ULID()] = struct{}{}
 			}
 
 			ep.metrics.timeRetentions.Inc()
@@ -165,15 +197,15 @@ func (ep *ExpirationPolicy) BeyondTimeRetention(rawBlocks []*block.Block, deleta
 
 // BlocksToDelete returns the blocks that should be deleted based on the retention policy
 // or already compacted into a new block.
-func (ep *ExpirationPolicy) BlocksToDelete(blocks []*block.Block) map[ulid.ULID]struct{} {
+func (ep *ExpirationPolicy[TBlock]) BlocksToDelete(blocks []TBlock) map[ulid.ULID]struct{} {
 	if len(blocks) == 0 {
 		return nil
 	}
 
 	deletable := make(map[ulid.ULID]struct{})
 	for _, blk := range blocks {
-		if blk.Meta().Compaction.Deletable {
-			deletable[blk.Meta().ULID] = struct{}{}
+		if blk.Deletable() {
+			deletable[blk.ULID()] = struct{}{}
 		}
 	}
 
@@ -193,7 +225,7 @@ func (ep *ExpirationPolicy) BlocksToDelete(blocks []*block.Block) map[ulid.ULID]
 
 // CatalogHeadsSize returns the on-disk size of the catalog and all of its heads.
 // It is useful to build the extraSize function passed to NewBlocksToDelete.
-func (ep *ExpirationPolicy) CatalogHeadsSize() int64 {
+func (ep *ExpirationPolicy[TBlock]) CatalogHeadsSize() int64 {
 	catalogSize := ep.c.OnDiskSize()
 	heads := ep.c.List(nil, nil)
 	for _, h := range heads {
@@ -210,22 +242,22 @@ func headSize(dir string) int64 {
 }
 
 // splitBlocks splits the blocks into downsampled and raw blocks.
-func splitBlocks(blocks []*block.Block) (downsampledBlocks, rawBlocks []*block.Block) {
+func splitBlocks[TBlock Block](blocks []TBlock) (downsampledBlocks, rawBlocks []TBlock) {
 	// Sort the blocks by time - newest to oldest (largest to smallest timestamp).
 	// This ensures that the retentions will remove the oldest  blocks.
-	slices.SortFunc(blocks, func(a, b *block.Block) int {
+	slices.SortFunc(blocks, func(a, b TBlock) int {
 		switch {
-		case b.Meta().MaxTime < a.Meta().MaxTime:
+		case b.MaxTime() < a.MaxTime():
 			return -1
-		case b.Meta().MaxTime > a.Meta().MaxTime:
+		case b.MaxTime() > a.MaxTime():
 			return 1
 		default:
 			return 0
 		}
 	})
 
-	downsampledBlocks = make([]*block.Block, 0, len(blocks)/2)
-	rawBlocks = make([]*block.Block, 0, len(blocks)/2)
+	downsampledBlocks = make([]TBlock, 0, len(blocks)/2)
+	rawBlocks = make([]TBlock, 0, len(blocks)/2)
 	for _, blk := range blocks {
 		if blk.IsDownsamplingBlock() {
 			downsampledBlocks = append(downsampledBlocks, blk)

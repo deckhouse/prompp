@@ -58,6 +58,7 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
@@ -923,7 +924,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			blocksToDelete := expirationpolicy.NewExpirationPolicy(
+			blocksToDelete := expirationpolicy.NewExpirationPolicy[*block.Block](
 				dataDir,
 				headCatalog,
 				&expirationpolicy.Options{

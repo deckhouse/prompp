@@ -212,6 +212,11 @@ func (pb *Block) Close() error {
 	)
 }
 
+// Deletable returns true if the block is deletable.
+func (pb *Block) Deletable() bool {
+	return pb.meta.Compaction.Deletable
+}
+
 // Dir returns the directory of the block.
 func (pb *Block) Dir() string { return pb.dir }
 
@@ -237,6 +242,11 @@ func (pb *Block) IsDownsamplingBlock() bool {
 // LabelNames returns all the unique label names present in the Block in sorted order.
 func (pb *Block) LabelNames(ctx context.Context) ([]string, error) {
 	return pb.indexr.LabelNames(ctx)
+}
+
+// MaxTime returns the maximum time of the block.
+func (pb *Block) MaxTime() int64 {
+	return pb.meta.MaxTime
 }
 
 // Meta returns [tsdb.BlockMeta] meta information about the block.
@@ -294,6 +304,11 @@ func (pb *Block) Tombstones() (tombstones.Reader, error) {
 	}
 
 	return blockTombstoneReader{Reader: pb.tombstones, b: pb}, nil
+}
+
+// ULID returns the ULID of the block.
+func (pb *Block) ULID() ulid.ULID {
+	return pb.meta.ULID
 }
 
 // startRead starts a read operation on the block.
@@ -503,13 +518,15 @@ func (o Overlaps) String() string {
 			))
 		}
 
-		res = append(res, fmt.Sprintf(
-			"[key: %s, mint: %d, maxt: %d, range: %s, blocks: %d]: %s",
-			r.Key,
-			r.Min, r.Max,
-			(time.Duration((r.Max-r.Min)/1000)*time.Second).String(),
-			len(overlaps),
-			strings.Join(groups, ", ")),
+		res = append(
+			res, fmt.Sprintf(
+				"[key: %s, mint: %d, maxt: %d, range: %s, blocks: %d]: %s",
+				r.Key,
+				r.Min, r.Max,
+				(time.Duration((r.Max-r.Min)/1000)*time.Second).String(),
+				len(overlaps),
+				strings.Join(groups, ", "),
+			),
 		)
 	}
 
