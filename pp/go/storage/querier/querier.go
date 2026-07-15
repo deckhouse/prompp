@@ -479,15 +479,15 @@ func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeT
 		return emptySelectHints
 	}
 
-	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithpout(hints) {
+	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithout(hints) {
 		return hints
 	}
 
 	return emptySelectHints
 }
 
-// isNotWithpout checks if the hints is not without by.
-func isNotWithpout(hints *storage.SelectHints) bool {
+// isNotWithout checks if the hints is not without by.
+func isNotWithout(hints *storage.SelectHints) bool {
 	return hints.By || len(hints.Grouping) == 0
 }
 

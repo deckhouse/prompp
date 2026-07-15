@@ -130,8 +130,12 @@ class AggregationIterator {
         return std::forward<Visitor>(visitor)(iterator_.delta);
       }
 
-      default: {
+      case Type::kResets: {
         return std::forward<Visitor>(visitor)(iterator_.resets);
+      }
+
+      default: {
+        assert(false);
       }
     }
   }

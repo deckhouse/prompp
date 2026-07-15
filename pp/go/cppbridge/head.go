@@ -255,8 +255,9 @@ func NewDataStorageSerializedData(ds *DataStorage) *DataStorageSerializedData {
 }
 
 func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
-	runtime.KeepAlive(sd.ds)
-	return seriesDataSerializedDataNext(sd.serializedData)
+	seriesID, chunkRef := seriesDataSerializedDataNext(sd.serializedData)
+	runtime.KeepAlive(sd)
+	return seriesID, chunkRef
 }
 
 type DataStorageSerializedDataSamplesIteratorControlBlock struct {
