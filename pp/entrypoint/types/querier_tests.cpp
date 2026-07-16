@@ -35,7 +35,7 @@ class RangeQuerierWrapperFixture : public testing::Test {
   BareBones::ShrinkedToFitOStringStream unloaded_chunks_;
   entrypoint::types::SerializedDataPtr serialized_data_;
 
-  RangeQuery query_for(LabelSetID label_set_id, int64_t min, int64_t max) {
+  static RangeQuery query_for(LabelSetID label_set_id, int64_t min, int64_t max) {
     Slice<LabelSetID> label_set_ids;
     label_set_ids.push_back(label_set_id);
     return RangeQuery{.time_interval{.min = min, .max = max}, .label_set_ids = std::move(label_set_ids)};
@@ -43,7 +43,7 @@ class RangeQuerierWrapperFixture : public testing::Test {
 
   [[nodiscard]] SampleList decode_chunk(uint32_t chunk_id) const {
     SampleList decoded;
-    std::ranges::copy(serialized_data_->iterator(chunk_id), DecodeIteratorSentinel{}, std::back_inserter(decoded));
+    std::ranges::copy(serialized_data_->samples_iterator(chunk_id), DecodeIteratorSentinel{}, std::back_inserter(decoded));
     return decoded;
   }
 
@@ -56,7 +56,7 @@ class RangeQuerierWrapperFixture : public testing::Test {
   }
 
   void load_unloaded_chunks(LabelSetID label_set_id) {
-    std::vector label_set_ids{label_set_id};
+    const std::vector label_set_ids{label_set_id};
     Loader loader{storage_, label_set_ids, static_cast<uint32_t>(label_set_ids.size())};
     loader.load_next(unloaded_chunks_.span<const uint8_t>());
     loader.load_finalize();
@@ -66,9 +66,9 @@ class RangeQuerierWrapperFixture : public testing::Test {
 TEST_F(RangeQuerierWrapperFixture, QueryWritesSerializedDataToPreparedMemory) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
-  auto query = query_for(0, 1, 1);
+  const auto query = query_for(0, 1, 1);
   const auto was_null_before_prepare = serialized_data_ == nullptr;
-  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, serialized_data_ptr()};
+  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, {}, serialized_data_ptr(), {}};
 
   // Act
   wrapper.query();
@@ -86,9 +86,9 @@ TEST_F(RangeQuerierWrapperFixture, QueryFinalizeWritesSerializedDataToPreparedMe
 
   unload_open_chunks();
 
-  auto query = query_for(0, 1, 3);
+  const auto query = query_for(0, 1, 3);
   const auto was_null_before_prepare = serialized_data_ == nullptr;
-  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, serialized_data_ptr()};
+  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, {}, serialized_data_ptr(), {}};
 
   // Act
   wrapper.query();
@@ -188,8 +188,8 @@ TEST_F(RangeQuerierWrapperFixture, QuerySerializesMatchingOpenChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  auto query = query_for(0, 2, 4);
-  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, serialized_data_ptr()};
+  const auto query = query_for(0, 2, 4);
+  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, {}, serialized_data_ptr(), {}};
 
   // Act
   wrapper.query();
@@ -205,8 +205,8 @@ TEST_F(RangeQuerierWrapperFixture, QuerySerializesMatchingOpenChunk) {
 TEST_F(RangeQuerierWrapperFixture, QuerySerializesEmptyResultWhenSeriesDoesNotMatchInterval) {
   // Arrange
   encoder_.encode(0, 10, 10.0);
-  auto query = query_for(0, 1, 5);
-  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, serialized_data_ptr()};
+  const auto query = query_for(0, 1, 5);
+  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, {}, serialized_data_ptr(), {}};
 
   // Act
   wrapper.query();
@@ -225,8 +225,8 @@ TEST_F(RangeQuerierWrapperFixture, QueryDefersSerializationUntilUnloadedSeriesIs
 
   unload_open_chunks();
 
-  auto query = query_for(0, 1, 3);
-  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, serialized_data_ptr()};
+  const auto query = query_for(0, 1, 3);
+  entrypoint::types::RangeQuerierWithArgumentsWrapperV2 wrapper{storage_, query, {}, serialized_data_ptr(), {}};
 
   // Act
   wrapper.query();
