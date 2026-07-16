@@ -89,7 +89,7 @@ TEST_F(UnloaderFixture, DontUnloadQueriedSeriesAfterCreateSnapshot) {
   EXPECT_EQ(0U, storage_.unloaded_series_bitmap.popcount());
 }
 
-class UnloaderOpenChunkTestFixture : public ::testing::Test {
+class UnloaderTestFixture : public ::testing::Test {
  protected:
   series_data::DataStorage storage_;
   series_data::Encoder<> encoder_{storage_};
@@ -97,7 +97,7 @@ class UnloaderOpenChunkTestFixture : public ::testing::Test {
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 
-class UnloaderSelectionTestFixture : public UnloaderOpenChunkTestFixture {
+class UnloaderSelectionTestFixture : public UnloaderTestFixture {
  protected:
   void SetUp() override {
     encoder_.encode(0, 1, 0.0);
@@ -126,7 +126,7 @@ class UnloaderSelectionTestFixture : public UnloaderOpenChunkTestFixture {
   }
 };
 
-TEST_F(UnloaderOpenChunkTestFixture, UnloadOpenChunk) {
+TEST_F(UnloaderTestFixture, UnloadOpenChunk) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(0, 2, 2.0);

@@ -62,7 +62,7 @@ class CedarEnumerativeIteratorFixture : public CedarTrieFixture, public testing:
   }
 };
 
-TEST_P(CedarEnumerativeIteratorFixture, Test) {
+TEST_P(CedarEnumerativeIteratorFixture, EnumeratesExpectedItems) {
   // Arrange
 
   // Act
@@ -129,7 +129,7 @@ class CedarTrieSerializeDeserializeFixture : public CedarTrieFixture, public ::t
   }
 };
 
-TEST_P(CedarTrieSerializeDeserializeFixture, Test) {
+TEST_P(CedarTrieSerializeDeserializeFixture, RoundTripPreservesItems) {
   // Arrange
   std::stringstream stream;
   CedarTrie trie2;

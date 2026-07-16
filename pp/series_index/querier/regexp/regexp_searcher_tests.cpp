@@ -53,7 +53,7 @@ class CedarTrieRegexpSearcherFixture : public testing::TestWithParam<RegexpSearc
   }
 };
 
-TEST_P(CedarTrieRegexpSearcherFixture, Test) {
+TEST_P(CedarTrieRegexpSearcherFixture, FindsExpectedMatches) {
   // Arrange
   auto expected_matches = get_expected_matches();
 

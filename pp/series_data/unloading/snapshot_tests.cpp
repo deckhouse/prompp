@@ -36,18 +36,6 @@ class SnapshotTestFixture : public testing::Test {
   std::vector<DecodedChunk> decoded_;
 };
 
-TEST_F(SnapshotTestFixture, EmptySnapshotHasNoChunks) {
-  // Arrange
-  const std::array<SnapshotChunkView, 0> chunks{};
-
-  // Act
-  write(chunks);
-  read();
-
-  // Assert
-  EXPECT_TRUE(decoded_.empty());
-}
-
 TEST_F(SnapshotTestFixture, RoundTripPreservesChunkMetadataAndPayload) {
   // Arrange
   const std::array<uint8_t, 2> first_bytes{1, 2};
@@ -62,6 +50,47 @@ TEST_F(SnapshotTestFixture, RoundTripPreservesChunkMetadataAndPayload) {
 
   // Assert
   EXPECT_EQ(expected, decoded_);
+}
+
+TEST_F(SnapshotTestFixture, RoundTripPreservesEmptyChunkPayload) {
+  // Arrange
+  const std::array<SnapshotChunkView, 1> chunks{{{7, 3, {}}}};
+  const std::vector<DecodedChunk> expected{{7, 3, {}}};
+
+  // Act
+  write(chunks);
+  read();
+
+  // Assert
+  EXPECT_EQ(expected, decoded_);
+}
+
+TEST_F(SnapshotTestFixture, RoundTripPreservesRepeatedAndChangedChunkIds) {
+  // Arrange
+  const std::array<uint8_t, 1> first_bytes{1};
+  const std::array<uint8_t, 2> second_bytes{2, 3};
+  const std::array<uint8_t, 3> third_bytes{4, 5, 6};
+  const std::array<SnapshotChunkView, 3> chunks{{{1, 4, first_bytes}, {2, 4, second_bytes}, {5, 9, third_bytes}}};
+  const std::vector<DecodedChunk> expected{{1, 4, {1}}, {2, 4, {2, 3}}, {5, 9, {4, 5, 6}}};
+
+  // Act
+  write(chunks);
+  read();
+
+  // Assert
+  EXPECT_EQ(expected, decoded_);
+}
+
+TEST_F(SnapshotTestFixture, EmptySnapshotHasNoChunks) {
+  // Arrange
+  const std::array<SnapshotChunkView, 0> chunks{};
+
+  // Act
+  write(chunks);
+  read();
+
+  // Assert
+  EXPECT_TRUE(decoded_.empty());
 }
 
 }  // namespace

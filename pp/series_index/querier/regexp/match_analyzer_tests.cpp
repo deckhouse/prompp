@@ -17,7 +17,7 @@ struct RegexpMatchAnalyzerTestCase {
 
 class RegexpMatchAnalyzerFixture : public testing::TestWithParam<RegexpMatchAnalyzerTestCase> {};
 
-TEST_P(RegexpMatchAnalyzerFixture, Test) {
+TEST_P(RegexpMatchAnalyzerFixture, ClassifiesRegexpAsExpected) {
   // Arrange
 
   // Act

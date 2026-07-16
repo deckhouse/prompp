@@ -34,6 +34,7 @@ class SnapshotWriter {
  public:
   template <class Stream, class Chunks>
   static void write_to(Stream& stream, const Chunks& chunks) noexcept {
+    // `chunks` must be ordered by increasing, unique ls_id: the bitmap defines the reader's metadata order.
     BareBones::Bitset ls_id_bitmap;
     EncodingChunkLengthSequence chunk_length_sequence;
     EncodingChunkIDSequence chunk_id_sequence;

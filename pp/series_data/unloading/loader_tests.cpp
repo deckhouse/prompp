@@ -82,7 +82,7 @@ class LoaderSelectionTestFixture : public LoaderTestFixture {
     encoder_.encode(2, 3, 3.0);
     encoder_.encode(2, 4, 4.0);
     encoder_.encode(2, 5, 5.0);
-    
+
     encoder_.encode(3, 1, 6.0);
     encoder_.encode(3, 2, 7.0);
     encoder_.encode(3, 3, 8.0);
