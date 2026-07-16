@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.3
+
+### Fixes
+1. **Per-`DataStorage` metrics page memory leak.** Each `DataStorage` registered a metrics page in the global C++ metrics storage and only detached it on destruction, but detached pages are physically reclaimed only during C++ metrics collection — which was disabled by default in v0.8.2. With the collector off, every created-and-destroyed `DataStorage` leaked its metrics page (observed as steady heap growth on stage). `DataStorage` now owns its metrics object directly instead of registering it globally, so no page can leak. As a consequence the per-`DataStorage` `prompp_data_storage_*` metrics are no longer exposed to the C++ metrics collector.
+2. **C++ metrics collector re-enabled by default.** The v0.8.2 use-after-free mitigation disabled the C++ metrics collector by default (`PROMPP_FEATURES=enable_cpp_metrics`) because it iterated metrics-page memory that could be freed concurrently by `remove_unused_pages`. Now that `DataStorage` no longer registers pages in the global metrics storage, nothing populates it in production, so that concurrent-free path is gone and the collector is safe to run unconditionally again. The `enable_cpp_metrics` feature flag is removed.
+
 ## v0.8.2
 
 ### Fixes
