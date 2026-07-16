@@ -52,9 +52,10 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
-	"github.com/prometheus/prometheus/pp-pkg/handler" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/rules"   // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"  // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/handler"  // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"   // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/cppbridge" // PP_CHANGES.md: jemalloc profile
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/template"
@@ -512,6 +513,11 @@ func serveDebug(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	subpath := route.Param(ctx, "subpath")
 
+	if subpath == "/jemalloc" {
+		serveJemallocProfile(w, req)
+		return
+	}
+
 	if subpath == "/pprof" {
 		http.Redirect(w, req, req.URL.Path+"/", http.StatusMovedPermanently)
 		return
@@ -536,6 +542,43 @@ func serveDebug(w http.ResponseWriter, req *http.Request) {
 		req.URL.Path = "/debug/pprof/" + subpath
 		pprof.Index(w, req)
 	}
+}
+
+// serveJemallocProfile dumps the C++ core's jemalloc heap profile to a temporary
+// file, streams it back to the client, and removes the file afterwards.
+//
+// The underlying mallctl("prof.dump") call is synchronous: jemalloc fully writes
+// and closes the file before cppbridge.DumpMemoryProfile returns, so the file is
+// complete by the time we open it here.
+//
+// Note: this requires the process to run with jemalloc profiling enabled at
+// startup (MALLOC_CONF must contain "prof:true"). Without it the dump fails and
+// this handler returns 500.
+func serveJemallocProfile(w http.ResponseWriter, _ *http.Request) {
+	tmpFile, err := os.CreateTemp("", "jemalloc-*.prof")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to create temporary profile file: %s", err), http.StatusInternalServerError)
+		return
+	}
+	filename := tmpFile.Name()
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(filename) }()
+
+	if !cppbridge.DumpMemoryProfile(filename) {
+		http.Error(w, "failed to dump jemalloc memory profile; ensure the process was started with MALLOC_CONF=\"prof:true\" and jemalloc profiling support", http.StatusInternalServerError)
+		return
+	}
+
+	f, err := os.Open(filename)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to open dumped profile: %s", err), http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="jemalloc.prof"`)
+	_, _ = io.Copy(w, f)
 }
 
 // SetReady sets the ready status of our web Handler.
