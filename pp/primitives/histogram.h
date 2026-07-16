@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <type_traits>
 
 #include "bare_bones/vector.h"
 #include "primitives.h"
@@ -32,6 +33,33 @@ enum class HistogramValueType : uint8_t {
 union HistogramBucketValue {
   int64_t value;
   double float_value;
+
+  template <class Value>
+  PROMPP_ALWAYS_INLINE Value get() const noexcept {
+    if constexpr (std::is_same_v<Value, double>) {
+      return float_value;
+    } else {
+      return value;
+    }
+  }
+
+  template <class Value>
+  PROMPP_ALWAYS_INLINE void inc(Value inc_to) noexcept {
+    if constexpr (std::is_same_v<Value, double>) {
+      float_value += inc_to;
+    } else {
+      value += inc_to;
+    }
+  }
+
+  template <class Value>
+  PROMPP_ALWAYS_INLINE void set(Value new_value) noexcept {
+    if constexpr (std::is_same_v<Value, double>) {
+      float_value = new_value;
+    } else {
+      value = new_value;
+    }
+  }
 
   bool operator==(const HistogramBucketValue& other) const noexcept { return value == other.value; }
 };
@@ -186,109 +214,96 @@ struct BasicHistogram {
     compact_int_histogram_buckets(positive_buckets, positive_spans, 2);
   }
 
-  PROMPP_ALWAYS_INLINE void compact_int_histogram_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
-                                                          BareBones::Vector<HistogramSpan>& spans,
-                                                          int max_empty_buckets) {
-    BareBones::Vector<int64_t> primary_buckets;
-    primary_buckets.reserve(buckets.size());
-    for (const auto& bucket : buckets) {
-      primary_buckets.emplace_back(bucket.value);
-    }
-
-    compact_buckets_impl<int64_t, true>(primary_buckets, spans, max_empty_buckets);
-
-    buckets.clear();
-    buckets.reserve(primary_buckets.size());
-    for (const auto value : primary_buckets) {
-      buckets.emplace_back(HistogramBucketValue{.value = value});
-    }
+  PROMPP_ALWAYS_INLINE static void compact_int_histogram_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
+                                                                 BareBones::Vector<HistogramSpan>& spans,
+                                                                 int max_empty_buckets) {
+    compact_buckets_impl<int64_t, true>(buckets, spans, max_empty_buckets);
   }
 
-  PROMPP_ALWAYS_INLINE void compact_float_histogram_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
-                                                            BareBones::Vector<HistogramSpan>& spans,
-                                                            int max_empty_buckets) {
-    BareBones::Vector<double> primary_buckets;
-    primary_buckets.reserve(buckets.size());
-    for (const auto& bucket : buckets) {
-      primary_buckets.emplace_back(bucket.float_value);
-    }
-
-    compact_buckets_impl<double, false>(primary_buckets, spans, max_empty_buckets);
-
-    buckets.clear();
-    buckets.reserve(primary_buckets.size());
-    for (const auto value : primary_buckets) {
-      buckets.emplace_back(HistogramBucketValue{.float_value = value});
-    }
+  PROMPP_ALWAYS_INLINE static void compact_float_histogram_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
+                                                                   BareBones::Vector<HistogramSpan>& spans,
+                                                                   int max_empty_buckets) {
+    compact_buckets_impl<double, false>(buckets, spans, max_empty_buckets);
   }
 
+  // Folds a bucket into the running absolute count: int histograms store deltas, float histograms store absolutes.
   template <class BucketCount, bool delta_buckets>
-  PROMPP_ALWAYS_INLINE void compact_buckets_impl(BareBones::Vector<BucketCount>& primary_buckets,
-                                                 BareBones::Vector<HistogramSpan>& spans,
-                                                 int max_empty_buckets) {
-    // Port of model/histogram/generic.go compactBuckets.
-    bool nothing_to_do = true;
-    BucketCount current_bucket_absolute{};
+  PROMPP_ALWAYS_INLINE static void advance_absolute(BucketCount& absolute, const HistogramBucketValue& bucket) noexcept {
+    if constexpr (delta_buckets) {
+      absolute += bucket.get<BucketCount>();
+    } else {
+      absolute = bucket.get<BucketCount>();
+    }
+  }
 
-    for (const auto bucket : primary_buckets) {
-      if constexpr (delta_buckets) {
-        current_bucket_absolute += bucket;
-      } else {
-        current_bucket_absolute = bucket;
-      }
-      if (current_bucket_absolute == BucketCount{}) {
-        nothing_to_do = false;
-        break;
+  // Port of model/histogram/generic.go compactBuckets: removes empty buckets and merges spans in place.
+  template <class BucketCount, bool delta_buckets>
+  PROMPP_ALWAYS_INLINE static void compact_buckets_impl(BareBones::Vector<HistogramBucketValue>& buckets,
+                                                        BareBones::Vector<HistogramSpan>& spans,
+                                                        int max_empty_buckets) {
+    if (!needs_compaction<BucketCount, delta_buckets>(buckets, spans, max_empty_buckets)) {
+      return;
+    }
+
+    merge_touching_spans(spans);
+    drop_empty_spans(spans);
+    if (spans.empty()) {
+      buckets.clear();
+      return;
+    }
+
+    remove_empty_buckets<BucketCount, delta_buckets>(buckets, spans, max_empty_buckets);
+
+    if (max_empty_buckets == 0 || buckets.empty()) {
+      return;
+    }
+    merge_small_gaps<BucketCount, delta_buckets>(buckets, spans, max_empty_buckets);
+  }
+
+  // Compaction is worthwhile only if there is an empty bucket to drop, or a span gap small enough to bridge.
+  template <class BucketCount, bool delta_buckets>
+  PROMPP_ALWAYS_INLINE static bool needs_compaction(const BareBones::Vector<HistogramBucketValue>& buckets,
+                                                    const BareBones::Vector<HistogramSpan>& spans,
+                                                    int max_empty_buckets) noexcept {
+    BucketCount absolute{};
+    for (const auto& bucket : buckets) {
+      advance_absolute<BucketCount, delta_buckets>(absolute, bucket);
+      if (absolute == BucketCount{}) {
+        return true;
       }
     }
 
-    if (nothing_to_do) {
-      for (const auto& span : spans) {
-        if (static_cast<int>(span.offset) <= max_empty_buckets || span.length == 0) {
-          nothing_to_do = false;
-          break;
-        }
-      }
-      if (nothing_to_do) {
-        return;
+    for (const auto& span : spans) {
+      if (static_cast<int>(span.offset) <= max_empty_buckets || span.length == 0) {
+        return true;
       }
     }
+    return false;
+  }
 
-    int i_bucket = 0;
-    int i_span = 0;
-    uint32_t pos_in_span = 0;
-    current_bucket_absolute = {};
-
-    const auto empty_buckets_here = [&](int bucket_index, uint32_t position_in_span) -> int {
-      int count = 0;
-      auto abs = current_bucket_absolute;
-      while (static_cast<uint32_t>(count) + position_in_span < spans[static_cast<size_t>(i_span)].length && abs == BucketCount{}) {
-        ++count;
-        if (bucket_index + count >= static_cast<int>(primary_buckets.size())) {
-          break;
-        }
-        abs = primary_buckets[static_cast<size_t>(bucket_index + count)];
-      }
-      return count;
-    };
-
-    if (spans.size() > 1) {
-      i_span = 0;
-      for (size_t i = 1; i < spans.size(); ++i) {
-        if (spans[i].offset == 0) {
-          spans[static_cast<size_t>(i_span)].length += spans[i].length;
-          continue;
-        }
-        ++i_span;
-        if (i != static_cast<size_t>(i_span)) {
-          spans[static_cast<size_t>(i_span)] = spans[i];
-        }
-      }
-      spans.resize(static_cast<size_t>(i_span + 1));
-      i_span = 0;
+  // Merges each span that directly abuts its predecessor (offset == 0) into it.
+  PROMPP_ALWAYS_INLINE static void merge_touching_spans(BareBones::Vector<HistogramSpan>& spans) noexcept {
+    if (spans.size() <= 1) {
+      return;
     }
 
-    i_span = 0;
+    size_t last = 0;
+    for (size_t i = 1; i < spans.size(); ++i) {
+      if (spans[i].offset == 0) {
+        spans[last].length += spans[i].length;
+        continue;
+      }
+      ++last;
+      if (i != last) {
+        spans[last] = spans[i];
+      }
+    }
+    spans.resize(last + 1);
+  }
+
+  // Drops zero-length spans, folding their offset into the following span.
+  PROMPP_ALWAYS_INLINE static void drop_empty_spans(BareBones::Vector<HistogramSpan>& spans) noexcept {
+    size_t last = 0;
     for (size_t i = 0; i < spans.size(); ++i) {
       if (spans[i].length == 0) {
         if (i + 1 < spans.size()) {
@@ -296,131 +311,182 @@ struct BasicHistogram {
         }
         continue;
       }
-      if (static_cast<int>(i) != i_span) {
-        spans[static_cast<size_t>(i_span)] = spans[i];
+      if (i != last) {
+        spans[last] = spans[i];
       }
-      ++i_span;
+      ++last;
     }
-    spans.resize(static_cast<size_t>(i_span));
-    i_span = 0;
+    spans.resize(last);
+  }
 
-    if (spans.empty()) {
-      primary_buckets.clear();
-      return;
-    }
+  // Walks buckets alongside spans, erasing runs of empty buckets and splitting/shrinking spans accordingly.
+  template <class BucketCount, bool delta_buckets>
+  PROMPP_ALWAYS_INLINE static void remove_empty_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
+                                                        BareBones::Vector<HistogramSpan>& spans,
+                                                        int max_empty_buckets) {
+    int i_bucket = 0;
+    int i_span = 0;
+    uint32_t pos_in_span = 0;
+    BucketCount current_bucket_absolute{};
 
-    while (i_bucket < static_cast<int>(primary_buckets.size()) && i_span < static_cast<int>(spans.size())) {
-      if constexpr (delta_buckets) {
-        current_bucket_absolute += primary_buckets[static_cast<size_t>(i_bucket)];
-      } else {
-        current_bucket_absolute = primary_buckets[static_cast<size_t>(i_bucket)];
+    // Length of the run of empty (zero absolute count) buckets starting at bucket_index, bounded by the current span.
+    const auto empty_buckets_here = [&](int bucket_index, uint32_t position_in_span) -> int {
+      int count = 0;
+      auto abs = current_bucket_absolute;
+      while (static_cast<uint32_t>(count) + position_in_span < spans[static_cast<size_t>(i_span)].length && abs == BucketCount{}) {
+        ++count;
+        if (bucket_index + count >= static_cast<int>(buckets.size())) {
+          break;
+        }
+        abs = buckets[static_cast<size_t>(bucket_index + count)].get<BucketCount>();
       }
+      return count;
+    };
+
+    while (i_bucket < static_cast<int>(buckets.size()) && i_span < static_cast<int>(spans.size())) {
+      advance_absolute<BucketCount, delta_buckets>(current_bucket_absolute, buckets[static_cast<size_t>(i_bucket)]);
 
       const int n_empty = empty_buckets_here(i_bucket, pos_in_span);
-      if (n_empty > 0) {
-        if (pos_in_span > 0 && n_empty < static_cast<int>(spans[static_cast<size_t>(i_span)].length - pos_in_span) && n_empty <= max_empty_buckets) {
-          i_bucket += n_empty;
-          if constexpr (delta_buckets) {
-            current_bucket_absolute = {};
-          }
-          pos_in_span += static_cast<uint32_t>(n_empty);
-          continue;
+      if (n_empty == 0) {
+        ++i_bucket;
+        ++pos_in_span;
+        if (pos_in_span >= spans[static_cast<size_t>(i_span)].length) {
+          pos_in_span = 0;
+          ++i_span;
         }
-
-        if constexpr (delta_buckets) {
-          if (i_bucket + n_empty < static_cast<int>(primary_buckets.size())) {
-            current_bucket_absolute = -primary_buckets[static_cast<size_t>(i_bucket)];
-            primary_buckets[static_cast<size_t>(i_bucket + n_empty)] += primary_buckets[static_cast<size_t>(i_bucket)];
-          }
-        }
-
-        primary_buckets.erase(primary_buckets.begin() + i_bucket, primary_buckets.begin() + i_bucket + n_empty);
-
-        if (pos_in_span == 0) {
-          if (n_empty == static_cast<int>(spans[static_cast<size_t>(i_span)].length)) {
-            const auto offset = spans[static_cast<size_t>(i_span)].offset;
-            spans.erase(spans.begin() + i_span, spans.begin() + i_span + 1);
-            if (i_span < static_cast<int>(spans.size())) {
-              spans[static_cast<size_t>(i_span)].offset += offset + static_cast<int32_t>(n_empty);
-            }
-            continue;
-          }
-          spans[static_cast<size_t>(i_span)].length -= static_cast<uint32_t>(n_empty);
-          spans[static_cast<size_t>(i_span)].offset += static_cast<int32_t>(n_empty);
-          continue;
-        }
-
-        HistogramSpan new_span{
-            .offset = static_cast<int32_t>(n_empty),
-            .length = spans[static_cast<size_t>(i_span)].length - pos_in_span - static_cast<uint32_t>(n_empty),
-        };
-        spans[static_cast<size_t>(i_span)].length = pos_in_span;
-        ++i_span;
-        pos_in_span = 0;
-        if (new_span.length == 0) {
-          if (i_span < static_cast<int>(spans.size())) {
-            spans[static_cast<size_t>(i_span)].offset += static_cast<int32_t>(n_empty);
-          }
-          continue;
-        }
-        spans.insert(spans.begin() + i_span, std::move(new_span));
         continue;
       }
 
-      ++i_bucket;
-      ++pos_in_span;
-      if (pos_in_span >= spans[static_cast<size_t>(i_span)].length) {
-        pos_in_span = 0;
-        ++i_span;
+      // A short interior gap is within budget: keep it and skip past it.
+      if (pos_in_span > 0 && n_empty < static_cast<int>(spans[static_cast<size_t>(i_span)].length - pos_in_span) && n_empty <= max_empty_buckets) {
+        i_bucket += n_empty;
+        if constexpr (delta_buckets) {
+          current_bucket_absolute = {};
+        }
+        pos_in_span += static_cast<uint32_t>(n_empty);
+        continue;
       }
-    }
 
-    if (max_empty_buckets == 0 || primary_buckets.empty()) {
+      // Carry the removed delta over to the next surviving bucket so absolute counts stay correct.
+      if constexpr (delta_buckets) {
+        if (i_bucket + n_empty < static_cast<int>(buckets.size())) {
+          const auto current_delta = buckets[static_cast<size_t>(i_bucket)].get<BucketCount>();
+          current_bucket_absolute = -current_delta;
+          buckets[static_cast<size_t>(i_bucket + n_empty)].inc(current_delta);
+        }
+      }
+
+      buckets.erase(buckets.begin() + i_bucket, buckets.begin() + i_bucket + n_empty);
+      shrink_spans_after_removal(spans, i_span, pos_in_span, n_empty);
+    }
+  }
+
+  // Fixes up the span list after n_empty buckets were erased at the cursor (i_span, pos_in_span), advancing the
+  // cursor when the erased run splits the current span.
+  PROMPP_ALWAYS_INLINE static void shrink_spans_after_removal(BareBones::Vector<HistogramSpan>& spans,
+                                                              int& i_span,
+                                                              uint32_t& pos_in_span,
+                                                              int n_empty) noexcept {
+    HistogramSpan& span = spans[static_cast<size_t>(i_span)];
+
+    if (pos_in_span == 0) {
+      if (n_empty == static_cast<int>(span.length)) {
+        // The whole span vanished: drop it and hand its offset plus the gap to the following span.
+        const int32_t carried_offset = span.offset + n_empty;
+        spans.erase(spans.begin() + i_span, spans.begin() + i_span + 1);
+        if (i_span < static_cast<int>(spans.size())) {
+          spans[static_cast<size_t>(i_span)].offset += carried_offset;
+        }
+        return;
+      }
+      // The gap is at the span start: shrink the span and shift its offset past the gap.
+      span.length -= static_cast<uint32_t>(n_empty);
+      span.offset += n_empty;
       return;
     }
 
-    i_bucket = static_cast<int>(spans[0].length);
-    if constexpr (delta_buckets) {
-      current_bucket_absolute = {};
-      for (int i = 0; i < i_bucket; ++i) {
-        current_bucket_absolute += primary_buckets[static_cast<size_t>(i)];
+    // The gap is inside the span: keep the head as the current span and re-inject the tail as the next span.
+    HistogramSpan tail_span{
+        .offset = n_empty,
+        .length = span.length - pos_in_span - static_cast<uint32_t>(n_empty),
+    };
+    span.length = pos_in_span;
+    ++i_span;
+    pos_in_span = 0;
+    if (tail_span.length == 0) {
+      if (i_span < static_cast<int>(spans.size())) {
+        spans[static_cast<size_t>(i_span)].offset += n_empty;
       }
+      return;
     }
+    spans.insert(spans.begin() + i_span, std::move(tail_span));
+  }
 
-    i_span = 1;
-    while (i_span < static_cast<int>(spans.size())) {
-      if (static_cast<int>(spans[static_cast<size_t>(i_span)].offset) > max_empty_buckets) {
-        const int length = static_cast<int>(spans[static_cast<size_t>(i_span)].length);
-        if constexpr (delta_buckets) {
-          for (int i = 0; i < length; ++i) {
-            current_bucket_absolute += primary_buckets[static_cast<size_t>(i_bucket + i)];
-          }
+  // Bridges spans separated by a gap no larger than max_empty_buckets by materialising the intervening zero buckets.
+  template <class BucketCount, bool delta_buckets>
+  PROMPP_ALWAYS_INLINE static void merge_small_gaps(BareBones::Vector<HistogramBucketValue>& buckets,
+                                                    BareBones::Vector<HistogramSpan>& spans,
+                                                    int max_empty_buckets) {
+    [[maybe_unused]] BucketCount current_bucket_absolute{};
+
+    // Advances the running absolute count across `count` buckets starting at `from` (a no-op for float histograms).
+    const auto accumulate_over = [&]([[maybe_unused]] int from, [[maybe_unused]] int count) {
+      if constexpr (delta_buckets) {
+        for (int i = 0; i < count; ++i) {
+          current_bucket_absolute += buckets[static_cast<size_t>(from + i)].get<BucketCount>();
         }
+      }
+    };
+
+    int i_bucket = static_cast<int>(spans[0].length);
+    accumulate_over(0, i_bucket);
+
+    int i_span = 1;
+    while (i_span < static_cast<int>(spans.size())) {
+      const auto& span = spans[static_cast<size_t>(i_span)];
+      const int gap = span.offset;
+
+      // Gap too wide to bridge: keep the span and walk the running count past its buckets.
+      if (gap > max_empty_buckets) {
+        const int length = static_cast<int>(span.length);
+        accumulate_over(i_bucket, length);
         i_bucket += length;
         ++i_span;
         continue;
       }
 
-      const int offset = static_cast<int>(spans[static_cast<size_t>(i_span)].offset);
-      spans[static_cast<size_t>(i_span - 1)].length += static_cast<uint32_t>(offset) + spans[static_cast<size_t>(i_span)].length;
+      // Bridge the gap: fold this span into the previous one and materialise `gap` zero buckets between them.
+      spans[static_cast<size_t>(i_span - 1)].length += static_cast<uint32_t>(gap) + span.length;
       spans.erase(spans.begin() + i_span, spans.begin() + i_span + 1);
 
-      BareBones::Vector<BucketCount> new_primary_buckets;
-      new_primary_buckets.resize(primary_buckets.size() + static_cast<size_t>(offset), BucketCount{});
-      for (int i = 0; i < i_bucket; ++i) {
-        new_primary_buckets[static_cast<size_t>(i)] = primary_buckets[static_cast<size_t>(i)];
-      }
-      for (size_t i = static_cast<size_t>(i_bucket); i < primary_buckets.size(); ++i) {
-        new_primary_buckets[i + static_cast<size_t>(offset)] = primary_buckets[i];
-      }
-      if constexpr (delta_buckets) {
-        new_primary_buckets[static_cast<size_t>(i_bucket)] = -current_bucket_absolute;
-        new_primary_buckets[static_cast<size_t>(i_bucket + offset)] += current_bucket_absolute;
-      }
-      primary_buckets = std::move(new_primary_buckets);
+      insert_zero_buckets<BucketCount, delta_buckets>(buckets, i_bucket, gap, current_bucket_absolute);
+      i_bucket += gap;
+      current_bucket_absolute = buckets[static_cast<size_t>(i_bucket)].get<BucketCount>();
+    }
+  }
 
-      i_bucket += offset;
-      current_bucket_absolute = primary_buckets[static_cast<size_t>(i_bucket)];
+  // Inserts `count` zero buckets at index `at` in place. For delta histograms the running absolute count is threaded
+  // through the inserted region so the delta encoding stays consistent across the gap.
+  template <class BucketCount, bool delta_buckets>
+  PROMPP_ALWAYS_INLINE static void insert_zero_buckets(BareBones::Vector<HistogramBucketValue>& buckets,
+                                                       int at,
+                                                       int count,
+                                                       [[maybe_unused]] BucketCount absolute) {
+    const size_t old_size = buckets.size();
+    buckets.resize(old_size + static_cast<size_t>(count));
+
+    // Shift the tail right by `count`, back-to-front so unread source elements are never clobbered.
+    for (size_t i = old_size; i-- > static_cast<size_t>(at);) {
+      buckets[i + static_cast<size_t>(count)] = buckets[i];
+    }
+
+    for (int i = at; i < at + count; ++i) {
+      buckets[static_cast<size_t>(i)] = HistogramBucketValue{};
+    }
+
+    if constexpr (delta_buckets) {
+      buckets[static_cast<size_t>(at)].set(-absolute);
+      buckets[static_cast<size_t>(at + count)].inc(absolute);
     }
   }
 };
