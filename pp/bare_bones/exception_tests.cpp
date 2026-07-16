@@ -1,94 +1,88 @@
 #include "bare_bones/exception.h"
 
-#include <filesystem>
+#include <array>
+#include <cstddef>
+#include <exception>
+#include <string>
+#include <string_view>
 
 #include <gtest/gtest.h>
 
-#include <sys/types.h>  // pid_t
-#include <sys/wait.h>   // waitpid()
-#include <unistd.h>     // fork()
-
-#define DUPE_5X_LITERAL(literal) literal literal literal literal literal
-#define DUPE_25X_LITERAL(literal) \
-  DUPE_5X_LITERAL(literal)        \
-  DUPE_5X_LITERAL(literal) DUPE_5X_LITERAL(literal) DUPE_5X_LITERAL(literal) DUPE_5X_LITERAL(literal)
-
 namespace {
 
-TEST(ExceptionTest, TruncateTest) {
-  BareBones::Exception e(0xcc63de60c4c06e86, "long:%s", DUPE_25X_LITERAL("'123456789"));  // 255 chars
-  std::string_view s{e.what()};
-  std::cout << "Exception length: " << s.size() << "\n";
-  std::cout << "TEST EXCEPTION: " << s;
-  EXPECT_GE(s.size(), 255);
-  EXPECT_EQ(s[s.size() - 1], '9');
+TEST(ExceptionTest, ExposesCode) {
+  // Arrange
+  constexpr BareBones::Exception::Code kCode = 0xcc63de60c4c06e86;
+
+  // Act
+  const BareBones::Exception exception(kCode, "message");
+
+  // Assert
+  EXPECT_EQ(kCode, exception.code());
 }
 
-template <typename Callable>
-struct CFunctor {
-  Callable& c;
-  static void call(void* ptr, pid_t pid) { static_cast<CFunctor<Callable>*>(ptr)->c(pid); }
-  explicit CFunctor(Callable& c) : c(c) {}
+TEST(ExceptionTest, FormatsMessage) {
+  // Arrange
+  constexpr std::string_view kExpectedMessage = "Exception cc63de60c4c06e86: series 42";
+
+  // Act
+  const BareBones::Exception exception(0xcc63de60c4c06e86, "series %d", 42);
+
+  // Assert
+  EXPECT_EQ(kExpectedMessage, exception.message());
+  EXPECT_EQ(kExpectedMessage, std::string_view(exception.what()));
+}
+
+TEST(ExceptionTest, ClampsFormattedMessageToSupportedLength) {
+  // Arrange
+  constexpr std::size_t kMaximumFormattedMessageSize = 255;
+  std::array<char, kMaximumFormattedMessageSize + 2> source_message;
+  source_message.fill('x');
+  source_message.back() = '\0';
+  const std::string expected_message = "Exception cc63de60c4c06e86: " + std::string(kMaximumFormattedMessageSize, 'x');
+
+  // Act
+  const BareBones::Exception exception(0xcc63de60c4c06e86, "%s", source_message.data());
+
+  // Assert
+  EXPECT_EQ(expected_message, exception.message());
+  EXPECT_EQ(expected_message, std::string_view(exception.what()));
+}
+
+class ExceptionThrowFixture : public testing::Test {
+ protected:
+  static constexpr std::string_view kExpectedMessage = "Exception cc63de60c4c06e86: series 42";
+
+  [[noreturn]] static void throw_exception() { throw BareBones::Exception(0xcc63de60c4c06e86, "series %d", 42); }
+
+  static std::string_view catch_exception_as_std_exception() {
+    try {
+      throw_exception();
+    } catch (const std::exception& exception) {
+      return exception.what();
+    }
+
+    return {};
+  }
 };
-template <typename Callable>
-CFunctor(Callable c) -> CFunctor<Callable>;
 
-// This test is disabled because it requires the specific filename for checking
-// (you can set it via PP_BARE_BONES_EXCEPTION_TEST_COREDUMP_NAME="$(sudo sysctl kernel.core_pattern)")
-// This test also DON'T PARSE THE %p, %e, etc. COREDUMP SPECIFIERS (see man core(5) for details),
-// IT TRIES TO OPEN THE FILE FROM ENV (with appended ".<pid>" from parent process) DIRECTLY.
-// This test mostly depends on exception logic, which is intended to not changing with times.
-// You may run it via ./<test_binary> --gtest_filter=*CoreDumpTest --gtest_also_run_disabled_tests
-// This test also depends on PP_BARE_BONES_EXCEPTION_TEST_SHOULD_FAIL environment variable.
-// In that case the tested exception won't throw and the coredump wouldn't generated, which leads to fail.
-// See https://www.baeldung.com/linux/managing-core-dumps for coredumps tutorial.
-// The resulting coredump may be analized via gdb --core=<coredump>
-TEST(ExceptionDeathTest, DISABLED_CoreDumpTest) {
-  auto filename = getenv("PP_BARE_BONES_EXCEPTION_TEST_COREDUMP_NAME");
-  if (filename == nullptr) {
-    GTEST_SKIP() << "This test requires PP_BARE_BONES_EXCEPTION_TEST_COREDUMP_NAME environment variable to set "
-                    "for proper coredump filename. You may get the current coredump file names pattern via "
-                    "`sysctl kernel.core_pattern` (possibly running as sudo/root user), but this test doesn't "
-                    "support neither of file patterns (except of exact filename).\n";
-    FAIL();  // this test is not intended to run w/o environment
-  }
-  std::filesystem::path coredump_file_path(filename);
-  if (!coredump_file_path.is_absolute()) {
-    GTEST_SKIP() << "This test requires absolute path in PP_BARE_BONES_EXCEPTION_TEST_COREDUMP_NAME "
-                    "environment variable for proper coredump filename. You may get the current coredump file names pattern via "
-                    "`sysctl kernel.core_pattern` (possibly running as sudo/root user), but this test doesn't "
-                    "support neither of file patterns (except of exact filename).\n";
-    FAIL();  // this test is not intended to run w/o environment
-  } else {
-  }
+TEST_F(ExceptionThrowFixture, ThrowsAsBareBonesException) {
+  // Arrange
 
-  auto fork_handler = [&](pid_t pid) {
-    if (pid > 0) {
-      std::cout << "Waiting for child " << pid << "...\n";
-      std::string s = filename;
-      s += ".";
-      s += std::to_string(pid);
-      coredump_file_path = s;
-      std::cout << "Will check that file " << coredump_file_path << " after child PID " << pid << " exits\n";
-      waitpid(pid, nullptr, 0);
-    }
-  };
-  CFunctor c_handler(fork_handler);
-  prompp_enable_coredumps_on_exception(1);
-  prompp_barebones_exception_set_on_fork_handler(&c_handler, decltype(c_handler)::call);
+  // Act
 
-  try {
-    if (getenv("PP_BARE_BONES_EXCEPTION_TEST_SHOULD_FAIL") == nullptr) {
-      throw BareBones::Exception(0x3941393742d8cc07, "This exception would terminate fork()-ed child process");
-    }
-  } catch (...) {
-    // mask exception, as intended.
-    std::ignore = 0;
-  }
+  // Assert
+  EXPECT_THROW(throw_exception(), BareBones::Exception);
+}
 
-  EXPECT_TRUE(std::filesystem::exists(coredump_file_path));
+TEST_F(ExceptionThrowFixture, CanBeCaughtAsStdException) {
+  // Arrange
 
-  prompp_enable_coredumps_on_exception(0);
+  // Act
+  const std::string_view caught_message = catch_exception_as_std_exception();
+
+  // Assert
+  EXPECT_EQ(kExpectedMessage, caught_message);
 }
 
 }  // namespace
