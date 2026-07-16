@@ -65,6 +65,8 @@ func (s *WriterSuite) SetupTest() {
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		blockDuration,
+		0,
+		clockwork.NewRealClock(),
 		prometheus.DefaultRegisterer,
 	)
 }

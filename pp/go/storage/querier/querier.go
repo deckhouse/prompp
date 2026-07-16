@@ -637,7 +637,7 @@ func SwitchFuncOptimize(
 	}
 
 	if funcOptimizeMap[hints.Func]&queryOptimize != 0 &&
-		isNotWithpout(hints) &&
+		isNotWithout(hints) &&
 		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) &&
 		possibleToOptimize() {
 		return hints
@@ -737,8 +737,8 @@ func isPossibleToOptimizeAggregationFunc(
 	return false
 }
 
-// isNotWithpout checks if the hints is not without by.
-func isNotWithpout(hints *storage.SelectHints) bool {
+// isNotWithout checks if the hints is not without by.
+func isNotWithout(hints *storage.SelectHints) bool {
 	return hints.By || len(hints.Grouping) == 0
 }
 

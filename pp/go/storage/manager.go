@@ -297,6 +297,8 @@ func (m *Manager) initServices(
 					o.DataDir,
 					block.DefaultChunkSegmentSize,
 					o.BlockDuration,
+					o.MaxRetentionPeriod,
+					clock,
 					r,
 				),
 				reloadBlocksTriggerNotifier,
