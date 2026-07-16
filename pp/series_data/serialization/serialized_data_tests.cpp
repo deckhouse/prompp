@@ -4,7 +4,6 @@
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
 #include "series_data/encoder/bit_sequence.h"
-#include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace {
