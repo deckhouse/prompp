@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <type_traits>
 
 #include "metric.h"
@@ -63,7 +64,10 @@ class MetricsPageControlBlock {
   PROMPP_ALWAYS_INLINE void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t page_object_size() const noexcept { return page_object_size_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t metric_offset() const noexcept { return metric_offset_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unused() const noexcept { return ref_count_ == 0; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_detached() const noexcept { return ref_count_ == 0; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_active() const noexcept {
+    return std::ranges::any_of(*this, [](const Metric* metric) { return metric->is_active(); });
+  }
   PROMPP_ALWAYS_INLINE void detach() noexcept { ref_count_ = 0; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }

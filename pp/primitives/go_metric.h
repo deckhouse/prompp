@@ -133,6 +133,7 @@ struct MetricDescriptor {
 struct Metric {
   dto::MetricDescriptor* descriptor{};
   dto::Metric* metric{};
+  std::atomic<uint32_t> active{1};
 };
 
 }  // namespace PromPP::Primitives::Go

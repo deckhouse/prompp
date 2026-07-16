@@ -39,7 +39,7 @@ class MetricsPageList {
     MetricsPageControlBlock* metrics_page_;
 
     void advance_to_used_metrics_page() noexcept {
-      while (metrics_page_ != nullptr && metrics_page_->is_unused()) {
+      while (metrics_page_ != nullptr && metrics_page_->is_detached()) {
         metrics_page_ = metrics_page_->next_metrics_page();
       }
 
@@ -72,7 +72,7 @@ class MetricsPageList {
 
     remove_unused_pages(page, page->next_metrics_page());
 
-    if (page->is_unused()) {
+    if (page->is_detached() && !page->is_active()) {
       // If page is first page in list then we delete it. Otherwise, we will delete it at another remove_unused_pages call
       if (next_metrics_page_.compare_exchange_weak(page, page->next_metrics_page())) [[likely]] {
         delete page;
@@ -90,7 +90,7 @@ class MetricsPageList {
     while (page != nullptr) [[likely]] {
       const auto next_page = page->next_metrics_page();
 
-      if (page->is_unused()) {
+      if (page->is_detached() && !page->is_active()) {
         prev_page->set_next_metrics_page(next_page);
         delete page;
       } else {
