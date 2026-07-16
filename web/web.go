@@ -554,8 +554,14 @@ func serveDebug(w http.ResponseWriter, req *http.Request) {
 // Note: this requires the process to run with jemalloc profiling enabled at
 // startup (MALLOC_CONF must contain "prof:true"). Without it the dump fails and
 // this handler returns 500.
-func serveJemallocProfile(w http.ResponseWriter, _ *http.Request) {
-	tmpFile, err := os.CreateTemp("", "jemalloc-*.prof")
+//
+// The profile is written to a temporary file first. By default os.TempDir() is
+// used, but the root filesystem is often read-only in containers, so the "dir"
+// query parameter can point the dump at a writable directory (e.g. the TSDB data
+// path: /debug/jemalloc?dir=/prometheus).
+func serveJemallocProfile(w http.ResponseWriter, req *http.Request) {
+	dir := req.URL.Query().Get("dir")
+	tmpFile, err := os.CreateTemp(dir, "jemalloc-*.prof")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to create temporary profile file: %s", err), http.StatusInternalServerError)
 		return
