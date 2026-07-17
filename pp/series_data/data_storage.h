@@ -372,7 +372,7 @@ struct DataStorage {
       metrics = &dummy_metrics_;
     }
 
-    // The timestamp states count is pushed into a page-owned gauge on state creation instead of being pulled from the
+    // The timestamp states count is pushed into a metrics-owned gauge on state creation instead of being pulled from the
     // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
     timestamp_encoder.set_states_count_gauge(&metrics->timestamp_states());
   }
