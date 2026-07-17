@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.8.4
+
+### Features
+1. **`prompptool persist-head` command.** Added a `persist-head` command that persists a single Prom++ head to TSDB blocks directly by its directory path, without consulting `head.log`. Useful for recovering or persisting an individual (e.g. corrupted or orphaned) head during incident investigation.
+2. **Skip writing blocks beyond retention.** The block writer now skips any block-duration quant whose entire time range already falls outside the retention period, instead of writing blocks that would be deleted on the very next retention pass. This avoids wasted disk writes when persisting shards that span far into the past.
+3. **jemalloc heap profile over HTTP.** Added a `/debug/jemalloc` endpoint that dumps the C++ core's jemalloc heap profile to a temporary file, streams it back as an attachment, and removes the file afterwards. Requires the process to run with `MALLOC_CONF="prof:true"` (profiling stays off by default). The optional `dir` query parameter (e.g. `/debug/jemalloc?dir=/prometheus`) points the temp file at a writable directory for containers with a read-only root filesystem.
+
+### Enhancements
+1. **Local storage observability.** The block-manager storage scheme now runs a local storage observer that reports the total size of unknown/unexpected objects in the local storage directory via the new `prompp_localstorage_unknown_bytes` gauge, making disk leftovers visible to operators.
+
+### Performance
+1. **Lazy block index buffer allocation.** Block writers previously allocated a 4 MiB index buffer per block-duration quant up front, including empty quants, which could reach several GiB of allocations on wide or sparse time intervals. The buffer is now allocated lazily on the first write, so empty blocks no longer hold multi-megabyte buffers.
+
+### Fixes
+1. **Heap-buffer-overflow in the outdated chunk merger.** `merge_outdated_samples_in_finalized_chunks` could keep iterating finalized chunks and dereference an already-exhausted samples span, causing a heap-buffer-overflow (observed on production heads, flagged by ASan). The merger now bails out as soon as the samples span is empty.
+2. **Leftover temporary block directories cleaned up on startup.** The block `Manager` never loaded `*.tmp-for-creation` / `*.tmp-for-deletion` directories, so leftovers from a crash during compaction or persist leaked on disk forever. Startup now performs a best-effort cleanup of these directories before the initial reload.
+3. **Go 1.26.5 security update.** Bumped the Go toolchain from 1.26.4 to 1.26.5, picking up standard-library fixes for an Encrypted Client Hello privacy leak in `crypto/tls` (GO-2026-5856) and a symlink-based root escape in `os` (GO-2026-4970). The remaining unfixed advisories are in unused code paths of indirect dependencies — the AWS S3 crypto SDK in `github.com/aws/aws-sdk-go` (GO-2022-0635, GO-2022-0646; only EC2 service discovery is used) and the deprecated `golang.org/x/crypto/openpgp` package (GO-2026-5932; not used) — and have no upstream fix available.
+
+## v0.8.3
+
+### Fixes
+1. **Per-`DataStorage` metrics page memory leak.** Each `DataStorage` registered a metrics page in the global C++ metrics storage and only detached it on destruction, but detached pages are physically reclaimed only during C++ metrics collection — which was disabled by default in v0.8.2. With the collector off, every created-and-destroyed `DataStorage` leaked its metrics page (observed as steady heap growth on stage). `DataStorage` now owns its metrics object directly instead of registering it globally, so no page can leak. As a consequence the per-`DataStorage` `prompp_data_storage_*` metrics are no longer exposed to the C++ metrics collector.
+2. **C++ metrics collector re-enabled by default.** The v0.8.2 use-after-free mitigation disabled the C++ metrics collector by default (`PROMPP_FEATURES=enable_cpp_metrics`) because it iterated metrics-page memory that could be freed concurrently by `remove_unused_pages`. Now that `DataStorage` no longer registers pages in the global metrics storage, nothing populates it in production, so that concurrent-free path is gone and the collector is safe to run unconditionally again. The `enable_cpp_metrics` feature flag is removed.
+
+## v0.8.2
+
+### Fixes
+1. **C++ metrics collector disabled by default (use-after-free mitigation).** The Prom++ C++ metrics collector iterates C++ metrics-page memory on every scrape while those pages can be freed concurrently (`remove_unused_pages`), risking a use-after-free. The collector is now off by default and must be opted into via `PROMPP_FEATURES=enable_cpp_metrics`.
+
 ## v0.8.1
 
 ### Features
