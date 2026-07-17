@@ -73,11 +73,6 @@ func NewHeadEncoderWithDataStorage(dataStorage *DataStorage) *HeadEncoder {
 	return encoder
 }
 
-// NewHeadEncoder - constructor.
-func NewHeadEncoder() *HeadEncoder {
-	return NewHeadEncoderWithDataStorage(NewDataStorage())
-}
-
 // Encode - encodes single triplet.
 func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
 	seriesDataEncoderEncode(e.encoder, seriesID, timestamp, value)

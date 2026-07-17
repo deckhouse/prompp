@@ -44,12 +44,15 @@ using entrypoint::types::QuerierType;
 using entrypoint::types::QuerierVariant;
 using entrypoint::types::QuerierVariantPtr;
 
-extern "C" void prompp_series_data_data_storage_ctor(void* res) {
+extern "C" void prompp_series_data_data_storage_ctor(void* args, void* res) {
+  struct Arguments {
+    bool collect_metrics;
+  };
   using Result = struct {
     DataStoragePtr data_storage;
   };
 
-  new (res) Result{.data_storage = std::make_unique<DataStorage>()};
+  new (res) Result{.data_storage = std::make_unique<DataStorage>(static_cast<Arguments*>(args)->collect_metrics)};
 }
 
 extern "C" void prompp_series_data_data_storage_reset(void* args) {

@@ -2053,14 +2053,18 @@ func prometheusPerShardRelabelerResetTo(
 	)
 }
 
-func seriesDataDataStorageCtor() uintptr {
+func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
+	args := struct {
+		collectMetrics bool
+	}{collectMetrics}
 	var res struct {
 		dataStorage uintptr
 	}
 
 	testGC()
-	fastcgo.UnsafeCall1(
+	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_ctor,
+		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 

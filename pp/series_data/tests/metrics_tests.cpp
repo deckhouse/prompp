@@ -20,7 +20,7 @@ using series_data::chunk::FinalizedChunkList;
 template <uint8_t kSamplesPerChunk = series_data::kSamplesPerChunkDefault>
 class DataStorageMetricsTestTrait {
  protected:
-  DataStorage storage_;
+  DataStorage storage_{true};
   Encoder<kSamplesPerChunk> encoder_{storage_};
 
   [[nodiscard]] double chunk_count(EncodingType encoding_type) const noexcept { return storage_.metrics->get_chunk_count(encoding_type); }
@@ -286,8 +286,8 @@ TEST_F(DataStorageMetricsMergeFinalizedTestFixture, MergeFinalizedChunkPreserves
 // now owned by the page, so it stays valid until the page itself is reclaimed by remove_unused_pages().
 TEST(DataStorageMetricsLifetimeTest, AddressLabelOwnedByPageSurvivesStorageDestruction) {
   // Arrange
-  auto* storage = new DataStorage();
-  auto* page = storage->metrics;
+  auto* storage = new DataStorage(true);
+  const auto* page = storage->metrics;
   const auto expected = std::to_string(std::bit_cast<uint64_t>(storage));
   ASSERT_EQ(expected, read_address_label(*page));
 

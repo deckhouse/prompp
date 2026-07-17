@@ -355,7 +355,7 @@ struct DataStorage {
     return 0;
   }
 
-  DataStorage() noexcept
+  explicit DataStorage(bool collect_metrics = false) noexcept
       : outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}},
         finalized_chunks{
             {},
@@ -364,9 +364,13 @@ struct DataStorage {
     constructor_impl<Reallocator>();
 
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
-    // The address label string is owned by the metrics page (not by DataStorage) so that its lifetime matches the page and a
-    // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
-    metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
+    if (collect_metrics) {
+      // The address label string is owned by the metrics page (not by DataStorage) so that its lifetime matches the page and a
+      // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
+      metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
+    } else {
+      metrics = &dummy_metrics_;
+    }
 
     // The timestamp states count is pushed into a page-owned gauge on state creation instead of being pulled from the
     // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
@@ -381,6 +385,8 @@ struct DataStorage {
   }
 
  private:
+  inline static Metrics<Reallocator> dummy_metrics_{""};
+
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk_timestamp_and_encoder(const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {

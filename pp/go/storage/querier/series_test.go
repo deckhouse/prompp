@@ -29,7 +29,7 @@ func TestSeriesSetTestSuite(t *testing.T) {
 
 func (s *SeriesSetTestSuite) SetupTest() {
 	s.lss = shard.NewLSS()
-	s.ds = shard.NewDataStorage()
+	s.ds = shard.NewDataStorage(false)
 
 	s.timeSeries = []storagetest.TimeSeries{
 		{
@@ -307,7 +307,7 @@ func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries1...)
 
 	anotherLss := shard.NewLSS()
-	anotherDs := shard.NewDataStorage()
+	anotherDs := shard.NewDataStorage(false)
 
 	timeSeries2 := []storagetest.TimeSeries{
 		{

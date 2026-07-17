@@ -13,9 +13,9 @@ type DataStorage struct {
 }
 
 // NewDataStorage - constructor.
-func NewDataStorage() *DataStorage {
+func NewDataStorage(collectMetrics bool) *DataStorage {
 	ds := &DataStorage{
-		dataStorage:       seriesDataDataStorageCtor(),
+		dataStorage:       seriesDataDataStorageCtor(collectMetrics),
 		gcDestroyDetector: &gcDestroyDetector,
 		timeInterval:      atomic.Pointer[TimeInterval]{},
 	}
