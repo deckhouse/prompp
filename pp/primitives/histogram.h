@@ -95,7 +95,7 @@ struct BasicHistogram {
   BucketsType<HistogramBucketValue> positive_buckets{};
   BucketsType<HistogramBucketValue> negative_buckets{};
   CustomValuesType<double> custom_values{};
-  HistogramType type;
+  HistogramType type{HistogramType::kInt};
   int8_t schema{};
 
   bool operator==(const BasicHistogram& a) const noexcept = default;
@@ -329,16 +329,15 @@ struct BasicHistogram {
     uint32_t pos_in_span = 0;
     BucketCount current_bucket_absolute{};
 
-    // Length of the run of empty (zero absolute count) buckets starting at bucket_index, bounded by the current span.
-    const auto empty_buckets_here = [&](int bucket_index, uint32_t position_in_span) -> int {
+    const auto empty_buckets_here = [&]() -> int {
       int count = 0;
       auto abs = current_bucket_absolute;
-      while (static_cast<uint32_t>(count) + position_in_span < spans[static_cast<size_t>(i_span)].length && abs == BucketCount{}) {
+      while (static_cast<uint32_t>(count) + pos_in_span < spans[static_cast<size_t>(i_span)].length && abs == BucketCount{}) {
         ++count;
-        if (bucket_index + count >= static_cast<int>(buckets.size())) {
+        if (i_bucket + count >= static_cast<int>(buckets.size())) {
           break;
         }
-        abs = buckets[static_cast<size_t>(bucket_index + count)].get<BucketCount>();
+        abs = buckets[static_cast<size_t>(i_bucket + count)].get<BucketCount>();
       }
       return count;
     };
@@ -346,7 +345,7 @@ struct BasicHistogram {
     while (i_bucket < static_cast<int>(buckets.size()) && i_span < static_cast<int>(spans.size())) {
       advance_absolute<BucketCount, delta_buckets>(current_bucket_absolute, buckets[static_cast<size_t>(i_bucket)]);
 
-      const int n_empty = empty_buckets_here(i_bucket, pos_in_span);
+      const int n_empty = empty_buckets_here();
       if (n_empty == 0) {
         ++i_bucket;
         ++pos_in_span;
