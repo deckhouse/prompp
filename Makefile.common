@@ -145,9 +145,10 @@ common-test-short: $(GOTEST_DIR)
 	$(GOTEST) -short $(GOOPTS) $(pkgs)
 
 .PHONY: common-test
+common-test: args ?= $(test-flags)
 common-test: $(GOTEST_DIR)
 	@echo ">> running all tests"
-	$(GOTEST) $(test-flags) $(GOOPTS) $(pkgs)
+	$(GOTEST) $(GOOPTS) $(args) $(pkgs)
 
 $(GOTEST_DIR):
 	@mkdir -p $@

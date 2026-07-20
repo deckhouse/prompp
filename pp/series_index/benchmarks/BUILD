@@ -35,3 +35,23 @@ cc_binary(
         "//:benchmark",
     ],
 )
+
+cc_binary(
+    name = "resolve_lss",
+    srcs = ["queryable_encoding_bimap_resolve_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:series_index",
+        "//:benchmark",
+    ],
+)
+
+cc_binary(
+    name = "index_writer_symbols",
+    srcs = ["index_writer_symbols_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:series_index",
+        "//:benchmark",
+    ],
+)

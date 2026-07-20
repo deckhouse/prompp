@@ -298,6 +298,11 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
 
+  inline __attribute__((always_inline)) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
+
+  // Exclusive upper bound for label set ids written to WAL.
+  inline __attribute__((always_inline)) uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
+
   inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
   inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
@@ -306,7 +311,7 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.size(); }
+  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
 
   inline __attribute__((always_inline)) uint64_t metadata_bytes() const { return metadata_bytes_; }
 
@@ -508,14 +513,14 @@ class GorillaSampleDecoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
                                                                Primitives::Timestamp timestamp,
                                                                BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc& crc) noexcept {
+                                                               SampleCrc& crc) {
     return decode_impl(ls_id, timestamp, value_sequence, crc);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
                                                                BareBones::BitSequenceReader& timestamp_sequence,
                                                                BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc& crc) noexcept {
+                                                               SampleCrc& crc) {
     return decode_impl(ls_id, timestamp_sequence, value_sequence, crc);
   }
 
@@ -707,7 +712,7 @@ class BasicDecoder {
 
   inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.size(); }
+  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
 
   /// \Returns Total processed samples count.
   /// \seealso \ref process_segment().

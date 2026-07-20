@@ -26,7 +26,11 @@ configure_make(
         "--enable-prof",
         "--enable-shared=\"no\"",
         "--enable-prof-libunwind=\"1\"",
-        "--with-malloc-conf=\"abort_conf:true,background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:0,retain:false\"",
+
+        # retain:true is safe because arenas are recycled via the FreeArenas pool
+        # (reset+purge) instead of arena.destroy. Switching to retain:false here
+        # would re-introduce vm.max_map_count risk on heavy rotation. See PR #317.
+        "--with-malloc-conf=\"abort_conf:true,background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:0,retain:true\"",
     ] + select({
         "@//bazel/toolchain:arm64": ["--with-lg-page=\"16\""],
         "//conditions:default": ["--with-lg-page=\"12\""],

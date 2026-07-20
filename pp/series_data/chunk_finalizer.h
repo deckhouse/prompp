@@ -20,6 +20,18 @@ class ChunkFinalizer {
     }
   }
 
+  PROMPP_ALWAYS_INLINE static bool finalize_if_timestamp_finalized(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
+    if (const auto finalized_timestamp_stream_id = storage.timestamp_encoder.process_finalized(chunk.timestamp_encoder_state_id);
+        finalized_timestamp_stream_id != encoder::timestamp::kInvalidStateId) [[unlikely]] {
+      ++storage.finalized_timestamp_streams[finalized_timestamp_stream_id].reference_count;
+      finalize(storage, ls_id, chunk, finalized_timestamp_stream_id);
+      return true;
+    }
+
+    return false;
+  }
+
+ private:
   static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk, uint32_t finalized_timestamp_stream_id) {
     const auto finalize_variant_encoder = [&storage, &chunk](auto& encoder, EncodingType encoding_type) PROMPP_LAMBDA_INLINE {
       const auto& finalized_stream = storage.finalized_data_streams.emplace_back(encoder.finalize_stream());
@@ -51,23 +63,12 @@ class ChunkFinalizer {
     }
   }
 
-  PROMPP_ALWAYS_INLINE static bool finalize_if_timestamp_finalized(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
-    if (const auto finalized_timestamp_stream_id = storage.timestamp_encoder.process_finalized(chunk.timestamp_encoder_state_id);
-        finalized_timestamp_stream_id != encoder::timestamp::kInvalidStateId) [[unlikely]] {
-      ++storage.finalized_timestamp_streams[finalized_timestamp_stream_id].reference_count;
-      finalize(storage, ls_id, chunk, finalized_timestamp_stream_id);
-      return true;
-    }
-
-    return false;
-  }
-
- private:
   PROMPP_ALWAYS_INLINE static void emplace_finalized_chunk(DataStorage& storage, uint32_t ls_id, const chunk::DataChunk& chunk) {
     storage.finalized_chunks.try_emplace(ls_id, storage.finalized_chunks_map_allocated_memory)
         .first->second.emplace(chunk, [&storage](const chunk::DataChunk& chunk) PROMPP_LAMBDA_INLINE {
           return Decoder::get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
         });
+    storage.metrics->finalized_chunks().inc();
   }
 
   template <FinalizeTimestampStateMode mode>

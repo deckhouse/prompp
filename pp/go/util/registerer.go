@@ -52,6 +52,11 @@ func (cr UnconflictRegisterer) NewGaugeVec(opts prometheus.GaugeOpts, labelNames
 	return g.MustCurryWith(constLabels)
 }
 
+// NewGaugeFunc create new prometheus.GaugeFunc and register it in wrapped registerer.
+func (cr UnconflictRegisterer) NewGaugeFunc(opts prometheus.GaugeOpts, fn func() float64) prometheus.GaugeFunc {
+	return mustRegisterOrGet(cr.Registerer, prometheus.NewGaugeFunc(opts, fn))
+}
+
 // NewHistogramVec create new prometheus.HistogramVec and register it in wrapped registerer
 func (cr UnconflictRegisterer) NewHistogramVec(
 	//nolint:gocritic // should be compatible with prometheus.NewHistogramVec

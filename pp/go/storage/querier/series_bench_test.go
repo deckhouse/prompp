@@ -2,6 +2,7 @@ package querier_test
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -64,16 +65,14 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
 
-	b.StopTimer()
-	seriesSets := make([]*querier.SeriesSet, 0, b.N)
-	for i := 0; i < b.N; i++ {
-		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, matcher))
-	}
+	for b.Loop() {
+		b.StopTimer()
+		runtime.GC()
+		runtime.GC()
+		seriesSet := queryOpt(b, lss, ds, start, end, matcher)
+		b.StartTimer()
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		iterateSeriesSet(seriesSets[i])
+		iterateSeriesSet(seriesSet)
 	}
 }
 

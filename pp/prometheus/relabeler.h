@@ -445,8 +445,9 @@ class PerShardRelabeler {
           return;
         }
 
-        if (inner_serie.ls_id >= lss.size()) [[unlikely]] {
-          throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d size: %d shard_id: %d", inner_serie.ls_id, lss.size(), shard_id_);
+        if (inner_serie.ls_id >= lss.next_item_index()) [[unlikely]] {
+          throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d next_item_index: %d shard_id: %d", inner_serie.ls_id, lss.next_item_index(),
+                                     shard_id_);
         }
         builder_.reset(lss[inner_serie.ls_id]);
         process_external_labels(builder_, external_labels_);
@@ -818,11 +819,11 @@ class PerGoroutineRelabeler {
                                                         Stats& stats,
                                                         SeriesContainer<InnerSeries>& shards_inner_series) {
     fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
-      const auto previous_size = target_lss.size();
+      const auto previous_size = target_lss.items_count();
       auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
       shards_inner_series[shard_id_].emplace_back(timeseries_buf_.samples(), ls_id, false);
 
-      if (target_lss.size() > previous_size) {
+      if (target_lss.items_count() > previous_size) {
         ++stats.series_added;
       }
       stats.samples_added += timeseries_buf_.samples().size();
@@ -861,7 +862,7 @@ class PerGoroutineRelabeler {
     relabeler_state_update.reserve(relabeler_state_update.size() + relabeled_series.size());
     inner_series.reserve(inner_series.size() + relabeled_series.size());
     if constexpr (BareBones::concepts::has_reserve<LSS>) {
-      target_lss.reserve(target_lss.size() + relabeled_series.size());
+      target_lss.reserve(target_lss.items_count() + relabeled_series.size());
     }
 
     for (const auto& relabeled_serie : relabeled_series.data()) {

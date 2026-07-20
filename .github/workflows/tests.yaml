@@ -174,9 +174,14 @@ jobs:
             STATIC: static
           - SANITIZERS: with_sanitizers
             ASAN: true
+        # Run only the two meaningful combinations: dbg+jemalloc and opt+asan.
+        # The remaining opt+jemalloc variant is covered by `go-tests-all-pkgs`,
+        # which exercises the full repository (root module ./...).
         exclude:
           - SANITIZERS: with_sanitizers
             OPT: dbg
+          - SANITIZERS: no_sanitizers
+            OPT: opt
     runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
@@ -213,6 +218,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
+            -e CI=true \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             -e CGO_CFLAGS="-Wno-error -I/usr/include" \
@@ -231,9 +237,9 @@ jobs:
               go install github.com/afunix/gocov/gocov@latest
               go install github.com/AlekSi/gocov-xml@latest
 
-              # tests
-              cd pp
-              go test \$(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
+              # Tests for our packages (Makefile default pkgs = ./pp/go/... ./pp-pkg/...).
+              FLAGS=\$(./pp/scripts/ci_get_go_test_flags.sh)
+              make test GO_ONLY=1 args=\"\$FLAGS -cover -count=1 -coverprofile=coverage.txt -covermode=atomic\" 2>&1 | tee report.txt
 
               # reports
               cat report.txt | go-junit-report > report.xml
@@ -246,24 +252,118 @@ jobs:
         if: always()
         run: |
           docker run --rm -v "$PWD":/workspace busybox \
-            sh -c "chown -R $(id -u):$(id -g) /workspace/pp/report.xml /workspace/pp/coverage.xml /workspace/pp/report.txt /workspace/pp/coverage.txt /workspace/.cache" || true
+            sh -c "chown -R $(id -u):$(id -g) /workspace/report.xml /workspace/coverage.xml /workspace/report.txt /workspace/coverage.txt /workspace/.cache" || true
 
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
           name: go-unit-tests-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: pp/report.xml
+          path: report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage-report-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: pp/coverage.xml
+          path: coverage.xml
+          retention-days: 7
+
+  go-tests-all-pkgs:
+    # Runs the entire repository (root module ./..., minus packages that we
+    # replace with pp-pkg counterparts or do not ship in cmd/prometheus).
+    # Single combination: opt + jemalloc (no sanitizers), on amd64 and arm64.
+    needs: [build-ci-image, build-go-bindings]
+    strategy:
+      max-parallel: 2
+      matrix:
+        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+    runs-on: ${{ matrix.runner_name }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-werf
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
+
+      - name: Download Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: go-cppbridge-${{ matrix.arch }}-opt-false
+          path: pp/go/cppbridge/
+
+      - name: Run All-Packages Go Tests
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e CI=true \
+            -e OPT=opt \
+            -e SANITIZERS=no_sanitizers \
+            -e CGO_CFLAGS="-Wno-error -I/usr/include" \
+            -e CGO_LDFLAGS="-L/usr/lib/" \
+            -e CGO_ENABLED="1" \
+            -e GOPATH="${{ github.workspace }}/.cache" \
+            -e GOBIN="/usr/local/go/bin" \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
+            bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace
+              # go tools
+              mkdir -p .cache
+              go install github.com/jstemmer/go-junit-report/v2@latest
+              go install github.com/afunix/gocov/gocov@latest
+              go install github.com/AlekSi/gocov-xml@latest
+
+              # All-packages run; pkgs override = filtered list from scripts/list-test-packages.sh.
+              # -timeout 20m: per-package timeout (default 10m) — heavy upstream tsdb suite needs more under -race+coverage.
+              FLAGS=\$(./pp/scripts/ci_get_go_test_flags.sh)
+              PKGS=\$(./scripts/list-test-packages.sh | tr '\n' ' ')
+              make test GO_ONLY=1 pkgs=\"\$PKGS\" args=\"\$FLAGS -cover -count=1 -coverprofile=coverage.txt -covermode=atomic -timeout 20m\" 2>&1 | tee report.txt
+
+              # reports
+              cat report.txt | go-junit-report > report.xml
+              sed -i '/\(pb\|easyjson\|string\)\.go/d' coverage.txt
+              gocov convert coverage.txt | gocov-xml > coverage.xml
+              go tool cover -func=coverage.txt | tail -n 1 | awk '{print \"Total coverage:\", \$3;}'
+            "
+
+      - name: Fix test artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            sh -c "chown -R $(id -u):$(id -g) /workspace/report.xml /workspace/coverage.xml /workspace/report.txt /workspace/coverage.txt /workspace/.cache" || true
+
+      - name: Upload Go Test Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-unit-tests-all-pkgs-${{ matrix.arch }}
+          path: report.xml
+          retention-days: 7
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-report-all-pkgs-${{ matrix.arch }}
+          path: coverage.xml
           retention-days: 7
 
   build_dev:
-    needs: go-tests
+    needs: [go-tests, go-tests-all-pkgs]
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit

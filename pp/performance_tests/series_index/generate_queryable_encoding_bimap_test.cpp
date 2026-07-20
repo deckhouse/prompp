@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 
+#include "bare_bones/vector.h"
 #include "performance_tests/dummy_wal.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -10,8 +11,7 @@
 
 namespace performance_tests::series_index {
 
-using QueryableEncodingBimap = ::series_index::
-    QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, ::series_index::trie::CedarTrie>;
+using QueryableEncodingBimap = ::series_index::QueryableEncodingBimap<BareBones::Vector>;
 
 void GenerateQueryableEncodingBimap::execute([[maybe_unused]] const Config& config, [[maybe_unused]] Metrics& metrics) const {
   DummyWal::Timeseries tmsr;

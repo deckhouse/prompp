@@ -1,6 +1,7 @@
 package cppbridge
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -14,9 +15,17 @@ func TestCppMetricsSuite(t *testing.T) {
 	suite.Run(t, new(CppMetricsSuite))
 }
 
+// jemallocMetricDescPrefix matches the global jemalloc arena pool metrics that
+// are registered in init() via prompp_metrics_register. They are unrelated to
+// per-test metric pages and are filtered out of the suite's view of CppMetrics.
+const jemallocMetricDescPrefix = `Desc{fqName: "prompp_common_jemalloc_`
+
 func (s *CppMetricsSuite) getMetrics() []*CppMetric {
 	metrics := []*CppMetric(nil)
 	for metric := range CppMetrics {
+		if strings.HasPrefix(metric.descriptor.String(), jemallocMetricDescPrefix) {
+			continue
+		}
 		metrics = append(metrics, metric)
 	}
 

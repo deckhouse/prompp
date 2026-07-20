@@ -48,8 +48,6 @@ class OutdatedChunkMerger {
     if (!samples.empty()) {
       merge_outdated_samples<ChunkType::kOpen>(ls_id, encoder_.storage().open_chunks[ls_id], std::numeric_limits<int64_t>::max(), samples);
     }
-
-    encoder_.storage().merged_samples_count += decoded_samples.size();
   }
 
  private:
@@ -135,6 +133,10 @@ class OutdatedChunkMerger {
 
   void merge_outdated_samples_in_finalized_chunks(uint32_t ls_id, const chunk::FinalizedChunkList& finalized_chunks, SamplesSpan& samples) {
     for (auto it = finalized_chunks.begin(), next_it = std::next(it); it != finalized_chunks.end(); ++next_it) {
+      if (samples.empty()) {
+        return;
+      }
+
       if (next_it == finalized_chunks.end()) {
         if (auto open_chunk_timestamp = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(encoder_.storage(), encoder_.storage().open_chunks[ls_id]);
             open_chunk_timestamp > samples.front().timestamp) {

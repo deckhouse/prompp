@@ -1,3 +1,17 @@
+#define Sizeof_SizeT sizeof(size_t)
+#define Sizeof_StdVector 24
+#define Sizeof_BareBonesVector 16
+#define Sizeof_RoaringBitset 40
+#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+#define Sizeof_GoLabels 16
+
+#define Sizeof_SerializedDataIterator 152
+
+#define Sizeof_MetricsIterator 24
+
+#define Sizeof_SegmentSamplesStorage 80
+#define Sizeof_RemoteWriteMessageEncoder 32
+#define Sizeof_SegmentSamplesStorageListIterator 56
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -33,20 +47,6 @@ void prompp_dump_memory_profile(void* args, void* res);
 #ifdef __cplusplus
 }
 #endif
-#define Sizeof_SizeT sizeof(size_t)
-#define Sizeof_StdVector 24
-#define Sizeof_BareBonesVector 16
-#define Sizeof_RoaringBitset 40
-#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
-#define Sizeof_GoLabels 16
-
-#define Sizeof_SerializedDataIterator 184
-
-#define Sizeof_MetricsIterator 24
-
-#define Sizeof_SegmentSamplesStorage 80
-#define Sizeof_RemoteWriteMessageEncoder 32
-#define Sizeof_SegmentSamplesStorageListIterator 56
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -185,6 +185,18 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
 void prompp_head_wal_encoder_finalize(void* args, void* res);
 
 /**
+ * @brief Exclusive upper bound of series item indices written to WAL.
+ *
+ * @param args {
+ *     encoder uintptr // pointer to constructed encoder
+ * }
+ * @param res {
+ *     max_written_item_index uint32
+ * }
+ */
+void prompp_head_wal_encoder_max_written_item_index(void* args, void* res);
+
+/**
  * @brief Construct a new Head WAL Decoder
  *
  * @param args {
@@ -249,6 +261,8 @@ void prompp_head_wal_decoder_decode_to_data_storage(void* args, void* res);
 #endif
 #pragma once
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -256,11 +270,20 @@ extern "C" {
 /**
  * @brief Construct index writer
  *
+ * The writer owns an internal output buffer that every write_* method resets
+ * and fills, so the buffer is never threaded through the cgo boundary. Besides
+ * the writer pointer the constructor returns a stable pointer to that buffer
+ * (a Go []byte header: {data, len, cap}); Go reads the produced bytes from it
+ * after each call. The buffer is released together with the writer in the
+ * destructor.
+ *
  * @param args {
  *     lss         uintptr      // pointer to constructed lss
  * }
  * @param res {
- *     writer    uintptr
+ *     writer            uintptr // pointer to constructed index writer
+ *     buffer            uintptr // pointer to the writer's internal output buffer ([]byte header)
+ *     has_more_postings uintptr // pointer to a uint8 set by write_postings (1 = more batches remain)
  * }
  */
 void prompp_index_writer_ctor(void* args, void* res);
@@ -277,29 +300,32 @@ void prompp_index_writer_dtor(void* args);
 /**
  * @brief Write header
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_header(void* args, void* res);
+void prompp_index_writer_write_header(void* writer);
 
 /**
  * @brief Write symbols
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Long-running single call: invoked as a regular cgo call (not fastcgo) so the
+ * goroutine parks in _Gsyscall and frees its P for the duration. The writer
+ * pointer is a stable prompp-arena address passed by value, so C runs on its
+ * own stack frame and never dereferences a goroutine stack address that a
+ * concurrent GC stack move could invalidate. The result is written into the
+ * writer's internal buffer.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_symbols(void* args, void* res);
+void prompp_index_writer_write_symbols(void* writer);
 
 /**
  * @brief Write next series batch
+ *
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
  *
  * @param args {
  *     writer      uintptr
@@ -310,73 +336,71 @@ void prompp_index_writer_write_symbols(void* args, void* res);
  *     }
  *     ls_id       uint32
  * }
- * @param res {
- *     data          []byte // only c allocated memory can be re-used
- * }
  */
-void prompp_index_writer_write_next_series_batch(void* args, void* res);
+void prompp_index_writer_write_next_series_batch(void* args);
 
 /**
  * @brief Write label indices
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Long-running single call: it walks the whole name/value trie index, so like
+ * write_symbols/write_postings it is invoked as a regular cgo call (not fastcgo)
+ * to park the goroutine in _Gsyscall and free its P for the duration. The writer
+ * pointer is a stable prompp-arena address passed by value. The result is
+ * written into the writer's internal buffer.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_label_indices(void* args, void* res);
+void prompp_index_writer_write_label_indices(void* writer);
 
 /**
- * @brief Write next postings batch
+ * @brief Write one batch of postings
  *
- * @param args {
- *     writer         uintptr
- *     max_batch_size uint32
- * }
- * @param res {
- *     data          []byte // only c allocated memory can be re-used
- *     has_more_data bool   // true if we should repeat this call
- * }
+ * Writes postings into the writer's internal buffer until the bytes produced in
+ * this call reach max_batch_size, then returns; call repeatedly while the
+ * has_more_postings flag (returned by the constructor) is non-zero to drain the
+ * whole section. Batching bounds the transient buffer size: a single unbatched
+ * call buffers the entire postings section (tens of MiB), so Go flushes each
+ * batch and reuses the buffer instead. The byte bound is checked only between
+ * whole postings, so the all-series posting and hot label values can overshoot
+ * it. Each batch is a regular cgo call (not fastcgo) so the goroutine parks in
+ * _Gsyscall and frees its P for the duration; the writer pointer is a stable
+ * prompp-arena address passed by value, so no goroutine stack pointer is handed
+ * to C.
+ *
+ * @param writer         uintptr // pointer to constructed index writer
+ * @param max_batch_size uint64  // soft upper bound on bytes emitted per call
  */
-void prompp_index_writer_write_next_postings_batch(void* args, void* res);
+void prompp_index_writer_write_postings(void* writer, uint64_t max_batch_size);
 
 /**
  * @brief Write label indeces table
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_label_indices_table(void* args, void* res);
+void prompp_index_writer_write_label_indices_table(void* writer);
 
 /**
  * @brief Write postings offset table
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_postings_table_offsets(void* args, void* res);
+void prompp_index_writer_write_postings_table_offsets(void* writer);
 
 /**
  * @brief Write table of contents
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_table_of_contents(void* args, void* res);
+void prompp_index_writer_write_table_of_contents(void* writer);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -412,6 +436,32 @@ void prompp_label_set_length(void* args, void* res);
  * }
  */
 void prompp_label_set_serialize_from_snapshot(void* args, void* res);
+
+/**
+ * @brief get serialized label set buffer length by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     length     uint32                       // serialized buffer length
+ * }
+ */
+void prompp_label_set_serialize_from_snapshot_length(void* args, void* res);
+
+/**
+ * @brief serialize label set into buffer by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     buffer     [] byte                      // allocated buffer
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ */
+void prompp_label_set_serialize_from_snapshot_to_buffer(void* args);
 
 /**
  * @brief free label set returned by prompp_label_set_serialize_from_snapshot
@@ -486,6 +536,11 @@ void prompp_label_set_bytes_without_labels(void* args, void* res);
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief Register cpp metrics
+ */
+void prompp_metrics_register();
 
 /**
  * @brief Initialize metrics iterator
@@ -801,6 +856,27 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  *
  */
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
+
+/**
+ * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ *
+ * @param args {
+ *     lss                 uintptr  // pointer to source queryable lss;
+ *     shrink_boundary      uint32  // boundary
+ * }
+ */
+void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+
+/**
+ * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to source queryable lss;
+ *     resolve_snapshot   uintptr  // pointer to snapshot lss for resolving ids with mapping;
+ *     new_to_old_mapping uintptr  // pointer to ls id `new (copy) -> old (source)` mapping from copier
+ * }
+ */
+void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
 
 /**
  * @brief destroy ls ids mapping

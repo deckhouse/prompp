@@ -4,16 +4,25 @@
 
 namespace series_data::decoder {
 
-class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<ConstantDecodeIterator> {
+class ConstantDecodeIterator : public DecodeIteratorTrait<ConstantDecodeIterator> {
  public:
   template <class BitSequenceWithItemsCount>
   ConstantDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, double value, bool is_last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream, value, is_last_stalenan) {}
+      : ConstantDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), value, is_last_stalenan) {}
   constexpr ConstantDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool is_last_stalenan)
-      : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, value, is_last_stalenan) {}
+      : data_{
+            .sample = {.value = value},
+            .remaining_samples = samples_count,
+            .last_stalenan = is_last_stalenan,
+            .timestamp_decoder{timestamp_reader},
+        } {
+    if (data_.remaining_samples > 0) [[likely]] {
+      data_.sample.timestamp = data_.timestamp_decoder.decode();
+    }
+  }
 
   PROMPP_ALWAYS_INLINE ConstantDecodeIterator& operator++() noexcept {
-    decode_timestamp();
+    decode();
     update_sample();
     return *this;
   }
@@ -25,21 +34,32 @@ class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
-    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
+    if (data_.remaining_samples == 1 && data_.last_stalenan) [[unlikely]] {
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
 
-    return sample_.value;
+    return data_.sample.value;
   }
 
  protected:
-  friend Base;
+  friend DecodeIteratorTrait;
 
-  PROMPP_ALWAYS_INLINE bool decode() noexcept { return decode_timestamp(); }
+  struct Data {
+    encoder::Sample sample{};
+    uint8_t remaining_samples{};
+    bool last_stalenan{false};
+    encoder::timestamp::TimestampDecoder timestamp_decoder;
+  };
+
+  static_assert(DecodeIteratorDataWithTimestampDecoder<Data>);
+
+  Data data_;
+
+  PROMPP_ALWAYS_INLINE bool decode() noexcept { return try_decode_timestamp(); }
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
-    sample_.timestamp = decoded_timestamp();
-    sample_.value = decoded_value();
+    data_.sample.timestamp = decoded_timestamp();
+    data_.sample.value = decoded_value();
   }
 };
 

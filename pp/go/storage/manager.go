@@ -60,6 +60,9 @@ var (
 
 	// DefaultNumberOfShards default number of shards.
 	DefaultNumberOfShards uint16 = 2
+
+	// ShrinkShardCopier flags for shrinking the shard copier.
+	ShrinkShardCopier = false
 )
 
 //
@@ -294,6 +297,8 @@ func (m *Manager) initServices(
 					o.DataDir,
 					block.DefaultChunkSegmentSize,
 					o.BlockDuration,
+					o.MaxRetentionPeriod,
+					clock,
 					r,
 				),
 				reloadBlocksTriggerNotifier,
@@ -321,7 +326,7 @@ func (m *Manager) initServices(
 				m.rotatorMediator,
 				m.cfg,
 				&headInformer{catalog: hcatalog},
-				head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyAddedSeries),
+				head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](m.shardCopier()),
 				persistenerMediator.TriggerWithResetTimer,
 				r,
 			).Execute(rotatorCtx)
@@ -400,6 +405,15 @@ func (m *Manager) close() {
 	default:
 		_ = m.closer.Close()
 	}
+}
+
+// shardCopier returns the shard copier function.
+func (m *Manager) shardCopier() func(source, destination *shard.Shard) {
+	if ShrinkShardCopier {
+		return shard.CopyLSSWithShrink
+	}
+
+	return shard.CopyAddedSeries
 }
 
 //

@@ -11,13 +11,16 @@ module(
 )
 
 # --- Bazel rule sets (from BCR) -----------------------------------------------
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.11")
 bazel_dep(name = "rules_cc", version = "0.1.1")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
 
 # --- Tools not published to BCR (use git_override) ----------------------------
-bazel_dep(name = "bazel_clang_tidy")
+# bazel_clang_tidy is only used by `make tidy` (clang-tidy aspect); it never
+# enters the production entrypoint build, so it is a dev-only dependency. This
+# lets closed-loop builds skip mirroring it via `--ignore_dev_dependency`.
+bazel_dep(name = "bazel_clang_tidy", dev_dependency = True)
 git_override(
     module_name = "bazel_clang_tidy",
     commit = "c4d35e0d0b838309358e57a2efed831780f85cd0",
@@ -53,22 +56,21 @@ git_override(
 register_toolchains(
     "@rules_foreign_cc//toolchains:preinstalled_make_toolchain",
     "@rules_foreign_cc//toolchains:preinstalled_pkgconfig_toolchain",
-    "//bazel/toolchain:cc_toolchain_for_g++-14_toolchain_aarch64",
-    "//bazel/toolchain:cc_toolchain_for_g++-14_toolchain_x86_64",
+    "//bazel/toolchain:cc_toolchain_for_g++-16_toolchain_aarch64",
+    "//bazel/toolchain:cc_toolchain_for_g++-16_toolchain_x86_64",
 )
 
 # --- Third-party C/C++ libraries (local module extension) ---------------------
 # These libraries are not consumed from BCR because we maintain custom BUILD
-# files and/or local patches for them. The extension below mirrors the former
-# WORKSPACE declarations.
+# files and/or local patches for them. Two extensions are used so that the
+# dev-only set (gtest, google_benchmark, tracy) can be skipped via
+# `--ignore_dev_dependency` in closed-loop production builds.
 third_party = use_extension("//third_party:deps.bzl", "third_party_deps")
 use_repo(
     third_party,
     "cedar",
     "com_google_absl",
     "fastfloat_header",
-    "google_benchmark",
-    "gtest",
     "jemalloc",
     "lz4",
     "parallel_hashmap",
@@ -78,6 +80,20 @@ use_repo(
     "scope_exit",
     "simdutf",
     "snappy",
-    "tracy",
     "xxHash",
+)
+
+# Dev-only third-party libs: gtest (cc_test rules), google_benchmark
+# (//:benchmark and benchmark binaries) and tracy (//:profiling, only consumed
+# by benchmark targets).
+third_party_dev = use_extension(
+    "//third_party:deps.bzl",
+    "third_party_dev_deps",
+    dev_dependency = True,
+)
+use_repo(
+    third_party_dev,
+    "google_benchmark",
+    "gtest",
+    "tracy",
 )

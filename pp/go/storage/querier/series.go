@@ -2,7 +2,6 @@ package querier
 
 import (
 	"math"
-	"sync"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -11,14 +10,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
 )
-
-// builderPool builders pool for reuse in SeriesSet.
-var builderPool = sync.Pool{
-	New: func() any {
-		b := labels.NewScratchBuilder(10)
-		return &b
-	},
-}
 
 // ChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type ChunkIterator struct {
@@ -84,29 +75,20 @@ func (it *ChunkIterator) Err() error {
 	return nil
 }
 
-func (it *ChunkIterator) next() chunkenc.ValueType {
+// Next advances the iterator by one and returns the type of the value.
+func (it *ChunkIterator) Next() chunkenc.ValueType {
 	if !it.isInitialized {
 		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
 		}
 
 		it.isInitialized = true
-		return chunkenc.ValFloat
 	} else {
 		it.chunkIterator.Next()
 
 		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
 		}
-
-		return chunkenc.ValFloat
-	}
-}
-
-// Next advances the iterator by one and returns the type of the value.
-func (it *ChunkIterator) Next() chunkenc.ValueType {
-	if it.next() == chunkenc.ValNone {
-		return chunkenc.ValNone
 	}
 
 	if it.AtT() > it.maxt {
@@ -212,16 +194,13 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	builder := builderPool.Get().(*labels.ScratchBuilder)
-	builder.Reset()
 	s.series = append(s.series, NewSeries(
 		s.mint,
 		s.maxt,
-		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, builder),
+		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID),
 		s.serializedData,
 		chunkRef,
 	))
-	builderPool.Put(builder)
 
 	return true
 }

@@ -29,23 +29,23 @@ struct LabelPair {
 using LabelPairsList = std::vector<LabelPair>;
 
 struct Gauge {
-  explicit Gauge(double* counter) : value(counter) {}
+  explicit Gauge(const double* counter) : value(counter) {}
 
   MessageState state{};
   CacheSize size_cache{};
   UnknownFields unknown_fields{};
 
-  double* value{};
+  const double* value{};
 };
 
 struct Counter {
-  explicit Counter(double* counter) : value(counter) {}
+  explicit Counter(const double* counter) : value(counter) {}
 
   MessageState state{};
   CacheSize size_cache{};
   UnknownFields unknown_fields{};
 
-  double* value{};
+  const double* value{};
   void* exemplar{};
   void* created_timestamp{};
 };
@@ -96,7 +96,7 @@ struct MetricDescriptor {
     for (const auto& label_pair : labels) {
       const_label_pairs.emplace_back(&label_pair);
     }
-    std::ranges::sort(const_label_pairs, [](const LabelPair* a, const LabelPair* b) { return a->name < b->name; });
+    std::ranges::sort(const_label_pairs, [](const LabelPair* a, const LabelPair* b) { return *a->name < *b->name; });
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t calculate_id() const noexcept {

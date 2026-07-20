@@ -29,6 +29,11 @@ GOOPTS ?= -tags stringlabels
 
 include Makefile.common
 
+# Default test scope: our packages.
+# CI overrides via `pkgs=...` (see .github/workflows/tests.yaml) for the
+# all-packages run that uses scripts/list-test-packages.sh.
+pkgs := ./pp/go/... ./pp-pkg/...
+
 DOCKER_IMAGE_NAME       ?= prometheus
 
 .PHONY: update-npm-deps

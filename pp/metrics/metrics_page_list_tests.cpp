@@ -7,6 +7,7 @@
 namespace {
 
 using metrics::Counter;
+using metrics::Gauge;
 using metrics::Metric;
 using metrics::MetricsPage;
 using metrics::MetricsPageControlBlock;
@@ -74,6 +75,33 @@ TEST_F(MetricsPageListFixture, TestIteratorWithUnusedPages) {
 
   // Assert
   EXPECT_EQ((MetricsPagesVector{metrics_pages[2]}), actual);
+}
+
+TEST_F(MetricsPageListFixture, TestIteratorWithRefreshableMetricsPage) {
+  // Arrange
+  static constexpr auto kExpectedValue = 12345;
+
+  struct RefreshableMetrics final : MetricsPage<Metrics> {
+    using MetricsPage::MetricsPage;
+
+    void refresh_metrics() noexcept override { uint64_gauge.set(kExpectedValue); }
+
+    Gauge uint64_gauge{LabelViewSet{}, "uint16_counter"};
+  };
+
+  auto* metrics_page = new RefreshableMetrics();
+  const MetricsPagesVector metrics_pages{metrics_page};
+
+  add_metrics_pages(metrics_pages);
+
+  MetricsPagesVector actual;
+
+  // Act
+  std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
+
+  // Assert
+  ASSERT_EQ((MetricsPagesVector{metrics_pages[0]}), actual);
+  EXPECT_EQ(kExpectedValue, metrics_page->uint64_gauge.value());
 }
 
 class MetricsPageListRemoveUnusedPagesFixture : public MetricsPageListFixture {

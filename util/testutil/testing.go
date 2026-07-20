@@ -40,5 +40,10 @@ func TolerantVerifyLeak(m *testing.M) {
 		// positives.
 		// https://github.com/kubernetes/client-go/blob/f6ce18ae578c8cca64d14ab9687824d9e1305a67/util/workqueue/queue.go#L201
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).updateUnfinishedWorkLoop"),
+		// TSDB background loops keep running until DB.Close() / WAL.Close().
+		// Tests that use teststorage may finish before these goroutines shut
+		// down, producing flaky goleak failures.
+		goleak.IgnoreTopFunction("github.com/prometheus/prometheus/tsdb.(*DB).run"),
+		goleak.IgnoreTopFunction("github.com/prometheus/prometheus/tsdb/wlog.(*WL).run"),
 	)
 }

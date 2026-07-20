@@ -18,6 +18,9 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
+// InstantQueryFeature is a feature flag for instant query when hints step is 0 and range is 0.
+var InstantQueryFeature = false
+
 const (
 	// lssQueryInstantQuerySelector name of task.
 	lssQueryInstantQuerySelector = "lss_query_instant_query_selector"
@@ -146,6 +149,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	if q.mint == q.maxt {
 		return q.selectInstant(ctx, sortSeries, hints, matchers...)
 	}
+
+	if InstantQueryFeature && hints != nil && hints.Step == 0 && hints.Range == 0 {
+		return q.selectInstant(ctx, sortSeries, hints, matchers...)
+	}
+
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 

@@ -37,7 +37,7 @@ void save_gorilla_to_wal::execute(const Config& config, Metrics& metrics) const 
       if (dummy_wal.cnt() % 1000000 == 0) {
         log() << "Number of label name symbols: " << wal.label_sets().data_view().keys().size() << std::endl;
         log() << "Number of label name sets: " << wal.label_sets().data_view().label_name_sets().size() << std::endl;
-        log() << "Number of label sets: " << wal.label_sets().size() << std::endl;
+        log() << "Number of label sets: " << wal.label_sets().items_count() << std::endl;
         ppp("label_sets", wal.label_sets_bytes(), wal.samples());
         ppp("ls_id", wal.ls_id_bytes(), wal.samples());
         ppp("ts", wal.timestamps_bytes(), wal.samples());

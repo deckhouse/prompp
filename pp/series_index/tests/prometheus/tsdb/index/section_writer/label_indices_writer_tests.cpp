@@ -2,20 +2,30 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/label_indices_writer.h"
-#include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+template <class T>
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
+using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
-using series_index::prometheus::tsdb::index::SymbolReferencesMap;
 using series_index::prometheus::tsdb::index::section_writer::LabelIndicesWriter;
-using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
 using std::operator""sv;
+
+template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
+using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
+
+template <class T>
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
+using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
 struct LabelIndicesWriterCase {
   std::vector<LabelViewSet> label_sets;
@@ -33,23 +43,19 @@ LabelViewSet make_ls_with_empty_label_value() {
 
 class LabelIndicesWriterFixture : public testing::TestWithParam<LabelIndicesWriterCase> {
  protected:
-  using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
-
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  SymbolReferencesMap symbol_references_;
-  LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)> label_indices_writer{lss_, symbol_references_, stream_writer_};
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
+  LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)> label_indices_writer_{lss_, index_write_context_, stream_writer_};
 
   void SetUp() final {
     for (auto& label_set : GetParam().label_sets) {
       lss_.find_or_emplace(label_set);
     }
 
-    std::ostringstream stream;
-    StreamWriter<decltype(stream_)> stream_writer{&stream};
-    SymbolsWriter{lss_, symbol_references_, stream_writer}.write();
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
   }
 };
 
@@ -57,8 +63,8 @@ TEST_P(LabelIndicesWriterFixture, Test) {
   // Arrange
 
   // Act
-  label_indices_writer.write_label_indices();
-  label_indices_writer.write_label_indices_table();
+  label_indices_writer_.write_label_indices();
+  label_indices_writer_.write_label_indices_table();
 
   // Assert
   EXPECT_EQ(GetParam().expected, stream_.view());
@@ -107,5 +113,63 @@ INSTANTIATE_TEST_SUITE_P(Test,
                                          "server"
                                          "\x14"
                                          "\xA8\xE9\x05\xC6"sv}));
+
+class LabelIndicesWriterShrunkLssFixture : public testing::Test {
+ protected:
+  std::ostringstream stream_;
+  StreamWriter<decltype(stream_)> stream_writer_{&stream_};
+  Lss lss_;
+};
+
+TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
+  // Arrange
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "localhost"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "127.0.0.1"}});
+  lss_.build_deferred_indexes();
+
+  const uint32_t shrink_boundary = lss_.next_item_index();
+
+  Lss lss_copy;
+  BareBones::Vector<uint32_t> dst_src_ids_mapping;
+  Copier<Lss, decltype(lss_.sorting_index()), decltype(lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(
+      lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping);
+  copier.copy_added_series_and_build_indexes();
+
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+  const ReadonlyLss resolve_snapshot(lss_copy);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
+
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
+  LabelIndicesWriter<Lss, decltype(stream_)> label_indices_writer{lss_, index_write_context, stream_writer_};
+
+  // Act
+  label_indices_writer.write_label_indices();
+  label_indices_writer.write_label_indices_table();
+
+  // Assert
+  EXPECT_EQ(stream_.view(),
+            "\x00\x00\x00\x0C"
+            "\x00\x00\x00\x01"
+            "\x00\x00\x00\x01"
+            "\x00\x00\x00\x02"
+            "\x06\x74\x7C\x4E"
+            "\x00\x00\x00\x10"
+            "\x00\x00\x00\x01"
+            "\x00\x00\x00\x02"
+            "\x00\x00\x00\x01"
+            "\x00\x00\x00\x04"
+            "\x60\xB8\x80\x5D"
+            "\x00\x00\x00\x13"
+            "\x00\x00\x00\x02"
+            "\x01"
+            "\x03"
+            "job"
+            "\x00"
+            "\x01"
+            "\x06"
+            "server"
+            "\x14"
+            "\xA8\xE9\x05\xC6"sv);
+}
 
 }  // namespace

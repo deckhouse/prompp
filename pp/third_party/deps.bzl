@@ -1,20 +1,29 @@
-"""Module extension declaring third-party C/C++ dependencies with custom BUILD
+"""Module extensions declaring third-party C/C++ dependencies with custom BUILD
 files and/or local patches.
 
 These declarations live here (rather than in BCR) because we maintain custom
 BUILD files and/or local patches per repository. For each repository we keep
 its canonical name so that existing `@name//:target` references in BUILD files
-and patches resolve correctly after `use_repo(third_party_deps, "name")` in
+and patches resolve correctly after `use_repo(<extension>, "name")` in
 MODULE.bazel.
+
+Two extensions are exposed:
+
+* `third_party_deps` — declares libraries reachable from the production
+  entrypoint build (`//:entrypoint_aio` / `//:entrypoint_init_aio`).
+* `third_party_dev_deps` — declares libraries used only by tests, benchmarks
+  and profiling (gtest, google_benchmark, tracy). MODULE.bazel pulls this
+  extension in with `dev_dependency = True` so closed-loop / production builds
+  do not need to mirror these archives (`--ignore_dev_dependency` skips them).
 """
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 
-def _third_party_deps_impl(_ctx):
+def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "d72f9c8aea6817cdf1ca0ac10887f328de7f3da2",
+        commit = "4141c384aa2a8e2da87dd17d16457caaecfeeda1",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -40,6 +49,9 @@ def _third_party_deps_impl(_ctx):
         url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.tar.gz",
     )
 
+third_party_dev_deps = module_extension(implementation = _third_party_dev_deps_impl)
+
+def _third_party_deps_impl(_ctx):
     http_archive(
         name = "jemalloc",
         build_file = Label("//third_party:jemalloc.BUILD"),
@@ -49,6 +61,7 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/jemalloc:0002-manual-init.patch"),
             Label("//third_party/patches/jemalloc:0003-svacer_fixes.patch"),
             Label("//third_party/patches/jemalloc:0004-werror_fixes.patch"),
+            Label("//third_party/patches/jemalloc:0005-gcc-16_fixes.patch"),
         ],
         sha256 = "2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa",
         strip_prefix = "jemalloc-5.3.0/",
@@ -122,20 +135,18 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/com_google_absl:0002-svacer_fixes.patch"),
             Label("//third_party/patches/com_google_absl:0003-null_dereference_fixes.patch"),
             Label("//third_party/patches/com_google_absl:0004-array_bounds_fixes.patch"),
+            Label("//third_party/patches/com_google_absl:0005-gcc-16_fixes.patch"),
         ],
-        sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
-        strip_prefix = "abseil-cpp-20240116.rc1/",
-        url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.rc1.tar.gz",
+        sha256 = "e887b423da5a1ba66e71610094fd7147ff2febfedccdfbf00f2c644ac21adf83",
+        strip_prefix = "abseil-cpp-20240116.3/",
+        url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.3.tar.gz",
     )
 
     git_repository(
         name = "snappy",
-        commit = "27f34a580be4a3becf5f8c0cba13433f53c21337",
-        patches = [
-            Label("//third_party/patches/snappy:0001-svacer_fixes.patch"),
-        ],
+        commit = "27ab5f7f518430a021239bc26a5b2fd64affbc7b",
         remote = "https://github.com/google/snappy",
-        shallow_since = "1689185568 -0700",
+        shallow_since = "1778353109 +0000",
     )
 
     http_archive(

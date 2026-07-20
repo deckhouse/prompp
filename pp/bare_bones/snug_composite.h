@@ -10,6 +10,7 @@
 
 #include <concepts>
 #include <cstdint>
+#include <limits>
 #include <ranges>
 #include <string_view>
 
@@ -33,13 +34,18 @@ template <class Range>
 concept ls_id_range = std::ranges::range<Range> && std::same_as<std::ranges::range_value_t<Range>, uint32_t>;
 
 template <class FilamentStorageType>
-concept is_shrinkable = requires(FilamentStorageType& storage) {
-  { storage.shrink() };
+concept is_shrinkable = requires(FilamentStorageType& storage, uint32_t count) {
+  { storage.drop_front(count) };
 };
 
 template <class Derived>
 concept has_next_item_index = requires(Derived derived) {
   { derived.next_item_index_impl() };
+};
+
+template <class Derived>
+concept has_items_count = requires(Derived derived) {
+  { derived.items_count_impl() };
 };
 
 template <class Derived, class Checkpoint>
@@ -49,6 +55,13 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
+
+template <class Derived, class ValueType>
+concept has_resolve = requires(const Derived& derived, uint32_t id) {
+  { derived.resolve_impl(id) } -> std::same_as<ValueType>;
+};
+
+constexpr uint32_t kInvalidId = std::numeric_limits<uint32_t>::max();
 
 // Symbol table view type, independent from any specific storage type
 struct SymbolTableView {
@@ -85,7 +98,7 @@ class GenericDecodingTable {
 
   static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
-  static constexpr auto kInvalidId = std::numeric_limits<uint32_t>::max();
+  static constexpr auto kInvalidId = BareBones::SnugComposite::kInvalidId;
 
  protected:
   class Proxy {
@@ -115,7 +128,7 @@ class GenericDecodingTable {
       return phmap::Hash<Class>()(c);
     }
 
-    PROMPP_ALWAYS_INLINE size_t operator()(const Proxy& p) const noexcept { return this->operator()(decoding_table->storage_.composite(p)); }
+    PROMPP_ALWAYS_INLINE size_t operator()(const Proxy& p) const noexcept { return this->operator()(decoding_table->operator[](p)); }
   };
 
   struct EqualityComparator {
@@ -128,12 +141,12 @@ class GenericDecodingTable {
 
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
-      return decoding_table->storage_.composite(a) == b;
+      return decoding_table->operator[](a) == b;
     }
 
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
-      return decoding_table->storage_.composite(b) == a;
+      return decoding_table->operator[](b) == a;
     }
   };
 
@@ -143,18 +156,18 @@ class GenericDecodingTable {
     PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table) noexcept : decoding_table_(decoding_table) {}
 
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Proxy& b) const noexcept {
-      return decoding_table_->storage_.composite(a) < decoding_table_->storage_.composite(b);
+      return decoding_table_->operator[](a) < decoding_table_->operator[](b);
     }
 
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
-      return decoding_table_->storage_.composite(a) < b;
+      return decoding_table_->operator[](a) < b;
     }
 
     template <class Class>
       requires(!std::is_same_v<Class, Proxy>)
     PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
-      return a < decoding_table_->storage_.composite(b);
+      return a < decoding_table_->operator[](b);
     }
 
    private:
@@ -288,14 +301,41 @@ class GenericDecodingTable {
       : storage_(other.storage_), version_(other.version_) {}
 
   GenericDecodingTable(const GenericDecodingTable& other) = delete;
+
+  GenericDecodingTable& operator=(const GenericDecodingTable& other) noexcept
+    requires kIsReadOnly
+  {
+    if (this != &other) [[likely]] {
+      storage_ = other.storage_;
+      version_ = other.version_;
+    }
+
+    return *this;
+  }
+
   GenericDecodingTable& operator=(const GenericDecodingTable& other) = delete;
 
   GenericDecodingTable(GenericDecodingTable&& other) noexcept = delete;
   GenericDecodingTable& operator=(GenericDecodingTable&& other) noexcept = delete;
 
-  PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return storage_.composite(id); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type storage_composite(uint32_t id) const noexcept { return storage_.composite(id); }
+
+  PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept {
+    if constexpr (has_resolve<Derived, value_type>) {
+      return static_cast<const Derived*>(this)->resolve_impl(id);
+    } else {
+      return storage_composite(id);
+    }
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept {
+    if constexpr (has_items_count<Derived>) {
+      return static_cast<const Derived*>(this)->items_count_impl();
+    } else {
+      return storage_.count();
+    }
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
 
@@ -318,7 +358,7 @@ class GenericDecodingTable {
     if constexpr (has_next_item_index<Derived>) {
       return static_cast<const Derived*>(this)->next_item_index_impl();
     } else {
-      return storage_.next_item_index();
+      return storage_.count();
     }
   }
 
@@ -449,12 +489,12 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   using value_type = typename Base::value_type;
 
   using Base::checkpoint;
+  using Base::items_count;
   using Base::load;
   using Base::next_item_index;
   using Base::remainder_size;
   using Base::save;
   using Base::save_size;
-  using Base::size;
 
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
 
@@ -491,14 +531,22 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   }
 
   void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
-    if (checkpoint.next_item_index() != next_item_index_impl()) {
-      throw Exception(0x1bf0dbff9fe3d955, "Invalid checkpoint to shrink: checkpoint next_item_index [%u], next_item_index [%u]", checkpoint.next_item_index(),
-                      next_item_index_impl());
+    if (checkpoint.next_item_index() > next_item_index_impl()) {
+      throw Exception(0x1bf0dbff9fe3d955,
+                      "Checkpoint requires more items than the current table has: checkpoint next_item_index [%u], table next_item_index [%u]",
+                      checkpoint.next_item_index(), next_item_index_impl());
     }
+    const auto keep_count = next_item_index_impl() - checkpoint.next_item_index();
+    const auto drop_count = Base::storage_.count() - keep_count;
 
-    shift_ += Base::size();
-    Base::storage_.shrink();
+    shift_ += drop_count;
+    Base::storage_.drop_front(drop_count);
+    assert(Base::storage_.count() == keep_count);
     set_.clear();
+    set_.reserve(keep_count);
+    for (uint32_t id = 0; id < keep_count; ++id) {
+      set_.emplace(typename Base::Proxy(id));
+    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return Base::allocated_memory() + set_allocated_memory_; }
@@ -523,7 +571,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
       set_{{}, 0, Base::hasher(), Base::equality_comparator(), Allocator<typename Base::Proxy, DefaultReallocator, uint32_t>{set_allocated_memory_}};
   uint32_t shift_{0};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.next_item_index(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.count(); }
 
   template <ls_id_range R>
   PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
@@ -630,9 +678,9 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   PROMPP_ALWAYS_INLINE void rollback_impl(const typename Base::checkpoint_type& s) noexcept
     requires(!Base::kIsReadOnly)
   {
-    assert(s.size() <= Base::size());
+    assert(s.size() <= Base::items_count());
 
-    for (uint32_t i = s.size(); i != Base::size(); ++i) {
+    for (uint32_t i = s.size(); i != Base::items_count(); ++i) {
       set_.erase(typename Base::Proxy(i), Base::hasher(), Base::equality_comparator());
     }
   }

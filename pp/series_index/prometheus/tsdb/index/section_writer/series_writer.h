@@ -1,7 +1,10 @@
 #pragma once
 
+#include <cassert>
+
 #include "bare_bones/preprocess.h"
 #include "prometheus/tsdb/index/stream_writer.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/types.h"
 
 namespace series_index::prometheus::tsdb::index::section_writer {
@@ -12,9 +15,10 @@ class SeriesWriter {
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using StringWriter = PromPP::Prometheus::tsdb::index::StringWriter;
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
+  using IndexWriteContext = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>;
 
-  SeriesWriter(const Lss& lss, const SymbolReferencesMap& symbol_references, SeriesReferencesMap& series_references)
-      : lss_(lss), symbol_references_(symbol_references), series_references_(series_references) {}
+  SeriesWriter(const Lss& lss, const IndexWriteContext& index_write_context, SeriesReferences& series_references)
+      : lss_(lss), index_write_context_(index_write_context), series_references_(series_references) {}
 
   template <class ChunkMetadataContainer>
   void write(PromPP::Primitives::LabelSetID ls_id, const ChunkMetadataContainer& chunks, StreamWriter& writer) {
@@ -31,8 +35,8 @@ class SeriesWriter {
 
  private:
   const Lss& lss_;
-  const SymbolReferencesMap& symbol_references_;
-  SeriesReferencesMap& series_references_;
+  const IndexWriteContext& index_write_context_;
+  SeriesReferences& series_references_;
 
   StringWriter series_writer_;
 
@@ -41,8 +45,8 @@ class SeriesWriter {
     series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(labels.size()));
 
     for (auto it = labels.begin(); it != labels.end(); ++it) {
-      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(get_symbol_reference(SymbolLssId{it.name_id()})));
-      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(get_symbol_reference(SymbolLssId{it.name_id(), it.value_id()})));
+      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(index_write_context_.symbol_ref_for_name_for_series(ls_id, it.name_id())));
+      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(index_write_context_.symbol_ref_for_value_for_series(ls_id, it.name_id(), it.value_id())));
     }
   }
 
@@ -70,8 +74,12 @@ class SeriesWriter {
   }
 
   PROMPP_ALWAYS_INLINE void emplace_series_reference(PromPP::Primitives::LabelSetID ls_id, size_t position) const {
-    auto section_ref = position / PromPP::Prometheus::tsdb::index::kSeriesAlignment;
-    series_references_.try_emplace(ls_id, section_ref);
+    const auto section_ref = position / PromPP::Prometheus::tsdb::index::kSeriesAlignment;
+    // The symbols table precedes the series section, so a written reference is never zero,
+    // which lets PostingsWriter use zero as the "not written" sentinel.
+    assert(section_ref != kUnwrittenSeriesReference);
+    assert(ls_id < series_references_.size());
+    series_references_[ls_id] = static_cast<PromPP::Prometheus::tsdb::index::SeriesReference>(section_ref);
   }
 
   void write_serialized_series(StreamWriter& writer) const {
@@ -82,12 +90,6 @@ class SeriesWriter {
     });
 
     writer.align_to(PromPP::Prometheus::tsdb::index::kSeriesAlignment);
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Prometheus::tsdb::index::SymbolReference get_symbol_reference(SymbolLssId symbol_id) const noexcept {
-    const auto reference_it = symbol_references_.find(symbol_id);
-    assert(reference_it != symbol_references_.end());
-    return reference_it->second;
   }
 };
 

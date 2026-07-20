@@ -21,16 +21,9 @@ runs:
       with:
         channel: ${{ inputs.channel }}
 
-    - uses: imjasonh/setup-crane@v0.4
-
     - name: Print werf version
       shell: bash
       run: werf version
-
-    - name: Print crane version
-      shell: bash
-      run: crane version
-
 
     - name: Login into registry ${{ inputs.registry }}
       shell: bash

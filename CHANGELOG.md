@@ -1,6 +1,58 @@
 # Changelog
 
+## v0.8.4
+
+### Features
+1. **`prompptool persist-head` command.** Added a `persist-head` command that persists a single Prom++ head to TSDB blocks directly by its directory path, without consulting `head.log`. Useful for recovering or persisting an individual (e.g. corrupted or orphaned) head during incident investigation.
+2. **Skip writing blocks beyond retention.** The block writer now skips any block-duration quant whose entire time range already falls outside the retention period, instead of writing blocks that would be deleted on the very next retention pass. This avoids wasted disk writes when persisting shards that span far into the past.
+3. **jemalloc heap profile over HTTP.** Added a `/debug/jemalloc` endpoint that dumps the C++ core's jemalloc heap profile to a temporary file, streams it back as an attachment, and removes the file afterwards. Requires the process to run with `MALLOC_CONF="prof:true"` (profiling stays off by default). The optional `dir` query parameter (e.g. `/debug/jemalloc?dir=/prometheus`) points the temp file at a writable directory for containers with a read-only root filesystem.
+
+### Enhancements
+1. **Local storage observability.** The block-manager storage scheme now runs a local storage observer that reports the total size of unknown/unexpected objects in the local storage directory via the new `prompp_localstorage_unknown_bytes` gauge, making disk leftovers visible to operators.
+
+### Performance
+1. **Lazy block index buffer allocation.** Block writers previously allocated a 4 MiB index buffer per block-duration quant up front, including empty quants, which could reach several GiB of allocations on wide or sparse time intervals. The buffer is now allocated lazily on the first write, so empty blocks no longer hold multi-megabyte buffers.
+
+### Fixes
+1. **Heap-buffer-overflow in the outdated chunk merger.** `merge_outdated_samples_in_finalized_chunks` could keep iterating finalized chunks and dereference an already-exhausted samples span, causing a heap-buffer-overflow (observed on production heads, flagged by ASan). The merger now bails out as soon as the samples span is empty.
+2. **Leftover temporary block directories cleaned up on startup.** The block `Manager` never loaded `*.tmp-for-creation` / `*.tmp-for-deletion` directories, so leftovers from a crash during compaction or persist leaked on disk forever. Startup now performs a best-effort cleanup of these directories before the initial reload.
+3. **Go 1.26.5 security update.** Bumped the Go toolchain from 1.26.4 to 1.26.5, picking up standard-library fixes for an Encrypted Client Hello privacy leak in `crypto/tls` (GO-2026-5856) and a symlink-based root escape in `os` (GO-2026-4970). The remaining unfixed advisories are in unused code paths of indirect dependencies — the AWS S3 crypto SDK in `github.com/aws/aws-sdk-go` (GO-2022-0635, GO-2022-0646; only EC2 service discovery is used) and the deprecated `golang.org/x/crypto/openpgp` package (GO-2026-5932; not used) — and have no upstream fix available.
+
+## v0.8.3
+
+### Fixes
+1. **Per-`DataStorage` metrics page memory leak.** Each `DataStorage` registered a metrics page in the global C++ metrics storage and only detached it on destruction, but detached pages are physically reclaimed only during C++ metrics collection — which was disabled by default in v0.8.2. With the collector off, every created-and-destroyed `DataStorage` leaked its metrics page (observed as steady heap growth on stage). `DataStorage` now owns its metrics object directly instead of registering it globally, so no page can leak. As a consequence the per-`DataStorage` `prompp_data_storage_*` metrics are no longer exposed to the C++ metrics collector.
+2. **C++ metrics collector re-enabled by default.** The v0.8.2 use-after-free mitigation disabled the C++ metrics collector by default (`PROMPP_FEATURES=enable_cpp_metrics`) because it iterated metrics-page memory that could be freed concurrently by `remove_unused_pages`. Now that `DataStorage` no longer registers pages in the global metrics storage, nothing populates it in production, so that concurrent-free path is gone and the collector is safe to run unconditionally again. The `enable_cpp_metrics` feature flag is removed.
+
+## v0.8.2
+
+### Fixes
+1. **C++ metrics collector disabled by default (use-after-free mitigation).** The Prom++ C++ metrics collector iterates C++ metrics-page memory on every scrape while those pages can be freed concurrently (`remove_unused_pages`), risking a use-after-free. The collector is now off by default and must be opted into via `PROMPP_FEATURES=enable_cpp_metrics`.
+
+## v0.8.1
+
+### Features
+1. **Block-manager historical storage (feature-flagged).** Introduced a standalone `block.Manager`/`block.Compactor` that owns reading persisted blocks, applying retention, and compaction, replacing the embedded TSDB on the read path in server mode. The pre-existing historical TSDB path stays the default; enable the new engine via `PROMPP_FEATURES=enable_block_manager`. Adds compaction plan/result logging, restored block-manager gauges, and block-duration diagnostics metrics (`prometheus_tsdb_blocks_loaded_by_duration`).
+2. **Disable core dumps feature flag.** Added `PROMPP_FEATURES=disable_coredumps`, which sets `RLIMIT_CORE` to 0 at startup so the kernel does not write core dumps into the working directory on crash. Lowering the limit needs no extra privileges, so it works in unprivileged Kubernetes pods.
+
+### Enhancements
+1. **DataStorage metrics.** Exposed a new family of `prompp_data_storage_*` metrics — per-encoder-type counts, finalized chunk counts, and timestamp state counts — giving operators visibility into the C++ data storage internals.
+
+### Performance
+1. **Faster `NewLabelsWithLSS`.** Added a dedicated `serialize_from_snapshot_to_buffer` binding so building Go label sets from an LSS snapshot serializes directly into a buffer, cutting allocations and copies on the hot path.
+2. **Index writer optimization.** Reworked snapshot symbol collection to emit each label name once instead of once per value (a single hot name previously reached ~4.7k copies on a real LSS), cutting `write_symbols` time after shrink by a further ~16% on top of the btree change.
+
+### Fixes
+1. **Dependency security updates.** Bumped the Go `go.mongodb.org/mongo-driver` to v1.17.7 and the web UI `ws` (v8.21.0) and `form-data` (v3.0.5) packages, picking up upstream security fixes.
+
+### Other
+1. **GCC 16 C++ toolchain.** Upgraded the CI/devcontainer C++ toolchain to GCC 16.
+
 ## v0.8.0
+
+### Features
+1. **Instant-query optimization (feature-flagged).** Added an optimized instant-query path that returns a single point per series and can fetch all required data in one pass. It is especially effective for "latest point" queries, because the newest sample is already kept in the series encoder in an unencoded form, so reading it is effectively near-zero cost. This approach was previously used in the federate API and is expected to be most beneficial for rule evaluations without window functions. Enable via `PROMPP_FEATURES=enable_instant_query_feature`.
+2. **Shrink QEB on head rotation (feature-flagged).** During head rotation, Prom++ keeps two heads in memory at once (the old head for conversion/querying and the new active head), which can cause RAM spikes every `min_block_duration` (2h). The Shrink Query Encoding Bimap (QEB) mechanism shares memory between old and new heads to reduce these spikes. Enable via `PROMPP_FEATURES=shrink_shard_copier` (or combine flags: `PROMPP_FEATURES=enable_instant_query_feature,shrink_shard_copier`).
 
 ### Enhancements
 1. **Snapshot LSS type separation.** Decoupled the read-only label set snapshot into a dedicated `SnapshotLSS` type with its own variant, reducing the active head's variant footprint and improving type safety.
@@ -8,10 +60,33 @@
 3. **GCC 14 and clang-tidy 21.** Upgraded the C++ toolchain to GCC 14.2.0 and clang-tidy 21.1.8 with new `bugprone-*` diagnostics enabled; all findings resolved.
 4. **Go `/sync/*` runtime metrics.** The Prometheus Go collector now exports mutex and semaphore contention statistics from `runtime/metrics` (`/sync/*`) alongside the existing GC and scheduler metrics, making locker contention observable in production.
 5. **Jemalloc resident memory metric.** Exposed jemalloc's resident set size as a new metric alongside the existing allocated/mapped stats, giving operators clearer visibility into the C++ allocator's memory footprint.
+6. **Chunk recoder optimization.** Switched the chunk recoder to a seek-based decode iterator and tuned the Prometheus `chunkenc` encoder with `[[likely]]` annotations, giving roughly a 10% speedup on the recoder benchmark.
+7. **Remote write data source refactor.** Reworked the WAL/encoder pipeline — extracted `SegmentSamplesStorage`, added a V2 WAL reader and `DataSourceV2`, and the shard now transparently switches between WAL format versions.
+8. **Merge-shard series sets.** New generic `mergeShardSeriesSet` / `mergeShardChunkSeriesSet` iterators stream across shards without an intermediate merge buffer, lowering query memory pressure on sharded heads.
+9. **Jemalloc arena pool recycling.** Arenas returned to the free pool are now reset and purged instead of being destroyed, with updated jemalloc build options. New metrics report arena pool releases and reclaimed bytes (`prompp_common_jemalloc_arena_pool_*`). Carried over from v0.7.11.
 
 ### Fixes
-1. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
-2. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
+1. **Remote-read snappy DoS (CVE-2026-42154).** Backported the upstream fix (GHSA-8rm2-7qqf-34qm) — `/api/v1/read` now rejects snappy-compressed payloads whose declared decoded length exceeds the 32 MiB decode limit before allocation, preventing memory exhaustion via crafted small requests.
+2. **Range-vector double-counting at step boundaries.** Backported the upstream Prometheus 3.0 fix (PR #13904) — both matrix selectors `metric[range]` and instant-vector lookback now use left-open, right-closed intervals `(t-range, t]` / `(t-lookback, t]`. Previously the closed `[t-range, t]` semantics caused range-vector functions like `sum_over_time`, `count_over_time` and `rate` to systematically include one extra sample at the left boundary, double-counting at step boundaries (upstream issue #14007) and producing inflated results when range and step were equal multiples of the scrape interval. Note: this is a behavior change for queries whose result depends on whether a sample exactly at `t-range` is included; existing dashboards and recording rules may see small numeric shifts.
+3. **Azure AD remote-write client_secret redaction (CVE-2026-42151).** Backported the upstream fix (GHSA-wg65-39gg-5wfj) — `OAuthConfig.ClientSecret` in `storage/remote/azuread` is now typed as `config.Secret` instead of a plain `string`, so the value is redacted (`<secret>`) when serving the configuration via the `/-/config` HTTP API.
+4. **Stored XSS in React web UI (CVE-2026-40179, CVE-2026-44903, CVE-2026-44990).** Backported upstream fixes (GHSA-vffh-x6r8-xx99, GHSA-fw8g-cg8f-9j28) — graph tooltips, the Metrics Explorer fuzzy results, the heatmap bucket tooltip, and the heatmap y-axis tick labels now `escapeHTML` metric names and label values (including `le`) before injecting them into `innerHTML`. As a defense-in-depth measure for the unpatched `sanitize-html` `<xmp>` bypass (GHSA-rpr9-rxv7-x643), the Flags page now also HTML-escapes the fuzzy-search output before passing it to `sanitize-html`, so the sanitizer never sees raw markup. Together this blocks script execution from crafted metrics ingested via scrape, remote-write, or OTLP and from operator-supplied command-line flag values.
+5. **OpenTelemetry security update.** Upgraded `go.opentelemetry.io/otel/sdk` and the `otlptracehttp` exporter to v1.43.0, and additionally bumped `go.opentelemetry.io/otel` to v1.41.0 — mitigates a PATH hijacking CVE (GHSA-hfvc-g4fc-pqhx) in the BSD host-id detector and adds a 4 MiB response body limit to OTLP HTTP exporters, protecting against memory exhaustion from a misbehaving collector.
+6. **Close WAL on shard rotation.** Shard rotation now explicitly closes the outgoing WAL via a dedicated `ClosedWal` sentinel instead of leaking the handle, preventing stale WAL readers from racing with newly-rotated shards.
+7. **Go 1.26.4.** Bumped Go to 1.26.4, pulling in the latest stdlib security fixes from the 1.26.x series.
+8. **aarch64 jemalloc page size.** Aligned the jemalloc build with the aarch64 host page size so ARM64 builds no longer hit a configuration mismatch under the GCC 14 toolchain.
+9. **Gorilla float encoder length overflow.** Fixed the XOR value encoder in `chunkenc` — a 64-bit-wide XOR difference produced a length of 64 that overflowed the 6-bit length field; the value is now masked so it wraps to the `0`-means-64 encoding, preventing corrupted samples in chunks containing such values.
+10. **Dependency security updates.** Bumped `google.golang.org/grpc` to v1.79.3, `golang.org/x/net` to v0.55.0, and `golang.org/x/crypto` to v0.52.0 on the Go side, plus the web UI `ws` package to v8.20.1, picking up upstream security fixes.
+
+### Other
+1. **Bazel Bzlmod migration.** Migrated `pp/` to Bzlmod and refreshed `rules_cc`, `rules_foreign_cc`, and `bazel_clang_tidy` to resolve dependency conflicts that had blocked further updates of the C++ build stack.
+
+## v0.7.11
+
+### Enhancements
+1. **Jemalloc arena pool recycling.** Arenas returned to the free pool are reset and purged instead of being destroyed, with updated jemalloc build options. New metrics report arena pool releases and reclaimed bytes (`prompp_common_jemalloc_arena_pool_*`).
+
+### Other
+1. **GCC 14 C++ toolchain.** The CI/devcontainer image and Bazel configuration on this branch build the C++ core with GCC 14.
 
 ## v0.7.10
 

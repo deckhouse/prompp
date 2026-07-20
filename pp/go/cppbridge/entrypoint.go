@@ -43,7 +43,6 @@ const (
 )
 
 var (
-
 	// per_goroutine_relabeler input_relabeling
 	perGoroutineRelabelerInputRelabelingSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -437,20 +436,31 @@ func memInfo() (res MemInfo) {
 }
 
 func dumpMemoryProfile(filename string) int {
+	// prof.dump synchronously walks the heap and writes the whole profile to the file before
+	// returning, which can take a long time for large heaps. Unlike the other short entrypoint
+	// calls this is therefore a regular cgo call (not fastcgo): the goroutine parks in _Gsyscall
+	// and frees its P for the duration instead of blocking the scheduler with a busy P.
+	//
+	// A regular cgo call is subject to the cgo pointer checker, so the filename cannot be passed
+	// as a Go string header (a Go pointer to Go memory). We copy it into a byte slice, pin that
+	// slice for the duration of the call, and hand C a {data, size} pair matching Go::String.
+	nameBytes := append([]byte(filename), 0)
+
+	var pinner runtime.Pinner
+	pinner.Pin(&nameBytes[0])
+	defer pinner.Unpin()
+
 	args := struct {
-		filename string
-	}{filename}
+		data *byte
+		size uintptr
+	}{&nameBytes[0], uintptr(len(filename))}
 
 	res := struct {
 		error int
 	}{0}
 
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_dump_memory_profile,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
+	C.prompp_dump_memory_profile(unsafe.Pointer(&args), unsafe.Pointer(&res))
 	return res.error
 }
 
@@ -1642,6 +1652,23 @@ func primitivesLSSBitsetSeries(lss uintptr) uintptr {
 	return res.bitset
 }
 
+// primitivesLSSFinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+func primitivesLSSFinalizeCopyAndShrink(lss, resolveSnapshot, newToOldMapping uintptr) {
+	args := struct {
+		lss             uintptr
+		resolveSnapshot uintptr
+		newToOldMapping uintptr
+	}{lss, resolveSnapshot, newToOldMapping}
+
+	testGC()
+	start := time.Now()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_finalize_copy_and_shrink,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	lssFinalizeCopyAndShrinkDurationMax.set(float64(time.Since(start).Nanoseconds()))
+}
+
 // primitivesLSSBitsetDtor destroy bitset of added series.
 func primitivesLSSBitsetDtor(bitset uintptr) {
 	args := struct {
@@ -1660,12 +1687,14 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 func primitivesSnapshotLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
 	var dstSrcLsIdsMapping uintptr
 
+	start := time.Now()
 	C.prompp_primitives_snapshot_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
 		C.uint64_t(uintptr(unsafe.Pointer(&dstSrcLsIdsMapping))),
 	)
+	snapshotLSSCopyAddedSeriesDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return dstSrcLsIdsMapping
 }
@@ -1680,6 +1709,24 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 		C.prompp_primitives_free_ls_ids_mapping,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
+	args := struct {
+		lss            uintptr
+		shrinkBoundary uint32
+	}{lss, shrinkBoundary}
+
+	testGC()
+	start := time.Now()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_set_pending_shrink_boundary,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
 //
@@ -2614,13 +2661,18 @@ func seriesDataUnloadedDataLoaderDtor(loader uintptr) {
 	)
 }
 
-func indexWriterCtor(lss uintptr) uintptr {
+// indexWriterCtor constructs the writer and returns both the writer pointer and a stable pointer
+// to its internal output buffer (a Go []byte header). Every write_* call fills that buffer in
+// place; the result is read back from this pointer, so no buffer is threaded through cgo.
+func indexWriterCtor(lss uintptr) (writer, buffer, hasMorePostings unsafe.Pointer) {
 	args := struct {
 		lss uintptr
 	}{lss}
 
 	var res struct {
-		writer uintptr
+		writer          unsafe.Pointer
+		buffer          unsafe.Pointer
+		hasMorePostings unsafe.Pointer
 	}
 
 	testGC()
@@ -2630,12 +2682,12 @@ func indexWriterCtor(lss uintptr) uintptr {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.writer
+	return res.writer, res.buffer, res.hasMorePostings
 }
 
-func indexWriterDtor(writer uintptr) {
+func indexWriterDtor(writer unsafe.Pointer) {
 	args := struct {
-		writer uintptr
+		writer unsafe.Pointer
 	}{writer}
 
 	testGC()
@@ -2645,160 +2697,85 @@ func indexWriterDtor(writer uintptr) {
 	)
 }
 
-func indexWriterWriteHeader(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteHeader(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_header,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteSymbols(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteSymbols(writer unsafe.Pointer) {
+	// write_symbols is the longest single C call on the index-writing path (multiple ms,
+	// tens of ms in the shrunk state). fastcgo runs on the system stack without releasing
+	// the P, which stalls the Go scheduler and GC for the whole duration; a regular cgo
+	// call parks the goroutine in _Gsyscall and frees the P, and its ~tens-of-ns overhead
+	// is negligible here. Only the writer pointer crosses the boundary, by value: it is a
+	// stable prompp-arena address, so no goroutine stack pointer is handed to C and a
+	// concurrent GC stack move during the call is harmless. The result is read from the
+	// writer's internal buffer.
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_symbols,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.data
+	C.prompp_index_writer_write_symbols(writer)
 }
 
-func indexWriterWriteNextSeriesBatch(writer uintptr, ls_id uint32, chunks_meta []ChunkMetadata, data []byte) []byte {
+func indexWriterWriteNextSeriesBatch(writer unsafe.Pointer, ls_id uint32, chunks_meta []ChunkMetadata) {
 	args := struct {
-		writer      uintptr
+		writer      unsafe.Pointer
 		chunks_meta []ChunkMetadata
 		ls_id       uint32
 	}{writer, chunks_meta, ls_id}
 
-	res := struct {
-		data []byte
-	}{data}
-
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_next_series_batch,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteLabelIndices(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteLabelIndices(writer unsafe.Pointer) {
+	// write_label_indices walks the whole name/value trie index (a few ms), long enough that
+	// fastcgo blocking the P would stall the scheduler. Like write_symbols/write_postings it
+	// uses a regular cgo call so the goroutine parks in _Gsyscall and frees the P; only the
+	// writer pointer (a stable prompp-arena address) crosses the boundary by value.
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_label_indices,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.data
+	C.prompp_index_writer_write_label_indices(writer)
 }
 
-func indexWriterWriteNextPostingsBatch(writer uintptr, max_batch_size uint32, data []byte) ([]byte, bool) {
-	args := struct {
-		writer         uintptr
-		max_batch_size uint32
-	}{writer, max_batch_size}
-
-	res := struct {
-		data          []byte
-		has_more_data bool
-	}{data, false}
-
+func indexWriterWritePostings(writer unsafe.Pointer, maxBatchSize uint32) {
+	// write_postings emits one batch (up to maxBatchSize bytes) per call; the caller loops
+	// while the has_more_postings flag stays set. Each batch can still be a multi-ms call (the
+	// all-series posting and hot label values are atomic), so it uses a regular cgo call: the
+	// goroutine parks in _Gsyscall and frees the P for the duration instead of fastcgo blocking
+	// the scheduler. Only the writer pointer (a stable prompp-arena address) and the scalar
+	// batch size cross the boundary by value, so no goroutine stack pointer is handed to C and a
+	// concurrent GC stack move during the call is harmless. The result is read from the writer's
+	// internal buffer.
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_next_postings_batch,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.data, res.has_more_data
+	C.prompp_index_writer_write_postings(writer, C.uint64_t(maxBatchSize))
 }
 
-func indexWriterWriteLabelIndicesTable(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteLabelIndicesTable(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_label_indices_table,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWritePostingsTableOffsets(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWritePostingsTableOffsets(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_postings_table_offsets,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteTableOfContents(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteTableOfContents(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_table_of_contents,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
 func freeHeadStatus(status *HeadStatus) {
@@ -3130,6 +3107,25 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
+// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
+func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+	args := struct {
+		encoder uintptr
+	}{encoder}
+	var res struct {
+		maxWrittenItemIndex uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_head_wal_encoder_max_written_item_index,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.maxWrittenItemIndex
+}
+
 func headWalEncoderDtor(encoder uintptr) {
 	args := struct {
 		encoder uintptr
@@ -3276,6 +3272,41 @@ func labelSetSerializeFromSnapshot(snapshot uintptr, labelSetID uint32) []Label 
 	)
 
 	return res.labelSet
+}
+
+func labelSetSerializeFromSnapshotLength(snapshot uintptr, labelSetID uint32) uint32 {
+	args := struct {
+		snapshot   uintptr
+		labelSetID uint32
+	}{snapshot, labelSetID}
+
+	var res struct {
+		length uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_serialize_from_snapshot_length,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length
+}
+
+func labelSetSerializeFromSnapshotToBuffer(snapshot uintptr, labelSetID uint32, buffer []byte) {
+	args := struct {
+		snapshot   uintptr
+		buffer     []byte
+		labelSetID uint32
+	}{snapshot, buffer, labelSetID}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_label_set_serialize_from_snapshot_to_buffer,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(buffer)
 }
 
 func labelSetFree(labelSet []Label) {
@@ -3706,6 +3737,12 @@ func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
 	fastcgo.UnsafeCall1(
 		C.prompp_remap_stale_nans_state,
 		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func prometheusMetricsRegister() {
+	fastcgo.UnsafeCall0(
+		C.prompp_metrics_register,
 	)
 }
 

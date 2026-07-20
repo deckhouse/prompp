@@ -32,6 +32,11 @@ func (NoopWal) Flush() error {
 	return nil
 }
 
+// MaxWrittenItemIndex implementation of [NoopWal], do nothing.
+func (NoopWal) MaxWrittenItemIndex() uint32 {
+	return 0
+}
+
 // Sync implementation of [NoopWal], do nothing.
 func (NoopWal) Sync() error {
 	return nil

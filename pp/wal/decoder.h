@@ -81,7 +81,8 @@ class GenericDecoder {
   PROMPP_ALWAYS_INLINE void decode(Input& in, SegmentProcessor&& processor) {
     std::ispanstream(std::string_view(in.data(), in.size())) >> decoder_;
 
-    decoder_.process_segment(processor);
+    decoder_.process_segment([&processor](Primitives::LabelSetID ls_id, Primitives::Timestamp timestamp, double value)
+                                 PROMPP_LAMBDA_INLINE { processor(ls_id, timestamp, value); });
   }
 
   // decode_to_hashdex decoding incoming data and add to hashdex with metadata.
