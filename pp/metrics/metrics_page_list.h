@@ -64,6 +64,11 @@ class MetricsPageList {
     } while (!next_metrics_page_.compare_exchange_weak(current_next_page, page));
   }
 
+  // remove_unused_pages is the only place pages are physically freed. It is invoked exclusively from
+  // prompp_metrics_iterator_ctor, which the Go side calls under cppMetrics.mutex (see pp/go/cppbridge/metrics.go), so
+  // frees are single-threaded. A page is freed only when it is detached AND not active; the Go finalizer concurrently
+  // clears the per-metric active flag but never frees anything. That is the invariant the whole retention scheme relies
+  // on — freeing from any other context, or off the Go mutex, would reintroduce the use-after-free this design fixes.
   void remove_unused_pages() {
     MetricsPageControlBlock* page = next_metrics_page_;
     if (page == nullptr) [[unlikely]] {

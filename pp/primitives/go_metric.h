@@ -1,5 +1,9 @@
 #pragma once
 
+#include <atomic>
+#include <cstddef>
+#include <type_traits>
+
 #include "bare_bones/xxhash.h"
 #include "go_model.h"
 #include "label_set.h"
@@ -133,7 +137,20 @@ struct MetricDescriptor {
 struct Metric {
   dto::MetricDescriptor* descriptor{};
   dto::Metric* metric{};
+  // active gates page reclamation: while any metric of a page is active, the (possibly detached) page is kept alive.
+  // It starts at 1 (active on creation) and is cleared solely from Go, by the CppMetricWrapper finalizer, once Go
+  // drops its last reference to this metric. C++ only ever reads it (see Metric::is_active / MetricsPageList).
   std::atomic<uint32_t> active{1};
 };
+
+// Metric is a shared-memory contract with the Go cppbridge.CppMetric struct (pp/go/cppbridge/metrics.go): the metrics
+// iterator hands Go a pointer straight into this C++ object, so Go reads descriptor/metric and writes `active` at these
+// exact offsets. The asserts fail the build if the layout ever drifts out of lockstep with the Go side (LP64 assumed).
+static_assert(std::is_standard_layout_v<Metric>);
+static_assert(sizeof(Metric) == 24);
+static_assert(offsetof(Metric, descriptor) == 0);
+static_assert(offsetof(Metric, metric) == 8);
+static_assert(offsetof(Metric, active) == 16);
+static_assert(sizeof(std::atomic<uint32_t>) == 4);
 
 }  // namespace PromPP::Primitives::Go

@@ -9,6 +9,14 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
+// CppMetric mirrors, field for field, the C++ PromPP::Primitives::Go::Metric struct: the pointer returned by
+// prometheusMetricsIteratorNext points directly into C++ metrics-page memory, so this struct is a memory view of it,
+// not a Go-owned copy. The field order, sizes and offsets MUST stay in lockstep with go_metric.h (descriptor and
+// metric pointers followed by the active flag); a static_assert on the C++ side guards the layout.
+//
+// active is written from Go (via the finalizer below, atomic.Uint32.Store) and read from C++
+// (std::atomic<uint32_t>) over the very same word. It is the handshake that keeps a detached page alive until Go
+// no longer references any of its metrics.
 type CppMetric struct {
 	descriptor *prometheus.Desc
 	metric     *dto.Metric
@@ -68,6 +76,12 @@ func (m *cppMetrics) Range(f func(metric *CppMetricWrapper) bool) {
 
 		wrappedMetric, ok := m.cache[cppMetric]
 		if !ok {
+			// The finalizer clears the C++ active flag once Go drops the last reference to this wrapper. This is the
+			// whole point of the wrapper cache: the backing C++ page is physically freed by remove_unused_pages()
+			// only when it is detached AND !is_active(), and active is cleared *exclusively* here. So the page is
+			// guaranteed to still be alive when the finalizer writes to it, and its address cannot be reused until
+			// every metric of the page has been finalized (no ABA). The tradeoff is that a detached page lingers
+			// until the next GC collects its wrappers, i.e. reclamation latency is now tied to GC scheduling.
 			wrappedMetric = &CppMetricWrapper{cppMetric: cppMetric, existsInCppStorageAtGeneration: m.generation}
 			runtime.SetFinalizer(wrappedMetric, func(wrappedMetric *CppMetricWrapper) {
 				wrappedMetric.cppMetric.active.Store(0)
@@ -77,9 +91,14 @@ func (m *cppMetrics) Range(f func(metric *CppMetricWrapper) bool) {
 			wrappedMetric.existsInCppStorageAtGeneration = m.generation
 		}
 
+		// Once a consumer returns false we stop invoking f, but we deliberately keep iterating every remaining page:
+		// the loop below prunes cache entries by generation, so each still-present page must be stamped with the
+		// current generation on every call, otherwise a live page's wrapper would be dropped and finalized too early.
 		callHandler = callHandler && f(wrappedMetric)
 	}
 
+	// Drop wrappers for pages that were not visited this generation (i.e. detached and no longer iterated). Removing
+	// the last reference lets the finalizer run, clear active, and thus allow remove_unused_pages() to free the page.
 	for key, wrappedMetric := range m.cache {
 		if wrappedMetric.existsInCppStorageAtGeneration != m.generation {
 			delete(m.cache, key)
