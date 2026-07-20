@@ -224,6 +224,8 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		2*time.Hour,
+		0,
+		s.clock,
 		prometheus.DefaultRegisterer,
 	)
 	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
@@ -260,6 +262,8 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		2*time.Hour,
+		0,
+		s.clock,
 		prometheus.DefaultRegisterer,
 	)
 	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
