@@ -1,9 +1,11 @@
 package querier_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -71,7 +73,13 @@ func (s *SeriesSetTestSuite) SetupTest() {
 	}
 }
 
-func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
+func (s *SeriesSetTestSuite) query(
+	lss *shard.LSS,
+	ds *shard.DataStorage,
+	start, end, downsamplingMs int64,
+	hints *storage.SelectHints,
+	matchers ...model.LabelMatcher,
+) *querier.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	require.NoError(s.T(), err)
 	if selector == 0 || snapshot == nil {
@@ -87,10 +95,38 @@ func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start,
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
-	})
+	}, downsamplingMs, hints)
 
 	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
+}
+
+func (s *SeriesSetTestSuite) queryAggr(
+	lss *shard.LSS,
+	ds *shard.DataStorage,
+	start, end, downsamplingMs int64,
+	hints *storage.SelectHints,
+	matchers ...model.LabelMatcher,
+) *querier.AggrSeriesSet {
+	selector, snapshot, err := lss.QuerySelector(0, matchers)
+	s.Require().NoError(err)
+	if selector == 0 || snapshot == nil {
+		return &querier.AggrSeriesSet{}
+	}
+
+	lssQueryResult := snapshot.Query(selector)
+	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
+		return &querier.AggrSeriesSet{}
+	}
+
+	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
+		StartTimestampMs: start,
+		EndTimestampMs:   end,
+		LabelSetIDs:      lssQueryResult.IDs(),
+	}, downsamplingMs, hints)
+
+	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
+	return querier.NewAggrSeriesSet(snapshot, dsQueryResult.SerializedData, lssQueryResult, start, end)
 }
 
 func (s *SeriesSetTestSuite) nextSample(iterator chunkenc.Iterator) cppbridge.Sample {
@@ -118,7 +154,7 @@ func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -139,7 +175,7 @@ func (s *SeriesSetTestSuite) TestQueryNoValues() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -160,7 +196,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -181,7 +217,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSample() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -202,7 +238,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -223,7 +259,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -253,7 +289,7 @@ func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -272,7 +308,7 @@ func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
 
 	expected := []storagetest.TimeSeries{}
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -327,8 +363,8 @@ func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(anotherLss, anotherDs, timeSeries2...)
 	expected := append(timeSeries1, timeSeries2...)
 	// Act
-	seriesSet1 := s.query(s.lss, s.ds, start, end, matcher)
-	seriesSet2 := s.query(anotherLss, anotherDs, start, end, matcher)
+	seriesSet1 := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
+	seriesSet2 := s.query(anotherLss, anotherDs, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 
 	// Assert
 	require.Equal(
@@ -352,7 +388,7 @@ func (s *SeriesSetTestSuite) TestSeriesSeek() {
 
 	expected := s.timeSeries[:4]
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	require.Equal(s.T(), expected[0].Labels, series.Labels())
@@ -389,7 +425,7 @@ func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
 	var end int64 = 1000
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	var iterator chunkenc.Iterator
@@ -416,7 +452,7 @@ func (s *SeriesSetTestSuite) TestSeriesParallelRead() {
 	expected := s.timeSeries
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, matcher)
 	seriesSlice := make([]storage.Series, 0, 2)
 	require.True(s.T(), seriesSet.Next())
 	seriesSlice = append(seriesSlice, seriesSet.At())
@@ -439,7 +475,7 @@ func (s *SeriesSetTestSuite) TestSeriesResetIterator() {
 
 	var start int64 = 0
 	var end int64 = 50
-	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, model.LabelMatcher{
 		Name:        "__name__",
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
@@ -466,7 +502,7 @@ func (s *SeriesSetTestSuite) TestSeriesResetIteratorWithMinTimestamp() {
 
 	var start int64 = 12
 	var end int64 = 50
-	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, &storage.SelectHints{}, model.LabelMatcher{
 		Name:        "__name__",
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
@@ -484,4 +520,228 @@ func (s *SeriesSetTestSuite) TestSeriesResetIteratorWithMinTimestamp() {
 	// Assert
 	s.Equal(cppbridge.Sample{Timestamp: 12, Value: 2}, s.nextSample(iterator))
 	s.Equal(chunkenc.ValNone, iterator.Next())
+}
+
+func (s *SeriesSetTestSuite) TestDownsampling() {
+	// Arrange
+	const Downsampling = 100
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 123, Value: 1.0},
+				{Timestamp: 152, Value: 1.0},
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 215, Value: 1.0},
+				{Timestamp: 242, Value: 1.0},
+				{Timestamp: 275, Value: 1.0},
+				{Timestamp: 303, Value: 1.0},
+			},
+		},
+	}...)
+
+	// Act
+	seriesSet := s.queryAggr(s.lss, s.ds, 0, 400, Downsampling, &storage.SelectHints{}, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 275, Value: 1.0},
+				{Timestamp: 303, Value: 1.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestQueryWithoutHints() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 123, Value: 1.0},
+				{Timestamp: 152, Value: 1.0},
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 215, Value: 1.0},
+			},
+		},
+	}...)
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, nil, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 123, Value: 1.0},
+				{Timestamp: 152, Value: 1.0},
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 215, Value: 1.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestMinOverTimeFunc() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
+				{Timestamp: 200, Value: 3.0},
+				{Timestamp: 250, Value: 0.0},
+			},
+		},
+	}...)
+	hints := &storage.SelectHints{
+		Start: 101,
+		End:   200,
+		Func:  "min_over_time",
+	}
+
+	// Act
+	seriesSet := s.queryAggr(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	s.Require().Equal([]storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 150, Value: 2.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestMaxOverTimeFunc() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
+				{Timestamp: 200, Value: 3.0},
+				{Timestamp: 250, Value: 0.0},
+			},
+		},
+	}...)
+	hints := &storage.SelectHints{
+		Start: 100,
+		End:   200,
+		Func:  "max_over_time",
+	}
+
+	// Act
+	seriesSet := s.queryAggr(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 200, Value: 3.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestLastOverTimeFunc() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
+				{Timestamp: 200, Value: 3.0},
+				{Timestamp: 250, Value: math.Float64frombits(value.StaleNaN)},
+				{Timestamp: 300, Value: 0.0},
+			},
+		},
+	}...)
+	hints := &storage.SelectHints{
+		Start: 100,
+		End:   250,
+		Func:  "last_over_time",
+	}
+
+	// Act
+	seriesSet := s.queryAggr(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 200, Value: 3.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestChangesFunc() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
+				{Timestamp: 200, Value: 3.0},
+				{Timestamp: 250, Value: math.Float64frombits(value.StaleNaN)},
+				{Timestamp: 300, Value: 0.0},
+			},
+		},
+	}...)
+	hints := &storage.SelectHints{
+		Start: 99,
+		End:   250,
+		Func:  "changes",
+	}
+
+	// Act
+	seriesSet := s.queryAggr(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Equal(labels.FromStrings("__name__", "metric", "job", "test"), actual[0].Labels)
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 100, Value: 1.0},
+		{Timestamp: 150, Value: 2.0},
+		{Timestamp: 200, Value: 3.0},
+	}, actual[0].Samples[:3])
+	s.Equal(int64(250), actual[0].Samples[3].Timestamp)
+	s.Equal(value.StaleNaN, math.Float64bits(actual[0].Samples[3].Value))
 }

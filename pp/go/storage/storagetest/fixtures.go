@@ -170,13 +170,13 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 			break
 		}
 
-		iterator := cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef)
+		iterator := cppbridge.NewDataStorageSerializedDataSamplesIterator(serializedData, chunkRef)
 		for {
 			if !iterator.HasData() {
 				break
 			}
 
-			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp, Value: iterator.Value})
+			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp(), Value: iterator.Value()})
 			iterator.Next()
 		}
 	}
