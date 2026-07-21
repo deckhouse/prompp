@@ -155,10 +155,14 @@ PROMPP_ALWAYS_INLINE void construct_multi_series_decode_iterator(MultiSeriesDeco
       break;
     }
 
-    case kSum:
-    default: {
+    case kSum: {
       std::construct_at(iterator, std::in_place_type<MultiSeriesDecodeIterator::SumMultiSeriesIterator>, create_series_iterators(),
                         select_hints.function_parameters);
+      break;
+    }
+
+    default: {
+      throw BareBones::Exception(0xbd870aaf62cce9d3, "Unsupported window function");
       break;
     }
   }

@@ -77,7 +77,7 @@ class MultiSeriesIterator {
       if (iterator != DecodeIteratorSentinel{}) [[likely]] {
         handler(iterator->timestamp, iterator->value);
       } else if (!iterator.has_more_samples()) {
-        iterators_.erase(it);
+        it = iterators_.erase(it);
         continue;
       }
 
