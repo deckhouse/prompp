@@ -125,19 +125,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			continue
 		}
 
-		var chunkIterator ChunkIterator
-		_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIdBatchSize, sd.DataStorage().Raw(), minT, maxT)
-			return nil
-		})
-
-		writer, err := newBlockWriter(
-			w.dataDir,
-			w.maxBlockChunkSegmentSize,
-			NewIndexWriter(sd.LSS().Target()),
-			chunkIterator,
-			tLabels,
-		)
+		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
@@ -146,6 +134,28 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	}
 
 	return writers, nil
+}
+
+func (w *Writer[TShard]) createWriter(
+	dataDir string,
+	sd TShard,
+	lss *cppbridge.LabelSetStorage,
+	minT, maxT, downsamplingMs int64,
+	tLabels map[string]string,
+) (blockWriter, error) {
+	var chunkIterator ChunkIterator
+	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
+		chunkIterator = NewChunkIterator(lss, LsIdBatchSize, ds, minT, maxT, downsamplingMs)
+		return nil
+	})
+
+	return newBlockWriter(
+		dataDir,
+		w.maxBlockChunkSegmentSize,
+		NewIndexWriter(lss),
+		chunkIterator,
+		tLabels,
+	)
 }
 
 // retentionCutoffMs returns the max time (in unix milliseconds) below which a

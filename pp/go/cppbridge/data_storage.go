@@ -3,6 +3,7 @@ package cppbridge
 import (
 	"runtime"
 	"sync/atomic"
+	"unsafe"
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
@@ -13,9 +14,9 @@ type DataStorage struct {
 }
 
 // NewDataStorage - constructor.
-func NewDataStorage() *DataStorage {
+func NewDataStorage(collectMetrics bool) *DataStorage {
 	ds := &DataStorage{
-		dataStorage:       seriesDataDataStorageCtor(),
+		dataStorage:       seriesDataDataStorageCtor(collectMetrics),
 		gcDestroyDetector: &gcDestroyDetector,
 		timeInterval:      atomic.Pointer[TimeInterval]{},
 	}
@@ -102,9 +103,10 @@ type DataStorageQuery struct {
 	LabelSetIDs      []uint32
 }
 
-func (ds *DataStorage) Query(query DataStorageQuery) DataStorageQueryResult {
+func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selectHints unsafe.Pointer) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData(ds)
-	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
+	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs, selectHints)
+	runtime.KeepAlive(selectHints)
 	return DataStorageQueryResult{
 		Querier:        querier,
 		Status:         status,

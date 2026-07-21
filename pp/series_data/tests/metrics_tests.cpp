@@ -15,7 +15,7 @@ using series_data::chunk::FinalizedChunkList;
 template <uint8_t kSamplesPerChunk = series_data::kSamplesPerChunkDefault>
 class DataStorageMetricsTestTrait {
  protected:
-  DataStorage storage_;
+  DataStorage storage_{true};
   Encoder<kSamplesPerChunk> encoder_{storage_};
 
   [[nodiscard]] double chunk_count(EncodingType encoding_type) const noexcept { return storage_.metrics->get_chunk_count(encoding_type); }
