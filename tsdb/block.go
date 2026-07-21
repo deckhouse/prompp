@@ -227,6 +227,8 @@ func (bm *BlockMetaCompaction) FromOutOfOrder() bool {
 	return bm.containsHint(CompactionHintFromOutOfOrder)
 }
 
+// PP_CHANGES.md: rebuild on cpp start
+
 // IsCorrupted returns true if the block marked as corrupted.
 func (bm *BlockMetaCompaction) IsCorrupted() bool {
 	return bm.containsHint(CompactionHintCorrupted)
@@ -254,6 +256,8 @@ func (bm *BlockMetaCompaction) UnsetCorrupted() bool {
 
 	return true
 }
+
+// PP_CHANGES.md: rebuild on cpp end
 
 func (bm *BlockMetaCompaction) addHint(hint string) {
 	if bm.containsHint(hint) {
