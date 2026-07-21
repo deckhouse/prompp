@@ -171,7 +171,7 @@ func makeHead(numShards, numSeries, numSamples int) *testHead {
 	dss := make([]*shard.DataStorage, 0, numShards)
 	for shardID := range numShards {
 		lss := shard.NewLSS()
-		ds := shard.NewDataStorage()
+		ds := shard.NewDataStorage(false)
 		timeSeries := makeTimeSeries(numSeries, numSamples, shardID)
 		storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 		lsses = append(lsses, lss)
