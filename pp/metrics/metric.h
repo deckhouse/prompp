@@ -25,7 +25,10 @@ class Metric {
   Metric& operator=(Metric&&) noexcept = delete;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t object_size() const noexcept { return object_size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_active() const noexcept { return go_metric_.active; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::Go::Metric* go_metric() const noexcept { return &go_metric_; }
+
+  PROMPP_ALWAYS_INLINE void deactivate() noexcept { go_metric_.active = 0; }
 
  private:
   PromPP::Primitives::BasicLabelSet<Label> labels_;
