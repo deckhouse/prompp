@@ -93,21 +93,60 @@ void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void*
 void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 
 /**
+ * @brief Get optimized promql functions list
+ *
+ * @param res {
+ *     functions []struct {
+ *        name string
+ *        type uint8
+ *     }  // serialized data
+ * }
+ */
+void prompp_get_promql_optimized_functions(void* res);
+
+/**
  * @brief Queries data storage and serializes result (new serialization model).
+ * If args.downsamplingMs != 0 than DownsamplingIterator will be created regardless of the args.hints
  *
  * @param args {
- *     dataStorage    uintptr          // pointer to constructed data storage
- *     query          DataStorageQuery // query
+ *     dataStorage    uintptr              // pointer to constructed data storage
+ *     query          DataStorageQuery     // query
+ *     downsamplingMs int64                // downsampling interval in milliseconds (0 - downsampling is disabled)
+ *     hints          *storage.SelectHints // select hints
  * }
  *
  * @param res {
- *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *     querier uintptr        // pointer to constructed Querier if data loading is needed.
  *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
- *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
  *     serializedData uintptr // pointer to serialized data
  * }
  */
 void prompp_series_data_data_storage_query_v2(void* args, void* res);
+
+/**
+ * @brief Get next series_id in serialized data.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ * @param res {
+ *     series_id uint32 // series id (UINT32_MAX if no more series).
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ */
+void prompp_series_data_serialized_data_next(void* args, void* res);
+
+/**
+ * @brief Destroy serialized data object.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ */
+void prompp_series_data_serialized_data_dtor(void* args);
 
 /**
  * @brief return instant series at given timestamp for label sets.
@@ -163,10 +202,11 @@ void prompp_series_data_data_storage_dtor(void* args);
  *     lss uintptr            // pointer to constructed label sets
  *     lsIdBatchSize uint32   // size of ls batch for recoding
  *     dataStorage   uintptr  // pointer to constructed data storage
- *     time_interval struct { closed interval [min, max]
+ *     timeInterval struct {  // closed interval [min, max]
  *        min int64
  *        max int64
  *     }
+ *     downsamplingMs int64   // downsampling interval in milliseconds (0 - downsampling is disabled)
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder
