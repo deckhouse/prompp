@@ -140,7 +140,7 @@ func newCorruptedShard(
 		headID:            headID,
 		shardID:           shardID,
 		corrupted:         true,
-		corruptedSnapshot: cppbridge.NewLssStorage().CreateLabelSetSnapshot(),
+		corruptedSnapshot: cppbridge.NewLssStorage().CreateLabelSetSnapshotWithType(cppbridge.SnapshotTypeRemoteWrite),
 		segmentSize:       segmentSize,
 	}
 }
@@ -248,7 +248,7 @@ func (s *shard) LSSSnapshot() *cppbridge.LabelSetSnapshot {
 		return s.corruptedSnapshot
 	}
 
-	return s.decoder.lss.CreateLabelSetSnapshot()
+	return s.decoder.lss.CreateLabelSetSnapshotWithType(cppbridge.SnapshotTypeRemoteWrite)
 }
 
 // Read [Segment] from WAL and decode to [DecodedSegment].
@@ -417,7 +417,7 @@ func newCorruptedShardRotated(
 		headID:            headID,
 		shardID:           shardID,
 		corrupted:         true,
-		corruptedSnapshot: cppbridge.NewLssStorage().CreateLabelSetSnapshot(),
+		corruptedSnapshot: cppbridge.NewLssStorage().CreateLabelSetSnapshotWithType(cppbridge.SnapshotTypeRemoteWrite),
 		segmentSize:       segmentSize,
 	}
 }
@@ -526,7 +526,7 @@ func (s *shardRotated) LSSSnapshot() *cppbridge.LabelSetSnapshot {
 		return s.corruptedSnapshot
 	}
 
-	return s.decoder.lss.CreateLabelSetSnapshot()
+	return s.decoder.lss.CreateLabelSetSnapshotWithType(cppbridge.SnapshotTypeRemoteWrite)
 }
 
 // ReadSegment reads [DecodedSegment] from wal.

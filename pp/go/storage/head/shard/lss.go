@@ -20,6 +20,7 @@ type LSS struct {
 	mappedSnapshot       *cppbridge.LabelSetSnapshot
 	locker               sync.RWMutex
 	once                 sync.Once
+	snapshotType         cppbridge.SnapshotType
 }
 
 // NewLSS init new [LSS].
@@ -27,6 +28,15 @@ func NewLSS() *LSS {
 	return &LSS{
 		input:  cppbridge.NewLssStorage(),
 		target: cppbridge.NewQueryableLssStorage(),
+	}
+}
+
+// NewTransitionLSS init new [LSS] with transition snapshot type.
+func NewTransitionLSS() *LSS {
+	return &LSS{
+		input:        cppbridge.NewLssStorage(),
+		target:       cppbridge.NewQueryableLssStorage(),
+		snapshotType: cppbridge.SnapshotTypeTransition,
 	}
 }
 
@@ -77,7 +87,7 @@ func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) 
 	// [LSS.FinalizeCopyAndShrink] and [Shard.DstSrcLsIdsMapping] from the
 	// post-rotation path).
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
-	l.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
+	l.mappedSnapshot = destination.target.CreateLabelSetSnapshotWithType(cppbridge.SnapshotTypeRotation)
 	l.newToOldLsIdsMapping = destination.dstSrcLsIdsMapping
 }
 
@@ -203,7 +213,7 @@ func (l *LSS) WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error)
 // getSnapshot return the actual snapshot.
 func (l *LSS) getSnapshot() *cppbridge.LabelSetSnapshot {
 	l.once.Do(func() {
-		l.snapshot = l.target.CreateLabelSetSnapshot()
+		l.snapshot = l.target.CreateLabelSetSnapshotWithType(l.snapshotType)
 	})
 
 	return l.snapshot
