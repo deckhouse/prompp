@@ -18,6 +18,12 @@ const (
 	DefaultChunkSegmentSize = 512 * 1024 * 1024
 	// DefaultBlockDuration is the default block duration.
 	DefaultBlockDuration = 2 * time.Hour
+
+	// shardIDLabel is the Thanos meta label holding the source shard ID. It is
+	// written to block meta.json only (it does not become a series label, so
+	// queries are unaffected) and is used as the compaction group key, so blocks
+	// from different shards are never compacted together.
+	shardIDLabel = "shard_id"
 )
 
 // LsIdBatchSize is the batch size for label set ID.
@@ -108,7 +114,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	timeInterval := sd.DataStorage().TimeInterval(false)
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
 	//revive:disable-next-line:add-constant // it's base 10
-	tLabels := map[string]string{"shard_id": strconv.FormatUint(uint64(sd.ShardID()), 10)}
+	tLabels := map[string]string{shardIDLabel: strconv.FormatUint(uint64(sd.ShardID()), 10)}
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
