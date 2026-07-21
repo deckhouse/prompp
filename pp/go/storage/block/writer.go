@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -40,22 +41,35 @@ type Writer[TShard Shard] struct {
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
 	downsamplingMs           int64
+	retentionPeriod          time.Duration
+	clock                    clockwork.Clock
 	blockWriteDuration       *prometheus.GaugeVec
 }
 
 // NewWriter creates a new [Writer].
+//
+// retentionPeriod, when greater than zero, prevents creating blocks whose whole
+// time range is already older than the retention period: such blocks would be
+// deleted on the very next retention pass, so writing them is pointless work.
 func NewWriter[TShard Shard](
 	dataDir string,
 	maxBlockChunkSegmentSize, downsamplingMs int64,
 	blockDuration time.Duration,
+	retentionPeriod time.Duration,
+	clock clockwork.Clock,
 	registerer prometheus.Registerer,
 ) *Writer[TShard] {
+	if clock == nil {
+		clock = clockwork.NewRealClock()
+	}
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Writer[TShard]{
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
 		downsamplingMs:           downsamplingMs,
+		retentionPeriod:          retentionPeriod,
+		clock:                    clock,
 		blockWriteDuration: factory.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prompp_block_write_duration",
 			Help: "Block write duration in milliseconds.",
@@ -95,6 +109,8 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 
 	timeInterval := sd.DataStorage().TimeInterval(false)
 
+	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
+
 	//revive:disable-next-line:add-constant // it's base 10
 	tLabels := map[string]string{"shard_id": strconv.FormatUint(uint64(sd.ShardID()), 10)}
 	lss := sd.LSS().Target()
@@ -106,6 +122,18 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 		}
 		if maxT > timeInterval.MaxT {
 			maxT = timeInterval.MaxT
+		}
+
+		// Skip blocks whose whole time range is already beyond the retention
+		// period: they would be deleted on the next retention pass anyway.
+		if applyRetention && maxT <= retentionCutoffMs {
+			continue
+		}
+
+		// Skip blocks whose whole time range is already beyond the retention
+		// period: they would be deleted on the next retention pass anyway.
+		if applyRetention && maxT <= retentionCutoffMs {
+			continue
 		}
 
 		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling, tLabels)
@@ -151,6 +179,18 @@ func (w *Writer[TShard]) createWriter(
 		chunkIterator,
 		tLabels,
 	)
+}
+
+// retentionCutoffMs returns the max time (in unix milliseconds) below which a
+// block is already beyond the retention period, and whether retention filtering
+// is enabled at all. A block whose MaxTime is at or before the cutoff would be
+// deleted on the next retention pass, so it should not be created.
+func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
+	if w.retentionPeriod <= 0 {
+		return 0, false
+	}
+
+	return w.clock.Now().Add(-w.retentionPeriod).UnixMilli(), true
 }
 
 // recodeAndWriteChunks recodes and writes chunks for the shard.

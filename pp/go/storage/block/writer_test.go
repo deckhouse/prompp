@@ -66,6 +66,8 @@ func (s *WriterSuite) SetupTest() {
 		block.DefaultChunkSegmentSize,
 		cppbridge.NoDownsampling,
 		blockDuration,
+		0,
+		clockwork.NewRealClock(),
 		prometheus.DefaultRegisterer,
 	)
 }

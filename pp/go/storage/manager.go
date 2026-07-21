@@ -299,6 +299,8 @@ func (m *Manager) initServices(
 					block.DefaultChunkSegmentSize,
 					o.Downsampling.Milliseconds(),
 					o.BlockDuration,
+					o.MaxRetentionPeriod,
+					clock,
 					r,
 				),
 				reloadBlocksTriggerNotifier,

@@ -88,6 +88,8 @@ func (cmd *cmdWALPPToBlock) Do(
 		block.DefaultChunkSegmentSize,
 		cppbridge.NoDownsampling,
 		time.Duration(cmd.blockDuration),
+		0, // no retention filtering: persist all heads regardless of age
+		clock,
 		registerer,
 	)
 

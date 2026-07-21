@@ -438,20 +438,31 @@ func memInfo() (res MemInfo) {
 }
 
 func dumpMemoryProfile(filename string) int {
+	// prof.dump synchronously walks the heap and writes the whole profile to the file before
+	// returning, which can take a long time for large heaps. Unlike the other short entrypoint
+	// calls this is therefore a regular cgo call (not fastcgo): the goroutine parks in _Gsyscall
+	// and frees its P for the duration instead of blocking the scheduler with a busy P.
+	//
+	// A regular cgo call is subject to the cgo pointer checker, so the filename cannot be passed
+	// as a Go string header (a Go pointer to Go memory). We copy it into a byte slice, pin that
+	// slice for the duration of the call, and hand C a {data, size} pair matching Go::String.
+	nameBytes := append([]byte(filename), 0)
+
+	var pinner runtime.Pinner
+	pinner.Pin(&nameBytes[0])
+	defer pinner.Unpin()
+
 	args := struct {
-		filename string
-	}{filename}
+		data *byte
+		size uintptr
+	}{&nameBytes[0], uintptr(len(filename))}
 
 	res := struct {
 		error int
 	}{0}
 
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_dump_memory_profile,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
+	C.prompp_dump_memory_profile(unsafe.Pointer(&args), unsafe.Pointer(&res))
 	return res.error
 }
 
@@ -2053,14 +2064,18 @@ func prometheusPerShardRelabelerResetTo(
 	)
 }
 
-func seriesDataDataStorageCtor() uintptr {
+func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
+	args := struct {
+		collectMetrics bool
+	}{collectMetrics}
 	var res struct {
 		dataStorage uintptr
 	}
 
 	testGC()
-	fastcgo.UnsafeCall1(
+	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_ctor,
+		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 

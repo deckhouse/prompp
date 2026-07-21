@@ -75,11 +75,6 @@ func NewHeadEncoderWithDataStorage(dataStorage *DataStorage) *HeadEncoder {
 	return encoder
 }
 
-// NewHeadEncoder - constructor.
-func NewHeadEncoder() *HeadEncoder {
-	return NewHeadEncoderWithDataStorage(NewDataStorage())
-}
-
 // Encode - encodes single triplet.
 func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
 	seriesDataEncoderEncode(e.encoder, seriesID, timestamp, value)
@@ -255,8 +250,9 @@ func NewDataStorageSerializedData(ds *DataStorage) *DataStorageSerializedData {
 }
 
 func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
-	runtime.KeepAlive(sd.ds)
-	return seriesDataSerializedDataNext(sd.serializedData)
+	seriesID, chunkRef := seriesDataSerializedDataNext(sd.serializedData)
+	runtime.KeepAlive(sd)
+	return seriesID, chunkRef
 }
 
 type DataStorageSerializedDataSamplesIteratorControlBlock struct {

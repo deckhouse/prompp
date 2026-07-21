@@ -23,7 +23,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file"
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "0b1e895ba4226c2fda5ee0178c9b5b1195a741aa",
+        commit = "4141c384aa2a8e2da87dd17d16457caaecfeeda1",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -137,9 +137,9 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/com_google_absl:0004-array_bounds_fixes.patch"),
             Label("//third_party/patches/com_google_absl:0005-gcc-16_fixes.patch"),
         ],
-        sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
-        strip_prefix = "abseil-cpp-20240116.rc1/",
-        url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.rc1.tar.gz",
+        sha256 = "e887b423da5a1ba66e71610094fd7147ff2febfedccdfbf00f2c644ac21adf83",
+        strip_prefix = "abseil-cpp-20240116.3/",
+        url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.3.tar.gz",
     )
 
     git_repository(

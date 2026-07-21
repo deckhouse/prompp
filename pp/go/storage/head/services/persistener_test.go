@@ -225,6 +225,8 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		block.DefaultChunkSegmentSize,
 		cppbridge.NoDownsampling,
 		2*time.Hour,
+		0,
+		s.clock,
 		prometheus.DefaultRegisterer,
 	)
 	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
@@ -262,6 +264,8 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		block.DefaultChunkSegmentSize,
 		cppbridge.NoDownsampling,
 		2*time.Hour,
+		0,
+		s.clock,
 		prometheus.DefaultRegisterer,
 	)
 	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {

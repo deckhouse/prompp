@@ -14,6 +14,7 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/google/uuid"
 	"github.com/grafana/regexp"
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 
@@ -131,6 +132,8 @@ func (cmd *cmdPersistHead) Do(
 		block.DefaultChunkSegmentSize,
 		cppbridge.NoDownsampling,
 		time.Duration(cmd.blockDuration),
+		0, // no retention filtering: persist all heads regardless of age
+		clockwork.NewRealClock(),
 		registerer,
 	)
 
