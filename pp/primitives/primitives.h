@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <string_view>
 
 #include "bare_bones/preprocess.h"
@@ -34,6 +35,8 @@ struct TimeInterval {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool intersect(const TimeInterval& interval) const noexcept {
     return std::max(min, interval.min) <= std::min(max, interval.max);
   }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Timestamp difference() const noexcept { return max - min; }
 
   bool operator==(const TimeInterval&) const noexcept = default;
 };

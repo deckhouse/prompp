@@ -1,7 +1,7 @@
 #include "series_data_encoder.h"
 
 #include "entrypoint/types/encoder.h"
-#include "primitives/primitives.h"
+#include "entrypoint/types/serialization.h"
 #include "prometheus/relabeler.h"
 #include "series_data/data_storage.h"
 
