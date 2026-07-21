@@ -130,12 +130,6 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			continue
 		}
 
-		// Skip blocks whose whole time range is already beyond the retention
-		// period: they would be deleted on the next retention pass anyway.
-		if applyRetention && maxT <= retentionCutoffMs {
-			continue
-		}
-
 		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling, tLabels)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
