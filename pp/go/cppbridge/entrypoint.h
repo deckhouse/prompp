@@ -1526,11 +1526,15 @@ extern "C" {
 /**
  * @brief Construct a new series data DataStorage
  *
+ * @param args {
+ *     collectMetrics bool // true if need collect metrics from DataStorage
+ * }
+ *
  * @param res {
  *     dataStorage uintptr // pointer to constructed data storage
  * }
  */
-void prompp_series_data_data_storage_ctor(void* res);
+void prompp_series_data_data_storage_ctor(void* args, void* res);
 
 /**
  * @brief Resets DataStorage to initial state

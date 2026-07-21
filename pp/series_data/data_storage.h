@@ -355,7 +355,7 @@ struct DataStorage {
     return 0;
   }
 
-  DataStorage() noexcept
+  explicit DataStorage(bool collect_metrics = false) noexcept
       : outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}},
         finalized_chunks{
             {},
@@ -364,12 +364,13 @@ struct DataStorage {
     constructor_impl<Reallocator>();
 
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
-    // The metrics object is owned directly by this DataStorage (not registered in the global metrics::storage) and is freed in
-    // the destructor, so a page can no longer be leaked per DataStorage. Registering it in metrics::storage previously leaked
-    // one page per DataStorage: detached pages are reclaimed only by metrics::Storage::remove_unused_pages(), which runs solely
-    // during C++ metrics collection, and that collector is disabled by default. As a consequence these per-DataStorage metrics
-    // are intentionally no longer visible to the C++ metrics collector.
-    metrics = new Metrics<Reallocator>(std::to_string(std::bit_cast<uint64_t>(this)));
+    if (collect_metrics) {
+      // The address label string is owned by the metrics page (not by DataStorage) so that its lifetime matches the page and a
+      // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
+      metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
+    } else {
+      metrics = &dummy_metrics_;
+    }
 
     // The timestamp states count is pushed into a metrics-owned gauge on state creation instead of being pulled from the
     // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
@@ -384,6 +385,8 @@ struct DataStorage {
   }
 
  private:
+  inline static Metrics<Reallocator> dummy_metrics_{""};
+
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk_timestamp_and_encoder(const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {
@@ -436,6 +439,8 @@ struct DataStorage {
 
   template <BareBones::ReallocatorInterface Reallocator>
   PROMPP_ALWAYS_INLINE void destructor_impl() noexcept {
+    metrics->detach();
+
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
       Reallocator::release_arena(arena_index);
     } else {
@@ -454,10 +459,6 @@ struct DataStorage {
       std::destroy_at(&unloaded_series_bitmap);
       std::destroy_at(&queried_series_bitmap);
     }
-
-    // Freed last: timestamp_encoder holds a raw pointer to a gauge owned by *metrics, so the metrics object must outlive the
-    // members destroyed above.
-    delete metrics;
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
