@@ -29,7 +29,7 @@ func TestCrossSeriesSetSuite(t *testing.T) {
 
 func (s *CrossSeriesSetSuite) SetupTest() {
 	s.lss = shard.NewLSS()
-	s.ds = shard.NewDataStorage()
+	s.ds = shard.NewDataStorage(false)
 
 	timeSeries := []storagetest.TimeSeries{
 		{

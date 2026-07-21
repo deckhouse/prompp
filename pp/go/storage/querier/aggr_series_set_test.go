@@ -27,7 +27,7 @@ func TestAggrSeriesSetSuite(t *testing.T) {
 
 func (s *AggrSeriesSetSuite) SetupTest() {
 	s.lss = shard.NewLSS()
-	s.ds = shard.NewDataStorage()
+	s.ds = shard.NewDataStorage(false)
 
 	timeSeries := []storagetest.TimeSeries{
 		{
