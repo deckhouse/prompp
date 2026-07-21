@@ -10,7 +10,7 @@ MODULE.bazel.
 Two extensions are exposed:
 
 * `third_party_deps` — declares libraries reachable from the production
-  entrypoint build (`//:entrypoint_aio` / `//:entrypoint_init_aio`).
+  entrypoint build (`//:entrypoint_aio`).
 * `third_party_dev_deps` — declares libraries used only by tests, benchmarks
   and profiling (gtest, google_benchmark, tracy). MODULE.bazel pulls this
   extension in with `dev_dependency = True` so closed-loop / production builds
@@ -58,7 +58,6 @@ def _third_party_deps_impl(_ctx):
         patch_args = ["-p1"],
         patches = [
             Label("//third_party/patches/jemalloc:0001-musl-noexcept-fix.patch"),
-            Label("//third_party/patches/jemalloc:0002-manual-init.patch"),
             Label("//third_party/patches/jemalloc:0003-svacer_fixes.patch"),
             Label("//third_party/patches/jemalloc:0004-werror_fixes.patch"),
             Label("//third_party/patches/jemalloc:0005-gcc-16_fixes.patch"),

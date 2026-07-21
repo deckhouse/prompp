@@ -83,6 +83,15 @@ void prompp_mem_info(void* res);
  */
 void prompp_dump_memory_profile(void* args, void* res);
 
+/**
+ * @brief return build architecture flavor
+ *
+ * @param res {
+ *   flavor string
+ * }
+ */
+void prompp_get_flavor(void* res);
+
 #ifdef __cplusplus
 }
 #endif
@@ -2676,20 +2685,4 @@ void prompp_wal_go_head_hashdex_presharding(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
-#endif
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * @brief return determined flavor
- *
- * @param res {
- *   flavor string
- * }
- */
-void prompp_get_flavor(void* res);
-
-#ifdef __cplusplus
-}
 #endif
