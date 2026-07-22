@@ -24,18 +24,68 @@ jobs:
       pr_base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
     secrets: inherit
 
+  changes:
+    runs-on: fsn-dev-gitlab-runner
+    outputs:
+      cpp: ${{ steps.filter.outputs.cpp }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # On PRs, decide whether C++, bazel, or the CI toolchain changed. The Go
+      # bindings under pp/go are excluded first (those are Go changes, covered
+      # by the Go test jobs). Dockerfile.ci is included because the C++
+      # toolchain lives in the CI image built from it. On push/workflow_dispatch
+      # this step is skipped and consumers run the C++ suite unconditionally.
+      - name: Detect C++/bazel changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "Changed files:"; echo "$changed"
+          if echo "$changed" \
+            | grep -vE '^pp/go/' \
+            | grep -qE '^pp/|\.bazel$|\.bzl$|(^|/)BUILD$|(^|/)WORKSPACE$|(^|/)MODULE\.bazel$|^\.bazelrc$|^\.bazelversion$|^Dockerfile\.ci$'; then
+            echo "cpp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cpp=false" >> "$GITHUB_OUTPUT"
+          fi
+
   cpp-tests:
-    needs: build-ci-image
+    needs: [build-ci-image, changes]
+    # C++ unit tests run only when C++/bazel files changed (on PRs); always on
+    # push to pp and manual dispatch.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.cpp == 'true'
     strategy:
       max-parallel: 2
+      # Two meaningful combinations, on amd64 and arm64:
+      #   dbg + asan       — catch memory bugs with debug symbols
+      #   opt + jemalloc   — release-like build
       matrix:
-        OPT: [dbg, opt]
-        SANITIZERS: [no_sanitizers, with_sanitizers]
-        runner_name: [fsn-dev-gitlab-runner, fsn-dev-arm-runner]
         include:
-          - runner_name: fsn-dev-gitlab-runner
+          - OPT: dbg
+            SANITIZERS: with_sanitizers
+            runner_name: fsn-dev-gitlab-runner
             arch: amd64
-          - runner_name: fsn-dev-arm-runner
+          - OPT: dbg
+            SANITIZERS: with_sanitizers
+            runner_name: fsn-dev-arm-runner
+            arch: arm64
+          - OPT: opt
+            SANITIZERS: no_sanitizers
+            runner_name: fsn-dev-gitlab-runner
+            arch: amd64
+          - OPT: opt
+            SANITIZERS: no_sanitizers
+            runner_name: fsn-dev-arm-runner
             arch: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
@@ -100,11 +150,19 @@ jobs:
 
   build-go-bindings:
     needs: [build-ci-image, cpp-tests]
+    # Go tests link against the freshly built cppbridge libs, so this must run
+    # every time — including when cpp-tests was skipped (C++ unchanged). Only
+    # block it if the CI image failed or the C++ tests actually failed.
+    if: ${{ always() && needs.build-ci-image.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
     strategy:
       max-parallel: 4
+      # Only opt builds are consumed downstream: go-test-pp uses opt+asan,
+      # go-test-all uses opt+jemalloc.
       matrix:
-        COMPILATION_MODE: [dbg, opt]
-        ASAN: [false, true]
+        # Jemalloc (ASAN off) always builds — go-test-all needs it. The ASAN
+        # variant is heavy and only feeds the optional go-test-pp job, so build
+        # it only when the PR carries the `go-test-asan` label.
+        ASAN: ${{ contains(github.event.pull_request.labels.*.name, 'go-test-asan') && fromJSON('[false, true]') || fromJSON('[false]') }}
         runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
         include:
           - runner_name: fsn-dev-perftest-runner
@@ -133,15 +191,13 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
-            -e ASAN=${{ matrix.ASAN }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
               git config --global --add safe.directory /workspace && cd pp
               echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
-              make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+              make compilation_mode=opt asan=${{ matrix.ASAN }} build-entrypoint
             "
 
       - name: Fix build artifact ownership
@@ -153,35 +209,28 @@ jobs:
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
-          name: go-cppbridge-${{ matrix.arch }}-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
+          name: go-cppbridge-${{ matrix.arch }}-opt-${{ matrix.ASAN }}
           path: pp/go/cppbridge/${{ matrix.arch }}_*
           retention-days: 7
 
       - name: Clear workspace
         run: rm -rf pp/go/cppbridge/${{ matrix.arch }}_*
 
-  go-tests:
+  go-test-pp:
+    # Our packages (Makefile default pkgs = ./pp/go/... ./pp-pkg/...).
+    # Single combination: opt + asan, on amd64 and arm64. The opt + jemalloc
+    # variant is covered by `go-test-all` (full repository).
+    # Optional: runs only when the PR carries the `go-test-asan` label.
     needs: [build-ci-image, build-go-bindings]
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'go-test-asan')
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
-        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
-        OPT: [dbg, opt]
-        SANITIZERS: [no_sanitizers, with_sanitizers]
         include:
-          - SANITIZERS: no_sanitizers
-            ASAN: false
-            STATIC: static
-          - SANITIZERS: with_sanitizers
-            ASAN: true
-        # Run only the two meaningful combinations: dbg+jemalloc and opt+asan.
-        # The remaining opt+jemalloc variant is covered by `go-tests-all-pkgs`,
-        # which exercises the full repository (root module ./...).
-        exclude:
-          - SANITIZERS: with_sanitizers
-            OPT: dbg
-          - SANITIZERS: no_sanitizers
-            OPT: opt
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
@@ -199,18 +248,10 @@ jobs:
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
           channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
-      - name: Set architecture variable
-        run: |
-          if [[ "${{ matrix.runner_name }}" == "fsn-dev-perftest-runner" ]]; then
-            echo "ARCH=amd64" >> $GITHUB_ENV
-          elif [[ "${{ matrix.runner_name }}" == "fsn-dev-arm-runner" ]]; then
-            echo "ARCH=arm64" >> $GITHUB_ENV
-          fi
-
       - name: Download Static Library
         uses: actions/download-artifact@v4
         with:
-          name: go-cppbridge-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.ASAN }}
+          name: go-cppbridge-${{ matrix.arch }}-opt-true
           path: pp/go/cppbridge/
 
       - name: Run Go Tests and Process Reports
@@ -219,23 +260,20 @@ jobs:
             -v $PWD:/workspace \
             -w /workspace \
             -e CI=true \
-            -e OPT=${{ matrix.OPT }} \
-            -e SANITIZERS=${{ matrix.SANITIZERS }} \
+            -e OPT=opt \
+            -e SANITIZERS=with_sanitizers \
             -e CGO_CFLAGS="-Wno-error -I/usr/include" \
             -e CGO_LDFLAGS="-L/usr/lib/" \
             -e CGO_ENABLED="1" \
             -e GOPATH="${{ github.workspace }}/.cache" \
             -e GOBIN="/usr/local/go/bin" \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }}${{ needs.build-ci-image.outputs.tag_suffix }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
               git config --global --add safe.directory /workspace
-              # go tools
+              # go test-report/coverage tools are baked into the CI image
               mkdir -p .cache
-              go install github.com/jstemmer/go-junit-report/v2@latest
-              go install github.com/afunix/gocov/gocov@latest
-              go install github.com/AlekSi/gocov-xml@latest
 
               # Tests for our packages (Makefile default pkgs = ./pp/go/... ./pp-pkg/...).
               FLAGS=\$(./pp/scripts/ci_get_go_test_flags.sh)
@@ -257,18 +295,18 @@ jobs:
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
-          name: go-unit-tests-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: go-unit-tests-${{ matrix.arch }}-opt-with_sanitizers
           path: report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: go-coverage-report-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: go-coverage-report-${{ matrix.arch }}-opt-with_sanitizers
           path: coverage.xml
           retention-days: 7
 
-  go-tests-all-pkgs:
+  go-test-all:
     # Runs the entire repository (root module ./..., minus packages that we
     # replace with pp-pkg counterparts or do not ship in cmd/prometheus).
     # Single combination: opt + jemalloc (no sanitizers), on amd64 and arm64.
@@ -323,11 +361,8 @@ jobs:
               set -eo pipefail
 
               git config --global --add safe.directory /workspace
-              # go tools
+              # go test-report/coverage tools are baked into the CI image
               mkdir -p .cache
-              go install github.com/jstemmer/go-junit-report/v2@latest
-              go install github.com/afunix/gocov/gocov@latest
-              go install github.com/AlekSi/gocov-xml@latest
 
               # All-packages run; pkgs override = filtered list from scripts/list-test-packages.sh.
               # -timeout 20m: per-package timeout (default 10m) — heavy upstream tsdb suite needs more under -race+coverage.
@@ -363,7 +398,29 @@ jobs:
           retention-days: 7
 
   build_dev:
-    needs: [go-tests, go-tests-all-pkgs]
-    if: github.event_name == 'pull_request'
+    needs: [go-test-all]
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit
+
+  tests-gate:
+    # Single required status check that aggregates the mandatory test pipeline.
+    # `if: always()` guarantees the context is always reported, so conditional
+    # matrix jobs (whose context names vary) don't have to be required directly.
+    # A `skipped` dependency is fine (e.g. cpp-tests when C++ is unchanged); the
+    # gate fails only when a required job failed or was cancelled.
+    # The optional label-gated jobs (go-test-pp asan, build_dev) are intentionally
+    # excluded, so they never block merge.
+    needs: [build-ci-image, changes, cpp-tests, build-go-bindings, go-test-all]
+    if: always()
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Check required test jobs
+        run: |
+          results="${{ join(needs.*.result, ',') }}"
+          echo "needs results: $results"
+          if [[ "$results" == *failure* || "$results" == *cancelled* ]]; then
+            echo "::error::A required test job failed or was cancelled"
+            exit 1
+          fi
+          echo "All required test jobs passed or were safely skipped."
