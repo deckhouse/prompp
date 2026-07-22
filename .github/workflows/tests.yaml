@@ -191,8 +191,6 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            -e COMPILATION_MODE=opt \
-            -e ASAN=${{ matrix.ASAN }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
