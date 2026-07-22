@@ -144,9 +144,12 @@ jobs:
     strategy:
       max-parallel: 4
       # Only opt builds are consumed downstream: go-test-pp uses opt+asan,
-      # go-test-all uses opt+jemalloc. ASAN toggles the two variants.
+      # go-test-all uses opt+jemalloc.
       matrix:
-        ASAN: [false, true]
+        # Jemalloc (ASAN off) always builds — go-test-all needs it. The ASAN
+        # variant is heavy and only feeds the optional go-test-pp job, so build
+        # it only when the PR carries the `go-test-asan` label.
+        ASAN: ${{ contains(github.event.pull_request.labels.*.name, 'go-test-asan') && fromJSON('[false, true]') || fromJSON('[false]') }}
         runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
         include:
           - runner_name: fsn-dev-perftest-runner
