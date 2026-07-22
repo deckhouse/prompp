@@ -31,6 +31,18 @@ index 0b72086..24dcda9 100644
  			if (node == NULL) {
  				ret = ENOENT;
  				goto label_return;
+diff --git a/src/prof.c b/src/prof.c
+index a833fed..dfe81de 100644
+--- a/src/prof.c
++++ b/src/prof.c
+@@ -455,6 +455,7 @@ prof_tdata_reinit(tsd_t *tsd, prof_tdata_t *tdata) {
+ 	prof_thread_name_assert(tdata);
+ 	char thread_name[PROF_THREAD_NAME_MAX_LEN];
+ 	strncpy(thread_name, tdata->thread_name, PROF_THREAD_NAME_MAX_LEN);
++	thread_name[PROF_THREAD_NAME_MAX_LEN - 1] = '\0';
+ 	prof_tdata_detach(tsd, tdata);
+ 
+ 	return prof_tdata_init_impl(
 diff --git a/src/prof_data.c b/src/prof_data.c
 index b66e234..e0f2512 100644
 --- a/src/prof_data.c
