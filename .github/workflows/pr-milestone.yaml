@@ -1,0 +1,25 @@
+name: PR Milestone Check
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, milestoned, demilestoned]
+    branches:
+      - pp
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  require-milestone:
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Require milestone on PR into pp
+        env:
+          MILESTONE: ${{ github.event.pull_request.milestone.title }}
+        run: |
+          if [ -z "$MILESTONE" ]; then
+            echo "::error::PR into 'pp' must be assigned a milestone. Assign one (see release flow in .wiki/howto/release.md) and the check will re-run."
+            exit 1
+          fi
+          echo "Milestone: $MILESTONE"
