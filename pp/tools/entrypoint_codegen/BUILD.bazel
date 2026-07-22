@@ -3,13 +3,11 @@ package(default_visibility = ["//visibility:private"])
 cc_library(
     name = "facts",
     srcs = [
-        "facts/fact_arena.cpp",
-        "facts/string_table.cpp",
+        "facts/fact_store.cpp",
     ],
     hdrs = [
-        "facts/fact_arena.h",
+        "facts/fact_store.h",
         "facts/facts.h",
-        "facts/string_table.h",
         "facts/tagged_index.h",
     ],
     copts = [
@@ -98,15 +96,12 @@ cc_library(
     srcs = [
         "app/analysis.cpp",
         "app/argparse.cpp",
-        "app/memory_tracking.cpp",
         "app/output.cpp",
         "app/run.cpp",
     ],
     hdrs = [
         "app/analysis.h",
         "app/argparse.h",
-        "app/memory_tracking.h",
-        "app/memory_usage.h",
         "app/options.h",
         "app/output.h",
         "app/run.h",

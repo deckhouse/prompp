@@ -1,7 +1,7 @@
 #include "contract/entrypoint_contract.h"
 
 #include "diagnostics/diagnostics.h"
-#include "facts/fact_arena.h"
+#include "facts/fact_store.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -24,8 +24,8 @@ void add_diagnostic(diagnostics::DiagnosticSet& diagnostic_set,
   });
 }
 
-bool has_layout(const facts::FactArena& facts, const facts::FunctionDecl& function, facts::LayoutKind kind) {
-  for (const facts::LayoutDecl& layout : facts.layouts(function.layouts)) {
+bool has_layout(const facts::FunctionDecl& function, facts::LayoutKind kind) {
+  for (const facts::LayoutDecl& layout : function.layouts) {
     if (layout.kind == kind) {
       return true;
     }
@@ -33,20 +33,17 @@ bool has_layout(const facts::FactArena& facts, const facts::FunctionDecl& functi
   return false;
 }
 
-void validate_fastcgo_function(const facts::FactArena& facts,
-                               diagnostics::DiagnosticSet& diagnostic_set,
-                               facts::FunctionId function_id,
-                               const facts::FunctionDecl& function) {
+void validate_fastcgo_function(diagnostics::DiagnosticSet& diagnostic_set, facts::FunctionId function_id, const facts::FunctionDecl& function) {
   using diagnostics::DiagnosticCode;
   using facts::LayoutKind;
   using facts::ParamDecl;
   using facts::ParamRole;
 
-  if (facts.string(function.return_type_spelling) != "void") {
+  if (function.return_type_spelling != "void") {
     add_diagnostic(diagnostic_set, DiagnosticCode::kUnsupportedReturnType, function_id, function.location);
   }
 
-  const auto params = facts.params(function.params);
+  const auto& params = function.params;
   if (params.size() > 2) {
     add_diagnostic(diagnostic_set, DiagnosticCode::kUnsupportedParamCount, function_id, function.location);
   }
@@ -55,7 +52,7 @@ void validate_fastcgo_function(const facts::FactArena& facts,
   bool uses_res = false;
   for (size_t i = 0; i < params.size(); ++i) {
     const ParamDecl& param = params[i];
-    if (!is_void_pointer_type(facts.string(param.type_spelling))) {
+    if (!is_void_pointer_type(param.type_spelling)) {
       add_diagnostic(diagnostic_set, DiagnosticCode::kUnsupportedParamType, function_id, param.location);
     }
     if (param.role == ParamRole::kOther) {
@@ -72,8 +69,8 @@ void validate_fastcgo_function(const facts::FactArena& facts,
     uses_res |= param.role == ParamRole::kRes;
   }
 
-  const bool has_arguments = has_layout(facts, function, LayoutKind::kArguments);
-  const bool has_result = has_layout(facts, function, LayoutKind::kResult);
+  const bool has_arguments = has_layout(function, LayoutKind::kArguments);
+  const bool has_result = has_layout(function, LayoutKind::kResult);
   if (uses_args && !has_arguments) {
     add_diagnostic(diagnostic_set, DiagnosticCode::kMissingArgumentsLayout, function_id, function.location);
   }
@@ -134,7 +131,7 @@ std::optional<facts::LayoutKind> layout_kind_for_name(std::string_view name) {
   return std::nullopt;
 }
 
-void validate_contract(const facts::FactArena& facts, diagnostics::DiagnosticSet& diagnostic_set) {
+void validate_contract(const facts::FactStore& facts, diagnostics::DiagnosticSet& diagnostic_set) {
   using diagnostics::DiagnosticCode;
   using facts::BridgeKind;
   using facts::FunctionDecl;
@@ -144,8 +141,7 @@ void validate_contract(const facts::FactArena& facts, diagnostics::DiagnosticSet
   for (size_t i = 0; i < functions.size(); ++i) {
     const auto function_id = FunctionId(static_cast<uint32_t>(i));
     const FunctionDecl& function = functions[i];
-    const std::string_view name = facts.string(function.name);
-    if (!is_entrypoint_function_name(name)) {
+    if (!is_entrypoint_function_name(function.name)) {
       add_diagnostic(diagnostic_set, DiagnosticCode::kMissingNamePrefix, function_id, function.location);
     }
     if (!function.has_c_linkage) {
@@ -156,7 +152,7 @@ void validate_contract(const facts::FactArena& facts, diagnostics::DiagnosticSet
       continue;
     }
     if (function.bridge_kind == BridgeKind::kFastCGo) {
-      validate_fastcgo_function(facts, diagnostic_set, function_id, function);
+      validate_fastcgo_function(diagnostic_set, function_id, function);
     }
   }
 }

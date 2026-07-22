@@ -13,14 +13,6 @@ inline constexpr std::string_view kInvalidValuePlaceholder = "<invalid>";
 
 using SourceFileId = TaggedIndex<struct SourceFileTag>;
 using FunctionId = TaggedIndex<struct FunctionTag>;
-using LayoutId = TaggedIndex<struct LayoutTag>;
-using ParamId = TaggedIndex<struct ParamTag>;
-using FieldId = TaggedIndex<struct FieldTag>;
-using StringId = TaggedIndex<struct StringTag>;
-
-using ParamListId = TaggedIndex<struct ParamListTag>;
-using LayoutListId = TaggedIndex<struct LayoutListTag>;
-using FieldListId = TaggedIndex<struct FieldListTag>;
 
 enum class BridgeKind : uint8_t {
   kUnknown,

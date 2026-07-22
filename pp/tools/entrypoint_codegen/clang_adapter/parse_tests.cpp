@@ -42,7 +42,7 @@ std::filesystem::path testdata_path(std::string_view name) {
   return apparent_repo_path;
 }
 
-epgen::facts::FactArena parse_one_file(const std::filesystem::path& source_file, epgen::diagnostics::DiagnosticSet& diagnostics) {
+epgen::facts::FactStore parse_one_file(const std::filesystem::path& source_file, epgen::diagnostics::DiagnosticSet& diagnostics) {
   return epgen::clang_adapter::parse_files(
       epgen::clang_adapter::ParseOptions{
           .source_files = {source_file},
@@ -51,7 +51,7 @@ epgen::facts::FactArena parse_one_file(const std::filesystem::path& source_file,
       diagnostics);
 }
 
-epgen::facts::FactArena parse_two_files(const std::filesystem::path& first_source_file,
+epgen::facts::FactStore parse_two_files(const std::filesystem::path& first_source_file,
                                         const std::filesystem::path& second_source_file,
                                         epgen::diagnostics::DiagnosticSet& diagnostics) {
   return epgen::clang_adapter::parse_files(
@@ -84,33 +84,33 @@ TEST(ClangAdapterParseTest, ExtractsFastCgoFunctionFactsFromSourceFile) {
   epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  epgen::facts::FactArena facts = parse_one_file(source_file, diagnostics);
+  epgen::facts::FactStore facts = parse_one_file(source_file, diagnostics);
   const auto functions = facts.functions();
 
   // Assert
   ASSERT_EQ(functions.size(), 1);
   const epgen::facts::FunctionDecl& function = functions[0];
-  const std::span<const epgen::facts::ParamDecl> params = facts.params(function.params);
-  const std::span<const epgen::facts::LayoutDecl> layouts = facts.layouts(function.layouts);
-  EXPECT_EQ(facts.string(function.name), "prompp_store");
+  const std::span<const epgen::facts::ParamDecl> params = function.params;
+  const std::span<const epgen::facts::LayoutDecl> layouts = function.layouts;
+  EXPECT_EQ(function.name, "prompp_store");
   EXPECT_EQ(function.bridge_kind, epgen::facts::BridgeKind::kFastCGo);
   EXPECT_TRUE(function.has_c_linkage);
   ASSERT_EQ(params.size(), 2);
-  EXPECT_EQ(facts.string(params[0].name), "args");
+  EXPECT_EQ(params[0].name, "args");
   EXPECT_EQ(params[0].role, epgen::facts::ParamRole::kArgs);
-  EXPECT_EQ(facts.string(params[1].name), "res");
+  EXPECT_EQ(params[1].name, "res");
   EXPECT_EQ(params[1].role, epgen::facts::ParamRole::kRes);
   ASSERT_EQ(layouts.size(), 2);
   EXPECT_EQ(layouts[0].kind, epgen::facts::LayoutKind::kArguments);
   EXPECT_EQ(layouts[1].kind, epgen::facts::LayoutKind::kResult);
-  const std::span<const epgen::facts::FieldDecl> argument_fields = facts.fields(layouts[0].fields);
-  const std::span<const epgen::facts::FieldDecl> result_fields = facts.fields(layouts[1].fields);
+  const std::span<const epgen::facts::FieldDecl> argument_fields = layouts[0].fields;
+  const std::span<const epgen::facts::FieldDecl> result_fields = layouts[1].fields;
   ASSERT_EQ(argument_fields.size(), 1);
-  EXPECT_EQ(facts.string(argument_fields[0].name), "series");
-  EXPECT_EQ(facts.string(argument_fields[0].type_spelling), "int");
+  EXPECT_EQ(argument_fields[0].name, "series");
+  EXPECT_EQ(argument_fields[0].type_spelling, "int");
   ASSERT_EQ(result_fields.size(), 1);
-  EXPECT_EQ(facts.string(result_fields[0].name), "value");
-  EXPECT_EQ(facts.string(result_fields[0].type_spelling), "double");
+  EXPECT_EQ(result_fields[0].name, "value");
+  EXPECT_EQ(result_fields[0].type_spelling, "double");
 }
 
 TEST(ClangAdapterParseTest, RecordsClangDiagnosticsSeparately) {
@@ -152,14 +152,14 @@ TEST(ClangAdapterParseTest, ExtractsFunctionsFromMultipleInputFiles) {
   epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  epgen::facts::FactArena facts = parse_two_files(first_source_file, second_source_file, diagnostics);
+  epgen::facts::FactStore facts = parse_two_files(first_source_file, second_source_file, diagnostics);
   const auto functions = facts.functions();
 
   // Assert
   EXPECT_TRUE(diagnostics.empty());
   ASSERT_EQ(functions.size(), 2);
-  EXPECT_EQ(facts.string(functions[0].name), "prompp_first");
-  EXPECT_EQ(facts.string(functions[1].name), "prompp_second");
+  EXPECT_EQ(functions[0].name, "prompp_first");
+  EXPECT_EQ(functions[1].name, "prompp_second");
 }
 
 TEST(ClangAdapterParseTest, ReportsAggregateTranslationUnitInternalLinkageCollisions) {
@@ -184,7 +184,7 @@ TEST(ClangAdapterParseTest, IgnoresUnannotatedExternCFunctionWithoutEntrypointPr
   epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  epgen::facts::FactArena facts = parse_one_file(source_file, diagnostics);
+  epgen::facts::FactStore facts = parse_one_file(source_file, diagnostics);
 
   // Assert
   EXPECT_TRUE(facts.functions().empty());
@@ -196,12 +196,12 @@ TEST(ClangAdapterParseTest, ExtractsAnnotatedFunctionWithoutEntrypointPrefix) {
   epgen::diagnostics::DiagnosticSet diagnostics;
 
   // Act
-  epgen::facts::FactArena facts = parse_one_file(source_file, diagnostics);
+  epgen::facts::FactStore facts = parse_one_file(source_file, diagnostics);
   const auto functions = facts.functions();
 
   // Assert
   ASSERT_EQ(functions.size(), 1);
-  EXPECT_EQ(facts.string(functions[0].name), "store");
+  EXPECT_EQ(functions[0].name, "store");
   EXPECT_EQ(functions[0].bridge_kind, epgen::facts::BridgeKind::kCGo);
 }
 

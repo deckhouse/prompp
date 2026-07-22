@@ -19,10 +19,10 @@ struct ParamNameAndRole {
   facts::ParamRole role;
 };
 
-ParamNameAndRole add_param_name_and_role(facts::FactArena& facts, CursorView cursor) {
+ParamNameAndRole add_param_name_and_role(CursorView cursor) {
   const std::string name = cursor.spelling();
   return ParamNameAndRole{
-      .name = facts.add_string(name),
+      .name = name,
       .role = contract::param_role_for_name(name),
   };
 }
@@ -40,21 +40,21 @@ class FunctionExtractor {
   }
 
   void add_function(CursorView function_cursor) {
-    std::pmr::vector<facts::ParamDecl> params = extract_params(function_cursor);
+    std::vector<facts::ParamDecl> params = extract_params(function_cursor);
 
     const facts::BridgeKind bridge_kind = extract_bridge_kind(function_cursor);
-    std::pmr::vector<facts::LayoutDecl> layouts(session_.memory_resource());
+    std::vector<facts::LayoutDecl> layouts;
     if (bridge_kind == facts::BridgeKind::kFastCGo) {
       layouts = extract_layouts(function_cursor);
     }
 
     session_.facts().add_function(facts::FunctionDecl{
-        .name = session_.facts().add_string(function_cursor.spelling()),
-        .return_type_spelling = session_.facts().add_string(function_cursor.result_type().spelling()),
-        .documentation = session_.facts().add_string(function_cursor.raw_comment()),
+        .name = function_cursor.spelling(),
+        .return_type_spelling = function_cursor.result_type().spelling(),
+        .documentation = function_cursor.raw_comment(),
         .bridge_kind = bridge_kind,
-        .params = session_.facts().add_params(params),
-        .layouts = session_.facts().add_layouts(layouts),
+        .params = std::move(params),
+        .layouts = std::move(layouts),
         .location = session_.source_location_for(function_cursor),
         .has_c_linkage = function_cursor.has_c_language(),
     });
@@ -102,8 +102,8 @@ class FunctionExtractor {
     return visitor_state.found;
   }
 
-  [[nodiscard]] std::pmr::vector<facts::ParamDecl> extract_params(CursorView function_cursor) {
-    std::pmr::vector<facts::ParamDecl> params(session_.memory_resource());
+  [[nodiscard]] std::vector<facts::ParamDecl> extract_params(CursorView function_cursor) {
+    std::vector<facts::ParamDecl> params;
     const int count = function_cursor.argument_count();
     if (count <= 0) {
       return params;
@@ -112,10 +112,10 @@ class FunctionExtractor {
     params.reserve(static_cast<size_t>(count));
     for (int i = 0; i < count; ++i) {
       const CursorView arg = function_cursor.argument(i);
-      const ParamNameAndRole name_and_role = add_param_name_and_role(session_.facts(), arg);
+      const ParamNameAndRole name_and_role = add_param_name_and_role(arg);
       params.push_back(facts::ParamDecl{
           .name = name_and_role.name,
-          .type_spelling = session_.facts().add_string(arg.type().spelling()),
+          .type_spelling = arg.type().spelling(),
           .role = name_and_role.role,
           .location = session_.source_location_for(arg),
       });
@@ -123,11 +123,11 @@ class FunctionExtractor {
     return params;
   }
 
-  [[nodiscard]] std::pmr::vector<facts::LayoutDecl> extract_layouts(CursorView function_cursor) {
-    std::pmr::vector<facts::LayoutDecl> layouts(session_.memory_resource());
+  [[nodiscard]] std::vector<facts::LayoutDecl> extract_layouts(CursorView function_cursor) {
+    std::vector<facts::LayoutDecl> layouts;
     struct LayoutVisitorState {
       FunctionExtractor& extractor;
-      std::pmr::vector<facts::LayoutDecl>& layouts;
+      std::vector<facts::LayoutDecl>& layouts;
     } visitor_state{
         .extractor = *this,
         .layouts = layouts,
@@ -142,11 +142,11 @@ class FunctionExtractor {
     return layouts;
   }
 
-  [[nodiscard]] std::pmr::vector<facts::FieldDecl> extract_fields(CursorView struct_cursor) {
-    std::pmr::vector<facts::FieldDecl> fields(session_.memory_resource());
+  [[nodiscard]] std::vector<facts::FieldDecl> extract_fields(CursorView struct_cursor) {
+    std::vector<facts::FieldDecl> fields;
     struct FieldVisitorState {
       FunctionExtractor& extractor;
-      std::pmr::vector<facts::FieldDecl>& fields;
+      std::vector<facts::FieldDecl>& fields;
     } visitor_state{
         .extractor = *this,
         .fields = fields,
@@ -158,8 +158,8 @@ class FunctionExtractor {
       }
 
       state.fields.push_back(facts::FieldDecl{
-          .name = state.extractor.session_.facts().add_string(field.spelling()),
-          .type_spelling = state.extractor.session_.facts().add_string(field.type().spelling()),
+          .name = field.spelling(),
+          .type_spelling = field.type().spelling(),
           .location = state.extractor.session_.source_location_for(field),
       });
       return VisitResult::kContinue;
@@ -167,11 +167,11 @@ class FunctionExtractor {
     return fields;
   }
 
-  [[nodiscard]] std::pmr::vector<facts::FieldDecl> extract_fields_from_alias(CursorView alias_cursor) {
-    std::pmr::vector<facts::FieldDecl> fields(session_.memory_resource());
+  [[nodiscard]] std::vector<facts::FieldDecl> extract_fields_from_alias(CursorView alias_cursor) {
+    std::vector<facts::FieldDecl> fields;
     struct AliasVisitorState {
       FunctionExtractor& extractor;
-      std::pmr::vector<facts::FieldDecl>& fields;
+      std::vector<facts::FieldDecl>& fields;
       bool found = false;
     } visitor_state{
         .extractor = *this,
@@ -198,25 +198,25 @@ class FunctionExtractor {
     return fields;
   }
 
-  void append_struct_layout(CursorView struct_cursor, facts::LayoutKind kind, std::pmr::vector<facts::LayoutDecl>& layouts) {
-    std::pmr::vector<facts::FieldDecl> fields = extract_fields(struct_cursor);
+  void append_struct_layout(CursorView struct_cursor, facts::LayoutKind kind, std::vector<facts::LayoutDecl>& layouts) {
+    std::vector<facts::FieldDecl> fields = extract_fields(struct_cursor);
     layouts.push_back(facts::LayoutDecl{
         .kind = kind,
-        .fields = session_.facts().add_fields(fields),
+        .fields = std::move(fields),
         .location = session_.source_location_for(struct_cursor),
     });
   }
 
-  void append_alias_layout(CursorView alias_cursor, facts::LayoutKind kind, std::pmr::vector<facts::LayoutDecl>& layouts) {
-    std::pmr::vector<facts::FieldDecl> fields = extract_fields_from_alias(alias_cursor);
+  void append_alias_layout(CursorView alias_cursor, facts::LayoutKind kind, std::vector<facts::LayoutDecl>& layouts) {
+    std::vector<facts::FieldDecl> fields = extract_fields_from_alias(alias_cursor);
     layouts.push_back(facts::LayoutDecl{
         .kind = kind,
-        .fields = session_.facts().add_fields(fields),
+        .fields = std::move(fields),
         .location = session_.source_location_for(alias_cursor),
     });
   }
 
-  [[nodiscard]] bool try_append_layout(CursorView cursor, std::pmr::vector<facts::LayoutDecl>& layouts) {
+  [[nodiscard]] bool try_append_layout(CursorView cursor, std::vector<facts::LayoutDecl>& layouts) {
     const CursorKind kind = cursor.kind();
     if (kind == CursorKind::kStructDecl) {
       const std::optional<facts::LayoutKind> layout_kind = contract::layout_kind_for_name(cursor.spelling());
@@ -267,13 +267,13 @@ void scan_translation_unit(ParseSession& session) {
 
 }  // namespace
 
-facts::FactArena parse_files(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set) {
+facts::FactStore parse_files(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set) {
   if (options.source_files.empty()) {
     throw std::invalid_argument("no source files provided");
   }
 
-  facts::FactArena facts(options.memory_resource);
-  const VirtualTranslationUnit aggregate_source = build_virtual_translation_unit(options.source_files, options.memory_resource);
+  facts::FactStore facts;
+  const VirtualTranslationUnit aggregate_source = build_virtual_translation_unit(options.source_files);
   ParseSession session(options, diagnostic_set, facts,
                        VirtualParseInput{
                            .source_files = options.source_files,

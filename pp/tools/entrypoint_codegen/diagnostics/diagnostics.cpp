@@ -8,8 +8,6 @@ bool SeverityCounts::has_errors() const noexcept {
   return errors != 0;
 }
 
-DiagnosticSet::DiagnosticSet(std::pmr::memory_resource* memory_resource) : diagnostics_(memory_resource) {}
-
 void DiagnosticSet::add(Diagnostic diagnostic) {
   diagnostics_.push_back(std::move(diagnostic));
 }
@@ -92,9 +90,6 @@ std::string_view diagnostic_code_name(DiagnosticCode code) {
     case DiagnosticCode::kMissingEntrypointAttribute: {
       return "missing_entrypoint_attribute";
     }
-    case DiagnosticCode::kRuntimeMemoryUsage: {
-      return "runtime_memory_usage";
-    }
   }
   return "unknown_diagnostic";
 }
@@ -142,9 +137,6 @@ std::string_view diagnostic_default_message(DiagnosticCode code) {
     }
     case DiagnosticCode::kMissingEntrypointAttribute: {
       return "entrypoint function requires CGo or FastCGo annotation";
-    }
-    case DiagnosticCode::kRuntimeMemoryUsage: {
-      return "runtime memory usage";
     }
   }
   return "unknown diagnostic";

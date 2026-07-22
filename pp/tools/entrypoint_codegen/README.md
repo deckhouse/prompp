@@ -124,7 +124,6 @@ the JSON output and the text log.
 Useful options:
 
 - `--output=PATH`: JSON output path. Required when `--mode=json`.
-- `--runtime-debug`: append tool-owned runtime diagnostics.
 - `--`: treat remaining arguments as libclang parser arguments.
 
 ## Exit Codes

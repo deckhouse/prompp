@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include "facts/fact_arena.h"
+#include "facts/fact_store.h"
 
 #include <string_view>
 
@@ -12,12 +12,12 @@ using epgen::diagnostics::Diagnostic;
 using epgen::diagnostics::DiagnosticCode;
 using epgen::diagnostics::DiagnosticSet;
 using epgen::diagnostics::Severity;
-using epgen::facts::FactArena;
+using epgen::facts::FactStore;
 using epgen::facts::SourceLocation;
 
 class DiagnosticSetTest : public testing::Test {
  protected:
-  FactArena facts_;
+  FactStore facts_;
   DiagnosticSet diagnostics_;
 };
 
@@ -36,7 +36,7 @@ TEST_F(DiagnosticSetTest, StartsEmpty) {
 TEST(DiagnosticsTest, DefaultDiagnosticUsesInvalidFactReferences) {
   // Arrange
   const Diagnostic diagnostic{
-      .code = DiagnosticCode::kRuntimeMemoryUsage,
+      .code = DiagnosticCode::kClangDiagnostic,
       .severity = Severity::kInfo,
   };
 
@@ -63,8 +63,8 @@ TEST_F(DiagnosticSetTest, StoresDiagnosticsInInsertionOrder) {
       .location = first_location,
   });
   diagnostics_.add(Diagnostic{
-      .code = DiagnosticCode::kRuntimeMemoryUsage,
-      .message = facts_.add_string("memory diagnostic"),
+      .code = DiagnosticCode::kClangDiagnostic,
+      .message = "memory diagnostic",
       .severity = Severity::kInfo,
       .location = second_location,
   });
@@ -80,9 +80,9 @@ TEST_F(DiagnosticSetTest, StoresDiagnosticsInInsertionOrder) {
   EXPECT_EQ(stored[0].location.line, first_location.line);
   EXPECT_EQ(stored[0].location.column, first_location.column);
 
-  EXPECT_EQ(stored[1].code, DiagnosticCode::kRuntimeMemoryUsage);
+  EXPECT_EQ(stored[1].code, DiagnosticCode::kClangDiagnostic);
   ASSERT_FALSE(stored[1].message.empty());
-  EXPECT_EQ(facts_.string(stored[1].message), "memory diagnostic");
+  EXPECT_EQ(stored[1].message, "memory diagnostic");
   ASSERT_TRUE(stored[1].location.is_valid());
   EXPECT_EQ(stored[1].location.line, second_location.line);
   EXPECT_EQ(stored[1].location.column, second_location.column);
@@ -91,7 +91,7 @@ TEST_F(DiagnosticSetTest, StoresDiagnosticsInInsertionOrder) {
 TEST_F(DiagnosticSetTest, CountsDiagnosticsBySeverity) {
   // Arrange
   diagnostics_.add(Diagnostic{
-      .code = DiagnosticCode::kRuntimeMemoryUsage,
+      .code = DiagnosticCode::kClangDiagnostic,
       .severity = Severity::kInfo,
   });
   diagnostics_.add(Diagnostic{
@@ -162,7 +162,7 @@ TEST(DiagnosticsTest, UnknownDiagnosticCodeDefaultMessageUsesUnknownFallback) {
 
 TEST(DiagnosticsTest, FallsBackToDefaultMessageWhenDiagnosticMessageIsAbsent) {
   // Arrange
-  FactArena facts;
+  FactStore facts;
   const Diagnostic diagnostic{
       .code = DiagnosticCode::kMissingNamePrefix,
       .severity = Severity::kError,
@@ -177,10 +177,10 @@ TEST(DiagnosticsTest, FallsBackToDefaultMessageWhenDiagnosticMessageIsAbsent) {
 
 TEST(DiagnosticsTest, UsesStoredDiagnosticMessageWhenPresent) {
   // Arrange
-  FactArena facts;
+  FactStore facts;
   const Diagnostic diagnostic{
       .code = DiagnosticCode::kClangDiagnostic,
-      .message = facts.add_string("clang says no"),
+      .message = "clang says no",
       .severity = Severity::kError,
   };
 

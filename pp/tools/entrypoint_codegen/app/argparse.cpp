@@ -52,7 +52,6 @@ void write_help(std::ostream& out) {
   out << "entrypoint_codegen [options] <source_file> [...] -- <clang_arg> [...]\n";
   out << "  --mode=json|lint        Output mode. Defaults to json.\n";
   out << "  --output=PATH           Required JSON output path when mode is json.\n";
-  out << "  --runtime-debug         Append runtime debug diagnostics.\n";
   out << "  --                      Treat remaining arguments as clang parser arguments.\n";
 }
 
@@ -72,10 +71,6 @@ CliOptions parse_arguments(int argc, char** argv) {
     }
     if (arg.rfind("--mode=", 0) == 0) {
       options.run_options.output.output_mode = parse_output_mode(arg.substr(std::string("--mode=").size()));
-      continue;
-    }
-    if (arg == "--runtime-debug") {
-      options.run_options.runtime.debug_diagnostics = true;
       continue;
     }
     if (arg == "--") {

@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "diagnostics/diagnostics.h"
-#include "facts/fact_arena.h"
+#include "facts/fact_store.h"
 
 #include <optional>
 #include <vector>
@@ -15,7 +15,7 @@ using epgen::diagnostics::DiagnosticCode;
 using epgen::diagnostics::DiagnosticSet;
 using epgen::diagnostics::Severity;
 using epgen::facts::BridgeKind;
-using epgen::facts::FactArena;
+using epgen::facts::FactStore;
 using epgen::facts::FunctionDecl;
 using epgen::facts::LayoutDecl;
 using epgen::facts::LayoutKind;
@@ -95,7 +95,7 @@ TEST(EntrypointContractTest, RecognizesVoidPointerSpellings) {
 
 class ValidateContractTest : public testing::Test {
  protected:
-  FactArena facts_;
+  FactStore facts_;
   DiagnosticSet diagnostics_;
 };
 
@@ -107,12 +107,12 @@ TEST_F(ValidateContractTest, AcceptsValidCgoFunction) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -133,20 +133,20 @@ TEST_F(ValidateContractTest, AcceptsValidFastCgoFunction) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kArgs, .location = location},
-      ParamDecl{.name = facts_.add_string("res"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kRes, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
   };
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kArguments, .fields = facts_.add_fields({}), .location = location},
-      LayoutDecl{.kind = LayoutKind::kResult, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kArguments, .fields = {}, .location = location},
+      LayoutDecl{.kind = LayoutKind::kResult, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts(layouts),
+      .params = params,
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
@@ -167,12 +167,12 @@ TEST_F(ValidateContractTest, ReportsMissingEntrypointPrefix) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const auto function_id = facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("other_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "other_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -198,12 +198,12 @@ TEST_F(ValidateContractTest, ReportsMissingCLinkage) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = false,
   });
@@ -225,12 +225,12 @@ TEST_F(ValidateContractTest, ReportsMissingEntrypointAttribute) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kUnknown,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -252,15 +252,15 @@ TEST_F(ValidateContractTest, ReportsMultipleDiagnosticsForOneFunction) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("int*"), .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "int*", .role = ParamRole::kArgs, .location = location},
   };
   const auto function_id = facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("other_fn"),
-      .return_type_spelling = facts_.add_string("int"),
-      .documentation = facts_.add_string(""),
+      .name = "other_fn",
+      .return_type_spelling = "int",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts({}),
+      .params = params,
+      .layouts = {},
       .location = location,
       .has_c_linkage = false,
   });
@@ -293,12 +293,12 @@ TEST_F(ValidateContractTest, ReportsUnsupportedFastCgoReturnType) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("int"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "int",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -320,21 +320,21 @@ TEST_F(ValidateContractTest, ReportsUnsupportedFastCgoParamCount) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kArgs, .location = location},
-      ParamDecl{.name = facts_.add_string("res"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kRes, .location = location},
-      ParamDecl{.name = facts_.add_string("res"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kRes, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
+      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
   };
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kArguments, .fields = facts_.add_fields({}), .location = location},
-      LayoutDecl{.kind = LayoutKind::kResult, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kArguments, .fields = {}, .location = location},
+      LayoutDecl{.kind = LayoutKind::kResult, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts(layouts),
+      .params = params,
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
@@ -356,18 +356,18 @@ TEST_F(ValidateContractTest, ReportsUnsupportedFastCgoParamType) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("int*"), .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "int*", .role = ParamRole::kArgs, .location = location},
   };
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kArguments, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kArguments, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts(layouts),
+      .params = params,
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
@@ -389,15 +389,15 @@ TEST_F(ValidateContractTest, ReportsUnknownFastCgoParamRole) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("other"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kOther, .location = location},
+      ParamDecl{.name = "other", .type_spelling = "void*", .role = ParamRole::kOther, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts({}),
+      .params = params,
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -419,19 +419,19 @@ TEST_F(ValidateContractTest, ReportsInvalidTwoParamOrder) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("res"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kRes, .location = location},
-      ParamDecl{.name = facts_.add_string("res"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kRes, .location = location},
+      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
+      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
   };
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kResult, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kResult, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts(layouts),
+      .params = params,
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
@@ -453,19 +453,19 @@ TEST_F(ValidateContractTest, ReportsInvalidSecondParamRole) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kArgs, .location = location},
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
   };
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kArguments, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kArguments, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts(layouts),
+      .params = params,
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
@@ -487,15 +487,15 @@ TEST_F(ValidateContractTest, ReportsMissingArgumentsLayout) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("args"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kArgs, .location = location},
+      ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts({}),
+      .params = params,
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -517,15 +517,15 @@ TEST_F(ValidateContractTest, ReportsMissingResultLayout) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<ParamDecl> params{
-      ParamDecl{.name = facts_.add_string("res"), .type_spelling = facts_.add_string("void*"), .role = ParamRole::kRes, .location = location},
+      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params(params),
-      .layouts = facts_.add_layouts({}),
+      .params = params,
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -547,15 +547,15 @@ TEST_F(ValidateContractTest, ReportsUnexpectedArgumentsLayout) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kArguments, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kArguments, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts(layouts),
+      .params = {},
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
@@ -577,15 +577,15 @@ TEST_F(ValidateContractTest, ReportsUnexpectedResultLayout) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 7, .column = 3};
   const std::vector<LayoutDecl> layouts{
-      LayoutDecl{.kind = LayoutKind::kResult, .fields = facts_.add_fields({}), .location = location},
+      LayoutDecl{.kind = LayoutKind::kResult, .fields = {}, .location = location},
   };
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_fn"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts(layouts),
+      .params = {},
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });

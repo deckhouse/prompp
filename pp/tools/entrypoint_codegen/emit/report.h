@@ -1,7 +1,7 @@
 #pragma once
 
 #include "diagnostics/diagnostics.h"
-#include "facts/fact_arena.h"
+#include "facts/fact_store.h"
 
 #include <cstdint>
 #include <iosfwd>
@@ -13,6 +13,6 @@ enum class ReportFormat : uint8_t {
   kCompilerDiagnostics,
 };
 
-void write_report(std::ostream& out, ReportFormat format, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set);
+void write_report(std::ostream& out, ReportFormat format, const facts::FactStore& facts, const diagnostics::DiagnosticSet& diagnostic_set);
 
 }  // namespace epgen::emit

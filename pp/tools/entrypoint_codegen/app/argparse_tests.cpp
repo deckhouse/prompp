@@ -84,14 +84,4 @@ TEST_F(ArgparseTest, RejectsUnknownOutputMode) {
   EXPECT_THROW(parse(), std::runtime_error);
 }
 
-TEST_F(ArgparseTest, ParsesRuntimeDebugPolicy) {
-  // Arrange
-
-  // Act
-  const epgen::app::CliOptions options = parse_args({"entrypoint_codegen", "--mode=lint", "--runtime-debug"});
-
-  // Assert
-  EXPECT_TRUE(options.run_options.runtime.debug_diagnostics);
-}
-
 }  // namespace

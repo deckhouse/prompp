@@ -2,13 +2,12 @@
 
 #include "clang_adapter/parse_options.h"
 #include "diagnostics/diagnostics.h"
-#include "facts/fact_arena.h"
+#include "facts/fact_store.h"
 #include "facts/facts.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <functional>
-#include <memory_resource>
 #include <span>
 #include <string>
 #include <string_view>
@@ -104,15 +103,14 @@ struct VirtualParseInput {
 
 class ParseSession {
  public:
-  ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactArena& facts, VirtualParseInput input);
+  ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactStore& facts, VirtualParseInput input);
   ~ParseSession();
 
   ParseSession(const ParseSession&) = delete;
   ParseSession& operator=(const ParseSession&) = delete;
 
-  [[nodiscard]] std::pmr::memory_resource* memory_resource() const { return memory_resource_; }
-  facts::FactArena& facts() { return facts_; }
-  [[nodiscard]] const facts::FactArena& facts() const { return facts_; }
+  facts::FactStore& facts() { return facts_; }
+  [[nodiscard]] const facts::FactStore& facts() const { return facts_; }
 
   void add_clang_diagnostics();
 
@@ -123,9 +121,8 @@ class ParseSession {
  private:
   class Impl;
 
-  std::pmr::memory_resource* memory_resource_;
   diagnostics::DiagnosticSet& diagnostics_;
-  facts::FactArena& facts_;
+  facts::FactStore& facts_;
   Impl* impl_ = nullptr;
 };
 

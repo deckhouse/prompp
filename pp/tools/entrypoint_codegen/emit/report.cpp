@@ -92,14 +92,14 @@ std::string_view layout_kind_name(facts::LayoutKind kind) {
   return "unknown";
 }
 
-void write_location(std::ostream& out, const facts::FactArena& facts, facts::SourceLocation location) {
+void write_location(std::ostream& out, const facts::FactStore& facts, facts::SourceLocation location) {
   out << "{"
-      << "\"file\": \"" << json_escape(facts.string(facts.source_file(location.file).path)) << "\", "
+      << "\"file\": \"" << json_escape(facts.source_file(location.file).path) << "\", "
       << "\"line\": " << location.line << ", "
       << "\"column\": " << location.column << "}";
 }
 
-void write_params(std::ostream& out, const facts::FactArena& facts, const std::vector<facts::ParamDecl>& params) {
+void write_params(std::ostream& out, const facts::FactStore& facts, const std::vector<facts::ParamDecl>& params) {
   out << "[";
   for (size_t i = 0; i < params.size(); ++i) {
     if (i != 0) {
@@ -107,8 +107,8 @@ void write_params(std::ostream& out, const facts::FactArena& facts, const std::v
     }
     const facts::ParamDecl& param = params[i];
     out << "{"
-        << "\"name\": \"" << json_escape(facts.string(param.name)) << "\", "
-        << "\"type\": \"" << json_escape(facts.string(param.type_spelling)) << "\", "
+        << "\"name\": \"" << json_escape(param.name) << "\", "
+        << "\"type\": \"" << json_escape(param.type_spelling) << "\", "
         << "\"role\": \"" << param_role_name(param.role) << "\", "
         << "\"location\": ";
     write_location(out, facts, param.location);
@@ -117,7 +117,7 @@ void write_params(std::ostream& out, const facts::FactArena& facts, const std::v
   out << "]";
 }
 
-void write_layouts(std::ostream& out, const facts::FactArena& facts, const std::vector<facts::LayoutDecl>& layouts) {
+void write_layouts(std::ostream& out, const facts::FactStore& facts, const std::vector<facts::LayoutDecl>& layouts) {
   out << "[";
   for (size_t i = 0; i < layouts.size(); ++i) {
     if (i != 0) {
@@ -129,15 +129,15 @@ void write_layouts(std::ostream& out, const facts::FactArena& facts, const std::
         << "\"location\": ";
     write_location(out, facts, layout.location);
     out << ", \"fields\": [";
-    const auto fields = facts.fields(layout);
+    const auto& fields = layout.fields;
     for (size_t field_index = 0; field_index < fields.size(); ++field_index) {
       if (field_index != 0) {
         out << ", ";
       }
       const facts::FieldDecl& field = fields[field_index];
       out << "{"
-          << "\"name\": \"" << json_escape(facts.string(field.name)) << "\", "
-          << "\"type\": \"" << json_escape(facts.string(field.type_spelling)) << "\", "
+          << "\"name\": \"" << json_escape(field.name) << "\", "
+          << "\"type\": \"" << json_escape(field.type_spelling) << "\", "
           << "\"location\": ";
       write_location(out, facts, field.location);
       out << "}";
@@ -147,11 +147,11 @@ void write_layouts(std::ostream& out, const facts::FactArena& facts, const std::
   out << "]";
 }
 
-void write_source_files(std::ostream& out, const facts::FactArena& facts) {
+void write_source_files(std::ostream& out, const facts::FactStore& facts) {
   out << "  \"source_files\": [\n";
   const auto source_files = facts.source_files();
   for (size_t i = 0; i < source_files.size(); ++i) {
-    out << "    {\"path\": \"" << json_escape(facts.string(source_files[i].path)) << "\"}";
+    out << "    {\"path\": \"" << json_escape(source_files[i].path) << "\"}";
     if (i + 1 != source_files.size()) {
       out << ",";
     }
@@ -160,13 +160,13 @@ void write_source_files(std::ostream& out, const facts::FactArena& facts) {
   out << "  ]";
 }
 
-void write_function(std::ostream& out, const facts::FactArena& facts, const facts::FunctionDecl& function) {
+void write_function(std::ostream& out, const facts::FactStore& facts, const facts::FunctionDecl& function) {
   out << "    {\n";
-  out << "      \"name\": \"" << json_escape(facts.string(function.name)) << "\",\n";
-  out << "      \"return_type\": \"" << json_escape(facts.string(function.return_type_spelling)) << "\",\n";
+  out << "      \"name\": \"" << json_escape(function.name) << "\",\n";
+  out << "      \"return_type\": \"" << json_escape(function.return_type_spelling) << "\",\n";
   out << "      \"bridge_kind\": \"" << bridge_kind_name(function.bridge_kind) << "\",\n";
   out << "      \"has_c_linkage\": " << (function.has_c_linkage ? "true" : "false") << ",\n";
-  out << "      \"documentation\": \"" << json_escape(facts.string(function.documentation)) << "\",\n";
+  out << "      \"documentation\": \"" << json_escape(function.documentation) << "\",\n";
   out << "      \"location\": ";
   write_location(out, facts, function.location);
   out << ",\n";
@@ -179,7 +179,7 @@ void write_function(std::ostream& out, const facts::FactArena& facts, const fact
   out << "    }";
 }
 
-void write_functions(std::ostream& out, const facts::FactArena& facts) {
+void write_functions(std::ostream& out, const facts::FactStore& facts) {
   out << "  \"functions\": [\n";
   const auto functions = facts.functions();
   for (size_t i = 0; i < functions.size(); ++i) {
@@ -192,15 +192,15 @@ void write_functions(std::ostream& out, const facts::FactArena& facts) {
   out << "  ]";
 }
 
-void write_diagnostic_function(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
+void write_diagnostic_function(std::ostream& out, const facts::FactStore& facts, const diagnostics::Diagnostic& diagnostic) {
   if (diagnostic.function.is_valid()) {
-    out << "\"" << json_escape(facts.string(facts.function(diagnostic.function).name)) << "\"";
+    out << "\"" << json_escape(facts.function(diagnostic.function).name) << "\"";
     return;
   }
   out << "null";
 }
 
-void write_diagnostic(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
+void write_diagnostic(std::ostream& out, const facts::FactStore& facts, const diagnostics::Diagnostic& diagnostic) {
   const std::string_view message = diagnostics::diagnostic_message(diagnostic);
   out << "    {"
       << "\"code\": \"" << json_escape(diagnostics::diagnostic_code_name(diagnostic.code)) << "\", "
@@ -217,7 +217,7 @@ void write_diagnostic(std::ostream& out, const facts::FactArena& facts, const di
   out << "}";
 }
 
-void write_json_diagnostics(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_diagnostics(std::ostream& out, const facts::FactStore& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   out << "  \"diagnostics\": [\n";
   const auto diagnostic_values = diagnostic_set.diagnostics();
   for (size_t i = 0; i < diagnostic_values.size(); ++i) {
@@ -230,7 +230,7 @@ void write_json_diagnostics(std::ostream& out, const facts::FactArena& facts, co
   out << "  ]";
 }
 
-void write_json_report(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_json_report(std::ostream& out, const facts::FactStore& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   if (!out) {
     throw std::runtime_error("output stream is not writable");
   }
@@ -245,11 +245,11 @@ void write_json_report(std::ostream& out, const facts::FactArena& facts, const d
   out << "}\n";
 }
 
-void write_compiler_diagnostics(std::ostream& out, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_compiler_diagnostics(std::ostream& out, const facts::FactStore& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   for (const diagnostics::Diagnostic& diagnostic : diagnostic_set.diagnostics()) {
     if (diagnostic.location.is_valid()) {
       const facts::SourceLocation location = diagnostic.location;
-      out << facts.string(facts.source_file(location.file).path) << ":" << location.line << ":" << location.column << ": ";
+      out << facts.source_file(location.file).path << ":" << location.line << ":" << location.column << ": ";
     }
     out << diagnostics::severity_name(diagnostic.severity) << ": " << diagnostics::diagnostic_message(diagnostic) << " ["
         << diagnostics::diagnostic_code_name(diagnostic.code) << "]\n";
@@ -258,7 +258,7 @@ void write_compiler_diagnostics(std::ostream& out, const facts::FactArena& facts
 
 }  // namespace
 
-void write_report(std::ostream& out, ReportFormat format, const facts::FactArena& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
+void write_report(std::ostream& out, ReportFormat format, const facts::FactStore& facts, const diagnostics::DiagnosticSet& diagnostic_set) {
   switch (format) {
     case ReportFormat::kJson: {
       write_json_report(out, facts, diagnostic_set);

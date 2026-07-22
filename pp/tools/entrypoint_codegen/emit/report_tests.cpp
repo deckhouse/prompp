@@ -15,7 +15,7 @@ using epgen::diagnostics::DiagnosticCode;
 using epgen::diagnostics::DiagnosticSet;
 using epgen::diagnostics::Severity;
 using epgen::facts::BridgeKind;
-using epgen::facts::FactArena;
+using epgen::facts::FactStore;
 using epgen::facts::FunctionDecl;
 using epgen::facts::SourceLocation;
 
@@ -51,7 +51,7 @@ bool has_unescaped_control_character_in_string(std::string_view json) {
 
 class EmitReportTest : public testing::Test {
  protected:
-  FactArena facts_;
+  FactStore facts_;
   DiagnosticSet diagnostics_;
   std::ostringstream output_;
 };
@@ -60,12 +60,12 @@ TEST_F(EmitReportTest, WritesJsonFunctionFacts) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 2, .column = 4};
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_store"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_store",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -103,7 +103,7 @@ TEST_F(EmitReportTest, EscapesJsonStringFieldsInOutput) {
   const SourceLocation location{.file = facts_.add_source_file("entry\"point.cpp"), .line = 2, .column = 4};
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kClangDiagnostic,
-      .message = facts_.add_string("line\nmessage"),
+      .message = "line\nmessage",
       .severity = Severity::kError,
       .location = location,
   });
@@ -128,7 +128,7 @@ TEST_F(EmitReportTest, EscapesNonWhitespaceControlCharactersInJsonStringFields) 
   message += "after";
   diagnostics_.add(Diagnostic{
       .code = DiagnosticCode::kClangDiagnostic,
-      .message = facts_.add_string(message),
+      .message = message,
       .severity = Severity::kError,
   });
 
@@ -165,12 +165,12 @@ TEST_F(EmitReportTest, WritesInvalidJsonLocationFileWhenSourceFileIsAbsent) {
   // Arrange
   const SourceLocation location{.file = epgen::facts::SourceFileId{}, .line = 7, .column = 9};
   facts_.add_function(FunctionDecl{
-      .name = facts_.add_string("prompp_store"),
-      .return_type_spelling = facts_.add_string("void"),
-      .documentation = facts_.add_string(""),
+      .name = "prompp_store",
+      .return_type_spelling = "void",
+      .documentation = "",
       .bridge_kind = BridgeKind::kCGo,
-      .params = facts_.add_params({}),
-      .layouts = facts_.add_layouts({}),
+      .params = {},
+      .layouts = {},
       .location = location,
       .has_c_linkage = true,
   });
@@ -187,7 +187,7 @@ TEST_F(EmitReportTest, WritesInvalidJsonLocationFileWhenSourceFileIsAbsent) {
 TEST_F(EmitReportTest, WritesNullJsonDiagnosticLocationWhenAbsent) {
   // Arrange
   diagnostics_.add(Diagnostic{
-      .code = DiagnosticCode::kRuntimeMemoryUsage,
+      .code = DiagnosticCode::kClangDiagnostic,
       .severity = Severity::kInfo,
   });
 
@@ -219,7 +219,7 @@ TEST_F(EmitReportTest, WritesCompilerStyleDiagnosticLine) {
 TEST_F(EmitReportTest, WritesLocationlessDiagnosticLine) {
   // Arrange
   diagnostics_.add(Diagnostic{
-      .code = DiagnosticCode::kRuntimeMemoryUsage,
+      .code = DiagnosticCode::kClangDiagnostic,
       .severity = Severity::kInfo,
   });
 
@@ -227,7 +227,7 @@ TEST_F(EmitReportTest, WritesLocationlessDiagnosticLine) {
   epgen::emit::write_report(output_, epgen::emit::ReportFormat::kCompilerDiagnostics, facts_, diagnostics_);
 
   // Assert
-  EXPECT_EQ(output_.str(), "info: runtime memory usage [runtime_memory_usage]\n");
+  EXPECT_EQ(output_.str(), "info: Clang diagnostic [clang_diagnostic]\n");
 }
 
 }  // namespace

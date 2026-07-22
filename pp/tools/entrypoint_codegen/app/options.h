@@ -24,14 +24,9 @@ struct OutputOptions {
   std::ostream* diagnostics_output = nullptr;
 };
 
-struct RuntimeOptions {
-  bool debug_diagnostics = false;
-};
-
 struct RunOptions {
   AnalysisOptions analysis;
   OutputOptions output;
-  RuntimeOptions runtime;
 };
 
 enum class ExitDecision : uint8_t {

@@ -3,7 +3,6 @@
 #include "facts/facts.h"
 
 #include <cstdint>
-#include <memory_resource>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -31,7 +30,6 @@ enum class DiagnosticCode : uint8_t {
   kMissingNamePrefix,
   kMissingCLinkage,
   kMissingEntrypointAttribute,
-  kRuntimeMemoryUsage,
 };
 
 struct Diagnostic {
@@ -53,8 +51,6 @@ struct SeverityCounts {
 
 class DiagnosticSet {
  public:
-  explicit DiagnosticSet(std::pmr::memory_resource* memory_resource = std::pmr::get_default_resource());
-
   void add(Diagnostic diagnostic);
 
   [[nodiscard]] std::span<const Diagnostic> diagnostics() const noexcept;
@@ -62,7 +58,7 @@ class DiagnosticSet {
   [[nodiscard]] bool empty() const noexcept;
 
  private:
-  std::pmr::vector<Diagnostic> diagnostics_;
+  std::vector<Diagnostic> diagnostics_;
 };
 
 [[nodiscard]] SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set);

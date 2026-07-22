@@ -142,7 +142,7 @@ struct SourceFile {
 
 class AstContext {
  public:
-  explicit AstContext(std::pmr::memory_resource* memory_resource) : cursors_(memory_resource), types_(memory_resource) {}
+  AstContext() = default;
 
   CursorView make_cursor(CXCursor cursor) {
     const auto index = static_cast<uint32_t>(cursors_.size());
@@ -169,8 +169,8 @@ class AstContext {
   }
 
  private:
-  std::pmr::vector<CXCursor> cursors_;
-  std::pmr::vector<CXType> types_;
+  std::vector<CXCursor> cursors_;
+  std::vector<CXType> types_;
 };
 
 std::string normalize_path(std::string path) {
@@ -274,12 +274,7 @@ void visit_children_impl(CursorView cursor, const ChildVisitor& visitor) {
 class ParseSession::Impl : public AstContext {
  public:
   Impl(ParseSession& owner, const ParseOptions& options, VirtualParseInput input)
-      : AstContext(options.memory_resource),
-        owner_(owner),
-        source_files_(options.memory_resource),
-        source_file_by_handle_(options.memory_resource),
-        source_file_by_path_(options.memory_resource),
-        args_(options.memory_resource) {
+      : AstContext(), owner_(owner), source_files_(), source_file_by_handle_(), source_file_by_path_(), args_() {
     if (index_.get() == nullptr) {
       throw std::runtime_error("failed to create libclang index");
     }
@@ -302,7 +297,7 @@ class ParseSession::Impl : public AstContext {
 
       owner_.diagnostics_.add(diagnostics::Diagnostic{
           .code = diagnostics::DiagnosticCode::kClangDiagnostic,
-          .message = owner_.facts().add_string(diagnostic_message(diagnostic)),
+          .message = diagnostic_message(diagnostic),
           .severity = diagnostic_severity_for(severity),
           .location = source_location_for(clang_getDiagnosticLocation(diagnostic)),
       });
@@ -415,7 +410,7 @@ class ParseSession::Impl : public AstContext {
       return nullptr;
     }
 
-    const std::pmr::string key(path, owner_.memory_resource());
+    const std::string key(path);
     const auto it = source_file_by_path_.find(key);
     if (it == source_file_by_path_.end()) {
       return nullptr;
@@ -443,7 +438,7 @@ class ParseSession::Impl : public AstContext {
         .id = id,
         .origin = origin,
     });
-    source_file_by_path_.emplace(std::pmr::string(path, owner_.memory_resource()), index);
+    source_file_by_path_.emplace(path, index);
     if (file != nullptr) {
       source_file_by_handle_.emplace(file, index);
     }
@@ -451,34 +446,24 @@ class ParseSession::Impl : public AstContext {
   }
 
   ParseSession& owner_;
-  std::pmr::vector<SourceFile> source_files_;
-  std::pmr::unordered_map<CXFile, size_t> source_file_by_handle_;
-  std::pmr::unordered_map<std::pmr::string, size_t> source_file_by_path_;
-  std::pmr::vector<const char*> args_;
+  std::vector<SourceFile> source_files_;
+  std::unordered_map<CXFile, size_t> source_file_by_handle_;
+  std::unordered_map<std::string, size_t> source_file_by_path_;
+  std::vector<const char*> args_;
   ClangIndexWrapper index_;
   ClangTranslationUnitWrapper translation_unit_;
 };
 
-ParseSession::ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactArena& facts, VirtualParseInput input)
-    : memory_resource_(options.memory_resource), diagnostics_(diagnostic_set), facts_(facts) {
-  std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
-  impl_ = allocator.allocate(1);
-  try {
-    allocator.construct(impl_, *this, options, input);
-  } catch (...) {
-    allocator.deallocate(impl_, 1);
-    impl_ = nullptr;
-    throw;
-  }
+ParseSession::ParseSession(const ParseOptions& options, diagnostics::DiagnosticSet& diagnostic_set, facts::FactStore& facts, VirtualParseInput input)
+    : diagnostics_(diagnostic_set), facts_(facts) {
+  impl_ = new Impl(*this, options, input);
 }
 
 ParseSession::~ParseSession() {
   if (impl_ == nullptr) {
     return;
   }
-  std::pmr::polymorphic_allocator<Impl> allocator(memory_resource_);
-  allocator.destroy(impl_);
-  allocator.deallocate(impl_, 1);
+  delete impl_;
 }
 
 CursorView ParseSession::root_cursor() const {
