@@ -62,7 +62,8 @@ var (
 	DefaultNumberOfShards uint16 = 2
 
 	// ShrinkShardCopier flags for shrinking the shard copier.
-	ShrinkShardCopier = false
+	// Enabled by default; disable via PROMPP_FEATURES=disable_shrink_shard_copier.
+	ShrinkShardCopier = true
 )
 
 //
