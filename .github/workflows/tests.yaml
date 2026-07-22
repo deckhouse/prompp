@@ -37,10 +37,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # On PRs, decide whether C++ or bazel files changed. The Go bindings
-      # under pp/go are excluded first (those are Go changes, covered by the
-      # Go test jobs). On push/workflow_dispatch this step is skipped and
-      # consumers run the C++ suite unconditionally.
+      # On PRs, decide whether C++, bazel, or the CI toolchain changed. The Go
+      # bindings under pp/go are excluded first (those are Go changes, covered
+      # by the Go test jobs). Dockerfile.ci is included because the C++
+      # toolchain lives in the CI image built from it. On push/workflow_dispatch
+      # this step is skipped and consumers run the C++ suite unconditionally.
       - name: Detect C++/bazel changes
         id: filter
         if: github.event_name == 'pull_request'
@@ -52,7 +53,7 @@ jobs:
           echo "Changed files:"; echo "$changed"
           if echo "$changed" \
             | grep -vE '^pp/go/' \
-            | grep -qE '^pp/|\.bazel$|\.bzl$|(^|/)BUILD$|(^|/)WORKSPACE$|(^|/)MODULE\.bazel$|^\.bazelrc$|^\.bazelversion$'; then
+            | grep -qE '^pp/|\.bazel$|\.bzl$|(^|/)BUILD$|(^|/)WORKSPACE$|(^|/)MODULE\.bazel$|^\.bazelrc$|^\.bazelversion$|^Dockerfile\.ci$'; then
             echo "cpp=true" >> "$GITHUB_OUTPUT"
           else
             echo "cpp=false" >> "$GITHUB_OUTPUT"

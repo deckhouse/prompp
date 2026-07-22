@@ -12,6 +12,9 @@ on:
       - '.bazelrc'
       - '.bazelversion'
       - 'MODULE.bazel'
+      # The lint toolchain (clang-format/clang-tidy) lives in the CI image
+      # built from Dockerfile.ci, so re-lint when it changes.
+      - 'Dockerfile.ci'
       # pp/go is the Go bindings; the only C++ header there
       # (pp/go/cppbridge/entrypoint.h) is generated from pp/entrypoint, is not
       # in any bazel target, and is not linted. Keep it last so it overrides
@@ -29,6 +32,9 @@ on:
       - '.bazelrc'
       - '.bazelversion'
       - 'MODULE.bazel'
+      # The lint toolchain (clang-format/clang-tidy) lives in the CI image
+      # built from Dockerfile.ci, so re-lint when it changes.
+      - 'Dockerfile.ci'
       # pp/go is the Go bindings; the only C++ header there
       # (pp/go/cppbridge/entrypoint.h) is generated from pp/entrypoint, is not
       # in any bazel target, and is not linted. Keep it last so it overrides
