@@ -55,9 +55,6 @@ const (
 )
 
 var (
-	// UnloadDataStorage flags for unloading [DataStorage].
-	UnloadDataStorage = true
-
 	// DefaultNumberOfShards default number of shards.
 	DefaultNumberOfShards uint16 = 2
 
@@ -171,10 +168,7 @@ func NewManager(
 		return nil, fmt.Errorf("%s is not directory", o.DataDir)
 	}
 
-	var unloadDataStorageInterval time.Duration
-	if UnloadDataStorage {
-		unloadDataStorageInterval = DefaultUnloadDataStorageInterval
-	}
+	unloadDataStorageInterval := DefaultUnloadDataStorageInterval
 
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
