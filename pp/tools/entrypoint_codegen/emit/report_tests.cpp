@@ -73,14 +73,29 @@ TEST_F(EmitReportTest, WritesJsonFunctionFacts) {
   // Act
   epgen::emit::write_report(output_, epgen::emit::ReportFormat::kJson, facts_, diagnostics_);
   const std::string json = output_.str();
-  const bool has_function_name = json.find("\"name\": \"prompp_store\"") != std::string::npos;
-  const bool has_bridge_kind = json.find("\"bridge_kind\": \"cgo\"") != std::string::npos;
-  const bool has_c_linkage = json.find("\"has_c_linkage\": true") != std::string::npos;
+  constexpr std::string_view expected =
+      "{\n"
+      "  \"source_files\": [\n"
+      "    {\"path\": \"entrypoint.cpp\"}\n"
+      "  ],\n"
+      "  \"functions\": [\n"
+      "    {\n"
+      "      \"name\": \"prompp_store\",\n"
+      "      \"return_type\": \"void\",\n"
+      "      \"bridge_kind\": \"cgo\",\n"
+      "      \"has_c_linkage\": true,\n"
+      "      \"documentation\": \"\",\n"
+      "      \"location\": {\"file\": \"entrypoint.cpp\", \"line\": 2, \"column\": 4},\n"
+      "      \"params\": [],\n"
+      "      \"layouts\": []\n"
+      "    }\n"
+      "  ],\n"
+      "  \"diagnostics\": [\n"
+      "  ]\n"
+      "}\n";
 
   // Assert
-  EXPECT_TRUE(has_function_name);
-  EXPECT_TRUE(has_bridge_kind);
-  EXPECT_TRUE(has_c_linkage);
+  EXPECT_EQ(expected, json);
 }
 
 TEST_F(EmitReportTest, EscapesJsonStringFieldsInOutput) {
