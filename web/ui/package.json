@@ -20,7 +20,7 @@
     "@rollup/plugin-node-resolve": "16.0.3",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.9",
-    "body-parser": "1.20.5",
+    "body-parser": "1.20.6",
     "bootstrap": "5.0.0",
     "cookie": "0.7.2",
     "eslint-config-prettier": "^9.1.0",
@@ -45,7 +45,7 @@
     "ts-jest": "^29.2.2",
     "typescript": "^5.0.0",
     "webpack": "5.106.2",
-    "webpack-dev-server": "5.2.5",
+    "webpack-dev-server": "5.2.6",
     "ws": "8.21.0"
   },
   "version": "0.55.1",

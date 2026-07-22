@@ -1,4 +1,5 @@
 #pragma once
+
 #include "bare_bones/memory.h"
 #include "series_data/chunk/serialized_chunk.h"
 #include "series_data/data_storage.h"
@@ -258,11 +259,6 @@ class DataSerializer {
   const DataStorage& storage_;
 };
 
-template <class DecodeIterator>
-concept AssignableFromUniversalDecodeIterator = requires(DecodeIterator iterator, decoder::UniversalDecodeIterator universal_decode_iterator) {
-  { iterator = universal_decode_iterator };
-};
-
 class SerializedDataView {
  public:
   using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
@@ -272,8 +268,8 @@ class SerializedDataView {
    public:
     DECODE_ITERATOR_TYPE_TRAITS();
 
-    SeriesIterator(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
-        : decode_iter_(create_decode_iterator(buffer, *(chunks.begin() + chunk_id))),
+    SeriesIterator(std::span<const uint8_t> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
+        : decode_iter_(create_decode_iterator(buffer, chunks.begin() + chunk_id)),
           chunk_iter_(chunks.begin() + chunk_id),
           chunk_iter_end_(chunks.end()),
           buffer_(buffer.data()),
@@ -284,7 +280,7 @@ class SerializedDataView {
     [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return decode_iter_.operator->(); }
 
     PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
-      const auto iterator_is_end = decode_iter_.visit([](auto& iterator) { return ++iterator == decoder::DecodeIteratorSentinel{}; });
+      const auto iterator_is_end = decode_iter_.visit([](auto& iterator) PROMPP_LAMBDA_INLINE { return ++iterator == decoder::DecodeIteratorSentinel{}; });
       if (iterator_is_end) [[unlikely]] {
         advance_to_next_series_chunk();
       }
@@ -309,6 +305,36 @@ class SerializedDataView {
 
       reset_decode_iterator();
     }
+
+    template <decoder::SeekKind Kind, class SeekHandler>
+    PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+      using enum decoder::SeekResult;
+
+      if (*this == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+        return;
+      }
+
+      do {
+        if (decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+          if (!advance_to_next_series_chunk()) {
+            return;
+          }
+        }
+
+        auto handler_result = kUpdateSample;
+        if constexpr (decoder::SampleSeekHandler<SeekHandler>) {
+          decode_iter_.seek<Kind>([&](PromPP::Primitives::Timestamp timestamp, double value) { return handler_result = handler(timestamp, value); });
+        } else {
+          decode_iter_.seek<Kind>([&](PromPP::Primitives::Timestamp timestamp) { return handler_result = handler(timestamp); });
+        }
+
+        if (!BareBones::is_in(handler_result, kUpdateSample, kNext)) {
+          break;
+        }
+      } while (true);
+    }
+
+    PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { decode_iter_.invalidate_sample(); }
 
     void seek_to(PromPP::Primitives::Timestamp timestamp) noexcept {
       if (*this == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
@@ -346,11 +372,11 @@ class SerializedDataView {
       return false;
     }
 
-    PROMPP_ALWAYS_INLINE void reset_decode_iterator() { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, *chunk_iter_); }
+    PROMPP_ALWAYS_INLINE void reset_decode_iterator() noexcept { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, chunk_iter_); }
 
-    PROMPP_ALWAYS_INLINE static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
-                                                                                        const chunk::SerializedChunk& chunk) noexcept {
-      return Decoder::create_decode_iterator(buffer, chunk, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+    PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
+                                                                                 chunk::SerializedChunkSpan::const_iterator chunk_iter) noexcept {
+      return Decoder::create_decode_iterator(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
     }
