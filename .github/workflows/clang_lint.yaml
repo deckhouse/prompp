@@ -5,11 +5,35 @@ on:
     types: [opened, reopened, labeled, synchronize]
     paths:
       - 'pp/**'
+      - '**/*.bazel'
+      - '**/*.bzl'
+      - '**/BUILD'
+      - '**/WORKSPACE'
+      - '.bazelrc'
+      - '.bazelversion'
+      - 'MODULE.bazel'
+      # pp/go is the Go bindings; the only C++ header there
+      # (pp/go/cppbridge/entrypoint.h) is generated from pp/entrypoint, is not
+      # in any bazel target, and is not linted. Keep it last so it overrides
+      # the includes above.
+      - '!pp/go/**'
   push:
     branches:
       - pp
     paths:
       - 'pp/**'
+      - '**/*.bazel'
+      - '**/*.bzl'
+      - '**/BUILD'
+      - '**/WORKSPACE'
+      - '.bazelrc'
+      - '.bazelversion'
+      - 'MODULE.bazel'
+      # pp/go is the Go bindings; the only C++ header there
+      # (pp/go/cppbridge/entrypoint.h) is generated from pp/entrypoint, is not
+      # in any bazel target, and is not linted. Keep it last so it overrides
+      # the includes above.
+      - '!pp/go/**'
   workflow_dispatch:
     inputs:
       release_branch:

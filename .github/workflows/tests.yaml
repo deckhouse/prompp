@@ -24,8 +24,45 @@ jobs:
       pr_base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
     secrets: inherit
 
+  changes:
+    runs-on: fsn-dev-gitlab-runner
+    outputs:
+      cpp: ${{ steps.filter.outputs.cpp }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # On PRs, decide whether C++ or bazel files changed. The Go bindings
+      # under pp/go are excluded first (those are Go changes, covered by the
+      # Go test jobs). On push/workflow_dispatch this step is skipped and
+      # consumers run the C++ suite unconditionally.
+      - name: Detect C++/bazel changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "Changed files:"; echo "$changed"
+          if echo "$changed" \
+            | grep -vE '^pp/go/' \
+            | grep -qE '^pp/|\.bazel$|\.bzl$|(^|/)BUILD$|(^|/)WORKSPACE$|(^|/)MODULE\.bazel$|^\.bazelrc$|^\.bazelversion$'; then
+            echo "cpp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cpp=false" >> "$GITHUB_OUTPUT"
+          fi
+
   cpp-tests:
-    needs: build-ci-image
+    needs: [build-ci-image, changes]
+    # C++ unit tests run only when C++/bazel files changed (on PRs); always on
+    # push to pp and manual dispatch.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.cpp == 'true'
     strategy:
       max-parallel: 2
       matrix:
@@ -100,6 +137,10 @@ jobs:
 
   build-go-bindings:
     needs: [build-ci-image, cpp-tests]
+    # Go tests link against the freshly built cppbridge libs, so this must run
+    # every time — including when cpp-tests was skipped (C++ unchanged). Only
+    # block it if the CI image failed or the C++ tests actually failed.
+    if: ${{ always() && needs.build-ci-image.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
     strategy:
       max-parallel: 4
       matrix:
