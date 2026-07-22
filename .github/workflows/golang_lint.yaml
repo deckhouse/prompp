@@ -3,17 +3,24 @@ name: Linter
 on:
   pull_request:
     types: [opened, reopened, labeled, synchronize]
-    # paths:
-    #   - '**/*.go'
-    #   - '**/*.mod'
-    #   - '**/*.sum'
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/.golangci.yml'
+      - 'scripts/golangci-lint.yml'
+      # Go toolchain lives in the CI image built from Dockerfile.ci.
+      - 'Dockerfile.ci'
   push:
     branches:
       - pp
-    # paths:
-    #   - '**/*.go'
-    #   - '**/*.mod'
-    #   - '**/*.sum'
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/.golangci.yml'
+      - 'scripts/golangci-lint.yml'
+      - 'Dockerfile.ci'
   workflow_dispatch:
     inputs:
       release_branch:
