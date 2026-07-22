@@ -15,18 +15,56 @@ package promql
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/go-kit/log"
 	"github.com/grafana/regexp"
 	"github.com/stretchr/testify/require"
 )
 
+type queryLogWriter struct {
+	written int
+	err     error
+}
+
+func (w *queryLogWriter) Write(p []byte) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+	w.written += len(p)
+	return len(p), nil
+}
+
+func (*queryLogWriter) Sync() error {
+	return nil
+}
+
+type shortQueryLogWriter struct{}
+
+func (*shortQueryLogWriter) Write(p []byte) (int, error) {
+	return len(p) - 1, nil
+}
+
+func (*shortQueryLogWriter) Sync() error {
+	return nil
+}
+
+type syncErrorQueryLogWriter struct {
+	queryLogWriter
+	syncErr error
+}
+
+func (w *syncErrorQueryLogWriter) Sync() error {
+	return w.syncErr
+}
+
 func TestQueryLogging(t *testing.T) {
 	fileAsBytes := make([]byte, 4096)
 	queryLogger := ActiveQueryTracker{
-		mmapedFile:   fileAsBytes,
+		mmappedFile:  fileAsBytes,
 		logger:       nil,
 		getNextIndex: make(chan int, 4),
 	}
@@ -70,7 +108,7 @@ func TestQueryLogging(t *testing.T) {
 func TestIndexReuse(t *testing.T) {
 	queryBytes := make([]byte, 1+3*entrySize)
 	queryLogger := ActiveQueryTracker{
-		mmapedFile:   queryBytes,
+		mmappedFile:  queryBytes,
 		logger:       nil,
 		getNextIndex: make(chan int, 3),
 	}
@@ -109,7 +147,7 @@ func TestMMapFile(t *testing.T) {
 	fpath := filepath.Join(dir, "mmapedFile")
 	const data = "ab"
 
-	fileAsBytes, closer, err := getMMapedFile(fpath, 2, nil)
+	fileAsBytes, closer, err := getMMappedFile(fpath, 2, nil)
 	require.NoError(t, err)
 	copy(fileAsBytes, data)
 	require.NoError(t, closer.Close())
@@ -125,6 +163,72 @@ func TestMMapFile(t *testing.T) {
 	require.NoError(t, err, "Unexpected error while reading file.")
 	require.Equal(t, 2, n)
 	require.Equal(t, []byte(data), bytes[:2], "Mmap failed")
+}
+
+func TestAllocateQueryLogFile(t *testing.T) {
+	writer := &queryLogWriter{}
+	require.NoError(t, allocateQueryLogFile(writer, 100_000))
+	require.Equal(t, 100_000, writer.written)
+}
+
+func TestAllocateQueryLogFileReturnsWriteErrors(t *testing.T) {
+	require.ErrorIs(t, allocateQueryLogFile(&queryLogWriter{err: os.ErrPermission}, 1), os.ErrPermission)
+	require.ErrorIs(t, allocateQueryLogFile(&shortQueryLogWriter{}, 1), io.ErrShortWrite)
+}
+
+func TestAllocateQueryLogFileReturnsSyncError(t *testing.T) {
+	require.ErrorIs(t, allocateQueryLogFile(&syncErrorQueryLogWriter{syncErr: os.ErrPermission}, 1), os.ErrPermission)
+}
+
+func TestNewActiveQueryTrackerReturnsError(t *testing.T) {
+	localStoragePath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(localStoragePath, nil, 0o666))
+
+	logger := log.NewNopLogger()
+	queryLogger, err := NewActiveQueryTracker(localStoragePath, 1, logger)
+	require.Error(t, err)
+	require.Nil(t, queryLogger)
+}
+
+func TestTrimStringByBytes(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		input    string
+		size     int
+		expected string
+	}{
+		{
+			name:     "normal ASCII string",
+			input:    "hello",
+			size:     3,
+			expected: "hel",
+		},
+		{
+			name:     "no trimming needed",
+			input:    "hi",
+			size:     10,
+			expected: "hi",
+		},
+		{
+			name:     "UTF-8 multibyte character boundary",
+			input:    "日本", // 6 bytes (3 bytes per character)
+			size:     4,
+			expected: "日", // trims back to complete character boundary
+		},
+		{
+			name:     "invalid UTF-8 continuation-only bytes",
+			input:    string([]byte{0x80, 0x81, 0x82, 0x83, 0x84}), // only continuation bytes
+			size:     4,
+			expected: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				result := trimStringByBytes(tc.input, tc.size)
+				require.Equal(t, tc.expected, result)
+			})
+		})
+	}
 }
 
 func TestParseBrokenJSON(t *testing.T) {

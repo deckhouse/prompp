@@ -31,7 +31,7 @@ import (
 )
 
 type ActiveQueryTracker struct {
-	mmapedFile    []byte
+	mmappedFile   []byte
 	getNextIndex  chan int
 	logger        log.Logger
 	closer        io.Closer
@@ -51,7 +51,7 @@ const (
 
 func parseBrokenJSON(brokenJSON []byte) (string, bool) {
 	queries := strings.ReplaceAll(string(brokenJSON), "\x00", "")
-	if len(queries) > 0 {
+	if queries != "" {
 		queries = queries[:len(queries)-1] + "]"
 	}
 
@@ -61,6 +61,31 @@ func parseBrokenJSON(brokenJSON []byte) (string, bool) {
 	}
 
 	return queries, true
+}
+
+type syncWriter interface {
+	io.Writer
+	Sync() error
+}
+
+func allocateQueryLogFile(file syncWriter, filesize int) error {
+	zeroes := make([]byte, min(filesize, 32*1024))
+	remaining := filesize
+	for remaining > 0 {
+		writeBytes := zeroes
+		if remaining < len(writeBytes) {
+			writeBytes = writeBytes[:remaining]
+		}
+		n, err := file.Write(writeBytes)
+		if err != nil {
+			return err
+		}
+		if n != len(writeBytes) {
+			return io.ErrShortWrite
+		}
+		remaining -= n
+	}
+	return file.Sync()
 }
 
 func logUnfinishedQueries(filename string, filesize int, logger log.Logger) {
@@ -87,24 +112,24 @@ func logUnfinishedQueries(filename string, filesize int, logger log.Logger) {
 	}
 }
 
-type mmapedFile struct {
+type mmappedFile struct {
 	f io.Closer
 	m mmap.MMap
 }
 
-func (f *mmapedFile) Close() error {
+func (f *mmappedFile) Close() error {
 	err := f.m.Unmap()
 	if err != nil {
-		err = fmt.Errorf("mmapedFile: unmapping: %w", err)
+		err = fmt.Errorf("mmappedFile: unmapping: %w", err)
 	}
 	if fErr := f.f.Close(); fErr != nil {
-		return errors.Join(fmt.Errorf("close mmapedFile.f: %w", fErr), err)
+		return errors.Join(fmt.Errorf("close mmappedFile.f: %w", fErr), err)
 	}
 
 	return err
 }
 
-func getMMapedFile(filename string, filesize int, logger log.Logger) ([]byte, io.Closer, error) {
+func getMMappedFile(filename string, filesize int, logger log.Logger) ([]byte, io.Closer, error) {
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o666)
 	if err != nil {
 		absPath, pathErr := filepath.Abs(filename)
@@ -115,8 +140,7 @@ func getMMapedFile(filename string, filesize int, logger log.Logger) ([]byte, io
 		return nil, nil, err
 	}
 
-	err = file.Truncate(int64(filesize))
-	if err != nil {
+	if err := allocateQueryLogFile(file, filesize); err != nil {
 		file.Close()
 		level.Error(logger).Log("msg", "Error setting filesize.", "filesize", filesize, "err", err)
 		return nil, nil, err
@@ -129,26 +153,27 @@ func getMMapedFile(filename string, filesize int, logger log.Logger) ([]byte, io
 		return nil, nil, err
 	}
 
-	return fileAsBytes, &mmapedFile{f: file, m: fileAsBytes}, err
+	return fileAsBytes, &mmappedFile{f: file, m: fileAsBytes}, err
 }
 
-func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger log.Logger) *ActiveQueryTracker {
+func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger log.Logger) (*ActiveQueryTracker, error) {
 	err := os.MkdirAll(localStoragePath, 0o777)
 	if err != nil {
 		level.Error(logger).Log("msg", "Failed to create directory for logging active queries")
+		return nil, fmt.Errorf("create active query log directory: %w", err)
 	}
 
 	filename, filesize := filepath.Join(localStoragePath, "queries.active"), 1+maxConcurrent*entrySize
 	logUnfinishedQueries(filename, filesize, logger)
 
-	fileAsBytes, closer, err := getMMapedFile(filename, filesize, logger)
+	fileAsBytes, closer, err := getMMappedFile(filename, filesize, logger)
 	if err != nil {
-		panic("Unable to create mmap-ed active query log")
+		return nil, fmt.Errorf("create mmap-ed active query log: %w", err)
 	}
 
 	copy(fileAsBytes, "[")
 	activeQueryTracker := ActiveQueryTracker{
-		mmapedFile:    fileAsBytes,
+		mmappedFile:   fileAsBytes,
 		closer:        closer,
 		getNextIndex:  make(chan int, maxConcurrent),
 		logger:        logger,
@@ -157,7 +182,7 @@ func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger lo
 
 	activeQueryTracker.generateIndices(maxConcurrent)
 
-	return &activeQueryTracker
+	return &activeQueryTracker, nil
 }
 
 func trimStringByBytes(str string, size int) string {
@@ -165,7 +190,7 @@ func trimStringByBytes(str string, size int) string {
 
 	trimIndex := len(bytesStr)
 	if size < len(bytesStr) {
-		for !utf8.RuneStart(bytesStr[size]) {
+		for size > 0 && !utf8.RuneStart(bytesStr[size]) {
 			size--
 		}
 		trimIndex = size
@@ -196,7 +221,7 @@ func newJSONEntry(query string, logger log.Logger) []byte {
 }
 
 func (tracker ActiveQueryTracker) generateIndices(maxConcurrent int) {
-	for i := 0; i < maxConcurrent; i++ {
+	for i := range maxConcurrent {
 		tracker.getNextIndex <- 1 + (i * entrySize)
 	}
 }
@@ -206,16 +231,22 @@ func (tracker ActiveQueryTracker) GetMaxConcurrent() int {
 }
 
 func (tracker ActiveQueryTracker) Delete(insertIndex int) {
-	copy(tracker.mmapedFile[insertIndex:], strings.Repeat("\x00", entrySize))
+	copy(tracker.mmappedFile[insertIndex:], strings.Repeat("\x00", entrySize))
 	tracker.getNextIndex <- insertIndex
 }
 
 func (tracker ActiveQueryTracker) Insert(ctx context.Context, query string) (int, error) {
 	select {
 	case i := <-tracker.getNextIndex:
-		fileBytes := tracker.mmapedFile
+		fileBytes := tracker.mmappedFile
 		entry := newJSONEntry(query, tracker.logger)
 		start, end := i, i+entrySize
+
+		if len(entry) > entrySize {
+			// cut the entry to the size of the entrySize
+			// this is to avoid the entry being too long and causing the copy to fail
+			entry = entry[:entrySize]
+		}
 
 		copy(fileBytes[start:], entry)
 		copy(fileBytes[end-1:], ",")
