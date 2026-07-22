@@ -57,7 +57,6 @@ def _third_party_deps_impl(_ctx):
         build_file = Label("//third_party:jemalloc.BUILD"),
         patch_args = ["-p1"],
         patches = [
-            Label("//third_party/patches/jemalloc:0001-musl-noexcept-fix.patch"),
             Label("//third_party/patches/jemalloc:0002-manual-init.patch"),
             Label("//third_party/patches/jemalloc:0003-svacer_fixes.patch"),
             Label("//third_party/patches/jemalloc:0004-werror_fixes.patch"),

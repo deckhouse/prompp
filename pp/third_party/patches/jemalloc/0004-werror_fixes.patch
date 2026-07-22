@@ -1,6 +1,28 @@
+diff --git a/src/conf.c b/src/conf.c
+index 65abcd2..64950f7 100644
+--- a/src/conf.c
++++ b/src/conf.c
+@@ -298,6 +298,7 @@ JEMALLOC_DIAGNOSTIC_POP
+ static const char *
+ obtain_malloc_conf(unsigned which_source, char readlink_buf[PATH_MAX + 1]) {
+ 	if (config_debug) {
++#ifndef NDEBUG
+ 		static unsigned read_source = 0;
+ 		/*
+ 		 * Each source should only be read once, to minimize # of
+@@ -305,6 +306,7 @@ obtain_malloc_conf(unsigned which_source, char readlink_buf[PATH_MAX + 1]) {
+ 		 */
+ 		assert(read_source == which_source);
+ 		read_source++;
++#endif // NDEBUG
+ 	}
+ 	assert(which_source < MALLOC_CONF_NSOURCES);
+ 
+diff --git a/src/ctl.c b/src/ctl.c
+index 0b72086..24dcda9 100644
 --- a/src/ctl.c
 +++ b/src/ctl.c
-@@ -1510,7 +1510,7 @@
+@@ -1538,7 +1538,7 @@ ctl_lookup(tsdn_t *tsdn, const ctl_named_node_t *starting_node,
  			}
  
  			inode = ctl_indexed_node(node->children);
@@ -9,27 +31,11 @@
  			if (node == NULL) {
  				ret = ENOENT;
  				goto label_return;
-
---- a/src/jemalloc.c
-+++ b/src/jemalloc.c
-@@ -978,12 +978,12 @@
- static const char *
- obtain_malloc_conf(unsigned which_source, char buf[PATH_MAX + 1]) {
- 	if (config_debug) {
-+#ifndef NDEBUG
- 		static unsigned read_source = 0;
- 		/*
- 		 * Each source should only be read once, to minimize # of
- 		 * syscalls on init.
- 		 */
--#ifndef NDEBUG
- 		assert(read_source == which_source);
- 		read_source++;
- #endif // NDEBUG
-
+diff --git a/src/prof_data.c b/src/prof_data.c
+index b66e234..e0f2512 100644
 --- a/src/prof_data.c
 +++ b/src/prof_data.c
-@@ -337,7 +337,7 @@
+@@ -339,7 +339,7 @@ prof_lookup(tsd_t *tsd, prof_bt_t *bt) {
  	assert(tdata != NULL);
  
  	if(tdata == NULL) {
@@ -38,10 +44,11 @@
  	}
  
  	malloc_mutex_lock(tsd_tsdn(tsd), tdata->lock);
-
+diff --git a/src/prof_recent.c b/src/prof_recent.c
+index f7108be..1a252cd 100644
 --- a/src/prof_recent.c
 +++ b/src/prof_recent.c
-@@ -362,6 +362,8 @@
+@@ -363,6 +363,8 @@ prof_recent_alloc(tsd_t *tsd, edata_t *edata, size_t size, size_t usize) {
  	/* Fill content into the tail node. */
  	prof_recent_t *tail = ql_last(&prof_recent_alloc_list, link);
  	assert(tail != NULL);
@@ -50,7 +57,7 @@
  	tail->size = size;
  	tail->usize = usize;
  	nstime_copy(&tail->alloc_time, edata_prof_alloc_time_get(edata));
-@@ -369,6 +371,7 @@
+@@ -370,6 +372,7 @@ prof_recent_alloc(tsd_t *tsd, edata_t *edata, size_t size, size_t usize) {
  	nstime_init_zero(&tail->dalloc_time);
  	tail->dalloc_tctx = NULL;
  	edata_prof_recent_alloc_set(tsd, edata, tail);
@@ -58,4 +65,3 @@
  
  	assert(!prof_recent_alloc_is_empty(tsd));
  	prof_recent_alloc_assert_count(tsd);
-
