@@ -160,7 +160,14 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 
 // CreateLabelSetSnapshot create LabelSetSnapshot from lss.
 func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
-	res := newLabelSetSnapshot(primitivesLSSCreateSnapshotLSS(lss.pointer))
+	res := newLabelSetSnapshot(primitivesLSSCreateSnapshotLSS(lss.pointer), SnapshotTypeWorking)
+	runtime.KeepAlive(lss)
+	return res
+}
+
+// CreateLabelSetSnapshotWithType create LabelSetSnapshot from lss with snapshot type.
+func (lss *LabelSetStorage) CreateLabelSetSnapshotWithType(snapshotType SnapshotType) *LabelSetSnapshot {
+	res := newLabelSetSnapshot(primitivesLSSCreateSnapshotLSS(lss.pointer), snapshotType)
 	runtime.KeepAlive(lss)
 	return res
 }

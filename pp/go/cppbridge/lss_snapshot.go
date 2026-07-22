@@ -5,21 +5,69 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 var (
-	snapshotCreate = promauto.NewCounter(
+	// Working snapshot.
+	snapshotCreateWorking = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_create_count",
-			Help: "Current number of created snapshots.",
+			Name:        "prompp_cppbridge_snapshot_create_count",
+			Help:        "Current number of created snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "working"},
+		},
+	)
+	snapshotFinalizeWorking = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_snapshot_finalize_count",
+			Help:        "Current number of finalized snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "working"},
 		},
 	)
 
-	snapshotFinalize = promauto.NewCounter(
+	// Transition snapshot.
+	snapshotCreateTransition = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_finalize_count",
-			Help: "Current number of finalized snapshots.",
+			Name:        "prompp_cppbridge_snapshot_create_count",
+			Help:        "Current number of created snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "transition"},
+		},
+	)
+	snapshotFinalizeTransition = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_snapshot_finalize_count",
+			Help:        "Current number of finalized snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "transition"},
+		},
+	)
+	// Remote write snapshot.
+	snapshotCreateRemoteWrite = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_snapshot_create_count",
+			Help:        "Current number of created snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "remote_write"},
+		},
+	)
+	snapshotFinalizeRemoteWrite = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_snapshot_finalize_count",
+			Help:        "Current number of finalized snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "remote_write"},
+		},
+	)
+	// Rotation snapshot.
+	snapshotCreateRotation = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_snapshot_create_count",
+			Help:        "Current number of created snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "rotation"},
+		},
+	)
+	snapshotFinalizeRotation = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_snapshot_finalize_count",
+			Help:        "Current number of finalized snapshots.",
+			ConstLabels: prometheus.Labels{"snapshot_type": "rotation"},
 		},
 	)
 )
@@ -28,25 +76,71 @@ var (
 var gcDestroyDetector uint64
 
 //
+// SnapshotType
+//
+
+// SnapshotType is the type of snapshot.
+type SnapshotType uint64
+
+// IncCreate increment the create counter for the snapshot type.
+func (t SnapshotType) IncCreate() {
+	switch t {
+	case SnapshotTypeWorking:
+		snapshotCreateWorking.Inc()
+	case SnapshotTypeTransition:
+		snapshotCreateTransition.Inc()
+	case SnapshotTypeRemoteWrite:
+		snapshotCreateRemoteWrite.Inc()
+	case SnapshotTypeRotation:
+		snapshotCreateRotation.Inc()
+	}
+}
+
+// IncFinalize increment the finalize counter for the snapshot type.
+func (t SnapshotType) IncFinalize() {
+	switch t {
+	case SnapshotTypeWorking:
+		snapshotFinalizeWorking.Inc()
+	case SnapshotTypeTransition:
+		snapshotFinalizeTransition.Inc()
+	case SnapshotTypeRemoteWrite:
+		snapshotFinalizeRemoteWrite.Inc()
+	case SnapshotTypeRotation:
+		snapshotFinalizeRotation.Inc()
+	}
+}
+
+const (
+	// SnapshotTypeWorking is the snapshot type for working state.
+	SnapshotTypeWorking SnapshotType = iota
+	// SnapshotTypeTransition is the snapshot type for transition state.
+	SnapshotTypeTransition
+	// SnapshotTypeRemoteWrite is the snapshot type for remote write state.
+	SnapshotTypeRemoteWrite
+	// SnapshotTypeRotation is the snapshot type for rotation state.
+	SnapshotTypeRotation
+)
+
+//
 // LabelSetSnapshot
 //
 
 // LabelSetSnapshot go container for snapshot from LabelSetStorage.
 type LabelSetSnapshot struct {
-	pointer           uintptr
-	gcDestroyDetector *uint64 // field for the GC to destroy the structure.
+	pointer      uintptr
+	snapshotType SnapshotType
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
-func newLabelSetSnapshot(snapshotPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: snapshotPtr, gcDestroyDetector: &gcDestroyDetector}
+func newLabelSetSnapshot(snapshotPtr uintptr, snapshotType SnapshotType) *LabelSetSnapshot {
+	lsst := &LabelSetSnapshot{pointer: snapshotPtr, snapshotType: snapshotType}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesSnapshotDtor(l.pointer)
 
-		snapshotFinalize.Inc()
+		l.snapshotType.IncFinalize()
 	})
 
-	snapshotCreate.Inc()
+	snapshotType.IncCreate()
 
 	return lsst
 }
