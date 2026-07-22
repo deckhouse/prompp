@@ -84,7 +84,14 @@ func (bs *BatchStorage) Commit(ctx context.Context) error {
 // CommitWithState adds aggregated series from [pp_storage.TransactionHead] to the [Head] with [cppbridge.StateV2].
 func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.StateV2) error {
 	s := bs.transactionHead.Shards()[0]
-	_, err := bs.adapter.AppendGoHeadHashdex(ctx, cppbridge.NewGoHeadHashdex(s.LSS().Target(), s.DataStorage().Raw()), state, false)
+	lss := s.LSS()
+	lss.ResetSnapshot()
+	_, err := bs.adapter.AppendGoHeadHashdex(
+		ctx,
+		cppbridge.NewGoHeadHashdex(lss.Target(), s.DataStorage().Raw()),
+		state,
+		false,
+	)
 	return err
 }
 
