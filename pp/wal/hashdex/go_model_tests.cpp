@@ -101,7 +101,8 @@ TEST(GoModelHashdexTest, HappyPath) {
 
   PromPP::Primitives::TimeseriesSemiview timeseries;
   auto ts_it = timeseries_vector.begin();
-  for (auto hdx_it = hdx.begin(); hdx_it != hdx.end(); hdx_it++, ts_it++) {
+  const auto& floats = hdx.floats();
+  for (auto hdx_it = floats.begin(); hdx_it != floats.end(); hdx_it++, ts_it++) {
     hdx_it->read(timeseries);
     EXPECT_TRUE(*ts_it == timeseries);
     timeseries.clear();

@@ -76,7 +76,7 @@ class HashdexTest : public std::vector<ItemTest> {
 
   void emplace_back(LabelViewSet&& label_set, std::vector<Sample>&& samples) { Base::emplace_back(std::move(label_set), std::move(samples)); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return *this; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return *this; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
     struct Stub {};
     return Stub{};
