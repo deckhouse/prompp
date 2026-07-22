@@ -453,6 +453,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
+	downsamplingMs := q.getDownsamplingMs()
 	queryDataStorage(
 		dsQueryRangeQuerier,
 		q.head,
@@ -460,9 +461,17 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		shardedSerializedData,
 		q.mint,
 		q.maxt,
-		q.getDownsamplingMs(),
+		downsamplingMs,
 		hints,
 	)
+
+	// downsampling has higher priority than aggregation or cross series
+	if downsamplingMs != cppbridge.NoDownsampling {
+		if q.metrics != nil {
+			q.metrics.OptimizationType.WithLabelValues("downsampling").Inc()
+		}
+		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+	}
 
 	if isCrossSeriesFunc(hints) {
 		if q.metrics != nil {

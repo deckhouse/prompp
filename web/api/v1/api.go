@@ -194,8 +194,10 @@ type API struct {
 	QueryEngine       promql.QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
 
-	adapter   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
-	opHandler *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	adapter                   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
+	opHandler                 *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	retentionDuration         time.Duration      // PP_CHANGES.md: rebuild on cpp
+	downsamplingLookbackDelta time.Duration      // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
@@ -233,6 +235,8 @@ func NewAPI(
 	eq storage.ExemplarQueryable,
 
 	adapter handler.Adapter, // PP_CHANGES.md: rebuild on cpp
+	retentionDuration time.Duration, // PP_CHANGES.md: rebuild on cpp
+	downsamplingLookbackDelta time.Duration, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
 	tr func(context.Context) TargetRetriever,
@@ -265,7 +269,9 @@ func NewAPI(
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
-		adapter: adapter, // PP_CHANGES.md: rebuild on cpp
+		adapter:                   adapter,                   // PP_CHANGES.md: rebuild on cpp
+		retentionDuration:         retentionDuration,         // PP_CHANGES.md: rebuild on cpp
+		downsamplingLookbackDelta: downsamplingLookbackDelta, // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
 		targetRetriever:       tr,
@@ -449,7 +455,7 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 		defer cancel()
 	}
 
-	opts, err := extractQueryOpts(r)
+	opts, err := extractQueryOpts(r, api.getLookbackDelta(api.now().Sub(ts)))
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -497,7 +503,15 @@ func (api *API) formatQuery(r *http.Request) (result apiFuncResult) {
 	return apiFuncResult{expr.Pretty(0), nil, nil, nil}
 }
 
-func extractQueryOpts(r *http.Request) (promql.QueryOpts, error) {
+func (api *API) getLookbackDelta(queryDuration time.Duration) time.Duration {
+	if queryDuration >= api.retentionDuration {
+		return api.downsamplingLookbackDelta
+	}
+
+	return 0
+}
+
+func extractQueryOpts(r *http.Request, extraLookbackDelta time.Duration) (promql.QueryOpts, error) {
 	var duration time.Duration
 
 	if strDuration := r.FormValue("lookback_delta"); strDuration != "" {
@@ -506,6 +520,10 @@ func extractQueryOpts(r *http.Request) (promql.QueryOpts, error) {
 			return nil, fmt.Errorf("error parsing lookback delta duration: %w", err)
 		}
 		duration = parsedDuration
+	}
+
+	if extraLookbackDelta > 0 {
+		duration = max(extraLookbackDelta, duration)
 	}
 
 	return promql.NewPrometheusQueryOpts(r.FormValue("stats") == "all", duration), nil
@@ -552,7 +570,7 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 		defer cancel()
 	}
 
-	opts, err := extractQueryOpts(r)
+	opts, err := extractQueryOpts(r, api.getLookbackDelta(end.Sub(start)))
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}

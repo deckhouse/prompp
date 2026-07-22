@@ -246,6 +246,8 @@ type Options struct {
 	Version               *PrometheusVersion
 	Flags                 map[string]string
 
+	DownsamplingLookbackDelta time.Duration // PP_CHANGES.md: rebuild on cpp
+
 	ListenAddresses            []string
 	CORSOrigin                 *regexp.Regexp
 	ReadTimeout                time.Duration
@@ -335,6 +337,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		app,
 		h.exemplarStorage,
 		adapter,
+		time.Duration(o.TSDBRetentionDuration),
+		o.DownsamplingLookbackDelta,
 		factorySPr,
 		factoryTr,
 		factoryAr,

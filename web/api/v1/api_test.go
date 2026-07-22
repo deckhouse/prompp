@@ -4193,7 +4193,7 @@ func TestExtractQueryOpts(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			req := &http.Request{Form: test.form}
-			opts, err := extractQueryOpts(req)
+			opts, err := extractQueryOpts(req, 0)
 			require.Equal(t, test.expect, opts)
 			if test.err == nil {
 				require.NoError(t, err)

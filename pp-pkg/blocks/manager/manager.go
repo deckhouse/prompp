@@ -47,7 +47,7 @@ type Options struct {
 
 // needDownsampling checks if the delta is greater than the downsampling duration.
 func (o *Options) needDownsampling(delta int64) bool {
-	return o.DownsamplingMS > 0 && delta > o.DownsamplingMS
+	return o.DownsamplingMS > 0 && delta > o.RetentionDuration
 }
 
 // Manager reloads and applies retention to persisted blocks on disk.

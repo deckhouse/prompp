@@ -1176,6 +1176,8 @@ func main() {
 	cfg.web.RuleManager = ruleManager
 	cfg.web.Notifier = notifierManager
 	cfg.web.LookbackDelta = time.Duration(cfg.lookbackDelta)
+	// x2 because the needed minimum lookback delta is 2*downsampling
+	cfg.web.DownsamplingLookbackDelta = time.Duration(cfg.Downsampling * 2)
 	cfg.web.IsAgent = agentMode
 	cfg.web.AppName = modeAppName
 
