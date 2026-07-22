@@ -402,3 +402,25 @@ jobs:
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit
+
+  tests-gate:
+    # Single required status check that aggregates the mandatory test pipeline.
+    # `if: always()` guarantees the context is always reported, so conditional
+    # matrix jobs (whose context names vary) don't have to be required directly.
+    # A `skipped` dependency is fine (e.g. cpp-tests when C++ is unchanged); the
+    # gate fails only when a required job failed or was cancelled.
+    # The optional label-gated jobs (go-test-pp asan, build_dev) are intentionally
+    # excluded, so they never block merge.
+    needs: [build-ci-image, changes, cpp-tests, build-go-bindings, go-test-all]
+    if: always()
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Check required test jobs
+        run: |
+          results="${{ join(needs.*.result, ',') }}"
+          echo "needs results: $results"
+          if [[ "$results" == *failure* || "$results" == *cancelled* ]]; then
+            echo "::error::A required test job failed or was cancelled"
+            exit 1
+          fi
+          echo "All required test jobs passed or were safely skipped."

@@ -3,24 +3,9 @@ name: Linter
 on:
   pull_request:
     types: [opened, reopened, labeled, synchronize]
-    paths:
-      - '**/*.go'
-      - '**/go.mod'
-      - '**/go.sum'
-      - '**/.golangci.yml'
-      - 'scripts/golangci-lint.yml'
-      # Go toolchain lives in the CI image built from Dockerfile.ci.
-      - 'Dockerfile.ci'
   push:
     branches:
       - pp
-    paths:
-      - '**/*.go'
-      - '**/go.mod'
-      - '**/go.sum'
-      - '**/.golangci.yml'
-      - 'scripts/golangci-lint.yml'
-      - 'Dockerfile.ci'
   workflow_dispatch:
     inputs:
       release_branch:
@@ -39,8 +24,44 @@ jobs:
       pr_base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
     secrets: inherit
 
+  changes:
+    runs-on: fsn-dev-gitlab-runner
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # On PRs, decide whether Go sources, module files, the golangci config, or
+      # the Go toolchain (CI image / Dockerfile.ci) changed. On
+      # push/workflow_dispatch this step is skipped and the linter runs
+      # unconditionally. Gating is done at job level (not workflow-level paths)
+      # so the `golangci` context is still reported (as skipped) and stays safe
+      # to use as a required status check.
+      - name: Detect Go changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "Changed files:"; echo "$changed"
+          if echo "$changed" \
+            | grep -qE '\.go$|(^|/)go\.mod$|(^|/)go\.sum$|(^|/)\.golangci\.yml$|^scripts/golangci-lint\.yml$|^Dockerfile\.ci$'; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
   golangci:
-    needs: build-ci-image
+    needs: [build-ci-image, changes]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
     runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
