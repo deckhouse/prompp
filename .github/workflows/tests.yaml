@@ -65,14 +65,26 @@ jobs:
     if: github.event_name != 'pull_request' || needs.changes.outputs.cpp == 'true'
     strategy:
       max-parallel: 2
+      # Two meaningful combinations, on amd64 and arm64:
+      #   dbg + asan       — catch memory bugs with debug symbols
+      #   opt + jemalloc   — release-like build
       matrix:
-        OPT: [dbg, opt]
-        SANITIZERS: [no_sanitizers, with_sanitizers]
-        runner_name: [fsn-dev-gitlab-runner, fsn-dev-arm-runner]
         include:
-          - runner_name: fsn-dev-gitlab-runner
+          - OPT: dbg
+            SANITIZERS: with_sanitizers
+            runner_name: fsn-dev-gitlab-runner
             arch: amd64
-          - runner_name: fsn-dev-arm-runner
+          - OPT: dbg
+            SANITIZERS: with_sanitizers
+            runner_name: fsn-dev-arm-runner
+            arch: arm64
+          - OPT: opt
+            SANITIZERS: no_sanitizers
+            runner_name: fsn-dev-gitlab-runner
+            arch: amd64
+          - OPT: opt
+            SANITIZERS: no_sanitizers
+            runner_name: fsn-dev-arm-runner
             arch: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
