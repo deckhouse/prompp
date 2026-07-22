@@ -60,13 +60,14 @@ import (
 
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/rules"                         // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"         // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"                       // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"       // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote" // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
 
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
 	block "github.com/prometheus/prometheus/pp/go/storage/block"  // PP_CHANGES.md: rebuild on cpp
@@ -771,6 +772,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The PP head manager and the catalog GC apply time-based retention only;
+	// unlike tsdb they cannot fall back to size-based retention for heads. When
+	// no time retention is configured (e.g. only storage.tsdb.retention.size is
+	// set, leaving RetentionDuration == 0) we would otherwise treat every head
+	// as outdated and delete it before it is persisted. Restore the tsdb default
+	// retention in that case, mirroring tsdb's default handling. In agent mode
+	// there is no block/head retention, so keep it at 0 (as tsdb does).
+	ppRetentionPeriod := time.Duration(cfg.tsdb.RetentionDuration)
+	if !agentMode && ppRetentionPeriod == 0 {
+		ppRetentionPeriod = time.Duration(defaultRetentionDuration)
+		level.Info(logger).Log("msg", "No time retention set for PP head storage so using the default time retention", "duration", defaultRetentionDuration)
+	}
+
 	removedHeadTriggerNotifier := pp_storage.NewTriggerNotifier()
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
@@ -778,7 +792,7 @@ func main() {
 			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
 			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
-			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
+			MaxRetentionPeriod:  ppRetentionPeriod,
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
 			KeeperCapacity:      2,
 			DataDir:             localStoragePath,
@@ -859,7 +873,8 @@ func main() {
 
 		if cfg.UseBlockManagerStorage {
 			level.Info(logger).Log("msg", "Using block-manager storage scheme")
-			level.Debug(logger).Log("msg", "Block storage options",
+			level.Debug(logger).Log(
+				"msg", "Block storage options",
 				"MinBlockDuration", cfg.tsdb.MinBlockDuration,
 				"MaxBytes", cfg.tsdb.MaxBytes,
 				"RetentionDuration", cfg.tsdb.RetentionDuration,
@@ -873,11 +888,23 @@ func main() {
 				pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
 				prometheus.DefaultRegisterer,
 			)
-			blockManager, err = block.NewManager(localStoragePath, &block.Options{
-				RetentionDuration:           retentionMs,
-				CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
-				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-			}, blocksToDelete, log.With(logger, "component", "blockmanager"), prometheus.DefaultRegisterer)
+			blockManager, err = block.NewManager(
+				localStoragePath,
+				&block.Options{
+					RetentionDuration:           retentionMs,
+					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
+					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+				},
+				blocksToDelete,
+				localstorageobserver.NewLocalStorageObserver(
+					localStoragePath,
+					headCatalog,
+					log.With(logger, "component", "localstorageobserver"),
+					prometheus.DefaultRegisterer,
+				),
+				log.With(logger, "component", "blockmanager"),
+				prometheus.DefaultRegisterer,
+			)
 			if err != nil {
 				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
 				os.Exit(1)
@@ -920,7 +947,8 @@ func main() {
 			persistedStorage = tsdbHistorical
 			startTimeFn = tsdbHistorical.StartTime
 			level.Info(logger).Log("msg", "TSDB storage started")
-			level.Debug(logger).Log("msg", "TSDB options",
+			level.Debug(logger).Log(
+				"msg", "TSDB options",
 				"MinBlockDuration", cfg.tsdb.MinBlockDuration,
 				"MaxBlockDuration", cfg.tsdb.MaxBlockDuration,
 				"MaxBytes", cfg.tsdb.MaxBytes,
@@ -1301,7 +1329,7 @@ func main() {
 		clock,
 		multiNotifiable,
 		removedHeadTriggerNotifier,
-		time.Duration(cfg.tsdb.RetentionDuration),
+		ppRetentionPeriod,
 	)
 
 	var g run.Group
@@ -1519,7 +1547,8 @@ func main() {
 				}
 
 				level.Info(logger).Log("msg", "Agent WAL storage started")
-				level.Debug(logger).Log("msg", "Agent WAL storage options",
+				level.Debug(logger).Log(
+					"msg", "Agent WAL storage options",
 					"WALSegmentSize", cfg.agent.WALSegmentSize,
 					"WALCompression", cfg.agent.WALCompression,
 					"StripeSize", cfg.agent.StripeSize,
@@ -2318,7 +2347,8 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing federation_split_families value",
-					"err", err)
+					"err", err,
+				)
 				continue
 			}
 			_ = level.Info(logger).Log(
@@ -2333,7 +2363,8 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
-					"err", err)
+					"err", err,
+				)
 				continue
 			}
 
@@ -2357,6 +2388,27 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				cfg.UseBlockManagerStorage = true
 			}
 			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
+
+		case "disable_coredumps":
+			if err := prom_runtime.DisableCoreDumps(); err != nil {
+				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
+				continue
+			}
+			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
+
+		case "select_func_optimization":
+			if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing select_func_optimization value",
+					"err", err,
+				)
+				continue
+			}
+
+			level.Info(logger).Log(
+				"msg", "[FEATURE] Select function optimization is set.",
+				"optimization", fvalue,
+			)
 		}
 	}
 }

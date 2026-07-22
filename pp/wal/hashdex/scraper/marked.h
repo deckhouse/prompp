@@ -35,19 +35,10 @@ class Metric {
     const auto [next_ptr, layout, labels_count] = encoding::LayoutCountCodec::decode(ptr);
     ptr = next_ptr;
 
-    ts.label_set().resize(labels_count);
-
-    auto label_iter = ts.label_set().begin();
+    ts.label_set().reserve(labels_count);
+    const auto buf_ptr = buffer_.data() + item_->base_offset;
     for (uint32_t i = 0; i < labels_count; ++i) {
-      const auto [next_ptr, label] = encoding::LabelCodec::decode(ptr);
-      ptr = next_ptr;
-
-      if (const auto buf_ptr = buffer_.data() + item_->base_offset; label.name.is_reserved_name()) [[unlikely]] {
-        std::construct_at(label_iter++, Prometheus::kMetricLabelName, std::string_view(buf_ptr + label.value.offset, label.value.length));
-      } else {
-        std::construct_at(label_iter++, std::string_view(buf_ptr + label.name.offset, label.name.length),
-                          std::string_view(buf_ptr + label.value.offset, label.value.length));
-      }
+      encoding::LabelCodec::decode_and_append(ptr, buf_ptr, ts.label_set());
     }
 
     auto [p, sample] = encoding::SampleCodec::decode(ptr, layout, default_timestamp_);
