@@ -979,11 +979,13 @@ func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s
 				interval = s.Interval
 			}
 			hints := &storage.SelectHints{
-				Start: start,
-				End:   end,
-				Step:  durationMilliseconds(interval),
-				Range: durationMilliseconds(evalRange),
-				Func:  extractFuncFromPath(path),
+				Start:         start,
+				End:           end,
+				Step:          durationMilliseconds(interval),
+				Range:         durationMilliseconds(evalRange),
+				Func:          extractFuncFromPath(path),
+				LookbackDelta: durationMilliseconds(s.LookbackDelta),
+				IsSubquery:    containsSubquery(path),
 			}
 			evalRange = 0
 			hints.By, hints.Grouping = extractGroupsFromPath(path)
@@ -1002,6 +1004,7 @@ func extractFuncFromPath(p []parser.Node) string {
 	if len(p) == 0 {
 		return ""
 	}
+
 	switch n := p[len(p)-1].(type) {
 	case *parser.AggregateExpr:
 		return n.Op.String()
@@ -1013,6 +1016,17 @@ func extractFuncFromPath(p []parser.Node) string {
 		return ""
 	}
 	return extractFuncFromPath(p[:len(p)-1])
+}
+
+// containsSubquery checks if the path contains a subquery.
+func containsSubquery(p []parser.Node) bool {
+	for _, n := range p {
+		if _, ok := n.(*parser.SubqueryExpr); ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 // extractGroupsFromPath parses vector outer function and extracts grouping information if by or without was used.
