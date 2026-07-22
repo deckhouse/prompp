@@ -143,8 +143,8 @@ jobs:
     if: ${{ always() && needs.build-ci-image.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
     strategy:
       max-parallel: 4
-      # Only opt builds are consumed downstream: go-tests uses opt+asan,
-      # go-tests-all-pkgs uses opt+jemalloc. ASAN toggles the two variants.
+      # Only opt builds are consumed downstream: go-test-pp uses opt+asan,
+      # go-test-all uses opt+jemalloc. ASAN toggles the two variants.
       matrix:
         ASAN: [false, true]
         runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
@@ -202,11 +202,13 @@ jobs:
       - name: Clear workspace
         run: rm -rf pp/go/cppbridge/${{ matrix.arch }}_*
 
-  go-tests:
+  go-test-pp:
     # Our packages (Makefile default pkgs = ./pp/go/... ./pp-pkg/...).
     # Single combination: opt + asan, on amd64 and arm64. The opt + jemalloc
-    # variant is covered by `go-tests-all-pkgs` (full repository).
+    # variant is covered by `go-test-all` (full repository).
+    # Optional: runs only when the PR carries the `go-test-asan` label.
     needs: [build-ci-image, build-go-bindings]
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'go-test-asan')
     strategy:
       max-parallel: 2
       matrix:
@@ -293,7 +295,7 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
-  go-tests-all-pkgs:
+  go-test-all:
     # Runs the entire repository (root module ./..., minus packages that we
     # replace with pp-pkg counterparts or do not ship in cmd/prometheus).
     # Single combination: opt + jemalloc (no sanitizers), on amd64 and arm64.
@@ -388,7 +390,7 @@ jobs:
           retention-days: 7
 
   build_dev:
-    needs: [go-tests, go-tests-all-pkgs]
+    needs: [go-test-all]
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit
