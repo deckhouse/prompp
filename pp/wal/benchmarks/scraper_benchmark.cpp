@@ -67,10 +67,10 @@ void ScraperRead(benchmark::State& state) {
   PromPP::Primitives::TimeseriesSemiview ts_buf;
 
   for ([[maybe_unused]] auto _ : state) {
-    for (auto& metric : scraper.metrics()) {
-      if (metric.hash() % 2 == 0) {
+    for (auto& item : scraper.floats()) {
+      if (item.hash() % 2 == 0) {
         ts_buf.clear();
-        metric.read(ts_buf);
+        item.read(ts_buf);
       }
     }
   }
