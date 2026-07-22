@@ -99,9 +99,8 @@ void write_location(std::ostream& out, const facts::FactArena& facts, facts::Sou
       << "\"column\": " << location.column << "}";
 }
 
-void write_params(std::ostream& out, const facts::FactArena& facts, facts::ParamListId id) {
+void write_params(std::ostream& out, const facts::FactArena& facts, const std::vector<facts::ParamDecl>& params) {
   out << "[";
-  const auto params = facts.params(id);
   for (size_t i = 0; i < params.size(); ++i) {
     if (i != 0) {
       out << ", ";
@@ -118,9 +117,8 @@ void write_params(std::ostream& out, const facts::FactArena& facts, facts::Param
   out << "]";
 }
 
-void write_layouts(std::ostream& out, const facts::FactArena& facts, facts::LayoutListId id) {
+void write_layouts(std::ostream& out, const facts::FactArena& facts, const std::vector<facts::LayoutDecl>& layouts) {
   out << "[";
-  const auto layouts = facts.layouts(id);
   for (size_t i = 0; i < layouts.size(); ++i) {
     if (i != 0) {
       out << ", ";
@@ -131,7 +129,7 @@ void write_layouts(std::ostream& out, const facts::FactArena& facts, facts::Layo
         << "\"location\": ";
     write_location(out, facts, layout.location);
     out << ", \"fields\": [";
-    const auto fields = facts.fields(layout.fields);
+    const auto fields = facts.fields(layout);
     for (size_t field_index = 0; field_index < fields.size(); ++field_index) {
       if (field_index != 0) {
         out << ", ";
@@ -203,7 +201,7 @@ void write_diagnostic_function(std::ostream& out, const facts::FactArena& facts,
 }
 
 void write_diagnostic(std::ostream& out, const facts::FactArena& facts, const diagnostics::Diagnostic& diagnostic) {
-  const std::string_view message = diagnostics::diagnostic_message(facts, diagnostic);
+  const std::string_view message = diagnostics::diagnostic_message(diagnostic);
   out << "    {"
       << "\"code\": \"" << json_escape(diagnostics::diagnostic_code_name(diagnostic.code)) << "\", "
       << "\"message\": \"" << json_escape(message) << "\", "
@@ -253,7 +251,7 @@ void write_compiler_diagnostics(std::ostream& out, const facts::FactArena& facts
       const facts::SourceLocation location = diagnostic.location;
       out << facts.string(facts.source_file(location.file).path) << ":" << location.line << ":" << location.column << ": ";
     }
-    out << diagnostics::severity_name(diagnostic.severity) << ": " << diagnostics::diagnostic_message(facts, diagnostic) << " ["
+    out << diagnostics::severity_name(diagnostic.severity) << ": " << diagnostics::diagnostic_message(diagnostic) << " ["
         << diagnostics::diagnostic_code_name(diagnostic.code) << "]\n";
   }
 }

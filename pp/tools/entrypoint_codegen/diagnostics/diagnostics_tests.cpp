@@ -41,7 +41,7 @@ TEST(DiagnosticsTest, DefaultDiagnosticUsesInvalidFactReferences) {
   };
 
   // Act
-  const bool message_is_valid = diagnostic.message.is_valid();
+  const bool message_is_valid = !diagnostic.message.empty();
   const bool function_is_valid = diagnostic.function.is_valid();
   const bool location_is_valid = diagnostic.location.is_valid();
 
@@ -76,12 +76,12 @@ TEST_F(DiagnosticSetTest, StoresDiagnosticsInInsertionOrder) {
 
   EXPECT_EQ(stored[0].code, DiagnosticCode::kMissingNamePrefix);
   ASSERT_TRUE(stored[0].location.is_valid());
-  EXPECT_FALSE(stored[0].message.is_valid());
+  EXPECT_TRUE(stored[0].message.empty());
   EXPECT_EQ(stored[0].location.line, first_location.line);
   EXPECT_EQ(stored[0].location.column, first_location.column);
 
   EXPECT_EQ(stored[1].code, DiagnosticCode::kRuntimeMemoryUsage);
-  ASSERT_TRUE(stored[1].message.is_valid());
+  ASSERT_FALSE(stored[1].message.empty());
   EXPECT_EQ(facts_.string(stored[1].message), "memory diagnostic");
   ASSERT_TRUE(stored[1].location.is_valid());
   EXPECT_EQ(stored[1].location.line, second_location.line);
@@ -169,7 +169,7 @@ TEST(DiagnosticsTest, FallsBackToDefaultMessageWhenDiagnosticMessageIsAbsent) {
   };
 
   // Act
-  const std::string_view message = epgen::diagnostics::diagnostic_message(facts, diagnostic);
+  const std::string_view message = epgen::diagnostics::diagnostic_message(diagnostic);
 
   // Assert
   EXPECT_EQ(message, epgen::diagnostics::diagnostic_default_message(diagnostic.code));
@@ -185,7 +185,7 @@ TEST(DiagnosticsTest, UsesStoredDiagnosticMessageWhenPresent) {
   };
 
   // Act
-  const std::string_view message = epgen::diagnostics::diagnostic_message(facts, diagnostic);
+  const std::string_view message = epgen::diagnostics::diagnostic_message(diagnostic);
 
   // Assert
   EXPECT_EQ(message, "clang says no");

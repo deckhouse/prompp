@@ -8,10 +8,6 @@
 #include <string_view>
 #include <vector>
 
-namespace epgen::facts {
-class FactArena;
-}
-
 namespace epgen::diagnostics {
 
 enum class Severity : uint8_t {
@@ -40,7 +36,7 @@ enum class DiagnosticCode : uint8_t {
 
 struct Diagnostic {
   DiagnosticCode code;
-  facts::StringId message{};
+  std::string message{};
   Severity severity;
   facts::FunctionId function{};
   facts::SourceLocation location{};
@@ -72,7 +68,7 @@ class DiagnosticSet {
 [[nodiscard]] SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set);
 [[nodiscard]] std::string_view diagnostic_code_name(DiagnosticCode code);
 [[nodiscard]] std::string_view diagnostic_default_message(DiagnosticCode code);
-[[nodiscard]] std::string_view diagnostic_message(const facts::FactArena& facts, const Diagnostic& diagnostic);
+[[nodiscard]] std::string_view diagnostic_message(const Diagnostic& diagnostic);
 [[nodiscard]] std::string_view severity_name(Severity severity);
 
 }  // namespace epgen::diagnostics

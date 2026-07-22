@@ -3,7 +3,9 @@
 #include "tagged_index.h"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace epgen::facts {
 
@@ -46,49 +48,47 @@ struct SourceLocation {
 };
 
 struct SourceFileDecl {
-  StringId path;
+  std::string path;
 
-  [[nodiscard]] bool is_valid() const noexcept { return path.is_valid(); }
+  [[nodiscard]] bool is_valid() const noexcept { return !path.empty(); }
 };
 
 struct ParamDecl {
-  StringId name;
-  StringId type_spelling;
+  std::string name;
+  std::string type_spelling;
   ParamRole role = ParamRole::kOther;
   SourceLocation location;
 
-  [[nodiscard]] bool is_valid() const noexcept { return name.is_valid() && type_spelling.is_valid() && location.is_valid(); }
+  [[nodiscard]] bool is_valid() const noexcept { return !name.empty() && !type_spelling.empty() && location.is_valid(); }
 };
 
 struct FieldDecl {
-  StringId name;
-  StringId type_spelling;
+  std::string name;
+  std::string type_spelling;
   SourceLocation location;
 
-  [[nodiscard]] bool is_valid() const noexcept { return name.is_valid() && type_spelling.is_valid() && location.is_valid(); }
+  [[nodiscard]] bool is_valid() const noexcept { return !name.empty() && !type_spelling.empty() && location.is_valid(); }
 };
 
 struct LayoutDecl {
   LayoutKind kind = LayoutKind::kArguments;
-  FieldListId fields;
+  std::vector<FieldDecl> fields;
   SourceLocation location;
 
-  [[nodiscard]] bool is_valid() const noexcept { return fields.is_valid() && location.is_valid(); }
+  [[nodiscard]] bool is_valid() const noexcept { return location.is_valid(); }
 };
 
 struct FunctionDecl {
-  StringId name;
-  StringId return_type_spelling;
-  StringId documentation;
+  std::string name;
+  std::string return_type_spelling;
+  std::string documentation;
   BridgeKind bridge_kind = BridgeKind::kUnknown;
-  ParamListId params;
-  LayoutListId layouts;
+  std::vector<ParamDecl> params;
+  std::vector<LayoutDecl> layouts;
   SourceLocation location;
   bool has_c_linkage = false;
 
-  [[nodiscard]] bool is_valid() const noexcept {
-    return name.is_valid() && return_type_spelling.is_valid() && documentation.is_valid() && params.is_valid() && layouts.is_valid() && location.is_valid();
-  }
+  [[nodiscard]] bool is_valid() const noexcept { return !name.empty() && !return_type_spelling.empty() && location.is_valid(); }
 };
 
 }  // namespace epgen::facts

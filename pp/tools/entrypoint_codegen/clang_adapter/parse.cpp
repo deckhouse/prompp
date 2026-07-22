@@ -15,7 +15,7 @@ namespace epgen::clang_adapter {
 namespace {
 
 struct ParamNameAndRole {
-  facts::StringId name;
+  std::string name;
   facts::ParamRole role;
 };
 

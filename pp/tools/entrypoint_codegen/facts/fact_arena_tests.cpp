@@ -49,25 +49,24 @@ TEST(FactsTest, DefaultIdsAndFactsAreInvalid) {
   EXPECT_FALSE(function.is_valid());
 }
 
-TEST_F(FactArenaTest, StoresStringsAndSourceFiles) {
+TEST_F(FactArenaTest, StoresSourceFilesAndDirectStrings) {
   // Parsed source: entrypoint.cpp
   // void prompp_fn();
 
   // Act
-  const auto string_id = facts_.add_string("prompp_fn");
+  const std::string name = facts_.add_string("prompp_fn");
   const auto source_file_id = facts_.add_source_file("entrypoint.cpp");
   const auto source_files = facts_.source_files();
 
   // Assert
-  EXPECT_TRUE(string_id.is_valid());
   EXPECT_TRUE(source_file_id.is_valid());
   EXPECT_TRUE(facts_.source_file(source_file_id).is_valid());
-  EXPECT_EQ(facts_.string(string_id), "prompp_fn");
+  EXPECT_EQ(name, "prompp_fn");
   ASSERT_EQ(source_files.size(), 1);
   EXPECT_EQ(facts_.string(facts_.source_file(source_file_id).path), "entrypoint.cpp");
 }
 
-TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
+TEST_F(FactArenaTest, ReturnsDirectlyOwnedLists) {
   // Parsed source: entrypoint.cpp
   // void prompp_fn(void* args, void* res);
 
@@ -82,10 +81,8 @@ TEST_F(FactArenaTest, ResolvesListIdsToStoredRecords) {
   };
 
   // Act
-  const auto param_list_id = facts_.add_params(params);
-  const auto field_list_id = facts_.add_fields(fields);
-  const auto stored_params = facts_.params(param_list_id);
-  const auto stored_fields = facts_.fields(field_list_id);
+  const auto stored_params = facts_.add_params(params);
+  const auto stored_fields = facts_.add_fields(fields);
 
   // Assert
   ASSERT_EQ(stored_params.size(), 2);
@@ -140,21 +137,15 @@ TEST_F(FactArenaTest, ResolvesFunctionOwnedLists) {
   EXPECT_EQ(stored_layouts[0].kind, LayoutKind::kArguments);
 }
 
-TEST_F(FactArenaTest, ResolvesInvalidIdsToSafeFallbackValues) {
+TEST_F(FactArenaTest, ResolvesInvalidSourceFileToSafeFallbackValue) {
   // Arrange
-  const StringId string_id;
   const SourceFileId source_file_id;
-  const ParamListId param_list_id;
 
   // Act
-  const std::string_view string = facts_.string(string_id);
   const epgen::facts::SourceFileDecl& source_file = facts_.source_file(source_file_id);
-  const std::span<const ParamDecl> params = facts_.params(param_list_id);
 
   // Assert
-  EXPECT_EQ(string, epgen::facts::kInvalidValuePlaceholder);
   EXPECT_EQ(facts_.string(source_file.path), epgen::facts::kInvalidValuePlaceholder);
-  EXPECT_TRUE(params.empty());
 }
 
 TEST_F(FactArenaTest, MoveTransfersStoredFacts) {
@@ -162,13 +153,13 @@ TEST_F(FactArenaTest, MoveTransfersStoredFacts) {
   // void prompp_fn();
 
   // Arrange
-  const auto string_id = facts_.add_string("prompp_fn");
+  const auto source_file_id = facts_.add_source_file("entrypoint.cpp");
 
   // Act
   FactArena moved = std::move(facts_);
 
   // Assert
-  EXPECT_EQ(moved.string(string_id), "prompp_fn");
+  EXPECT_EQ(moved.source_file(source_file_id).path, "entrypoint.cpp");
 }
 
 }  // namespace
