@@ -272,11 +272,8 @@ jobs:
               set -eo pipefail
 
               git config --global --add safe.directory /workspace
-              # go tools
+              # go test-report/coverage tools are baked into the CI image
               mkdir -p .cache
-              go install github.com/jstemmer/go-junit-report/v2@latest
-              go install github.com/afunix/gocov/gocov@latest
-              go install github.com/AlekSi/gocov-xml@latest
 
               # Tests for our packages (Makefile default pkgs = ./pp/go/... ./pp-pkg/...).
               FLAGS=\$(./pp/scripts/ci_get_go_test_flags.sh)
@@ -364,11 +361,8 @@ jobs:
               set -eo pipefail
 
               git config --global --add safe.directory /workspace
-              # go tools
+              # go test-report/coverage tools are baked into the CI image
               mkdir -p .cache
-              go install github.com/jstemmer/go-junit-report/v2@latest
-              go install github.com/afunix/gocov/gocov@latest
-              go install github.com/AlekSi/gocov-xml@latest
 
               # All-packages run; pkgs override = filtered list from scripts/list-test-packages.sh.
               # -timeout 20m: per-package timeout (default 10m) — heavy upstream tsdb suite needs more under -race+coverage.
