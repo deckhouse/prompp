@@ -24,7 +24,7 @@ struct PbLabelSetMemoryLimits {
   size_t max_timeseries_count;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool max_timeseries_count_exceeded(uint32_t count) const {
-    return max_label_name_length != 0 && count > max_timeseries_count;
+    return max_timeseries_count != 0 && count > max_timeseries_count;
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool max_label_name_length_exceeded(std::string_view label_name) const {
     return max_label_name_length != 0 && label_name.length() > max_label_name_length;

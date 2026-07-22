@@ -100,7 +100,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   Primitives::LabelViewSet label_set_;
 
   void parse_timeseries(protozero::pbf_reader& pb) {
-    if (limits_.max_timeseries_count_exceeded(floats_.size())) [[unlikely]] {
+    if (limits_.max_timeseries_count_exceeded(floats_.size() + 1)) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
 
