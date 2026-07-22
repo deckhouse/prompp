@@ -364,6 +364,6 @@ jobs:
 
   build_dev:
     needs: [go-tests, go-tests-all-pkgs]
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit
