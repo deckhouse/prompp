@@ -143,8 +143,9 @@ jobs:
     if: ${{ always() && needs.build-ci-image.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
     strategy:
       max-parallel: 4
+      # Only opt builds are consumed downstream: go-tests uses opt+asan,
+      # go-tests-all-pkgs uses opt+jemalloc. ASAN toggles the two variants.
       matrix:
-        COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
         runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
         include:
@@ -174,7 +175,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
+            -e COMPILATION_MODE=opt \
             -e ASAN=${{ matrix.ASAN }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
@@ -182,7 +183,7 @@ jobs:
 
               git config --global --add safe.directory /workspace && cd pp
               echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
-              make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+              make compilation_mode=opt asan=${{ matrix.ASAN }} build-entrypoint
             "
 
       - name: Fix build artifact ownership
@@ -194,7 +195,7 @@ jobs:
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
-          name: go-cppbridge-${{ matrix.arch }}-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
+          name: go-cppbridge-${{ matrix.arch }}-opt-${{ matrix.ASAN }}
           path: pp/go/cppbridge/${{ matrix.arch }}_*
           retention-days: 7
 
@@ -202,27 +203,18 @@ jobs:
         run: rm -rf pp/go/cppbridge/${{ matrix.arch }}_*
 
   go-tests:
+    # Our packages (Makefile default pkgs = ./pp/go/... ./pp-pkg/...).
+    # Single combination: opt + asan, on amd64 and arm64. The opt + jemalloc
+    # variant is covered by `go-tests-all-pkgs` (full repository).
     needs: [build-ci-image, build-go-bindings]
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
-        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
-        OPT: [dbg, opt]
-        SANITIZERS: [no_sanitizers, with_sanitizers]
         include:
-          - SANITIZERS: no_sanitizers
-            ASAN: false
-            STATIC: static
-          - SANITIZERS: with_sanitizers
-            ASAN: true
-        # Run only the two meaningful combinations: dbg+jemalloc and opt+asan.
-        # The remaining opt+jemalloc variant is covered by `go-tests-all-pkgs`,
-        # which exercises the full repository (root module ./...).
-        exclude:
-          - SANITIZERS: with_sanitizers
-            OPT: dbg
-          - SANITIZERS: no_sanitizers
-            OPT: opt
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
@@ -240,18 +232,10 @@ jobs:
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
           channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
-      - name: Set architecture variable
-        run: |
-          if [[ "${{ matrix.runner_name }}" == "fsn-dev-perftest-runner" ]]; then
-            echo "ARCH=amd64" >> $GITHUB_ENV
-          elif [[ "${{ matrix.runner_name }}" == "fsn-dev-arm-runner" ]]; then
-            echo "ARCH=arm64" >> $GITHUB_ENV
-          fi
-
       - name: Download Static Library
         uses: actions/download-artifact@v4
         with:
-          name: go-cppbridge-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.ASAN }}
+          name: go-cppbridge-${{ matrix.arch }}-opt-true
           path: pp/go/cppbridge/
 
       - name: Run Go Tests and Process Reports
@@ -260,14 +244,14 @@ jobs:
             -v $PWD:/workspace \
             -w /workspace \
             -e CI=true \
-            -e OPT=${{ matrix.OPT }} \
-            -e SANITIZERS=${{ matrix.SANITIZERS }} \
+            -e OPT=opt \
+            -e SANITIZERS=with_sanitizers \
             -e CGO_CFLAGS="-Wno-error -I/usr/include" \
             -e CGO_LDFLAGS="-L/usr/lib/" \
             -e CGO_ENABLED="1" \
             -e GOPATH="${{ github.workspace }}/.cache" \
             -e GOBIN="/usr/local/go/bin" \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }}${{ needs.build-ci-image.outputs.tag_suffix }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -298,14 +282,14 @@ jobs:
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
-          name: go-unit-tests-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: go-unit-tests-${{ matrix.arch }}-opt-with_sanitizers
           path: report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: go-coverage-report-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: go-coverage-report-${{ matrix.arch }}-opt-with_sanitizers
           path: coverage.xml
           retention-days: 7
 
