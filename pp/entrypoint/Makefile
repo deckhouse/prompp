@@ -31,25 +31,14 @@ ifeq ($(platform),aarch64)
 platform := arm64
 endif
 
-# Here we specifie supported flavors per platform
+# Baseline march per platform used for the single built variant.
 #
-# All flavors should be valid march option.
-# First flavor in list is used as minimal fallback, so it will be system requirement.
-# Runtime detection flavor is placed in entrypoint.cpp.template/mk.
+# It should be a valid march option and acts as the system requirement for the binary.
 amd64_flavors := k8 nehalem haswell
 arm64_flavors := armv8-a armv8-a+crc
 flavors := $($(platform)_flavors)
 generic_flavor := $(firstword $(flavors))
 
-# Since arm64 flavors uses special characters such as + and - in the name,
-# in some cases we have to escape them.
-escape = echo $(1) | sed 's/[^a-zA-Z0-9]/_/g'
-make_escape = $(shell $(call escape,$(1)))
-amd64_escaped_flavors := $(foreach flavor,$(amd64_flavors),$(call make_escape,$(flavor)))
-arm64_escaped_flavors := $(foreach flavor,$(arm64_flavors),$(call make_escape,$(flavor)))
-escaped_flavors := $($(platform)_escaped_flavors)
-
-include entrypoint.cpp.mk
 include build.mk
 
 .PHONY: help
@@ -61,23 +50,21 @@ help: ## Show this message
 	@grep -hE '^[a-zA-Z_-]+\?=.*## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = " *(?=|##) *"}; {printf "\033[33m%-20s\033[0m %s \033[30m(default %s)\033[0m\n", $$1, $$3, $$2}'
 
 .PHONY: all
-all: $(result_dir)/entrypoint.h ## Generate archive with flavored code and runtime init
-all: $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a
-all: $(prefixed_archives)
+all: $(result_dir)/entrypoint.h ## Generate archive with entrypoint code
+all: $(result_dir)/$(platform)_entrypoint_aio_$(result_suffix).a
 
 .PHONY: clean
 clean: ## Remove all generated content
-	@-rm -rf init $(build_dir) $(result_dir)
+	@-rm -rf $(build_dir) $(result_dir)
 
 .PHONY: install
 install: $(result_dir)/entrypoint.h ## Copy resulting generated files to destination $(install_dir)
-install: $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a
-install: $(prefixed_archives)
+install: $(result_dir)/$(platform)_entrypoint_aio_$(result_suffix).a
 	@install $^ $(install_dir)
 
 # Shared type/layout contracts that the Go side reads via cgo (e.g. Sizeof_* macros).
 type_headers := types/go_constants.h
 
-$(result_dir)/entrypoint.h: $(type_headers) $(headers) entrypoint.h.template ## Concat all headers in one
+$(result_dir)/entrypoint.h: $(type_headers) $(headers) ## Concat all headers in one
 	@mkdir -p ${@D}
 	@cat $^ > $@

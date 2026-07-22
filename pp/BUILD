@@ -244,23 +244,6 @@ cc_static_library(
 )
 
 cc_library(
-    name = "entrypoint_init",
-    srcs = glob(["entrypoint/init/*.cpp"]),
-    hdrs = glob([
-        "entrypoint/init/**/*.h",
-        "entrypoint/init/**/*.hpp",
-    ]),
-    linkstatic = True,
-)
-
-cc_static_library(
-    name = "entrypoint_init_aio",
-    deps = [
-        ":entrypoint_init",
-    ],
-)
-
-cc_library(
     name = "performance_tests_headers",
     hdrs = glob(["performance_tests/**/*.h"]),
     deps = [

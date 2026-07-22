@@ -5,6 +5,8 @@
 #include <malloc.h>
 #endif
 
+#include <cstring>
+
 #include "primitives/go_slice.h"
 
 extern "C" void prompp_free_bytes(void* args) {
@@ -13,12 +15,25 @@ extern "C" void prompp_free_bytes(void* args) {
   static_cast<Slice*>(args)->~Slice();
 }
 
-extern "C" void je_jemalloc_constructor(void);
-
-extern "C" void prompp_jemalloc_init() {
-#if JEMALLOC_AVAILABLE
-  je_jemalloc_constructor();
+namespace {
+#if defined(__x86_64__) || defined(_M_AMD64)
+constexpr const char* kPromppFlavor = "k8";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+constexpr const char* kPromppFlavor = "armv8-a";
+#else
+constexpr const char* kPromppFlavor = "unknown";
 #endif
+}  // namespace
+
+extern "C" void prompp_get_flavor(void* res) {
+  struct Result {
+    const char* data;
+    size_t len;
+  };
+
+  auto* out = static_cast<Result*>(res);
+  out->data = kPromppFlavor;
+  out->len = std::strlen(kPromppFlavor);
 }
 
 extern "C" void prompp_mem_info(void* res) {

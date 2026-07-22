@@ -30,6 +30,15 @@ void prompp_mem_info(void* res);
  */
 void prompp_dump_memory_profile(void* args, void* res);
 
+/**
+ * @brief return build architecture flavor
+ *
+ * @param res {
+ *   flavor string
+ * }
+ */
+void prompp_get_flavor(void* res);
+
 #ifdef __cplusplus
 }
 #endif
