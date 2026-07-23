@@ -13,6 +13,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -40,7 +41,7 @@ type dataSourceActive struct {
 // newDataSourceActive creates a new [dataSourceActive].
 func newDataSourceActive(
 	dataDir string,
-	config DestinationConfig, //nolint:gocritic // hugeParam // config
+	config DestinationConfig,
 	numberOfShards uint16,
 	discardCache bool,
 	clock clockwork.Clock,
@@ -290,7 +291,7 @@ func (ds *dataSourceActive) readFromShards(
 	return readShardResults
 }
 
-// segmentIsReady checks if the segment is ready and returns the shard IDs in which the segment is located,
+// segmentIsReady checks if the segment is ready and returns the shard IDs in which the segment is located,.
 func (ds *dataSourceActive) segmentIsReady(ctx context.Context) ([]uint16, error) {
 	for {
 		if ctx.Err() != nil {
@@ -347,7 +348,7 @@ type dataSourceRotated struct {
 // newDataSourceRotated creates a new [dataSourceRotated].
 func newDataSourceRotated(
 	dataDir string,
-	config DestinationConfig, //nolint:gocritic // hugeParam // config
+	config DestinationConfig,
 	numberOfShards uint16,
 	discardCache bool,
 	clock clockwork.Clock,

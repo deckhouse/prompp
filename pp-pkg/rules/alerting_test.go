@@ -235,8 +235,8 @@ func TestAlertingRuleLabelsUpdate(t *testing.T) {
 		t.Logf("case %d", i)
 		evalTime := baseTime.Add(time.Duration(i) * time.Minute)
 		result[0].T = timestamp.FromTime(evalTime)
-		res, err := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
-		require.NoError(t, err)
+		res, evalErr := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
+		require.NoError(t, evalErr)
 
 		var filteredRes promql.Vector // After removing 'ALERTS_FOR_STATE' samples.
 		for _, smpl := range res {
@@ -885,8 +885,8 @@ func TestKeepFiringFor(t *testing.T) {
 		t.Logf("case %d", i)
 		evalTime := baseTime.Add(time.Duration(i) * time.Minute)
 		result[0].T = timestamp.FromTime(evalTime)
-		res, err := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
-		require.NoError(t, err)
+		res, evalErr := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
+		require.NoError(t, evalErr)
 
 		var filteredRes promql.Vector // After removing 'ALERTS_FOR_STATE' samples.
 		for _, smpl := range res {

@@ -73,7 +73,7 @@ func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Gene
 	return t
 }
 
-// SetShardsNumber set shards number
+// SetShardsNumber set shards number.
 func (t *Generic[TShard]) SetShardsNumber(number uint16) {
 	t.wg.Add(int(number))
 }

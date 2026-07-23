@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -236,7 +238,7 @@ func (dg *DestinationGroup) ObserveEncodersMemory() {
 		dg.memoryInUse.With(
 			prometheus.Labels{
 				"allocator": fmt.Sprintf("encoder_%s", dg.cfg.Name),
-				"id":        fmt.Sprintf("%d", id),
+				"id":        strconv.Itoa(id),
 			},
 		).Set(val)
 	})
@@ -348,7 +350,7 @@ func (dg *DestinationGroup) Shutdown(ctx context.Context) error {
 		dg.memoryInUse.Delete(
 			prometheus.Labels{
 				"allocator": fmt.Sprintf("output_relabeler_%s", dg.cfg.Name),
-				"id":        fmt.Sprintf("%d", shardID),
+				"id":        strconv.FormatUint(uint64(shardID), 10),
 			},
 		)
 
@@ -356,7 +358,7 @@ func (dg *DestinationGroup) Shutdown(ctx context.Context) error {
 			dg.memoryInUse.Delete(
 				prometheus.Labels{
 					"allocator": fmt.Sprintf("encoder_%s", dg.cfg.Name),
-					"id":        fmt.Sprintf("%d", id),
+					"id":        strconv.Itoa(id),
 				},
 			)
 		})
@@ -416,7 +418,7 @@ func (dg *DestinationGroup) reshardingOutputRelabelers(
 				dg.memoryInUse.Delete(
 					prometheus.Labels{
 						"allocator": fmt.Sprintf("output_relabeler_%s", dg.cfg.Name),
-						"id":        fmt.Sprintf("%d", shardID),
+						"id":        strconv.Itoa(shardID),
 					},
 				)
 				continue

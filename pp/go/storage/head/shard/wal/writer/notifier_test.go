@@ -4,8 +4,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
 
 type SegmentWriteNotifierSuite struct {

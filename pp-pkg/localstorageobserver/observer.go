@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -167,7 +168,7 @@ func (lso *LocalStorageObserver) isKnownHead(de fs.DirEntry) bool {
 // observeObjects to list the objects in the local storage.
 //
 //revive:disable-next-line:function-length // this is not a complex function
-//nolint:gocritic // unnamedResult // returns names as string and total size as int64.
+
 func (lso *LocalStorageObserver) observeObjects(ctx context.Context, files []os.DirEntry) (string, int64) {
 	var totalSize int64
 	names := make([]string, 0, len(files))

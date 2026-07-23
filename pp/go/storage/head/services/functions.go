@@ -9,7 +9,7 @@ const (
 	// dsMergeOutOfOrderChunks name of task.
 	dsMergeOutOfOrderChunks = "data_storage_merge_out_of_order_chunks"
 
-	// dsUnloadUnusedSeriesData name of task
+	// dsUnloadUnusedSeriesData name of task.
 	dsUnloadUnusedSeriesData = "data_storage_unload_unused_series_data"
 )
 

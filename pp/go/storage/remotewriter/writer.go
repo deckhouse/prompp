@@ -23,7 +23,7 @@ func (*protobufWriter) Close() error {
 	return nil
 }
 
-// Write [cppbridge.SnappyProtobufEncodedData] to [remote.WriteClient]
+// Write [cppbridge.SnappyProtobufEncodedData] to [remote.WriteClient].
 func (w *protobufWriter) Write(ctx context.Context, protobuf []byte) error {
 	if len(protobuf) == 0 {
 		return nil
