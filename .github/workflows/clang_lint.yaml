@@ -13,7 +13,7 @@ on:
         required: false
 
 concurrency: 
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: clang-lint-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
