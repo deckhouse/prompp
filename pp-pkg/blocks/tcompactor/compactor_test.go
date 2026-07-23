@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"github.com/go-kit/log"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/testutils"
-	"github.com/stretchr/testify/suite"
 )
 
 type TCompactorSuite struct {
