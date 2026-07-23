@@ -261,7 +261,7 @@ func (cg *Group) OverlappingBlocks(overlapGroups block.Overlaps) {
 		}
 
 		// Our block "b" is now pending.
-		pending = append(newPending, meta) //nolint:gocritic // appendAssign: reuse at next iteration
+		pending = append(newPending, meta)
 		if len(newPending) == 0 {
 			// No overlaps.
 			continue
