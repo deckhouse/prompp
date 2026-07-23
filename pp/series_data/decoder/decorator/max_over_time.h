@@ -20,6 +20,6 @@ class FindMaxElement {
 };
 
 template <class Iterator = UniversalDecodeIterator>
-using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElement, Iterator>;
+using MaxOverTimeIterator = OverTimeFuncIterator<FindMaxElement, Iterator, true>;
 
 }  // namespace series_data::decoder::decorator

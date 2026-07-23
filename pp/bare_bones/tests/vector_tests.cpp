@@ -108,7 +108,7 @@ class BareBonesVectorEraseFixture : public testing::Test {
   }
 };
 
-TEST_F(BareBonesVectorEraseFixture, EraseLastItem) {
+TEST_F(BareBonesVectorEraseFixture, EraseLastItemByRange) {
   // Arrange
 
   // Act
@@ -120,7 +120,19 @@ TEST_F(BareBonesVectorEraseFixture, EraseLastItem) {
   EXPECT_EQ("2", *vector_[1]);
 }
 
-TEST_F(BareBonesVectorEraseFixture, EraseFirstItem) {
+TEST_F(BareBonesVectorEraseFixture, EraseLastItem) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.end() - 1);
+
+  // Assert
+  EXPECT_EQ(2U, vector_.size());
+  EXPECT_EQ("1", *vector_[0]);
+  EXPECT_EQ("2", *vector_[1]);
+}
+
+TEST_F(BareBonesVectorEraseFixture, EraseFirstItemByRange) {
   // Arrange
 
   // Act
@@ -132,11 +144,35 @@ TEST_F(BareBonesVectorEraseFixture, EraseFirstItem) {
   EXPECT_EQ("3", *vector_[1]);
 }
 
-TEST_F(BareBonesVectorEraseFixture, EraseSecondItem) {
+TEST_F(BareBonesVectorEraseFixture, EraseFirstItem) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.begin());
+
+  // Assert
+  EXPECT_EQ(2U, vector_.size());
+  EXPECT_EQ("2", *vector_[0]);
+  EXPECT_EQ("3", *vector_[1]);
+}
+
+TEST_F(BareBonesVectorEraseFixture, EraseSecondItemByRange) {
   // Arrange
 
   // Act
   vector_.erase(vector_.begin() + 1, vector_.begin() + 2);
+
+  // Assert
+  EXPECT_EQ(2U, vector_.size());
+  EXPECT_EQ("1", *vector_[0]);
+  EXPECT_EQ("3", *vector_[1]);
+}
+
+TEST_F(BareBonesVectorEraseFixture, EraseSecondItem) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.begin() + 1);
 
   // Assert
   EXPECT_EQ(2U, vector_.size());
