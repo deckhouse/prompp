@@ -13,8 +13,6 @@ import (
 	"github.com/jonboulle/clockwork"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/stretchr/testify/suite"
-
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -93,7 +91,8 @@ func MustAppendTimeSeries(ctx context.Context, noErrorFunc NoErrorFunc, head *st
 			ctx,
 			NewIncomingData(noErrorFunc, timeSeries[i].toModelTimeSeries()),
 			state,
-			true)
+			true,
+		)
 		noErrorFunc(err)
 	}
 }
