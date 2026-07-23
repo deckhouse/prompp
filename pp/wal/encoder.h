@@ -48,7 +48,7 @@ class GenericEncoder {
   // add_wo_stalenans - add (without any stalenans) to encode incoming data(ShardedData) through C++ encoder.
   template <class Hashdex, class Stats>
   inline __attribute__((always_inline)) void add(Hashdex& hx, Stats* stats) {
-    for (const auto& item : hx) {
+    for (const auto& item : hx.floats()) {
       if ((item.hash() % (1ULL << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
         item.read(timeseries_);
         encoder_.add(timeseries_, item.hash());
@@ -100,7 +100,7 @@ class GenericEncoder {
                                                                                Primitives::Timestamp stale_ts,
                                                                                Writer::SourceState state) {
     auto add_many_cb = [&](auto& add_cb) {
-      for (const auto& item : hx) {
+      for (const auto& item : hx.floats()) {
         if ((item.hash() % (1 << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
           item.read(timeseries_);
           add_cb(timeseries_, item.hash());

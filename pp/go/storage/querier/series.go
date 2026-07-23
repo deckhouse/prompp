@@ -206,10 +206,10 @@ func (s *SeriesSet) At() storage.Series {
 	return &s.series[len(s.series)-1]
 }
 
-func (s *SeriesSet) Err() error {
+func (*SeriesSet) Err() error {
 	return nil
 }
 
-func (s *SeriesSet) Warnings() annotations.Annotations {
+func (*SeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
