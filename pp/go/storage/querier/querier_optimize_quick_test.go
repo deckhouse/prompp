@@ -160,7 +160,7 @@ type ModifierQueryParams struct {
 
 // Generate generates a random query parameter.
 //
-//nolint:gocritic // hugeParam // this is a test function
+
 func (mqp ModifierQueryParams) Generate(rd *rand.Rand, _ int) reflect.Value {
 	mqp.modGen(rd)
 
@@ -198,7 +198,7 @@ type OffsetQueryParams struct {
 
 // Generate generates a random query parameter.
 //
-//nolint:gocritic // hugeParam // this is a test function
+
 func (oqp OffsetQueryParams) Generate(rd *rand.Rand, _ int) reflect.Value {
 	oqp.offsetGen(rd)
 

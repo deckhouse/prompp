@@ -651,7 +651,7 @@ func readSeriesSet(ss storage.SeriesSet) (map[string][]promql.FPoint, error) {
 		series := ss.At()
 
 		points := []promql.FPoint{}
-		it := series.Iterator(it)
+		it = series.Iterator(it)
 		for it.Next() == chunkenc.ValFloat {
 			t, v := it.At()
 			points = append(points, promql.FPoint{T: t, F: v})

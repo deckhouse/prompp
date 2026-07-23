@@ -96,7 +96,7 @@ func (as *Autosharder) incShardsNumberPower(in uint8) uint8 {
 	return as.currentShardsNumberPower + in
 }
 
-// decShardsNumberPower - decrease the current ShardsNumberPower considering the minimum value
+// decShardsNumberPower - decrease the current ShardsNumberPower considering the minimum value.
 func (as *Autosharder) decShardsNumberPower(in uint8) uint8 {
 	if as.currentShardsNumberPower <= in {
 		return 0

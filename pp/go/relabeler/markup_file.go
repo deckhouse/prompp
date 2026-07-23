@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/google/uuid"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
 )
@@ -276,8 +277,7 @@ func (mr *MarkupReader) readFull(ctx context.Context) error {
 	}
 }
 
-// checkRestoredServiceData - check restored service data(title, destinations names),
-// these data are required to be restored, without them you cant read the rest
+// these data are required to be restored, without them you cant read the rest.
 func (mr *MarkupReader) checkRestoredServiceData() bool {
 	return mr.m.title != nil && mr.m.ackStatus != nil
 }

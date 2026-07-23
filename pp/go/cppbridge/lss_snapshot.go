@@ -95,7 +95,7 @@ type SeriesGroups struct {
 	Groups [][]uint32
 }
 
-// GroupSeriesByLabelNames group series by label names
+// GroupSeriesByLabelNames group series by label names.
 func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *SeriesGroups {
 	result := &SeriesGroups{
 		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),

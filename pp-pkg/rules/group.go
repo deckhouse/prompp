@@ -252,7 +252,6 @@ func (g *Group) run(ctx context.Context) {
 					level.Error(g.logger).Log("msg", "Failed to commit batch storage", "err", err)
 					return
 				}
-
 			}
 		}(time.Now())
 	}()
@@ -939,7 +938,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		}
 
 		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		spanCtx, sp := otel.Tracer("").Start(ctx, "rule")
 		sp.SetAttributes(attribute.String("name", rule.Name()))
 		defer func(t time.Time) {
 			sp.End()
@@ -956,7 +955,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 
 		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
+		vector, err := rule.Eval(spanCtx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
 		if err != nil {
 			rule.SetHealth(HealthBad)
 			rule.SetLastError(err)
@@ -976,7 +975,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		samplesTotal.Add(float64(len(vector)))
 
 		if ar, ok := rule.(*AlertingRule); ok {
-			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
+			ar.sendAlerts(spanCtx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
 		}
 
 		mtx.Lock()
@@ -1073,7 +1072,7 @@ func (g *Group) sequentiallyEval(
 		}
 
 		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		spanCtx, sp := otel.Tracer("").Start(ctx, "rule")
 		sp.SetAttributes(attribute.String("name", rule.Name()))
 		defer func(t time.Time) {
 			sp.End()
@@ -1090,7 +1089,7 @@ func (g *Group) sequentiallyEval(
 
 		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
+		vector, err := rule.Eval(spanCtx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
 		if err != nil {
 			rule.SetHealth(HealthBad)
 			rule.SetLastError(err)
@@ -1110,18 +1109,18 @@ func (g *Group) sequentiallyEval(
 		samplesTotal += float64(len(vector))
 
 		if ar, ok := rule.(*AlertingRule); ok {
-			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
+			ar.sendAlerts(spanCtx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
 		}
 
-		app := bs.Appender(ctx)
+		app := bs.Appender(spanCtx)
 		defer func() {
-			if err := app.Commit(); err != nil {
+			if commitErr := app.Commit(); commitErr != nil {
 				rule.SetHealth(HealthBad)
-				rule.SetLastError(err)
-				sp.SetStatus(codes.Error, err.Error())
+				rule.SetLastError(commitErr)
+				sp.SetStatus(codes.Error, commitErr.Error())
 				g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
+				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", commitErr)
 				return
 			}
 		}()

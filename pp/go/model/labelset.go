@@ -31,18 +31,18 @@ type delegatedStringView struct{ begin, len int32 }
 
 func (view delegatedStringView) reveal(data []byte) string {
 	b := data[view.begin : view.begin+view.len]
-	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // this is memory optimisation
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-// number of bytes addet to each key-value pair in LabelSet data
+// number of bytes addet to each key-value pair in LabelSet data.
 const additionalSymbols = 2 // ':' between key and value and ';' at the end
 
-// EmptyLabelSet is a constructor of empty LabelSet
+// EmptyLabelSet is a constructor of empty LabelSet.
 func EmptyLabelSet() LabelSet {
 	return LabelSet{}
 }
 
-// LabelSetFromMap is a constructor for predefined LabelSet
+// LabelSetFromMap is a constructor for predefined LabelSet.
 func LabelSetFromMap(m map[string]string) LabelSet {
 	var size int
 	keys := make([]string, 0, len(m))
@@ -89,7 +89,7 @@ func LabelSetFromSlice(s []SimpleLabel) LabelSet {
 	return ls
 }
 
-// LabelSetFromPairs is a short constructor for tests
+// LabelSetFromPairs is a short constructor for tests.
 func LabelSetFromPairs(kv ...string) LabelSet {
 	if len(kv)%additionalSymbols != 0 {
 		panic("kv is not pairs")
@@ -124,15 +124,15 @@ func LabelSetFromPairs(kv ...string) LabelSet {
 //
 // Implements fmt.Stringer.
 func (ls LabelSet) String() string {
-	return unsafe.String(unsafe.SliceData(ls.data), len(ls.data)) //nolint:gosec // memory and cpu optimization
+	return unsafe.String(unsafe.SliceData(ls.data), len(ls.data))
 }
 
-// IsEmpty returns true if label set is empty
+// IsEmpty returns true if label set is empty.
 func (ls LabelSet) IsEmpty() bool {
 	return ls.Len() == 0
 }
 
-// Get returns label value by key or default value if there is no key in label set
+// Get returns label value by key or default value if there is no key in label set.
 func (ls LabelSet) Get(key, defaultValue string) string {
 	if n, ok := ls.get(key); ok {
 		return ls.Value(n)
@@ -140,22 +140,22 @@ func (ls LabelSet) Get(key, defaultValue string) string {
 	return defaultValue
 }
 
-// Len returns number of label pairs
+// Len returns number of label pairs.
 func (ls LabelSet) Len() int {
 	return len(ls.pairs)
 }
 
-// Key returns i-th key
+// Key returns i-th key.
 func (ls LabelSet) Key(i int) string {
 	return ls.pairs[i].key.reveal(ls.data)
 }
 
-// Value returns i-th value
+// Value returns i-th value.
 func (ls LabelSet) Value(i int) string {
 	return ls.pairs[i].value.reveal(ls.data)
 }
 
-// ToMap returns label pairs as map
+// ToMap returns label pairs as map.
 func (ls LabelSet) ToMap() map[string]string {
 	m := make(map[string]string, ls.Len())
 	for i := 0; i < ls.Len(); i++ {
@@ -173,7 +173,7 @@ func (ls LabelSet) Range(f func(lname, lvalue string) bool) {
 	}
 }
 
-// With return LabelSet with label key-value
+// With return LabelSet with label key-value.
 func (ls LabelSet) With(key, value string) LabelSet {
 	i, ok := ls.get(key)
 	if ok && ls.Value(i) == value {
@@ -207,12 +207,12 @@ func (ls LabelSet) With(key, value string) LabelSet {
 	return res
 }
 
-// WithPairs returns result of merge label set with kv pairs
+// WithPairs returns result of merge label set with kv pairs.
 func (ls LabelSet) WithPairs(kv ...string) LabelSet {
 	return ls.Merge(LabelSetFromPairs(kv...))
 }
 
-// Merge returns result of merge ls with updates
+// Merge returns result of merge ls with updates.
 func (ls LabelSet) Merge(updates LabelSet) LabelSet {
 	if updates.IsEmpty() {
 		return ls
@@ -314,7 +314,7 @@ func (ls LabelSet) SplitBy(keys ...string) (extracted, rest LabelSet) {
 	return extracted, rest
 }
 
-// Without returns new label set without given keys
+// Without returns new label set without given keys.
 func (ls LabelSet) Without(keys ...string) LabelSet {
 	sortedKeys := make([]string, len(keys))
 	copy(sortedKeys, keys)
@@ -340,7 +340,7 @@ func (ls LabelSet) Without(keys ...string) LabelSet {
 	return res
 }
 
-// MarshalJSON implements json.Marshaler
+// MarshalJSON implements json.Marshaler.
 func (ls LabelSet) MarshalJSON() ([]byte, error) {
 	w := &jwriter.Writer{}
 	w.RawByte('{')
@@ -358,7 +358,7 @@ func (ls LabelSet) MarshalJSON() ([]byte, error) {
 	return w.BuildBytes()
 }
 
-// UnmarshalJSON implements json.Unmarshaler
+// UnmarshalJSON implements json.Unmarshaler.
 func (ls *LabelSet) UnmarshalJSON(data []byte) error {
 	m := map[string]string{}
 	if err := json.Unmarshal(data, &m); err != nil {
@@ -368,12 +368,12 @@ func (ls *LabelSet) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalYAML implements yaml.Marshaler
+// MarshalYAML implements yaml.Marshaler.
 func (ls LabelSet) MarshalYAML() (interface{}, error) {
 	return ls.ToMap(), nil
 }
 
-// UnmarshalYAML implements yaml/v2.Unmarshaler (v3 compatible)
+// UnmarshalYAML implements yaml/v2.Unmarshaler (v3 compatible).
 func (ls *LabelSet) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	m := map[string]string{}
 	if err := unmarshal(&m); err != nil {
@@ -400,7 +400,7 @@ func (ls *LabelSet) append(key, value string) {
 	ls.pairs = append(ls.pairs, pair{dKey, dValue})
 }
 
-// appendFrom appends items from other in half-interval [a; b)
+// appendFrom appends items from other in half-interval [a; b).
 func (ls *LabelSet) appendFrom(other LabelSet, a, b int) {
 	if a >= b {
 		return
@@ -442,12 +442,12 @@ func (ls LabelSet) valueLen(i int) int {
 // LabelSetBuilder
 //
 
-// LabelSetBuilder used for carry labels pairs
+// LabelSetBuilder used for carry labels pairs.
 type LabelSetBuilder struct {
 	pairs map[string]string
 }
 
-// NewLabelSetBuilder is a constructor
+// NewLabelSetBuilder is a constructor.
 func NewLabelSetBuilder() *LabelSetBuilder {
 	return &LabelSetBuilder{
 		pairs: map[string]string{},
@@ -461,7 +461,7 @@ func NewLabelSetBuilderSize(size int) *LabelSetBuilder {
 	}
 }
 
-// Build label set
+// Build label set.
 func (builder *LabelSetBuilder) Build() LabelSet {
 	return LabelSetFromMap(builder.pairs)
 }
@@ -471,13 +471,13 @@ func (builder *LabelSetBuilder) Add(key, value string) {
 	builder.pairs[key] = value
 }
 
-// Set key-value in label set
+// Set key-value in label set.
 func (builder *LabelSetBuilder) Set(key, value string) *LabelSetBuilder {
 	builder.pairs[key] = value
 	return builder
 }
 
-// Delete key-value pair from label set
+// Delete key-value pair from label set.
 func (builder *LabelSetBuilder) Delete(keys ...string) *LabelSetBuilder {
 	for _, key := range keys {
 		delete(builder.pairs, key)
@@ -485,7 +485,7 @@ func (builder *LabelSetBuilder) Delete(keys ...string) *LabelSetBuilder {
 	return builder
 }
 
-// NewWith clone builder and add given key-value
+// NewWith clone builder and add given key-value.
 func (builder *LabelSetBuilder) NewWith(key, value string) *LabelSetBuilder {
 	res := make(map[string]string, len(builder.pairs)+1)
 	for k, v := range builder.pairs {

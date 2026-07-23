@@ -143,7 +143,7 @@ func NewStaleNaNSeriesChunkIterator(t int64) *StaleNaNSeriesChunkIterator {
 // Always returns the staleNaN value for the specified timestamp.
 // [chunkenc.Iterator] interface implementation.
 //
-//nolint:gocritic // unnamedResult not needed
+
 func (i *StaleNaNSeriesChunkIterator) At() (int64, float64) {
 	return i.t, floatStaleNaN
 }

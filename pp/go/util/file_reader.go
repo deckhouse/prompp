@@ -16,7 +16,7 @@ type FileReader struct {
 //
 // It uses default os.Open with all default flags.
 func OpenFileReader(path string) (*FileReader, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // sequential reader opens caller-provided paths by design
 	if err != nil {
 		return nil, err
 	}

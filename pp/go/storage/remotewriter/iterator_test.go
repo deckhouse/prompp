@@ -274,7 +274,7 @@ func (*IteratorSuite) decodeToWriteRequest(wr *prompb.WriteRequest, data []byte)
 // Benchmark
 //
 
-// go test -test.fullpath=true -benchmem -run=^$ -tags stringlabels -bench ^BenchmarkIteratorV1$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x
+// go test -test.fullpath=true -benchmem -run=^$ -tags stringlabels -bench ^BenchmarkIteratorV1$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x.
 func BenchmarkIteratorV1(b *testing.B) {
 	if b.N != 100 && b.N != 1000 {
 		return
@@ -359,7 +359,7 @@ func BenchmarkIteratorV1(b *testing.B) {
 	}
 }
 
-// go test -test.fullpath=true -benchmem -run=^$ -tags stringlabels -bench ^BenchmarkIteratorV2$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x
+// go test -test.fullpath=true -benchmem -run=^$ -tags stringlabels -bench ^BenchmarkIteratorV2$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x.
 func BenchmarkIteratorV2(b *testing.B) {
 	if b.N != 100 && b.N != 1000 {
 		return

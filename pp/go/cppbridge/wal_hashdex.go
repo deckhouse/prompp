@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/model"
 )
 
-// ShardedData - array of structures with (*LabelSet, timestamp, value, LSHash)
+// ShardedData - array of structures with (*LabelSet, timestamp, value, LSHash).
 type ShardedData interface {
 	Cluster() string
 	Replica() string
@@ -137,7 +137,7 @@ type WALGoModelHashdex struct {
 }
 
 func (h *WALGoModelHashdex) RangeMetadata(f func(metadata WALScraperHashdexMetadata) bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -202,7 +202,7 @@ type WALBasicDecoderHashdex struct {
 }
 
 func (h *WALBasicDecoderHashdex) RangeMetadata(f func(metadata WALScraperHashdexMetadata) bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

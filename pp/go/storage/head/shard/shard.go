@@ -191,22 +191,22 @@ func (s *Shard) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) cppbri
 	return s.dataStorage.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
 }
 
-// UnloadedDataStorage get unloaded data storage
+// UnloadedDataStorage get unloaded data storage.
 func (s *Shard) UnloadedDataStorage() *UnloadedDataStorage {
 	return s.unloadedDataStorage
 }
 
-// QueriedSeriesStorage get queried series storage
+// QueriedSeriesStorage get queried series storage.
 func (s *Shard) QueriedSeriesStorage() *QueriedSeriesStorage {
 	return s.queriedSeriesStorage
 }
 
-// LoadAndQuerySeriesDataTask get load and query series data task
+// LoadAndQuerySeriesDataTask get load and query series data task.
 func (s *Shard) LoadAndQuerySeriesDataTask() *LoadAndQuerySeriesDataTask {
 	return s.loadAndQueryTask
 }
 
-// UnloadUnusedSeriesData unload unused series data
+// UnloadUnusedSeriesData unload unused series data.
 func (s *Shard) UnloadUnusedSeriesData() error {
 	if s.UnloadedDataStorage() == nil {
 		return nil
@@ -223,7 +223,7 @@ func (s *Shard) UnloadUnusedSeriesData() error {
 
 	header, err := s.UnloadedDataStorage().WriteSnapshot(snapshot)
 	if err != nil {
-		return fmt.Errorf("unable to write unloaded series data snapshot: %v", err)
+		return fmt.Errorf("unable to write unloaded series data snapshot: %w", err)
 	}
 
 	_ = s.DataStorage().WithLock(func(*cppbridge.DataStorage) error {
@@ -233,7 +233,7 @@ func (s *Shard) UnloadUnusedSeriesData() error {
 	})
 
 	if err = s.QueriedSeriesStorage().Write(queriedSeries, time.Now().UnixMilli()); err != nil {
-		return fmt.Errorf("unable to write queried series data: %v", err)
+		return fmt.Errorf("unable to write queried series data: %w", err)
 	}
 
 	return nil
@@ -258,10 +258,10 @@ func (s *Shard) LoadAndQuerySeriesData() (err error) {
 	return nil
 }
 
-// DstSrcLsIdsMapping return ids mapping after lss copying.
+// DstSrcLsIDsMapping return ids mapping after lss copying.
 // Note: writes are unlocked because these fields are read only after rotation completes (no concurrent readers).
-func (s *Shard) DstSrcLsIdsMapping() *cppbridge.IdsMapping {
-	return s.lss.dstSrcLsIdsMapping
+func (s *Shard) DstSrcLsIDsMapping() *cppbridge.IdsMapping {
+	return s.lss.dstSrcLsIDsMapping
 }
 
 //

@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
@@ -22,7 +24,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/stretchr/testify/suite"
 
 	prom_storage "github.com/prometheus/prometheus/storage"
 )
@@ -31,7 +32,7 @@ type idGeneratorStub struct {
 	uuid uuid.UUID
 }
 
-func newIdGeneratorStub() *idGeneratorStub {
+func newIDGeneratorStub() *idGeneratorStub {
 	return &idGeneratorStub{
 		uuid: uuid.New(),
 	}
@@ -49,7 +50,7 @@ type HeadLoadSuite struct {
 	suite.Suite
 	dataDir         string
 	clock           clockwork.Clock
-	headIdGenerator *idGeneratorStub
+	headIDGenerator *idGeneratorStub
 	catalog         *catalog.Catalog
 }
 
@@ -63,18 +64,18 @@ func (s *HeadLoadSuite) SetupTest() {
 	s.dataDir = dataDir
 
 	s.clock = clockwork.NewFakeClockAt(time.Now())
-	s.headIdGenerator = newIdGeneratorStub()
+	s.headIDGenerator = newIDGeneratorStub()
 	s.createCatalog()
 }
 
 func (s *HeadLoadSuite) createCatalog() {
-	ctlg, err := storagetest.CreateCatalog(s.clock, filepath.Join(s.dataDir, "catalog.log"), s.headIdGenerator)
+	ctlg, err := storagetest.CreateCatalog(s.clock, filepath.Join(s.dataDir, "catalog.log"), s.headIDGenerator)
 	s.Require().NoError(err)
 	s.catalog = ctlg
 }
 
 func (s *HeadLoadSuite) headDir() string {
-	return filepath.Join(s.dataDir, s.headIdGenerator.last())
+	return filepath.Join(s.dataDir, s.headIDGenerator.last())
 }
 
 func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*storage.Head, error) {
@@ -114,7 +115,7 @@ func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) 
 }
 
 func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, error) {
-	record, err := s.catalog.Get(s.headIdGenerator.last())
+	record, err := s.catalog.Get(s.headIDGenerator.last())
 	s.Require().NoError(err)
 
 	return storage.NewLoader(s.dataDir, storagetest.MaxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval).Load(record, 0)
