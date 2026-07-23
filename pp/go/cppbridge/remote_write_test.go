@@ -4,8 +4,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/model"
 )
 
 type MessageEncodersSuite struct {

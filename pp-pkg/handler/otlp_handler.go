@@ -85,8 +85,8 @@ func (h *OTLPWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	converter := NewPPConverter(h.logger, req.Metrics().MetricCount())
-	if err := converter.FromMetrics(req.Metrics()); err != nil {
-		level.Warn(h.logger).Log("msg", "Error translating OTLP metrics to Prometheus write request", "err", err)
+	if convErr := converter.FromMetrics(req.Metrics()); convErr != nil {
+		level.Warn(h.logger).Log("msg", "Error translating OTLP metrics to Prometheus write request", "err", convErr)
 	}
 
 	stats, err := h.adapter.AppendTimeSeries(

@@ -91,7 +91,8 @@ func MustAppendTimeSeries(ctx context.Context, noErrorFunc NoErrorFunc, head *st
 			ctx,
 			NewIncomingData(noErrorFunc, timeSeries[i].toModelTimeSeries()),
 			state,
-			true)
+			true,
+		)
 		noErrorFunc(err)
 	}
 }

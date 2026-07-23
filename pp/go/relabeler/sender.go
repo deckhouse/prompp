@@ -23,14 +23,14 @@ const (
 	defaultRTT = 120 * time.Second
 )
 
-// Source is a manager
+// Source is a manager.
 type Source interface {
 	Get(ctx context.Context, key cppbridge.SegmentKey) (Segment, error)
 	Ack(key cppbridge.SegmentKey, dest string)
 	Reject(key cppbridge.SegmentKey, dest string)
 }
 
-// Sender is a transport adapter for manager
+// Sender is a transport adapter for manager.
 type Sender struct {
 	done          chan struct{}
 	dialer        Dialer
@@ -47,7 +47,7 @@ type Sender struct {
 	responsedSegment *prometheus.GaugeVec
 }
 
-// NewSender is a constructor
+// NewSender is a constructor.
 func NewSender(
 	ctx context.Context,
 	blockID uuid.UUID,
@@ -106,12 +106,12 @@ func NewSender(
 	return sender
 }
 
-// String implements fmt.Stringer interface
+// String implements fmt.Stringer interface.
 func (sender *Sender) String() string {
 	return sender.dialer.String()
 }
 
-// Shutdown await while write receive ErrPromiseCanceled and then ack on last sent
+// Shutdown await while write receive ErrPromiseCanceled and then ack on last sent.
 func (sender *Sender) Shutdown(ctx context.Context) error {
 	sender.cancelCause(ErrShutdown)
 
@@ -164,7 +164,7 @@ func (sender *Sender) getSegment(ctx context.Context, id uint32) (Segment, error
 		}
 		return segment, err
 	}, bo)
-	if err != nil && err == ctx.Err() {
+	if err != nil && errors.Is(err, ctx.Err()) {
 		err = context.Cause(ctx)
 	}
 	return segment, err

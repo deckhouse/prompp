@@ -33,8 +33,8 @@ const (
 )
 
 var (
-	// LsIdBatchSize is the batch size for label set ID.
-	LsIdBatchSize uint32 = 100000
+	// LsIDBatchSize is the batch size for label set ID.
+	LsIDBatchSize uint32 = 100000
 
 	// EnableBlockShardLabels is a flag to enable block shard labels.
 	EnableBlockShardLabels = false
@@ -111,8 +111,8 @@ func (w *Writer[TShard]) Write(sd TShard, numberOfShards uint16) (writtenBlocks 
 			return err
 		}
 		defer func() {
-			if errClose := writers.Close(); errClose != nil {
-				logger.Warnf("Failed to close block writers: %v", errClose)
+			if closeErr := writers.Close(); closeErr != nil {
+				logger.Warnf("Failed to close block writers: %v", closeErr)
 			}
 		}()
 
@@ -183,7 +183,7 @@ func (w *Writer[TShard]) createWriter(
 ) (blockWriter, error) {
 	var chunkIterator ChunkIterator
 	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
-		chunkIterator = NewChunkIterator(lss, LsIdBatchSize, ds, minT, maxT, downsamplingMs)
+		chunkIterator = NewChunkIterator(lss, LsIDBatchSize, ds, minT, maxT, downsamplingMs)
 		return nil
 	})
 
@@ -213,7 +213,7 @@ func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
 	_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
+		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIDBatchSize)
 		return nil
 	})
 
