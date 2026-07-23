@@ -43,6 +43,10 @@ func main() {
 	var walvanillaCmd cmdWALVanillaToBlock
 	registerCmdWALVanillaToBlock(&walvanillaCmd, walvanillaClause)
 
+	persistHeadClause := app.Command("persist-head", "Persist a single prom++ head to tsdb-blocks by its directory path.")
+	var persistHeadCmd cmdPersistHead
+	registerCmdPersistHead(&persistHeadCmd, persistHeadClause)
+
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	logger := initLogger(*verbose)
 	logger = log.With(logger, "cmd", cmd)
@@ -57,6 +61,11 @@ func main() {
 	case walvanillaClause.FullCommand():
 		if err := walvanillaCmd.Do(ctx, workingDir, logger); err != nil {
 			level.Error(logger).Log("msg", "fail to convert", "error", err)
+			os.Exit(1)
+		}
+	case persistHeadClause.FullCommand():
+		if err := persistHeadCmd.Do(ctx, logger, nil); err != nil {
+			level.Error(logger).Log("msg", "fail to persist head", "error", err)
 			os.Exit(1)
 		}
 	}

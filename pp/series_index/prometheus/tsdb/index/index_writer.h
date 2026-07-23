@@ -21,7 +21,10 @@ class IndexWriter {
   using LabelIndicesWriter = section_writer::LabelIndicesWriter<QueryableEncodingBimap, Stream>;
   using ExportContext = series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>;
 
-  explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {}
+  explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {
+    // Single up-front allocation: the index is dense over [0, next_item_index()).
+    series_references_.resize(lss_.next_item_index(), kUnwrittenSeriesReference);
+  }
 
   PROMPP_ALWAYS_INLINE void write_header(Stream& stream) {
     const auto stream_setter = writer_.writer().stream_setter(&stream);
@@ -108,7 +111,7 @@ class IndexWriter {
  private:
   const QueryableEncodingBimap& lss_;
 
-  SeriesReferencesMap series_references_;
+  SeriesReferences series_references_;
   ExportContext index_write_context_{lss_};
 
   StreamWriter writer_;

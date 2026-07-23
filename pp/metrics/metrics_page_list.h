@@ -39,7 +39,7 @@ class MetricsPageList {
     MetricsPageControlBlock* metrics_page_;
 
     void advance_to_used_metrics_page() noexcept {
-      while (metrics_page_ != nullptr && metrics_page_->is_unused()) {
+      while (metrics_page_ != nullptr && metrics_page_->is_detached()) {
         metrics_page_ = metrics_page_->next_metrics_page();
       }
 
@@ -64,6 +64,11 @@ class MetricsPageList {
     } while (!next_metrics_page_.compare_exchange_weak(current_next_page, page));
   }
 
+  // remove_unused_pages is the only place pages are physically freed. It is invoked exclusively from
+  // prompp_metrics_iterator_ctor, which the Go side calls under cppMetrics.mutex (see pp/go/cppbridge/metrics.go), so
+  // frees are single-threaded. A page is freed only when it is detached AND not active; the Go finalizer concurrently
+  // clears the per-metric active flag but never frees anything. That is the invariant the whole retention scheme relies
+  // on — freeing from any other context, or off the Go mutex, would reintroduce the use-after-free this design fixes.
   void remove_unused_pages() {
     MetricsPageControlBlock* page = next_metrics_page_;
     if (page == nullptr) [[unlikely]] {
@@ -72,7 +77,7 @@ class MetricsPageList {
 
     remove_unused_pages(page, page->next_metrics_page());
 
-    if (page->is_unused()) {
+    if (page->is_detached() && !page->is_active()) {
       // If page is first page in list then we delete it. Otherwise, we will delete it at another remove_unused_pages call
       if (next_metrics_page_.compare_exchange_weak(page, page->next_metrics_page())) [[likely]] {
         delete page;
@@ -90,7 +95,7 @@ class MetricsPageList {
     while (page != nullptr) [[likely]] {
       const auto next_page = page->next_metrics_page();
 
-      if (page->is_unused()) {
+      if (page->is_detached() && !page->is_active()) {
         prev_page->set_next_metrics_page(next_page);
         delete page;
       } else {

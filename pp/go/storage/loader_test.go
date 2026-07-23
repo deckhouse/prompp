@@ -24,6 +24,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/pp/go/util"
+
+	prom_storage "github.com/prometheus/prometheus/storage"
 )
 
 type idGeneratorStub struct {
@@ -212,7 +214,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   2,
 		LabelSetIDs:      []uint32{0},
-	})
+	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
 	err := loadedHead.Close()
 
 	// Assert
@@ -264,7 +266,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   4,
 		LabelSetIDs:      []uint32{0},
-	})
+	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
 
 	err := loadedHead.Close()
 

@@ -49,3 +49,11 @@ func getLimits(resource int, unit string) string {
 func FdLimits() string {
 	return getLimits(syscall.RLIMIT_NOFILE, "")
 }
+
+// DisableCoreDumps sets the soft and hard RLIMIT_CORE to 0 for the current
+// process, preventing the kernel from writing core dumps on crash. Lowering a
+// resource limit is always permitted for an unprivileged process, so no extra
+// capabilities (e.g. CAP_SYS_RESOURCE) are required.
+func DisableCoreDumps() error {
+	return syscall.Setrlimit(syscall.RLIMIT_CORE, &syscall.Rlimit{Cur: 0, Max: 0})
+}

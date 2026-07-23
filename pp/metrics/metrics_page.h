@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <type_traits>
+
 #include "metric.h"
 
 namespace metrics {
@@ -61,7 +64,10 @@ class MetricsPageControlBlock {
   PROMPP_ALWAYS_INLINE void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t page_object_size() const noexcept { return page_object_size_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t metric_offset() const noexcept { return metric_offset_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unused() const noexcept { return ref_count_ == 0; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_detached() const noexcept { return ref_count_ == 0; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_active() const noexcept {
+    return std::ranges::any_of(*this, [](const Metric* metric) { return metric->is_active(); });
+  }
   PROMPP_ALWAYS_INLINE void detach() noexcept { ref_count_ = 0; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
@@ -84,8 +90,11 @@ class MetricsPage : public MetricsPageControlBlock {
   explicit MetricsPage() : MetricsPageControlBlock(sizeof(Derived)) {
     static_assert(sizeof(Derived) >= sizeof(MetricsPageControlBlock) + sizeof(Metric), "Metrics page must contain at least one metric");
   }
-  explicit MetricsPage(const Metric& first_metric)
-      : MetricsPageControlBlock(sizeof(Derived), reinterpret_cast<const char*>(&first_metric) - reinterpret_cast<const char*>(this)) {}
+
+  template <class MemberType>
+    requires std::is_base_of_v<Metric, MemberType>
+  explicit MetricsPage(MemberType Derived::* first_metric_member)
+      : MetricsPageControlBlock(sizeof(Derived), std::bit_cast<size_t>(&(static_cast<const Derived*>(nullptr)->*first_metric_member))) {}
 
   MetricsPage(const MetricsPage&) = delete;
   MetricsPage(MetricsPage&&) noexcept = delete;

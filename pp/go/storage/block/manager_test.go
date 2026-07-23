@@ -3,10 +3,13 @@ package block
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/go-kit/log"
 	"github.com/oklog/ulid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -22,7 +25,7 @@ func TestManagerLoadsExistingBlocksOnStartup(t *testing.T) {
 	createTestBlock(t, dir, 1000, "metric_a")
 	createTestBlock(t, dir, 5000, "metric_b")
 
-	m, err := NewManager(dir, nil, nil, log.NewNopLogger(), nil)
+	m, err := NewManager(dir, nil, nil, nil, log.NewNopLogger(), nil)
 	require.NoError(t, err)
 	t.Cleanup(m.Close)
 
@@ -49,7 +52,7 @@ func TestManagerAppliesBlocksToDeleteOnInitialReload(t *testing.T) {
 		return map[ulid.ULID]struct{}{marked: {}}
 	}
 
-	m, err := NewManager(dir, nil, blocksToDelete, log.NewNopLogger(), nil)
+	m, err := NewManager(dir, nil, blocksToDelete, nil, log.NewNopLogger(), nil)
 	require.NoError(t, err)
 	t.Cleanup(m.Close)
 
@@ -68,9 +71,63 @@ func TestManagerReturnsErrorOnInitialReloadFailure(t *testing.T) {
 	notDir := filepath.Join(tmp, "not-a-directory")
 	require.NoError(t, os.WriteFile(notDir, []byte("x"), 0o600))
 
-	m, err := NewManager(notDir, nil, nil, log.NewNopLogger(), nil)
+	m, err := NewManager(notDir, nil, nil, nil, log.NewNopLogger(), nil)
 	require.Error(t, err)
 	require.Nil(t, m)
+}
+
+func TestManagerExportsLoadedBlocksMetrics(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createTestBlock(t, dir, 1000, "metric_a")
+	createTestBlock(t, dir, 5000, "metric_b")
+
+	reg := prometheus.NewRegistry()
+	m, err := NewManager(dir, nil, nil, nil, log.NewNopLogger(), reg)
+	require.NoError(t, err)
+	t.Cleanup(m.Close)
+
+	require.Equal(t, float64(2), testutil.ToFloat64(m.metrics.loadedBlocks))
+	require.Greater(t, testutil.ToFloat64(m.metrics.symbolTableSize), 0.0)
+
+	durationCounts := map[int64]int{}
+	for _, b := range m.Blocks() {
+		duration := normalizeBlockDurationMinutes(b.Meta().MaxTime - b.Meta().MinTime)
+		durationCounts[duration]++
+	}
+	for duration, count := range durationCounts {
+		require.Equal(
+			t,
+			float64(count),
+			testutil.ToFloat64(m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(duration, 10))),
+		)
+	}
+}
+
+func TestManagerRemovesLeftoverTmpDirsOnStartup(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createTestBlock(t, dir, 1000, "metric_a")
+
+	// Simulate leftovers from a crash during compaction/persist.
+	const validULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	tmpCreation := filepath.Join(dir, validULID+tmpForCreationBlockDirSuffix)
+	tmpDeletion := filepath.Join(dir, validULID+tmpForDeletionBlockDirSuffix)
+	require.NoError(t, os.Mkdir(tmpCreation, 0o777))
+	require.NoError(t, os.Mkdir(tmpDeletion, 0o777))
+
+	m, err := NewManager(dir, nil, nil, nil, log.NewNopLogger(), nil)
+	require.NoError(t, err)
+	t.Cleanup(m.Close)
+
+	require.Len(t, m.Blocks(), 1)
+
+	_, err = os.Stat(tmpCreation)
+	require.True(t, os.IsNotExist(err), "expected leftover tmp-for-creation dir to be removed")
+	_, err = os.Stat(tmpDeletion)
+	require.True(t, os.IsNotExist(err), "expected leftover tmp-for-deletion dir to be removed")
 }
 
 func createTestBlock(t *testing.T, dir string, startTS int, metric string) {

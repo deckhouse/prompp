@@ -15,7 +15,8 @@ using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
-using series_index::prometheus::tsdb::index::SeriesReferencesMap;
+using series_index::prometheus::tsdb::index::kUnwrittenSeriesReference;
+using series_index::prometheus::tsdb::index::SeriesReferences;
 using series_index::prometheus::tsdb::index::section_writer::PostingsWriter;
 using series_index::prometheus::tsdb::index::section_writer::SeriesWriter;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
@@ -37,7 +38,7 @@ class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  SeriesReferencesMap series_references_;
+  SeriesReferences series_references_;
   series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
 
   void fill_data(const LabelViewSetList& label_sets, const ChunkMetadataList& chunk_metadata_list) {
@@ -47,6 +48,8 @@ class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> 
 
     lss_.build_deferred_indexes();
     index_write_context_.rebuild();
+
+    series_references_.resize(lss_.next_item_index(), kUnwrittenSeriesReference);
 
     std::ostringstream stream;
     StreamWriter<decltype(stream_)> stream_writer{&stream};

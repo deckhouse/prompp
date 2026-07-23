@@ -79,6 +79,14 @@ class GenericVector {
     derived()->set_size(new_size);
   }
 
+  PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) noexcept {
+    const auto current_size = size();
+    resize(new_size);
+    if (new_size > current_size) {
+      std::fill(data() + current_size, data() + new_size, value);
+    }
+  }
+
   template <class Writer>
     requires std::is_invocable_v<Writer, iterator, SizeType>
   PROMPP_ALWAYS_INLINE void reserve_and_write(SizeType additional_size, Writer&& writer) {

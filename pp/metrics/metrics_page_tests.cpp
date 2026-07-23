@@ -39,8 +39,7 @@ TEST_F(MetricsPageFixture, TestIteratorForPageWithMetadata) {
   struct Metrics : MetricsPage<Metrics> {
     using MetricsPage::MetricsPage;
 
-    // NOLINTNEXTLINE(clang-analyzer-optin.cplusplus.UninitializedObject)
-    Metrics() : MetricsPage{uint16_counter} {}
+    Metrics() : MetricsPage{&Metrics::uint16_counter} {}
 
     std::string label_name_{"label_name"};
 
@@ -56,6 +55,28 @@ TEST_F(MetricsPageFixture, TestIteratorForPageWithMetadata) {
 
   // Assert
   EXPECT_EQ((MetricsVector{&metrics.uint16_counter, &metrics.uint32_counter, &metrics.atomic_counter}), metric_pointers);
+}
+
+TEST_F(MetricsPageFixture, TestActive) {
+  // Arrange
+  struct Metrics : MetricsPage<Metrics> {
+    using MetricsPage::MetricsPage;
+
+    Counter uint16_counter{LabelViewSet{}, "uint16_counter", 16};
+    Counter uint32_counter{LabelViewSet{}, "uint32_counter", 32};
+  } metrics;
+
+  // Act
+  const auto is_active1 = metrics.is_active();
+  metrics.uint16_counter.deactivate();
+  const auto is_active2 = metrics.is_active();
+  metrics.uint32_counter.deactivate();
+  const auto is_active3 = metrics.is_active();
+
+  // Assert
+  EXPECT_TRUE(is_active1);
+  EXPECT_TRUE(is_active2);
+  EXPECT_FALSE(is_active3);
 }
 
 }  // namespace

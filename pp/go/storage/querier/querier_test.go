@@ -120,7 +120,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
 	// Act
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -148,7 +148,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
 	// Act
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal([]storagetest.TimeSeries{}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -203,7 +203,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	// Act
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 	s.appendTimeSeries(timeSeriesAfterUnload)
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
@@ -239,7 +239,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
 	// Act
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
@@ -294,7 +294,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 	// Act
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 	s.appendTimeSeries(timeSeriesAfterUnload)
-	seriesSet := q.Select(s.context, false, nil, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
 
 	// Assert
 	s.Equal([]storagetest.TimeSeries{

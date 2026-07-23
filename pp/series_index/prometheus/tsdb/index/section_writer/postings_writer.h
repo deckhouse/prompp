@@ -1,5 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <cassert>
+#include <limits>
+
 #include "bare_bones/preprocess.h"
 #include "prometheus/tsdb/index/stream_writer.h"
 #include "series_index/prometheus/tsdb/index/types.h"
@@ -16,9 +20,13 @@ class PostingsWriter {
 
   static constexpr uint32_t kUnlimitedBatchSize = std::numeric_limits<uint32_t>::max();
 
-  PostingsWriter(const Lss& lss, const SeriesReferencesMap& series_references, StreamWriter& writer)
+  PostingsWriter(const Lss& lss, const SeriesReferences& series_references, StreamWriter& writer)
       : lss_(lss), trie_index_iterator_(lss_.trie_index().begin()), series_references_(series_references), writer_(writer) {}
 
+  // Writes postings until either the trie index is exhausted or the bytes emitted in this call
+  // reach max_batch_size. State (trie iterator, entries_) persists across calls, so a caller can
+  // resume with another call while has_more_data() is true. The byte bound is checked only between
+  // whole postings: the all-series posting and hot label values are atomic and can overshoot it.
   void write_postings(uint32_t max_batch_size = kUnlimitedBatchSize) {
     auto const is_batch_filled = [this, max_batch_size] PROMPP_LAMBDA_INLINE { return writer_.size() >= max_batch_size; };
 
@@ -55,7 +63,7 @@ class PostingsWriter {
  private:
   const Lss& lss_;
   typename Lss::TrieIndexIterator trie_index_iterator_;
-  const SeriesReferencesMap& series_references_;
+  const SeriesReferences& series_references_;
   StreamWriter& writer_;
 
   StringWriter table_offsets_writer_;
@@ -63,15 +71,20 @@ class PostingsWriter {
   uint32_t entries_{};
 
   void write_posting_with_all_series() {
-    write_posting(series_references_, "", "");
+    generate_all_series_references();
+    emit_posting("", "");
 
     series_reference_list_.clear();
     series_reference_list_.shrink_to_fit();
   }
 
-  template <class SeriesReference>
-  void write_posting(const SeriesReference& series_reference, std::string_view name, std::string_view value) {
-    if (generate_series_references(series_reference); series_reference_list_.empty()) {
+  void write_posting(const SeriesIdSequence& series_id_sequence, std::string_view name, std::string_view value) {
+    generate_series_references(series_id_sequence);
+    emit_posting(name, value);
+  }
+
+  void emit_posting(std::string_view name, std::string_view value) {
+    if (series_reference_list_.empty()) {
       return;
     }
 
@@ -106,21 +119,28 @@ class PostingsWriter {
     table_offsets_writer_.write_varint<NoCrc32>(position);
   }
 
-  template <class SeriesIdList>
-  void generate_series_references(const SeriesIdList& series_id_sequence) {
+  void generate_all_series_references() {
     series_reference_list_.clear();
+    series_reference_list_.reserve(series_references_.size());
 
-    if constexpr (std::is_same_v<SeriesIdList, SeriesIdSequence>) {
-      series_reference_list_.reserve(series_id_sequence.count());
-      for (auto series_id : series_id_sequence) {
-        if (const auto it = series_references_.find(series_id); it != series_references_.end()) {
-          series_reference_list_.emplace_back(it->second);
-        }
+    for (const auto series_reference : series_references_) {
+      if (series_reference != kUnwrittenSeriesReference) {
+        series_reference_list_.emplace_back(series_reference);
       }
-    } else {
-      series_reference_list_.reserve(series_id_sequence.size());
-      std::ranges::transform(series_id_sequence, std::back_inserter(series_reference_list_),
-                             [](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator.second; });
+    }
+
+    std::ranges::sort(series_reference_list_);
+  }
+
+  void generate_series_references(const SeriesIdSequence& series_id_sequence) {
+    series_reference_list_.clear();
+    series_reference_list_.reserve(series_id_sequence.count());
+
+    for (const auto series_id : series_id_sequence) {
+      assert(series_id < series_references_.size());
+      if (const auto series_reference = series_references_[series_id]; series_reference != kUnwrittenSeriesReference) {
+        series_reference_list_.emplace_back(series_reference);
+      }
     }
 
     std::ranges::sort(series_reference_list_);

@@ -332,7 +332,7 @@ func NewShardDataLoader(
 func (l *ShardDataLoader) Load(readOnly bool) error {
 	l.shardData = ShardData{
 		lss:         shard.NewLSS(),
-		dataStorage: shard.NewDataStorage(),
+		dataStorage: shard.NewDataStorage(true),
 		wal: wal.NewCorruptedWal[
 			*cppbridge.HeadEncodedSegment,
 			*writer.Buffered[*cppbridge.HeadEncodedSegment],

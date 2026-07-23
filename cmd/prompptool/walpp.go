@@ -86,6 +86,8 @@ func (cmd *cmdWALPPToBlock) Do(
 		workingDir,
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),
+		0, // no retention filtering: persist all heads regardless of age
+		clock,
 		registerer,
 	)
 

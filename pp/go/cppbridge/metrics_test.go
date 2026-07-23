@@ -1,6 +1,7 @@
 package cppbridge
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -22,11 +23,11 @@ const jemallocMetricDescPrefix = `Desc{fqName: "prompp_common_jemalloc_`
 
 func (s *CppMetricsSuite) getMetrics() []*CppMetric {
 	metrics := []*CppMetric(nil)
-	for metric := range CppMetrics {
-		if strings.HasPrefix(metric.descriptor.String(), jemallocMetricDescPrefix) {
+	for metric := range CppMetrics.Range {
+		if strings.HasPrefix(metric.cppMetric.descriptor.String(), jemallocMetricDescPrefix) {
 			continue
 		}
-		metrics = append(metrics, metric)
+		metrics = append(metrics, metric.cppMetric)
 	}
 
 	return metrics
@@ -90,4 +91,28 @@ func (s *CppMetricsSuite) TestTwoMetricPages() {
 
 	s.Equal(`Desc{fqName: "counter1", help: "", constLabels: {metrics_page1="for_test"}, variableLabels: {}}`, metrics[3].descriptor.String())
 	s.Equal(metrics[3].metric.Gauge.GetValue(), float64(counterValue1))
+}
+
+func (s *CppMetricsSuite) TestDeactivateMetricsAtGc() {
+	// Arrange
+	page1 := prometheusMetricsPageForTestCtor(Labels{Label{Name: "metrics_page1", Value: "for_test"}}, "counter1", 123)
+	page2 := prometheusMetricsPageForTestCtor(Labels{Label{Name: "metrics_page2", Value: "for_test"}}, "counter2", 321)
+
+	sourceMetrics := s.getMetrics()
+	prometheusMetricsPageForTestDetach(page1)
+	prometheusMetricsPageForTestDetach(page2)
+
+	// Act
+	actualMetrics := s.getMetrics()
+	runtime.GC()
+	runtime.GC()
+
+	// Assert
+	s.Empty(actualMetrics)
+
+	s.Require().Len(sourceMetrics, 4)
+	s.Equal(uint32(0), sourceMetrics[0].active.Load())
+	s.Equal(uint32(0), sourceMetrics[1].active.Load())
+	s.Equal(uint32(0), sourceMetrics[2].active.Load())
+	s.Equal(uint32(0), sourceMetrics[3].active.Load())
 }

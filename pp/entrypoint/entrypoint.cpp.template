@@ -23,6 +23,12 @@
 enum class arch_flavor : uint8_t { generic, nehalem, haswell };
 
 arch_flavor determine_arch_flavor() {
+  // initialize() may run before libgcc's CPU-detection constructor (it is also
+  // triggered by the malloc interposer), so __cpu_model can be uninitialized.
+  // Force detection explicitly, otherwise every __builtin_cpu_supports() returns
+  // 0 and we always fall back to the k8 bindings.
+  __builtin_cpu_init();
+
   if (!__builtin_cpu_supports("sse4.2"))
     return arch_flavor::generic;
 

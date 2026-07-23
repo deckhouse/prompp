@@ -31,7 +31,8 @@ type (
 	CppStdVector                         = [C.Sizeof_StdVector]byte
 	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
 	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
-	CppSerializedDataIterator            = [C.Sizeof_SerializedDataIterator]byte
+	CppSerializedDataSamplesIterator     = [C.Sizeof_SerializedDataSamplesIterator]byte
+	CppSerializedDataAggregationIterator = [C.Sizeof_SerializedDataAggregationIterator]byte
 	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
 	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
 	CppRemoteWriteMessageEncoder         = [C.Sizeof_RemoteWriteMessageEncoder]byte
@@ -436,20 +437,31 @@ func memInfo() (res MemInfo) {
 }
 
 func dumpMemoryProfile(filename string) int {
+	// prof.dump synchronously walks the heap and writes the whole profile to the file before
+	// returning, which can take a long time for large heaps. Unlike the other short entrypoint
+	// calls this is therefore a regular cgo call (not fastcgo): the goroutine parks in _Gsyscall
+	// and frees its P for the duration instead of blocking the scheduler with a busy P.
+	//
+	// A regular cgo call is subject to the cgo pointer checker, so the filename cannot be passed
+	// as a Go string header (a Go pointer to Go memory). We copy it into a byte slice, pin that
+	// slice for the duration of the call, and hand C a {data, size} pair matching Go::String.
+	nameBytes := append([]byte(filename), 0)
+
+	var pinner runtime.Pinner
+	pinner.Pin(&nameBytes[0])
+	defer pinner.Unpin()
+
 	args := struct {
-		filename string
-	}{filename}
+		data *byte
+		size uintptr
+	}{&nameBytes[0], uintptr(len(filename))}
 
 	res := struct {
 		error int
 	}{0}
 
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_dump_memory_profile,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
+	C.prompp_dump_memory_profile(unsafe.Pointer(&args), unsafe.Pointer(&res))
 	return res.error
 }
 
@@ -2053,14 +2065,18 @@ func prometheusPerShardRelabelerResetTo(
 	)
 }
 
-func seriesDataDataStorageCtor() uintptr {
+func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
+	args := struct {
+		collectMetrics bool
+	}{collectMetrics}
 	var res struct {
 		dataStorage uintptr
 	}
 
 	testGC()
-	fastcgo.UnsafeCall1(
+	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_ctor,
+		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
@@ -2105,11 +2121,40 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+type PromqlCppFunctionType uint8
+
+type PromqlCppFunction struct {
+	Name string
+	Type PromqlCppFunctionType
+}
+
+func getPromqlCppFunctions() []PromqlCppFunction {
+	res := struct {
+		functions []PromqlCppFunction
+	}{nil}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_get_promql_optimized_functions,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.functions
+}
+
+func seriesDataDataStorageQueryV2(
+	dataStorage uintptr,
+	query DataStorageQuery,
+	serializedData *DataStorageSerializedData,
+	downsamplingMs int64,
+	selectHints unsafe.Pointer,
+) (querier uintptr, status uint8) {
 	args := struct {
-		dataStorage uintptr
-		query       DataStorageQuery
-	}{dataStorage, query}
+		dataStorage    uintptr
+		query          DataStorageQuery
+		downsamplingMs int64
+		selectHints    uintptr
+	}{dataStorage, query, downsamplingMs, uintptr(selectHints)}
 
 	res := struct {
 		Querier        uintptr
@@ -2190,7 +2235,7 @@ func seriesDataSerializedDataDtor(serializedData uintptr) {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_dtor,
+		C.prompp_series_data_serialized_data_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2206,7 +2251,7 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_serialization_serialized_data_next,
+		C.prompp_series_data_serialized_data_next,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2214,7 +2259,11 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 	return res.seriesID, res.chunkRef
 }
 
-func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
+func seriesDataSerializedDataSamplesIteratorCtor(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
 	args := struct {
 		iterator       uintptr
 		serializedData uintptr
@@ -2223,20 +2272,23 @@ func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIte
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_ctor,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_ctor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-func seriesDataSerializedDataIteratorNext(iterator *DataStorageSerializedDataIterator) {
+func seriesDataSerializedDataSamplesIteratorNext(iterator *DataStorageSerializedDataSamplesIterator) {
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_next,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_next,
 		uintptr(unsafe.Pointer(iterator)),
 	)
 }
 
-func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIterator, targetTimestamp int64) {
+func seriesDataSerializedDataSamplesIteratorSeek(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	targetTimestamp int64,
+) {
 	args := struct {
 		iterator        uintptr
 		targetTimestamp int64
@@ -2244,12 +2296,16 @@ func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIte
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_seek,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_seek,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
+func seriesDataSerializedDataSamplesIteratorReset(
+	iterator *DataStorageSerializedDataSamplesIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
 	args := struct {
 		iterator       uintptr
 		serializedData uintptr
@@ -2258,7 +2314,51 @@ func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIt
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_reset,
+		C.prompp_series_data_serialization_serialized_data_samples_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorCtor(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		chunkRef       uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorNext(iterator *DataStorageSerializedDataAggregationIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_next,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+}
+
+func seriesDataSerializedDataAggregationIteratorReset(
+	iterator *DataStorageSerializedDataAggregationIterator,
+	serializedData uintptr,
+	chunkRef uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		chunkRef       uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_aggregation_iterator_reset,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2422,13 +2522,14 @@ func seriesDataEncoderDtor(encoder uintptr) {
 	)
 }
 
-func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval) uintptr {
+func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval, downsamplingMs int64) uintptr {
 	args := struct {
 		lss           uintptr
 		lsIdBatchSize uint32
 		dataStorage   uintptr
 		TimeInterval
-	}{lss, lsIdBatchSize, dataStorage, timeInterval}
+		downsamplingMs int64
+	}{lss, lsIdBatchSize, dataStorage, timeInterval, downsamplingMs}
 	var res struct {
 		chunkRecoder uintptr
 	}
@@ -2650,13 +2751,18 @@ func seriesDataUnloadedDataLoaderDtor(loader uintptr) {
 	)
 }
 
-func indexWriterCtor(lss uintptr) uintptr {
+// indexWriterCtor constructs the writer and returns both the writer pointer and a stable pointer
+// to its internal output buffer (a Go []byte header). Every write_* call fills that buffer in
+// place; the result is read back from this pointer, so no buffer is threaded through cgo.
+func indexWriterCtor(lss uintptr) (writer, buffer, hasMorePostings unsafe.Pointer) {
 	args := struct {
 		lss uintptr
 	}{lss}
 
 	var res struct {
-		writer uintptr
+		writer          unsafe.Pointer
+		buffer          unsafe.Pointer
+		hasMorePostings unsafe.Pointer
 	}
 
 	testGC()
@@ -2666,12 +2772,12 @@ func indexWriterCtor(lss uintptr) uintptr {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.writer
+	return res.writer, res.buffer, res.hasMorePostings
 }
 
-func indexWriterDtor(writer uintptr) {
+func indexWriterDtor(writer unsafe.Pointer) {
 	args := struct {
-		writer uintptr
+		writer unsafe.Pointer
 	}{writer}
 
 	testGC()
@@ -2681,160 +2787,85 @@ func indexWriterDtor(writer uintptr) {
 	)
 }
 
-func indexWriterWriteHeader(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteHeader(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_header,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteSymbols(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteSymbols(writer unsafe.Pointer) {
+	// write_symbols is the longest single C call on the index-writing path (multiple ms,
+	// tens of ms in the shrunk state). fastcgo runs on the system stack without releasing
+	// the P, which stalls the Go scheduler and GC for the whole duration; a regular cgo
+	// call parks the goroutine in _Gsyscall and frees the P, and its ~tens-of-ns overhead
+	// is negligible here. Only the writer pointer crosses the boundary, by value: it is a
+	// stable prompp-arena address, so no goroutine stack pointer is handed to C and a
+	// concurrent GC stack move during the call is harmless. The result is read from the
+	// writer's internal buffer.
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_symbols,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.data
+	C.prompp_index_writer_write_symbols(writer)
 }
 
-func indexWriterWriteNextSeriesBatch(writer uintptr, ls_id uint32, chunks_meta []ChunkMetadata, data []byte) []byte {
+func indexWriterWriteNextSeriesBatch(writer unsafe.Pointer, ls_id uint32, chunks_meta []ChunkMetadata) {
 	args := struct {
-		writer      uintptr
+		writer      unsafe.Pointer
 		chunks_meta []ChunkMetadata
 		ls_id       uint32
 	}{writer, chunks_meta, ls_id}
 
-	res := struct {
-		data []byte
-	}{data}
-
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_next_series_batch,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteLabelIndices(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteLabelIndices(writer unsafe.Pointer) {
+	// write_label_indices walks the whole name/value trie index (a few ms), long enough that
+	// fastcgo blocking the P would stall the scheduler. Like write_symbols/write_postings it
+	// uses a regular cgo call so the goroutine parks in _Gsyscall and frees the P; only the
+	// writer pointer (a stable prompp-arena address) crosses the boundary by value.
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_label_indices,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.data
+	C.prompp_index_writer_write_label_indices(writer)
 }
 
-func indexWriterWriteNextPostingsBatch(writer uintptr, max_batch_size uint32, data []byte) ([]byte, bool) {
-	args := struct {
-		writer         uintptr
-		max_batch_size uint32
-	}{writer, max_batch_size}
-
-	res := struct {
-		data          []byte
-		has_more_data bool
-	}{data, false}
-
+func indexWriterWritePostings(writer unsafe.Pointer, maxBatchSize uint32) {
+	// write_postings emits one batch (up to maxBatchSize bytes) per call; the caller loops
+	// while the has_more_postings flag stays set. Each batch can still be a multi-ms call (the
+	// all-series posting and hot label values are atomic), so it uses a regular cgo call: the
+	// goroutine parks in _Gsyscall and frees the P for the duration instead of fastcgo blocking
+	// the scheduler. Only the writer pointer (a stable prompp-arena address) and the scalar
+	// batch size cross the boundary by value, so no goroutine stack pointer is handed to C and a
+	// concurrent GC stack move during the call is harmless. The result is read from the writer's
+	// internal buffer.
 	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_index_writer_write_next_postings_batch,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.data, res.has_more_data
+	C.prompp_index_writer_write_postings(writer, C.uint64_t(maxBatchSize))
 }
 
-func indexWriterWriteLabelIndicesTable(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteLabelIndicesTable(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_label_indices_table,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWritePostingsTableOffsets(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWritePostingsTableOffsets(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_postings_table_offsets,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
-func indexWriterWriteTableOfContents(writer uintptr, data []byte) []byte {
-	args := struct {
-		writer uintptr
-	}{writer}
-
-	res := struct {
-		data []byte
-	}{data}
-
+func indexWriterWriteTableOfContents(writer unsafe.Pointer) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_write_table_of_contents,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(writer),
 	)
-
-	return res.data
 }
 
 func freeHeadStatus(status *HeadStatus) {
@@ -3331,6 +3362,41 @@ func labelSetSerializeFromSnapshot(snapshot uintptr, labelSetID uint32) []Label 
 	)
 
 	return res.labelSet
+}
+
+func labelSetSerializeFromSnapshotLength(snapshot uintptr, labelSetID uint32) uint32 {
+	args := struct {
+		snapshot   uintptr
+		labelSetID uint32
+	}{snapshot, labelSetID}
+
+	var res struct {
+		length uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_serialize_from_snapshot_length,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length
+}
+
+func labelSetSerializeFromSnapshotToBuffer(snapshot uintptr, labelSetID uint32, buffer []byte) {
+	args := struct {
+		snapshot   uintptr
+		buffer     []byte
+		labelSetID uint32
+	}{snapshot, buffer, labelSetID}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_label_set_serialize_from_snapshot_to_buffer,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(buffer)
 }
 
 func labelSetFree(labelSet []Label) {

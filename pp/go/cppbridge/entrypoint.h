@@ -1,3 +1,56 @@
+#define Sizeof_SizeT sizeof(size_t)
+#define Sizeof_StdVector 24
+#define Sizeof_BareBonesVector 16
+#define Sizeof_RoaringBitset 40
+#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+#define Sizeof_GoLabels 16
+
+#define Sizeof_SerializedDataSamplesIterator 152
+#define Sizeof_SerializedDataAggregationIterator 208
+
+#define Sizeof_MetricsIterator 24
+
+#define Sizeof_SegmentSamplesStorage 80
+#define Sizeof_RemoteWriteMessageEncoder 32
+#define Sizeof_SegmentSamplesStorageListIterator 56
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Create a aggregation iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor(void* args);
+
+/**
+ * @brief Advance aggregation iterator.
+ *
+ * @param iterator uintptr // pointer to aggregation iterator
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_next(void* iterator);
+
+/**
+ * @brief Reset a aggregation iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     iterator uintptr // pointer to aggregation iterator
+ *     chunkRef uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_aggregation_iterator_reset(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -33,20 +86,6 @@ void prompp_dump_memory_profile(void* args, void* res);
 #ifdef __cplusplus
 }
 #endif
-#define Sizeof_SizeT sizeof(size_t)
-#define Sizeof_StdVector 24
-#define Sizeof_BareBonesVector 16
-#define Sizeof_RoaringBitset 40
-#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
-#define Sizeof_GoLabels 16
-
-#define Sizeof_SerializedDataIterator 152
-
-#define Sizeof_MetricsIterator 24
-
-#define Sizeof_SegmentSamplesStorage 80
-#define Sizeof_RemoteWriteMessageEncoder 32
-#define Sizeof_SegmentSamplesStorageListIterator 56
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -261,6 +300,8 @@ void prompp_head_wal_decoder_decode_to_data_storage(void* args, void* res);
 #endif
 #pragma once
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -268,11 +309,20 @@ extern "C" {
 /**
  * @brief Construct index writer
  *
+ * The writer owns an internal output buffer that every write_* method resets
+ * and fills, so the buffer is never threaded through the cgo boundary. Besides
+ * the writer pointer the constructor returns a stable pointer to that buffer
+ * (a Go []byte header: {data, len, cap}); Go reads the produced bytes from it
+ * after each call. The buffer is released together with the writer in the
+ * destructor.
+ *
  * @param args {
  *     lss         uintptr      // pointer to constructed lss
  * }
  * @param res {
- *     writer    uintptr
+ *     writer            uintptr // pointer to constructed index writer
+ *     buffer            uintptr // pointer to the writer's internal output buffer ([]byte header)
+ *     has_more_postings uintptr // pointer to a uint8 set by write_postings (1 = more batches remain)
  * }
  */
 void prompp_index_writer_ctor(void* args, void* res);
@@ -289,29 +339,32 @@ void prompp_index_writer_dtor(void* args);
 /**
  * @brief Write header
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_header(void* args, void* res);
+void prompp_index_writer_write_header(void* writer);
 
 /**
  * @brief Write symbols
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Long-running single call: invoked as a regular cgo call (not fastcgo) so the
+ * goroutine parks in _Gsyscall and frees its P for the duration. The writer
+ * pointer is a stable prompp-arena address passed by value, so C runs on its
+ * own stack frame and never dereferences a goroutine stack address that a
+ * concurrent GC stack move could invalidate. The result is written into the
+ * writer's internal buffer.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_symbols(void* args, void* res);
+void prompp_index_writer_write_symbols(void* writer);
 
 /**
  * @brief Write next series batch
+ *
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
  *
  * @param args {
  *     writer      uintptr
@@ -322,73 +375,71 @@ void prompp_index_writer_write_symbols(void* args, void* res);
  *     }
  *     ls_id       uint32
  * }
- * @param res {
- *     data          []byte // only c allocated memory can be re-used
- * }
  */
-void prompp_index_writer_write_next_series_batch(void* args, void* res);
+void prompp_index_writer_write_next_series_batch(void* args);
 
 /**
  * @brief Write label indices
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Long-running single call: it walks the whole name/value trie index, so like
+ * write_symbols/write_postings it is invoked as a regular cgo call (not fastcgo)
+ * to park the goroutine in _Gsyscall and free its P for the duration. The writer
+ * pointer is a stable prompp-arena address passed by value. The result is
+ * written into the writer's internal buffer.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_label_indices(void* args, void* res);
+void prompp_index_writer_write_label_indices(void* writer);
 
 /**
- * @brief Write next postings batch
+ * @brief Write one batch of postings
  *
- * @param args {
- *     writer         uintptr
- *     max_batch_size uint32
- * }
- * @param res {
- *     data          []byte // only c allocated memory can be re-used
- *     has_more_data bool   // true if we should repeat this call
- * }
+ * Writes postings into the writer's internal buffer until the bytes produced in
+ * this call reach max_batch_size, then returns; call repeatedly while the
+ * has_more_postings flag (returned by the constructor) is non-zero to drain the
+ * whole section. Batching bounds the transient buffer size: a single unbatched
+ * call buffers the entire postings section (tens of MiB), so Go flushes each
+ * batch and reuses the buffer instead. The byte bound is checked only between
+ * whole postings, so the all-series posting and hot label values can overshoot
+ * it. Each batch is a regular cgo call (not fastcgo) so the goroutine parks in
+ * _Gsyscall and frees its P for the duration; the writer pointer is a stable
+ * prompp-arena address passed by value, so no goroutine stack pointer is handed
+ * to C.
+ *
+ * @param writer         uintptr // pointer to constructed index writer
+ * @param max_batch_size uint64  // soft upper bound on bytes emitted per call
  */
-void prompp_index_writer_write_next_postings_batch(void* args, void* res);
+void prompp_index_writer_write_postings(void* writer, uint64_t max_batch_size);
 
 /**
  * @brief Write label indeces table
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_label_indices_table(void* args, void* res);
+void prompp_index_writer_write_label_indices_table(void* writer);
 
 /**
  * @brief Write postings offset table
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_postings_table_offsets(void* args, void* res);
+void prompp_index_writer_write_postings_table_offsets(void* writer);
 
 /**
  * @brief Write table of contents
  *
- * @param args {
- *     writer    uintptr
- * }
- * @param res {
- *     data []byte // only c allocated memory can be re-used
- * }
+ * Writes into the writer's internal buffer; read the result from the buffer
+ * pointer returned by the constructor.
+ *
+ * @param writer uintptr // pointer to constructed index writer
  */
-void prompp_index_writer_write_table_of_contents(void* args, void* res);
+void prompp_index_writer_write_table_of_contents(void* writer);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -424,6 +475,32 @@ void prompp_label_set_length(void* args, void* res);
  * }
  */
 void prompp_label_set_serialize_from_snapshot(void* args, void* res);
+
+/**
+ * @brief get serialized label set buffer length by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     length     uint32                       // serialized buffer length
+ * }
+ */
+void prompp_label_set_serialize_from_snapshot_length(void* args, void* res);
+
+/**
+ * @brief serialize label set into buffer by series id
+ *
+ * @param args {
+ *     snapshot   uintptr                      // pointer to constructed snapshot
+ *     buffer     [] byte                      // allocated buffer
+ *     labelSetID uint32                       // series id
+ * }
+ *
+ */
+void prompp_label_set_serialize_from_snapshot_to_buffer(void* args);
 
 /**
  * @brief free label set returned by prompp_label_set_serialize_from_snapshot
@@ -1398,13 +1475,66 @@ extern "C" {
 #endif
 
 /**
+ * @brief Create a samples iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_ctor(void* args);
+
+/**
+ * @brief Advance samples iterator.
+ *
+ * @param iterator uintptr // pointer to samples iterator
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* iterator);
+
+/**
+ * @brief Advance samples iterator until referenced sample is gte targetTimestamp.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to samples iterator
+ *     targetTimestamp int64 // target timestamp
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_seek(void* args);
+
+/**
+ * @brief Reset a samples iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     iterator uintptr // pointer to samples iterator
+ *     chunkRef uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_samples_iterator_reset(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
  * @brief Construct a new series data DataStorage
+ *
+ * @param args {
+ *     collectMetrics bool // true if need collect metrics from DataStorage
+ * }
  *
  * @param res {
  *     dataStorage uintptr // pointer to constructed data storage
  * }
  */
-void prompp_series_data_data_storage_ctor(void* res);
+void prompp_series_data_data_storage_ctor(void* args, void* res);
 
 /**
  * @brief Resets DataStorage to initial state
@@ -1488,21 +1618,60 @@ void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void*
 void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 
 /**
+ * @brief Get optimized promql functions list
+ *
+ * @param res {
+ *     functions []struct {
+ *        name string
+ *        type uint8
+ *     }  // serialized data
+ * }
+ */
+void prompp_get_promql_optimized_functions(void* res);
+
+/**
  * @brief Queries data storage and serializes result (new serialization model).
+ * If args.downsamplingMs != 0 than DownsamplingIterator will be created regardless of the args.hints
  *
  * @param args {
- *     dataStorage    uintptr          // pointer to constructed data storage
- *     query          DataStorageQuery // query
+ *     dataStorage    uintptr              // pointer to constructed data storage
+ *     query          DataStorageQuery     // query
+ *     downsamplingMs int64                // downsampling interval in milliseconds (0 - downsampling is disabled)
+ *     hints          *storage.SelectHints // select hints
  * }
  *
  * @param res {
- *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *     querier uintptr        // pointer to constructed Querier if data loading is needed.
  *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
- *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
  *     serializedData uintptr // pointer to serialized data
  * }
  */
 void prompp_series_data_data_storage_query_v2(void* args, void* res);
+
+/**
+ * @brief Get next series_id in serialized data.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ * @param res {
+ *     series_id uint32 // series id (UINT32_MAX if no more series).
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ */
+void prompp_series_data_serialized_data_next(void* args, void* res);
+
+/**
+ * @brief Destroy serialized data object.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ */
+void prompp_series_data_serialized_data_dtor(void* args);
 
 /**
  * @brief return instant series at given timestamp for label sets.
@@ -1558,10 +1727,11 @@ void prompp_series_data_data_storage_dtor(void* args);
  *     lss uintptr            // pointer to constructed label sets
  *     lsIdBatchSize uint32   // size of ls batch for recoding
  *     dataStorage   uintptr  // pointer to constructed data storage
- *     time_interval struct { closed interval [min, max]
+ *     timeInterval struct {  // closed interval [min, max]
  *        min int64
  *        max int64
  *     }
+ *     downsamplingMs int64   // downsampling interval in milliseconds (0 - downsampling is disabled)
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder
@@ -1793,79 +1963,6 @@ void prompp_series_data_encoder_merge_out_of_order_chunks(void* args);
  * }
  */
 void prompp_series_data_encoder_dtor(void* args);
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * @brief Get next series_id in serialized data.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- * }
- *
- * @param res {
- *     series_id uint32 // series id (UINT32_MAX if no more series).
- *     chunk_ref uint32 // inner chunk id.
- * }
- */
-void prompp_series_data_serialization_serialized_data_next(void* args, void* res);
-
-/**
- * @brief Create a decode iterator for corresponding chunk_ref.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- *     chunk_ref uint32 // inner chunk id.
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args);
-
-/**
- * @brief Advance decode iterator.
- *
- * @param iterator uintptr // pointer to decode iterator
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator);
-
-/**
- * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
- *
- * @param args {
- *     iterator uintptr // pointer to decode iterator
- *     targetTimestamp int64 // target timestamp
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_seek(void* args);
-
-/**
- * @brief Reset a decode iterator for corresponding chunk_ref.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- *     iterator uintptr // pointer to decode iterator
- *     chunkRef uint32 // inner chunk id.
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_reset(void* args);
-
-/**
- * @brief Destroy serialized data object.
- *
- * @param args {
- *     serializedData uintptr // pointer to serialized data.
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

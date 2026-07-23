@@ -203,7 +203,7 @@ func (s *BatchStorageSuite) TestCommit_WithSamplesAdded() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   5000,
 		LabelSetIDs:      []uint32{0},
-	})
+	}, cppbridge.NoDownsampling, &storage.SelectHints{})
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, queryResult.Status)
 	s.Equal(storagetest.SamplesMap{
 		0: []cppbridge.Sample{

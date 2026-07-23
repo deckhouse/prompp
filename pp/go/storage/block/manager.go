@@ -1,10 +1,12 @@
 package block
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,6 +30,7 @@ var (
 const (
 	tmpForDeletionBlockDirSuffix = ".tmp-for-deletion"
 	reloadBlocksInterval         = time.Minute
+	blockDurationMinuteMS        = int64(time.Minute / time.Millisecond)
 )
 
 // Options configures block reload, mirroring the relevant tsdb.Options fields.
@@ -48,13 +51,31 @@ type Manager struct {
 	logger         log.Logger
 	chunkPool      chunkenc.Pool
 	metrics        *metrics
+	lsObserver     LocalStorageObserver
 
 	mtx    sync.RWMutex
 	blocks []*tsdb.Block
+	// compactor, when set via SetCompactor, runs a single compaction pass after
+	// each reload in the loop goroutine. Guarded by mtx.
+	compactor compactionRunner
 
 	stopc    chan struct{}
 	stoppedc chan struct{}
 	stopOnce sync.Once
+}
+
+// compactionRunner runs a single compaction pass over the on-disk blocks,
+// reporting whether a compaction was performed and the ULIDs of the blocks it
+// created (so the driver can remove them if the following reload fails).
+// Implemented by *Compactor.
+type compactionRunner interface {
+	Compact() (uids []ulid.ULID, compacted bool, err error)
+}
+
+// LocalStorageObserver is the observer of the local storage.
+type LocalStorageObserver interface {
+	// Observe is the function to observe the local storage.
+	Observe(ctx context.Context)
 }
 
 // NewManager init new [Manager] and starts its periodic reload loop.
@@ -65,6 +86,7 @@ func NewManager(
 	dir string,
 	opts *Options,
 	blocksToDelete tsdb.BlocksToDeleteFunc,
+	lsObserver LocalStorageObserver,
 	logger log.Logger,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -75,20 +97,33 @@ func NewManager(
 		logger = log.NewNopLogger()
 	}
 
+	if lsObserver == nil {
+		lsObserver = noopLocalStorageObserver{}
+	}
+
 	m := &Manager{
 		dir:            dir,
 		opts:           opts,
 		blocksToDelete: blocksToDelete,
 		logger:         logger,
 		chunkPool:      chunkenc.NewPool(),
-		metrics:        newMetrics(r),
+		lsObserver:     lsObserver,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
+	}
+	m.metrics = newMetrics(m, r)
+
+	// Best-effort cleanup of leftover tmp block dirs (e.g. *.tmp-for-creation) that
+	// may remain after a crash during compaction or persist. Unlike tsdb.DB.Open, the
+	// block Manager never loads these dirs, so without this they would leak on disk.
+	if err := tsdb.RemoveBestEffortTmpDirs(logger, dir); err != nil {
+		level.Warn(logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", dir, "err", err)
 	}
 
 	if err := m.reloadBlocks(); err != nil {
 		return nil, fmt.Errorf("initial reload blocks: %w", err)
 	}
+	m.logLoadedBlocks()
 
 	level.Info(logger).Log("msg", "Block manager started", "dir", dir)
 	go m.loop()
@@ -102,16 +137,80 @@ func (m *Manager) loop() {
 
 	ticker := time.NewTicker(reloadBlocksInterval)
 	defer ticker.Stop()
+	baseCtx := context.Background()
 
 	for {
 		select {
 		case <-ticker.C:
-			if err := m.reloadBlocks(); err != nil {
-				level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
-			}
+			m.reloadAndCompact()
+
+			ctx, cancel := context.WithTimeout(baseCtx, reloadBlocksInterval/2)
+			m.lsObserver.Observe(ctx)
+			cancel()
 
 		case <-m.stopc:
 			return
+		}
+	}
+}
+
+// SetCompactor sets the compactor driven by the reload loop. Passing nil
+// disables compaction. It is typically called right after construction, before
+// the first tick.
+func (m *Manager) SetCompactor(c compactionRunner) {
+	m.mtx.Lock()
+	m.compactor = c
+	m.mtx.Unlock()
+}
+
+// reloadAndCompact reloads blocks and then compacts repeatedly until there is
+// nothing left to compact, reloading between passes. Everything runs in this one
+// goroutine, so a compaction never races with the deletion of its inputs: after
+// each compaction the reload loads the new block and deletes the now-obsolete
+// parents before the next plan is computed (mirroring tsdb's single-goroutine
+// compact/reload loop). Compacting until exhaustion within a single tick avoids
+// waiting a full ticker interval per compaction step.
+func (m *Manager) reloadAndCompact() {
+	if err := m.reloadBlocks(); err != nil {
+		level.Error(m.logger).Log("msg", "periodic reload blocks failed", "err", err)
+	}
+
+	m.mtx.RLock()
+	c := m.compactor
+	m.mtx.RUnlock()
+	if c == nil {
+		return
+	}
+
+	for {
+		uids, compacted, err := c.Compact()
+		if err != nil {
+			level.Error(m.logger).Log("msg", "compaction failed", "err", err)
+			return
+		}
+		if !compacted {
+			return
+		}
+		// Reload to load the freshly created block and delete the obsolete
+		// parents before planning the next compaction. If the reload fails,
+		// remove the freshly compacted block(s) so a half-applied compaction
+		// does not leave orphaned blocks on disk (mirroring tsdb).
+		if err := m.reloadBlocks(); err != nil {
+			level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
+			m.deleteCompactedBlocks(uids)
+			return
+		}
+	}
+}
+
+// deleteCompactedBlocks removes the given block directories from disk. It is used
+// to clean up freshly compacted blocks when the reload that would have loaded
+// them fails, so a half-applied compaction does not leave orphaned blocks behind
+// (mirroring tsdb).
+func (m *Manager) deleteCompactedBlocks(uids []ulid.ULID) {
+	for _, uid := range uids {
+		if err := os.RemoveAll(filepath.Join(m.dir, uid.String())); err != nil {
+			level.Error(m.logger).Log("msg", "delete compacted block after failed reload", "block", uid, "err", err)
 		}
 	}
 }
@@ -205,6 +304,25 @@ func (m *Manager) Blocks() []*tsdb.Block {
 	return slices.Clone(m.blocks)
 }
 
+// logLoadedBlocks logs the set of currently loaded blocks, mirroring the
+// "Found healthy block" output of legacy tsdb so operators can see the on-disk
+// block layout at startup.
+func (m *Manager) logLoadedBlocks() {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+
+	for _, b := range m.blocks {
+		meta := b.Meta()
+		level.Info(m.logger).Log(
+			"msg", "Found healthy block",
+			"mint", meta.MinTime,
+			"maxt", meta.MaxTime,
+			"ulid", meta.ULID,
+			"duration_minutes", normalizeBlockDurationMinutes(meta.MaxTime-meta.MinTime),
+		)
+	}
+}
+
 // reloadBlocks reloads blocks from disk and deletes the ones past retention.
 //
 //revive:disable-next-line:cyclomatic // ported from tsdb.DB.reloadBlocks.
@@ -269,8 +387,9 @@ func (m *Manager) reloadBlocks() (err error) {
 	}
 
 	var (
-		toLoad     []*tsdb.Block
-		blocksSize int64
+		toLoad               []*tsdb.Block
+		blocksSize           int64
+		blocksByDurationMins = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time as there might be loadable ready to be removed (replaced by compacted block).
@@ -282,8 +401,14 @@ func (m *Manager) reloadBlocks() (err error) {
 
 		toLoad = append(toLoad, block)
 		blocksSize += block.Size()
+		durationMinutes := normalizeBlockDurationMinutes(block.Meta().MaxTime - block.Meta().MinTime)
+		blocksByDurationMins[durationMinutes]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
+	m.metrics.loadedBlocksByDuration.Reset()
+	for durationMinutes, count := range blocksByDurationMins {
+		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
+	}
 
 	slices.SortFunc(toLoad, func(a, b *tsdb.Block) int {
 		switch {
@@ -320,6 +445,7 @@ func (m *Manager) reloadBlocks() (err error) {
 	if err := m.deleteBlocks(deletable); err != nil {
 		return fmt.Errorf("delete %v blocks: %w", len(deletable), err)
 	}
+
 	return nil
 }
 
@@ -358,19 +484,53 @@ func (m *Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration)
 	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli())
 }
 
+func normalizeBlockDurationMinutes(durationMS int64) int64 {
+	if durationMS <= 0 {
+		return 0
+	}
+	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
+}
+
 //
 // metrics
 //
 
 type metrics struct {
-	reloads         prometheus.Counter
-	reloadsFailed   prometheus.Counter
-	corruptedBlocks prometheus.Gauge
-	blocksBytes     prometheus.Gauge
+	loadedBlocks           prometheus.GaugeFunc
+	loadedBlocksByDuration *prometheus.GaugeVec
+	symbolTableSize        prometheus.GaugeFunc
+	reloads                prometheus.Counter
+	reloadsFailed          prometheus.Counter
+	corruptedBlocks        prometheus.Gauge
+	blocksBytes            prometheus.Gauge
 }
 
-func newMetrics(r prometheus.Registerer) *metrics {
+func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 	m := &metrics{
+		loadedBlocks: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_blocks_loaded",
+			Help: "Number of currently loaded data blocks.",
+		}, func() float64 {
+			manager.mtx.RLock()
+			defer manager.mtx.RUnlock()
+			return float64(len(manager.blocks))
+		}),
+		loadedBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_blocks_loaded_by_duration",
+			Help: "Number of currently loaded blocks grouped by block duration in minutes.",
+		}, []string{"duration_minutes"}),
+		symbolTableSize: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_symbol_table_size_bytes",
+			Help: "Size of symbol table in memory for loaded blocks.",
+		}, func() float64 {
+			manager.mtx.RLock()
+			defer manager.mtx.RUnlock()
+			var symTblSize uint64
+			for _, b := range manager.blocks {
+				symTblSize += b.GetSymbolTableSize()
+			}
+			return float64(symTblSize)
+		}),
 		reloads: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "prometheus_tsdb_reloads_total",
 			Help: "Number of times the database reloaded block data from disk.",
@@ -391,6 +551,9 @@ func newMetrics(r prometheus.Registerer) *metrics {
 
 	if r != nil {
 		r.MustRegister(
+			m.loadedBlocks,
+			m.loadedBlocksByDuration,
+			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,
 			m.corruptedBlocks,
@@ -400,3 +563,13 @@ func newMetrics(r prometheus.Registerer) *metrics {
 
 	return m
 }
+
+//
+// noopLocalStorageObserver
+//
+
+// noopLocalStorageObserver is the noop implementation of the [LocalStorageObserver].
+type noopLocalStorageObserver struct{}
+
+// Observe is the function to observe the local storage.
+func (noopLocalStorageObserver) Observe(context.Context) {}
