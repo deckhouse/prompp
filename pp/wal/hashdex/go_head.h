@@ -64,7 +64,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
     uint32_t max_ls_id_;
   };
 
-  class Metrics {
+  class Floats {
    public:
     PROMPP_ALWAYS_INLINE void reset(const Lss* lss, const series_data::DataStorage* data_storage) noexcept {
       lss_ = lss;
@@ -87,26 +87,21 @@ class GoHead : public Prometheus::hashdex::Abstract {
     const series_data::DataStorage* data_storage_{};
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return metrics_.size(); }
-
   PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, series_data::DataStorage* data_storage) {
     series_data::Encoder encoder(*data_storage);
     series_data::OutdatedChunkMerger{encoder}.merge();
 
-    metrics_.reset(lss, data_storage);
+    floats_.reset(lss, data_storage);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return metrics_.begin(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return metrics_.end(); }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return metrics_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
     struct Stub {};
     return Stub{};
   }
 
  private:
-  Metrics metrics_;
+  Floats floats_;
 };
 
 }  // namespace PromPP::WAL::hashdex
