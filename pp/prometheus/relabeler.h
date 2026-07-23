@@ -513,7 +513,8 @@ class PerGoroutineRelabeler {
                                                                  Primitives::Timestamp def_timestamp) {
     bool result{true};
     size_t samples_count{};
-    fill_inner_series(hashdex, hashdex.begin(), shards_inner_series, [&](auto& item) {
+    const auto& floats = hashdex.floats();
+    fill_inner_series(floats, floats.begin(), shards_inner_series, [&](auto& item) {
       const auto check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), item.hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
@@ -568,7 +569,8 @@ class PerGoroutineRelabeler {
                                                       SeriesContainer<RelabeledSeries>& shards_relabeled_series,
                                                       Primitives::Timestamp def_timestamp) {
     size_t samples_count{};
-    fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
+    const auto& floats = hashdex.floats();
+    fill_inner_series(floats, skip_shard_inner_series(floats, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
       const auto check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), item.hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
@@ -686,10 +688,10 @@ class PerGoroutineRelabeler {
     return track_staleness;
   }
 
-  template <hashdex::HashdexInterface Hashdex>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto skip_shard_inner_series(const Hashdex& hashdex, size_t i) {
-    auto it = hashdex.begin();
-    for (; it != hashdex.end() && i > 0; ++it) {
+  template <hashdex::HashdexFloats Floats>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto skip_shard_inner_series(const Floats& floats, size_t i) {
+    auto it = floats.begin();
+    for (; it != floats.end() && i > 0; ++it) {
       if ((it->hash() % number_of_shards_) != shard_id_) {
         continue;
       }
@@ -818,7 +820,8 @@ class PerGoroutineRelabeler {
                                                         const Hashdex& hashdex,
                                                         Stats& stats,
                                                         SeriesContainer<InnerSeries>& shards_inner_series) {
-    fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
+    const auto& floats = hashdex.floats();
+    fill_inner_series(floats, skip_shard_inner_series(floats, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
       const auto previous_size = target_lss.items_count();
       auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
       shards_inner_series[shard_id_].emplace_back(timeseries_buf_.samples(), ls_id, false);
@@ -838,7 +841,8 @@ class PerGoroutineRelabeler {
                                                                   Stats& stats,
                                                                   SeriesContainer<InnerSeries>& shards_inner_series) {
     bool result = true;
-    fill_inner_series(hashdex, hashdex.begin(), shards_inner_series, [&](auto& item) {
+    const auto& floats = hashdex.floats();
+    fill_inner_series(floats, floats.begin(), shards_inner_series, [&](auto& item) {
       if (auto ls_id = target_lss.find(timeseries_buf_.label_set(), item.hash()); ls_id.has_value()) {
         shards_inner_series[shard_id_].emplace_back(timeseries_buf_.samples(), *ls_id, false);
         stats.samples_added += timeseries_buf_.samples().size();
@@ -872,24 +876,24 @@ class PerGoroutineRelabeler {
     }
   }
 
-  template <hashdex::HashdexInterface Hashdex, class Handler>
-  void fill_inner_series(const Hashdex& hashdex, auto hashdex_it, SeriesContainer<InnerSeries>& shards_inner_series, Handler handler) {
+  template <hashdex::HashdexFloats Floats, class Handler>
+  void fill_inner_series(const Floats& floats, auto floats_it, SeriesContainer<InnerSeries>& shards_inner_series, Handler handler) {
     assert(number_of_shards_ > 0);
 
-    const size_t n = std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * 1.1) / number_of_shards_));
+    const size_t n = std::min(static_cast<size_t>(floats.size()), static_cast<size_t>((floats.size() * 1.1) / number_of_shards_));
     for (uint16_t i = 0; i < number_of_shards_; ++i) {
       shards_inner_series[i].reserve(n);
     }
 
-    for (; hashdex_it != hashdex.end(); ++hashdex_it) {
-      if ((hashdex_it->hash() % number_of_shards_) != shard_id_) {
+    for (; floats_it != floats.end(); ++floats_it) {
+      if ((floats_it->hash() % number_of_shards_) != shard_id_) {
         continue;
       }
 
       timeseries_buf_.clear();
-      hashdex_it->read(timeseries_buf_);
+      floats_it->read(timeseries_buf_);
 
-      if (!handler(*hashdex_it)) {
+      if (!handler(*floats_it)) {
         break;
       }
     }
