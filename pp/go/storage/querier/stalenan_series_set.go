@@ -42,22 +42,28 @@ func NewStaleNaNSeriesSliceFromTimestamps(timestamps []int64) []StaleNaNSeries {
 // StaleNaNSeriesSet contains a set of series that always return the staleNaN value for the specified timestamps.
 type StaleNaNSeriesSet struct {
 	series                      []StaleNaNSeries
-	lssQueryResult              *cppbridge.LSSQueryResult
 	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	valueNotFoundTimestampValue int64
 	nextSeriesIndex             int
 }
 
 // NewStaleNaNSeriesSet creates a new [StaleNaNSeriesSet].
+// The series ids from lssQueryResult are copied into the (Go-owned) series slice so that
+// the C-allocated result buffer is no longer referenced after construction and can be
+// released immediately (see [cppbridge.LSSQueryResult.Close]).
 func NewStaleNaNSeriesSet(
 	series []StaleNaNSeries,
 	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
 ) *StaleNaNSeriesSet {
+	ids := lssQueryResult.IDs()
+	for i := range series {
+		series[i].seriesID = ids[i]
+	}
+
 	return &StaleNaNSeriesSet{
 		series:                      series,
-		lssQueryResult:              lssQueryResult,
 		labelSetSnapshot:            labelSetSnapshot,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
 	}
@@ -90,8 +96,7 @@ func (ss *StaleNaNSeriesSet) Next() bool {
 		ss.nextSeriesIndex++
 	}
 
-	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
-	ss.series[ss.nextSeriesIndex].labelSet = labels.NewLabelsWithLSS(ss.labelSetSnapshot, lsID)
+	ss.series[ss.nextSeriesIndex].labelSet = labels.NewLabelsWithLSS(ss.labelSetSnapshot, ss.series[ss.nextSeriesIndex].seriesID)
 	ss.nextSeriesIndex++
 
 	return true
@@ -111,6 +116,7 @@ func (*StaleNaNSeriesSet) Warnings() annotations.Annotations {
 type StaleNaNSeries struct {
 	timestamp int64
 	labelSet  labels.Labels
+	seriesID  uint32
 }
 
 // Iterator returns an iterator that iterates over the samples of the series.
