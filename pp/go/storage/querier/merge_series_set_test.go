@@ -2,6 +2,7 @@ package querier_test
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -246,7 +247,7 @@ func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries
 		evenNumbered := j%2 == 0
 		ls := labels.FromStrings(
 			"__name__", "metric",
-			"even_numbered", fmt.Sprintf("%t", evenNumbered),
+			"even_numbered", strconv.FormatBool(evenNumbered),
 			"foo", fmt.Sprintf("bar%d", j),
 			"shard_id", fmt.Sprintf("id_%d", shardID),
 		)
