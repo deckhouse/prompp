@@ -826,7 +826,7 @@ func (c *LeveledCompactor) write(
 		return err
 	}
 
-	//#nosec G301 // this is meant to be that way
+	// #nosec G301 // this is meant to be that way
 	if err = os.MkdirAll(tmp, 0o777); err != nil { //revive:disable-line:add-constant // this is permissions
 		return err
 	}

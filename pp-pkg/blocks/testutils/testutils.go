@@ -5,14 +5,15 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
+	"github.com/stretchr/testify/require"
+
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -35,7 +36,7 @@ func CreateBlock(tb testing.TB, dir string, series []storage.Series) string {
 // GenSeries generates series of float64 samples with a given number of labels and values.
 func GenSeries(totalSeries, labelCount int, mint, maxt int64) []storage.Series {
 	return genSeriesFromSampleGenerator(totalSeries, labelCount, mint, maxt, 1, func(ts int64) chunks.Sample {
-		return SampleTest{TS: ts, V: rand.Float64()}
+		return SampleTest{TS: ts, V: rand.Float64()} //nolint:gosec // G404: no need for cryptographic strength here
 	})
 }
 

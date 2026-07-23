@@ -1225,7 +1225,8 @@ func BenchmarkCompaction(b *testing.B) {
 			c.compactionType,
 			nBlocks,
 			nSeries,
-			c.ranges[0][1]-c.ranges[0][0]+1),
+			c.ranges[0][1]-c.ranges[0][0]+1,
+		),
 			func(b *testing.B) {
 				dir := b.TempDir()
 				blockDirs := make([]string, 0, len(c.ranges))
@@ -1318,7 +1319,6 @@ func (erringBReader) Tombstones() (tombstones.Reader, error) { return nil, error
 //revive:disable-next-line:cognitive-complexity // this is a test function
 //revive:disable-next-line:cyclomatic // this is a test function
 //revive:disable-next-line:function-result-limit // this is a test function
-//nolint:gocritic // unnamedResult // this is a test function
 func createIdxChkReaders(
 	t *testing.T,
 	tc []testutils.SeriesSamplesTest,
