@@ -42,6 +42,7 @@ func (wb *WrittenBlock) MetaFilename() string {
 	return filepath.Join(wb.Dir, block.MetaFilename)
 }
 
+// blockWriter is a writer for a block.
 type blockWriter struct {
 	WrittenBlock
 

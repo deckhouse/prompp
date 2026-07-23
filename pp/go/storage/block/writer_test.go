@@ -263,7 +263,7 @@ func (s *WriterSuite) TestWrite() {
 
 	// Act
 	block.LsIdBatchSize = 2
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -275,7 +275,7 @@ func (s *WriterSuite) TestWriteInBatches() {
 
 	// Act
 	block.LsIdBatchSize = 1
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -288,7 +288,7 @@ func (s *WriterSuite) TestWriteWithDataUnloading() {
 
 	// Act
 	block.LsIdBatchSize = 2
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -301,7 +301,7 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 	// Act
 	block.LsIdBatchSize = 1
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -320,7 +320,7 @@ func (s *WriterSuite) TestSkipEmptyBlock() {
 	})
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.Require().NoError(err)

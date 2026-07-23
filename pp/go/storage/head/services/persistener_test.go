@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
@@ -21,7 +23,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -228,8 +229,8 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
-		return blockWriter.Write(shard)
+	s.blockWriter.WriteFunc = func(shard *shard.Shard, numberOfShards uint16) ([]block.WrittenBlock, error) {
+		return blockWriter.Write(shard, numberOfShards)
 	}
 
 	head := s.mustCreateHead()
@@ -266,12 +267,12 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
+	s.blockWriter.WriteFunc = func(shard *shard.Shard, numberOfShards uint16) ([]block.WrittenBlock, error) {
 		if len(s.blockWriter.WriteCalls()) == 2 {
 			return nil, errors.New("some error")
 		}
 
-		return blockWriter.Write(shard)
+		return blockWriter.Write(shard, numberOfShards)
 	}
 
 	head := s.mustCreateHead()
