@@ -3,9 +3,6 @@ name: Run Tests
 on:
   pull_request:
     types: [opened, reopened, labeled, synchronize]
-  push:
-    branches:
-      - pp
   workflow_dispatch:
     inputs:
       release_branch:
@@ -18,6 +15,13 @@ concurrency:
 
 jobs:
   build-ci-image:
+    # Skip the whole heavy pipeline for Renovate PRs until a human adds the
+    # `ready-for-ci` label. Non-PR events and non-Renovate PRs are unaffected.
+    # The merge is still blocked in the meantime by the tests-gate job below.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.user.login != 'deckhouse-BOaTswain' ||
+      contains(github.event.pull_request.labels.*.name, 'ready-for-ci')
     uses: ./.github/workflows/build-ci-image.yaml
     with:
       pr_number: ${{ github.event_name == 'pull_request' && format('{0}', github.event.number) || '' }}
@@ -415,6 +419,18 @@ jobs:
     if: always()
     runs-on: fsn-dev-gitlab-runner
     steps:
+      # Block merge (and native automerge) for Renovate PRs that have not yet
+      # received the `ready-for-ci` label. This is the required check that keeps
+      # such PRs un-mergeable while the heavy CI jobs are intentionally skipped.
+      - name: Require ready-for-ci label on Renovate PRs
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.user.login == 'deckhouse-BOaTswain' &&
+          !contains(github.event.pull_request.labels.*.name, 'ready-for-ci')
+        run: |
+          echo "::error::Renovate PR is awaiting the 'ready-for-ci' label. CI runs and merge unlock once the label is added."
+          exit 1
+
       - name: Check required test jobs
         run: |
           results="${{ join(needs.*.result, ',') }}"
