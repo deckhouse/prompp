@@ -1,6 +1,63 @@
---- a/src/arena.c
-+++ b/src/arena.c
-@@ -257,10 +257,25 @@ arena_slab_reg_alloc_batch(edata_t *slab, const bin_info_t *bin_info,
+diff --git a/include/jemalloc/internal/jemalloc_internal_inlines_b.h b/include/jemalloc/internal/jemalloc_internal_inlines_b.h
+index dad37a9..434f7af 100644
+--- a/include/jemalloc/internal/jemalloc_internal_inlines_b.h
++++ b/include/jemalloc/internal/jemalloc_internal_inlines_b.h
+@@ -11,6 +11,10 @@ percpu_arena_update(tsd_t *tsd, unsigned cpu) {
+ 	assert(have_percpu_arena);
+ 	arena_t *oldarena = tsd_arena_get(tsd);
+ 	assert(oldarena != NULL);
++	if(oldarena == NULL) {
++		return;
++	}
++
+ 	unsigned oldind = arena_ind_get(oldarena);
+ 
+ 	if (oldind != cpu) {
+diff --git a/include/jemalloc/internal/util.h b/include/jemalloc/internal/util.h
+index ecfa76b..51e8b74 100644
+--- a/include/jemalloc/internal/util.h
++++ b/include/jemalloc/internal/util.h
+@@ -106,11 +106,13 @@ util_prefetch_read(void *ptr) {
+ #ifdef __GNUC__
+ 	if (config_debug) {
+ 		/* Enforce the "valid ptr" requirement. */
+-		*(volatile char *)ptr;
++		volatile char byte = *(volatile char *)ptr;
++		(void)byte;
+ 	}
+ 	__builtin_prefetch(ptr, /* read or write */ 0, /* locality hint */ 3);
+ #else
+-	*(volatile char *)ptr;
++	volatile char byte = *(volatile char *)ptr;
++	(void)byte;
+ #endif
+ }
+ 
+@@ -118,7 +120,8 @@ JEMALLOC_ALWAYS_INLINE void
+ util_prefetch_write(void *ptr) {
+ #ifdef __GNUC__
+ 	if (config_debug) {
+-		*(volatile char *)ptr;
++		volatile char byte = *(volatile char *)ptr;
++		(void)byte;
+ 	}
+ 	/*
+ 	 * The only difference from the read variant is that this has a 1 as the
+@@ -126,7 +129,8 @@ util_prefetch_write(void *ptr) {
+ 	 */
+ 	__builtin_prefetch(ptr, 1, 3);
+ #else
+-	*(volatile char *)ptr;
++	volatile char byte = *(volatile char *)ptr;
++	(void)byte;
+ #endif
+ }
+ 
+diff --git a/src/bin.c b/src/bin.c
+index 6bab4b2..dfe8b90 100644
+--- a/src/bin.c
++++ b/src/bin.c
+@@ -102,10 +102,25 @@ bin_slab_reg_alloc_batch(
  #else
  	unsigned group = 0;
  	bitmap_t g = slab_data->bitmap[group];
@@ -27,7 +84,7 @@
  		}
  		size_t shift = group << LG_BITMAP_GROUP_NBITS;
  		size_t pop = popcount_lu(g);
-@@ -283,6 +298,7 @@ arena_slab_reg_alloc_batch(edata_t *slab, const bin_info_t *bin_info,
+@@ -129,6 +144,7 @@ bin_slab_reg_alloc_batch(
  		}
  		slab_data->bitmap[group] = g;
  	}
@@ -35,66 +92,14 @@
  #endif
  	edata_nfree_sub(slab, cnt);
  }
-
---- a/src/hpa.c
-+++ b/src/hpa.c
-@@ -707,10 +707,16 @@ hpa_alloc_batch_psset(tsdn_t *tsdn, hpa_shard_t *shard, size_t size,
-
- static hpa_shard_t *
- hpa_from_pai(pai_t *self) {
--	assert(self->alloc = &hpa_alloc);
--	assert(self->expand = &hpa_expand);
--	assert(self->shrink = &hpa_shrink);
--	assert(self->dalloc = &hpa_dalloc);
-+#ifndef NDEBUG
-+	self->alloc = &hpa_alloc;
-+	self->expand = &hpa_expand;
-+	self->shrink = &hpa_shrink;
-+	self->dalloc = &hpa_dalloc;
-+	assert(self->alloc);
-+	assert(self->expand);
-+	assert(self->shrink);
-+	assert(self->dalloc);
-+#endif // NDEBUG
- 	return (hpa_shard_t *)self;
- }
-
-
---- a/src/jemalloc.c
-+++ b/src/jemalloc.c
-@@ -983,7 +983,10 @@ obtain_malloc_conf(unsigned which_source, char buf[PATH_MAX + 1]) {
- 		 * Each source should only be read once, to minimize # of
- 		 * syscalls on init.
- 		 */
--		assert(read_source++ == which_source);
-+#ifndef NDEBUG
-+		assert(read_source == which_source);
-+		read_source++;
-+#endif // NDEBUG
- 	}
- 	assert(which_source < MALLOC_CONF_NSOURCES);
-
-
---- a/include/jemalloc/internal/jemalloc_internal_inlines_b.h
-+++ b/include/jemalloc/internal/jemalloc_internal_inlines_b.h
-@@ -8,6 +8,10 @@ percpu_arena_update(tsd_t *tsd, unsigned cpu) {
- 	assert(have_percpu_arena);
- 	arena_t *oldarena = tsd_arena_get(tsd);
- 	assert(oldarena != NULL);
-+	if(oldarena == NULL) {
-+		return;
-+	}
-+
- 	unsigned oldind = arena_ind_get(oldarena);
-
- 	if (oldind != cpu) {
-
+diff --git a/src/prof_data.c b/src/prof_data.c
+index 7aa047a..b66e234 100644
 --- a/src/prof_data.c
 +++ b/src/prof_data.c
-@@ -336,6 +336,10 @@ prof_lookup(tsd_t *tsd, prof_bt_t *bt) {
+@@ -338,6 +338,10 @@ prof_lookup(tsd_t *tsd, prof_bt_t *bt) {
  	tdata = prof_tdata_get(tsd, false);
  	assert(tdata != NULL);
-
+ 
 +	if(tdata == NULL) {
 +			return ret.p;
 +	}
@@ -102,68 +107,29 @@
  	malloc_mutex_lock(tsd_tsdn(tsd), tdata->lock);
  	not_found = ckh_search(&tdata->bt2tctx, bt, NULL, &ret.v);
  	if (!not_found) { /* Note double negative! */
-
+diff --git a/src/tcache.c b/src/tcache.c
+index fe210d2..d2538e4 100644
 --- a/src/tcache.c
 +++ b/src/tcache.c
-@@ -6,6 +6,7 @@
+@@ -7,6 +7,7 @@
  #include "jemalloc/internal/safety_check.h"
  #include "jemalloc/internal/san.h"
  #include "jemalloc/internal/sc.h"
 +#include "jemalloc/internal/util.h"
-
+ 
  /******************************************************************************/
  /* Data. */
-@@ -823,8 +824,11 @@ tcache_destroy(tsd_t *tsd, tcache_t *tcache, bool tsd_tcache) {
+@@ -1244,8 +1245,11 @@ tcache_destroy(tsd_t *tsd, tcache_t *tcache, bool tsd_tcache) {
  	 * tsd).  Manually trigger decay to avoid pathological cases.  Also
  	 * include arena 0 because the tcache array is allocated from it.
  	 */
--	arena_decay(tsd_tsdn(tsd), arena_get(tsd_tsdn(tsd), 0, false),
--	    false, false);
+-	arena_decay(
+-	    tsd_tsdn(tsd), arena_get(tsd_tsdn(tsd), 0, false), false, false);
 +	arena_t *a0 = arena_get(tsd_tsdn(tsd), 0, false);
 +	if(likely(a0 != NULL)) {
 +		arena_decay(tsd_tsdn(tsd), a0,
 +			/* is_background_thread */ false, /* all */ false);
 +	}
-
- 	if (arena_nthreads_get(arena, false) == 0 &&
- 	    !background_thread_enabled()) {
-
---- a/include/jemalloc/internal/util.h
-+++ b/include/jemalloc/internal/util.h
-@@ -80,11 +80,13 @@ util_prefetch_read(void *ptr) {
- #ifdef __GNUC__
- 	if (config_debug) {
- 		/* Enforce the "valid ptr" requirement. */
--		*(volatile char *)ptr;
-+		volatile char byte = *(volatile char *)ptr;
-+		(void)byte;
- 	}
- 	__builtin_prefetch(ptr, /* read or write */ 0, /* locality hint */ 3);
- #else
--	*(volatile char *)ptr;
-+	volatile char byte = *(volatile char *)ptr;
-+	(void)byte;
- #endif
- }
-
-@@ -92,7 +94,8 @@ JEMALLOC_ALWAYS_INLINE void
- util_prefetch_write(void *ptr) {
- #ifdef __GNUC__
- 	if (config_debug) {
--		*(volatile char *)ptr;
-+		volatile char byte = *(volatile char *)ptr;
-+		(void)byte;
- 	}
- 	/*
- 	 * The only difference from the read variant is that this has a 1 as the
-@@ -100,7 +103,8 @@ util_prefetch_write(void *ptr) {
- 	 */
- 	__builtin_prefetch(ptr, 1, 3);
- #else
--	*(volatile char *)ptr;
-+	volatile char byte = *(volatile char *)ptr;
-+	(void)byte;
- #endif
- }
-
-
+ 
+ 	if (arena_nthreads_get(arena, false) == 0
+ 	    && !background_thread_enabled()) {
