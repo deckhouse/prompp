@@ -14,8 +14,8 @@ using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
 using PromPP::Primitives::Timestamp;
 using PromPP::Prometheus::MetadataType;
+using PromPP::WAL::hashdex::FloatMetric;
 using PromPP::WAL::hashdex::Metadata;
-using PromPP::WAL::hashdex::Metric;
 using PromPP::WAL::hashdex::scraper::Error;
 using PromPP::WAL::hashdex::scraper::OpenMetricsScraper;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;
@@ -26,7 +26,7 @@ struct ScraperCase {
   std::string_view buffer;
   Error result;
   std::vector<Metadata> metadata{};
-  std::vector<Metric> metrics{};
+  std::vector<FloatMetric> floats{};
 };
 
 constexpr Timestamp kDefaultTimestamp = std::numeric_limits<Timestamp>::max();
@@ -36,13 +36,13 @@ class ScraperFixture : public ::testing::TestWithParam<ScraperCase> {
  protected:
   Scraper scraper_;
 
-  [[nodiscard]] std::vector<Metric> get_metrics() const noexcept { return PromPP::WAL::hashdex::get_metrics(scraper_.metrics()); }
-  [[nodiscard]] std::vector<Metadata> get_metadata() const noexcept { return PromPP::WAL::hashdex::get_metadata(scraper_.metadata()); }
+  [[nodiscard]] std::vector<FloatMetric> get_floats() const noexcept { return PromPP::WAL::hashdex::get_floats(scraper_); }
+  [[nodiscard]] std::vector<Metadata> get_metadata() const noexcept { return PromPP::WAL::hashdex::get_metadata(scraper_); }
 };
 
 class PrometheusScraperFixture : public ScraperFixture<PrometheusScraper> {
  protected:
-  void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).metrics); }
+  void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).floats); }
 };
 
 TEST_P(PrometheusScraperFixture, Test) {
@@ -52,18 +52,18 @@ TEST_P(PrometheusScraperFixture, Test) {
 
   // Act
   const auto result = scraper_.parse(buffer, kDefaultTimestamp);
-  const auto metrics = get_metrics();
+  const auto floats = get_floats();
   const auto metadata = get_metadata();
 
   // Assert
   EXPECT_EQ(GetParam().result, result);
-  EXPECT_EQ(GetParam().metrics, metrics);
+  EXPECT_EQ(GetParam().floats, floats);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
 
-INSTANTIATE_TEST_SUITE_P(EmptyBuffer, PrometheusScraperFixture, testing::Values(ScraperCase{.buffer = "", .result = Error::kNoError, .metrics = {}}));
+INSTANTIATE_TEST_SUITE_P(EmptyBuffer, PrometheusScraperFixture, testing::Values(ScraperCase{.buffer = "", .result = Error::kNoError, .floats = {}}));
 
-INSTANTIATE_TEST_SUITE_P(Comment, PrometheusScraperFixture, testing::Values(ScraperCase{.buffer = "# comment\n", .result = Error::kNoError, .metrics = {}}));
+INSTANTIATE_TEST_SUITE_P(Comment, PrometheusScraperFixture, testing::Values(ScraperCase{.buffer = "# comment\n", .result = Error::kNoError, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(HelpMetadata,
                          PrometheusScraperFixture,
@@ -91,109 +91,110 @@ INSTANTIATE_TEST_SUITE_P(
 
 INSTANTIATE_TEST_SUITE_P(MetricNameInsideLabelSet,
                          PrometheusScraperFixture,
-                         testing::Values(ScraperCase{.buffer = "{q=\"0.9\",\"http.status\",a=\"b\"} 8.3835e-05\n"sv,
-                                                     .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"q", "0.9"},
-                                                                                           {"__name__", "http.status"},
-                                                                                           {"a", "b"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}}}}));
+                         testing::Values(ScraperCase{
+                             .buffer = "{q=\"0.9\",\"http.status\",a=\"b\"} 8.3835e-05\n"sv,
+                             .result = Error::kNoError,
+                             .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                       {"q", "0.9"},
+                                                                       {"__name__", "http.status"},
+                                                                       {"a", "b"},
+                                                                   },
+                                                                   BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}}}}));
 
 INSTANTIATE_TEST_SUITE_P(NullByte,
                          PrometheusScraperFixture,
                          testing::Values(ScraperCase{.buffer = "null_byte_metric{a=\"abc\x00\"} 1\n"sv,
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "null_byte_metric"},
-                                                                                           {"a", "abc\x00"sv},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "null_byte_metric"},
+                                                                                               {"a", "abc\x00"sv},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
                                          ScraperCase{.buffer = "a{b=\"\x00ss\"} 1\n"sv,
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "a"},
-                                                                                           {"b", "\x00ss"sv},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "a"},
+                                                                                               {"b", "\x00ss"sv},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
                                          ScraperCase{.buffer = "a{b=\"\x00\"} 1\n"sv,
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "a"},
-                                                                                           {"b", "\x00"sv},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-                                         ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n"sv, .result = Error::kUnexpectedToken, .metrics = {}},
-                                         ScraperCase{.buffer = "a{b=\"\x00\n"sv, .result = Error::kUnexpectedToken, .metrics = {}},
-                                         ScraperCase{.buffer = "a{b\x00=\"hiih\"}	\n"sv, .result = Error::kUnexpectedToken, .metrics = {}},
-                                         ScraperCase{.buffer = "a\x00{b=\"ddd\"} 1\n"sv, .result = Error::kInvalidValue, .metrics = {}},
-                                         ScraperCase{.buffer = "a 0 1\x00\n"sv, .result = Error::kUnexpectedToken, .metrics = {}}));
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "a"},
+                                                                                               {"b", "\x00"sv},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                         ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n"sv, .result = Error::kUnexpectedToken, .floats = {}},
+                                         ScraperCase{.buffer = "a{b=\"\x00\n"sv, .result = Error::kUnexpectedToken, .floats = {}},
+                                         ScraperCase{.buffer = "a{b\x00=\"hiih\"}	\n"sv, .result = Error::kUnexpectedToken, .floats = {}},
+                                         ScraperCase{.buffer = "a\x00{b=\"ddd\"} 1\n"sv, .result = Error::kInvalidValue, .floats = {}},
+                                         ScraperCase{.buffer = "a 0 1\x00\n"sv, .result = Error::kUnexpectedToken, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(
     InvalidInput,
     PrometheusScraperFixture,
-    testing::Values(ScraperCase{.buffer = "a\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "a{b='c'} 1\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "a{b=\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "a{b=\"\xff\"} 1\n", .result = Error::kInvalidUtf8, .metrics = {}},
-                    ScraperCase{.buffer = "{\"a\", \"b = \"c\"}\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .metrics = {}},
-                    ScraperCase{.buffer = "something_weird{problem=\"\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "empty_label_name{=\"\"} 0\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "empty_label_name{a=\"\", =\"2\"} 0\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "foo 1_2\n", .result = Error::kInvalidValue, .metrics = {}},
-                    ScraperCase{.buffer = "foo 0x1p-3\n", .result = Error::kInvalidValue, .metrics = {}},
-                    ScraperCase{.buffer = "foo 0x1P-3\n", .result = Error::kInvalidValue, .metrics = {}},
-                    ScraperCase{.buffer = "foo 0 1_2\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "{a=\"ok\"} 1\n", .result = Error::kNoMetricName, .metrics = {}},
-                    ScraperCase{.buffer = "\"aaaa\"\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count 8437 9223372036854775808\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count \n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kInvalidValue, .metrics = {}},
-                    ScraperCase{.buffer = "{\"a\"\n}\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "{} 1\n", .result = Error::kNoMetricName, .metrics = {}},
-                    ScraperCase{.buffer = "{\"\xff\"\n}\n", .result = Error::kInvalidUtf8, .metrics = {}},
-                    ScraperCase{.buffer = "# TYPE #\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "# HELP #\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "# HELP metric_name value\xff\n", .result = Error::kInvalidUtf8, .metrics = {}}));
+    testing::Values(ScraperCase{.buffer = "a\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a{b='c'} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a{b=\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a{b=\"\xff\"} 1\n", .result = Error::kInvalidUtf8, .floats = {}},
+                    ScraperCase{.buffer = "{\"a\", \"b = \"c\"}\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
+                    ScraperCase{.buffer = "something_weird{problem=\"\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "empty_label_name{=\"\"} 0\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "empty_label_name{a=\"\", =\"2\"} 0\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "foo 1_2\n", .result = Error::kInvalidValue, .floats = {}},
+                    ScraperCase{.buffer = "foo 0x1p-3\n", .result = Error::kInvalidValue, .floats = {}},
+                    ScraperCase{.buffer = "foo 0x1P-3\n", .result = Error::kInvalidValue, .floats = {}},
+                    ScraperCase{.buffer = "foo 0 1_2\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "{a=\"ok\"} 1\n", .result = Error::kNoMetricName, .floats = {}},
+                    ScraperCase{.buffer = "\"aaaa\"\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count 8437 9223372036854775808\n", .result = Error::kInvalidTimestamp, .floats = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count \n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kInvalidValue, .floats = {}},
+                    ScraperCase{.buffer = "{\"a\"\n}\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "{} 1\n", .result = Error::kNoMetricName, .floats = {}},
+                    ScraperCase{.buffer = "{\"\xff\"\n}\n", .result = Error::kInvalidUtf8, .floats = {}},
+                    ScraperCase{.buffer = "# TYPE #\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "# HELP #\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "# HELP metric_name value\xff\n", .result = Error::kInvalidUtf8, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(Labels,
                          PrometheusScraperFixture,
                          testing::Values(ScraperCase{.buffer = "go_gc_duration_seconds_count 8437\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "go_gc_duration_seconds_count"}},
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8437}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "go_gc_duration_seconds_count"}},
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8437}}}}}},
                                          ScraperCase{.buffer = "example_metric{value=\"1\", z=\"\"} 0.144\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "example_metric"}, {"value", "1"}},
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0.144}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "example_metric"}, {"value", "1"}},
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0.144}}}}}},
                                          ScraperCase{.buffer = "go_gc_duration_seconds_count 8437 12345\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "go_gc_duration_seconds_count"}},
-                                                                                       BareBones::Vector<Sample>{Sample{12345, 8437}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "go_gc_duration_seconds_count"}},
+                                                                                           BareBones::Vector<Sample>{Sample{12345, 8437}}}}}},
                                          ScraperCase{.buffer = "go_gc_duration_seconds_count{} 0\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "go_gc_duration_seconds_count"}},
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "go_gc_duration_seconds_count"}},
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0}}}}}},
                                          ScraperCase{.buffer = "go_info{version=\"go1.23.1\"} 1\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "go_info"},
-                                                                                           {"version", "go1.23.1"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "go_info"},
+                                                                                               {"version", "go1.23.1"},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
                                          ScraperCase{.buffer = "go_info{version=\"go1.23.1\", os=\"linux\"} 1\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "go_info"},
-                                                                                           {"version", "go1.23.1"},
-                                                                                           {"os", "linux"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}}));
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "go_info"},
+                                                                                               {"version", "go1.23.1"},
+                                                                                               {"os", "linux"},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}}));
 INSTANTIATE_TEST_SUITE_P(
     PromTest,
     PrometheusScraperFixture,
@@ -236,102 +237,102 @@ INSTANTIATE_TEST_SUITE_P(
                      Metadata{.metric_name = "go_goroutines", .text = "Number of goroutines that currently exist.", .type = MetadataType::kHelp},
                      Metadata{.metric_name = "go_goroutines", .text = "gauge", .type = MetadataType::kType},
                      Metadata{.metric_name = "metric", .text = "foo\000bar"sv, .type = MetadataType::kHelp}},
-        .metrics = {Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "0"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "0.25"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "0.5"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "0.8"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "0.9"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "wind_speed"},
-                                              {"A", "2"},
-                                              {"c", "3"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 12345}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds"},
-                                              {"quantile", "2.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_gc_duration_seconds_count"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 99}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "some:aggregate:rate5m"},
-                                              {"a_b", "c"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go_goroutines"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{123123, 33}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "_metric_starting_with_underscore"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "testmetric"},
-                                              {"_label_starting_with_underscore", "foo"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "testmetric"},
-                                              {"label", "\"bar\""},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "null_byte_metric"},
-                                              {"a", "abc\000"sv},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}}));
+        .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "0"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "0.25"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "0.5"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "0.8"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "0.9"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "wind_speed"},
+                                                  {"A", "2"},
+                                                  {"c", "3"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 12345}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "1.0"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "1.0"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "1.0"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "1.0"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds"},
+                                                  {"quantile", "2.0"},
+                                                  {"a", "b"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_gc_duration_seconds_count"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 99}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "some:aggregate:rate5m"},
+                                                  {"a_b", "c"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "go_goroutines"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{123123, 33}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "_metric_starting_with_underscore"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "testmetric"},
+                                                  {"_label_starting_with_underscore", "foo"},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "testmetric"},
+                                                  {"label", "\"bar\""},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{
+                                                  {"__name__", "null_byte_metric"},
+                                                  {"a", "abc\000"sv},
+                                              },
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}}));
 
 INSTANTIATE_TEST_SUITE_P(
     Utf8PromTest,
@@ -357,64 +358,65 @@ INSTANTIATE_TEST_SUITE_P(
         .result = Error::kNoError,
         .metadata = {Metadata{.metric_name = "go.gc_duration_seconds", .text = "A summary of the GC invocation durations.", .type = MetadataType::kHelp},
                      Metadata{.metric_name = "go.gc_duration_seconds", .text = "summary", .type = MetadataType::kType}},
-        .metrics = {Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "0"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "0.25"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "0.5"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "0.8"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "0.9"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds"},
-                                              {"quantile", "1.0"},
-                                              {"a", "b"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-                    Metric{.timeseries = {LabelViewSet{
-                                              {"__name__", "go.gc_duration_seconds_count"},
-                                          },
-                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 99}}}},
-                    Metric{.timeseries = {
-                               LabelViewSet{
+        .floats = {
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0.25"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0.5"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0.8"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0.9"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "1.0"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "1.0"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "1.0"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "1.0"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds_count"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 99}}}},
+            FloatMetric{
+                .timeseries = {LabelViewSet{
                                    {"__name__",
                                     "\x48\x65\x69\x7a\xc3\xb6\x6c\x72\xc3\xbc\x63\x6b\x73\x74\x6f\xc3\x9f\x61\x62\x64\xc3\xa4\x6d\x70\x66\x75\x6e\x67\x20\x31"
                                     "\x30\xe2\x82\xac\x20\x6d\x65\x74\x72\x69\x63\x20\x77\x69\x74\x68\x20\x22\x69\x6e\x74\x65\x72\x65\x73\x74\x69\x6e\x67\x22"
@@ -423,23 +425,23 @@ INSTANTIATE_TEST_SUITE_P(
                                },
                                BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 10.0}}}}}}));
 
-INSTANTIATE_TEST_SUITE_P(SpecificFloatValue,
-                         PrometheusScraperFixture,
-                         testing::Values(ScraperCase{
-                             .buffer = "test_nan nan\n"
-                                       "rest_client_exec_plugin_ttl_seconds Inf\n"
-                                       "rest_client_exec_plugin_ttl_seconds +Inf\n"
-                                       "rest_client_exec_plugin_ttl_seconds -Inf\n",
-                             .result = Error::kNoError,
-                             .metrics = {
-                                 Metric{.timeseries = {LabelViewSet{{"__name__", "test_nan"}},
-                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, PromPP::Prometheus::kNormalNan}}}},
-                                 Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
-                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
-                                 Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
-                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
-                                 Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
-                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, -std::numeric_limits<double>::infinity()}}}}}}));
+INSTANTIATE_TEST_SUITE_P(
+    SpecificFloatValue,
+    PrometheusScraperFixture,
+    testing::Values(ScraperCase{
+        .buffer = "test_nan nan\n"
+                  "rest_client_exec_plugin_ttl_seconds Inf\n"
+                  "rest_client_exec_plugin_ttl_seconds +Inf\n"
+                  "rest_client_exec_plugin_ttl_seconds -Inf\n",
+        .result = Error::kNoError,
+        .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "test_nan"}},
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, PromPP::Prometheus::kNormalNan}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
+                   FloatMetric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
+                                              BareBones::Vector<Sample>{Sample{kDefaultTimestamp, -std::numeric_limits<double>::infinity()}}}}}}));
 
 INSTANTIATE_TEST_SUITE_P(
     NoNewLine,
@@ -447,26 +449,26 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(
         ScraperCase{.buffer = "extended_monitoring_enabled{namespace=\"kube-system\"} 1",
                     .result = Error::kNoError,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                          {"__name__", "extended_monitoring_enabled"},
-                                                          {"namespace", "kube-system"},
-                                                      },
-                                                      BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                    .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                              {"__name__", "extended_monitoring_enabled"},
+                                                              {"namespace", "kube-system"},
+                                                          },
+                                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
         ScraperCase{.buffer = "extended_monitoring_enabled{namespace=\"kube-system\"} 1 12345",
                     .result = Error::kNoError,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                          {"__name__", "extended_monitoring_enabled"},
-                                                          {"namespace", "kube-system"},
-                                                      },
-                                                      BareBones::Vector<Sample>{Sample{12345, 1}}}}}},
+                    .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                              {"__name__", "extended_monitoring_enabled"},
+                                                              {"namespace", "kube-system"},
+                                                          },
+                                                          BareBones::Vector<Sample>{Sample{12345, 1}}}}}},
         ScraperCase{.buffer = "clickhouse_store_campaignParentOnlyReportStore 63514169",
                     .result = Error::kNoError,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "clickhouse_store_campaignParentOnlyReportStore"}},
-                                                      BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 63514169}}}}}},
+                    .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "clickhouse_store_campaignParentOnlyReportStore"}},
+                                                          BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 63514169}}}}}},
         ScraperCase{.buffer = "clickhouse_store_campaignParentOnlyReportStore 63514169 1",
                     .result = Error::kNoError,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "clickhouse_store_campaignParentOnlyReportStore"}},
-                                                      BareBones::Vector<Sample>{Sample{1, 63514169}}}}}},
+                    .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "clickhouse_store_campaignParentOnlyReportStore"}},
+                                                          BareBones::Vector<Sample>{Sample{1, 63514169}}}}}},
         ScraperCase{.buffer = "# comment", .result = Error::kNoError},
         ScraperCase{.buffer = "# HELP go_goroutines Number of goroutines that currently exist.",
                     .result = Error::kNoError,
@@ -479,15 +481,15 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                          PrometheusScraperFixture,
                          testing::Values(ScraperCase{.buffer = R"(kubevirt_vmi_filesystem_capacity_bytes{mount_point="D:\\"} 1.1)",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "kubevirt_vmi_filesystem_capacity_bytes"},
-                                                                                           {"mount_point", "D:\\"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "kubevirt_vmi_filesystem_capacity_bytes"},
+                                                                                               {"mount_point", "D:\\"},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
 class OpenMetricsScraperFixture : public ScraperFixture<OpenMetricsScraper> {
  protected:
-  void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).metrics); }
+  void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).floats); }
 };
 
 TEST_P(OpenMetricsScraperFixture, Test) {
@@ -497,102 +499,103 @@ TEST_P(OpenMetricsScraperFixture, Test) {
 
   // Act
   const auto result = scraper_.parse(buffer, kDefaultTimestamp);
-  const auto metrics = get_metrics();
+  const auto floats = get_floats();
   const auto metadata = get_metadata();
 
   // Assert
   EXPECT_EQ(GetParam().result, result);
-  EXPECT_EQ(GetParam().metrics, metrics);
+  EXPECT_EQ(GetParam().floats, floats);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
 
 INSTANTIATE_TEST_SUITE_P(EmptyBuffer,
                          OpenMetricsScraperFixture,
-                         testing::Values(ScraperCase{.buffer = "# EOF", .result = Error::kNoError, .metrics = {}},
-                                         ScraperCase{.buffer = "# EOF\n", .result = Error::kNoError, .metrics = {}}));
+                         testing::Values(ScraperCase{.buffer = "# EOF", .result = Error::kNoError, .floats = {}},
+                                         ScraperCase{.buffer = "# EOF\n", .result = Error::kNoError, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(
     InvalidInput,
     OpenMetricsScraperFixture,
     testing::Values(
-        ScraperCase{.buffer = "", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "metric", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "metric 1", .result = Error::kUnexpectedToken, .metrics = {}},
+        ScraperCase{.buffer = "", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "metric", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "metric 1", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "metric 1\n",
                     .result = Error::kUnexpectedToken,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "metric"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-        ScraperCase{.buffer = R"(metric_total 1 # {aa="bb"} 4)",
-                    .result = Error::kUnexpectedToken,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "metric_total"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-        ScraperCase{.buffer = "a\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "\n\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
+                    .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "metric"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+        ScraperCase{
+            .buffer = R"(metric_total 1 # {aa="bb"} 4)",
+            .result = Error::kUnexpectedToken,
+            .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "metric_total"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+        ScraperCase{.buffer = "a\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "\n\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a 1\n#EOF\n",
                     .result = Error::kUnexpectedToken,
-                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "a"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-        ScraperCase{.buffer = "9\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "# TYPE \n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "# UNIT \n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "# HELP \n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "# HELP m\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a\t1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a\t1\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a 1\t2\n# EOF\n", .result = Error::kInvalidValue, .metrics = {}},
-        ScraperCase{.buffer = "a 1\t2\n#EOF\n", .result = Error::kInvalidValue, .metrics = {}},
-        ScraperCase{.buffer = "a 1 2 \n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a 1 2 #\n#EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a 1 1z\n#EOF\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = " # EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "#\tTYPE c counter\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a 1 1 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b='c'} 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{,b=\"c\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b=\"c\"d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b=\"c\",,d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b=\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b=\"\xff\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .metrics = {}},
-        ScraperCase{.buffer = "{\"a\",\"b = \"c\"}\n# EOF", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n# EOF", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .metrics = {}},
-        ScraperCase{.buffer = "something_weird{problem=\"\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "empty_label_name{=\"\"} 0\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "foo 1_2\n\n# EOF\n", .result = Error::kInvalidValue, .metrics = {}},
-        ScraperCase{.buffer = "foo 0x1p-3\n\n# EOF\n", .result = Error::kInvalidValue, .metrics = {}},
-        ScraperCase{.buffer = "foo 0x1P-3\n\n# EOF\n", .result = Error::kInvalidValue, .metrics = {}},
-        ScraperCase{.buffer = "foo 0 1_2\n\n# EOF\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "{b=\"c\",} 1\n# EOF", .result = Error::kNoMetricName, .metrics = {}},
-        ScraperCase{.buffer = "a 1 NaN\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "a 1 -Inf\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "a 1 +Inf\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "a 1 Inf\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b=\"\x00", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a{b\x00=\"hiih\"}	1", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "a\x00{b=\"ddd\"} 1", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "#", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "# comment\n# EOF", .result = Error::kUnexpectedToken, .metrics = {}}));
+                    .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "a"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+        ScraperCase{.buffer = "9\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# TYPE \n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# UNIT \n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# HELP \n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# HELP m\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a\t1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a\t1\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a 1\t2\n# EOF\n", .result = Error::kInvalidValue, .floats = {}},
+        ScraperCase{.buffer = "a 1\t2\n#EOF\n", .result = Error::kInvalidValue, .floats = {}},
+        ScraperCase{.buffer = "a 1 2 \n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a 1 2 #\n#EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a 1 1z\n#EOF\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = " # EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "#\tTYPE c counter\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a 1 1 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b='c'} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{,b=\"c\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"c\"d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"c\",,d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b=\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"\xff\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .floats = {}},
+        ScraperCase{.buffer = "{\"a\",\"b = \"c\"}\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
+        ScraperCase{.buffer = "something_weird{problem=\"\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "empty_label_name{=\"\"} 0\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "foo 1_2\n\n# EOF\n", .result = Error::kInvalidValue, .floats = {}},
+        ScraperCase{.buffer = "foo 0x1p-3\n\n# EOF\n", .result = Error::kInvalidValue, .floats = {}},
+        ScraperCase{.buffer = "foo 0x1P-3\n\n# EOF\n", .result = Error::kInvalidValue, .floats = {}},
+        ScraperCase{.buffer = "foo 0 1_2\n\n# EOF\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "{b=\"c\",} 1\n# EOF", .result = Error::kNoMetricName, .floats = {}},
+        ScraperCase{.buffer = "a 1 NaN\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "a 1 -Inf\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "a 1 +Inf\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "a 1 Inf\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"\x00", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{b\x00=\"hiih\"}	1", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a\x00{b=\"ddd\"} 1", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "#", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# comment\n# EOF", .result = Error::kUnexpectedToken, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(
     DISABLED_InvalidInputInExamplers,
     OpenMetricsScraperFixture,
     testing::Values(
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=bb}\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"}\n# EOF\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"}", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {bb}", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {bb, a=\"dd\"}", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\",,cc=\"dd\"} 1", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"} 1_2", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"} 0x1p-3", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"} true", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\",cc=}", .result = Error::kUnexpectedToken, .metrics = {}},
-        /*ScraperCase{.buffer = `custom_metric_total 1 # {aa=\"\xff\"} 9.0` .result = Error::kUnexpectedToken, .metrics = {}}*/
-        ScraperCase{.buffer = "# TYPE hhh histogram\nhhh_bucket{le=\"+Inf\"} 1 # {aa=\"bb\"} 4 NaN\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "# TYPE hhh histogram\nhhh_bucket{le=\"+Inf\"} 1 # {aa=\"bb\"} 4 -Inf\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "# TYPE hhh histogram\nhhh_bucket{le=\"+Inf\"} 1 # {aa=\"bb\"} 4 Inf\n", .result = Error::kInvalidTimestamp, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {b=\x00\"ssss\"} 1\n", .result = Error::kUnexpectedToken, .metrics = {}},
-        ScraperCase{.buffer = "custom_metric_total 1 # {b=\"\x00ss\"} 1\n", .result = Error::kUnexpectedToken, .metrics = {}}));
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=bb}\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"}\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"}", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {bb}", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {bb, a=\"dd\"}", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\",,cc=\"dd\"} 1", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"} 1_2", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"} 0x1p-3", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\"} true", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {aa=\"bb\",cc=}", .result = Error::kUnexpectedToken, .floats = {}},
+        /*ScraperCase{.buffer = `custom_metric_total 1 # {aa=\"\xff\"} 9.0` .result = Error::kUnexpectedToken, .floats = {}}*/
+        ScraperCase{.buffer = "# TYPE hhh histogram\nhhh_bucket{le=\"+Inf\"} 1 # {aa=\"bb\"} 4 NaN\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "# TYPE hhh histogram\nhhh_bucket{le=\"+Inf\"} 1 # {aa=\"bb\"} 4 -Inf\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "# TYPE hhh histogram\nhhh_bucket{le=\"+Inf\"} 1 # {aa=\"bb\"} 4 Inf\n", .result = Error::kInvalidTimestamp, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {b=\x00\"ssss\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "custom_metric_total 1 # {b=\"\x00ss\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(
     PromTest,
@@ -665,121 +668,121 @@ INSTANTIATE_TEST_SUITE_P(
                 Metadata{.metric_name = "foo", .text = "counter", .type = MetadataType::kType},
                 Metadata{.metric_name = "metric", .text = "foo\0bar"sv, .type = MetadataType::kHelp},
             },
-        .metrics = {
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go_gc_duration_seconds"},
-                                      {"quantile", "0"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go_gc_duration_seconds"},
-                                      {"quantile", "0.25"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go_gc_duration_seconds"},
-                                      {"quantile", "0.5"},
-                                      {"a", "b"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go_gc_duration_seconds"},
-                                      {"quantile", "1.0"},
-                                      {"a", "b"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go_gc_duration_seconds_count"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 99}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "some:aggregate:rate5m"},
-                                      {"a_b", "c"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go_goroutines"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{123123, 33}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "hh_bucket"},
-                                      {"le", "+Inf"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "gh_bucket"},
-                                      {"le", "+Inf"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "hhh_bucket"},
-                                      {"le", "+Inf"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "hhh_count"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "ggh_bucket"},
-                                      {"le", "+Inf"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "ggh_count"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "smr_seconds_count"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 2}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "smr_seconds_sum"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 42}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "ii"},
-                                      {"foo", "bar"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "ss"},
-                                      {"ss", "foo"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "ss"},
-                                      {"ss", "bar"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "ss"},
-                                      {"A", "a"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "_metric_starting_with_underscore"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "testmetric"},
-                                      {"_label_starting_with_underscore", "foo"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "testmetric"},
-                                      {"label", "\"bar\""},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "foo_total"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{1520879607789, 17.0}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "null_byte_metric"},
-                                      {"a", "abc\0"sv},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+        .floats = {
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go_gc_duration_seconds"},
+                                           {"quantile", "0"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go_gc_duration_seconds"},
+                                           {"quantile", "0.25"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go_gc_duration_seconds"},
+                                           {"quantile", "0.5"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go_gc_duration_seconds"},
+                                           {"quantile", "1.0"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go_gc_duration_seconds_count"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 99}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "some:aggregate:rate5m"},
+                                           {"a_b", "c"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go_goroutines"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{123123, 33}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "hh_bucket"},
+                                           {"le", "+Inf"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "gh_bucket"},
+                                           {"le", "+Inf"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "hhh_bucket"},
+                                           {"le", "+Inf"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "hhh_count"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "ggh_bucket"},
+                                           {"le", "+Inf"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "ggh_count"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "smr_seconds_count"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 2}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "smr_seconds_sum"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 42}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "ii"},
+                                           {"foo", "bar"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "ss"},
+                                           {"ss", "foo"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "ss"},
+                                           {"ss", "bar"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "ss"},
+                                           {"A", "a"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "_metric_starting_with_underscore"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "testmetric"},
+                                           {"_label_starting_with_underscore", "foo"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "testmetric"},
+                                           {"label", "\"bar\""},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "foo_total"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{1520879607789, 17.0}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "null_byte_metric"},
+                                           {"a", "abc\0"sv},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}},
         }}));
 
 INSTANTIATE_TEST_SUITE_P(
@@ -806,40 +809,40 @@ INSTANTIATE_TEST_SUITE_P(
                 Metadata{.metric_name = "go.gc_duration_seconds", .text = "A summary of the GC invocation durations.", .type = MetadataType::kHelp},
                 Metadata{.metric_name = "go.gc_duration_seconds", .text = "summary", .type = MetadataType::kType},
             },
-        .metrics = {
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go.gc_duration_seconds"},
-                                      {"quantile", "0"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go.gc_duration_seconds"},
-                                      {"quantile", "0.25"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go.gc_duration_seconds"},
-                                      {"quantile", "0.5"},
-                                      {"a", "b"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "http.status"},
-                                      {"q", "0.9"},
-                                      {"a", "b"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"q", "0.9"},
-                                      {"__name__", "http.status"},
-                                      {"a", "b"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
-            Metric{.timeseries = {LabelViewSet{
-                                      {"__name__", "go.gc_duration_seconds_sum"},
-                                  },
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0.004304266}}}},
-            Metric{
+        .floats = {
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 4.9351e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0.25"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 7.424100000000001e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds"},
+                                           {"quantile", "0.5"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "http.status"},
+                                           {"q", "0.9"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"q", "0.9"},
+                                           {"__name__", "http.status"},
+                                           {"a", "b"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 8.3835e-05}}}},
+            FloatMetric{.timeseries = {LabelViewSet{
+                                           {"__name__", "go.gc_duration_seconds_sum"},
+                                       },
+                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 0.004304266}}}},
+            FloatMetric{
                 .timeseries = {LabelViewSet{
                                    {"__name__",
                                     "\x48\x65\x69\x7a\xc3\xb6\x6c\x72\xc3\xbc\x63\x6b\x73\x74\x6f\xc3\x9f\x61\x62\x64\xc3\xa4\x6d\x70\x66\x75\x6e\x67\x20\x31"
@@ -854,36 +857,29 @@ INSTANTIATE_TEST_SUITE_P(NullByte,
                          OpenMetricsScraperFixture,
                          testing::Values(ScraperCase{.buffer = "null_byte_metric{a=\"abc\x00\"} 1\n# EOF\n"sv,
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "null_byte_metric"},
-                                                                                           {"a", "abc\x00"sv},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-                                         ScraperCase{.buffer = "null_byte_metric{a=\"abc\x00\"} 1\n# EOF\n"sv,
-                                                     .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "null_byte_metric"},
-                                                                                           {"a", "abc\x00"sv},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "null_byte_metric"},
+                                                                                               {"a", "abc\x00"sv},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
                                          ScraperCase{.buffer = "a{b=\"\x00\"} 1\n# EOF\n"sv,
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "a"},
-                                                                                           {"b", "\x00"sv},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-                                         ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n# EOF\n"sv, .result = Error::kUnexpectedToken, .metrics = {}}));
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "a"},
+                                                                                               {"b", "\x00"sv},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                         ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n# EOF\n"sv, .result = Error::kUnexpectedToken, .floats = {}}));
 
 INSTANTIATE_TEST_SUITE_P(EscapedString,
                          OpenMetricsScraperFixture,
                          testing::Values(ScraperCase{.buffer = R"(kubevirt_vmi_filesystem_capacity_bytes{mount_point="D:\\"} 1.1)"
                                                                "\n# EOF\n",
                                                      .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "kubevirt_vmi_filesystem_capacity_bytes"},
-                                                                                           {"mount_point", "D:\\"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{
+                                                                                               {"__name__", "kubevirt_vmi_filesystem_capacity_bytes"},
+                                                                                               {"mount_point", "D:\\"},
+                                                                                           },
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
 }  // namespace

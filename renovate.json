@@ -4,6 +4,14 @@
   "minimumReleaseAge": "90 days",
   "internalChecksFilter": "strict",
 
+  "reviewers": ["vporoshok"],
+  "assignees": ["vporoshok"],
+
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "automergeStrategy": "squash",
+
   "vulnerabilityAlerts": {
     "enabled": true,
     "minimumReleaseAge": "0 days",

@@ -21,7 +21,6 @@ class Protobuf : public Prometheus::hashdex::Abstract {
             .max_timeseries_count = limits.max_timeseries_count,
         } {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return metrics_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& limits() const noexcept { return limits_; }
 
   void presharding(std::string_view protobuf) {
@@ -61,10 +60,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     presharding(protobuf_);
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return std::begin(metrics_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return std::end(metrics_); }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return metrics_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
 
  private:
@@ -83,23 +79,23 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   };
 
   std::string protobuf_;
-  BareBones::Vector<Item> metrics_;
+  BareBones::Vector<Item> floats_;
   BareBones::Vector<Metadata> metadata_;
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
   Primitives::LabelViewSet label_set_;
 
   void parse_timeseries(protozero::pbf_reader& pb) {
-    if (limits_.max_timeseries_count && metrics_.size() >= limits_.max_timeseries_count) [[unlikely]] {
+    if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
     auto pb_view = pb.get_view();
     read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
 
-    if (metrics_.empty()) [[unlikely]] {
+    if (floats_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);
     }
 
-    metrics_.emplace_back(hash_value(label_set_), pb_view);
+    floats_.emplace_back(hash_value(label_set_), pb_view);
 
     label_set_.clear();
   }
