@@ -5,11 +5,11 @@
 
 namespace PromPP::WAL::hashdex {
 
-struct Metric {
+struct FloatMetric {
   Primitives::TimeseriesSemiview timeseries{};
   uint64_t hash{};
 
-  bool operator==(const Metric&) const noexcept = default;
+  bool operator==(const FloatMetric&) const noexcept = default;
 };
 
 #pragma pack(push, 1)
