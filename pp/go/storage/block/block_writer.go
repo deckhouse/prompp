@@ -2,7 +2,6 @@ package block
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -43,6 +42,7 @@ func (wb *WrittenBlock) MetaFilename() string {
 	return filepath.Join(wb.Dir, block.MetaFilename)
 }
 
+// blockWriter is a writer for a block.
 type blockWriter struct {
 	WrittenBlock
 
@@ -310,49 +310,6 @@ func adjustBlockMetaTimeRange(blockMeta *tsdb.BlockMeta, mint, maxt int64) {
 	if maxt > blockMeta.MaxTime {
 		blockMeta.MaxTime = maxt
 	}
-}
-
-// TODO: Delete this function
-func writeBlockMetaFile(fileName string, blockMeta *tsdb.BlockMeta) (int64, error) {
-	tmp := fileName + ".tmp"
-	defer func() {
-		if err := os.RemoveAll(tmp); err != nil {
-			logger.Errorf("failed to remove directory: %v", err)
-		}
-	}()
-
-	metaFile, err := os.Create(tmp) // #nosec G304 // it's meant to be that way
-	if err != nil {
-		return 0, fmt.Errorf("failed to create block meta file: %w", err)
-	}
-	defer func() {
-		if metaFile != nil {
-			if err = metaFile.Close(); err != nil {
-				logger.Errorf("failed to close metadata file: %v", err)
-			}
-		}
-	}()
-
-	jsonBlockMeta, err := json.MarshalIndent(blockMeta, "", "\t")
-	if err != nil {
-		return 0, fmt.Errorf("failed to marshal meta json: %w", err)
-	}
-
-	n, err := metaFile.Write(jsonBlockMeta)
-	if err != nil {
-		return 0, fmt.Errorf("failed to write meta json: %w", err)
-	}
-
-	if err = metaFile.Sync(); err != nil {
-		return 0, fmt.Errorf("failed to sync meta file: %w", err)
-	}
-
-	if err = metaFile.Close(); err != nil {
-		return 0, fmt.Errorf("faield to close meta file: %w", err)
-	}
-	metaFile = nil
-
-	return int64(n), fileutil.Replace(tmp, fileName)
 }
 
 func createTmpDir(dir string) error {

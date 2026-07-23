@@ -143,7 +143,7 @@ func (cmd *cmdPersistHead) Do(
 			return err
 		}
 
-		writtenBlocks, writeErr := bw.Write(sd)
+		writtenBlocks, writeErr := bw.Write(sd, numberOfShards)
 		if writeErr != nil {
 			return fmt.Errorf("failed to write tsdb block [id: %s, dir: %s]: %w", id.String(), headID, writeErr)
 		}

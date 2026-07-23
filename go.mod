@@ -33,7 +33,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.7.0
-	github.com/google/pprof v0.0.0-20260507013755-92041b743c96
+	github.com/google/pprof v0.0.0-20260709232956-b9395ee17fa0
 	github.com/google/uuid v1.6.0
 	github.com/gophercloud/gophercloud v1.14.1
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853
@@ -67,7 +67,6 @@ require (
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.36
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
 	github.com/stretchr/testify v1.11.1
-	github.com/thanos-io/objstore v0.0.0-20241111205755-d1dd89d41f97
 	github.com/thanos-io/thanos v0.37.2
 	github.com/vultr/govultr/v2 v2.17.2
 	go.opentelemetry.io/collector/pdata v1.14.1
@@ -325,6 +324,7 @@ require (
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/tdakkota/asciicheck v0.4.1 // indirect
 	github.com/tetafro/godot v1.5.0 // indirect
+	github.com/thanos-io/objstore v0.0.0-20241111205755-d1dd89d41f97 // indirect
 	github.com/thanos-io/promql-engine v0.0.0-20241203103240-2f49f80c7c68 // indirect
 	github.com/timakin/bodyclose v0.0.0-20241017074812-ed6a65f985e3 // indirect
 	github.com/timonwong/loggercheck v0.10.1 // indirect

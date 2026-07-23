@@ -179,11 +179,10 @@ func (m *Manager) reloadAndCompact() {
 	}
 
 	for {
-		compacted, err := m.compactor.Compact(m.blocks)
-		if err != nil {
+		compacted, errCompact := m.compactor.Compact(m.blocks)
+		if errCompact != nil {
 			//revive:disable-next-line:add-constant // this is log
-			_ = level.Error(m.logger).Log("msg", "compaction failed", "err", err)
-			return
+			_ = level.Error(m.logger).Log("msg", "compaction failed", "err", errCompact)
 		}
 		if len(compacted) == 0 {
 			return
@@ -195,6 +194,10 @@ func (m *Manager) reloadAndCompact() {
 		if err := m.reloadBlocks(); err != nil {
 			_ = level.Error(m.logger).Log("msg", "reload blocks after compaction failed", "err", err)
 			m.deleteCompactedBlocks(compacted)
+			return
+		}
+
+		if errCompact != nil {
 			return
 		}
 	}
@@ -452,14 +455,39 @@ func (m *Manager) reloadBlocks() (err error) {
 		}
 	}
 
-	if err := m.deleteBlocks(deletable); err != nil {
-		return fmt.Errorf("delete %v blocks: %w", len(deletable), err)
+	if err := m.renameForDeletionBlocks(deletable); err != nil {
+		return fmt.Errorf("rename for deletion %v blocks: %w", len(deletable), err)
+	}
+
+	go m.closeAndDeleteBlocks(deletable)
+
+	return nil
+}
+
+// renameForDeletionBlocks renames the given blocks for deletion.
+func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) error {
+	for uid := range blocks {
+		from := filepath.Join(m.dir, uid.String())
+		switch _, err := os.Stat(from); {
+		case os.IsNotExist(err):
+			// Noop.
+			continue
+		case err != nil:
+			return fmt.Errorf("stat dir %v: %w", from, err)
+		}
+
+		// Replace atomically to avoid partial block when process would crash during deletion.
+		tmpToDelete := filepath.Join(m.dir, fmt.Sprintf("%s%s", uid, tmpForDeletionBlockDirSuffix))
+		if err := fileutil.Replace(from, tmpToDelete); err != nil {
+			return fmt.Errorf("replace of obsolete block for deletion %s: %w", uid, err)
+		}
 	}
 
 	return nil
 }
 
-func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*block.Block) error {
+// closeAndDeleteBlocks closes the given blocks and deletes the temporary files for deletion.
+func (m *Manager) closeAndDeleteBlocks(blocks map[ulid.ULID]*block.Block) {
 	for uid, blk := range blocks {
 		if blk != nil {
 			if err := blk.Close(); err != nil {
@@ -468,29 +496,23 @@ func (m *Manager) deleteBlocks(blocks map[ulid.ULID]*block.Block) error {
 			}
 		}
 
-		toDelete := filepath.Join(m.dir, uid.String())
-		switch _, err := os.Stat(toDelete); {
+		tmpToDelete := filepath.Join(m.dir, fmt.Sprintf("%s%s", uid, tmpForDeletionBlockDirSuffix))
+		switch _, err := os.Stat(tmpToDelete); {
 		case os.IsNotExist(err):
 			// Noop.
 			continue
 		case err != nil:
-			return fmt.Errorf("stat dir %v: %w", toDelete, err)
-		}
-
-		// Replace atomically to avoid partial block when process would crash during deletion.
-		tmpToDelete := filepath.Join(m.dir, fmt.Sprintf("%s%s", uid, tmpForDeletionBlockDirSuffix))
-		if err := fileutil.Replace(toDelete, tmpToDelete); err != nil {
-			return fmt.Errorf("replace of obsolete block for deletion %s: %w", uid, err)
+			_ = level.Warn(m.logger).Log("msg", "stat temporary file for deletion failed", "err", err, "block", uid)
+			continue
 		}
 
 		if err := os.RemoveAll(tmpToDelete); err != nil {
-			return fmt.Errorf("delete obsolete block %s: %w", uid, err)
+			_ = level.Warn(m.logger).Log("msg", "delete temporary file for deletion failed", "err", err, "block", uid)
+			continue
 		}
 
 		_ = level.Info(m.logger).Log("msg", "Deleting obsolete block", "block", uid)
 	}
-
-	return nil
 }
 
 // deleteCompactedBlocks removes the given block directories from disk. It is used
