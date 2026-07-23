@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+
 	"github.com/prometheus/prometheus/storage/remote"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -276,7 +277,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 func (wl *writeLoop) makeDataSource(
 	ctx context.Context,
 	headDir string,
-	dcfg DestinationConfig, //nolint:gocritic // hugeParam // config
+	dcfg DestinationConfig,
 	headRecord *catalog.Record,
 	targetSegmentID uint32,
 	discardCache bool,
@@ -335,7 +336,7 @@ func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
 
 // createClient creates a new [remote.WriteClient].
 //
-//nolint:gocritic // hugeParam // this is a constructor for new client
+
 func createClient(config DestinationConfig) (client remote.WriteClient, err error) {
 	clientConfig := remote.ClientConfig{
 		URL:              config.URL,
@@ -365,7 +366,7 @@ func (fn CorruptMarkerFn) MarkCorrupted(headID string) error {
 
 // nextHead returns next head record from catalog.
 //
-//nolint:gocritic // hugeParam // this is a extractor
+
 //revive:disable-next-line:cyclomatic // this is a extractor
 func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID string) (*catalog.Record, error) {
 	if err := contextErr(ctx); err != nil {

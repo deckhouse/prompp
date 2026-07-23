@@ -71,7 +71,7 @@ testmetric{label="\"bar\""} 1`
 	})
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(uint32(18), scraped)
 	s.Equal(expectedMetadata, actualMetadata)
 }
@@ -84,7 +84,7 @@ func (s *PrometheusScraperHashdexSuite) TestParseErrScraperParseUnexpectedToken(
 	scraped, err := s.hasdex.Parse(input, -1)
 
 	// Assert
-	s.ErrorIs(err, cppbridge.ErrScraperParseUnexpectedToken)
+	s.Require().ErrorIs(err, cppbridge.ErrScraperParseUnexpectedToken)
 	s.Equal(uint32(0), scraped)
 }
 
@@ -96,7 +96,7 @@ func (s *PrometheusScraperHashdexSuite) TestParseErrScraperParseNoMetricName() {
 	scraped, err := s.hasdex.Parse(input, -1)
 
 	// Assert
-	s.ErrorIs(err, cppbridge.ErrScraperParseNoMetricName)
+	s.Require().ErrorIs(err, cppbridge.ErrScraperParseNoMetricName)
 	s.Equal(uint32(0), scraped)
 }
 
@@ -108,7 +108,7 @@ func (s *PrometheusScraperHashdexSuite) TestParseErrScraperInvalidUtf8() {
 	scraped, err := s.hasdex.Parse(input, -1)
 
 	// Assert
-	s.ErrorIs(err, cppbridge.ErrScraperInvalidUtf8)
+	s.Require().ErrorIs(err, cppbridge.ErrScraperInvalidUtf8)
 	s.Equal(uint32(0), scraped)
 }
 
@@ -120,7 +120,7 @@ func (s *PrometheusScraperHashdexSuite) TestParseErrScraperParseInvalidValue() {
 	scraped, err := s.hasdex.Parse(input, -1)
 
 	// Assert
-	s.ErrorIs(err, cppbridge.ErrScraperParseInvalidValue)
+	s.Require().ErrorIs(err, cppbridge.ErrScraperParseInvalidValue)
 	s.Equal(uint32(0), scraped)
 }
 
@@ -132,7 +132,7 @@ func (s *PrometheusScraperHashdexSuite) TestParseErrScraperParseInvalidTimestamp
 	scraped, err := s.hasdex.Parse(input, -1)
 
 	// Assert
-	s.ErrorIs(err, cppbridge.ErrScraperParseInvalidTimestamp)
+	s.Require().ErrorIs(err, cppbridge.ErrScraperParseInvalidTimestamp)
 	s.Equal(uint32(0), scraped)
 }
 
@@ -149,7 +149,7 @@ func (s *PrometheusScraperHashdexSuite) TestParseEmptyInput() {
 	})
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal([]cppbridge.WALScraperHashdexMetadata(nil), actualMetadata)
 	s.Equal(uint32(0), scraped)
 }

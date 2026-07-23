@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-// Header versions
+// Header versions.
 const (
 	unknownHeaderVersion uint8 = iota
 	headerVersion1
@@ -39,7 +39,7 @@ const (
 	maxheaderSize int    = headerSizeMain + headerSizeV3
 )
 
-// VersionedHeader - versioned header
+// VersionedHeader - versioned header.
 type VersionedHeader interface {
 	DecodeBinary(r io.Reader) error
 	DecodeBuffer(buf []byte)

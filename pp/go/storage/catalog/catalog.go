@@ -212,7 +212,7 @@ func (c *Catalog) List(filterFn func(record *Record) bool, sortLess func(lhs, rh
 	return records
 }
 
-// listWithFilter returns slice of filtered records
+// listWithFilter returns slice of filtered records.
 func (c *Catalog) listWithFilter(filterFn func(record *Record) bool) []*Record {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()

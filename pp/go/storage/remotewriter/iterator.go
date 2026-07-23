@@ -11,8 +11,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/prometheus/storage/remote"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/prometheus/prometheus/storage/remote"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"

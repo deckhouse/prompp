@@ -54,6 +54,7 @@ func (s *LabelSetSuite) TestLabelSet_FromPairs() {
 
 func (s *LabelSetSuite) TestLabelSet_FromPairs_panic() {
 	s.Panics(func() {
+		//nolint:staticcheck // odd number of elements is intentional to trigger the panic under test
 		model.LabelSetFromPairs(
 			"__name__", "example",
 			"instance", "instance",

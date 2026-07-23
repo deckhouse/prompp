@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -166,8 +167,8 @@ func (b *Builder) createShardOnDisk(
 		shardID,
 		shardFile,
 		writer.WriteSegment[*cppbridge.HeadEncodedSegment], // V2: writer.WriteSegmentV2
-		swn,                                                // V2: NoopSegmentWriteNotifier{}
-		writer.NoopSegmentMarkup{},                         // V2: headRecord
+		swn,                        // V2: NoopSegmentWriteNotifier{}
+		writer.NoopSegmentMarkup{}, // V2: headRecord
 		// writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
 		// NoopSegmentWriteNotifier{},
 		// headRecord,
