@@ -20,6 +20,6 @@ class FindMinElement {
 };
 
 template <class Iterator = UniversalDecodeIterator>
-using MinOverTimeIterator = OverTimeFuncIterator<FindMinElement, Iterator>;
+using MinOverTimeIterator = OverTimeFuncIterator<FindMinElement, Iterator, true>;
 
 }  // namespace series_data::decoder::decorator
