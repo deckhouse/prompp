@@ -595,39 +595,48 @@ func (s *querierOptimize) fillHead(ctx context.Context) {
 	valueCounter := 1
 	for ts := s.start; !ts.After(s.end); ts = ts.Add(s.step) {
 		tsMilli := ts.UnixMilli()
-		timeSeries[0].Samples = append(timeSeries[0].Samples,
+		timeSeries[0].Samples = append(
+			timeSeries[0].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(ts.UnixMilli())) * 10},
 		)
-		timeSeries[1].Samples = append(timeSeries[1].Samples,
+		timeSeries[1].Samples = append(
+			timeSeries[1].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(ts.Second())) * 10},
 		)
 
 		if valueCounter%5 == 0 {
-			timeSeries[2].Samples = append(timeSeries[2].Samples,
+			timeSeries[2].Samples = append(
+				timeSeries[2].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: floatStaleNaN},
 			)
 		} else {
-			timeSeries[2].Samples = append(timeSeries[2].Samples,
+			timeSeries[2].Samples = append(
+				timeSeries[2].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(ts.Second())) * 10},
 			)
 		}
 
-		timeSeries[3].Samples = append(timeSeries[3].Samples,
+		timeSeries[3].Samples = append(
+			timeSeries[3].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Cos(float64(ts.UnixMilli())) * 10},
 		)
-		timeSeries[4].Samples = append(timeSeries[4].Samples,
+		timeSeries[4].Samples = append(
+			timeSeries[4].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: math.Cos(float64(ts.Second())) * 10},
 		)
-		timeSeries[5].Samples = append(timeSeries[5].Samples,
+		timeSeries[5].Samples = append(
+			timeSeries[5].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter)},
 		)
 
 		if valueCounter%5 == 0 {
-			timeSeries[6].Samples = append(timeSeries[6].Samples,
+			timeSeries[6].Samples = append(
+				timeSeries[6].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: floatStaleNaN},
 			)
 		} else {
-			timeSeries[6].Samples = append(timeSeries[6].Samples,
+			timeSeries[6].Samples = append(
+				timeSeries[6].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter + 1)},
 			)
 		}
@@ -635,7 +644,8 @@ func (s *querierOptimize) fillHead(ctx context.Context) {
 		if resetsCounter%10 == 0 {
 			resetsCounter = 1
 		}
-		timeSeries[7].Samples = append(timeSeries[7].Samples,
+		timeSeries[7].Samples = append(
+			timeSeries[7].Samples,
 			cppbridge.Sample{Timestamp: tsMilli, Value: float64(resetsCounter)},
 		)
 
@@ -668,11 +678,13 @@ func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, start, counte
 	for ts := s.start; !ts.After(s.end); ts = ts.Add(s.step) {
 		tsMilli := ts.UnixMilli()
 		for i := range counter {
-			timeSeries[i].Samples = append(timeSeries[i].Samples,
+			timeSeries[i].Samples = append(
+				timeSeries[i].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: float64(valueCounter)},
 			)
 
-			timeSeries[i+counter].Samples = append(timeSeries[i+counter].Samples,
+			timeSeries[i+counter].Samples = append(
+				timeSeries[i+counter].Samples,
 				cppbridge.Sample{Timestamp: tsMilli, Value: math.Sin(float64(i))*10 + math.Cos(float64(i))*10},
 			)
 		}
@@ -920,8 +932,6 @@ func (s *MatrixQuerierOptimizeSuiteSuite) TestQueryRangeSingle() {
 var defaultEpsilon = 0.0000000000001
 
 // resultEqual compares two results.
-//
-//nolint:gocritic // unnamedResult // comporator
 func resultEqual(exp, act *promql.Result, query string) (bool, string) {
 	if exp == nil && act == nil {
 		return true, ""
@@ -947,8 +957,6 @@ func resultEqual(exp, act *promql.Result, query string) (bool, string) {
 }
 
 // valueEqual compares two values.
-//
-//nolint:gocritic // unnamedResult // comporator
 func valueEqual(exp, act parser.Value) (bool, string) {
 	if exp == nil && act == nil {
 		return true, ""
@@ -978,8 +986,6 @@ func valueEqual(exp, act parser.Value) (bool, string) {
 }
 
 // scalarEqual compares two scalars.
-//
-//nolint:gocritic // unnamedResult // comporator
 func scalarEqual(exp, act promql.Scalar) (bool, string) {
 	if exp.T != act.T || !inEpsilon(exp.V, act.V, defaultEpsilon) {
 		return false, fmt.Sprintf("scalar: %s != %s", exp, act)
@@ -989,8 +995,6 @@ func scalarEqual(exp, act promql.Scalar) (bool, string) {
 }
 
 // vectorEqual compares two vectors.
-//
-//nolint:gocritic // unnamedResult // comporator
 func vectorEqual(exp, act promql.Vector) (bool, string) {
 	if len(exp) != len(act) {
 		return false, fmt.Sprintf("vector: length: %d != %d", len(exp), len(act))
@@ -1024,8 +1028,6 @@ func vectorEqual(exp, act promql.Vector) (bool, string) {
 }
 
 // sampleEqual compares two samples.
-//
-//nolint:gocritic // unnamedResult // comporator
 func sampleEqual(exp, act promql.Sample) (bool, string) {
 	if !labels.Equal(exp.Metric, act.Metric) {
 		return false, fmt.Sprintf("labels: %s != %s\n", exp.Metric, act.Metric)
@@ -1053,8 +1055,6 @@ func sampleEqual(exp, act promql.Sample) (bool, string) {
 }
 
 // matrixEqual compares two matrices.
-//
-//nolint:gocritic // unnamedResult // comporator
 func matrixEqual(exp, act promql.Matrix) (bool, string) {
 	if len(exp) != len(act) {
 		return false, fmt.Sprintf("matrix: length: %d != %d", len(exp), len(act))
@@ -1079,8 +1079,6 @@ func matrixEqual(exp, act promql.Matrix) (bool, string) {
 }
 
 // seriesEqual compares two series.
-//
-//nolint:gocritic // unnamedResult // comporator
 func seriesEqual(exp, act promql.Series) (bool, string) {
 	if !labels.Equal(exp.Metric, act.Metric) {
 		return false, fmt.Sprintf("labels: %s != %s\n", exp.Metric, act.Metric)
