@@ -15,10 +15,10 @@ package promql
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +28,12 @@ import (
 	"github.com/edsrzf/mmap-go"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/mailru/easyjson/jwriter"
+)
+
+var (
+	emptyFiller = "\x00"
+	emptyEntry  = strings.Repeat(emptyFiller, entrySize)
 )
 
 type ActiveQueryTracker struct {
@@ -45,12 +51,23 @@ type Entry struct {
 	Timestamp int64  `json:"timestamp_sec"`
 }
 
+// MarshalJSON implements json.Marshaler.
+func (e *Entry) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	w.RawString(`{"query":`)
+	w.String(e.Query)
+	w.RawString(`,"timestamp_sec":`)
+	w.Int64(e.Timestamp)
+	w.RawByte('}')
+	return w.BuildBytes()
+}
+
 const (
 	entrySize int = 1000
 )
 
 func parseBrokenJSON(brokenJSON []byte) (string, bool) {
-	queries := strings.ReplaceAll(string(brokenJSON), "\x00", "")
+	queries := strings.ReplaceAll(string(brokenJSON), emptyFiller, "")
 	if queries != "" {
 		queries = queries[:len(queries)-1] + "]"
 	}
@@ -142,7 +159,7 @@ func getMMappedFile(filename string, filesize int, logger log.Logger) ([]byte, i
 
 	if err := allocateQueryLogFile(file, filesize); err != nil {
 		file.Close()
-		level.Error(logger).Log("msg", "Error setting filesize.", "filesize", filesize, "err", err)
+		level.Error(logger).Log("msg", "Error allocating query log file", "filesize", filesize, "err", err)
 		return nil, nil, err
 	}
 
@@ -161,6 +178,14 @@ func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger lo
 	if err != nil {
 		level.Error(logger).Log("msg", "Failed to create directory for logging active queries")
 		return nil, fmt.Errorf("create active query log directory: %w", err)
+	}
+
+	if maxConcurrent < 1 {
+		return nil, fmt.Errorf("maxConcurrent must be greater than 0")
+	}
+
+	if maxConcurrent > math.MaxInt32/1000 { // 2GB max size of the file
+		return nil, fmt.Errorf("maxConcurrent must be less than %d", math.MaxInt32)
 	}
 
 	filename, filesize := filepath.Join(localStoragePath, "queries.active"), 1+maxConcurrent*entrySize
@@ -186,22 +211,20 @@ func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger lo
 }
 
 func trimStringByBytes(str string, size int) string {
-	bytesStr := []byte(str)
-
-	trimIndex := len(bytesStr)
-	if size < len(bytesStr) {
-		for size > 0 && !utf8.RuneStart(bytesStr[size]) {
+	trimIndex := len(str)
+	if size < len(str) {
+		for size > 0 && !utf8.RuneStart(str[size]) {
 			size--
 		}
 		trimIndex = size
 	}
 
-	return string(bytesStr[:trimIndex])
+	return str[:trimIndex]
 }
 
 func _newJSONEntry(query string, timestamp int64, logger log.Logger) []byte {
 	entry := Entry{query, timestamp}
-	jsonEntry, err := json.Marshal(entry)
+	jsonEntry, err := entry.MarshalJSON()
 	if err != nil {
 		level.Error(logger).Log("msg", "Cannot create json of query", "query", query)
 		return []byte{}
@@ -212,12 +235,23 @@ func _newJSONEntry(query string, timestamp int64, logger log.Logger) []byte {
 
 func newJSONEntry(query string, logger log.Logger) []byte {
 	timestamp := time.Now().Unix()
+	// Leave one byte for the trailing ',' written by Insert.
+	maxLen := entrySize - 1
 	minEntryJSON := _newJSONEntry("", timestamp, logger)
 
-	query = trimStringByBytes(query, entrySize-(len(minEntryJSON)+1))
-	jsonEntry := _newJSONEntry(query, timestamp, logger)
+	query = trimStringByBytes(query, maxLen-len(minEntryJSON))
+	for {
+		jsonEntry := _newJSONEntry(query, timestamp, logger)
+		if len(jsonEntry) <= maxLen || query == "" {
+			return jsonEntry
+		}
 
-	return jsonEntry
+		// JSON escaping (e.g. ", \, <, control chars) can make the marshaled
+		// entry longer than the raw query byte budget; shrink and retry.
+		overflow := len(jsonEntry) - maxLen
+		next := max(len(query)-overflow, 0)
+		query = trimStringByBytes(query, next)
+	}
 }
 
 func (tracker ActiveQueryTracker) generateIndices(maxConcurrent int) {
@@ -231,7 +265,7 @@ func (tracker ActiveQueryTracker) GetMaxConcurrent() int {
 }
 
 func (tracker ActiveQueryTracker) Delete(insertIndex int) {
-	copy(tracker.mmappedFile[insertIndex:], strings.Repeat("\x00", entrySize))
+	copy(tracker.mmappedFile[insertIndex:], emptyEntry)
 	tracker.getNextIndex <- insertIndex
 }
 
@@ -241,12 +275,6 @@ func (tracker ActiveQueryTracker) Insert(ctx context.Context, query string) (int
 		fileBytes := tracker.mmappedFile
 		entry := newJSONEntry(query, tracker.logger)
 		start, end := i, i+entrySize
-
-		if len(entry) > entrySize {
-			// cut the entry to the size of the entrySize
-			// this is to avoid the entry being too long and causing the copy to fail
-			entry = entry[:entrySize]
-		}
 
 		copy(fileBytes[start:], entry)
 		copy(fileBytes[end-1:], ",")

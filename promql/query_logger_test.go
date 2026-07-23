@@ -15,6 +15,7 @@ package promql
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -78,9 +79,10 @@ func TestQueryLogging(t *testing.T) {
 		"SpecialCharQuery{host=\"2132132\", id=123123}",
 	}
 
+	trimmedLongString := trimStringByBytes(veryLongString, entrySize-40)
 	want := []string{
 		`^{"query":"TestQuery","timestamp_sec":\d+}\x00*,$`,
-		`^{"query":"` + trimStringByBytes(veryLongString, entrySize-40) + `","timestamp_sec":\d+}\x00*,$`,
+		`^{"query":"` + trimmedLongString + `","timestamp_sec":\d+}\x00*,$`,
 		`^{"query":"","timestamp_sec":\d+}\x00*,$`,
 		`^{"query":"SpecialCharQuery{host=\\"2132132\\", id=123123}","timestamp_sec":\d+}\x00*,$`,
 	}
@@ -144,7 +146,7 @@ func TestIndexReuse(t *testing.T) {
 
 func TestMMapFile(t *testing.T) {
 	dir := t.TempDir()
-	fpath := filepath.Join(dir, "mmapedFile")
+	fpath := filepath.Join(dir, "mmappedFile")
 	const data = "ab"
 
 	fileAsBytes, closer, err := getMMappedFile(fpath, 2, nil)
@@ -266,4 +268,16 @@ func TestParseBrokenJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewJSONEntryFitsEntrySize(t *testing.T) {
+	// Long query with characters that expand under JSON escaping (", \).
+	// Without accounting for escaping, the marshaled entry exceeds entrySize.
+	query := `(sum(irate(namedprocess_namegroup_cpu_seconds_total{instance=~\"127.0.0.1:9256\", job=\"process-exporter\", groupname=~\"(zsh|xdg-permission-|xdg-document-po|xdg-desktop-por|xdelta3|wpa_supplicant|wireplumber|user-session-he|upowerd|update-notifier|update-motd-upd|update-mime-dat|update-manager|unattended-upgr|udisksd|udev-configure-|trdl|tracker-miner-f|tracker-extract|tmux: server|tmux: client|telegram-deskto|systemd-udevd|systemd-tty-ask|systemd-timesyn|systemd-timedat|systemd-resolve|systemd-oomd|systemd-logind|systemd-journal|systemd-hostnam|systemd|systemctl|switcheroo-cont|sudo|sublime_text|store|ssh-agent|ssh|speech-dispatch|snapd\\\\.postinst|snapd-desktop-i|snapd|snap-store|snap|smbd-notifyd|smbd-cleanupd|smbd|sleep|sh|sensible-editor|sed|sd_openjtalk|sd_espeak-ng|sd_dummy|scp|rtkit-daemon|rsyslogd|rpcbind|rpc\\\\.statd|rpc\\\\.mountd|rpc\\\\.idmapd|python3|python|prompp_storage|prompp_82|prometheus|process-exporte|pprof|power-profiles-|polkitd|polk","timestamp_sec, len fileBytes 16000 len(entry) 1000 entry {"query":"(sum(irate(namedprocess_namegroup_cpu_seconds_total{instance=~\"127.0.0.1:9256\", job=\"process-exporter\", groupname=~\"(zsh|xdg-permission-|xdg-document-po|xdg-desktop-por|xdelta3|wpa_supplicant|wireplumber|user-session-he|upowerd|update-notifier|update-motd-upd|update-mime-dat|update-manager|unattended-upgr|udisksd|udev-configure-|trdl|tracker-miner-f|tracker-extract|tmux: server|tmux: client|telegram-deskto|systemd-udevd|systemd-tty-ask|systemd-timesyn|systemd-timedat|systemd-resolve|systemd-oomd|systemd-logind|systemd-journal|systemd-hostnam|systemd|systemctl|switcheroo-cont|sudo|sublime_text|store|ssh-agent|ssh|speech-dispatch|snapd\\\\.postinst|snapd-desktop-i|snapd|snap-store|snap|smbd-notifyd|smbd-cleanupd|smbd|sleep|sh|sensible-editor|sed|sd_openjtalk|sd_espeak-ng|sd_dummy|scp|rtkit-daemon|rsyslogd|rpcbind|rpc\\\\.statd|rpc\\\\.mountd|rpc\\\\.idmapd|python3|python|prompp_storage|prompp_82|prometheus|process-exporte|pprof|power-profiles-|polkitd|polk`
+	require.Greater(t, len(query), entrySize)
+
+	jsonEntry := newJSONEntry(query, log.NewNopLogger())
+	// Insert reserves the last byte of each slot for a trailing comma.
+	require.LessOrEqual(t, len(jsonEntry), entrySize-1, "json entry: %s", jsonEntry)
+	require.True(t, json.Valid(jsonEntry))
 }
