@@ -8,33 +8,33 @@ import (
 )
 
 var (
-	// exchange
+	// exchange.
 
-	// ErrPromiseCanceled - error for promise is canceled
+	// ErrPromiseCanceled - error for promise is canceled.
 	ErrPromiseCanceled = errors.New("promise is canceled")
-	// ErrSegmentGone - error for segment gone from exchange
+	// ErrSegmentGone - error for segment gone from exchange.
 	ErrSegmentGone = errors.New("segment gone from exchange")
 
-	// manager_keeper
+	// manager_keeper.
 
 	// ErrShutdownTimeout - error when value ErrShutdownTimeout less UncommittedTimeWindow*2.
 	ErrShutdownTimeout = errors.New("ShutdownTimeout must be greater than the UncommittedTimeWindow*2")
 
-	// manager
+	// manager.
 
-	// ErrDestinationsRequired - error no destinations found in config
+	// ErrDestinationsRequired - error no destinations found in config.
 	ErrDestinationsRequired = errors.New("no destinations found in config")
-	// ErrShutdown - error shutdown
+	// ErrShutdown - error shutdown.
 	ErrShutdown = errors.New("shutdown")
 
-	// models
+	// models.
 
-	// ErrAborted - error for promise is aborted
+	// ErrAborted - error for promise is aborted.
 	ErrAborted = errors.New("promise is aborted")
 	// ErrHADropped - error when metrics skip from High Availability.
 	ErrHADropped = errors.New("dropped from HA")
 
-	// refill sender
+	// refill sender.
 
 	// ErrCorruptedFile - error if the file is corrupted.
 	ErrCorruptedFile = errors.New("corrupted file")
@@ -43,7 +43,7 @@ var (
 	// errRefillLimitExceeded - error if refill limit exceeded.
 	errRefillLimitExceeded = errors.New("refill limit exceeded")
 
-	// sender
+	// sender.
 
 	// ErrBlockFinalization - signal if the current block is finalized.
 	ErrBlockFinalization = errors.New("block finalization")
@@ -65,12 +65,12 @@ type CorruptedEncoderError struct {
 	err error
 }
 
-// Error implements error interface
+// Error implements error interface.
 func (err CorruptedEncoderError) Error() string {
 	return err.err.Error()
 }
 
-// Unwrap implements errors.Unwrapper interface
+// Unwrap implements errors.Unwrapper interface.
 func (err CorruptedEncoderError) Unwrap() error {
 	return err.err
 }
@@ -91,7 +91,7 @@ type ErrSegmentNotFoundInRefill struct {
 	key cppbridge.SegmentKey
 }
 
-// SegmentNotFoundInRefill create ErrSegmentNotFoundInRefill error
+// SegmentNotFoundInRefill create ErrSegmentNotFoundInRefill error.
 func SegmentNotFoundInRefill(key cppbridge.SegmentKey) ErrSegmentNotFoundInRefill {
 	return ErrSegmentNotFoundInRefill{key}
 }

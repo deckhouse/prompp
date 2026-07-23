@@ -10,6 +10,8 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage"
@@ -20,7 +22,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	prom_storage "github.com/prometheus/prometheus/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -154,7 +155,7 @@ func (s *AppenderSuite) TestDropInvalidSeries() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 0, SeriesAdded: 0, SeriesDrop: 1}, stats)
 }
 
@@ -181,7 +182,7 @@ func (s *AppenderSuite) TestAppendMultipleSamplesInOneSeries() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 2, SeriesAdded: 1, SeriesDrop: 0}, stats)
 
 	data := s.getHeadData([]uint32{0})
@@ -229,7 +230,7 @@ func (s *AppenderSuite) TestSeriesPerShardTransfer() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 2, SeriesAdded: 2, SeriesDrop: 0}, stats)
 
 	data := s.getHeadData([]uint32{0})
@@ -287,7 +288,7 @@ func (s *AppenderSuite) TestShardedRelabeledSeriesFullNotEmpty() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 4, SeriesAdded: 4, SeriesDrop: 0}, stats)
 
 	data := s.getHeadData([]uint32{0, 1, 2, 3})
@@ -346,7 +347,7 @@ func (s *AppenderSuite) TestTrackStaleness() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 2, SeriesAdded: 1, SeriesDrop: 0}, stats)
 
 	data := s.getHeadData([]uint32{0})
@@ -393,7 +394,7 @@ func (s *AppenderSuite) TestTrackStalenessWithoutHonorTimestamps() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 2, SeriesAdded: 1, SeriesDrop: 0}, stats)
 
 	data := s.getHeadData([]uint32{0})
@@ -431,7 +432,7 @@ func (s *AppenderSuite) TestWithoutCommitToWal() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(0, s.walCommitCount)
 }
 
@@ -453,7 +454,7 @@ func (s *AppenderSuite) TestWithCommitToWal() {
 		true)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(1, s.walCommitCount)
 }
 
@@ -485,11 +486,11 @@ func (s *AppenderSuite) TestWithCommitToWalByLimitExhausted() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(1, s.walCommitCount)
 }
 
-/*func (s *AppenderSuite) TestUseRelabelerCache() {
+/* func (s *AppenderSuite) TestUseRelabelerCache() {
 	// Arrange
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
@@ -519,5 +520,5 @@ func (s *AppenderSuite) TestWithCommitToWalByLimitExhausted() {
 		false)
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 }*/

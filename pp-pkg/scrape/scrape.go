@@ -444,12 +444,12 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 		}
 
 		t := sp.activeTargets[fp]
-		interval, timeout, err := t.intervalAndTimeout(interval, timeout)
+		iterInterval, iterTimeout, err := t.intervalAndTimeout(interval, timeout)
 		var (
 			s = &targetScraper{
 				Target:               t,
 				client:               sp.client,
-				timeout:              timeout,
+				timeout:              iterTimeout,
 				bodySizeLimit:        bodySizeLimit,
 				acceptHeader:         acceptHeader(sp.config.ScrapeProtocols, validationScheme),
 				acceptEncodingHeader: acceptEncodingHeader(enableCompression),
@@ -465,8 +465,8 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 				trackTimestampsStaleness: trackTimestampsStaleness,
 				mrc:                      mrc,
 				cache:                    cache,
-				interval:                 interval,
-				timeout:                  timeout,
+				interval:                 iterInterval,
+				timeout:                  iterTimeout,
 				validationScheme:         validationScheme,
 			})
 		)

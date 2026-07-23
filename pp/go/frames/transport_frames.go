@@ -69,7 +69,7 @@ func NewWriteSegmentV4(id uint32, payload WritePayload) *WriteSegmentV4 {
 	return f
 }
 
-// WriteTo implements io.WriterTo interface
+// WriteTo implements io.WriterTo interface.
 func (f *WriteSegmentV4) WriteTo(w io.Writer) (int64, error) {
 	buf := make([]byte, segmentSizeV4)
 	var offset int
@@ -191,8 +191,10 @@ type ResponseV4 struct {
 	Text      string
 }
 
-var _ FrameReader = (*ResponseV4)(nil)
-var _ FrameWriter = (*ResponseV4)(nil)
+var (
+	_ FrameReader = (*ResponseV4)(nil)
+	_ FrameWriter = (*ResponseV4)(nil)
+)
 
 // NewResponseV4 - init new ResponseV4 via stream.
 func NewResponseV4(sentAt int64, segmentID uint32, code uint16, text string) *ResponseV4 {

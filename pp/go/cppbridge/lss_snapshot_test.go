@@ -4,9 +4,10 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/stretchr/testify/suite"
 )
 
 type LabelSetSnapshotSuite struct {
