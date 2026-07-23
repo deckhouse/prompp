@@ -18,7 +18,7 @@ require (
 	github.com/dennwc/varint v1.0.0
 	github.com/digitalocean/godo v1.122.0
 	github.com/edsrzf/mmap-go v1.2.0
-	github.com/envoyproxy/go-control-plane/envoy v1.36.0
+	github.com/envoyproxy/go-control-plane/envoy v1.37.0
 	github.com/envoyproxy/protoc-gen-validate v1.3.3
 	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb
 	github.com/fsnotify/fsnotify v1.7.0
@@ -81,7 +81,7 @@ require (
 	go.uber.org/goleak v1.3.0
 	go.uber.org/multierr v1.11.0
 	golang.org/x/net v0.56.0
-	golang.org/x/oauth2 v0.35.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.46.0
 	golang.org/x/text v0.39.0
@@ -89,7 +89,7 @@ require (
 	golang.org/x/tools v0.47.0
 	google.golang.org/api v0.223.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260519071638-aa98bba5eb94
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -143,7 +143,7 @@ require (
 	github.com/charithe/durationcheck v0.0.10 // indirect
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/ckaznocha/intrange v0.3.0 // indirect
-	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect
+	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
