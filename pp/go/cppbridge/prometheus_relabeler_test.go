@@ -2,25 +2,25 @@ package cppbridge_test
 
 import (
 	"context"
-	"fmt"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/golang/snappy"
+	"github.com/stretchr/testify/suite"
+	"gopkg.in/yaml.v3"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/prompb"
-	"github.com/stretchr/testify/suite"
-	"gopkg.in/yaml.v3"
 )
 
 type RelabelerSuite struct {
 	suite.Suite
 	baseCtx context.Context
-	options cppbridge.RelabelerOptions
 }
 
 func TestRelabelerSuite(t *testing.T) {
@@ -91,7 +91,7 @@ func (s *RelabelerSuite) TestRelabelConfigValidate() {
 		},
 	}
 	for i, test := range tests {
-		s.Run(fmt.Sprint(i), func() {
+		s.Run(strconv.Itoa(i), func() {
 			err := test.config.Validate()
 			if test.expected == "" {
 				s.Require().NoError(err)

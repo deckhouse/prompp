@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
 

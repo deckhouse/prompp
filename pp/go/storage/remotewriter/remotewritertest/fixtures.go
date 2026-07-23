@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -415,7 +416,7 @@ func (tss *TimeSeries) ToWriteRequest() *prompb.WriteRequest {
 	for _, mtss := range tss.data {
 		for _, ts := range mtss {
 			labels := make([]prompb.Label, 0, ts.LabelSet.Len())
-			ts.LabelSet.Range(func(lname string, lvalue string) bool {
+			ts.LabelSet.Range(func(lname, lvalue string) bool {
 				labels = append(labels, prompb.Label{
 					Name:  lname,
 					Value: lvalue,

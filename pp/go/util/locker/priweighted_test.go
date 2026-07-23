@@ -343,7 +343,6 @@ func (s *WeightedSuite) TestRLockWakesToErrSemaphoreClosedAfterClose() {
 	})
 }
 
-
 func (s *WeightedSuite) TestTwoRLockWithPriorityOrder() {
 	synctest.Test(s.T(), func(t *testing.T) {
 		ctx := context.Background()

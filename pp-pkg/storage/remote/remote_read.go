@@ -19,6 +19,8 @@ import (
 )
 
 // RemoteRead represents all the remote read endpoints.
+//
+//nolint:revive // RemoteRead mirrors the public NewRemoteRead constructor used across the codebase.
 type RemoteRead struct {
 	logger *logging.Deduper
 	mtx    sync.Mutex

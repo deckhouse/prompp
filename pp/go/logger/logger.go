@@ -12,7 +12,7 @@ var (
 	Log    Logger = noopLogger{}
 )
 
-// Unset logger funcs to NoOp
+// Unset logger funcs to NoOp.
 func Unset() {
 	Errorf = noop
 	Warnf = noop

@@ -66,8 +66,6 @@ type Head[TShard Shard, TGShard Shard] struct {
 	// for tasks metrics
 	tasksCreated *prometheus.CounterVec
 	tasksDone    *prometheus.CounterVec
-	tasksLive    *prometheus.CounterVec
-	tasksExecute *prometheus.CounterVec
 
 	// pools for reusable objects
 	headPool *poolprovider.HeadPool[TGShard]
@@ -76,7 +74,7 @@ type Head[TShard Shard, TGShard Shard] struct {
 // NewHead init new [Head].
 //
 //revive:disable-next-line:function-length long but readable.
-func NewHead[TShard Shard, TGShard Shard](
+func NewHead[TShard, TGShard Shard](
 	id string,
 	shards []TShard,
 	gshardCtor func(TShard, uint16) TGShard,
@@ -316,7 +314,7 @@ func calculateHeadConcurrency(numberOfShards int) int64 {
 //
 
 // CopyAddedSeries copy the label sets from the source lss to the destination lss that were added source lss.
-func CopyAddedSeries[TShard Shard, TGShard Shard](
+func CopyAddedSeries[TShard, TGShard Shard](
 	shardCopier func(source, destination TShard),
 ) func(source, destination *Head[TShard, TGShard]) {
 	return func(source, destination *Head[TShard, TGShard]) {

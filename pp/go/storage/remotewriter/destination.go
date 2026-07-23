@@ -8,9 +8,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"gopkg.in/yaml.v2"
+
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
-	"gopkg.in/yaml.v2"
 )
 
 // String constants for instrumentation.
@@ -36,7 +37,7 @@ type DestinationConfig struct {
 
 // EqualTo checks if the config is equal to the other config.
 //
-//nolint:gocritic // hugeParam // equal configs
+
 func (c *DestinationConfig) EqualTo(other DestinationConfig) bool {
 	return c.ExternalLabels.Hash() == other.ExternalLabels.Hash() &&
 		c.ReadTimeout == other.ReadTimeout &&
@@ -66,7 +67,7 @@ func (d *Destination) Config() DestinationConfig {
 
 // ResetConfig resets current config to the new one.
 //
-//nolint:gocritic // hugeParam // resets config
+
 func (d *Destination) ResetConfig(cfg DestinationConfig) {
 	d.config = cfg
 }
@@ -74,7 +75,7 @@ func (d *Destination) ResetConfig(cfg DestinationConfig) {
 // NewDestination creates a new [Destination].
 //
 //revive:disable-next-line:function-length // this is a constructor
-//nolint:gocritic // hugeParam // this is a constructor
+
 func NewDestination(cfg DestinationConfig) *Destination {
 	return &Destination{
 		config:  cfg,
@@ -174,7 +175,7 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 
 // remoteWriteConfigsAreEqual compares two remote write configs.
 //
-//nolint:gocritic // this is a compares configs
+
 func remoteWriteConfigsAreEqual(lrwc, rwrc config.RemoteWriteConfig) bool {
 	ldata, _ := yaml.Marshal(lrwc)
 	rdata, _ := yaml.Marshal(rwrc)

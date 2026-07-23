@@ -1,6 +1,6 @@
 package frames
 
-// Protocol versions
+// Protocol versions.
 const (
 	UnknownProtocolVersion uint8 = iota
 	ProtocolVersion1
@@ -10,7 +10,7 @@ const (
 )
 
 const (
-	// constant size of type
+	// constant size of type.
 	sizeOfTypeFrame = 1
 	sizeOfUint8     = 1
 	sizeOfUint16    = 2
@@ -18,13 +18,13 @@ const (
 	sizeOfUint64    = 8
 	sizeOfUUID      = 16
 
-	// default version
+	// default version.
 	defaultVersion uint8 = ProtocolVersion4
-	// magic byte for header
+	// magic byte for header.
 	magicByte byte = 165
 )
 
-// Content versions
+// Content versions.
 const (
 	UnknownContentVersion uint8 = iota
 	ContentVersion1
