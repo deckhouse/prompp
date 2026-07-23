@@ -32,8 +32,8 @@ import (
 )
 
 var (
-	emptyFiller = "\x00"
-	emptyEntry  = strings.Repeat(emptyFiller, entrySize)
+	zeroFiller = "\x00"
+	emptyEntry = strings.Repeat(zeroFiller, entrySize)
 )
 
 type ActiveQueryTracker struct {
@@ -67,7 +67,7 @@ const (
 )
 
 func parseBrokenJSON(brokenJSON []byte) (string, bool) {
-	queries := strings.ReplaceAll(string(brokenJSON), emptyFiller, "")
+	queries := strings.ReplaceAll(string(brokenJSON), zeroFiller, "")
 	if queries != "" {
 		queries = queries[:len(queries)-1] + "]"
 	}
@@ -170,7 +170,7 @@ func getMMappedFile(filename string, filesize int, logger log.Logger) ([]byte, i
 		return nil, nil, err
 	}
 
-	return fileAsBytes, &mmappedFile{f: file, m: fileAsBytes}, err
+	return fileAsBytes, &mmappedFile{f: file, m: fileAsBytes}, nil
 }
 
 func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger log.Logger) (*ActiveQueryTracker, error) {
@@ -184,8 +184,8 @@ func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger lo
 		return nil, fmt.Errorf("maxConcurrent must be greater than 0")
 	}
 
-	if maxConcurrent > math.MaxInt32/1000 { // 2GB max size of the file
-		return nil, fmt.Errorf("maxConcurrent must be less than %d", math.MaxInt32)
+	if maxConcurrent > math.MaxInt32-1/entrySize { // 2GB max size of the file
+		return nil, fmt.Errorf("maxConcurrent must be less than %d", math.MaxInt32-1/entrySize)
 	}
 
 	filename, filesize := filepath.Join(localStoragePath, "queries.active"), 1+maxConcurrent*entrySize
@@ -211,6 +211,10 @@ func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger lo
 }
 
 func trimStringByBytes(str string, size int) string {
+	if size < 0 {
+		return ""
+	}
+
 	trimIndex := len(str)
 	if size < len(str) {
 		for size > 0 && !utf8.RuneStart(str[size]) {
