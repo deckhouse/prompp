@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -54,7 +55,8 @@ func TestMain(m *testing.M) {
 func TestQueryConcurrency(t *testing.T) {
 	maxConcurrency := 10
 
-	queryTracker := promql.NewActiveQueryTracker(t.TempDir(), maxConcurrency, nil)
+	queryTracker, err := promql.NewActiveQueryTracker(t.TempDir(), maxConcurrency, log.NewNopLogger())
+	require.NoError(t, err)
 	opts := promql.EngineOpts{
 		Logger:             nil,
 		Reg:                nil,
