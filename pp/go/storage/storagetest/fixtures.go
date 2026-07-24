@@ -342,13 +342,12 @@ func StaleNaNQuery(
 		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
-	timestamps := querier.MakeTimestampsSliceWithDefault(lssQueryResult.Len(), valueNotFoundTimestampValue)
-	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps)
+	series := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
-	return querier.NewStaleNaNSeriesSet(
-		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
-		lssQueryResult,
-		snapshot,
-		valueNotFoundTimestampValue,
-	), nil
+	ds.QueryStaleNaNSeries(
+		lssQueryResult.IDs(),
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	return querier.NewStaleNaNSeriesSet(series, snapshot, valueNotFoundTimestampValue), nil
 }
