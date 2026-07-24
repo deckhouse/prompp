@@ -512,8 +512,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
 				q.mint,
 				q.maxt,
 			)
-			lssQueryResults[shardID] = nil
-
 			continue
 		}
 
@@ -542,8 +540,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 				snapshots[shardID],
 				serializedData,
 			)
-			lssQueryResults[shardID] = nil
-
 			continue
 		}
 
