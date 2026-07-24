@@ -58,10 +58,11 @@ class InstantQuerierWithArgumentsWrapper {
 };
 
 struct SampleWithGoLabels : public ::series_data::encoder::Sample {
+  // series_id is filled by the instant querier alongside the sample; go_labels_ is written
+  // from the Go side (querier.InstantSeries.LabelSet). This layout mirrors the Go struct.
+  uint32_t series_id;
+
  private:
-  // series_id_ and go_labels_ are written from the Go side (querier.InstantSeries.SeriesID
-  // and .LabelSet); C++ only fills the Sample base. They must mirror the Go struct layout.
-  uint32_t series_id_;
   char go_labels_[Sizeof_GoLabels];
 };
 
