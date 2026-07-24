@@ -46,7 +46,7 @@ cc_library(
 
 cc_test(
     name = "bare_bones_test",
-    srcs = glob(["bare_bones/tests/*_tests.cpp"]),
+    srcs = glob(["bare_bones/**/*_tests.cpp"]),
     deps = [
         ":bare_bones",
         "@gtest//:gtest_main",
@@ -73,7 +73,7 @@ cc_library(
 
 cc_test(
     name = "primitives_test",
-    srcs = glob(["primitives/tests/*_tests.cpp"]),
+    srcs = glob(["primitives/**/*_tests.cpp"]),
     deps = [
         ":primitives",
         "@gtest//:gtest_main",
@@ -341,9 +341,7 @@ cc_library(
 
 cc_test(
     name = "series_index_test",
-    srcs = glob([
-        "series_index/tests/**/*.cpp",
-    ]),
+    srcs = glob(["series_index/**/*_tests.cpp"]),
     deps = [
         ":series_index",
         "@gtest//:gtest_main",
@@ -362,9 +360,7 @@ cc_library(
 
 cc_test(
     name = "series_data_test",
-    srcs = glob([
-        "series_data/tests/**/*.cpp",
-    ]),
+    srcs = glob(["series_data/**/*_tests.cpp"]),
     deps = [
         ":series_data",
         "@gtest//:gtest_main",
