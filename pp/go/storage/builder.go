@@ -167,8 +167,8 @@ func (b *Builder) createShardOnDisk(
 		shardID,
 		shardFile,
 		writer.WriteSegment[*cppbridge.HeadEncodedSegment], // V2: writer.WriteSegmentV2
-		swn,                        // V2: NoopSegmentWriteNotifier{}
-		writer.NoopSegmentMarkup{}, // V2: headRecord
+		swn,                                                // V2: NoopSegmentWriteNotifier{}
+		writer.NoopSegmentMarkup{},                         // V2: headRecord
 		// writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
 		// NoopSegmentWriteNotifier{},
 		// headRecord,
