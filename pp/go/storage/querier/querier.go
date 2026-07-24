@@ -345,7 +345,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			}
 
 			seriesSets[shardID] = NewInstantSeriesSet(
-				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
 				instantSeries,

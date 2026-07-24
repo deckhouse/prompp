@@ -31,20 +31,14 @@ type InstantSeriesSet struct {
 }
 
 // NewInstantSeriesSet init new [InstantSeriesSet].
-// The series ids from lssQueryResult are stored inline in instantSeries (next to the
-// data, like serializedData), so the C-allocated result buffer is no longer referenced
-// after construction and can be released immediately (see [cppbridge.LSSQueryResult.Close]).
+// The series id is filled inline in each instantSeries by the C++ instant query (next to the
+// sample), so the query result buffer is not referenced here and can be released right after
+// the data storage query (see [cppbridge.LSSQueryResult.Close]).
 func NewInstantSeriesSet(
-	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
 	instantSeries []InstantSeries,
 ) *InstantSeriesSet {
-	ids := lssQueryResult.IDs()
-	for i := range instantSeries {
-		instantSeries[i].SeriesID = ids[i]
-	}
-
 	return &InstantSeriesSet{
 		labelSetSnapshot:            labelSetSnapshot,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,

@@ -24,6 +24,7 @@ class InstantQuerier {
     assert(std::size(samples) == std::size(label_set_ids));
 
     for (auto&& [sample, ls_id] : std::ranges::views::zip(samples, label_set_ids)) {
+      store_series_id(sample, ls_id);
       query_sample(sample, ls_id, timestamp);
     }
   }
@@ -47,6 +48,15 @@ class InstantQuerier {
  private:
   DataStorage& storage_;
   BareBones::Bitset series_to_load_;
+
+  // store_series_id records the label-set id next to the sample when the sample type carries it
+  // (entrypoint::types::SampleWithGoLabels). For plain encoder::Sample it is a no-op.
+  template <typename SampleType>
+  PROMPP_ALWAYS_INLINE static void store_series_id(SampleType& sample, LabelSetID ls_id) noexcept {
+    if constexpr (requires { sample.series_id = ls_id; }) {
+      sample.series_id = ls_id;
+    }
+  }
 
   PROMPP_ALWAYS_INLINE void query_sample(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     if (storage_.open_chunks.size() <= ls_id || storage_.open_chunks[ls_id].is_empty()) [[unlikely]] {
