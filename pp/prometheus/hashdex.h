@@ -43,10 +43,19 @@ concept HashdexFloats = requires(const Floats& const_floats) {
   { const_floats.begin() == const_floats.end() };
 };
 
+template <class Histograms>
+concept HashdexHistograms = requires(const Histograms& const_histograms) {
+  { const_histograms.size() } -> std::convertible_to<size_t>;
+
+  { std::forward_iterator<decltype(const_histograms.begin())> };
+  { const_histograms.begin() == const_histograms.end() };
+};
+
 template <class Hashdex>
 concept HashdexInterface = requires(const Hashdex& const_hashdex) {
   { const_hashdex.metadata() };
   { const_hashdex.floats() } -> HashdexFloats;
+  { const_hashdex.histograms() } -> HashdexHistograms;
 };
 
 }  // namespace PromPP::Prometheus::hashdex

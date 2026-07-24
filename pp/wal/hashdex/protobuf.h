@@ -4,7 +4,6 @@
 
 #include "bare_bones/vector.h"
 #include "metric.h"
-#include "primitives/label_set.h"
 #include "prometheus/hashdex.h"
 #include "prometheus/remote_write.h"
 
@@ -61,15 +60,16 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& histograms() const noexcept { return histograms_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
 
  private:
-  class Item {
+  class FloatItem {
     size_t hash_;
     std::string_view data_;
 
    public:
-    PROMPP_ALWAYS_INLINE explicit Item(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
+    PROMPP_ALWAYS_INLINE explicit FloatItem(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
 
     template <class Timeseries>
@@ -78,26 +78,48 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     }
   };
 
+  class HistogramItem {
+    size_t hash_;
+    std::string_view data_;
+
+   public:
+    PROMPP_ALWAYS_INLINE explicit HistogramItem(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+
+    template <class HistogramTimeseries>
+    PROMPP_ALWAYS_INLINE void read(HistogramTimeseries& histogram_timeseries) const {
+      Prometheus::RemoteWrite::read_histogram_timeseries(protozero::pbf_reader(data_), histogram_timeseries);
+    }
+  };
+
   std::string protobuf_;
-  BareBones::Vector<Item> floats_;
+  BareBones::Vector<FloatItem> floats_;
+  BareBones::Vector<HistogramItem> histograms_;
   BareBones::Vector<Metadata> metadata_;
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
   Primitives::LabelViewSet label_set_;
 
   void parse_timeseries(protozero::pbf_reader& pb) {
-    if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
+    if (limits_.max_timeseries_count_exceeded(floats_.size() + 1)) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
-    auto pb_view = pb.get_view();
-    read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
 
-    if (floats_.empty()) [[unlikely]] {
+    label_set_.clear();
+    auto pb_view = pb.get_view();
+    const auto metrics_type = preparse_timeseries(protozero::pbf_reader{pb_view}, label_set_, limits_);
+
+    if (floats_.empty() && histograms_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);
     }
 
-    floats_.emplace_back(hash_value(label_set_), pb_view);
-
-    label_set_.clear();
+    const auto hash = hash_value(label_set_);
+    if (metrics_type == Prometheus::RemoteWrite::MetricsType::kFloat) [[likely]] {
+      floats_.emplace_back(hash, pb_view);
+    } else if (metrics_type == Prometheus::RemoteWrite::MetricsType::kHistogram) {
+      histograms_.emplace_back(hash, pb_view);
+    } else {
+      throw BareBones::Exception(0x4108761111389831, "No timeseries data");
+    }
   }
 
   void parse_metadata(protozero::pbf_reader pb_metadata) {
