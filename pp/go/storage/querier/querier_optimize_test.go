@@ -2,6 +2,7 @@ package querier_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -946,7 +947,7 @@ func resultEqual(exp, act *promql.Result, query string) (bool, string) {
 		return false, fmt.Sprintf("query: %s\none of the results is nil", query)
 	}
 
-	if exp.Err != act.Err {
+	if !equalError(exp.Err, act.Err) {
 		return false, fmt.Sprintf("query: %s\nerror: %v, got %v", query, exp.Err, act.Err)
 	}
 
@@ -959,6 +960,19 @@ func resultEqual(exp, act *promql.Result, query string) (bool, string) {
 	}
 
 	return true, ""
+}
+
+// equalError compares two errors.
+func equalError(exp, act error) bool {
+	if exp == nil && act == nil {
+		return true
+	}
+
+	if exp == nil || act == nil {
+		return false
+	}
+
+	return errors.Is(exp, act)
 }
 
 // valueEqual compares two values.
