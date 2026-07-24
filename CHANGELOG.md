@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.8.5 / 2026-07-23
+
+### Enhancements
+1. **Optional DataStorage metrics collection.** The per-`DataStorage` `prompp_data_storage_*` metrics (removed by default in v0.8.3 to fix a page leak) can now be collected again on an opt-in basis: `DataStorage` takes an explicit flag so metrics are gathered only where needed, keeping the default hot path allocation-free (#418).
+
+### Performance
+1. **Faster scrape parsing.** Reworked the scraper WAL hashdex encoding/marking, reducing parse and read-parse time (also benefiting from the newer compiler) (#329).
+2. **Release transaction snapshot on commit.** `TransactionHead` now resets its LSS snapshot as soon as the transaction is committed instead of holding it, lowering peak memory during ingestion (#422).
+
+### Fixes
+1. **CPU flavor detection selected baseline bindings on all CPUs.** `determine_arch_flavor()` called `__builtin_cpu_supports()` without first initializing `__cpu_model`, so the entrypoint could run before libgcc's CPU-detection constructor and every feature check returned 0 — the generic/k8 baseline bindings were always chosen even on modern CPUs (visible as `amd64_k8_*` symbols in profiles). It now calls `__builtin_cpu_init()` before feature detection, so the real CPU flavor is selected (#423).
+2. **Use-after-free with detached C++ metrics pages.** Reworked metrics-page iteration around a generation-based wrapper cache with an atomic active/detach handshake, so a page physically freed by `remove_unused_pages()` can no longer be reclaimed while another scrape is still iterating it. Replaces the earlier mitigation with a robust fix (#413).
+3. **Dependency security updates.** Bumped Go modules `golang.org/x/text` to v0.39.0 (#430), `golang.org/x/net` to v0.56.0 (#429) and `google.golang.org/grpc` to v1.82.1 (#431), and web UI packages `body-parser` to v1.20.6 (#420), `webpack-dev-server` to v5.2.6 (#421) and `immutable` to v4.3.9 (GHSA-v56q-mh7h-f735, GHSA-xvcm-6775-5m9r), picking up upstream security fixes.
+
 ## v0.8.4
 
 ### Features
