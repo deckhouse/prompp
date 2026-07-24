@@ -60,8 +60,6 @@ class SerializerTrait {
   }
 };
 
-using SerializerDeserializerTrait = SerializerTrait;
-
 class SerializerFixture : public SerializerTrait, public testing::Test {};
 
 TEST_F(SerializerFixture, EmptyChunksList) {
@@ -1206,7 +1204,7 @@ TEST_F(SerializedDataIterSeekToFixture, SeekToOnEndIterator) {
   EXPECT_EQ(iterator, DecodeIteratorSentinel{});
 }
 
-class SerializedDataIterSeekFixture : public SerializerDeserializerTrait, public testing::Test {
+class SerializedDataIterSeekFixture : public SerializerTrait, public testing::Test {
  protected:
   SerializedData serialized_data_;
 
