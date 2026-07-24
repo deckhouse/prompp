@@ -287,18 +287,20 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
 
 type createIteratorMethod = func(*cppbridge.DataStorageSerializedData, []uint32) cppbridge.DataStorageSerializedDataMultiSeriesIterator
 
-var createMultiSeriesIterator = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator
-var createAndResetMultiSeriesIterator = func(
-	serializedData *cppbridge.DataStorageSerializedData,
-	seriesIDs []uint32,
-) cppbridge.DataStorageSerializedDataMultiSeriesIterator {
-	it := createMultiSeriesIterator(serializedData, seriesIDs)
-	for it.HasData() {
-		it.Next()
+var (
+	createMultiSeriesIterator         = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator
+	createAndResetMultiSeriesIterator = func(
+		serializedData *cppbridge.DataStorageSerializedData,
+		seriesIDs []uint32,
+	) cppbridge.DataStorageSerializedDataMultiSeriesIterator {
+		it := createMultiSeriesIterator(serializedData, seriesIDs)
+		for it.HasData() {
+			it.Next()
+		}
+		it.Reset(serializedData, seriesIDs)
+		return it
 	}
-	it.Reset(serializedData, seriesIDs)
-	return it
-}
+)
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 	hints storage.SelectHints,
