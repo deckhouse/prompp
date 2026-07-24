@@ -2,13 +2,13 @@ package util
 
 import "io"
 
-// OffsetReader is a wrapper of io.ReaderAt to implement io.Reader interface
+// OffsetReader is a wrapper of io.ReaderAt to implement io.Reader interface.
 type OffsetReader struct {
 	r   io.ReaderAt
 	off int64
 }
 
-// NewOffsetReader wraps io.ReaderAt with offset
+// NewOffsetReader wraps io.ReaderAt with offset.
 func NewOffsetReader(r io.ReaderAt, off int64) *OffsetReader {
 	return &OffsetReader{
 		r:   r,
@@ -16,7 +16,7 @@ func NewOffsetReader(r io.ReaderAt, off int64) *OffsetReader {
 	}
 }
 
-// Read implements io.Reader interface
+// Read implements io.Reader interface.
 func (or *OffsetReader) Read(p []byte) (int, error) {
 	n, err := or.r.ReadAt(p, or.off)
 	or.off += int64(n)

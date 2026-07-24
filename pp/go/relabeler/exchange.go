@@ -8,12 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Exchange holds and coordinate segment-redundants flow
+// Exchange holds and coordinate segment-redundants flow.
 type Exchange struct {
 	records        *sync.Map // map[common.SegmentKey]*exchangeRecord
 	lastSegments   []uint32  // max segment id per shard
@@ -65,7 +66,7 @@ func NewExchange(
 	}
 }
 
-// Ack segment by key
+// Ack segment by key.
 func (ex *Exchange) Ack(key cppbridge.SegmentKey) {
 	record, ok := ex.records.Load(key)
 	if !ok {
@@ -125,7 +126,7 @@ func (ex *Exchange) Put(
 	}
 }
 
-// Reject segment by key
+// Reject segment by key.
 func (ex *Exchange) Reject(key cppbridge.SegmentKey) bool {
 	atomic.StoreUint32(&ex.rejects[key.ShardID], 1)
 	record, ok := ex.records.Load(key)
@@ -136,7 +137,7 @@ func (ex *Exchange) Reject(key cppbridge.SegmentKey) bool {
 	return false
 }
 
-// RejectedOrExpired returns slice of keys which was rejected
+// RejectedOrExpired returns slice of keys which was rejected.
 func (ex *Exchange) RejectedOrExpired(now time.Time) (keys []cppbridge.SegmentKey, empty bool) {
 	empty = true
 	ex.records.Range(func(k, value any) bool {
@@ -154,7 +155,7 @@ func (ex *Exchange) RejectedOrExpired(now time.Time) (keys []cppbridge.SegmentKe
 	return keys, empty
 }
 
-// Remove keys from exchange because them writted in refill
+// Remove keys from exchange because them writted in refill.
 func (ex *Exchange) Remove(keys []cppbridge.SegmentKey) {
 	if len(keys) == 0 {
 		return

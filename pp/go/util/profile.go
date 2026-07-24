@@ -23,7 +23,7 @@ func (w *HeapProfileWriter) WriteHeapProfile() error {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("failed to stat dir: %w", err)
 		}
-		if err = os.MkdirAll(w.dir, 0777); err != nil {
+		if err = os.MkdirAll(w.dir, 0o750); err != nil {
 			return fmt.Errorf("failed to create dir: %w", err)
 		}
 		dirStat, err = os.Stat(w.dir)
@@ -37,7 +37,7 @@ func (w *HeapProfileWriter) WriteHeapProfile() error {
 	}
 
 	filePath := filepath.Join(w.dir, fmt.Sprintf("heap_profile_%d", time.Now().UnixMilli()))
-	file, err := os.Create(filePath)
+	file, err := os.Create(filePath) //nolint:gosec // filePath is derived from the configured profile dir
 	if err != nil {
 		return fmt.Errorf("failed to create heap profile file: %w", err)
 	}

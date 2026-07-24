@@ -10,9 +10,10 @@ import (
 
 	"github.com/go-faker/faker/v4"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/stretchr/testify/suite"
 )
 
 // FileBuffer - implement file.
@@ -651,15 +652,13 @@ func (s *FrameSuite) TestRefillMsgQuick() {
 
 func (s *FrameSuite) TestRefillMsgFrameAt() {
 	ctx := context.Background()
-	var (
-		msgs = []frames.MessageData{
-			{ID: 0, Size: 5, Typemsg: 2},
-			{ID: 1, Size: 6, Typemsg: 3},
-			{ID: 2, Size: 12, Typemsg: 4},
-			{ID: 3, Size: 4, Typemsg: 5},
-			{ID: 4294967294, Size: 4294967294, Typemsg: 5},
-		}
-	)
+	msgs := []frames.MessageData{
+		{ID: 0, Size: 5, Typemsg: 2},
+		{ID: 1, Size: 6, Typemsg: 3},
+		{ID: 2, Size: 12, Typemsg: 4},
+		{ID: 3, Size: 4, Typemsg: 5},
+		{ID: 4294967294, Size: 4294967294, Typemsg: 5},
+	}
 
 	wm, err := frames.NewRefillFrame(s.version, msgs)
 	s.Require().NoError(err)
@@ -682,15 +681,13 @@ func (s *FrameSuite) TestRefillMsgFrameAt() {
 
 func (s *FrameSuite) TestRefillMsgFrame() {
 	ctx := context.Background()
-	var (
-		msgs = []frames.MessageData{
-			{ID: 0, Size: 5, Typemsg: 2},
-			{ID: 1, Size: 6, Typemsg: 3},
-			{ID: 2, Size: 12, Typemsg: 4},
-			{ID: 3, Size: 4, Typemsg: 5},
-			{ID: 4294967294, Size: 4294967294, Typemsg: 5},
-		}
-	)
+	msgs := []frames.MessageData{
+		{ID: 0, Size: 5, Typemsg: 2},
+		{ID: 1, Size: 6, Typemsg: 3},
+		{ID: 2, Size: 12, Typemsg: 4},
+		{ID: 3, Size: 4, Typemsg: 5},
+		{ID: 4294967294, Size: 4294967294, Typemsg: 5},
+	}
 
 	wm, err := frames.NewRefillFrame(s.version, msgs)
 	s.Require().NoError(err)
@@ -714,15 +711,13 @@ func (s *FrameSuite) TestRefillMsgFrame() {
 
 func (s *FrameSuite) TestRefillMsgFrameAtWithMsg() {
 	ctx := context.Background()
-	var (
-		msgs = []frames.MessageData{
-			{ID: 0, Size: 5, Typemsg: 2},
-			{ID: 1, Size: 6, Typemsg: 3},
-			{ID: 2, Size: 12, Typemsg: 4},
-			{ID: 3, Size: 4, Typemsg: 5},
-			{ID: 4294967294, Size: 4294967294, Typemsg: 5},
-		}
-	)
+	msgs := []frames.MessageData{
+		{ID: 0, Size: 5, Typemsg: 2},
+		{ID: 1, Size: 6, Typemsg: 3},
+		{ID: 2, Size: 12, Typemsg: 4},
+		{ID: 3, Size: 4, Typemsg: 5},
+		{ID: 4294967294, Size: 4294967294, Typemsg: 5},
+	}
 	msg := frames.NewRefillMsg(msgs)
 	wm, err := frames.NewRefillFrameWithMsg(s.version, msg)
 	s.Require().NoError(err)
@@ -745,15 +740,13 @@ func (s *FrameSuite) TestRefillMsgFrameAtWithMsg() {
 
 func (s *FrameSuite) TestRefillMsgFrameWithMsg() {
 	ctx := context.Background()
-	var (
-		msgs = []frames.MessageData{
-			{ID: 0, Size: 5, Typemsg: 2},
-			{ID: 1, Size: 6, Typemsg: 3},
-			{ID: 2, Size: 12, Typemsg: 4},
-			{ID: 3, Size: 4, Typemsg: 5},
-			{ID: 4294967294, Size: 4294967294, Typemsg: 5},
-		}
-	)
+	msgs := []frames.MessageData{
+		{ID: 0, Size: 5, Typemsg: 2},
+		{ID: 1, Size: 6, Typemsg: 3},
+		{ID: 2, Size: 12, Typemsg: 4},
+		{ID: 3, Size: 4, Typemsg: 5},
+		{ID: 4294967294, Size: 4294967294, Typemsg: 5},
+	}
 	msg := frames.NewRefillMsg(msgs)
 	wm, err := frames.NewRefillFrameWithMsg(s.version, msg)
 	s.Require().NoError(err)
@@ -823,9 +816,7 @@ func (s *FrameSuite) TestDestinationsNamesQuick() {
 
 func (s *FrameSuite) TestDestinationsNamesFrameAt() {
 	ctx := context.Background()
-	var (
-		names = []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	)
+	names := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
 	wm, err := frames.NewDestinationsNamesFrame(s.version, names...)
 	s.Require().NoError(err)
 	b := wm.EncodeBinary()
@@ -847,9 +838,7 @@ func (s *FrameSuite) TestDestinationsNamesFrameAt() {
 
 func (s *FrameSuite) TestDestinationsNamesFrame() {
 	ctx := context.Background()
-	var (
-		names = []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	)
+	names := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
 	wm, err := frames.NewDestinationsNamesFrame(s.version, names...)
 	s.Require().NoError(err)
 	b := wm.EncodeBinary()
@@ -872,9 +861,7 @@ func (s *FrameSuite) TestDestinationsNamesFrame() {
 
 func (s *FrameSuite) TestDestinationsNamesFrameAtWithMsg() {
 	ctx := context.Background()
-	var (
-		names = []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	)
+	names := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
 	msg := frames.NewDestinationsNames(names...)
 	wm, err := frames.NewDestinationsNamesFrameWithMsg(s.version, msg)
 	s.Require().NoError(err)
@@ -897,9 +884,7 @@ func (s *FrameSuite) TestDestinationsNamesFrameAtWithMsg() {
 
 func (s *FrameSuite) TestDestinationsNamesFrameWithMsg() {
 	ctx := context.Background()
-	var (
-		names = []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
-	)
+	names := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
 	msg := frames.NewDestinationsNames(names...)
 	wm, err := frames.NewDestinationsNamesFrameWithMsg(s.version, msg)
 	s.Require().NoError(err)
@@ -950,9 +935,7 @@ func (s *FrameSuite) TestStatusesQuick() {
 
 func (s *FrameSuite) TestStatusesFrameAt() {
 	ctx := context.Background()
-	var (
-		data frames.Statuses = []uint32{1, 2, 3, 4, 5}
-	)
+	var data frames.Statuses = []uint32{1, 2, 3, 4, 5}
 	wm, err := frames.NewStatusesFrame(data)
 	s.Require().NoError(err)
 	b := wm.EncodeBinary()
@@ -974,9 +957,7 @@ func (s *FrameSuite) TestStatusesFrameAt() {
 
 func (s *FrameSuite) TestStatusesFrame() {
 	ctx := context.Background()
-	var (
-		data frames.Statuses = []uint32{1, 2, 3, 4, 5}
-	)
+	var data frames.Statuses = []uint32{1, 2, 3, 4, 5}
 	wm, err := frames.NewStatusesFrame(data)
 	s.Require().NoError(err)
 	b := wm.EncodeBinary()
@@ -1038,15 +1019,13 @@ func (s *FrameSuite) TestRejectStatusesQuick() {
 
 func (s *FrameSuite) TestRejectStatusesFrameAt() {
 	ctx := context.Background()
-	var (
-		data = frames.RejectStatuses{
-			frames.Reject{
-				NameID:  10,
-				Segment: 15,
-				ShardID: 1,
-			},
-		}
-	)
+	data := frames.RejectStatuses{
+		frames.Reject{
+			NameID:  10,
+			Segment: 15,
+			ShardID: 1,
+		},
+	}
 	wm, err := frames.NewRejectStatusesFrame(data)
 	s.Require().NoError(err)
 	b := wm.EncodeBinary()
@@ -1068,15 +1047,13 @@ func (s *FrameSuite) TestRejectStatusesFrameAt() {
 
 func (s *FrameSuite) TestRejectStatusesFrame() {
 	ctx := context.Background()
-	var (
-		data = frames.RejectStatuses{
-			frames.Reject{
-				NameID:  10,
-				Segment: 15,
-				ShardID: 1,
-			},
-		}
-	)
+	data := frames.RejectStatuses{
+		frames.Reject{
+			NameID:  10,
+			Segment: 15,
+			ShardID: 1,
+		},
+	}
 	wm, err := frames.NewRejectStatusesFrame(data)
 	s.Require().NoError(err)
 	b := wm.EncodeBinary()
@@ -1206,9 +1183,7 @@ func (s *FrameSuite) TestFinalMsgQuick() {
 
 func (s *FrameSuite) TestFinalMsgFrameAt() {
 	ctx := context.Background()
-	var (
-		hasRefill = true
-	)
+	hasRefill := true
 	wm, err := frames.NewFinalMsgFrame(s.version, hasRefill)
 	s.Require().NoError(err)
 
@@ -1255,9 +1230,7 @@ func (s *FrameSuite) TestFinalMsgWriteFrameAt() {
 
 func (s *FrameSuite) TestFinalMsgFrame() {
 	ctx := context.Background()
-	var (
-		hasRefill = true
-	)
+	hasRefill := true
 	wm, err := frames.NewFinalMsgFrame(s.version, hasRefill)
 	s.Require().NoError(err)
 

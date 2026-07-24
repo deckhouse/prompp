@@ -48,7 +48,7 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 	return newLabelSetStorageFromPointer(primitivesLSSCtor(lssType))
 }
 
-// newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
+// newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss.
 func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
 	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
@@ -135,7 +135,7 @@ func (lss *LabelSetStorage) QueryLabelValues(
 	return result
 }
 
-// GetLabelNameIDs - returns label name ids
+// GetLabelNameIDs - returns label name ids.
 func (lss *LabelSetStorage) GetLabelNameIDs(names []string) []uint32 {
 	out := primitivesLSSGetLabelNameIDs(lss.pointer, names)
 	runtime.KeepAlive(lss)

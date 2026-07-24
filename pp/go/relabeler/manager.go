@@ -392,7 +392,7 @@ func (mgr *Manager) ObserveEncodersMemory(set func(id int, val float64)) {
 	}
 }
 
-// Open run senders and refill loops
+// Open run senders and refill loops.
 func (mgr *Manager) Open(ctx context.Context) {
 	mgr.senders = make([]*Sender, 0, len(mgr.dialers)*len(mgr.encoders))
 	for name, dialer := range mgr.dialers {
@@ -676,7 +676,7 @@ func (mgr *Manager) writeSegmentToRefill(ctx context.Context, key cppbridge.Segm
 	return mgr.refill.WriteSegment(ctx, key, segment)
 }
 
-// DoNothingTicker - imitation of a ticker, but only one that does nothing
+// DoNothingTicker - imitation of a ticker, but only one that does nothing.
 type DoNothingTicker struct {
 	c chan time.Time
 }
