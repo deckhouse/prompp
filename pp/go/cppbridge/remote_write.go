@@ -3,6 +3,7 @@ package cppbridge
 import "runtime"
 
 type RWMessage struct {
+	//nolint:unused // populated by the C++ core; part of the RWMessage ABI layout
 	samplesIterator CppSegmentSamplesStorageListIterator
 	Buffer          []byte
 	MaxTimestamp    int64

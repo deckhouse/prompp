@@ -3,8 +3,9 @@ package task_test
 import (
 	"testing"
 
-	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/stretchr/testify/require"
+
+	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
 
 func TestTaskWaiter(t *testing.T) {

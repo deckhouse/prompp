@@ -5,7 +5,7 @@
 
 namespace series_data::decoder::decorator {
 
-template <class SampleHandler, class Iterator = UniversalDecodeIterator>
+template <class SampleHandler, class Iterator, bool SkipStaleNans>
 class OverTimeFuncIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
@@ -25,6 +25,7 @@ class OverTimeFuncIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_samples() const noexcept { return iterator_ != DecodeIteratorSentinel{}; }
 
   PROMPP_ALWAYS_INLINE OverTimeFuncIterator& operator++() {
     sample_.timestamp = kInvalidTimestamp;
@@ -55,10 +56,11 @@ class OverTimeFuncIterator {
         return SeekResult::kStop;
       }
 
-      if (!BareBones::Encoding::Gorilla::isstalenan(value)) [[likely]] {
-        handler(timestamp, value);
+      if (SkipStaleNans && BareBones::Encoding::Gorilla::isstalenan(value)) [[unlikely]] {
+        return SeekResult::kNext;
       }
 
+      handler(timestamp, value);
       return SeekResult::kNext;
     });
   }

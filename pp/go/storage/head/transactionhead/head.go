@@ -41,7 +41,7 @@ type Head[TShard Shard, TGShard Shard] struct {
 }
 
 // NewHead init new [Head].
-func NewHead[TShard Shard, TGShard Shard](
+func NewHead[TShard, TGShard Shard](
 	id string,
 	shard TShard,
 	gshard TGShard,

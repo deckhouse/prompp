@@ -102,7 +102,7 @@ func (s *WeightedSuite) TestWithError() {
 		cancel()
 		synctest.Wait()
 
-		s.Error(err)
+		s.Require().Error(err)
 		s.Require().ErrorIs(err, context.Canceled)
 	})
 }

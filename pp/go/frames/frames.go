@@ -157,7 +157,7 @@ func (fr *ReadFrame) Read(ctx context.Context, r io.Reader) error {
 	return fr.Validate()
 }
 
-// WriteTo implements io.WriterTo interface
+// WriteTo implements io.WriterTo interface.
 func (fr *ReadFrame) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(fr.EncodeBinary())
 
@@ -561,7 +561,7 @@ func NewRefillMsgEmpty() *RefillMsg {
 	return new(RefillMsg)
 }
 
-// Size returns bytes length of message after encoding
+// Size returns bytes length of message after encoding.
 func (rm *RefillMsg) Size() int64 {
 	var n int64
 	n += util.VarintLen(uint64(len(rm.Messages)))
@@ -573,7 +573,7 @@ func (rm *RefillMsg) Size() int64 {
 	return n
 }
 
-// WriteTo implements io.WriterTo interface
+// WriteTo implements io.WriterTo interface.
 func (rm *RefillMsg) WriteTo(w io.Writer) (int64, error) {
 	buf := make([]byte, 0, rm.Size())
 
@@ -732,8 +732,7 @@ func NewDestinationsNamesFrameWithMsg(version uint8, msg *DestinationsNames) (*R
 	return NewFrame(version, ContentVersion1, DestinationNamesType, body)
 }
 
-// stringViewSize -contant size.
-// sum = 4(begin=int32)+4(length=int32)
+// sum = 4(begin=int32)+4(length=int32).
 const stringViewSize = 8
 
 // stringView - string view for compact storage.
@@ -745,7 +744,7 @@ type stringView struct {
 // toString - serialize to string.
 func (sv stringView) toString(data []byte) string {
 	b := data[sv.begin : sv.begin+sv.length]
-	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // this is memory optimisation
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 // NotFoundName - not found name.
@@ -1002,7 +1001,7 @@ func (ss Statuses) Reset() {
 	}
 }
 
-// MarshalBinary implements encoding.BinaryMarshaler
+// MarshalBinary implements encoding.BinaryMarshaler.
 func (ss Statuses) MarshalBinary() ([]byte, error) {
 	// 4(length slice as.status) + 4(status(uint32))*(number of statuses)
 	buf := make([]byte, 0, sizeOfUint32+sizeOfUint32*len(ss))
@@ -1017,7 +1016,7 @@ func (ss Statuses) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-// UnmarshalBinary implements encoding.BinaryUnmarshaler
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (ss *Statuses) UnmarshalBinary(data []byte) error {
 	r := bytes.NewReader(data)
 	length, err := binary.ReadUvarint(r)
@@ -1115,7 +1114,7 @@ type Reject struct {
 // RejectStatuses - RejectStatuses - slice with rejected segment struct.
 type RejectStatuses []Reject
 
-// the number is chosen with a finger to the sky
+// the number is chosen with a finger to the sky.
 const defaultCapacityRejectStatuses = 512
 
 // NewRejectStatusesEmpty - init RejectStatuses.
@@ -1123,7 +1122,7 @@ func NewRejectStatusesEmpty() RejectStatuses {
 	return make([]Reject, 0, defaultCapacityRejectStatuses)
 }
 
-// MarshalBinary implements encoding.MarshalBinary
+// MarshalBinary implements encoding.MarshalBinary.
 func (rjss RejectStatuses) MarshalBinary() ([]byte, error) {
 	// 4(length slice status) + (4(NameID(uint32))+4(Segment(uint32))+2(ShardID(uint16)))*(number of statuses)
 	buf := make([]byte, 0, sizeOfUint32+((sizeOfUint32+sizeOfUint32+sizeOfUint16)*len(rjss)))
@@ -1140,7 +1139,7 @@ func (rjss RejectStatuses) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-// UnmarshalBinary implements encoding.BinaryUnmarshaler
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (rjss *RejectStatuses) UnmarshalBinary(data []byte) error {
 	r := bytes.NewReader(data)
 	length, err := binary.ReadUvarint(r)
@@ -1393,7 +1392,7 @@ func (fm FinalMsg) HasRefill() bool {
 	return fm.hasRefill == 1
 }
 
-// Size returns bytes length of message after encoding
+// Size returns bytes length of message after encoding.
 func (fm *FinalMsg) Size() int64 {
 	var n int64
 	n += util.VarintLen(uint64(fm.hasRefill))
@@ -1404,7 +1403,7 @@ func (fm *FinalMsg) CRC32() uint32 {
 	return 0
 }
 
-// WriteTo implements io.WriterTo interface
+// WriteTo implements io.WriterTo interface.
 func (fm *FinalMsg) WriteTo(w io.Writer) (int64, error) {
 	// error always nil
 	buf, _ := fm.MarshalBinary()

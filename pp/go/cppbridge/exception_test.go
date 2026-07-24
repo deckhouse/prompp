@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/prometheus/prometheus/prompb"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
@@ -30,9 +31,9 @@ func TestHashdex_error(t *testing.T) {
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 	_, err = cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, b), hlimits)
-	assert.Error(t, err)
+	require.Error(t, err)
 	var coreErr *cppbridge.Exception
-	assert.ErrorAs(t, err, &coreErr)
+	require.ErrorAs(t, err, &coreErr)
 	assert.EqualValues(t, 0x68997b7d2e49de1e, coreErr.Code())
 	assert.Greater(t, len(coreErr.Stacktrace()), 1)
 }

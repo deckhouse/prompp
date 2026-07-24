@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/gzip"
+
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/storage"

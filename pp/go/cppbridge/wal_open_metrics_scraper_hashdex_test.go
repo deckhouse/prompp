@@ -97,7 +97,7 @@ foo_total 17.0 1520879607.789 # {id="counter-test"} 5`
 	})
 
 	// Assert
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal(uint32(24), scraped)
 	s.Equal(expectedMetadata, actualMetadata)
 }

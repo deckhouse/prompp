@@ -3,12 +3,13 @@ package handler_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/config"
 	pp_pkg_config "github.com/prometheus/prometheus/pp-pkg/config"
 	"github.com/prometheus/prometheus/pp-pkg/handler"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	rconfig "github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/stretchr/testify/suite"
 )
 
 type StatesStorageSuite struct {
