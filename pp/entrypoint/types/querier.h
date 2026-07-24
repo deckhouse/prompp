@@ -66,6 +66,16 @@ struct SampleWithGoLabels : public ::series_data::encoder::Sample {
   char go_labels_[Sizeof_GoLabels];
 };
 
+struct StaleNaNSeriesWithGoLabels {
+  // timestamp and series_id are filled by the data storage stalenan query; go_labels_ is
+  // written from the Go side (querier.StaleNaNSeries.labelSet). This layout mirrors the Go struct.
+  PromPP::Primitives::Timestamp timestamp;
+  uint32_t series_id;
+
+ private:
+  char go_labels_[Sizeof_GoLabels];
+};
+
 using InstantQuerierWithArgumentsWrapperEntrypoint =
     InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>>;
 using GoSelectHints = PromPP::Prometheus::GenericSelectHints<PromPP::Primitives::Go::String, PromPP::Primitives::Go::SliceView>;

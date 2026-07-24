@@ -15,21 +15,13 @@ import (
 // floatStaleNaN is the float64 representation of the [value.StaleNaN] value.
 var floatStaleNaN = math.Float64frombits(value.StaleNaN)
 
-// MakeTimestampsSliceWithDefault creates a slice with the default timestamp.
-func MakeTimestampsSliceWithDefault(size int, defaultTimestamp int64) []int64 {
-	timestamps := make([]int64, size)
-	for i := range timestamps {
-		timestamps[i] = defaultTimestamp
-	}
-
-	return timestamps
-}
-
-// NewStaleNaNSeriesSliceFromTimestamps creates [StaleNaNSeries] slice from timestamps.
-func NewStaleNaNSeriesSliceFromTimestamps(timestamps []int64) []StaleNaNSeries {
-	seriesSlice := make([]StaleNaNSeries, len(timestamps))
+// NewStaleNaNSeriesSlice creates a [StaleNaNSeries] slice and sets the default timestamp to each series.
+// The timestamp and seriesID fields are then filled in place by the C++ stalenan query
+// (see [cppbridge.DataStorage.QueryStaleNaNSeries]).
+func NewStaleNaNSeriesSlice(size int, defaultTimestamp int64) []StaleNaNSeries {
+	seriesSlice := make([]StaleNaNSeries, size)
 	for i := range seriesSlice {
-		seriesSlice[i].timestamp = timestamps[i]
+		seriesSlice[i].timestamp = defaultTimestamp
 	}
 
 	return seriesSlice
@@ -48,20 +40,14 @@ type StaleNaNSeriesSet struct {
 }
 
 // NewStaleNaNSeriesSet creates a new [StaleNaNSeriesSet].
-// The series ids from lssQueryResult are copied into the (Go-owned) series slice so that
-// the C-allocated result buffer is no longer referenced after construction and can be
-// released immediately (see [cppbridge.LSSQueryResult.Close]).
+// The seriesID is filled inline in each series by the C++ stalenan query (next to the
+// timestamp), so the query result buffer is not referenced here and can be released right
+// after the data storage query (see [cppbridge.LSSQueryResult.Close]).
 func NewStaleNaNSeriesSet(
 	series []StaleNaNSeries,
-	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
 ) *StaleNaNSeriesSet {
-	ids := lssQueryResult.IDs()
-	for i := range series {
-		series[i].seriesID = ids[i]
-	}
-
 	return &StaleNaNSeriesSet{
 		series:                      series,
 		labelSetSnapshot:            labelSetSnapshot,
@@ -113,10 +99,14 @@ func (*StaleNaNSeriesSet) Warnings() annotations.Annotations {
 //
 
 // StaleNaNSeries is a series that always returns the staleNaN value for the specified timestamps.
+// NOTE: this struct is shared with C++ (entrypoint::types::StaleNaNSeriesWithGoLabels):
+// the data storage stalenan query writes timestamp/seriesID into it by pointer, so its
+// layout must stay in sync with the C++ side (timestamp -> timestamp, seriesID -> series_id,
+// labelSet -> go_labels_).
 type StaleNaNSeries struct {
 	timestamp int64
-	labelSet  labels.Labels
 	seriesID  uint32
+	labelSet  labels.Labels
 }
 
 // Iterator returns an iterator that iterates over the samples of the series.
