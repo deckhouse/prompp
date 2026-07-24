@@ -7,7 +7,7 @@
 #include "entrypoint/types/loader.h"
 #include "entrypoint/types/lss.h"
 #include "entrypoint/types/querier.h"
-#include "entrypoint/types/serialized_data.h"
+#include "entrypoint/types/serialization.h"
 #include "head/chunk_recoder.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
@@ -44,12 +44,15 @@ using entrypoint::types::QuerierType;
 using entrypoint::types::QuerierVariant;
 using entrypoint::types::QuerierVariantPtr;
 
-extern "C" void prompp_series_data_data_storage_ctor(void* res) {
+extern "C" void prompp_series_data_data_storage_ctor(void* args, void* res) {
+  struct Arguments {
+    bool collect_metrics;
+  };
   using Result = struct {
     DataStoragePtr data_storage;
   };
 
-  new (res) Result{.data_storage = std::make_unique<DataStorage>()};
+  new (res) Result{.data_storage = std::make_unique<DataStorage>(static_cast<Arguments*>(args)->collect_metrics)};
 }
 
 extern "C" void prompp_series_data_data_storage_reset(void* args) {
@@ -115,6 +118,30 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
   new (res) Result{.result = result};
 }
 
+extern "C" void prompp_get_promql_optimized_functions(void* res) {
+  using PromPP::Prometheus::promql::FunctionType;
+  using PromPP::Prometheus::promql::kFunctions;
+
+  struct GoFunction {
+    PromPP::Primitives::Go::String name;
+    FunctionType type;
+  };
+
+  static constexpr auto kGoFunctions = [] {
+    std::array<GoFunction, kFunctions.size()> functions;
+    for (size_t i = 0; i < functions.size(); ++i) {
+      functions[i] = {.name = PromPP::Primitives::Go::String(kFunctions[i].name), .type = kFunctions[i].type};
+    }
+    return functions;
+  }();
+
+  struct Result {
+    SliceView<const GoFunction> functions;
+  };
+
+  new (res) Result{.functions = SliceView{kGoFunctions.data(), kGoFunctions.size(), kGoFunctions.size()}};
+}
+
 extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
   using entrypoint::types::RangeQuerierWithArgumentsWrapperV2;
@@ -123,6 +150,8 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   struct Arguments {
     DataStoragePtr data_storage;
     Query query;
+    PromPP::Primitives::Timestamp downsampling_ms;
+    entrypoint::types::GoSelectHints* hints;
   };
 
   struct Result {
@@ -134,7 +163,8 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   const auto in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data);
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, in->hints ? *in->hints : entrypoint::types::GoSelectHints{}, out->serialized_data,
+                                             in->downsampling_ms);
   querier.query();
 
   if (querier.need_loading()) {
@@ -143,6 +173,27 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   } else {
     out->status = QueryStatus::kSuccess;
   }
+}
+
+extern "C" void prompp_series_data_serialized_data_next(void* args, void* res) {
+  struct Arguments {
+    entrypoint::types::SerializedDataPtr serialized_data;
+  };
+
+  using Result = struct {
+    uint32_t series_id;
+    uint32_t chunk_ref;
+  };
+  const auto out = new (res) Result{};
+  std::tie(out->series_id, out->chunk_ref) = static_cast<Arguments*>(args)->serialized_data->next();
+}
+
+extern "C" void prompp_series_data_serialized_data_dtor(void* args) {
+  struct Arguments {
+    entrypoint::types::SerializedDataPtr serialized_data;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
 }
 
 extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
@@ -244,6 +295,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
     uint32_t ls_id_batch_size;
     DataStoragePtr data_storage;
     PromPP::Primitives::TimeInterval time_interval;
+    PromPP::Primitives::Timestamp downsampling_ms;
   };
   struct Result {
     ChunkRecoderVariantPtr chunk_recoder;
@@ -255,7 +307,8 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<ChunkRecoder>,
-          ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size, in->data_storage.get(), in->time_interval}, in->time_interval),
+          ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size, in->data_storage.get(), in->time_interval}, in->time_interval,
+          in->downsampling_ms),
   };
 }
 
@@ -273,7 +326,7 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<SerializedChunkRecoder>,
           series_data::chunk::SerializedChunkIterator{in->serialized_data->get()->get_buffer_view(), in->serialized_data->get()->get_chunks_view()},
-          in->time_interval),
+          in->time_interval, series_data::decoder::decorator::kNoDownsampling),
   };
 }
 

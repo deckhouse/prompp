@@ -23,7 +23,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file"
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "0b1e895ba4226c2fda5ee0178c9b5b1195a741aa",
+        commit = "4141c384aa2a8e2da87dd17d16457caaecfeeda1",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -57,15 +57,14 @@ def _third_party_deps_impl(_ctx):
         build_file = Label("//third_party:jemalloc.BUILD"),
         patch_args = ["-p1"],
         patches = [
-            Label("//third_party/patches/jemalloc:0001-musl-noexcept-fix.patch"),
             Label("//third_party/patches/jemalloc:0002-manual-init.patch"),
             Label("//third_party/patches/jemalloc:0003-svacer_fixes.patch"),
             Label("//third_party/patches/jemalloc:0004-werror_fixes.patch"),
             Label("//third_party/patches/jemalloc:0005-gcc-16_fixes.patch"),
         ],
-        sha256 = "2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa",
-        strip_prefix = "jemalloc-5.3.0/",
-        url = "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2",
+        sha256 = "3826bc80232f22ed5c4662f3034f799ca316e819103bdc7bb99018a421706f92",
+        strip_prefix = "jemalloc-5.3.1/",
+        url = "https://github.com/jemalloc/jemalloc/releases/download/5.3.1/jemalloc-5.3.1.tar.bz2",
     )
 
     http_archive(
@@ -137,14 +136,14 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/com_google_absl:0004-array_bounds_fixes.patch"),
             Label("//third_party/patches/com_google_absl:0005-gcc-16_fixes.patch"),
         ],
-        sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
-        strip_prefix = "abseil-cpp-20240116.rc1/",
-        url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.rc1.tar.gz",
+        sha256 = "e887b423da5a1ba66e71610094fd7147ff2febfedccdfbf00f2c644ac21adf83",
+        strip_prefix = "abseil-cpp-20240116.3/",
+        url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.3.tar.gz",
     )
 
     git_repository(
         name = "snappy",
-        commit = "27ab5f7f518430a021239bc26a5b2fd64affbc7b",
+        commit = "7406111ac4ae539ea0db8b7ea2dc76730cd957f4",
         remote = "https://github.com/google/snappy",
         shallow_since = "1778353109 +0000",
     )

@@ -48,7 +48,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 	for i := range benchNumberOfShards {
 		shards[i] = shard.NewShard(
 			shard.NewLSS(),
-			shard.NewDataStorage(),
+			shard.NewDataStorage(false),
 			nil, // unloadedDataStorage
 			nil, // queriedSeriesStorage
 			wal.NewNoopWal(),
@@ -114,7 +114,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 	}
 }
 
-// services.CFViaRange
+// services.CFViaRange.
 func commitAndFlush(*benchHead) error {
 	return nil
 }

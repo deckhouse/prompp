@@ -9,8 +9,9 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -202,7 +203,7 @@ func (s *BatchStorageSuite) TestCommit_WithSamplesAdded() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   5000,
 		LabelSetIDs:      []uint32{0},
-	})
+	}, cppbridge.NoDownsampling, &storage.SelectHints{})
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, queryResult.Status)
 	s.Equal(storagetest.SamplesMap{
 		0: []cppbridge.Sample{

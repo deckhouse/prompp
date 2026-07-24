@@ -13,8 +13,9 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 )
 
 type LocalStorageObserverSuite struct {

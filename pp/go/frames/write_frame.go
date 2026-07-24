@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// WritePayload is a payload to write in frame
+// WritePayload is a payload to write in frame.
 type WritePayload interface {
 	Size() int64
 	CRC32() uint32
 	io.WriterTo
 }
 
-// WriteFrame - frame for write
+// WriteFrame - frame for write.
 type WriteFrame struct {
 	header  *Header
 	payload WritePayload

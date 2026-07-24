@@ -14,7 +14,7 @@ import (
 // ChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type ChunkIterator struct {
 	serializedData *cppbridge.DataStorageSerializedData
-	chunkIterator  cppbridge.DataStorageSerializedDataIterator
+	chunkIterator  cppbridge.DataStorageSerializedDataSamplesIterator
 	mint           int64
 	maxt           int64
 	isInitialized  bool
@@ -24,12 +24,12 @@ type ChunkIterator struct {
 func NewChunkIterator(serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32, mint, maxt int64) *ChunkIterator {
 	it := &ChunkIterator{
 		serializedData: serializedData,
-		chunkIterator:  cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef),
+		chunkIterator:  cppbridge.NewDataStorageSerializedDataSamplesIterator(serializedData, chunkRef),
 		mint:           mint,
 		maxt:           maxt,
 	}
 
-	if it.chunkIterator.Timestamp < mint {
+	if it.chunkIterator.Timestamp() < mint {
 		it.chunkIterator.Seek(mint)
 	}
 
@@ -43,16 +43,16 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 	it.isInitialized = false
 	it.chunkIterator.Reset(serializedData, chunkRef)
 
-	if it.chunkIterator.Timestamp < mint {
+	if it.chunkIterator.Timestamp() < mint {
 		it.chunkIterator.Seek(mint)
 	}
 }
 
 // At returns the current timestamp/value pair if the value is a float.
 //
-//nolint:gocritic // unnamedResult not need
+
 func (it *ChunkIterator) At() (int64, float64) {
-	return it.chunkIterator.Timestamp, it.chunkIterator.Value
+	return it.chunkIterator.Timestamp(), it.chunkIterator.Value()
 }
 
 // AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
@@ -67,7 +67,7 @@ func (it *ChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.
 
 // AtT returns the current timestamp.
 func (it *ChunkIterator) AtT() int64 {
-	return it.chunkIterator.Timestamp
+	return it.chunkIterator.Timestamp()
 }
 
 // Err returns the current error.
@@ -160,12 +160,10 @@ func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 
 type SeriesSet struct {
 	mint, maxt       int64
-	lssQueryResult   *cppbridge.LSSQueryResult
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	serializedData   *cppbridge.DataStorageSerializedData
 
-	lastIndexFromLSSQueryResult int
-	series                      []Series
+	series []Series
 }
 
 func NewSeriesSet(
@@ -177,7 +175,6 @@ func NewSeriesSet(
 	return &SeriesSet{
 		mint:             mint,
 		maxt:             maxt,
-		lssQueryResult:   lssQueryResult,
 		labelSetSnapshot: labelSetSnapshot,
 		serializedData:   serializedData,
 		series:           make([]Series, 0, lssQueryResult.Len()),
@@ -209,10 +206,10 @@ func (s *SeriesSet) At() storage.Series {
 	return &s.series[len(s.series)-1]
 }
 
-func (s *SeriesSet) Err() error {
+func (*SeriesSet) Err() error {
 	return nil
 }
 
-func (s *SeriesSet) Warnings() annotations.Annotations {
+func (*SeriesSet) Warnings() annotations.Annotations {
 	return nil
 }

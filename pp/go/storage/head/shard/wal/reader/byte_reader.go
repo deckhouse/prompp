@@ -9,7 +9,7 @@ type ByteReader struct {
 	readBytes int // bytes read via ReadByte
 }
 
-// NewByteReader init new [byteReader]
+// NewByteReader init new [byteReader].
 func NewByteReader(r io.Reader) *ByteReader {
 	return &ByteReader{
 		r:   r,

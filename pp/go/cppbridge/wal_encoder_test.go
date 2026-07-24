@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/prompb"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
@@ -101,7 +102,7 @@ func (s *EncoderSuite) TestEncode() {
 		size := seg.Size()
 
 		tbyte := s.transferringData(seg)
-		s.EqualValues(size, len(tbyte))
+		s.Len(tbyte, int(size))
 	}
 }
 
@@ -125,7 +126,7 @@ func (s *EncoderSuite) TestEncodeDuplicateTS() {
 	size := seg.Size()
 
 	tbyte := s.transferringData(seg)
-	s.EqualValues(size, len(tbyte))
+	s.Len(tbyte, int(size))
 }
 
 func (s *EncoderSuite) TestEncodeError() {
@@ -248,12 +249,12 @@ func (s *EncoderSuite) TestEncodeRemainingSize() {
 	var remainingTableSize uint32 = math.MaxUint32
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, s.makeData(1)), hlimits)
-	s.NoError(err)
+	s.Require().NoError(err)
 
 	enc := cppbridge.NewWALEncoder(0, 0)
 	seg, err := enc.Add(s.baseCtx, h)
-	s.NoError(err)
+	s.Require().NoError(err)
 
-	var prevRemainingTableSize = seg.RemainingTableSize()
+	prevRemainingTableSize := seg.RemainingTableSize()
 	s.Less(prevRemainingTableSize, remainingTableSize)
 }

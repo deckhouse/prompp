@@ -1082,12 +1082,22 @@ func main() {
 	}
 
 	if !agentMode {
+		activeQueryTracker, err := promql.NewActiveQueryTracker(
+			localStoragePath,
+			cfg.queryConcurrency,
+			log.With(logger, "component", "active query tracker"),
+		)
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to initialize active query tracker", "err", err)
+			os.Exit(1)
+		}
+
 		opts := promql.EngineOpts{
 			Logger:                   log.With(logger, "component", "query engine"),
 			Reg:                      prometheus.DefaultRegisterer,
 			MaxSamples:               cfg.queryMaxSamples,
 			Timeout:                  time.Duration(cfg.queryTimeout),
-			ActiveQueryTracker:       promql.NewActiveQueryTracker(localStoragePath, cfg.queryConcurrency, log.With(logger, "component", "activeQueryTracker")),
+			ActiveQueryTracker:       activeQueryTracker,
 			LookbackDelta:            time.Duration(cfg.lookbackDelta),
 			NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 			// EnableAtModifier and EnableNegativeOffset have to be
@@ -2395,6 +2405,20 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 				continue
 			}
 			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
+
+		case "select_func_optimization":
+			if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing select_func_optimization value",
+					"err", err,
+				)
+				continue
+			}
+
+			level.Info(logger).Log(
+				"msg", "[FEATURE] Select function optimization is set.",
+				"optimization", fvalue,
+			)
 		}
 	}
 }

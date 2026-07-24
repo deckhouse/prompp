@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -108,7 +109,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 func (b *Builder) BuildTransactionHead() *TransactionHead {
 	sd := shard.NewShard(
 		shard.NewLSS(),
-		shard.NewDataStorage(),
+		shard.NewDataStorage(false),
 		nil,
 		nil,
 		wal.NewNoopWal(),
@@ -191,7 +192,7 @@ func (b *Builder) createShardOnDisk(
 
 	return shard.NewShard(
 		lss,
-		shard.NewDataStorage(),
+		shard.NewDataStorage(true),
 		unloadedDataStorage,
 		queriedSeriesStorage,
 		wal.NewWal(shardWalEncoder, sw, lss, b.maxSegmentSize, shardID, b.registerer),

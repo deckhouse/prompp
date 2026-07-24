@@ -61,8 +61,8 @@ type Shard interface {
 	// WalWrite append the incoming inner series to wal encoder.
 	WalWrite(innerSeriesSlice []cppbridge.InnerSeries) (bool, error)
 
-	// DstSrcLsIdsMapping return ids mapping after lss copying
-	DstSrcLsIdsMapping() *cppbridge.IdsMapping
+	// DstSrcLsIDsMapping return ids mapping after lss copying
+	DstSrcLsIDsMapping() *cppbridge.IdsMapping
 }
 
 //
@@ -373,7 +373,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) updateRelabelerStateStage(
 	return nil
 }
 
-// trackStaleNans add stale nans samples if needed
+// trackStaleNans add stale nans samples if needed.
 func (a *Appender[TTask, TShard, TGShard, THead]) trackStaleNans(
 	shardInnerSeries *cppbridge.ShardedInnerSeries,
 	state *cppbridge.StateV2,
@@ -434,7 +434,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) resolveState(state *cppbridge.
 
 	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards(), func(maps []*cppbridge.IdsMapping) {
 		for id, shard := range a.head.Shards() {
-			maps[id] = shard.DstSrcLsIdsMapping()
+			maps[id] = shard.DstSrcLsIDsMapping()
 		}
 	})
 

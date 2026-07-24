@@ -147,8 +147,8 @@ func (l *Loader) loadHead(
 	return h, err
 }
 
-// EnsureSameErrorTypes checks if err contains targetErr - we ensure that all errors in chain would be targetErr,
-// otherwise return all errors in chain except targetErr
+// EnsureSameErrorTypes returns targetErr if every error in errs matches it,
+// otherwise returns all errors in the chain except targetErr.
 func EnsureSameErrorTypes(errs []error, targetErr error) error {
 	if len(errs) == 0 {
 		return nil
@@ -332,7 +332,7 @@ func NewShardDataLoader(
 func (l *ShardDataLoader) Load(readOnly bool) error {
 	l.shardData = ShardData{
 		lss:         shard.NewLSS(),
-		dataStorage: shard.NewDataStorage(),
+		dataStorage: shard.NewDataStorage(true),
 		wal: wal.NewCorruptedWal[
 			*cppbridge.HeadEncodedSegment,
 			*writer.Buffered[*cppbridge.HeadEncodedSegment],

@@ -11,8 +11,9 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/prompb"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
@@ -227,7 +228,7 @@ func (s *EncoderDecoderSuite) TestRestoreFromStream() {
 	s.Equal(uint32(count-1), retoreSID)
 }
 
-// this test run for local  benchmark test
+// this test run for local  benchmark test.
 func (s *EncoderDecoderSuite) EncodeDecodeBench(i int64) {
 	expectedWr := s.makeData(100, i)
 	data, err := expectedWr.Marshal()
@@ -248,7 +249,7 @@ func (s *EncoderDecoderSuite) EncodeDecodeBench(i int64) {
 	_ = protob
 }
 
-// this test run for local  benchmark test
+// this test run for local  benchmark test.
 func (s *EncoderDecoderSuite) TestEncodeDecodeBenchmark() {
 	for i := 0; i < 10; i++ {
 		s.EncodeDecodeBench(int64(i))

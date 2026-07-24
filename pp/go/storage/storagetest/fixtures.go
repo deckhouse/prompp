@@ -13,6 +13,8 @@ import (
 	"github.com/jonboulle/clockwork"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -28,7 +30,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/suite"
 )
 
 // TimeSeries test data.
@@ -170,13 +171,13 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 			break
 		}
 
-		iterator := cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef)
+		iterator := cppbridge.NewDataStorageSerializedDataSamplesIterator(serializedData, chunkRef)
 		for {
 			if !iterator.HasData() {
 				break
 			}
 
-			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp, Value: iterator.Value})
+			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp(), Value: iterator.Value()})
 			iterator.Next()
 		}
 	}

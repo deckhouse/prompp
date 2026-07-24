@@ -45,7 +45,7 @@ TEST_F(GoHeadFixture, Test) {
 
   // Act
   hashdex_.presharding(&lss_, &data_storage_);
-  std::ranges::for_each(hashdex_.metrics(), [&actual](const GoHead<Lss>::Iterator& it) {
+  std::ranges::for_each(hashdex_.floats(), [&actual](const GoHead<Lss>::Iterator& it) {
     auto& item = actual.emplace_back();
     item.hash = it.hash();
     it.read(item.timeseries);

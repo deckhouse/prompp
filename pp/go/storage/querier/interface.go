@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/storage"
 )
 
 //
@@ -51,6 +52,8 @@ type DataStorage interface {
 	// Query returns serialized chunks from data storage.
 	Query(
 		query cppbridge.DataStorageQuery,
+		downsamplingMs int64,
+		hints *storage.SelectHints,
 	) cppbridge.DataStorageQueryResult
 
 	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.

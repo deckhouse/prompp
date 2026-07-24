@@ -6,6 +6,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -19,8 +20,8 @@ const (
 	DefaultBlockDuration = 2 * time.Hour
 )
 
-// LsIdBatchSize is the batch size for label set ID.
-var LsIdBatchSize uint32 = 100000
+// LsIDBatchSize is the batch size for label set ID.
+var LsIDBatchSize uint32 = 100000
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
@@ -80,8 +81,8 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 			return err
 		}
 		defer func() {
-			if err := writers.Close(); err != nil {
-				logger.Warnf("Failed to close block writers: %v", err)
+			if closeErr := writers.Close(); closeErr != nil {
+				logger.Warnf("Failed to close block writers: %v", closeErr)
 			}
 		}()
 
@@ -121,18 +122,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			continue
 		}
 
-		var chunkIterator ChunkIterator
-		_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIdBatchSize, sd.DataStorage().Raw(), minT, maxT)
-			return nil
-		})
-
-		writer, err := newBlockWriter(
-			w.dataDir,
-			w.maxBlockChunkSegmentSize,
-			NewIndexWriter(sd.LSS().Target()),
-			chunkIterator,
-		)
+		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
@@ -141,6 +131,26 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	}
 
 	return writers, nil
+}
+
+func (w *Writer[TShard]) createWriter(
+	dataDir string,
+	sd TShard,
+	lss *cppbridge.LabelSetStorage,
+	minT, maxT, downsamplingMs int64,
+) (blockWriter, error) {
+	var chunkIterator ChunkIterator
+	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
+		chunkIterator = NewChunkIterator(lss, LsIDBatchSize, ds, minT, maxT, downsamplingMs)
+		return nil
+	})
+
+	return newBlockWriter(
+		dataDir,
+		w.maxBlockChunkSegmentSize,
+		NewIndexWriter(lss),
+		chunkIterator,
+	)
 }
 
 // retentionCutoffMs returns the max time (in unix milliseconds) below which a
@@ -159,7 +169,7 @@ func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
 	_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
+		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIDBatchSize)
 		return nil
 	})
 

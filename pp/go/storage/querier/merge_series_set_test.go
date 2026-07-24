@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -11,7 +13,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 // mergeSeriesSetMatrix is exercised for happy-path, empty-set, and across-shard order scenarios.
@@ -76,8 +77,8 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 				esets := make([]storage.SeriesSet, 0, bm.numShards)
 				asets := make([]storage.SeriesSet, 0, bm.numShards)
 				for i := 0; i < bm.numShards; i++ {
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -90,8 +91,8 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 						esets = append(esets, &querier.SeriesSet{})
 						asets = append(asets, &querier.SeriesSet{})
 					}
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -100,10 +101,10 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 				esets := make([]storage.SeriesSet, 0, bm.numShards)
 				asets := make([]storage.SeriesSet, 0, bm.numShards)
 				for i := 0; i < bm.numShards; i++ {
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				for i := bm.numShards - 1; i >= 0; i-- {
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -141,7 +142,7 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 				b.StopTimer()
 				seriesSets = seriesSets[:0]
 				for i := 0; i < bm.numShards; i++ {
-					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, matcher))
+					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
 				}
 				b.StartTimer()
 
@@ -171,7 +172,7 @@ func makeHead(numShards, numSeries, numSamples int) *testHead {
 	dss := make([]*shard.DataStorage, 0, numShards)
 	for shardID := range numShards {
 		lss := shard.NewLSS()
-		ds := shard.NewDataStorage()
+		ds := shard.NewDataStorage(false)
 		timeSeries := makeTimeSeries(numSeries, numSamples, shardID)
 		storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 		lsses = append(lsses, lss)
