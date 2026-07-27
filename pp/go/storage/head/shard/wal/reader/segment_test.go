@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
+	"github.com/prometheus/prometheus/util/pool"
 )
 
 type SegmentSuite struct {
@@ -282,4 +283,22 @@ func (s *SegmentV2Suite) TestReadIDAndBody() {
 	s.Require().Equal(len(data), segment.Length())
 	s.Require().Equal(segmentSamples, segment.Samples())
 	s.Require().Equal(data, segment.Bytes())
+}
+
+func TestXxx(t *testing.T) {
+	// t.Log(getBuffer(10e3))
+	t.Log(buffers)
+}
+
+// buffers is a pool of buffers.
+var buffers = pool.New(1e3, 512e3, 2, func(sz int) any { return make([]byte, 0, sz) })
+
+// getBuffer gets a buffer from the pool.
+func getBuffer(size int) []byte {
+	return buffers.Get(size).([]byte)[:size]
+}
+
+// putBuffer puts a buffer into the pool.
+func putBuffer(buf []byte) {
+	buffers.Put(buf)
 }

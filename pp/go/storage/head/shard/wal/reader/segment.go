@@ -16,7 +16,7 @@ import (
 
 // buffers is a pool of buffers.
 // It is used to reuse buffers to avoid allocation overhead.
-var buffers = pool.New(10e3, 500e3, 2, func(sz int) any { return make([]byte, 0, sz) })
+var buffers = pool.New(1e3, 512e3, 2, func(sz int) any { return make([]byte, 0, sz) })
 
 // getBuffer gets a buffer from the pool.
 func getBuffer(size int) []byte {
