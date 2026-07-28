@@ -1131,6 +1131,44 @@ func TestCompaction_populateBlock(t *testing.T) {
 	}
 }
 
+func TestCompact_SingleCorruptedBlockDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	series := storage.NewListSeries(
+		labels.FromStrings("a", "b"),
+		[]chunks.Sample{testutils.SampleTest{TS: 1, V: 1}},
+	)
+	blockDir := testutils.CreateBlock(t, tmpdir, []storage.Series{series})
+
+	chunkFiles, err := filepath.Glob(filepath.Join(block.ChunkDir(blockDir), "*"))
+	require.NoError(t, err)
+	require.NotEmpty(t, chunkFiles)
+
+	f, err := os.OpenFile(chunkFiles[0], os.O_RDWR, 0o666)
+	require.NoError(t, err)
+	require.NoError(t, f.Truncate(1))
+	require.NoError(t, f.Close())
+
+	c, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{
+		20,
+		60,
+		240,
+		720,
+		2160,
+	}, nil, nil)
+	require.NoError(t, err)
+
+	dest := t.TempDir()
+	ulids, err := c.Compact(dest, []string{blockDir}, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	meta, _, err := block.ReadFromDir(blockDir)
+	require.NoError(t, err)
+	require.True(t, meta.Compaction.IsCorrupted())
+}
+
 func TestCompactBlockMetas(t *testing.T) {
 	parent1 := ulid.MustNew(100, nil)
 	parent2 := ulid.MustNew(200, nil)

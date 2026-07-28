@@ -116,7 +116,7 @@ func (g *DefaultGrouper) Groups(blocks []*block.Block) (res []*Group, err error)
 			res = append(res, group)
 		}
 
-		if err := group.AppendMeta(meta); err != nil {
+		if err := group.AppendMeta(&meta); err != nil {
 			return nil, fmt.Errorf("add compaction group: %w", err)
 		}
 	}
