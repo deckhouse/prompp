@@ -1,4 +1,4 @@
-//go:build stringlabels
+//go:build !slicelabels && !dedupelabels
 
 package labels
 
