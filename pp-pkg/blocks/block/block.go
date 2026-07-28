@@ -63,8 +63,9 @@ type Block struct {
 	closing        bool
 	pendingReaders sync.WaitGroup
 
-	dir  string
-	meta metadata.Meta
+	dir     string
+	meta    metadata.Meta
+	mtxMeta sync.RWMutex
 
 	// Symbol Table Size in bytes.
 	// We maintain this variable to avoid recalculation every time.
@@ -120,7 +121,7 @@ func OpenBlocks(
 
 		if meta.Compaction.UnsetCorrupted() {
 			// unmark block as corrupted
-			block.Metadata().Compaction.UnsetCorrupted()
+			block.UnsetCorrupted()
 			if _, err := WriteThanosMetaFile(l, bDir, meta); err != nil {
 				_ = level.Error(l).Log(
 					"msg", "Failed to update meta.json for a block during reloadBlocks",
@@ -250,10 +251,18 @@ func (pb *Block) MaxTime() int64 {
 }
 
 // Meta returns [tsdb.BlockMeta] meta information about the block.
-func (pb *Block) Meta() tsdb.BlockMeta { return pb.meta.BlockMeta }
+func (pb *Block) Meta() tsdb.BlockMeta {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
+	return pb.meta.BlockMeta
+}
 
 // Metadata returns the thanos [metadata.Meta] of the block.
-func (pb *Block) Metadata() *metadata.Meta { return &pb.meta }
+func (pb *Block) Metadata() metadata.Meta {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
+	return pb.meta
+}
 
 // OverlapsClosedInterval returns true if the block overlaps [mint, maxt].
 func (pb *Block) OverlapsClosedInterval(mint, maxt int64) bool {
@@ -264,13 +273,18 @@ func (pb *Block) OverlapsClosedInterval(mint, maxt int64) bool {
 
 // SetAsDeletable sets the block as deletable.
 func (pb *Block) SetAsDeletable() {
+	pb.mtxMeta.Lock()
 	pb.meta.Compaction.Deletable = true
+	pb.mtxMeta.Unlock()
 }
 
 // SetCompactionFailed sets the block as compaction failed.
 func (pb *Block) SetCompactionFailed(
 	writeMetaFileFn func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error),
 ) error {
+	pb.mtxMeta.Lock()
+	defer pb.mtxMeta.Unlock()
+
 	pb.meta.Compaction.Failed = true
 	n, err := writeMetaFileFn(pb.logger, pb.dir, &pb.meta.BlockMeta)
 	if err != nil {
@@ -285,6 +299,13 @@ func (pb *Block) SetCompactionFailed(
 // SetNumBytesMeta sets the number of bytes of the meta file.
 func (pb *Block) SetNumBytesMeta(n int64) {
 	pb.numBytesMeta = n
+}
+
+// SetThanosMeta sets the thanos meta of the block.
+func (pb *Block) SetThanosMeta(meta *metadata.Meta) {
+	pb.mtxMeta.Lock()
+	pb.meta = *meta
+	pb.mtxMeta.Unlock()
 }
 
 // Size returns the number of bytes that the block takes up.
@@ -309,6 +330,13 @@ func (pb *Block) Tombstones() (tombstones.Reader, error) {
 // ULID returns the ULID of the block.
 func (pb *Block) ULID() ulid.ULID {
 	return pb.meta.ULID
+}
+
+// UnsetCorrupted unsets the block as corrupted.
+func (pb *Block) UnsetCorrupted() bool {
+	pb.mtxMeta.Lock()
+	defer pb.mtxMeta.Unlock()
+	return pb.meta.Compaction.UnsetCorrupted()
 }
 
 // startRead starts a read operation on the block.

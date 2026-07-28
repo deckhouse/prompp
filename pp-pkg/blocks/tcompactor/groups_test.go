@@ -33,8 +33,8 @@ func TestGrouperSuite(t *testing.T) {
 func (s *GrouperSuite) TestOneGroup() {
 	blks := []*block.Block{{}, {}}
 	ls := map[string]string{"foo": "bar"}
-	blks[0].Metadata().Thanos.Labels = ls
-	blks[1].Metadata().Thanos.Labels = ls
+	blks[0].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
+	blks[1].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
 
 	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil).Groups(blks)
 	s.Require().NoError(err)
@@ -45,8 +45,8 @@ func (s *GrouperSuite) TestTwoGroupsByLabels() {
 	blks := []*block.Block{{}, {}}
 	ls1 := map[string]string{"foo": "bar"}
 	ls2 := map[string]string{"foo": "baz"}
-	blks[0].Metadata().Thanos.Labels = ls1
-	blks[1].Metadata().Thanos.Labels = ls2
+	blks[0].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls1}})
+	blks[1].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls2}})
 
 	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil).Groups(blks)
 	s.Require().NoError(err)
@@ -56,10 +56,12 @@ func (s *GrouperSuite) TestTwoGroupsByLabels() {
 func (s *GrouperSuite) TestTwoGroupsByResolution() {
 	blks := []*block.Block{{}, {}}
 	ls := map[string]string{"foo": "bar"}
-	blks[0].Metadata().Thanos.Labels = ls
-	blks[1].Metadata().Thanos.Labels = ls
-	blks[0].Metadata().Thanos.Downsample.Resolution = 10
-	blks[1].Metadata().Thanos.Downsample.Resolution = 20
+	blks[0].SetThanosMeta(&metadata.Meta{
+		Thanos: metadata.Thanos{Labels: ls, Downsample: metadata.ThanosDownsample{Resolution: 10}},
+	})
+	blks[1].SetThanosMeta(&metadata.Meta{
+		Thanos: metadata.Thanos{Labels: ls, Downsample: metadata.ThanosDownsample{Resolution: 20}},
+	})
 
 	groups, err := tcompactor.NewDefaultGrouper(log.NewNopLogger(), nil).Groups(blks)
 	s.Require().NoError(err)
@@ -83,8 +85,8 @@ func (s *GroupCompactSuite) TestHappyPath() {
 	ls := map[string]string{"foo": "bar"}
 
 	blks := []*block.Block{{}, {}}
-	blks[0].Metadata().Thanos.Labels = ls
-	blks[1].Metadata().Thanos.Labels = ls
+	blks[0].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
+	blks[1].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
 
 	group := tcompactor.NewGroup(
 		log.NewNopLogger(),
@@ -95,7 +97,8 @@ func (s *GroupCompactSuite) TestHappyPath() {
 	)
 
 	for i := range blks {
-		s.Require().NoError(group.AppendMeta(blks[i].Metadata()))
+		meta := blks[i].Metadata()
+		s.Require().NoError(group.AppendMeta(&meta))
 	}
 
 	planner := &mock.PlannerMock{
@@ -156,8 +159,8 @@ func (s *GroupCompactSuite) TestNoPlan() {
 	ls := map[string]string{"foo": "bar"}
 
 	blks := []*block.Block{{}, {}}
-	blks[0].Metadata().Thanos.Labels = ls
-	blks[1].Metadata().Thanos.Labels = ls
+	blks[0].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
+	blks[1].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
 
 	group := tcompactor.NewGroup(
 		log.NewNopLogger(),
@@ -168,7 +171,8 @@ func (s *GroupCompactSuite) TestNoPlan() {
 	)
 
 	for i := range blks {
-		s.Require().NoError(group.AppendMeta(blks[i].Metadata()))
+		meta := blks[i].Metadata()
+		s.Require().NoError(group.AppendMeta(&meta))
 	}
 
 	planner := &mock.PlannerMock{
@@ -204,8 +208,8 @@ func (s *GroupCompactSuite) TestNoCompact() {
 	ls := map[string]string{"foo": "bar"}
 
 	blks := []*block.Block{{}, {}}
-	blks[0].Metadata().Thanos.Labels = ls
-	blks[1].Metadata().Thanos.Labels = ls
+	blks[0].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
+	blks[1].SetThanosMeta(&metadata.Meta{Thanos: metadata.Thanos{Labels: ls}})
 
 	group := tcompactor.NewGroup(
 		log.NewNopLogger(),
@@ -216,7 +220,8 @@ func (s *GroupCompactSuite) TestNoCompact() {
 	)
 
 	for i := range blks {
-		s.Require().NoError(group.AppendMeta(blks[i].Metadata()))
+		meta := blks[i].Metadata()
+		s.Require().NoError(group.AppendMeta(&meta))
 	}
 
 	planner := &mock.PlannerMock{

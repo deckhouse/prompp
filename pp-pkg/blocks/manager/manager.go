@@ -64,9 +64,10 @@ type Manager struct {
 	blocks    []*block.Block
 	compactor compactionRunner
 
-	stopc    chan struct{}
-	stoppedc chan struct{}
-	stopOnce sync.Once
+	stopc          chan struct{}
+	stoppedc       chan struct{}
+	stopOnce       sync.Once
+	deleteBlocksWG sync.WaitGroup
 }
 
 // compactionRunner runs a single compaction pass over the on-disk blocks,
@@ -209,6 +210,7 @@ func (m *Manager) Close() {
 		close(m.stopc)
 	})
 	<-m.stoppedc
+	m.deleteBlocksWG.Wait()
 
 	_ = level.Info(m.logger).Log("msg", "Block manager closed")
 
@@ -459,6 +461,7 @@ func (m *Manager) reloadBlocks() (err error) {
 		return fmt.Errorf("rename for deletion %v blocks: %w", len(deletable), err)
 	}
 
+	m.deleteBlocksWG.Add(1)
 	go m.closeAndDeleteBlocks(deletable)
 
 	return nil
@@ -488,6 +491,8 @@ func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) err
 
 // closeAndDeleteBlocks closes the given blocks and deletes the temporary files for deletion.
 func (m *Manager) closeAndDeleteBlocks(blocks map[ulid.ULID]*block.Block) {
+	defer m.deleteBlocksWG.Done()
+
 	for uid, blk := range blocks {
 		if blk != nil {
 			if err := blk.Close(); err != nil {

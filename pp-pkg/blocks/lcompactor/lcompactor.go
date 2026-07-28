@@ -576,6 +576,11 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 		uids = append(uids, meta.ULID.String())
 	}
 
+	// All blocks may have been skipped as corrupted.
+	if len(metas) == 0 {
+		return nil, nil
+	}
+
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)
