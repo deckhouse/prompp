@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <utility>
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include "bit_sequence.h"
 #include "exception.h"

@@ -12,7 +12,7 @@
 #include <arm_acle.h>
 #endif
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include "bare_bones/exception.h"
 #include "bare_bones/streams.h"
