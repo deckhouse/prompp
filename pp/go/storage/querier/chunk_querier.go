@@ -142,6 +142,9 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	defer poolProvider.PutSnapshots(snapshots)
 	lssQueryResults := poolProvider.GetLSSQueryResults()
 	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+	// The chunk series sets take the series id from the recoded chunks and do not
+	// reference the query result buffers, so they can be released on return.
+	defer closeLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
@@ -162,7 +165,6 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		}
 
 		chunkSeriesSets[shardID] = NewChunkSeriesSet(
-			lssQueryResults[shardID],
 			snapshots[shardID],
 			cppbridge.NewSerializedChunkRecoder(serializedData, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
