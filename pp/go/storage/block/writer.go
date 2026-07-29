@@ -102,7 +102,7 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	var writers blockWriters
 
-	timeInterval := sd.DataStorage().TimeInterval(false)
+	timeInterval := sd.DataStorage().TimeInterval(true)
 
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
 
