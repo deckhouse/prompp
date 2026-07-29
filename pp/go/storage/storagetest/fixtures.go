@@ -285,7 +285,7 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}
 
-	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, instantSeries), nil
+	return querier.NewInstantSeriesSet(snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
 
 const (
@@ -341,13 +341,12 @@ func StaleNaNQuery(
 		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
-	timestamps := querier.MakeTimestampsSliceWithDefault(lssQueryResult.Len(), valueNotFoundTimestampValue)
-	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps)
+	series := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
-	return querier.NewStaleNaNSeriesSet(
-		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
-		lssQueryResult,
-		snapshot,
-		valueNotFoundTimestampValue,
-	), nil
+	ds.QueryStaleNaNSeries(
+		lssQueryResult.IDs(),
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	return querier.NewStaleNaNSeriesSet(series, snapshot, valueNotFoundTimestampValue), nil
 }

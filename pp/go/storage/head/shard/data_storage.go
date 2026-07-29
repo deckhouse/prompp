@@ -94,6 +94,14 @@ func (ds *DataStorage) QueryFirstTimestamps(ids []uint32, timestamps []int64) {
 	ds.locker.RUnlock()
 }
 
+// QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
+// series in ids directly into the C-shared series slice (pointed to by series).
+func (ds *DataStorage) QueryStaleNaNSeries(ids []uint32, series uintptr) {
+	ds.locker.RLock()
+	ds.dataStorage.QueryStaleNaNSeries(ids, series)
+	ds.locker.RUnlock()
+}
+
 // QueryStatus get head status from [DataStorage].
 func (ds *DataStorage) QueryStatus(status *cppbridge.HeadStatus) {
 	ds.locker.RLock()

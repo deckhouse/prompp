@@ -192,6 +192,9 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer poolProvider.PutSnapshots(snapshots)
 	lssQueryResults := poolProvider.GetLSSQueryResults()
 	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+	// The instant series sets copy out the series ids they need, so the query result
+	// buffers can be released on return (after all in-flight C queries have completed).
+	defer closeLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to instant: %s", err)
@@ -228,7 +231,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			}
 
 			seriesSets[shardID] = NewInstantSeriesSet(
-				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
 				instantSeries,
@@ -282,6 +284,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer poolProvider.PutSnapshots(snapshots)
 	lssQueryResults := poolProvider.GetLSSQueryResults()
 	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+	// Range/aggr series sets only use the result length at construction, so the query
+	// result buffers can be released on return (queryDataStorage has already waited for
+	// all in-flight C queries by then).
+	defer closeLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
@@ -500,6 +506,18 @@ func queryLabelValues[
 	sort.Strings(lvs)
 
 	return lvs, anns, nil
+}
+
+// closeLSSQueryResults releases the C-allocated buffers held by the query results.
+// It is safe to call once every series set built from these results has copied out
+// (or no longer needs) the data it references. Nil entries are skipped and Close is
+// idempotent, so the finalizer stays a harmless fallback.
+func closeLSSQueryResults(lssQueryResults []*cppbridge.LSSQueryResult) {
+	for _, lssQueryResult := range lssQueryResults {
+		if lssQueryResult != nil {
+			lssQueryResult.Close()
+		}
+	}
 }
 
 // queryLss returns query results and snapshots.
