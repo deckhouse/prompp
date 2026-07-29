@@ -128,6 +128,16 @@ INSTANTIATE_TEST_SUITE_P(TwoPositiveMatchers,
                                                                             {.name = "task", .value = "php|python|nodejs", .type = MatcherType::kRegexpMatch}},
                                                          .expected = {.series_id_list = {0, 1, 2}, .status = QuerierStatus::kMatch}}));
 
+INSTANTIATE_TEST_SUITE_P(RegexpMatchWithOverlappingAlternatives,
+                         QuerierFixture,
+                         testing::Values(QuerierTestCase{.label_matchers = {{.name = "task", .value = "php|.hp", .type = MatcherType::kRegexpMatch}},
+                                                         .expected = {.series_id_list = {1}, .status = QuerierStatus::kMatch}},
+                                         QuerierTestCase{.label_matchers = {{.name = "task", .value = "php|python|.hp", .type = MatcherType::kRegexpMatch}},
+                                                         .expected = {.series_id_list = {1, 2}, .status = QuerierStatus::kMatch}},
+                                         QuerierTestCase{.label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
+                                                                            {.name = "task", .value = "php|.hp|nodejs|n.dejs", .type = MatcherType::kRegexpMatch}},
+                                                         .expected = {.series_id_list = {0, 1}, .status = QuerierStatus::kMatch}}));
+
 INSTANTIATE_TEST_SUITE_P(EmptyMatcher,
                          QuerierFixture,
                          testing::Values(QuerierTestCase{.label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},

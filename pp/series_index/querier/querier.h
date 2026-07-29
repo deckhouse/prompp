@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <ranges>
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
@@ -89,11 +88,7 @@ class Querier {
     MemoryPool memory_pool(fill_matchers_cardinality(selector));
     sort_matchers(selector);
 
-    auto result_set = resolve_positive_matcher(selector.matchers[0], memory_pool.merge1, memory_pool.merge2);
-    if (selector.matchers.size() > 1 && selector.matchers[1].is_positive()) {
-      memory_pool.allocate_temp_memory();
-    }
-
+    auto result_set = resolve_positive_matcher(selector.matchers[0], memory_pool.merge1);
     for (auto it = std::next(selector.matchers.begin()); it != selector.matchers.end(); ++it) {
       process_matcher(*it, memory_pool, result_set);
     }
@@ -106,13 +101,11 @@ class Querier {
   class MemoryPool {
     SeriesIdContainer merge_container1_;
     SeriesIdContainer merge_container2_;
-    SeriesIdContainer temp_container_;
     Cardinality cardinality_;
 
    public:
     uint32_t* merge1{};
     uint32_t* merge2{};
-    uint32_t* temp{};
 
     explicit MemoryPool(uint32_t cardinality)
         : merge_container1_(cardinality),
@@ -120,11 +113,6 @@ class Querier {
           cardinality_(cardinality),
           merge1(merge_container1_.data()),
           merge2(merge_container2_.data()) {}
-
-    PROMPP_ALWAYS_INLINE void allocate_temp_memory() {
-      temp_container_.resize(cardinality_);
-      temp = temp_container_.data();
-    }
 
     PROMPP_ALWAYS_INLINE SeriesIdContainer&& release_container_for_merge(const uint32_t* memory) {
       if (memory == merge_container1_.data()) {
@@ -134,7 +122,7 @@ class Querier {
     }
   };
 
-  SeriesSliceList series_slice_list_;
+  MatchesMerger matches_merger_;
 
   PROMPP_ALWAYS_INLINE static void sort_matchers(Selector& selector) noexcept {
     std::ranges::sort(selector.matchers, MatchersComparatorByTypeAndCardinality{});
@@ -174,7 +162,7 @@ class Querier {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
       result_set = SetIntersecter::intersect(result_set, matcher.label_name_match);
     } else {
-      result_set = SetIntersecter::intersect(result_set, resolve_positive_matcher(matcher, memory_pool.merge2, memory_pool.temp));
+      result_set = SetIntersecter::intersect(result_set, resolve_positive_matcher(matcher, memory_pool.merge2));
     }
   }
 
@@ -186,14 +174,14 @@ class Querier {
     }
   }
 
-  SeriesIdSpan resolve_positive_matcher(const Selector::Matcher& matcher, uint32_t*& memory, uint32_t*& temp_memory) {
+  SeriesIdSpan resolve_positive_matcher(const Selector::Matcher& matcher, uint32_t*& memory) {
     using enum PromPP::Prometheus::MatchStatus;
 
     if (matcher.status == kAllMatch) {
       return resolve_all_match_matcher(matcher, memory);
     }
 
-    return resolve_partial_match_matcher(matcher, memory, temp_memory);
+    return resolve_partial_match_matcher(matcher, memory);
   }
 
   PROMPP_ALWAYS_INLINE static SeriesIdSpan resolve_all_match_matcher(const Selector::Matcher& matcher, uint32_t* memory) {
@@ -201,18 +189,8 @@ class Querier {
     return {memory, matcher.label_name_match.count()};
   }
 
-  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_partial_match_matcher(const Selector::Matcher& matcher, uint32_t*& memory, uint32_t*& temp_memory) {
-    series_slice_list_.clear();
-    series_slice_list_.reserve(matcher.matches.size());
-
-    uint32_t offset = 0;
-    for (const auto& label_value_match : matcher.matches) {
-      decode_sequence(label_value_match, memory + offset);
-      series_slice_list_.emplace_back(SeriesSlice{.begin = offset, .end = offset + label_value_match.count()});
-      offset += label_value_match.count();
-    }
-
-    return SetMerger::merge(series_slice_list_, memory, temp_memory);
+  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_partial_match_matcher(const Selector::Matcher& matcher, uint32_t* memory) noexcept {
+    return matches_merger_.merge(matcher.matches, memory);
   }
 
   PROMPP_ALWAYS_INLINE static void decode_sequence(const SeriesIdSequenceSnapshot& sequence, uint32_t* memory) { std::ranges::copy(sequence, memory); }
