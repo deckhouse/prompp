@@ -259,7 +259,7 @@ class SelectorQuerier {
       return status;
     }
 
-    fill_matcher_without_excludes(values_trie.count(), match_resolver_.value_resolver(label_name_id), matcher);
+    fill_matcher_without_excludes(values_trie.count(), match_resolver_.value_resolver(label_name_id), matcher.matches);
     return status;
   }
 
@@ -271,26 +271,26 @@ class SelectorQuerier {
     return regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(values_trie, regexp);
   }
 
-  void fill_matcher_without_excludes(uint32_t values_trie_count, const auto& value_resolver, Selector::Matcher& matcher) {
+  void fill_matcher_without_excludes(uint32_t values_trie_count, const auto& value_resolver, Selector::Matcher::Matches& matches) {
     std::ranges::sort(excluded_value_ids_);
 
-    matcher.matches.reserve(values_trie_count - excluded_value_ids_.size());
+    matches.reserve(values_trie_count);
 
     uint32_t value_id = 0;
     for (const auto excluded_value_id : excluded_value_ids_) {
       for (; value_id < excluded_value_id; ++value_id) {
-        matcher.matches.emplace_back(value_resolver(value_id));
+        matches.emplace_back(value_resolver(value_id));
       }
 
       value_id = excluded_value_id + 1;
     }
 
     for (; value_id < values_trie_count; ++value_id) {
-      matcher.matches.emplace_back(value_resolver(value_id));
+      matches.emplace_back(value_resolver(value_id));
     }
 
-    if (matcher.matches.empty()) [[unlikely]] {
-      matcher.matches.shrink_to_fit();
+    if (matches.empty()) [[unlikely]] {
+      matches.shrink_to_fit();
     }
   }
 };

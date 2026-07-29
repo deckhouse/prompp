@@ -198,6 +198,7 @@ class CedarTrie {
   template <class InputStream>
   friend InputStream& operator>>(InputStream& stream, CedarTrie& trie) {
     stream >> trie.trie_;
+    trie.count_ = static_cast<uint32_t>(trie.trie_.num_keys());
     return stream;
   }
 
