@@ -317,7 +317,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	queriers = append(queriers,
+	queriers = append(
+		queriers,
 		querier.NewQuerier(
 			ahead,
 			querier.NewNoOpShardedDeduplicator,
@@ -336,12 +337,13 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
-		timeInterval := headTimeInterval(head)
+		timeInterval := headTimeIntervalWithValidateCache(head, defaultCacheCheckIntervalMs)
 		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
 			continue
 		}
 
-		queriers = append(queriers,
+		queriers = append(
+			queriers,
 			querier.NewQuerierWithOutSelectFuncOptimize(
 				head,
 				querier.NewNoOpShardedDeduplicator,
@@ -363,18 +365,6 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
-}
-
-// headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
-func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
-	timeInterval := cppbridge.NewInvalidTimeInterval()
-	for _, shard := range head.Shards() {
-		interval := shard.TimeInterval(false)
-		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
-		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
-	}
-
-	return timeInterval
 }
 
 // headTimeIntervalWithValidateCache returns [cppbridge.TimeInterval] from [pp_storage.Head] with validate cache.
