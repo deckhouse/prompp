@@ -6,7 +6,6 @@
 #include "series_data/decoder/decorator/rate_iterator.h"
 #include "series_data/decoder/decorator/resets_iterator.h"
 #include "series_data/encoder.h"
-#include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace {

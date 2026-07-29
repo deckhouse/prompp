@@ -3,8 +3,6 @@
 #include "primitives/go_model.h"
 #include "primitives/label_set.h"
 
-#include "primitives/snug_composites.h"
-
 namespace {
 
 using PromPP::Primitives::LabelView;
