@@ -93,7 +93,7 @@ class Querier {
       process_matcher(*it, memory_pool, result_set);
     }
 
-    result.set_series_id_list(memory_pool.release_container_for_merge(result_set.data()), result_set.size());
+    result.set_series_id_list(memory_pool.release_container_for_merge(), result_set.size());
     return result;
   }
 
@@ -114,12 +114,7 @@ class Querier {
           merge1(merge_container1_.data()),
           merge2(merge_container2_.data()) {}
 
-    PROMPP_ALWAYS_INLINE SeriesIdContainer&& release_container_for_merge(const uint32_t* memory) {
-      if (memory == merge_container1_.data()) {
-        return std::move(merge_container1_);
-      }
-      return std::move(merge_container2_);
-    }
+    PROMPP_ALWAYS_INLINE SeriesIdContainer&& release_container_for_merge() { return std::move(merge_container1_); }
   };
 
   MatchesMerger matches_merger_;

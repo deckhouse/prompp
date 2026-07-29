@@ -13,7 +13,6 @@ using series_index::SeriesIdSequenceSnapshot;
 using series_index::querier::MatchesMerger;
 using series_index::querier::Selector;
 using series_index::querier::SeriesIdSpan;
-using series_index::querier::SeriesSliceList;
 using series_index::querier::SetSubstractor;
 
 struct MatchesMergerCase {
@@ -55,32 +54,29 @@ TEST_P(MatchesMergerFixture, Test) {
   EXPECT_TRUE(std::ranges::equal(GetParam().expected, result));
 }
 
-INSTANTIATE_TEST_SUITE_P(TestCases,
-                         MatchesMergerFixture,
-                         testing::Values(MatchesMergerCase{.matches = {}, .expected = {}},
-                                         MatchesMergerCase{.matches = {{}}, .expected = {}},
-                                         MatchesMergerCase{.matches = {{0, 1, 2, 3}}, .expected = {0, 1, 2, 3}},
-                                         MatchesMergerCase{.matches = {{0, 1, 2}, {3, 4, 5}}, .expected = {0, 1, 2, 3, 4, 5}},
-                                         MatchesMergerCase{.matches = {{3, 4, 5}, {0, 1, 2}}, .expected = {0, 1, 2, 3, 4, 5}},
-                                         MatchesMergerCase{.matches = {{0, 2, 4}, {1, 3, 5}}, .expected = {0, 1, 2, 3, 4, 5}},
-                                         MatchesMergerCase{.matches = {{0, 1, 2, 3}, {2, 3, 4, 5}}, .expected = {0, 1, 2, 3, 4, 5}},
-                                         MatchesMergerCase{.matches = {{0, 1, 2}, {0, 1, 2}}, .expected = {0, 1, 2}},
-                                         MatchesMergerCase{.matches = {{}, {0, 1, 2}, {}}, .expected = {0, 1, 2}},
-                                         MatchesMergerCase{.matches = {{0, 5, 10}, {1, 5, 11}, {2, 10, 12}}, .expected = {0, 1, 2, 5, 10, 11, 12}},
-                                         MatchesMergerCase{.matches = {{}, {}, {}}, .expected = {}},
-                                         MatchesMergerCase{.matches = {{5}, {5}, {5}}, .expected = {5}},
-                                         MatchesMergerCase{.matches = {{1, 2, 3, 4, 5}, {1, 2, 3, 4, 5}, {1, 2, 3, 4, 5}}, .expected = {1, 2, 3, 4, 5}},
-                                         MatchesMergerCase{.matches = {{0, 10, 20, 30}, {1, 2, 3}}, .expected = {0, 1, 2, 3, 10, 20, 30}},
-                                         MatchesMergerCase{.matches = {{0, 1, 2, 3, 4, 5, 6, 7}, {2, 5}, {6}}, .expected = {0, 1, 2, 3, 4, 5, 6, 7}},
-                                         MatchesMergerCase{.matches = {{100, 200}, {150, 250}, {50, 300}}, .expected = {50, 100, 150, 200, 250, 300}},
-                                         MatchesMergerCase{.matches = {{0, 4, 8}, {1, 5, 9}, {2, 6, 10}, {3, 7, 11}},
-                                                           .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
-                                         MatchesMergerCase{.matches = {{0, 6}, {1, 7}, {2, 8}, {3, 9}, {4, 10}, {5, 11}},
-                                                           .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
-                                         MatchesMergerCase{.matches = {{9}, {3}, {6}, {1}, {8}, {2}, {5}, {0}, {7}, {4}},
-                                                           .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}},
-                                         MatchesMergerCase{.matches = {{0, 4, 8, 12}, {2, 4, 6, 8}, {1, 4, 7, 12}, {3, 4, 5, 12}},
-                                                           .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12}}));
+INSTANTIATE_TEST_SUITE_P(
+    TestCases,
+    MatchesMergerFixture,
+    testing::Values(MatchesMergerCase{.matches = {}, .expected = {}},
+                    MatchesMergerCase{.matches = {{}}, .expected = {}},
+                    MatchesMergerCase{.matches = {{0, 1, 2, 3}}, .expected = {0, 1, 2, 3}},
+                    MatchesMergerCase{.matches = {{0, 1, 2}, {3, 4, 5}}, .expected = {0, 1, 2, 3, 4, 5}},
+                    MatchesMergerCase{.matches = {{3, 4, 5}, {0, 1, 2}}, .expected = {0, 1, 2, 3, 4, 5}},
+                    MatchesMergerCase{.matches = {{0, 2, 4}, {1, 3, 5}}, .expected = {0, 1, 2, 3, 4, 5}},
+                    MatchesMergerCase{.matches = {{0, 1, 2, 3}, {2, 3, 4, 5}}, .expected = {0, 1, 2, 3, 4, 5}},
+                    MatchesMergerCase{.matches = {{0, 1, 2}, {0, 1, 2}}, .expected = {0, 1, 2}},
+                    MatchesMergerCase{.matches = {{}, {0, 1, 2}, {}}, .expected = {0, 1, 2}},
+                    MatchesMergerCase{.matches = {{0, 5, 10}, {1, 5, 11}, {2, 10, 12}}, .expected = {0, 1, 2, 5, 10, 11, 12}},
+                    MatchesMergerCase{.matches = {{}, {}, {}}, .expected = {}},
+                    MatchesMergerCase{.matches = {{5}, {5}, {5}}, .expected = {5}},
+                    MatchesMergerCase{.matches = {{1, 2, 3, 4, 5}, {1, 2, 3, 4, 5}, {1, 2, 3, 4, 5}}, .expected = {1, 2, 3, 4, 5}},
+                    MatchesMergerCase{.matches = {{0, 10, 20, 30}, {1, 2, 3}}, .expected = {0, 1, 2, 3, 10, 20, 30}},
+                    MatchesMergerCase{.matches = {{0, 1, 2, 3, 4, 5, 6, 7}, {2, 5}, {6}}, .expected = {0, 1, 2, 3, 4, 5, 6, 7}},
+                    MatchesMergerCase{.matches = {{100, 200}, {150, 250}, {50, 300}}, .expected = {50, 100, 150, 200, 250, 300}},
+                    MatchesMergerCase{.matches = {{0, 4, 8}, {1, 5, 9}, {2, 6, 10}, {3, 7, 11}}, .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
+                    MatchesMergerCase{.matches = {{0, 6}, {1, 7}, {2, 8}, {3, 9}, {4, 10}, {5, 11}}, .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
+                    MatchesMergerCase{.matches = {{9}, {3}, {6}, {1}, {8}, {2}, {5}, {0}, {7}, {4}}, .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}},
+                    MatchesMergerCase{.matches = {{0, 4, 8, 12}, {2, 4, 6, 8}, {1, 4, 7, 12}, {3, 4, 5, 12}}, .expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12}}));
 
 struct SetSubstracterCase {
   std::vector<uint32_t> set1;

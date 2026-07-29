@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <ranges>
 #include <vector>
 
 #include "bare_bones/preprocess.h"
@@ -11,13 +10,6 @@
 
 namespace series_index::querier {
 
-struct SeriesSlice {
-  uint32_t begin;
-  uint32_t end;
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return end - begin; }
-};
-using SeriesSliceList = BareBones::Vector<SeriesSlice>;
 using SeriesIdSpan = std::span<uint32_t>;
 
 class MatchesMerger {
