@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "bare_bones/preprocess.h"
+#include "primitives/primitives.h"
 #include "selector.h"
 #include "series_index/reverse_index.h"
 
@@ -58,15 +59,36 @@ class MatchesMerger {
         previous_series_id = value;
       }
 
-      std::ranges::pop_heap(merge_iterators_, greater_);
-      if (++merge_iterators_.back() == SeriesIdSequenceSnapshot::end()) {
+      if (auto& next = merge_iterators_.front(); ++next == SeriesIdSequenceSnapshot::end()) {
+        std::ranges::pop_heap(merge_iterators_, greater_);
         merge_iterators_.pop_back();
       } else {
-        std::ranges::push_heap(merge_iterators_, greater_);
+        sift_down_root();
       }
     }
 
     return memory;
+  }
+
+  PROMPP_ALWAYS_INLINE void sift_down_root() noexcept {
+    const size_t size = merge_iterators_.size();
+    for (size_t parent = 0;;) {
+      size_t child = 2 * parent + 1;
+      if (child >= size) {
+        break;
+      }
+
+      if (child + 1 < size && greater_(merge_iterators_[child], merge_iterators_[child + 1])) {
+        ++child;
+      }
+
+      if (!greater_(merge_iterators_[parent], merge_iterators_[child])) {
+        break;
+      }
+
+      std::swap(merge_iterators_[parent], merge_iterators_[child]);
+      parent = child;
+    }
   }
 };
 
