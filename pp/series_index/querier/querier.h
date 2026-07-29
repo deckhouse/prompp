@@ -185,15 +185,21 @@ class Querier {
   }
 
   PROMPP_ALWAYS_INLINE static SeriesIdSpan resolve_all_match_matcher(const Selector::Matcher& matcher, uint32_t* memory) {
-    decode_sequence(matcher.label_name_match, memory);
-    return {memory, matcher.label_name_match.count()};
+    return decode_sequence(matcher.label_name_match, memory);
   }
 
   PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_partial_match_matcher(const Selector::Matcher& matcher, uint32_t* memory) noexcept {
+    if (matcher.matches.size() == 1) {
+      return decode_sequence(matcher.matches[0], memory);
+    }
+
     return matches_merger_.merge(matcher.matches, memory);
   }
 
-  PROMPP_ALWAYS_INLINE static void decode_sequence(const SeriesIdSequenceSnapshot& sequence, uint32_t* memory) { std::ranges::copy(sequence, memory); }
+  PROMPP_ALWAYS_INLINE static SeriesIdSpan decode_sequence(const SeriesIdSequenceSnapshot& sequence, uint32_t* memory) {
+    std::ranges::copy(sequence, memory);
+    return {memory, sequence.count()};
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const Selector::Matcher& matcher) {
     for (const auto& value_match : matcher.matches) {
