@@ -49,8 +49,6 @@ class InstantQuerier {
   DataStorage& storage_;
   BareBones::Bitset series_to_load_;
 
-  // store_series_id records the label-set id next to the sample when the sample type carries it
-  // (entrypoint::types::SampleWithGoLabels). For plain encoder::Sample it is a no-op.
   template <typename SampleType>
   PROMPP_ALWAYS_INLINE static void store_series_id(SampleType& sample, LabelSetID ls_id) noexcept {
     if constexpr (requires { sample.series_id = ls_id; }) {
