@@ -49,6 +49,10 @@ const std::array kBenchmarkCases{
     LabelMatchers{
         {.name = "__name__", .value = "container_cpu_usage_seconds_total", .type = PromPP::Prometheus::MatcherType::kExactMatch},
     },
+    LabelMatchers{
+        {.name = "__name__", .value = "container_cpu_usage_seconds_total", .type = PromPP::Prometheus::MatcherType::kExactMatch},
+        {.name = "container", .value = "|POD", .type = PromPP::Prometheus::MatcherType::kRegexpMatch},
+    },
 };
 
 void LssQuery(benchmark::State& state) {
