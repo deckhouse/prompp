@@ -134,9 +134,10 @@ INSTANTIATE_TEST_SUITE_P(RegexpMatchWithOverlappingAlternatives,
                                                          .expected = {.series_id_list = {1}, .status = QuerierStatus::kMatch}},
                                          QuerierTestCase{.label_matchers = {{.name = "task", .value = "php|python|.hp", .type = MatcherType::kRegexpMatch}},
                                                          .expected = {.series_id_list = {1, 2}, .status = QuerierStatus::kMatch}},
-                                         QuerierTestCase{.label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
-                                                                            {.name = "task", .value = "php|.hp|nodejs|n.dejs", .type = MatcherType::kRegexpMatch}},
-                                                         .expected = {.series_id_list = {0, 1}, .status = QuerierStatus::kMatch}}));
+                                         QuerierTestCase{
+                                             .label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
+                                                                {.name = "task", .value = "php|.hp|nodejs|n.dejs", .type = MatcherType::kRegexpMatch}},
+                                             .expected = {.series_id_list = {0, 1}, .status = QuerierStatus::kMatch}}));
 
 INSTANTIATE_TEST_SUITE_P(EmptyMatcher,
                          QuerierFixture,
