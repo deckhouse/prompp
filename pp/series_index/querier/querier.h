@@ -62,9 +62,8 @@ class Querier {
     SeriesIdContainer series_ids{};
     QuerierStatus status{QuerierStatus::kNoMatch};
 
-    PROMPP_ALWAYS_INLINE void set_series_id_list(SeriesIdContainer&& ids, uint32_t size) noexcept {
+    PROMPP_ALWAYS_INLINE void set_series_id_list(SeriesIdContainer&& ids) noexcept {
       series_ids = std::move(ids);
-      series_ids.resize(size);
       status = series_ids.empty() ? QuerierStatus::kNoMatch : QuerierStatus::kMatch;
     }
 
@@ -93,28 +92,26 @@ class Querier {
       process_matcher(*it, memory_pool, result_set);
     }
 
-    result.set_series_id_list(memory_pool.release_container_for_merge(), result_set.size());
+    result.set_series_id_list(memory_pool.release_container_for_merge(result_set.size()));
     return result;
   }
 
  private:
   class MemoryPool {
     SeriesIdContainer merge_container1_;
-    SeriesIdContainer merge_container2_;
-    Cardinality cardinality_;
 
    public:
     uint32_t* merge1{};
     uint32_t* merge2{};
 
     explicit MemoryPool(uint32_t cardinality)
-        : merge_container1_(cardinality),
-          merge_container2_(cardinality),
-          cardinality_(cardinality),
-          merge1(merge_container1_.data()),
-          merge2(merge_container2_.data()) {}
+        : merge_container1_(static_cast<size_t>(cardinality) * 2), merge1(merge_container1_.data()), merge2(merge_container1_.data() + cardinality) {}
 
-    PROMPP_ALWAYS_INLINE SeriesIdContainer&& release_container_for_merge() { return std::move(merge_container1_); }
+    PROMPP_ALWAYS_INLINE SeriesIdContainer&& release_container_for_merge(uint32_t size) {
+      merge_container1_.resize(size);
+      merge_container1_.shrink_to_fit();
+      return std::move(merge_container1_);
+    }
   };
 
   MatchesMerger matches_merger_;
