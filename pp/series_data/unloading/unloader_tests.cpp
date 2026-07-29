@@ -3,7 +3,6 @@
 #include "bare_bones/streams.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
-#include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
 
 namespace {
@@ -88,6 +87,80 @@ TEST_F(UnloaderFixture, DontUnloadQueriedSeriesAfterCreateSnapshot) {
   // Assert
   EXPECT_EQ(chunk_stream_size, encoder_stream.size_in_bits());
   EXPECT_EQ(0U, storage_.unloaded_series_bitmap.popcount());
+}
+
+class UnloaderTestFixture : public ::testing::Test {
+ protected:
+  series_data::DataStorage storage_;
+  series_data::Encoder<> encoder_{storage_};
+  Unloader unloader_{storage_};
+  BareBones::ShrinkedToFitOStringStream stream_;
+};
+
+class UnloaderSelectionTestFixture : public UnloaderTestFixture {
+ protected:
+  void SetUp() override {
+    encoder_.encode(0, 1, 0.0);
+    encoder_.encode(0, 2, 0.0);
+    encoder_.encode(0, 3, 0.0);
+    encoder_.encode(0, 4, 0.0);
+    encoder_.encode(0, 5, 0.0);
+
+    encoder_.encode(1, 1, 1.0);
+    encoder_.encode(1, 2, 1.0);
+    encoder_.encode(1, 3, 1.0);
+    encoder_.encode(1, 4, 1.0);
+    encoder_.encode(1, 5, 1.0);
+
+    encoder_.encode(2, 1, 1.0);
+    encoder_.encode(2, 2, 2.0);
+    encoder_.encode(2, 3, 3.0);
+    encoder_.encode(2, 4, 4.0);
+    encoder_.encode(2, 5, 5.0);
+
+    encoder_.encode(3, 1, 6.0);
+    encoder_.encode(3, 2, 7.0);
+    encoder_.encode(3, 3, 8.0);
+    encoder_.encode(3, 4, 9.0);
+    encoder_.encode(3, 5, 10.0);
+  }
+};
+
+TEST_F(UnloaderTestFixture, UnloadOpenChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+  encoder_.encode(0, 5, 5.0);
+
+  const uint32_t chunk_stream_size_in_bits =
+      storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
+  // Act
+  unloader_.create_snapshot(stream_);
+  unloader_.unload();
+
+  // Assert
+  ASSERT_EQ(chunk_stream_size_in_bits % 8,
+            storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits());
+  ASSERT_EQ(1U, storage_.unloaded_series_bitmap.popcount());
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
+}
+
+TEST_F(UnloaderSelectionTestFixture, UnloadAfterQuery) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 1, 3});
+  const uint32_t chunk_stream_size_in_bits =
+      storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits();
+  // Act
+  unloader_.create_snapshot(stream_);
+  unloader_.unload();
+
+  // Assert
+  ASSERT_EQ(chunk_stream_size_in_bits % 8,
+            storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits());
+  ASSERT_EQ(1U, storage_.unloaded_series_bitmap.popcount());
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(2));
 }
 
 }  // namespace

@@ -1,15 +1,9 @@
 #pragma once
 
-#include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
 #include "series_data/data_storage.h"
 
 namespace series_data::unloading {
-
-using EncodingChunkLengthSequence =
-    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
-using EncodingChunkIDSequence =
-    BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
 
 template <chunk::DataChunk::Type ChunkType>
 [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage::CompactBitSequence& get_chunk_stream(DataStorage& storage, const chunk::DataChunk& chunk) noexcept {

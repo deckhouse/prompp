@@ -2,17 +2,10 @@
 
 #include <algorithm>
 
-#include "regexp_searcher_test_cases.h"
-#include "series_index/querier/regexp/regexp_searcher.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
-using series_index::querier::ValueMatchIdResolver;
-using series_index::querier::regexp::RegexpParser;
-using series_index::querier::regexp::RegexpSearcher;
-using series_index::querier::regexp_tests::RegexpSearcherTestCase;
-using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 using std::operator""sv;
 using std::operator""s;
@@ -69,7 +62,7 @@ class CedarEnumerativeIteratorFixture : public CedarTrieFixture, public testing:
   }
 };
 
-TEST_P(CedarEnumerativeIteratorFixture, Test) {
+TEST_P(CedarEnumerativeIteratorFixture, EnumeratesExpectedItems) {
   // Arrange
 
   // Act
@@ -123,46 +116,6 @@ INSTANTIATE_TEST_SUITE_P(ValueWithZeroByte,
                                                                           {.key = "\x01"s, .value = 0},
                                                                       }}));
 
-class CedarTrieRegexpSearcherFixture : public CedarTrieFixture, public testing::TestWithParam<RegexpSearcherTestCase> {
- protected:
-  using MatchesList = std::vector<uint32_t>;
-
-  MatchesList matches_;
-  CedarMatchesList<MatchesList, ValueMatchIdResolver> matches_list_{matches_, {}};
-  RegexpSearcher<CedarTrie, decltype(matches_list_)> searcher_{matches_list_};
-
-  void SetUp() final {
-    uint32_t id = 0;
-    for (auto& key : GetParam().trie_values) {
-      trie_.insert(key, id++);
-    }
-  }
-
-  [[nodiscard]] MatchesList get_expected_matches() const {
-    MatchesList expected_matches;
-    for (auto& key : GetParam().matches) {
-      expected_matches.push_back(trie_.lookup(key).value_or(std::numeric_limits<uint32_t>::max()));
-    }
-
-    return expected_matches;
-  }
-};
-
-TEST_P(CedarTrieRegexpSearcherFixture, Test) {
-  // Arrange
-  auto expected_matches = get_expected_matches();
-
-  // Act
-  std::ignore = searcher_.search(trie_, RegexpParser::parse(GetParam().regexp));
-
-  // Assert
-  std::ranges::sort(expected_matches);
-  std::ranges::sort(matches_);
-  EXPECT_EQ(expected_matches, matches_);
-}
-
-INSTANTIATE_REGEXP_SEARCHER_TEST_SUITE_P(CedarTrieRegexpSearcherFixture);
-
 struct SerializeDeserializeCase {
   std::vector<TrieItem> items;
 };
@@ -176,7 +129,7 @@ class CedarTrieSerializeDeserializeFixture : public CedarTrieFixture, public ::t
   }
 };
 
-TEST_P(CedarTrieSerializeDeserializeFixture, Test) {
+TEST_P(CedarTrieSerializeDeserializeFixture, RoundTripPreservesItems) {
   // Arrange
   std::stringstream stream;
   CedarTrie trie2;

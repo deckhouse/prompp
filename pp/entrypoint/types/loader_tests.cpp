@@ -25,6 +25,7 @@ class RevertableLoaderFixture : public testing::Test {
   Encoder<> encoder_{storage_};
   Unloader unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
+  BareBones::ShrinkedToFitOStringStream restored_stream_;
   QueryableEncodingBimap lss_;
 
   void SetUp() override {
@@ -69,6 +70,22 @@ TEST_F(RevertableLoaderFixture, LoadFinalizeRestoresUnloadedOpenChunk) {
   // Assert
   EXPECT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}}), decode_open_chunk(0));
   EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+}
+
+TEST_F(RevertableLoaderFixture, RestoredOpenChunkProducesOriginalSnapshot) {
+  // Arrange
+  unloader_.create_snapshot(stream_);
+  unloader_.unload();
+
+  entrypoint::types::RevertableLoader loader{storage_, lss_.ls_id_set().begin(), lss_.ls_id_set().end(), 1};
+  loader.load_next(stream_.span<const uint8_t>());
+  loader.load_finalize();
+
+  // Act
+  unloader_.create_snapshot(restored_stream_);
+
+  // Assert
+  EXPECT_EQ(stream_.view(), restored_stream_.view());
 }
 
 TEST_F(RevertableLoaderFixture, RevertRestoresUnloadedOpenChunk) {

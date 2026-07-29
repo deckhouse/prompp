@@ -3,9 +3,8 @@
 #include <utility>
 
 #include "common.h"
+#include "snapshot.h"
 
-#include "bare_bones/bitset.h"
-#include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/type_traits.h"
 #include "series_data/concepts.h"
@@ -148,13 +147,7 @@ class Loader {
   }
 
   void load_next(std::span<const uint8_t> buffer) {
-    const auto bitset_it = BareBones::Bitset::create_read_iterator(buffer);
-    const auto length_it = EncodingChunkLengthSequence::create_read_iterator(buffer, length_encoder_);
-    const auto id_it = EncodingChunkIDSequence::create_read_iterator(buffer, id_encoder_);
-
-    const uint8_t* bitseqs_ptr = buffer.data();
-
-    process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);
+    SnapshotReader::visit(buffer, [this](const SnapshotChunkView& chunk) { process_snapshot_chunk(chunk); });
   }
 
   template <EncoderInterface Encoder = Encoder<>>
@@ -180,36 +173,17 @@ class Loader {
   [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& storage() noexcept { return storage_; }
 
  private:
-  void process_ls_id_data(BareBones::Bitset::Iterator bitset_it,
-                          EncodingChunkLengthSequence::Iterator length_it,
-                          EncodingChunkIDSequence::Iterator id_it,
-                          const uint8_t* bitseqs_ptr) {
-    uint32_t accumulated_offset = 0;
-
-    while (bitset_it != BareBones::Bitset::IteratorSentinel{}) {
-      const uint32_t ls_id = *bitset_it;
-
-      if (auto infos_it = ls_id_to_infos_.find(ls_id); infos_it != ls_id_to_infos_.end()) {
-        auto& info = (*infos_it).second;
-
-        const uint32_t chunk_id_snapshot = *id_it;
-        const uint32_t bitseq_size = *length_it;
-
-        if (chunk_id_snapshot != info.chunk_id) {
-          if (info.buffer.size_in_bits() != 0) {
-            load_chunk_id(ls_id, info);
-          }
-          info.chunk_id = chunk_id_snapshot;
-          info.buffer.rewind();
+  void process_snapshot_chunk(const SnapshotChunkView& chunk) {
+    if (auto infos_it = ls_id_to_infos_.find(chunk.ls_id()); infos_it != ls_id_to_infos_.end()) {
+      auto& info = (*infos_it).second;
+      if (chunk.chunk_id() != info.chunk_id) {
+        if (info.buffer.size_in_bits() != 0) {
+          load_chunk_id(chunk.ls_id(), info);
         }
-        info.buffer.push_back_bytes(bitseqs_ptr + accumulated_offset, BareBones::Bit::to_bits(bitseq_size));
+        info.chunk_id = chunk.chunk_id();
+        info.buffer.rewind();
       }
-
-      accumulated_offset += *length_it;
-
-      ++bitset_it;
-      ++length_it;
-      ++id_it;
+      info.buffer.push_back_bytes(chunk.bytes().data(), BareBones::Bit::to_bits(chunk.bytes().size()));
     }
   }
 
@@ -222,9 +196,6 @@ class Loader {
   }
 
   DataStorage& storage_;
-
-  EncodingChunkLengthSequence::encoder_type length_encoder_{};
-  EncodingChunkIDSequence::encoder_type id_encoder_{};
 
   UnorderedVector ls_id_to_infos_{};
 };
