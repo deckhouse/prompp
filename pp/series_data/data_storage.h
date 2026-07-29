@@ -369,7 +369,7 @@ struct DataStorage {
       // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
       metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
     } else {
-static Metrics<Reallocator> dummy_metrics_{""};
+      static Metrics<Reallocator> dummy_metrics_{""};
       metrics = &dummy_metrics_;
     }
 
