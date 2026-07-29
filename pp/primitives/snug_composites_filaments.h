@@ -1,7 +1,7 @@
 #pragma once
 
-#include <experimental/scope>
 #include <cstring>
+#include <experimental/scope>
 #include <iterator>
 
 #include "bare_bones/exception.h"
