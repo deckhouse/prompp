@@ -226,7 +226,7 @@ extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args
   struct Arguments {
     DataStoragePtr data_storage;
     SliceView<LabelSetID> series_ids;
-    entrypoint::types::StaleNaNSeriesWithGoLabels* series;
+    entrypoint::series_data::StaleNaNSeriesWithGoLabels* series;
   };
 
   const auto in = static_cast<Arguments*>(args);
