@@ -9,18 +9,19 @@
 
 namespace series_data::serialization {
 
-struct SerializedData {
+template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
+struct BasicSerializedData {
   using Memory = BareBones::Memory<BareBones::MemoryControlBlockWithItemCount, unsigned char>;
 
-  SerializedData() = default;
+  BasicSerializedData() = default;
 
-  SerializedData(const SerializedData&) = delete;
-  SerializedData(SerializedData&&) noexcept = default;
+  BasicSerializedData(const BasicSerializedData&) = delete;
+  BasicSerializedData(BasicSerializedData&&) noexcept = default;
 
-  SerializedData& operator=(const SerializedData&) = delete;
-  SerializedData& operator=(SerializedData&&) noexcept = default;
+  BasicSerializedData& operator=(const BasicSerializedData&) = delete;
+  BasicSerializedData& operator=(BasicSerializedData&&) noexcept = default;
 
-  ~SerializedData() {
+  ~BasicSerializedData() {
     uint32_t timestamp_offset{kNoTimestampOffset};
     for (auto& chunk : chunks) {
       destroy_chunk_data(chunk, timestamp_offset);
@@ -51,12 +52,12 @@ struct SerializedData {
       case kAscIntegerThenValuesGorilla:
       case kValuesGorilla: {
         destroy_timestamp_stream_if_needed(chunk, timestamp_offset);
-        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.values_offset));
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.values_offset));
         break;
       }
 
       case kGorilla: {
-        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.values_offset));
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.values_offset));
         break;
       }
 
@@ -70,14 +71,20 @@ struct SerializedData {
   PROMPP_ALWAYS_INLINE void destroy_timestamp_stream_if_needed(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) {
     if (timestamp_offset == kNoTimestampOffset || chunk.timestamps_offset > timestamp_offset) [[unlikely]] {
       timestamp_offset = chunk.timestamps_offset;
-      std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.timestamps_offset));
+      std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.timestamps_offset));
     }
   }
 };
 
+using SerializedData = BasicSerializedData<DataStorage<>::Reallocator>;
+
+template <class Storage = DataStorage<>>
 class DataSerializer {
  public:
-  explicit DataSerializer(const DataStorage& storage) : storage_(storage) {}
+  using SerializedData = BasicSerializedData<typename Storage::Reallocator>;
+  using SerializedCompactBitSequence = ::series_data::SerializedCompactBitSequence<typename Storage::Reallocator>;
+
+  explicit DataSerializer(const Storage& storage) : storage_(storage) {}
 
   SerializedData serialize(const querier::QueriedChunkList& queried_chunks) noexcept { return serialize_internal(queried_chunks); }
   SerializedData serialize() noexcept { return serialize_internal(storage_.chunks()); }
@@ -95,7 +102,7 @@ class DataSerializer {
 
   template <class ChunkList>
   SerializedData serialize_internal(const ChunkList& chunks) noexcept {
-    const auto& kReservedBytesForReader = DataStorage::CompactBitSequence::reserved_bytes_for_reader();
+    const auto& kReservedBytesForReader = Storage::CompactBitSequence::reserved_bytes_for_reader();
 
     SerializedData serialized_data;
     serialized_data.chunks.reserve(get_chunk_count(chunks));
@@ -124,7 +131,7 @@ class DataSerializer {
 
   template <class ChunkList>
   PROMPP_ALWAYS_INLINE static uint32_t get_chunk_count(const ChunkList& chunks) noexcept {
-    if constexpr (std::is_same_v<ChunkList, DataStorage::Chunks>) {
+    if constexpr (std::is_same_v<ChunkList, typename Storage::Chunks>) {
       return chunks.non_empty_chunk_count();
     } else {
       return chunks.size();
@@ -177,25 +184,25 @@ class DataSerializer {
 
       case kAscInteger: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.get_asc_integer_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.template get_asc_integer_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
       case kAscIntegerThenValuesGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.template get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
       case kValuesGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.template get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
       case kGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.template get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
@@ -217,12 +224,12 @@ class DataSerializer {
   }
 
   template <chunk::DataChunk::Type>
-  [[nodiscard]] static const chunk::DataChunk& get_chunk(const DataStorage::SeriesChunkIterator::Data& chunk) noexcept {
+  [[nodiscard]] static const chunk::DataChunk& get_chunk(const typename Storage::SeriesChunkIterator::Data& chunk) noexcept {
     return chunk.chunk();
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  static void fill_timestamp_stream_offset(const DataStorage& storage,
+  static void fill_timestamp_stream_offset(const Storage& storage,
                                            TimestampStreamsData& timestamp_streams_data,
                                            encoder::timestamp::StateId timestamp_stream_id,
                                            chunk::SerializedChunk& serialized_chunk,
@@ -232,7 +239,7 @@ class DataSerializer {
       if (const auto it = timestamp_streams_data.stream_offsets.find(timestamp_stream_id); it == timestamp_streams_data.stream_offsets.end()) [[unlikely]] {
         timestamp_streams_data.stream_offsets.emplace(timestamp_stream_id, data_size);
         serialized_chunk.timestamps_offset = data_size;
-        write_compact_bit_sequence(storage.get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
+        write_compact_bit_sequence(storage.template get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }
@@ -241,7 +248,7 @@ class DataSerializer {
           it == timestamp_streams_data.finalized_stream_offsets.end()) [[unlikely]] {
         timestamp_streams_data.finalized_stream_offsets.emplace(timestamp_stream_id, data_size);
         serialized_chunk.timestamps_offset = data_size;
-        write_compact_bit_sequence(storage.get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
+        write_compact_bit_sequence(storage.template get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }
@@ -256,10 +263,11 @@ class DataSerializer {
     data_size += sizeof(SerializedCompactBitSequence);
   }
 
-  const DataStorage& storage_;
+  const Storage& storage_;
 };
 
-class SerializedDataView {
+template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
+class BasicSerializedDataView {
  public:
   using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
   static constexpr uint32_t kNoMoreSeries = std::numeric_limits<uint32_t>::max();
@@ -376,13 +384,13 @@ class SerializedDataView {
 
     PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
                                                                                  chunk::SerializedChunkSpan::const_iterator chunk_iter) noexcept {
-      return Decoder::create_decode_iterator(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+      return Decoder::create_decode_iterator<Reallocator>(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
     }
   };
 
-  explicit SerializedDataView(const SerializedData& serialized_data) : data_(serialized_data) {}
+  explicit BasicSerializedDataView(const BasicSerializedData<Reallocator>& serialized_data) : data_(serialized_data) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return {data_.chunks.data(), data_.chunks.size()}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept {
@@ -434,7 +442,9 @@ class SerializedDataView {
   }
 
  private:
-  const SerializedData& data_;
+  const BasicSerializedData<Reallocator>& data_;
   uint32_t series_first_chunk_id_{kNoMoreSeries};
 };
+
+using SerializedDataView = BasicSerializedDataView<DataStorage<>::Reallocator>;
 }  // namespace series_data::serialization

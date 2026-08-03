@@ -12,7 +12,7 @@ using SamplesIterator = ::series_data::serialization::SerializedDataView::Series
 
 class SerializedDataGo {
  public:
-  explicit SerializedDataGo(const ::series_data::DataStorage& storage,
+  explicit SerializedDataGo(const ::series_data::DataStorage<>& storage,
                             const ::series_data::querier::QueriedChunkList& queried_chunks,
                             SelectHints&& select_hints,
                             PromPP::Primitives::Timestamp downsampling_ms)

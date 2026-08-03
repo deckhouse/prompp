@@ -27,7 +27,7 @@ struct PROMPP_ATTRIBUTE_PACKED OutdatedSample {
   OutdatedSample(int64_t _timestamp, double _value, uint32_t _ls_id) : timestamp(_timestamp), value(_value), ls_id(_ls_id) {}
 };
 
-SampleList get_encoded_samples(const series_data::DataStorage& data_storage, uint32_t ls_id) {
+SampleList get_encoded_samples(const series_data::DataStorage<>& data_storage, uint32_t ls_id) {
   SampleList result;
   if (auto it = data_storage.finalized_chunks.find(ls_id); it != data_storage.finalized_chunks.end()) {
     auto decoded_samples = Decoder::decode_chunks(data_storage, it->second, data_storage.open_chunks[ls_id]);
@@ -41,7 +41,7 @@ SampleList get_encoded_samples(const series_data::DataStorage& data_storage, uin
   return result;
 }
 
-void validate_encoded_chunks(const std::unordered_map<uint32_t, SampleList>& source_samples, const series_data::DataStorage& data_storage) {
+void validate_encoded_chunks(const std::unordered_map<uint32_t, SampleList>& source_samples, const series_data::DataStorage<>& data_storage) {
   for (auto& [ls_id, expected_samples] : source_samples) {
     auto actual_samples = get_encoded_samples(data_storage, ls_id);
     if (!std::ranges::equal(expected_samples, actual_samples)) {
@@ -64,7 +64,7 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
   DummyWal dummy_wal(input_file_full_name(config));
 
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> label_set_bitmap;
-  series_data::DataStorage storage;
+  series_data::DataStorage<> storage;
   series_data::Encoder encoder{storage};
   std::chrono::nanoseconds encode_time{};
   size_t samples_count = 0;

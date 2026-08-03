@@ -10,6 +10,7 @@
 #include <ranges>
 
 namespace series_data {
+template <class Storage = DataStorage<>>
 class InstantQuerier {
   using Timestamp = PromPP::Primitives::Timestamp;
   using LabelSetID = PromPP::Primitives::LabelSetID;
@@ -17,7 +18,7 @@ class InstantQuerier {
   using ChunkType = chunk::DataChunk::Type;
 
  public:
-  explicit InstantQuerier(DataStorage& storage) : storage_(storage) {}
+  explicit InstantQuerier(Storage& storage) : storage_(storage) {}
 
   template <typename LsIDStorage, typename SampleStorage>
   void query(SampleStorage& samples, const LsIDStorage& label_set_ids, const Timestamp& timestamp) noexcept {
@@ -40,13 +41,13 @@ class InstantQuerier {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const DataStorage& get_storage() const noexcept { return storage_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& get_storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Storage& get_storage() const noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& get_storage() noexcept { return storage_; }
   [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
   [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
  private:
-  DataStorage& storage_;
+  Storage& storage_;
   BareBones::Bitset series_to_load_;
 
   // store_series_id records the label-set id next to the sample when the sample type carries it
@@ -75,7 +76,7 @@ class InstantQuerier {
   }
 
   void check_inside_series(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
-    for (const auto& chunk_data : DataStorage::SeriesChunks(&storage_, ls_id)) {
+    for (const auto& chunk_data : typename Storage::SeriesChunks(&storage_, ls_id)) {
       if (Decoder::get_chunk_time_interval(chunk_data).contains(timestamp)) {
         Decoder::create_decode_iterator(chunk_data, [&](auto&& begin, auto&& end) PROMPP_LAMBDA_INLINE {
           for (auto sample_it = begin; sample_it != end && sample_it->timestamp <= timestamp; ++sample_it) {
@@ -88,4 +89,4 @@ class InstantQuerier {
 };
 }  // namespace series_data
 
-static_assert(series_data::LoadableQuerierInterface<series_data::InstantQuerier>);
+static_assert(series_data::LoadableQuerierInterface<series_data::InstantQuerier<>>);

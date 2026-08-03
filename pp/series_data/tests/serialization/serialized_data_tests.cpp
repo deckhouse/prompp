@@ -8,7 +8,7 @@
 namespace {
 
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::serialization::DataSerializer;
 using series_data::serialization::SerializedData;
@@ -18,7 +18,7 @@ class SerializedDataViewEnumerateSeriesFixture : public testing::Test {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  DataSerializer serializer_{storage_};
+  DataSerializer<> serializer_{storage_};
 
   struct ChunkInfo {
     uint32_t series_id;

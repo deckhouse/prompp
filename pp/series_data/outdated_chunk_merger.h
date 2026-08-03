@@ -11,7 +11,8 @@ namespace series_data {
 template <EncoderInterface Encoder>
 class OutdatedChunkMerger {
  public:
-  using OutdatedChunk = DataStorage::OutdatedChunk;
+  using Storage = std::remove_cvref_t<decltype(std::declval<Encoder&>().storage())>;
+  using OutdatedChunk = typename Storage::OutdatedChunk;
 
   explicit OutdatedChunkMerger(Encoder& encoder) : encoder_(encoder) {}
 

@@ -14,14 +14,14 @@
 
 namespace series_data {
 
-template <uint8_t kSamplesPerChunk = kSamplesPerChunkDefault>
+template <class Storage = DataStorage<>, uint8_t kSamplesPerChunk = kSamplesPerChunkDefault>
 class Encoder {
  public:
-  using Reallocator = DataStorage::Reallocator;
+  using Reallocator = typename Storage::Reallocator;
 
-  Encoder(DataStorage& storage) : storage_(storage) {}
+  Encoder(Storage& storage) : storage_(storage) {}
 
-  DataStorage& storage() noexcept { return storage_; }
+  Storage& storage() noexcept { return storage_; }
 
   PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value) {
     if (storage_.open_chunks.size() <= ls_id) [[unlikely]] {
@@ -38,7 +38,7 @@ class Encoder {
   PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) { encode_impl(ls_id, timestamp, value, chunk); }
 
  private:
-  DataStorage& storage_;
+  Storage& storage_;
 
   void encode_impl(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     if (should_skip_stalenan(value, chunk)) [[unlikely]] {
@@ -274,7 +274,7 @@ class Encoder {
     chunk.encoding_state.encoding_type = EncodingType::kDoubleConstant;
     chunk.encoding_state.has_last_stalenan = BareBones::Encoding::Gorilla::isstalenan(value);
     auto& encoder = storage_.variant_encoders.emplace_back();
-    encoder.construct<EncodingType::kDoubleConstant>(value);
+    encoder.template construct<EncodingType::kDoubleConstant>(value);
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
 
     storage_.metrics->inc_chunk_count(EncodingType::kDoubleConstant);
@@ -284,7 +284,7 @@ class Encoder {
     storage_.metrics->change_chunk_count(chunk.encoding_state.encoding_type, EncodingType::kTwoDoubleConstant);
 
     auto& encoder = storage_.variant_encoders.emplace_back();
-    encoder.construct<EncodingType::kTwoDoubleConstant>(v1.value, value2, v1.count);
+    encoder.template construct<EncodingType::kTwoDoubleConstant>(v1.value, value2, v1.count);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kTwoDoubleConstant, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
@@ -296,7 +296,7 @@ class Encoder {
     storage_.metrics->change_chunk_count(chunk.encoding_state.encoding_type, EncodingType::kAscInteger);
 
     auto& encoder = storage_.variant_encoders.emplace_back();
-    encoder.construct<EncodingType::kAscInteger>(v1, v2, v3);
+    encoder.template construct<EncodingType::kAscInteger>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscInteger, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
@@ -308,7 +308,7 @@ class Encoder {
     storage_.metrics->change_chunk_count(chunk.encoding_state.encoding_type, EncodingType::kValuesGorilla);
 
     auto& encoder = storage_.variant_encoders.emplace_back();
-    encoder.construct<EncodingType::kValuesGorilla>(v1, v2, v3);
+    encoder.template construct<EncodingType::kValuesGorilla>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kValuesGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
@@ -319,7 +319,7 @@ class Encoder {
     storage_.metrics->change_chunk_count(EncodingType::kAscInteger, EncodingType::kAscIntegerThenValuesGorilla);
 
     auto& encoder = storage_.variant_encoders.emplace_back();
-    encoder.construct<EncodingType::kAscIntegerThenValuesGorilla>(std::move(asc_int_encoder), value);
+    encoder.template construct<EncodingType::kAscIntegerThenValuesGorilla>(std::move(asc_int_encoder), value);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscIntegerThenValuesGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }

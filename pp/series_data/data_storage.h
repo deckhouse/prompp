@@ -14,10 +14,11 @@
 
 namespace series_data {
 
+template <bool kUseArenas = true>
 struct DataStorage {
-#if 0
+#if JEMALLOC_AVAILABLE
   struct DataStorageAllocatorTag {};
-  using Reallocator = BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>;
+  using Reallocator = std::conditional_t<kUseArenas, BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>, BareBones::DefaultReallocator>;
 #else
   using Reallocator = BareBones::DefaultReallocator;
 #endif
