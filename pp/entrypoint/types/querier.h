@@ -26,7 +26,7 @@ concept QuerierInterface = requires(Querier querier) {
   { querier.query_finalize() };
   { querier.series_to_load() } -> std::same_as<const BareBones::Bitset&>;
   { querier.need_loading() } -> std::same_as<bool>;
-  { querier.storage() } -> std::same_as<::series_data::DataStorage&>;
+  { querier.storage() } -> std::same_as<::series_data::DataStorage<>&>;
 };
 
 enum class QueryStatus : uint8_t {
@@ -37,7 +37,7 @@ enum class QueryStatus : uint8_t {
 template <typename LsIDStorage, typename SampleStorage>
 class InstantQuerierWithArgumentsWrapper {
   using Timestamp = PromPP::Primitives::Timestamp;
-  using DataStorage = ::series_data::DataStorage;
+  using DataStorage = ::series_data::DataStorage<>;
 
  public:
   InstantQuerierWithArgumentsWrapper(DataStorage& storage, const LsIDStorage& label_set_ids, const Timestamp& timestamp, SampleStorage& samples)
@@ -51,7 +51,7 @@ class InstantQuerierWithArgumentsWrapper {
   [[nodiscard]] DataStorage& storage() noexcept { return instant_querier_.get_storage(); }
 
  private:
-  ::series_data::InstantQuerier instant_querier_;
+  ::series_data::InstantQuerier<> instant_querier_;
   SampleStorage samples_;
   const LsIDStorage label_set_ids_;
   const Timestamp timestamp_;
@@ -81,7 +81,7 @@ using InstantQuerierWithArgumentsWrapperEntrypoint =
 using GoSelectHints = PromPP::Prometheus::GenericSelectHints<PromPP::Primitives::Go::String, PromPP::Primitives::Go::SliceView>;
 
 class RangeQuerierWithArgumentsWrapperV2 {
-  using DataStorage = ::series_data::DataStorage;
+  using DataStorage = ::series_data::DataStorage<>;
   using LabelSetID = PromPP::Primitives::LabelSetID;
   template <class T>
   using Slice = PromPP::Primitives::Go::Slice<T>;
@@ -121,7 +121,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
 
  private:
   SelectHints select_hints_;
-  ::series_data::querier::Querier querier_;
+  ::series_data::querier::Querier<> querier_;
   const Query* query_;
   SerializedDataPtr* serialized_data_;
   PromPP::Primitives::Timestamp downsampling_ms_;

@@ -7,7 +7,7 @@
 
 extern "C" void prompp_series_data_encoder_ctor(void* args, void* res) {
   struct Arguments {
-    series_data::DataStorage* data_storage;
+    series_data::DataStorage<>* data_storage;
   };
   using Result = struct {
     entrypoint::types::SeriesDataEncoderWrapperPtr encoder_wrapper;

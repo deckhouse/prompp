@@ -38,7 +38,7 @@ using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
 using entrypoint::types::RevertableLoader;
 
-using LoaderVariant = std::variant<series_data::unloading::Loader, RevertableLoader>;
+using LoaderVariant = std::variant<series_data::unloading::Loader<>, RevertableLoader>;
 using LoaderVariantPtr = std::unique_ptr<LoaderVariant>;
 static_assert(sizeof(LoaderVariantPtr) == sizeof(void*));
 
@@ -54,7 +54,7 @@ extern "C" void prompp_series_data_data_storage_ctor(void* args, void* res) {
     DataStoragePtr data_storage;
   };
 
-  new (res) Result{.data_storage = std::make_unique<DataStorage>(static_cast<Arguments*>(args)->collect_metrics)};
+  new (res) Result{.data_storage = std::make_unique<DataStorage<>>(static_cast<Arguments*>(args)->collect_metrics)};
 }
 
 extern "C" void prompp_series_data_data_storage_reset(void* args) {
@@ -396,9 +396,9 @@ extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
 }
 
 struct Unloader {
-  explicit Unloader(DataStorage& storage) : unloader(storage) {}
+  explicit Unloader(DataStorage<>& storage) : unloader(storage) {}
 
-  series_data::unloading::Unloader unloader;
+  series_data::unloading::Unloader<> unloader;
   Slice<char> snapshot;
 };
 
@@ -467,8 +467,8 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader>, *in->data_storage)};
-  auto& loader = std::get<Loader>(*out->loader);
+  const auto out = new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader<>>, *in->data_storage)};
+  auto& loader = std::get<Loader<>>(*out->loader);
 
   for (const auto& rest : in->queriers) {
     std::visit(

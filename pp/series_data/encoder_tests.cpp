@@ -7,7 +7,7 @@ namespace {
 
 using BareBones::BitSequenceReader;
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::EncodingType;
@@ -28,7 +28,7 @@ class EncoderTestTrait {
   using ListOfSampleList = BareBones::Vector<SampleList>;
 
   DataStorage storage_;
-  Encoder<kSamplesPerChunk> encoder_{storage_};
+  Encoder<DataStorage, kSamplesPerChunk> encoder_{storage_};
 
   [[nodiscard]] const DataChunk& chunk(uint32_t ls_id) const noexcept { return storage_.open_chunks[ls_id]; }
   [[nodiscard]] const FinalizedChunkList* finalized_chunks(uint32_t ls_id) const noexcept {
