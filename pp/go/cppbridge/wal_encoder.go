@@ -119,9 +119,7 @@ func NewEncodedSegment(b []byte, stats WALEncoderStats) *EncodedSegment {
 		buf:             b,
 		WALEncoderStats: stats,
 	}
-	runtime.SetFinalizer(s, func(s *EncodedSegment) {
-		freeBytes(s.buf)
-	})
+	runtime.AddCleanup(s, freeBytes, s.buf)
 	return s
 }
 
@@ -169,9 +167,7 @@ func NewWALEncoder(shardID uint16, logShards uint8) *WALEncoder {
 		shardID:            shardID,
 		lastEncodedSegment: math.MaxUint32,
 	}
-	runtime.SetFinalizer(e, func(e *WALEncoder) {
-		walEncoderDtor(e.encoder)
-	})
+	runtime.AddCleanup(e, walEncoderDtor, e.encoder)
 	return e
 }
 
@@ -204,6 +200,7 @@ func (e *WALEncoder) AddInnerSeries(ctx context.Context, innerSeries []InnerSeri
 	}
 
 	stats, exception := walEncoderAddInnerSeries(e.encoder, innerSeries)
+	runtime.KeepAlive(e)
 	return &stats, handleException(exception)
 }
 
@@ -218,6 +215,9 @@ func (e *WALEncoder) AddRelabeledSeries(
 	}
 
 	stats, exception := walEncoderAddRelabeledSeries(e.encoder, relabeledSeries, relabelerStateUpdate)
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(relabeledSeries)
+	runtime.KeepAlive(relabelerStateUpdate)
 	return &stats, handleException(exception)
 }
 
@@ -270,6 +270,9 @@ func (e *WALEncoder) AddWithStaleNans(
 		sourceState.pointer,
 		staleTS,
 	)
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(shardedData)
+	runtime.KeepAlive(sourceState)
 	return &stats, &SourceState{state}, handleException(exception)
 }
 
@@ -280,6 +283,8 @@ func (e *WALEncoder) CollectSource(ctx context.Context, sourceState *SourceState
 	}
 
 	stats, exception := walEncoderCollectSource(e.encoder, sourceState.pointer, staleTS)
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(sourceState)
 	return &stats, handleException(exception)
 }
 
@@ -306,9 +311,7 @@ func NewWALEncoderLightweight(shardID uint16, logShards uint8) *WALEncoderLightw
 		shardID:            shardID,
 		lastEncodedSegment: math.MaxUint32,
 	}
-	runtime.SetFinalizer(e, func(e *WALEncoderLightweight) {
-		walEncoderLightweightDtor(e.encoder)
-	})
+	runtime.AddCleanup(e, walEncoderLightweightDtor, e.encoder)
 	return e
 }
 
@@ -337,6 +340,7 @@ func (e *WALEncoderLightweight) AddInnerSeries(ctx context.Context, innerSeries 
 	}
 
 	stats, exception := walEncoderLightweightAddInnerSeries(e.encoder, innerSeries)
+	runtime.KeepAlive(e)
 	return &stats, handleException(exception)
 }
 
@@ -351,6 +355,9 @@ func (e *WALEncoderLightweight) AddRelabeledSeries(
 	}
 
 	stats, exception := walEncoderLightweightAddRelabeledSeries(e.encoder, relabeledSeries, relabelerStateUpdate)
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(relabeledSeries)
+	runtime.KeepAlive(relabelerStateUpdate)
 	return &stats, handleException(exception)
 }
 

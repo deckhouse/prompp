@@ -4,27 +4,47 @@ import (
 	"runtime"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	dsCreate = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_data_storage_create_count",
+			Help: "Current number of created data storages.",
+		},
+	)
+
+	dsFinalize = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_data_storage_finalize_count",
+			Help: "Current number of finalized data storages.",
+		},
+	)
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
 type DataStorage struct {
-	dataStorage       uintptr
-	gcDestroyDetector *uint64
-	timeInterval      atomic.Pointer[TimeInterval]
+	dataStorage  uintptr
+	timeInterval atomic.Pointer[TimeInterval]
 }
 
 // NewDataStorage - constructor.
 func NewDataStorage(collectMetrics bool) *DataStorage {
 	ds := &DataStorage{
-		dataStorage:       seriesDataDataStorageCtor(collectMetrics),
-		gcDestroyDetector: &gcDestroyDetector,
-		timeInterval:      atomic.Pointer[TimeInterval]{},
+		dataStorage:  seriesDataDataStorageCtor(collectMetrics),
+		timeInterval: atomic.Pointer[TimeInterval]{},
 	}
 	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 
 	runtime.SetFinalizer(ds, func(ds *DataStorage) {
 		seriesDataDataStorageDtor(ds.dataStorage)
+		dsFinalize.Inc()
 	})
+
+	dsCreate.Inc()
 
 	return ds
 }
@@ -33,6 +53,7 @@ func NewDataStorage(collectMetrics bool) *DataStorage {
 func (ds *DataStorage) Reset() {
 	seriesDataDataStorageReset(ds.dataStorage)
 	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
+	runtime.KeepAlive(ds)
 }
 
 func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
@@ -89,10 +110,9 @@ func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *UnusedSeriesDataUnloade
 		unloader: seriesDataUnusedSeriesDataUnloaderCtor(ds.dataStorage),
 		ds:       ds,
 	}
+	runtime.KeepAlive(ds)
 
-	runtime.SetFinalizer(unloader, func(u *UnusedSeriesDataUnloader) {
-		seriesDataUnusedSeriesDataUnloaderDtor(u.unloader)
-	})
+	runtime.AddCleanup(unloader, seriesDataUnusedSeriesDataUnloaderDtor, unloader.unloader)
 
 	return unloader
 }
@@ -106,6 +126,7 @@ type DataStorageQuery struct {
 func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selectHints unsafe.Pointer) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData(ds)
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs, selectHints)
+	runtime.KeepAlive(ds)
 	runtime.KeepAlive(selectHints)
 	return DataStorageQueryResult{
 		Querier:        querier,
@@ -117,7 +138,9 @@ func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selec
 // InstantQuery .
 // Deprecated: InstantQuery .
 func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
-	return seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
+	result := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
+	runtime.KeepAlive(ds)
+	return result
 }
 
 // QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.

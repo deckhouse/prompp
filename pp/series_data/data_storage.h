@@ -15,7 +15,7 @@
 namespace series_data {
 
 struct DataStorage {
-#if JEMALLOC_AVAILABLE
+#if 0
   struct DataStorageAllocatorTag {};
   using Reallocator = BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>;
 #else

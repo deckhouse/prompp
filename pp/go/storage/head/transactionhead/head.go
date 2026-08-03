@@ -3,7 +3,6 @@ package transactionhead
 import (
 	"context"
 	"fmt"
-	"runtime"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
@@ -54,17 +53,13 @@ func NewHead[TShard, TGShard Shard](
 		headPool: headPool,
 	}
 
-	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
-		logger.Debugf("[Head] %s destroyed", h.String())
-	})
-
 	logger.Debugf("[Head] %s created", h.String())
 
 	return h
 }
 
 // AcquireQuery implementation of the working [Head], no blocking.
-func (*Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (func(), error) {
+func (*Head[TShard, TGShard]) AcquireQuery(context.Context) (func(), error) {
 	return noopRelease, nil
 }
 

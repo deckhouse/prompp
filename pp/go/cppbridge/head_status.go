@@ -45,9 +45,11 @@ func NewHeadStatus() *HeadStatus {
 // FromLSS get head status from lss.
 func (s *HeadStatus) FromLSS(lss *LabelSetStorage, limit int) {
 	getHeadStatusLSS(lss.pointer, s, limit)
+	runtime.KeepAlive(lss)
 }
 
 // FromDataStorage get head status from data storage.
 func (s *HeadStatus) FromDataStorage(dataStorage *DataStorage) {
 	getHeadStatusDataStorage(dataStorage.dataStorage, s)
+	runtime.KeepAlive(dataStorage)
 }

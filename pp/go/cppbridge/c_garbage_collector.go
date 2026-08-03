@@ -2,6 +2,7 @@ package cppbridge
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"time"
 
@@ -10,20 +11,23 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-// garbage collector for objects initiated in GO but filled in C/C++,
+// CGOGC is a garbage collector for objects initiated in GO but filled in C/C++,
 // because native GC knows nothing about the used memory and starts cleaning up memory too late.
 
 const (
-	defaultGCDecay       float64       = 1.0 / 3.0
-	defaultGCWarmupValue float64       = 0
-	gcDelayThreshold     time.Duration = 2 * time.Second
+	defaultGCDecay         float64       = 0.2
+	defaultGCHeadroom      float64       = 0.30 // GC when InUse >= value * 1.30
+	defaultGCWarmupValue   float64       = 0
+	defaultGCAbsoluteLimit uint64        = 3221225472
+	gcDelayThreshold       time.Duration = 2 * time.Second
 )
 
-// CGOGC - implement wise garbage collector for c/c++ objects.
+// CGOGC implements a wise garbage collector for c/c++ objects.
 type CGOGC struct {
 	threshold   float64
 	decay       float64
 	multiplier  float64
+	headroom    float64
 	value       float64
 	warmupValue float64
 	stop        chan struct{}
@@ -36,11 +40,12 @@ type CGOGC struct {
 	cGoGCCount      prometheus.Counter
 }
 
-// NewCGOGC - init new CGOGC.
+// NewCGOGC initializes a new [CGOGC].
 func NewCGOGC(registerer prometheus.Registerer) *CGOGC {
 	factory := util.NewUnconflictRegisterer(registerer)
 	cgc := &CGOGC{
 		decay:       defaultGCDecay,
+		headroom:    defaultGCHeadroom,
 		threshold:   defaultGCWarmupValue,
 		warmupValue: defaultGCWarmupValue,
 		stop:        make(chan struct{}),
@@ -81,7 +86,7 @@ func NewCGOGC(registerer prometheus.Registerer) *CGOGC {
 	return cgc
 }
 
-// set - set a value to the series and updates the moving average.
+// set a value to the series and updates the moving average.
 func (cgc *CGOGC) set(memInfo MemInfo) {
 	cgc.memoryInUse.Set(float64(memInfo.InUse))
 	cgc.memoryResident.Set(float64(memInfo.Resident))
@@ -93,7 +98,7 @@ func (cgc *CGOGC) set(memInfo MemInfo) {
 	cgc.value = (float64(memInfo.InUse) * cgc.decay) + (cgc.value * cgc.multiplier)
 }
 
-// calcThreshold - calculate max expotential threshold value.
+// calcThreshold calculate max expotential threshold value.
 func (cgc *CGOGC) calcThreshold() {
 	if cgc.value <= cgc.warmupValue {
 		cgc.threshold = cgc.warmupValue
@@ -101,13 +106,20 @@ func (cgc *CGOGC) calcThreshold() {
 		return
 	}
 
-	cgc.threshold = cgc.value + (cgc.value * cgc.multiplier)
+	cgc.threshold = cgc.value * (1 + cgc.headroom)
 	cgc.memoryThreshold.Set(cgc.threshold)
 }
 
-// isOverThreshold - check and adjustment threshold.
+// isOverThreshold check and adjustment threshold.
 func (cgc *CGOGC) isOverThreshold(memInfo MemInfo) bool {
 	cgc.set(memInfo)
+
+	if memInfo.InUse >= defaultGCAbsoluteLimit {
+		cgc.calcThreshold()
+		dumpMemoryOnce()
+		return true
+	}
+
 	if float64(memInfo.InUse) >= cgc.threshold {
 		cgc.calcThreshold()
 		return true
@@ -119,7 +131,7 @@ func (cgc *CGOGC) isOverThreshold(memInfo MemInfo) bool {
 	return false
 }
 
-// run - run gc if the number of objects initiated more threshold.
+// run GC if the number of objects initiated more threshold.
 func (cgc *CGOGC) run() {
 	timer := time.NewTimer(gcDelayThreshold)
 
@@ -138,7 +150,7 @@ func (cgc *CGOGC) run() {
 	}
 }
 
-// gc - run gc if over threshold.
+// gc runs GC if over threshold.
 func (cgc *CGOGC) gc() {
 	memInfo := GetMemInfo()
 
@@ -149,7 +161,7 @@ func (cgc *CGOGC) gc() {
 	cgc.cGoGCCount.Inc()
 }
 
-// Shutdown - stop loop with gc.
+// Shutdown stops loop with GC.
 func (cgc *CGOGC) Shutdown(ctx context.Context) error {
 	close(cgc.stop)
 
@@ -159,4 +171,15 @@ func (cgc *CGOGC) Shutdown(ctx context.Context) error {
 	case <-cgc.done:
 		return nil
 	}
+}
+
+var dumpedMemory = false
+
+func dumpMemoryOnce() {
+	if dumpedMemory {
+		return
+	}
+
+	dumpedMemory = true
+	DumpMemoryProfile(fmt.Sprintf("jemalloc-%d.prof", time.Now().UnixMilli()))
 }

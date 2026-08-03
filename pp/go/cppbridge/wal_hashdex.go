@@ -90,9 +90,7 @@ func NewWALSnappyProtobufHashdex(compressedProtobuf []byte, limits WALHashdexLim
 	h := &WALProtobufHashdex{
 		hashdex: walProtobufHashdexCtor(limits),
 	}
-	runtime.SetFinalizer(h, func(h *WALProtobufHashdex) {
-		walHashdexDtor(h.hashdex)
-	})
+	runtime.AddCleanup(h, walHashdexDtor, h.hashdex)
 	var exception []byte
 	h.cluster, h.replica, exception = walProtobufHashdexSnappyPresharding(h.hashdex, compressedProtobuf)
 	return h, handleException(exception)
@@ -162,10 +160,17 @@ func NewWALGoModelHashdex(limits WALHashdexLimits, data []model.TimeSeries) (Sha
 		hashdex: walGoModelHashdexCtor(limits),
 		data:    data,
 	}
-	runtime.SetFinalizer(h, func(h *WALGoModelHashdex) {
-		runtime.KeepAlive(h.data)
-		walHashdexDtor(h.hashdex)
-	})
+	runtime.AddCleanup(h, func(arg struct {
+		hashdex uintptr
+		data    []model.TimeSeries
+	},
+	) {
+		runtime.KeepAlive(arg.data)
+		walHashdexDtor(arg.hashdex)
+	}, struct {
+		hashdex uintptr
+		data    []model.TimeSeries
+	}{h.hashdex, h.data})
 	var exception []byte
 	h.cluster, h.replica, exception = walGoModelHashdexPresharding(h.hashdex, data)
 	return h, handleException(exception)
@@ -215,13 +220,20 @@ func NewWALBasicDecoderHashdex(decoder *WALDecoder, hashdex uintptr, meta *MetaI
 		cluster:  cluster,
 		replica:  replica,
 	}
-	runtime.SetFinalizer(h, func(h *WALBasicDecoderHashdex) {
-		runtime.KeepAlive(h.metadata)
-		if h.hashdex == 0 {
+	runtime.AddCleanup(h, func(arg struct {
+		hashdex  uintptr
+		metadata *MetaInjection
+	},
+	) {
+		runtime.KeepAlive(arg.metadata)
+		if arg.hashdex == 0 {
 			return
 		}
-		walHashdexDtor(h.hashdex)
-	})
+		walHashdexDtor(arg.hashdex)
+	}, struct {
+		hashdex  uintptr
+		metadata *MetaInjection
+	}{h.hashdex, h.metadata})
 	return h
 }
 
@@ -314,9 +326,7 @@ func NewPrometheusScraperHashdex() *WALPrometheusScraperHashdex {
 		hashdex: walPrometheusScraperHashdexCtor(),
 		buffer:  nil,
 	}
-	runtime.SetFinalizer(h, func(h *WALPrometheusScraperHashdex) {
-		walHashdexDtor(h.hashdex)
-	})
+	runtime.AddCleanup(h, walHashdexDtor, h.hashdex)
 	return h
 }
 
@@ -324,6 +334,7 @@ func NewPrometheusScraperHashdex() *WALPrometheusScraperHashdex {
 func (h *WALPrometheusScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walPrometheusScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
+	runtime.KeepAlive(h)
 	return scraped, errorFromCode(errorCode)
 }
 
@@ -337,6 +348,7 @@ func (h *WALPrometheusScraperHashdex) RangeMetadata(f func(metadata WALScraperHa
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }
@@ -370,9 +382,7 @@ func NewOpenMetricsScraperHashdex() *WALOpenMetricsScraperHashdex {
 		hashdex: walOpenMetricsScraperHashdexCtor(),
 		buffer:  nil,
 	}
-	runtime.SetFinalizer(h, func(h *WALOpenMetricsScraperHashdex) {
-		walHashdexDtor(h.hashdex)
-	})
+	runtime.AddCleanup(h, walHashdexDtor, h.hashdex)
 	return h
 }
 
@@ -380,6 +390,7 @@ func NewOpenMetricsScraperHashdex() *WALOpenMetricsScraperHashdex {
 func (h *WALOpenMetricsScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walOpenMetricsScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
+	runtime.KeepAlive(h)
 	return scraped, errorFromCode(errorCode)
 }
 
@@ -393,6 +404,7 @@ func (h *WALOpenMetricsScraperHashdex) RangeMetadata(f func(metadata WALScraperH
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }
@@ -442,9 +454,7 @@ func NewGoHeadHashdex(lss *LabelSetStorage, dataStorage *DataStorage) *WALGoHead
 		lss:         lss,
 		dataStorage: dataStorage,
 	}
-	runtime.SetFinalizer(hashdex, func(hashdex *WALGoHeadHashdex) {
-		walHashdexDtor(hashdex.hashdex)
-	})
+	runtime.AddCleanup(hashdex, walHashdexDtor, hashdex.hashdex)
 
 	walGoHeadPresharding(hashdex.hashdex, lss.pointer, dataStorage.dataStorage)
 	return hashdex

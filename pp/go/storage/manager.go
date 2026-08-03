@@ -39,7 +39,7 @@ const (
 	DefaultMergeDuration = 5 * time.Minute
 
 	// DefaultMetricWriteInterval default metric scrape interval.
-	DefaultMetricWriteInterval = 15 * time.Second
+	DefaultMetricWriteInterval = 30 * time.Second
 
 	// defaultStartMetricWriteInterval the default interval for start [MetricsUpdater] timer.
 	defaultStartMetricWriteInterval = 5 * time.Second

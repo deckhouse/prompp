@@ -2,6 +2,7 @@ package cppbridge
 
 import (
 	"runtime"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,6 +23,20 @@ var (
 			Help: "Current number of finalized snapshots.",
 		},
 	)
+
+	lsQueryResultCreate = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_ls_query_result_create_count",
+			Help: "Current number of created LSSQueryResult.",
+		},
+	)
+
+	lsQueryResultFinalize = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_ls_query_result_finalize_count",
+			Help: "Current number of finalized LSSQueryResult.",
+		},
+	)
 )
 
 // gcDestroyDetector for field for the GC to destroy the structure.
@@ -40,11 +55,11 @@ type LabelSetSnapshot struct {
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(snapshotPtr uintptr) *LabelSetSnapshot {
 	lsst := &LabelSetSnapshot{pointer: snapshotPtr, gcDestroyDetector: &gcDestroyDetector}
-	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
-		primitivesSnapshotDtor(l.pointer)
+	runtime.AddCleanup(lsst, func(pointer uintptr) {
+		primitivesSnapshotDtor(pointer)
 
 		snapshotFinalize.Inc()
-	})
+	}, snapshotPtr)
 
 	snapshotCreate.Inc()
 
@@ -99,9 +114,7 @@ func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []u
 	result := &SeriesGroups{
 		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),
 	}
-	runtime.SetFinalizer(result, func(result *SeriesGroups) {
-		primitivesGroupSeriesByLabelNamesFree(result.Groups)
-	})
+	runtime.AddCleanup(result, primitivesGroupSeriesByLabelNamesFree, result.Groups)
 
 	runtime.KeepAlive(lss)
 	return result
@@ -123,9 +136,7 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 		pointer:           primitivesSnapshotLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
 		gcDestroyDetector: &gcDestroyDetector,
 	}
-	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
-		primitivesFreeLsIdsMapping(idsMapping.pointer)
-	})
+	runtime.AddCleanup(idsMapping, primitivesFreeLsIdsMapping, idsMapping.pointer)
 
 	runtime.KeepAlive(lss)
 	runtime.KeepAlive(bitsetSeries)
@@ -135,14 +146,40 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 }
 
 //
+// lssQueryResultCPP
+//
+
+// lssQueryResultCPP is the C-allocated result.
+type lssQueryResultCPP struct {
+	matches         []uint32 // c allocated
+	labelSetLengths []uint16 // c allocated
+	status          uint32
+}
+
+// lssQueryResultFreeState is shared between Close and AddCleanup so the C
+// buffers are freed exactly once even if Stop is a no-op (cleanup already queued).
+type lssQueryResultFreeState struct {
+	lqrcpp lssQueryResultCPP
+	freed  atomic.Bool
+}
+
+// freeLSSQueryResultOnce frees the C-allocated result buffers if not already freed.
+func freeLSSQueryResultOnce(st *lssQueryResultFreeState) {
+	if !st.freed.CompareAndSwap(false, true) {
+		return
+	}
+	primitivesLabelSetMatchesFree(&st.lqrcpp)
+	lsQueryResultFinalize.Inc()
+}
+
+//
 // LSSQueryResult
 //
 
 // LSSQueryResult query execution result in lss with copy.
 type LSSQueryResult struct {
-	matches         []uint32 // c allocated
-	labelSetLengths []uint16 // c allocated
-	status          uint32
+	freeState *lssQueryResultFreeState
+	cleanup   runtime.Cleanup
 }
 
 // newLSSQueryResult init new LSSQueryResult.
@@ -152,40 +189,38 @@ func newLSSQueryResult(
 	status uint32,
 ) *LSSQueryResult {
 	lqr := &LSSQueryResult{
-		matches:         matches,
-		labelSetLengths: labelSetLengths,
-		status:          status,
+		freeState: &lssQueryResultFreeState{
+			lqrcpp: lssQueryResultCPP{
+				matches:         matches,
+				labelSetLengths: labelSetLengths,
+				status:          status,
+			},
+		},
 	}
+	lsQueryResultCreate.Inc()
 
 	if status != LSSQueryStatusMatch {
-		lqr.Close()
+		freeLSSQueryResultOnce(lqr.freeState)
 
 		return lqr
 	}
 
-	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
-		result.Close()
-	})
+	lqr.cleanup = runtime.AddCleanup(lqr, freeLSSQueryResultOnce, lqr.freeState)
 
 	return lqr
 }
 
-// Close frees the C-allocated result buffers and cancels the finalizer.
-// It is idempotent: subsequent calls (and the finalizer) are no-ops.
+// Close frees the C-allocated result buffers and cancels the cleanup.
+// It is idempotent: subsequent calls (and the cleanup) are no-ops.
 // After Close the result must not be read anymore.
 func (r *LSSQueryResult) Close() {
-	if r.matches == nil && r.labelSetLengths == nil {
-		return
-	}
-
-	runtime.SetFinalizer(r, nil)
-	primitivesLabelSetMatchesFree(r)
-	r.matches = nil
-	r.labelSetLengths = nil
+	r.cleanup.Stop()
+	freeLSSQueryResultOnce(r.freeState)
+	runtime.KeepAlive(r)
 }
 
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
-	for i, match := range r.matches {
+	for i, match := range r.freeState.lqrcpp.matches {
 		if match == seriesID {
 			return i
 		}
@@ -195,12 +230,12 @@ func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
 
 func (r *LSSQueryResult) LengthBySeriesID(seriesID uint32, searchFrom int) (length uint16, index int) {
 	for {
-		if searchFrom > len(r.matches)-1 {
+		if searchFrom > len(r.freeState.lqrcpp.matches)-1 {
 			return 0, -1
 		}
 
-		if r.matches[searchFrom] == seriesID {
-			return r.labelSetLengths[searchFrom], searchFrom
+		if r.freeState.lqrcpp.matches[searchFrom] == seriesID {
+			return r.freeState.lqrcpp.labelSetLengths[searchFrom], searchFrom
 		}
 
 		searchFrom++
@@ -209,25 +244,25 @@ func (r *LSSQueryResult) LengthBySeriesID(seriesID uint32, searchFrom int) (leng
 
 // GetByIndex return ls id and length for ls id by index.
 func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
-	return r.matches[i], r.labelSetLengths[i]
+	return r.freeState.lqrcpp.matches[i], r.freeState.lqrcpp.labelSetLengths[i]
 }
 
 // IDs return labels sets ids.
 func (r *LSSQueryResult) IDs() []uint32 {
-	return r.matches
+	return r.freeState.lqrcpp.matches
 }
 
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
-	return r.labelSetLengths
+	return r.freeState.lqrcpp.labelSetLengths
 }
 
 // Len of result.
 func (r *LSSQueryResult) Len() int {
-	return len(r.matches)
+	return len(r.freeState.lqrcpp.matches)
 }
 
 // Status query execution.
 func (r *LSSQueryResult) Status() uint32 {
-	return r.status
+	return r.freeState.lqrcpp.status
 }

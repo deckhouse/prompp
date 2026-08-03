@@ -1,0 +1,1353 @@
+gc 29413 @50391.450s 2%: 19+336+13 ms clock, 158+56/531/0+108 ms cpu, 1020->1093->875 MB, 1096 MB goal, 8 MB stacks, 0 MB globals, 8 P
+SIGSEGV: segmentation violation
+PC=0x56ef25 m=16 sigcode=1 addr=0x118
+
+goroutine 0 gp=0x11051c953680 m=16 mp=0x11051b481808 [idle]:
+runtime.(*unwinder).next(0x7071f75fd3f0)
+	/usr/local/go/src/runtime/traceback.go:459 +0x105 fp=0x7071f75fd3b8 sp=0x7071f75fd340 pc=0x56ef25
+runtime.scanstack(0x11051beee000, 0x11051ac03260)
+	/usr/local/go/src/runtime/mgcmark.go:972 +0x2d1 fp=0x7071f75fd4d0 sp=0x7071f75fd3b8 pc=0x5295b1
+runtime.markroot.func1()
+	/usr/local/go/src/runtime/mgcmark.go:306 +0xb1 fp=0x7071f75fd520 sp=0x7071f75fd4d0 pc=0x528011
+runtime.markroot(0x11051ac03260, 0x34e, 0x1)
+	/usr/local/go/src/runtime/mgcmark.go:280 +0x1a5 fp=0x7071f75fd5d0 sp=0x7071f75fd520 pc=0x527c65
+runtime.gcDrain(0x11051ac03260, 0x3)
+	/usr/local/go/src/runtime/mgcmark.go:1275 +0x4a7 fp=0x7071f75fd640 sp=0x7071f75fd5d0 pc=0x52a167
+runtime.gcDrainMarkWorkerDedicated(...)
+	/usr/local/go/src/runtime/mgcmark.go:1178
+runtime.gcBgMarkWorker.func2()
+	/usr/local/go/src/runtime/mgc.go:1862 +0x9a fp=0x7071f75fd690 sp=0x7071f75fd640 pc=0x525eda
+runtime.systemstack(0x800000)
+	/usr/local/go/src/runtime/asm_amd64.s:562 +0x4a fp=0x7071f75fd6a0 sp=0x7071f75fd690 pc=0x58862a
+
+goroutine 34 gp=0x11051b084000 m=16 mp=0x11051b481808 [GC worker (active)]:
+runtime.systemstack_switch()
+	/usr/local/go/src/runtime/asm_amd64.s:516 +0x8 fp=0x1105281e0f40 sp=0x1105281e0f30 pc=0x5885c8
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1847 +0x1df fp=0x1105281e0fc8 sp=0x1105281e0f40 pc=0x525cdf
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x1105281e0fe0 sp=0x1105281e0fc8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x1105281e0fe8 sp=0x1105281e0fe0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 1 gp=0x11051ab661e0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x70784ec93de0?, 0x40000000000f0?, 0xe8?, 0xf1?, 0x70784ec93de0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051c806848 sp=0x11051c806828 pc=0x58234e
+runtime.chanrecv(0x11051b07e0e0, 0x11051b3fc948, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051c8068c0 sp=0x11051c806848 pc=0x5107ae
+runtime.chanrecv1(0x10?, 0xf?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051c8068e8 sp=0x11051c8068c0 pc=0x5102d2
+github.com/oklog/run.(*Group).Run(0x11051c807268)
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:43 +0x155 fp=0x11051c806968 sp=0x11051c8068e8 pc=0xa57a35
+main.main()
+	/workspaces/prompp/cmd/prometheus/main.go:1673 +0xf1fe fp=0x11051c807f48 sp=0x11051c806968 pc=0x30be9de
+runtime.main()
+	/usr/local/go/src/runtime/proc.go:290 +0x2d5 fp=0x11051c807fe0 sp=0x11051c807f48 pc=0x54abd5
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051c807fe8 sp=0x11051c807fe0 pc=0x58a201
+
+goroutine 2 gp=0x11051ab66d20 m=nil [force gc (idle), 839 minutes]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac16fa8 sp=0x11051ac16f88 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.forcegchelper()
+	/usr/local/go/src/runtime/proc.go:375 +0xb3 fp=0x11051ac16fe0 sp=0x11051ac16fa8 pc=0x54aef3
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac16fe8 sp=0x11051ac16fe0 pc=0x58a201
+created by runtime.init.7 in goroutine 1
+	/usr/local/go/src/runtime/proc.go:363 +0x1a
+
+goroutine 3 gp=0x11051ab672c0 m=nil [GC sweep wait]:
+runtime.gopark(0x7e69c01?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac17788 sp=0x11051ac17768 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.bgsweep(0x11051ac40000)
+	/usr/local/go/src/runtime/mgcsweep.go:324 +0x151 fp=0x11051ac177c8 sp=0x11051ac17788 pc=0x531f11
+runtime.gcenable.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:214 +0x17 fp=0x11051ac177e0 sp=0x11051ac177c8 pc=0x523117
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac177e8 sp=0x11051ac177e0 pc=0x58a201
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:214 +0x66
+
+goroutine 4 gp=0x11051ab674a0 m=nil [GC scavenge wait]:
+runtime.gopark(0x873e22?, 0x2ab99a?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac17f78 sp=0x11051ac17f58 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x7e75e00)
+	/usr/local/go/src/runtime/mgcscavenge.go:425 +0x49 fp=0x11051ac17fa8 sp=0x11051ac17f78 pc=0x52f989
+runtime.bgscavenge(0x11051ac40000)
+	/usr/local/go/src/runtime/mgcscavenge.go:658 +0x59 fp=0x11051ac17fc8 sp=0x11051ac17fa8 pc=0x52ff19
+runtime.gcenable.gowrap2()
+	/usr/local/go/src/runtime/mgc.go:215 +0x17 fp=0x11051ac17fe0 sp=0x11051ac17fc8 pc=0x5230d7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac17fe8 sp=0x11051ac17fe0 pc=0x58a201
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:215 +0xa5
+
+goroutine 5 gp=0x11051ab67a40 m=nil [GOMAXPROCS updater (idle), 839 minutes]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac18788 sp=0x11051ac18768 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.updateMaxProcsGoroutine()
+	/usr/local/go/src/runtime/proc.go:7095 +0xe7 fp=0x11051ac187e0 sp=0x11051ac18788 pc=0x559567
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac187e8 sp=0x11051ac187e0 pc=0x58a201
+created by runtime.defaultGOMAXPROCSUpdateEnable in goroutine 1
+	/usr/local/go/src/runtime/proc.go:7083 +0x37
+
+goroutine 6 gp=0x11051ac5a1e0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x54697f0?, 0x40?, 0xc0?, 0x1000000010?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac16620 sp=0x11051ac16600 pc=0x58234e
+runtime.runFinalizers()
+	/usr/local/go/src/runtime/mfinal.go:210 +0x107 fp=0x11051ac167e0 sp=0x11051ac16620 pc=0x522087
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac167e8 sp=0x11051ac167e0 pc=0x58a201
+created by runtime.createfing in goroutine 1
+	/usr/local/go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 7 gp=0x11051adbe780 m=nil [GC worker (idle)]:
+runtime.gopark(0x8525780?, 0x1?, 0x6d?, 0x6c?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ca70f40 sp=0x11051ca70f20 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x11051ca70fc8 sp=0x11051ca70f40 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x11051ca70fe0 sp=0x11051ca70fc8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ca70fe8 sp=0x11051ca70fe0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 18 gp=0x11051ac843c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1875e1a5e08ca?, 0x1?, 0xea?, 0x3d?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac13740 sp=0x11051ac13720 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x11051ac137c8 sp=0x11051ac13740 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x11051ac137e0 sp=0x11051ac137c8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac137e8 sp=0x11051ac137e0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 8 gp=0x11051adbe960 m=nil [GC worker (idle)]:
+runtime.gopark(0x8525780?, 0x1?, 0x24?, 0xb2?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051c93c740 sp=0x11051c93c720 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x11051c93c7c8 sp=0x11051c93c740 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x11051c93c7e0 sp=0x11051c93c7c8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051c93c7e8 sp=0x11051c93c7e0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 19 gp=0x11051ac845a0 m=nil [GC worker (idle)]:
+runtime.gopark(0x8525780?, 0x1?, 0xb1?, 0x3b?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110522c34f40 sp=0x110522c34f20 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x110522c34fc8 sp=0x110522c34f40 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x110522c34fe0 sp=0x110522c34fc8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110522c34fe8 sp=0x110522c34fe0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 35 gp=0x11051b0841e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1875ece1f7d93?, 0x1?, 0x6d?, 0x78?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b08c740 sp=0x11051b08c720 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x11051b08c7c8 sp=0x11051b08c740 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x11051b08c7e0 sp=0x11051b08c7c8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b08c7e8 sp=0x11051b08c7e0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 9 gp=0x11051adbeb40 m=nil [GC worker (idle)]:
+runtime.gopark(0x54680b0?, 0x11051ac92400?, 0x1c?, 0xa?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110576fe1f40 sp=0x110576fe1f20 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x110576fe1fc8 sp=0x110576fe1f40 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x110576fe1fe0 sp=0x110576fe1fc8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110576fe1fe8 sp=0x110576fe1fe0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 20 gp=0x11051ac84780 m=nil [GC worker (idle)]:
+runtime.gopark(0x8525780?, 0x1?, 0x25?, 0xfd?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b088f40 sp=0x11051b088f20 pc=0x58234e
+runtime.gcBgMarkWorker(0x11051ac4e0e0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x11051b088fc8 sp=0x11051b088f40 pc=0x525beb
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x11051b088fe0 sp=0x11051b088fc8 pc=0x525ad7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b088fe8 sp=0x11051b088fe0 pc=0x58a201
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 50 gp=0x11051b2045a0 m=nil [cleanup wait]:
+runtime.gopark(0x70724cfcd400?, 0x11052d18ff90?, 0x95?, 0x68?, 0x70724cfcd400?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052d18ff68 sp=0x11052d18ff48 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x7e76580)
+	/usr/local/go/src/runtime/mcleanup.go:522 +0xd4 fp=0x11052d18ffa0 sp=0x11052d18ff68 pc=0x51e5f4
+runtime.runCleanups()
+	/usr/local/go/src/runtime/mcleanup.go:718 +0x45 fp=0x11052d18ffe0 sp=0x11052d18ffa0 pc=0x51ec65
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052d18ffe8 sp=0x11052d18ffe0 pc=0x58a201
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+	/usr/local/go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 108 gp=0x11051b0263c0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x11051bc48070?, 0x11051b08d720?, 0xa4?, 0x41?, 0x11051ace0d20?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b08d6c0 sp=0x11051b08d6a0 pc=0x58234e
+runtime.chanrecv(0x11051bc48150, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b08d738 sp=0x11051b08d6c0 pc=0x5107ae
+runtime.chanrecv1(0x50f3b7?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b08d760 sp=0x11051b08d738 pc=0x5102d2
+github.com/prometheus/prometheus/pp/go/storage.(*Manager).initServices.func1()
+	/workspaces/prompp/pp/go/storage/manager.go:277 +0x45 fp=0x11051b08d788 sp=0x11051b08d760 pc=0x14db2a5
+github.com/oklog/run.(*Group).Run.func1({0x11051b7884e0?, 0x11051b784430?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b08d7c0 sp=0x11051b08d788 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b08d7e0 sp=0x11051b08d7c0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b08d7e8 sp=0x11051b08d7e0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 451
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 235 gp=0x11051b027680 m=nil [select]:
+runtime.gopark(0x11051b08df80?, 0x2?, 0xa0?, 0xdd?, 0x11051b08dee4?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b08dd78 sp=0x11051b08dd58 pc=0x58234e
+runtime.selectgo(0x11051b08df80, 0x11051b08dee0, 0x11051b08df10?, 0x0, 0x50fbc0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b08dea8 sp=0x11051b08dd78 pc=0x55e3a5
+github.com/prometheus/prometheus/util/logging.(*Deduper).run(0x11051b512600)
+	/workspaces/prompp/util/logging/dedupe.go:75 +0xdb fp=0x11051b08dfc8 sp=0x11051b08dea8 pc=0x124089b
+github.com/prometheus/prometheus/util/logging.Dedupe.gowrap1()
+	/workspaces/prompp/util/logging/dedupe.go:61 +0x17 fp=0x11051b08dfe0 sp=0x11051b08dfc8 pc=0x1240757
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b08dfe8 sp=0x11051b08dfe0 pc=0x58a201
+created by github.com/prometheus/prometheus/util/logging.Dedupe in goroutine 1
+	/workspaces/prompp/util/logging/dedupe.go:61 +0xf8
+
+goroutine 68281126 gp=0x11051ace1680 m=nil [sync.Cond.Wait]:
+runtime.gopark(0x11053f601b28?, 0x2?, 0x2a?, 0x1b?, 0x3?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x1105386a7b40 sp=0x1105386a7b20 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+sync.runtime_notifyListWait(0x110529a88f48, 0x5)
+	/usr/local/go/src/runtime/sema.go:617 +0x1b3 fp=0x1105386a7b90 sp=0x1105386a7b40 pc=0x583ed3
+sync.(*Cond).Wait(0x11053f601b2a?)
+	/usr/local/go/src/sync/cond.go:71 +0x73 fp=0x1105386a7bc8 sp=0x1105386a7b90 pc=0x593913
+golang.org/x/net/http2.(*pipe).Read(0x110529a88f30, {0x11053f601b3c, 0x4, 0x4})
+	/root/go/pkg/mod/golang.org/x/net@v0.56.0/http2/pipe.go:76 +0xdb fp=0x1105386a7c30 sp=0x1105386a7bc8 pc=0xa7c85b
+golang.org/x/net/http2.transportResponseBody.Read({0x55d7f0?}, {0x11053f601b3c?, 0x1105386a7cf0?, 0x519c45?})
+	/root/go/pkg/mod/golang.org/x/net@v0.56.0/http2/transport.go:2180 +0x59 fp=0x1105386a7cb8 sp=0x1105386a7c30 pc=0xa880f9
+io.ReadAtLeast({0x70784da5e300, 0x110529a88f00}, {0x11053f601b3c, 0x4, 0x4}, 0x4)
+	/usr/local/go/src/io/io.go:335 +0x8e fp=0x1105386a7d00 sp=0x1105386a7cb8 pc=0x5f5a6e
+k8s.io/apimachinery/pkg/util/framer.(*lengthDelimitedFrameReader).Read(0x110573769758, {0x1105809a0800, 0x400, 0x400})
+	/root/go/pkg/mod/k8s.io/apimachinery@v0.31.0/pkg/util/framer/framer.go:76 +0x88 fp=0x1105386a7d78 sp=0x1105386a7d00 pc=0x2311ac8
+k8s.io/apimachinery/pkg/runtime/serializer/streaming.(*decoder).Decode(0x11052a07d180, 0x0, {0x54af028, 0x11054dd7b4c0})
+	/root/go/pkg/mod/k8s.io/apimachinery@v0.31.0/pkg/runtime/serializer/streaming/streaming.go:77 +0xa3 fp=0x1105386a7e28 sp=0x1105386a7d78 pc=0x22df703
+k8s.io/client-go/rest/watch.(*Decoder).Decode(0x11059bc5e8a0)
+	/root/go/pkg/mod/k8s.io/client-go@v0.31.0/rest/watch/decoder.go:49 +0x4b fp=0x1105386a7e98 sp=0x1105386a7e28 pc=0x22e0c8b
+k8s.io/apimachinery/pkg/watch.(*StreamWatcher).receive(0x11054d6fa9c0)
+	/root/go/pkg/mod/k8s.io/apimachinery@v0.31.0/pkg/watch/streamwatcher.go:105 +0xc5 fp=0x1105386a7fc8 sp=0x1105386a7e98 pc=0x207b2e5
+k8s.io/apimachinery/pkg/watch.NewStreamWatcher.gowrap1()
+	/root/go/pkg/mod/k8s.io/apimachinery@v0.31.0/pkg/watch/streamwatcher.go:76 +0x17 fp=0x1105386a7fe0 sp=0x1105386a7fc8 pc=0x207b0b7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x1105386a7fe8 sp=0x1105386a7fe0 pc=0x58a201
+created by k8s.io/apimachinery/pkg/watch.NewStreamWatcher in goroutine 1463
+	/root/go/pkg/mod/k8s.io/apimachinery@v0.31.0/pkg/watch/streamwatcher.go:76 +0x105
+
+goroutine 148 gp=0x11051ace03c0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ca74718 sp=0x11051ca746f8 pc=0x58234e
+runtime.chanrecv(0x11051bc48fc0, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051ca74790 sp=0x11051ca74718 pc=0x5107ae
+runtime.chanrecv1(0x0?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051ca747b8 sp=0x11051ca74790 pc=0x5102d2
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run.func1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:152 +0x26 fp=0x11051ca747e0 sp=0x11051ca747b8 pc=0x12694a6
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ca747e8 sp=0x11051ca747e0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run in goroutine 815
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:151 +0x89
+
+goroutine 65 gp=0x11051ace05a0 m=nil [select]:
+runtime.gopark(0x1105240cdf68?, 0x2?, 0xd0?, 0xeb?, 0x1105240cdf54?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052e10bde8 sp=0x11052e10bdc8 pc=0x58234e
+runtime.selectgo(0x11052e10bf68, 0x1105240cdf50, 0x11059529e5b0?, 0x0, 0x1?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11052e10bf18 sp=0x11052e10bde8 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/block.(*Manager).loop(0x11051bb2c540)
+	/workspaces/prompp/pp/go/storage/block/manager.go:143 +0x146 fp=0x11052e10bfc8 sp=0x11052e10bf18 pc=0x14ccea6
+github.com/prometheus/prometheus/pp/go/storage/block.NewManager.gowrap1()
+	/workspaces/prompp/pp/go/storage/block/manager.go:129 +0x17 fp=0x11052e10bfe0 sp=0x11052e10bfc8 pc=0x14ccd37
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052e10bfe8 sp=0x11052e10bfe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/block.NewManager in goroutine 1
+	/workspaces/prompp/pp/go/storage/block/manager.go:129 +0x5d6
+
+goroutine 121 gp=0x11051ace0780 m=nil [select, 839 minutes]:
+runtime.gopark(0x11051b335f18?, 0x3?, 0x2?, 0x0?, 0x11051b335eaa?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b335d40 sp=0x11051b335d20 pc=0x58234e
+runtime.selectgo(0x11051b335f18, 0x11051b335ea4, 0x0?, 0x0, 0x100000000?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b335e70 sp=0x11051b335d40 pc=0x55e3a5
+main.main.func11()
+	/workspaces/prompp/cmd/prometheus/main.go:1354 +0xc5 fp=0x11051b335f88 sp=0x11051b335e70 pc=0x30c15a5
+github.com/oklog/run.(*Group).Run.func1({0x11051b0b0340?, 0x11051c2142b8?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b335fc0 sp=0x11051b335f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b335fe0 sp=0x11051b335fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b335fe8 sp=0x11051b335fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 737 gp=0x11051ace0960 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x5000000000070?, 0x68?, 0x35?, 0x70784ec922f8?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110539fcf7a8 sp=0x110539fcf788 pc=0x58234e
+runtime.chanrecv(0x11053e63a770, 0x110539fcf898, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x110539fcf820 sp=0x110539fcf7a8 pc=0x5107ae
+runtime.chanrecv2(0x11053d3936b0?, 0x54cec70?)
+	/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0x110539fcf848 sp=0x110539fcf820 pc=0x5102f2
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).write(0x11051c803f28?, {0x54cec70, 0x11051b0b21e0}, 0x11053d3936b0)
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:186 +0x186 fp=0x110539fcf8b8 sp=0x110539fcf848 pc=0x1270146
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).run(0x11051b509c70, {0x54cec70, 0x11051b0b21e0})
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:100 +0x4ed fp=0x110539fcff78 sp=0x110539fcf8b8 pc=0x126fbed
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run(0x11051bee3650, {0x54cec70?, 0x11051c15a000?})
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:155 +0xa5 fp=0x110539fcffb8 sp=0x110539fcff78 pc=0x1269425
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run.gowrap1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0x1f fp=0x110539fcffe0 sp=0x110539fcffb8 pc=0x12692bf
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110539fcffe8 sp=0x110539fcffe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run in goroutine 453
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0xe4e
+
+goroutine 68599232 gp=0x11051ace0b40 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x1000000?, 0x30?, 0x1b?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052c131af8 sp=0x11052c131ad8 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x11052c131b30 sp=0x11052c131af8 pc=0x5436d7
+internal/poll.runtime_pollWait(0x707223baa200, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x11052c131b50 sp=0x11052c131b30 pc=0x581525
+internal/poll.(*pollDesc).wait(0x11052574f480?, 0x110524ae2000?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x11052c131b78 sp=0x11052c131b50 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x11052574f480, {0x110524ae2000, 0x1000, 0x1000})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x11052c131c10 sp=0x11052c131b78 pc=0x6020ce
+net.(*netFD).Read(0x11052574f480, {0x110524ae2000?, 0x505ae6?, 0x0?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x11052c131c58 sp=0x11052c131c10 pc=0x64d725
+net.(*conn).Read(0x11052457aa00, {0x110524ae2000?, 0x1?, 0x110525e008a0?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x11052c131ca0 sp=0x11052c131c58 pc=0x65d9c5
+github.com/mwitkow/go-conntrack.(*clientConnTracker).Read(0x11052c131d08?, {0x110524ae2000?, 0x11057f9b09c0?, 0x4a30160?})
+	<autogenerated>:1 +0x22 fp=0x11052c131cd0 sp=0x11052c131ca0 pc=0xa56a02
+net/http.(*persistConn).Read(0x11052f9cc780, {0x110524ae2000?, 0x5489a40?, 0x7d58840?})
+	/usr/local/go/src/net/http/transport.go:2174 +0x47 fp=0x11052c131d30 sp=0x11052c131cd0 pc=0x83a2c7
+bufio.(*Reader).fill(0x110549e06180)
+	/usr/local/go/src/bufio/bufio.go:113 +0x103 fp=0x11052c131d68 sp=0x11052c131d30 pc=0x792e43
+bufio.(*Reader).Peek(0x110549e06180, 0x1)
+	/usr/local/go/src/bufio/bufio.go:152 +0x53 fp=0x11052c131d80 sp=0x11052c131d68 pc=0x792f73
+net/http.(*persistConn).readLoop(0x11052f9cc780)
+	/usr/local/go/src/net/http/transport.go:2330 +0x172 fp=0x11052c131fc8 sp=0x11052c131d80 pc=0x83add2
+net/http.(*Transport).dialConn.gowrap2()
+	/usr/local/go/src/net/http/transport.go:1994 +0x17 fp=0x11052c131fe0 sp=0x11052c131fc8 pc=0x8397f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052c131fe8 sp=0x11052c131fe0 pc=0x58a201
+created by net/http.(*Transport).dialConn in goroutine 68599227
+	/usr/local/go/src/net/http/transport.go:1994 +0x16ac
+
+goroutine 107 gp=0x11051ace0d20 m=13 mp=0x11051bac8008 [syscall, 839 minutes]:
+runtime.notetsleepg(0x85245e0, 0xffffffffffffffff)
+	/usr/local/go/src/runtime/lock_futex.go:123 +0x29 fp=0x11051b08b7a0 sp=0x11051b08b778 pc=0x516fc9
+os/signal.signal_recv()
+	/usr/local/go/src/runtime/sigqueue.go:152 +0x98 fp=0x11051b08b7c0 sp=0x11051b08b7a0 pc=0x584878
+os/signal.loop()
+	/usr/local/go/src/os/signal/signal_unix.go:23 +0x13 fp=0x11051b08b7e0 sp=0x11051b08b7c0 pc=0x8a23d3
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b08b7e8 sp=0x11051b08b7e0 pc=0x58a201
+created by os/signal.Notify.func1.1 in goroutine 1
+	/usr/local/go/src/os/signal/signal.go:152 +0x1f
+
+goroutine 68477707 gp=0x11051b482780 m=nil [select]:
+runtime.gopark(0x11054a72ef48?, 0x2?, 0x40?, 0x78?, 0x11054a72eef4?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11054a72ed88 sp=0x11054a72ed68 pc=0x58234e
+runtime.selectgo(0x11054a72ef48, 0x11054a72eef0, 0x110572d40000?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11054a72eeb8 sp=0x11054a72ed88 pc=0x55e3a5
+net/http.(*persistConn).writeLoop(0x1105916268c0)
+	/usr/local/go/src/net/http/transport.go:2652 +0xe6 fp=0x11054a72efc8 sp=0x11054a72eeb8 pc=0x83c786
+net/http.(*Transport).dialConn.gowrap3()
+	/usr/local/go/src/net/http/transport.go:1995 +0x17 fp=0x11054a72efe0 sp=0x11054a72efc8 pc=0x8397b7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11054a72efe8 sp=0x11054a72efe0 pc=0x58a201
+created by net/http.(*Transport).dialConn in goroutine 68477600
+	/usr/local/go/src/net/http/transport.go:1995 +0x16fe
+
+goroutine 776 gp=0x11051ace0f00 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x5000000000070?, 0x18?, 0x1b?, 0x70784ec93de0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052c0257a8 sp=0x11052c025788 pc=0x58234e
+runtime.chanrecv(0x11052315b650, 0x11052c025898, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11052c025820 sp=0x11052c0257a8 pc=0x5107ae
+runtime.chanrecv2(0x11053c7eadc0?, 0x54cec70?)
+	/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0x11052c025848 sp=0x11052c025820 pc=0x5102f2
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).write(0x110520cf9f28?, {0x54cec70, 0x11051acca000}, 0x11053c7eadc0)
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:186 +0x186 fp=0x11052c0258b8 sp=0x11052c025848 pc=0x1270146
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).run(0x11051b3a1860, {0x54cec70, 0x11051acca000})
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:100 +0x4ed fp=0x11052c025f78 sp=0x11052c0258b8 pc=0x126fbed
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run(0x11051bee3b60, {0x54cec70?, 0x11051c15a000?})
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:155 +0xa5 fp=0x11052c025fb8 sp=0x11052c025f78 pc=0x1269425
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run.gowrap1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0x1f fp=0x11052c025fe0 sp=0x11052c025fb8 pc=0x12692bf
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052c025fe8 sp=0x11052c025fe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run in goroutine 453
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0xe4e
+
+goroutine 122 gp=0x11051b0543c0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x19f024e32c7?, 0x4831740?, 0x98?, 0xf9?, 0x11051b334eb8?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b334e28 sp=0x11051b334e08 pc=0x58234e
+runtime.chanrecv(0x11051c216460, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b334ea0 sp=0x11051b334e28 pc=0x5107ae
+runtime.chanrecv1(0x11051b3a0ff0?, 0x50fbc0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b334ec8 sp=0x11051b334ea0 pc=0x5102d2
+github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).Run(0x11051bb2d080)
+	/workspaces/prompp/discovery/legacymanager/manager.go:119 +0x70 fp=0x11051b334f00 sp=0x11051b334ec8 pc=0x1501a30
+main.main.func13()
+	/workspaces/prompp/cmd/prometheus/main.go:1377 +0x32 fp=0x11051b334f88 sp=0x11051b334f00 pc=0x30c13d2
+github.com/oklog/run.(*Group).Run.func1({0x11051b7b10e0?, 0x11051bc18860?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b334fc0 sp=0x11051b334f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b334fe0 sp=0x11051b334fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b334fe8 sp=0x11051b334fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 68692519 gp=0x11051b328000 m=nil [IO wait]:
+runtime.gopark(0x11051bafae08?, 0x14f4800?, 0x88?, 0xf1?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110545fd7d78 sp=0x110545fd7d58 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x110545fd7db0 sp=0x110545fd7d78 pc=0x5436d7
+internal/poll.runtime_pollWait(0x70714bafe600, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x110545fd7dd0 sp=0x110545fd7db0 pc=0x581525
+internal/poll.(*pollDesc).wait(0x11053f1f0380?, 0x11058b94af21?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x110545fd7df8 sp=0x110545fd7dd0 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x11053f1f0380, {0x11058b94af21, 0x1, 0x1})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x110545fd7e90 sp=0x110545fd7df8 pc=0x6020ce
+net.(*netFD).Read(0x11053f1f0380, {0x11058b94af21?, 0x110545fd7f50?, 0x55f2d9?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x110545fd7ed8 sp=0x110545fd7e90 pc=0x64d725
+net.(*conn).Read(0x1105228c6b70, {0x11058b94af21?, 0x7e81d20?, 0x110558d91260?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x110545fd7f20 sp=0x110545fd7ed8 pc=0x65d9c5
+github.com/prometheus/prometheus/util/netconnlimit.(*sharedLimitListenerConn).Read(0x110545fd7fb0?, {0x11058b94af21?, 0x110553214c38?, 0x11051cc62700?})
+	<autogenerated>:1 +0x22 fp=0x110545fd7f50 sp=0x110545fd7f20 pc=0x30a1082
+github.com/mwitkow/go-conntrack.(*serverConnTracker).Read(0x19?, {0x11058b94af21?, 0x11051f96c148?, 0x11054281e540?})
+	<autogenerated>:1 +0x22 fp=0x110545fd7f80 sp=0x110545fd7f50 pc=0xa57342
+net/http.(*connReader).backgroundRead(0x11058b94af00)
+	/usr/local/go/src/net/http/server.go:702 +0x33 fp=0x110545fd7fc8 sp=0x110545fd7f80 pc=0x818753
+net/http.(*connReader).startBackgroundRead.gowrap2()
+	/usr/local/go/src/net/http/server.go:698 +0x17 fp=0x110545fd7fe0 sp=0x110545fd7fc8 pc=0x8186b7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110545fd7fe8 sp=0x110545fd7fe0 pc=0x58a201
+created by net/http.(*connReader).startBackgroundRead in goroutine 68691533
+	/usr/local/go/src/net/http/server.go:698 +0xb6
+
+goroutine 68692752 gp=0x11051b3283c0 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x0?, 0xa0?, 0xfa?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110520bf4d78 sp=0x110520bf4d58 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x110520bf4db0 sp=0x110520bf4d78 pc=0x5436d7
+internal/poll.runtime_pollWait(0x7071441a4600, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x110520bf4dd0 sp=0x110520bf4db0 pc=0x581525
+internal/poll.(*pollDesc).wait(0x110585ce2500?, 0x110590bd9da1?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x110520bf4df8 sp=0x110520bf4dd0 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x110585ce2500, {0x110590bd9da1, 0x1, 0x1})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x110520bf4e90 sp=0x110520bf4df8 pc=0x6020ce
+net.(*netFD).Read(0x110585ce2500, {0x110590bd9da1?, 0x50f9c0?, 0x110582f2fb80?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x110520bf4ed8 sp=0x110520bf4e90 pc=0x64d725
+net.(*conn).Read(0x11051f84a8e0, {0x110590bd9da1?, 0xbb5744?, 0x110585eed800?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x110520bf4f20 sp=0x110520bf4ed8 pc=0x65d9c5
+github.com/prometheus/prometheus/util/netconnlimit.(*sharedLimitListenerConn).Read(0x110520bf4fb0?, {0x110590bd9da1?, 0x110582f2fb80?, 0x7071ed760000?})
+	<autogenerated>:1 +0x22 fp=0x110520bf4f50 sp=0x110520bf4f20 pc=0x30a1082
+github.com/mwitkow/go-conntrack.(*serverConnTracker).Read(0x11054ecaaa10?, {0x110590bd9da1?, 0x1105322ae030?, 0x110541f61b40?})
+	<autogenerated>:1 +0x22 fp=0x110520bf4f80 sp=0x110520bf4f50 pc=0xa57342
+net/http.(*connReader).backgroundRead(0x110590bd9d80)
+	/usr/local/go/src/net/http/server.go:702 +0x33 fp=0x110520bf4fc8 sp=0x110520bf4f80 pc=0x818753
+net/http.(*connReader).startBackgroundRead.gowrap2()
+	/usr/local/go/src/net/http/server.go:698 +0x17 fp=0x110520bf4fe0 sp=0x110520bf4fc8 pc=0x8186b7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110520bf4fe8 sp=0x110520bf4fe0 pc=0x58a201
+created by net/http.(*connReader).startBackgroundRead in goroutine 68692725
+	/usr/local/go/src/net/http/server.go:698 +0xb6
+
+goroutine 68691156 gp=0x11051b3285a0 m=nil [select]:
+runtime.gopark(0x11054e1ea450?, 0x2?, 0x8?, 0x38?, 0x11054e1ea40c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11054e1ea2a8 sp=0x11054e1ea288 pc=0x58234e
+runtime.selectgo(0x11054e1ea450, 0x11054e1ea408, 0x30?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11054e1ea3d8 sp=0x11054e1ea2a8 pc=0x55e3a5
+github.com/prometheus/prometheus/promql.ActiveQueryTracker.Insert({{0x70784ec0a000, 0x4e21, 0x4e21}, 0x11051ad4c900, {0x548abc0, 0x11051b3a1e00}, {0x548b5e0, 0x11051bee41b0}, 0x14}, {0x54cec38, ...}, ...)
+	/workspaces/prompp/promql/query_logger.go:277 +0xd0 fp=0x11054e1ea480 sp=0x11054e1ea3d8 pc=0x13bdb70
+github.com/prometheus/prometheus/promql.(*ActiveQueryTracker).Insert(0x0?, {0x54cec38?, 0x110525b772c0?}, {0x11053877d2b0?, 0x1105867fc0d0?})
+	<autogenerated>:1 +0xd3 fp=0x11054e1ea540 sp=0x11054e1ea480 pc=0x13c67f3
+github.com/prometheus/prometheus/promql.(*Engine).queueActive(0x11051b1ee500, {0x54cec38, 0x110525b772c0}, 0x110599352770)
+	/workspaces/prompp/promql/engine.go:702 +0xd7 fp=0x11054e1ea5a8 sp=0x11054e1ea540 pc=0x138abb7
+github.com/prometheus/prometheus/promql.(*Engine).exec(0x11051b1ee500, {0x54cec38, 0x110525b772c0}, 0x110599352770)
+	/workspaces/prompp/promql/engine.go:668 +0x20e fp=0x11054e1ea7a8 sp=0x11054e1ea5a8 pc=0x1389c0e
+github.com/prometheus/prometheus/promql.(*query).Exec(0x110599352770, {0x54cec38, 0x110525b77230})
+	/workspaces/prompp/promql/engine.go:247 +0x1b7 fp=0x11054e1ea898 sp=0x11054e1ea7a8 pc=0x13872b7
+github.com/prometheus/prometheus/web/api/v1.(*API).query(0x11051bcb0420, 0x110581562b40)
+	/workspaces/prompp/web/api/v1/api.go:472 +0x5fb fp=0x11054e1eaa40 sp=0x11054e1ea898 pc=0x308ad5b
+github.com/prometheus/prometheus/web/api/v1.(*API).query-fm(0x0?)
+	<autogenerated>:1 +0x34 fp=0x11054e1eaab0 sp=0x11054e1eaa40 pc=0x309e7b4
+github.com/prometheus/prometheus/web/api/v1.(*API).Register.(*API).Register.func2.func5(0x54b9950?)
+	/workspaces/prompp/web/api/v1/api.go:363 +0xdb fp=0x11054e1eab30 sp=0x11054e1eaab0 pc=0x308987b
+github.com/prometheus/prometheus/web/api/v1.(*API).Register.(*API).Register.func2.(*API).Register.func1.func38({0x54b9950, 0x110542d2bd80}, 0x110581562b40)
+	/workspaces/prompp/web/api/v1/api.go:338 +0x77 fp=0x11054e1eabf8 sp=0x11054e1eab30 pc=0x3089557
+net/http.HandlerFunc.ServeHTTP(0x707803532160?, {0x54b9950?, 0x110542d2bd80?}, 0x11059c5634f0?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1eac20 sp=0x11054e1eabf8 pc=0x820a89
+github.com/prometheus/prometheus/util/httputil.CompressionHandler.ServeHTTP({{0x548a140?, 0x11051c287938?}}, {0x707803532160?, 0x11059c5634f0?}, 0x110581562b40)
+	/workspaces/prompp/util/httputil/compression.go:91 +0x63 fp=0x11054e1eac68 sp=0x11054e1eac20 pc=0x307cc63
+github.com/prometheus/prometheus/util/httputil.CompressionHandler.ServeHTTP-fm({0x707803532160?, 0x11059c5634f0?}, 0x11054b342510?)
+	<autogenerated>:1 +0x34 fp=0x11054e1eaca0 sp=0x11054e1eac68 pc=0x309e714
+github.com/prometheus/prometheus/web.(*Handler).testReady-fm.(*Handler).testReady.func1({0x707803532160, 0x11059c5634f0}, 0x110581562b40)
+	/workspaces/prompp/web/web.go:611 +0x83 fp=0x11054e1eacf0 sp=0x11054e1eaca0 pc=0x30ace63
+net/http.HandlerFunc.ServeHTTP(0x707803532160?, {0x707803532160?, 0x11059c5634f0?}, 0xffffffffffffffff?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1ead18 sp=0x11054e1eacf0 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerResponseSize.func1({0x707803532160?, 0x11059c5634a0?}, 0x110581562b40)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:296 +0xcf fp=0x11054e1eae38 sp=0x11054e1ead18 pc=0x1f6156f
+net/http.HandlerFunc.ServeHTTP(0x70743816a9d8?, {0x707803532160?, 0x11059c5634a0?}, 0x11051c6b3808?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1eae60 sp=0x11054e1eae38 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerDuration.func2({0x707803532160, 0x11059c5634a0}, 0x110581562b40)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:109 +0xc5 fp=0x11054e1eaf88 sp=0x11054e1eae60 pc=0x1f60205
+net/http.HandlerFunc.ServeHTTP(0x54c4dc0?, {0x707803532160?, 0x11059c5634a0?}, 0x11053829f028?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1eafb0 sp=0x11054e1eaf88 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerCounter.func1({0x54c4dc0?, 0x110552fc9b00?}, 0x110581562b40)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:147 +0xc3 fp=0x11054e1eb0c0 sp=0x11054e1eafb0 pc=0x1f60f43
+github.com/prometheus/prometheus/web.(*Handler).Run.setPathWithPrefix.func5.1({0x54c4dc0, 0x110552fc9b00}, 0x110581562a00)
+	/workspaces/prompp/web/web.go:885 +0xb3 fp=0x11054e1eb120 sp=0x11054e1eb0c0 pc=0x30aa933
+github.com/prometheus/common/route.(*Router).handle.func1({0x54c4dc0, 0x110552fc9b00}, 0x1105815628c0, {0x0, 0x0, 0x0?})
+	/root/go/pkg/mod/github.com/prometheus/common@v0.59.1/route/route.go:83 +0x21d fp=0x11054e1eb1b8 sp=0x11054e1eb120 pc=0x117cf7d
+github.com/julienschmidt/httprouter.(*Router).ServeHTTP(0x11051b3efda0, {0x54c4dc0, 0x110552fc9b00}, 0x1105815628c0)
+	/root/go/pkg/mod/github.com/julienschmidt/httprouter@v1.3.0/router.go:387 +0x815 fp=0x11054e1eb2d8 sp=0x11054e1eb1b8 pc=0x1179f35
+github.com/prometheus/common/route.(*Router).ServeHTTP(0x0?, {0x54c4dc0?, 0x110552fc9b00?}, 0x7?)
+	/root/go/pkg/mod/github.com/prometheus/common@v0.59.1/route/route.go:126 +0x25 fp=0x11054e1eb308 sp=0x11054e1eb2d8 pc=0x117d585
+github.com/prometheus/prometheus/web.(*Handler).Run.StripPrefix.func7({0x54c4dc0, 0x110552fc9b00}, 0x110581562780)
+	/usr/local/go/src/net/http/server.go:2348 +0x2be fp=0x11054e1eb390 sp=0x11054e1eb308 pc=0x30aa6de
+net/http.HandlerFunc.ServeHTTP(0x11051bea8600?, {0x54c4dc0?, 0x110552fc9b00?}, 0x51a41d?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1eb3b8 sp=0x11054e1eb390 pc=0x820a89
+net/http.(*ServeMux).ServeHTTP(0x54cec38?, {0x54c4dc0, 0x110552fc9b00}, 0x110581562780)
+	/usr/local/go/src/net/http/server.go:2828 +0x1c7 fp=0x11054e1eb408 sp=0x11054e1eb3b8 pc=0x822887
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp.(*middleware).serveHTTP(0x11051bea86c0, {0x54b6a00, 0x11053d833c20}, 0x1105414a12c0, {0x548a1a0, 0x11051bea8600})
+	/root/go/pkg/mod/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.65.0/handler.go:178 +0x12a7 fp=0x11054e1eb818 sp=0x11054e1eb408 pc=0x111f3a7
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp.NewMiddleware.func1.1({0x54b6a00?, 0x11053d833c20?}, 0x7ffe60d89465?)
+	/root/go/pkg/mod/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.65.0/handler.go:66 +0x35 fp=0x11054e1eb858 sp=0x11054e1eb818 pc=0x111dc95
+net/http.HandlerFunc.ServeHTTP(0x11053829f8d0?, {0x54b6a00?, 0x11053d833c20?}, 0x110583a17340?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1eb880 sp=0x11054e1eb858 pc=0x820a89
+github.com/prometheus/prometheus/web.(*Handler).Run.withStackTracer.func9({0x54b6a00?, 0x11053d833c20?}, 0x110583a17340?)
+	/workspaces/prompp/web/web.go:106 +0x74 fp=0x11054e1eb8e0 sp=0x11054e1eb880 pc=0x30aa0f4
+net/http.HandlerFunc.ServeHTTP(0x7ffe60d89465?, {0x54b6a00?, 0x11053d833c20?}, 0x110574434948?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054e1eb908 sp=0x11054e1eb8e0 pc=0x820a89
+github.com/prometheus/exporter-toolkit/web.(*webHandler).ServeHTTP(0x11051b5f71c0, {0x54b6a00, 0x11053d833c20}, 0x1105414a12c0)
+	/root/go/pkg/mod/github.com/prometheus/exporter-toolkit@v0.12.0/web/handler.go:102 +0x438 fp=0x11054e1ebb60 sp=0x11054e1eb908 pc=0xad2e38
+net/http.serverHandler.ServeHTTP({0x549e238?}, {0x54b6a00?, 0x11053d833c20?}, 0x1?)
+	/usr/local/go/src/net/http/server.go:3311 +0x8e fp=0x11054e1ebb90 sp=0x11054e1ebb60 pc=0x8411ce
+net/http.(*conn).serve(0x11052f184fc0, {0x54cec38, 0x11051b6403c0})
+	/usr/local/go/src/net/http/server.go:2073 +0x650 fp=0x11054e1ebfb8 sp=0x11054e1ebb90 pc=0x81eb70
+net/http.(*Server).Serve.gowrap3()
+	/usr/local/go/src/net/http/server.go:3464 +0x1f fp=0x11054e1ebfe0 sp=0x11054e1ebfb8 pc=0x82475f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11054e1ebfe8 sp=0x11054e1ebfe0 pc=0x58a201
+created by net/http.(*Server).Serve in goroutine 606
+	/usr/local/go/src/net/http/server.go:3464 +0x485
+
+goroutine 68695136 gp=0x11051b328960 m=nil [select]:
+runtime.gopark(0x1105529e6660?, 0x2?, 0x8?, 0xd8?, 0x1105529e661c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x1105529e64b8 sp=0x1105529e6498 pc=0x58234e
+runtime.selectgo(0x1105529e6660, 0x1105529e6618, 0x30?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x1105529e65e8 sp=0x1105529e64b8 pc=0x55e3a5
+github.com/prometheus/prometheus/promql.ActiveQueryTracker.Insert({{0x70784ec0a000, 0x4e21, 0x4e21}, 0x11051ad4c900, {0x548abc0, 0x11051b3a1e00}, {0x548b5e0, 0x11051bee41b0}, 0x14}, {0x54cec38, ...}, ...)
+	/workspaces/prompp/promql/query_logger.go:277 +0xd0 fp=0x1105529e6690 sp=0x1105529e65e8 pc=0x13bdb70
+github.com/prometheus/prometheus/promql.(*ActiveQueryTracker).Insert(0x13893d8?, {0x54cec38?, 0x11056f34a4b0?}, {0x110522c95d80?, 0x11059b031330?})
+	<autogenerated>:1 +0xd3 fp=0x1105529e6750 sp=0x1105529e6690 pc=0x13c67f3
+github.com/prometheus/prometheus/promql.(*Engine).queueActive(0x11051b1ee500, {0x54cec38, 0x11056f34a4b0}, 0x11059d7f7e30)
+	/workspaces/prompp/promql/engine.go:702 +0xd7 fp=0x1105529e67b8 sp=0x1105529e6750 pc=0x138abb7
+github.com/prometheus/prometheus/promql.(*Engine).NewInstantQuery(0x11051b1ee500, {0x54cec38, 0x11056f34a4b0}, {0x548ade0?, 0x11051b512780?}, {0x549fd30?, 0x11054281f7d0?}, {0x110522c95d80, 0x7f}, {0xdc4c7c0, ...})
+	/workspaces/prompp/promql/engine.go:476 +0xfc fp=0x1105529e6898 sp=0x1105529e67b8 pc=0x13885bc
+github.com/prometheus/prometheus/web/api/v1.(*API).query(0x11051bcb0420, 0x110531b0d680)
+	/workspaces/prompp/web/api/v1/api.go:456 +0x490 fp=0x1105529e6a40 sp=0x1105529e6898 pc=0x308abf0
+github.com/prometheus/prometheus/web/api/v1.(*API).query-fm(0x0?)
+	<autogenerated>:1 +0x34 fp=0x1105529e6ab0 sp=0x1105529e6a40 pc=0x309e7b4
+github.com/prometheus/prometheus/web/api/v1.(*API).Register.(*API).Register.func2.func5(0x54b9950?)
+	/workspaces/prompp/web/api/v1/api.go:363 +0xdb fp=0x1105529e6b30 sp=0x1105529e6ab0 pc=0x308987b
+github.com/prometheus/prometheus/web/api/v1.(*API).Register.(*API).Register.func2.(*API).Register.func1.func38({0x54b9950, 0x110524df20c0}, 0x110531b0d680)
+	/workspaces/prompp/web/api/v1/api.go:338 +0x77 fp=0x1105529e6bf8 sp=0x1105529e6b30 pc=0x3089557
+net/http.HandlerFunc.ServeHTTP(0x707803532160?, {0x54b9950?, 0x110524df20c0?}, 0x1105314f74f0?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e6c20 sp=0x1105529e6bf8 pc=0x820a89
+github.com/prometheus/prometheus/util/httputil.CompressionHandler.ServeHTTP({{0x548a140?, 0x11051c287938?}}, {0x707803532160?, 0x1105314f74f0?}, 0x110531b0d680)
+	/workspaces/prompp/util/httputil/compression.go:91 +0x63 fp=0x1105529e6c68 sp=0x1105529e6c20 pc=0x307cc63
+github.com/prometheus/prometheus/util/httputil.CompressionHandler.ServeHTTP-fm({0x707803532160?, 0x1105314f74f0?}, 0x11056f34a510?)
+	<autogenerated>:1 +0x34 fp=0x1105529e6ca0 sp=0x1105529e6c68 pc=0x309e714
+github.com/prometheus/prometheus/web.(*Handler).testReady-fm.(*Handler).testReady.func1({0x707803532160, 0x1105314f74f0}, 0x110531b0d680)
+	/workspaces/prompp/web/web.go:611 +0x83 fp=0x1105529e6cf0 sp=0x1105529e6ca0 pc=0x30ace63
+net/http.HandlerFunc.ServeHTTP(0x707803532160?, {0x707803532160?, 0x1105314f74f0?}, 0xffffffffffffffff?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e6d18 sp=0x1105529e6cf0 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerResponseSize.func1({0x707803532160?, 0x1105314f74a0?}, 0x110531b0d680)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:296 +0xcf fp=0x1105529e6e38 sp=0x1105529e6d18 pc=0x1f6156f
+net/http.HandlerFunc.ServeHTTP(0x70723c5c0788?, {0x707803532160?, 0x1105314f74a0?}, 0x11051e42d808?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e6e60 sp=0x1105529e6e38 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerDuration.func2({0x707803532160, 0x1105314f74a0}, 0x110531b0d680)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:109 +0xc5 fp=0x1105529e6f88 sp=0x1105529e6e60 pc=0x1f60205
+net/http.HandlerFunc.ServeHTTP(0x54c4dc0?, {0x707803532160?, 0x1105314f74a0?}, 0x11053839f028?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e6fb0 sp=0x1105529e6f88 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerCounter.func1({0x54c4dc0?, 0x11052481c7e0?}, 0x110531b0d680)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:147 +0xc3 fp=0x1105529e70c0 sp=0x1105529e6fb0 pc=0x1f60f43
+github.com/prometheus/prometheus/web.(*Handler).Run.setPathWithPrefix.func5.1({0x54c4dc0, 0x11052481c7e0}, 0x110531b0ca00)
+	/workspaces/prompp/web/web.go:885 +0xb3 fp=0x1105529e7120 sp=0x1105529e70c0 pc=0x30aa933
+github.com/prometheus/common/route.(*Router).handle.func1({0x54c4dc0, 0x11052481c7e0}, 0x110531b0c8c0, {0x0, 0x0, 0x0?})
+	/root/go/pkg/mod/github.com/prometheus/common@v0.59.1/route/route.go:83 +0x21d fp=0x1105529e71b8 sp=0x1105529e7120 pc=0x117cf7d
+github.com/julienschmidt/httprouter.(*Router).ServeHTTP(0x11051b3efda0, {0x54c4dc0, 0x11052481c7e0}, 0x110531b0c8c0)
+	/root/go/pkg/mod/github.com/julienschmidt/httprouter@v1.3.0/router.go:387 +0x815 fp=0x1105529e72d8 sp=0x1105529e71b8 pc=0x1179f35
+github.com/prometheus/common/route.(*Router).ServeHTTP(0x0?, {0x54c4dc0?, 0x11052481c7e0?}, 0x7?)
+	/root/go/pkg/mod/github.com/prometheus/common@v0.59.1/route/route.go:126 +0x25 fp=0x1105529e7308 sp=0x1105529e72d8 pc=0x117d585
+github.com/prometheus/prometheus/web.(*Handler).Run.StripPrefix.func7({0x54c4dc0, 0x11052481c7e0}, 0x1105863f7b80)
+	/usr/local/go/src/net/http/server.go:2348 +0x2be fp=0x1105529e7390 sp=0x1105529e7308 pc=0x30aa6de
+net/http.HandlerFunc.ServeHTTP(0x11051bea8600?, {0x54c4dc0?, 0x11052481c7e0?}, 0x51a41d?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e73b8 sp=0x1105529e7390 pc=0x820a89
+net/http.(*ServeMux).ServeHTTP(0x54cec38?, {0x54c4dc0, 0x11052481c7e0}, 0x1105863f7b80)
+	/usr/local/go/src/net/http/server.go:2828 +0x1c7 fp=0x1105529e7408 sp=0x1105529e73b8 pc=0x822887
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp.(*middleware).serveHTTP(0x11051bea86c0, {0x54b6a00, 0x11052fef24b0}, 0x1105863f72c0, {0x548a1a0, 0x11051bea8600})
+	/root/go/pkg/mod/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.65.0/handler.go:178 +0x12a7 fp=0x1105529e7818 sp=0x1105529e7408 pc=0x111f3a7
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp.NewMiddleware.func1.1({0x54b6a00?, 0x11052fef24b0?}, 0x7ffe60d89465?)
+	/root/go/pkg/mod/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.65.0/handler.go:66 +0x35 fp=0x1105529e7858 sp=0x1105529e7818 pc=0x111dc95
+net/http.HandlerFunc.ServeHTTP(0x11053839f8d0?, {0x54b6a00?, 0x11052fef24b0?}, 0x11051bf0a9a0?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e7880 sp=0x1105529e7858 pc=0x820a89
+github.com/prometheus/prometheus/web.(*Handler).Run.withStackTracer.func9({0x54b6a00?, 0x11052fef24b0?}, 0x11051bf0a9a0?)
+	/workspaces/prompp/web/web.go:106 +0x74 fp=0x1105529e78e0 sp=0x1105529e7880 pc=0x30aa0f4
+net/http.HandlerFunc.ServeHTTP(0x7ffe60d89465?, {0x54b6a00?, 0x11052fef24b0?}, 0x11051f3d4948?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x1105529e7908 sp=0x1105529e78e0 pc=0x820a89
+github.com/prometheus/exporter-toolkit/web.(*webHandler).ServeHTTP(0x11051b5f71c0, {0x54b6a00, 0x11052fef24b0}, 0x1105863f72c0)
+	/root/go/pkg/mod/github.com/prometheus/exporter-toolkit@v0.12.0/web/handler.go:102 +0x438 fp=0x1105529e7b60 sp=0x1105529e7908 pc=0xad2e38
+net/http.serverHandler.ServeHTTP({0x549e238?}, {0x54b6a00?, 0x11052fef24b0?}, 0x1?)
+	/usr/local/go/src/net/http/server.go:3311 +0x8e fp=0x1105529e7b90 sp=0x1105529e7b60 pc=0x8411ce
+net/http.(*conn).serve(0x11054e5223f0, {0x54cec38, 0x11051b6403c0})
+	/usr/local/go/src/net/http/server.go:2073 +0x650 fp=0x1105529e7fb8 sp=0x1105529e7b90 pc=0x81eb70
+net/http.(*Server).Serve.gowrap3()
+	/usr/local/go/src/net/http/server.go:3464 +0x1f fp=0x1105529e7fe0 sp=0x1105529e7fb8 pc=0x82475f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x1105529e7fe8 sp=0x1105529e7fe0 pc=0x58a201
+created by net/http.(*Server).Serve in goroutine 606
+	/usr/local/go/src/net/http/server.go:3464 +0x485
+
+goroutine 68693104 gp=0x11051b328b40 m=nil [IO wait]:
+runtime.gopark(0x159?, 0x0?, 0xb0?, 0x3c?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x1105206e1d78 sp=0x1105206e1d58 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x1105206e1db0 sp=0x1105206e1d78 pc=0x5436d7
+internal/poll.runtime_pollWait(0x707144041e00, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x1105206e1dd0 sp=0x1105206e1db0 pc=0x581525
+internal/poll.(*pollDesc).wait(0x1105414e1500?, 0x11054e124021?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x1105206e1df8 sp=0x1105206e1dd0 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x1105414e1500, {0x11054e124021, 0x1, 0x1})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x1105206e1e90 sp=0x1105206e1df8 pc=0x6020ce
+net.(*netFD).Read(0x1105414e1500, {0x11054e124021?, 0x50f9c0?, 0x54cec38?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x1105206e1ed8 sp=0x1105206e1e90 pc=0x64d725
+net.(*conn).Read(0x11052505c238, {0x11054e124021?, 0xbcd244?, 0x11058e2483f0?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x1105206e1f20 sp=0x1105206e1ed8 pc=0x65d9c5
+github.com/prometheus/prometheus/util/netconnlimit.(*sharedLimitListenerConn).Read(0x1105206e1fb0?, {0x11054e124021?, 0x1105240fcee0?, 0x11051ed6a300?})
+	<autogenerated>:1 +0x22 fp=0x1105206e1f50 sp=0x1105206e1f20 pc=0x30a1082
+github.com/mwitkow/go-conntrack.(*serverConnTracker).Read(0x2?, {0x11054e124021?, 0xbcd2a0?, 0x1105408272d0?})
+	<autogenerated>:1 +0x22 fp=0x1105206e1f80 sp=0x1105206e1f50 pc=0xa57342
+net/http.(*connReader).backgroundRead(0x11054e124000)
+	/usr/local/go/src/net/http/server.go:702 +0x33 fp=0x1105206e1fc8 sp=0x1105206e1f80 pc=0x818753
+net/http.(*connReader).startBackgroundRead.gowrap2()
+	/usr/local/go/src/net/http/server.go:698 +0x17 fp=0x1105206e1fe0 sp=0x1105206e1fc8 pc=0x8186b7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x1105206e1fe8 sp=0x1105206e1fe0 pc=0x58a201
+created by net/http.(*connReader).startBackgroundRead in goroutine 68693073
+	/usr/local/go/src/net/http/server.go:698 +0xb6
+
+goroutine 68575945 gp=0x11051b328d20 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x1000000?, 0x30?, 0x6b?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052f976af8 sp=0x11052f976ad8 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x11052f976b30 sp=0x11052f976af8 pc=0x5436d7
+internal/poll.runtime_pollWait(0x707133981400, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x11052f976b50 sp=0x11052f976b30 pc=0x581525
+internal/poll.(*pollDesc).wait(0x11057da27500?, 0x11051f1c4000?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x11052f976b78 sp=0x11052f976b50 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x11057da27500, {0x11051f1c4000, 0x1000, 0x1000})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x11052f976c10 sp=0x11052f976b78 pc=0x6020ce
+net.(*netFD).Read(0x11057da27500, {0x11051f1c4000?, 0x5803f3?, 0x0?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x11052f976c58 sp=0x11052f976c10 pc=0x64d725
+net.(*conn).Read(0x11054130a198, {0x11051f1c4000?, 0x11051b480008?, 0x11051b480540?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x11052f976ca0 sp=0x11052f976c58 pc=0x65d9c5
+github.com/mwitkow/go-conntrack.(*clientConnTracker).Read(0x11052f976d08?, {0x11051f1c4000?, 0x11058726b590?, 0x4a30160?})
+	<autogenerated>:1 +0x22 fp=0x11052f976cd0 sp=0x11052f976ca0 pc=0xa56a02
+net/http.(*persistConn).Read(0x110569b7ea00, {0x11051f1c4000?, 0x5489a40?, 0x7d58840?})
+	/usr/local/go/src/net/http/transport.go:2174 +0x47 fp=0x11052f976d30 sp=0x11052f976cd0 pc=0x83a2c7
+bufio.(*Reader).fill(0x110583922d20)
+	/usr/local/go/src/bufio/bufio.go:113 +0x103 fp=0x11052f976d68 sp=0x11052f976d30 pc=0x792e43
+bufio.(*Reader).Peek(0x110583922d20, 0x1)
+	/usr/local/go/src/bufio/bufio.go:152 +0x53 fp=0x11052f976d80 sp=0x11052f976d68 pc=0x792f73
+net/http.(*persistConn).readLoop(0x110569b7ea00)
+	/usr/local/go/src/net/http/transport.go:2330 +0x172 fp=0x11052f976fc8 sp=0x11052f976d80 pc=0x83add2
+net/http.(*Transport).dialConn.gowrap2()
+	/usr/local/go/src/net/http/transport.go:1994 +0x17 fp=0x11052f976fe0 sp=0x11052f976fc8 pc=0x8397f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052f976fe8 sp=0x11052f976fe0 pc=0x58a201
+created by net/http.(*Transport).dialConn in goroutine 68575424
+	/usr/local/go/src/net/http/transport.go:1994 +0x16ac
+
+goroutine 65791800 gp=0x11051b3294a0 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x1000000?, 0x30?, 0xbb?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052bd5baf8 sp=0x11052bd5bad8 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x11052bd5bb30 sp=0x11052bd5baf8 pc=0x5436d7
+internal/poll.runtime_pollWait(0x7071441a4800, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x11052bd5bb50 sp=0x11052bd5bb30 pc=0x581525
+internal/poll.(*pollDesc).wait(0x1105762f9a00?, 0x1105305e2000?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x11052bd5bb78 sp=0x11052bd5bb50 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x1105762f9a00, {0x1105305e2000, 0x1000, 0x1000})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x11052bd5bc10 sp=0x11052bd5bb78 pc=0x6020ce
+net.(*netFD).Read(0x1105762f9a00, {0x1105305e2000?, 0x5803f3?, 0x0?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x11052bd5bc58 sp=0x11052bd5bc10 pc=0x64d725
+net.(*conn).Read(0x11051b5037c0, {0x1105305e2000?, 0x11051e42d808?, 0x11051e42dd40?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x11052bd5bca0 sp=0x11052bd5bc58 pc=0x65d9c5
+github.com/mwitkow/go-conntrack.(*clientConnTracker).Read(0x11052bd5bd08?, {0x1105305e2000?, 0x11056bbc9e00?, 0x4a30160?})
+	<autogenerated>:1 +0x22 fp=0x11052bd5bcd0 sp=0x11052bd5bca0 pc=0xa56a02
+net/http.(*persistConn).Read(0x110571083400, {0x1105305e2000?, 0x5489a40?, 0x7d58840?})
+	/usr/local/go/src/net/http/transport.go:2174 +0x47 fp=0x11052bd5bd30 sp=0x11052bd5bcd0 pc=0x83a2c7
+bufio.(*Reader).fill(0x1105499391a0)
+	/usr/local/go/src/bufio/bufio.go:113 +0x103 fp=0x11052bd5bd68 sp=0x11052bd5bd30 pc=0x792e43
+bufio.(*Reader).Peek(0x1105499391a0, 0x1)
+	/usr/local/go/src/bufio/bufio.go:152 +0x53 fp=0x11052bd5bd80 sp=0x11052bd5bd68 pc=0x792f73
+net/http.(*persistConn).readLoop(0x110571083400)
+	/usr/local/go/src/net/http/transport.go:2330 +0x172 fp=0x11052bd5bfc8 sp=0x11052bd5bd80 pc=0x83add2
+net/http.(*Transport).dialConn.gowrap2()
+	/usr/local/go/src/net/http/transport.go:1994 +0x17 fp=0x11052bd5bfe0 sp=0x11052bd5bfc8 pc=0x8397f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052bd5bfe8 sp=0x11052bd5bfe0 pc=0x58a201
+created by net/http.(*Transport).dialConn in goroutine 65791799
+	/usr/local/go/src/net/http/transport.go:1994 +0x16ac
+
+goroutine 68650079 gp=0x11051b329680 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x1000000?, 0x30?, 0xeb?, 0xb?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x1105201eeaf8 sp=0x1105201eead8 pc=0x58234e
+runtime.netpollblock(0x5a5638?, 0x50d4c6?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x1105201eeb30 sp=0x1105201eeaf8 pc=0x5436d7
+internal/poll.runtime_pollWait(0x70714414f600, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x1105201eeb50 sp=0x1105201eeb30 pc=0x581525
+internal/poll.(*pollDesc).wait(0x1105811f4200?, 0x1105387b1000?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x1105201eeb78 sp=0x1105201eeb50 pc=0x600ea7
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x1105811f4200, {0x1105387b1000, 0x1000, 0x1000})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x2ae fp=0x1105201eec10 sp=0x1105201eeb78 pc=0x6020ce
+net.(*netFD).Read(0x1105811f4200, {0x1105387b1000?, 0x505ae6?, 0x0?})
+	/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0x1105201eec58 sp=0x1105201eec10 pc=0x64d725
+net.(*conn).Read(0x110525758f28, {0x1105387b1000?, 0x1?, 0x110525e005f8?})
+	/usr/local/go/src/net/net.go:196 +0x45 fp=0x1105201eeca0 sp=0x1105201eec58 pc=0x65d9c5
+github.com/mwitkow/go-conntrack.(*clientConnTracker).Read(0x1105201eed08?, {0x1105387b1000?, 0x11057f9b09c0?, 0x4a30160?})
+	<autogenerated>:1 +0x22 fp=0x1105201eecd0 sp=0x1105201eeca0 pc=0xa56a02
+net/http.(*persistConn).Read(0x110531ac8500, {0x1105387b1000?, 0x5489a40?, 0x7d58840?})
+	/usr/local/go/src/net/http/transport.go:2174 +0x47 fp=0x1105201eed30 sp=0x1105201eecd0 pc=0x83a2c7
+bufio.(*Reader).fill(0x110526d13440)
+	/usr/local/go/src/bufio/bufio.go:113 +0x103 fp=0x1105201eed68 sp=0x1105201eed30 pc=0x792e43
+bufio.(*Reader).Peek(0x110526d13440, 0x1)
+	/usr/local/go/src/bufio/bufio.go:152 +0x53 fp=0x1105201eed80 sp=0x1105201eed68 pc=0x792f73
+net/http.(*persistConn).readLoop(0x110531ac8500)
+	/usr/local/go/src/net/http/transport.go:2330 +0x172 fp=0x1105201eefc8 sp=0x1105201eed80 pc=0x83add2
+net/http.(*Transport).dialConn.gowrap2()
+	/usr/local/go/src/net/http/transport.go:1994 +0x17 fp=0x1105201eefe0 sp=0x1105201eefc8 pc=0x8397f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x1105201eefe8 sp=0x1105201eefe0 pc=0x58a201
+created by net/http.(*Transport).dialConn in goroutine 68650192
+	/usr/local/go/src/net/http/transport.go:1994 +0x16ac
+
+goroutine 68692521 gp=0x11051b329860 m=nil [select]:
+runtime.gopark(0x11054ba02450?, 0x2?, 0x8?, 0x50?, 0x11054ba0240c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11054ba022a8 sp=0x11054ba02288 pc=0x58234e
+runtime.selectgo(0x11054ba02450, 0x11054ba02408, 0x30?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11054ba023d8 sp=0x11054ba022a8 pc=0x55e3a5
+github.com/prometheus/prometheus/promql.ActiveQueryTracker.Insert({{0x70784ec0a000, 0x4e21, 0x4e21}, 0x11051ad4c900, {0x548abc0, 0x11051b3a1e00}, {0x548b5e0, 0x11051bee41b0}, 0x14}, {0x54cec38, ...}, ...)
+	/workspaces/prompp/promql/query_logger.go:277 +0xd0 fp=0x11054ba02480 sp=0x11054ba023d8 pc=0x13bdb70
+github.com/prometheus/prometheus/promql.(*ActiveQueryTracker).Insert(0x0?, {0x54cec38?, 0x11054aa33e30?}, {0x11059d01fe00?, 0x110581ed37f0?})
+	<autogenerated>:1 +0xd3 fp=0x11054ba02540 sp=0x11054ba02480 pc=0x13c67f3
+github.com/prometheus/prometheus/promql.(*Engine).queueActive(0x11051b1ee500, {0x54cec38, 0x11054aa33e30}, 0x11059c3fb1f0)
+	/workspaces/prompp/promql/engine.go:702 +0xd7 fp=0x11054ba025a8 sp=0x11054ba02540 pc=0x138abb7
+github.com/prometheus/prometheus/promql.(*Engine).exec(0x11051b1ee500, {0x54cec38, 0x11054aa33e30}, 0x11059c3fb1f0)
+	/workspaces/prompp/promql/engine.go:668 +0x20e fp=0x11054ba027a8 sp=0x11054ba025a8 pc=0x1389c0e
+github.com/prometheus/prometheus/promql.(*query).Exec(0x11059c3fb1f0, {0x54cec38, 0x11054aa33da0})
+	/workspaces/prompp/promql/engine.go:247 +0x1b7 fp=0x11054ba02898 sp=0x11054ba027a8 pc=0x13872b7
+github.com/prometheus/prometheus/web/api/v1.(*API).query(0x11051bcb0420, 0x110569b7e280)
+	/workspaces/prompp/web/api/v1/api.go:472 +0x5fb fp=0x11054ba02a40 sp=0x11054ba02898 pc=0x308ad5b
+github.com/prometheus/prometheus/web/api/v1.(*API).query-fm(0x0?)
+	<autogenerated>:1 +0x34 fp=0x11054ba02ab0 sp=0x11054ba02a40 pc=0x309e7b4
+github.com/prometheus/prometheus/web/api/v1.(*API).Register.(*API).Register.func2.func5(0x54b9950?)
+	/workspaces/prompp/web/api/v1/api.go:363 +0xdb fp=0x11054ba02b30 sp=0x11054ba02ab0 pc=0x308987b
+github.com/prometheus/prometheus/web/api/v1.(*API).Register.(*API).Register.func2.(*API).Register.func1.func38({0x54b9950, 0x11057046f380}, 0x110569b7e280)
+	/workspaces/prompp/web/api/v1/api.go:338 +0x77 fp=0x11054ba02bf8 sp=0x11054ba02b30 pc=0x3089557
+net/http.HandlerFunc.ServeHTTP(0x707803532160?, {0x54b9950?, 0x11057046f380?}, 0x11054cde66e0?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba02c20 sp=0x11054ba02bf8 pc=0x820a89
+github.com/prometheus/prometheus/util/httputil.CompressionHandler.ServeHTTP({{0x548a140?, 0x11051c287938?}}, {0x707803532160?, 0x11054cde66e0?}, 0x110569b7e280)
+	/workspaces/prompp/util/httputil/compression.go:91 +0x63 fp=0x11054ba02c68 sp=0x11054ba02c20 pc=0x307cc63
+github.com/prometheus/prometheus/util/httputil.CompressionHandler.ServeHTTP-fm({0x707803532160?, 0x11054cde66e0?}, 0x11054cde8db0?)
+	<autogenerated>:1 +0x34 fp=0x11054ba02ca0 sp=0x11054ba02c68 pc=0x309e714
+github.com/prometheus/prometheus/web.(*Handler).testReady-fm.(*Handler).testReady.func1({0x707803532160, 0x11054cde66e0}, 0x110569b7e280)
+	/workspaces/prompp/web/web.go:611 +0x83 fp=0x11054ba02cf0 sp=0x11054ba02ca0 pc=0x30ace63
+net/http.HandlerFunc.ServeHTTP(0x707803532160?, {0x707803532160?, 0x11054cde66e0?}, 0x7e93ed8?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba02d18 sp=0x11054ba02cf0 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerResponseSize.func1({0x707803532160?, 0x11054cde6690?}, 0x110569b7e280)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:296 +0xcf fp=0x11054ba02e38 sp=0x11054ba02d18 pc=0x1f6156f
+net/http.HandlerFunc.ServeHTTP(0x707225d6d200?, {0x707803532160?, 0x11054cde6690?}, 0x11051b44e808?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba02e60 sp=0x11054ba02e38 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerDuration.func2({0x707803532160, 0x11054cde6690}, 0x110569b7e280)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:109 +0xc5 fp=0x11054ba02f88 sp=0x11054ba02e60 pc=0x1f60205
+net/http.HandlerFunc.ServeHTTP(0x54c4dc0?, {0x707803532160?, 0x11054cde6690?}, 0x110545ac0fe0?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba02fb0 sp=0x11054ba02f88 pc=0x820a89
+github.com/prometheus/client_golang/prometheus/promhttp.InstrumentHandlerCounter.func1({0x54c4dc0?, 0x1105288fd680?}, 0x110569b7e280)
+	/root/go/pkg/mod/github.com/prometheus/client_golang@v1.20.3/prometheus/promhttp/instrument_server.go:147 +0xc3 fp=0x11054ba030c0 sp=0x11054ba02fb0 pc=0x1f60f43
+github.com/prometheus/prometheus/web.(*Handler).Run.setPathWithPrefix.func5.1({0x54c4dc0, 0x1105288fd680}, 0x110569b7e140)
+	/workspaces/prompp/web/web.go:885 +0xb3 fp=0x11054ba03120 sp=0x11054ba030c0 pc=0x30aa933
+github.com/prometheus/common/route.(*Router).handle.func1({0x54c4dc0, 0x1105288fd680}, 0x11058696cc80, {0x0, 0x0, 0x0?})
+	/root/go/pkg/mod/github.com/prometheus/common@v0.59.1/route/route.go:83 +0x21d fp=0x11054ba031b8 sp=0x11054ba03120 pc=0x117cf7d
+github.com/julienschmidt/httprouter.(*Router).ServeHTTP(0x11051b3efda0, {0x54c4dc0, 0x1105288fd680}, 0x11058696cc80)
+	/root/go/pkg/mod/github.com/julienschmidt/httprouter@v1.3.0/router.go:387 +0x815 fp=0x11054ba032d8 sp=0x11054ba031b8 pc=0x1179f35
+github.com/prometheus/common/route.(*Router).ServeHTTP(0x0?, {0x54c4dc0?, 0x1105288fd680?}, 0x7?)
+	/root/go/pkg/mod/github.com/prometheus/common@v0.59.1/route/route.go:126 +0x25 fp=0x11054ba03308 sp=0x11054ba032d8 pc=0x117d585
+github.com/prometheus/prometheus/web.(*Handler).Run.StripPrefix.func7({0x54c4dc0, 0x1105288fd680}, 0x110539725a40)
+	/usr/local/go/src/net/http/server.go:2348 +0x2be fp=0x11054ba03390 sp=0x11054ba03308 pc=0x30aa6de
+net/http.HandlerFunc.ServeHTTP(0x11051bea8600?, {0x54c4dc0?, 0x1105288fd680?}, 0x51a41d?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba033b8 sp=0x11054ba03390 pc=0x820a89
+net/http.(*ServeMux).ServeHTTP(0x54cec38?, {0x54c4dc0, 0x1105288fd680}, 0x110539725a40)
+	/usr/local/go/src/net/http/server.go:2828 +0x1c7 fp=0x11054ba03408 sp=0x11054ba033b8 pc=0x822887
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp.(*middleware).serveHTTP(0x11051bea86c0, {0x54b6a00, 0x11051f66b770}, 0x110539725400, {0x548a1a0, 0x11051bea8600})
+	/root/go/pkg/mod/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.65.0/handler.go:178 +0x12a7 fp=0x11054ba03818 sp=0x11054ba03408 pc=0x111f3a7
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp.NewMiddleware.func1.1({0x54b6a00?, 0x11051f66b770?}, 0x7ffe60d89465?)
+	/root/go/pkg/mod/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.65.0/handler.go:66 +0x35 fp=0x11054ba03858 sp=0x11054ba03818 pc=0x111dc95
+net/http.HandlerFunc.ServeHTTP(0x110545ac18d0?, {0x54b6a00?, 0x11051f66b770?}, 0x110580bb1ce0?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba03880 sp=0x11054ba03858 pc=0x820a89
+github.com/prometheus/prometheus/web.(*Handler).Run.withStackTracer.func9({0x54b6a00?, 0x11051f66b770?}, 0x110580bb1ce0?)
+	/workspaces/prompp/web/web.go:106 +0x74 fp=0x11054ba038e0 sp=0x11054ba03880 pc=0x30aa0f4
+net/http.HandlerFunc.ServeHTTP(0x7ffe60d89465?, {0x54b6a00?, 0x11051f66b770?}, 0x7071e867ef08?)
+	/usr/local/go/src/net/http/server.go:2286 +0x29 fp=0x11054ba03908 sp=0x11054ba038e0 pc=0x820a89
+github.com/prometheus/exporter-toolkit/web.(*webHandler).ServeHTTP(0x11051b5f71c0, {0x54b6a00, 0x11051f66b770}, 0x110539725400)
+	/root/go/pkg/mod/github.com/prometheus/exporter-toolkit@v0.12.0/web/handler.go:102 +0x438 fp=0x11054ba03b60 sp=0x11054ba03908 pc=0xad2e38
+net/http.serverHandler.ServeHTTP({0x549e238?}, {0x54b6a00?, 0x11051f66b770?}, 0x1?)
+	/usr/local/go/src/net/http/server.go:3311 +0x8e fp=0x11054ba03b90 sp=0x11054ba03b60 pc=0x8411ce
+net/http.(*conn).serve(0x11054d2847e0, {0x54cec38, 0x11051b6403c0})
+	/usr/local/go/src/net/http/server.go:2073 +0x650 fp=0x11054ba03fb8 sp=0x11054ba03b90 pc=0x81eb70
+net/http.(*Server).Serve.gowrap3()
+	/usr/local/go/src/net/http/server.go:3464 +0x1f fp=0x11054ba03fe0 sp=0x11054ba03fb8 pc=0x82475f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11054ba03fe8 sp=0x11054ba03fe0 pc=0x58a201
+created by net/http.(*Server).Serve in goroutine 606
+	/usr/local/go/src/net/http/server.go:3464 +0x485
+
+goroutine 178 gp=0x11051b329a40 m=nil [runnable]:
+runtime.gopark(0x110576ea8f98?, 0x2?, 0x0?, 0x0?, 0x110576ea8f8c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110576ea8e28 sp=0x110576ea8e08 pc=0x58234e
+runtime.selectgo(0x110576ea8f98, 0x110576ea8f88, 0x0?, 0x0, 0x1?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x110576ea8f58 sp=0x110576ea8e28 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/cppbridge.(*CGOGC).run(0x11051b1a6cf0)
+	/workspaces/prompp/pp/go/cppbridge/c_garbage_collector.go:139 +0x8c fp=0x110576ea8fc8 sp=0x110576ea8f58 pc=0xb3f44c
+github.com/prometheus/prometheus/pp/go/cppbridge.NewCGOGC.gowrap1()
+	/workspaces/prompp/pp/go/cppbridge/c_garbage_collector.go:85 +0x17 fp=0x110576ea8fe0 sp=0x110576ea8fc8 pc=0xb3f077
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110576ea8fe8 sp=0x110576ea8fe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/cppbridge.NewCGOGC in goroutine 1
+	/workspaces/prompp/pp/go/cppbridge/c_garbage_collector.go:85 +0x3b2
+
+goroutine 179 gp=0x11051b329c20 m=nil [select]:
+runtime.gopark(0x11051b3ce780?, 0x2?, 0x29?, 0x2a?, 0x11051b3ce77c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3ce610 sp=0x11051b3ce5f0 pc=0x58234e
+runtime.selectgo(0x11051b3ce780, 0x11051b3ce778, 0x0?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3ce740 sp=0x11051b3ce610 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/mediator.(*Mediator).loop(0x11051b24a390)
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:92 +0xd7 fp=0x11051b3ce7c8 sp=0x11051b3ce740 pc=0x14d2bf7
+github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator.gowrap1()
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x17 fp=0x11051b3ce7e0 sp=0x11051b3ce7c8 pc=0x14d2977
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3ce7e8 sp=0x11051b3ce7e0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator in goroutine 1
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x138
+
+goroutine 180 gp=0x11051b336000 m=nil [select, 4 minutes]:
+runtime.gopark(0x11051b3cef80?, 0x2?, 0x40?, 0x17?, 0x11051b3cef7c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3cee10 sp=0x11051b3cedf0 pc=0x58234e
+runtime.selectgo(0x11051b3cef80, 0x11051b3cef78, 0x0?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3cef40 sp=0x11051b3cee10 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/mediator.(*Mediator).loop(0x11051b24a5a0)
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:92 +0xd7 fp=0x11051b3cefc8 sp=0x11051b3cef40 pc=0x14d2bf7
+github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator.gowrap1()
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x17 fp=0x11051b3cefe0 sp=0x11051b3cefc8 pc=0x14d2977
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3cefe8 sp=0x11051b3cefe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator in goroutine 1
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x138
+
+goroutine 181 gp=0x11051b3361e0 m=nil [select, 2 minutes]:
+runtime.gopark(0x11051b3cf780?, 0x2?, 0x40?, 0x17?, 0x11051b3cf77c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3cf610 sp=0x11051b3cf5f0 pc=0x58234e
+runtime.selectgo(0x11051b3cf780, 0x11051b3cf778, 0x0?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3cf740 sp=0x11051b3cf610 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/mediator.(*Mediator).loop(0x11051b24a810)
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:92 +0xd7 fp=0x11051b3cf7c8 sp=0x11051b3cf740 pc=0x14d2bf7
+github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator.gowrap1()
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x17 fp=0x11051b3cf7e0 sp=0x11051b3cf7c8 pc=0x14d2977
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3cf7e8 sp=0x11051b3cf7e0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator in goroutine 1
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x138
+
+goroutine 182 gp=0x11051b3363c0 m=nil [select]:
+runtime.gopark(0x11051b3cff80?, 0x2?, 0x40?, 0x17?, 0x11051b3cff7c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3cfe10 sp=0x11051b3cfdf0 pc=0x58234e
+runtime.selectgo(0x11051b3cff80, 0x11051b3cff78, 0x0?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3cff40 sp=0x11051b3cfe10 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/mediator.(*Mediator).loop(0x11051b24b440)
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:92 +0xd7 fp=0x11051b3cffc8 sp=0x11051b3cff40 pc=0x14d2bf7
+github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator.gowrap1()
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x17 fp=0x11051b3cffe0 sp=0x11051b3cffc8 pc=0x14d2977
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3cffe8 sp=0x11051b3cffe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator in goroutine 1
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x138
+
+goroutine 183 gp=0x11051b3365a0 m=nil [select]:
+runtime.gopark(0x11051b3d0780?, 0x2?, 0x40?, 0x17?, 0x11051b3d077c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3d0610 sp=0x11051b3d05f0 pc=0x58234e
+runtime.selectgo(0x11051b3d0780, 0x11051b3d0778, 0x50483704fbcab4e5?, 0x0, 0x2?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3d0740 sp=0x11051b3d0610 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/mediator.(*Mediator).loop(0x11051acbc390)
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:92 +0xd7 fp=0x11051b3d07c8 sp=0x11051b3d0740 pc=0x14d2bf7
+github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator.gowrap1()
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x17 fp=0x11051b3d07e0 sp=0x11051b3d07c8 pc=0x14d2977
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3d07e8 sp=0x11051b3d07e0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/mediator.NewMediator in goroutine 1
+	/workspaces/prompp/pp/go/storage/mediator/mediator.go:51 +0x138
+
+goroutine 190 gp=0x11051b336780 m=nil [select, 9 minutes]:
+runtime.gopark(0x11051b3eaf78?, 0x2?, 0x80?, 0x67?, 0x11051b3eaf4c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3eade0 sp=0x11051b3eadc0 pc=0x58234e
+runtime.selectgo(0x11051b3eaf78, 0x11051b3eaf48, 0x11051b3eaf60?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3eaf10 sp=0x11051b3eade0 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/hatracker.(*HighAvailabilityTracker).cleanup(0x11051b312c60)
+	/workspaces/prompp/pp/go/hatracker/high_availability_tracker.go:90 +0x11e fp=0x11051b3eafc8 sp=0x11051b3eaf10 pc=0x14c485e
+github.com/prometheus/prometheus/pp/go/hatracker.NewHighAvailabilityTracker.gowrap1()
+	/workspaces/prompp/pp/go/hatracker/high_availability_tracker.go:79 +0x17 fp=0x11051b3eafe0 sp=0x11051b3eafc8 pc=0x14c4717
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3eafe8 sp=0x11051b3eafe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/hatracker.NewHighAvailabilityTracker in goroutine 1
+	/workspaces/prompp/pp/go/hatracker/high_availability_tracker.go:79 +0x4bb
+
+goroutine 698 gp=0x11051b336960 m=nil [chan receive]:
+runtime.gopark(0x70784ec91a00?, 0x5000000000070?, 0x18?, 0xa2?, 0x70784ec91a00?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052be0d7a8 sp=0x11052be0d788 pc=0x58234e
+runtime.chanrecv(0x1105334ad5e0, 0x11051e1c3898, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11052be0d820 sp=0x11052be0d7a8 pc=0x5107ae
+runtime.chanrecv2(0x1105a0374b60?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0x11052be0d848 sp=0x11052be0d820 pc=0x5102f2
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).write(0x11051e1c3f28?, {0x54cec70, 0x11051b426460}, 0x110538b800b0)
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:186 +0x186 fp=0x11052be0d8b8 sp=0x11052be0d848 pc=0x1270146
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).run(0x11051c763d10, {0x54cec70, 0x11051b426460})
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:100 +0x4ed fp=0x11052be0df78 sp=0x11052be0d8b8 pc=0x126fbed
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run(0x11051bee30b0, {0x54cec70?, 0x11051c15a000?})
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:155 +0xa5 fp=0x11052be0dfb8 sp=0x11052be0df78 pc=0x1269425
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run.gowrap1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0x1f fp=0x11052be0dfe0 sp=0x11052be0dfb8 pc=0x12692bf
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052be0dfe8 sp=0x11052be0dfe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run in goroutine 453
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0xe4e
+
+goroutine 253 gp=0x11051b482960 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x3?, 0x0?, 0x0?, 0x0?, 0x11051b0578e8?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac15718 sp=0x11051ac156f8 pc=0x58234e
+runtime.chanrecv(0x11051bc48ee0, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051ac15790 sp=0x11051ac15718 pc=0x5107ae
+runtime.chanrecv1(0x11051b057dc0?, 0x11051b057880?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051ac157b8 sp=0x11051ac15790 pc=0x5102d2
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run.func1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:152 +0x26 fp=0x11051ac157e0 sp=0x11051ac157b8 pc=0x12694a6
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac157e8 sp=0x11051ac157e0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run in goroutine 776
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:151 +0x89
+
+goroutine 295 gp=0x11051b054f00 m=nil [cleanup wait]:
+runtime.gopark(0x707243c14c00?, 0x110528d63790?, 0x95?, 0x68?, 0x707243c14c00?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110528d63768 sp=0x110528d63748 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x7e76580)
+	/usr/local/go/src/runtime/mcleanup.go:522 +0xd4 fp=0x110528d637a0 sp=0x110528d63768 pc=0x51e5f4
+runtime.runCleanups()
+	/usr/local/go/src/runtime/mcleanup.go:718 +0x45 fp=0x110528d637e0 sp=0x110528d637a0 pc=0x51ec65
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110528d637e8 sp=0x110528d637e0 pc=0x58a201
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+	/usr/local/go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 659 gp=0x11051b0550e0 m=nil [select]:
+runtime.gopark(0x11052cc99448?, 0x2?, 0x0?, 0x0?, 0x11052cc9940c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11052cc992a8 sp=0x11052cc99288 pc=0x58234e
+runtime.selectgo(0x11052cc99448, 0x11052cc99408, 0x11052cc99450?, 0x0, 0x7077fab3e1e0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11052cc993d8 sp=0x11052cc992a8 pc=0x55e3a5
+golang.org/x/sync/semaphore.(*Weighted).Acquire(0x11054d304ff0, {0x54cec70, 0x11051b618000}, 0x32)
+	/root/go/pkg/mod/golang.org/x/sync@v0.21.0/semaphore/semaphore.go:74 +0x332 fp=0x11052cc99488 sp=0x11052cc993d8 pc=0x119de12
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*Iterator).SendMessage.func1()
+	/workspaces/prompp/pp/go/storage/remotewriter/iterator.go:371 +0x2cf fp=0x11052cc995f0 sp=0x11052cc99488 pc=0x126750f
+github.com/cenkalti/backoff/v4.RetryNotifyWithTimer.Operation.withEmptyData.func1()
+	/root/go/pkg/mod/github.com/cenkalti/backoff/v4@v4.3.0/retry.go:18 +0x13 fp=0x11052cc99600 sp=0x11052cc995f0 pc=0x116a4d3
+github.com/cenkalti/backoff/v4.doRetryNotify[...](0x11052cc99728?, {0x549fa90, 0x11059dc1c420}, 0x0, {0x0, 0x0?})
+	/root/go/pkg/mod/github.com/cenkalti/backoff/v4@v4.3.0/retry.go:88 +0x11c fp=0x11052cc996f0 sp=0x11052cc99600 pc=0x116a7fc
+github.com/cenkalti/backoff/v4.RetryNotifyWithTimer(0x11052cc99820?, {0x549fa90?, 0x11059dc1c420?}, 0x799ceec?, {0x0?, 0x0?})
+	/root/go/pkg/mod/github.com/cenkalti/backoff/v4@v4.3.0/retry.go:61 +0x56 fp=0x11052cc99748 sp=0x11052cc996f0 pc=0x116a456
+github.com/cenkalti/backoff/v4.RetryNotify(...)
+	/root/go/pkg/mod/github.com/cenkalti/backoff/v4@v4.3.0/retry.go:49
+github.com/cenkalti/backoff/v4.Retry(...)
+	/root/go/pkg/mod/github.com/cenkalti/backoff/v4@v4.3.0/retry.go:38
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*Iterator).SendMessage(0x11053d392dc0, {0x54cec70, 0x11051b618000}, 0x1105503e5020)
+	/workspaces/prompp/pp/go/storage/remotewriter/iterator.go:336 +0x2cf fp=0x11052cc99848 sp=0x11052cc99748 pc=0x12670af
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).write(0x11051f5ebf28?, {0x54cec70, 0x11051b618000}, 0x11053d392dc0)
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:191 +0x1d8 fp=0x11052cc998b8 sp=0x11052cc99848 pc=0x1270198
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoop).run(0x11051c762f50, {0x54cec70, 0x11051b618000})
+	/workspaces/prompp/pp/go/storage/remotewriter/writeloop.go:100 +0x4ed fp=0x11052cc99f78 sp=0x11052cc998b8 pc=0x126fbed
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run(0x11051bee2bb8, {0x54cec70?, 0x11051c15a000?})
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:155 +0xa5 fp=0x11052cc99fb8 sp=0x11052cc99f78 pc=0x1269425
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run.gowrap1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0x1f fp=0x11052cc99fe0 sp=0x11052cc99fb8 pc=0x12692bf
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11052cc99fe8 sp=0x11052cc99fe0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run in goroutine 453
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:114 +0xe4e
+
+goroutine 1050 gp=0x11051b0552c0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x1256331?, 0x7e75420?, 0x0?, 0x0?, 0x1256360?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ac14718 sp=0x11051ac146f8 pc=0x58234e
+runtime.chanrecv(0x11051bc497a0, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051ac14790 sp=0x11051ac14718 pc=0x5107ae
+runtime.chanrecv1(0x125611f?, 0x54899a0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051ac147b8 sp=0x11051ac14790 pc=0x5102d2
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run.func1()
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:152 +0x26 fp=0x11051ac147e0 sp=0x11051ac147b8 pc=0x12694a6
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ac147e8 sp=0x11051ac147e0 pc=0x58a201
+created by github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*writeLoopRunner).run in goroutine 893
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:151 +0x89
+
+goroutine 436 gp=0x11051b0554a0 m=nil [select, 839 minutes, locked to thread]:
+runtime.gopark(0x11051b3ca7a8?, 0x2?, 0x1?, 0x54?, 0x11051b3ca794?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3ca628 sp=0x11051b3ca608 pc=0x58234e
+runtime.selectgo(0x11051b3ca7a8, 0x11051b3ca790, 0x0?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b3ca758 sp=0x11051b3ca628 pc=0x55e3a5
+runtime.ensureSigM.func1()
+	/usr/local/go/src/runtime/signal_unix.go:1091 +0x188 fp=0x11051b3ca7e0 sp=0x11051b3ca758 pc=0x57c1c8
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3ca7e8 sp=0x11051b3ca7e0 pc=0x58a201
+created by runtime.ensureSigM in goroutine 1
+	/usr/local/go/src/runtime/signal_unix.go:1074 +0xc5
+
+goroutine 123 gp=0x11051b482b40 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x0?, 0x4831740?, 0x98?, 0xf9?, 0x11051b0866b8?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b086628 sp=0x11051b086608 pc=0x58234e
+runtime.chanrecv(0x11051c2164d0, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b0866a0 sp=0x11051b086628 pc=0x5107ae
+runtime.chanrecv1(0x11051b3a1040?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b0866c8 sp=0x11051b0866a0 pc=0x5102d2
+github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).Run(0x11051bb2d140)
+	/workspaces/prompp/discovery/legacymanager/manager.go:119 +0x70 fp=0x11051b086700 sp=0x11051b0866c8 pc=0x1501a30
+main.main.func15()
+	/workspaces/prompp/cmd/prometheus/main.go:1391 +0x32 fp=0x11051b086788 sp=0x11051b086700 pc=0x30c11f2
+github.com/oklog/run.(*Group).Run.func1({0x11051b7b1110?, 0x11051bc188a0?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b0867c0 sp=0x11051b086788 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b0867e0 sp=0x11051b0867c0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b0867e8 sp=0x11051b0867e0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 124 gp=0x11051b482d20 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x11052008c310?, 0x1?, 0x20?, 0x0?, 0x8?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x110522d21e58 sp=0x110522d21e38 pc=0x58234e
+runtime.chanrecv(0x11051ac4f180, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x110522d21ed0 sp=0x110522d21e58 pc=0x5107ae
+runtime.chanrecv1(0x11051ac4f110?, 0x110547215ca0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x110522d21ef8 sp=0x110522d21ed0 pc=0x5102d2
+github.com/prometheus/prometheus/pp-pkg/rules.(*Manager).Run(0x11051bed0f60)
+	/workspaces/prompp/pp-pkg/rules/manager.go:177 +0xfa fp=0x110522d21f60 sp=0x110522d21ef8 pc=0x14a6e5a
+main.main.func17()
+	/workspaces/prompp/cmd/prometheus/main.go:1406 +0x2f fp=0x110522d21f88 sp=0x110522d21f60 pc=0x30c10af
+github.com/oklog/run.(*Group).Run.func1({0x11051c2142d0?, 0x11051bc0e360?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x110522d21fc0 sp=0x110522d21f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x110522d21fe0 sp=0x110522d21fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x110522d21fe8 sp=0x110522d21fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 125 gp=0x11051b482f00 m=nil [select]:
+runtime.gopark(0x11051b0876b8?, 0x2?, 0x2?, 0x0?, 0x11051b0876ac?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b087548 sp=0x11051b087528 pc=0x58234e
+runtime.selectgo(0x11051b0876b8, 0x11051b0876a8, 0x0?, 0x0, 0x2?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b087678 sp=0x11051b087548 pc=0x55e3a5
+github.com/prometheus/prometheus/pp-pkg/scrape.(*Manager).Run(0x11051bb117c0, 0x11051bc49490)
+	/workspaces/prompp/pp-pkg/scrape/manager.go:154 +0xd6 fp=0x11051b0876e8 sp=0x11051b087678 pc=0x14aba56
+main.main.func19()
+	/workspaces/prompp/cmd/prometheus/main.go:1424 +0x72 fp=0x11051b087788 sp=0x11051b0876e8 pc=0x30c0f52
+github.com/oklog/run.(*Group).Run.func1({0x11051b0b0440?, 0x11051bc188c0?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b0877c0 sp=0x11051b087788 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b0877e0 sp=0x11051b0877c0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b0877e8 sp=0x11051b0877e0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 126 gp=0x11051b4830e0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x4ab3480?, 0x11051abe6120?, 0x45?, 0xf1?, 0x10d9200?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b087e90 sp=0x11051b087e70 pc=0x58234e
+runtime.chanrecv(0x11051ac4f0a0, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b087f08 sp=0x11051b087e90 pc=0x5107ae
+runtime.chanrecv1(0x7076537cf6d8?, 0x1105257ab750?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b087f30 sp=0x11051b087f08 pc=0x5102d2
+github.com/prometheus/prometheus/tracing.(*Manager).Run(0x11051be63320)
+	/workspaces/prompp/tracing/tracing.go:67 +0xd5 fp=0x11051b087f60 sp=0x11051b087f30 pc=0x306bd55
+main.main.func21()
+	/workspaces/prompp/cmd/prometheus/main.go:1443 +0x2f fp=0x11051b087f88 sp=0x11051b087f60 pc=0x30c0dcf
+github.com/oklog/run.(*Group).Run.func1({0x11051c2142e8?, 0x11051bc0e370?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b087fc0 sp=0x11051b087f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b087fe0 sp=0x11051b087fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b087fe8 sp=0x11051b087fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 127 gp=0x11051b4832c0 m=nil [select, 839 minutes]:
+runtime.gopark(0x11051b088708?, 0x3?, 0x70?, 0x85?, 0x11051b088672?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b0884f0 sp=0x11051b0884d0 pc=0x58234e
+runtime.selectgo(0x11051b088708, 0x11051b08866c, 0x0?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051b088620 sp=0x11051b0884f0 pc=0x55e3a5
+main.main.func23()
+	/workspaces/prompp/cmd/prometheus/main.go:1464 +0x125 fp=0x11051b088788 sp=0x11051b088620 pc=0x30c09c5
+github.com/oklog/run.(*Group).Run.func1({0x11051c212a80?, 0x11051ba04080?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b0887c0 sp=0x11051b088788 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b0887e0 sp=0x11051b0887c0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b0887e8 sp=0x11051b0887e0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 128 gp=0x11051b4834a0 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x2?, 0x11053fbf5e90?, 0x9e?, 0x20?, 0x110547215c00?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ba80e00 sp=0x11051ba80de0 pc=0x58234e
+runtime.chanrecv(0x11051c216310, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051ba80e78 sp=0x11051ba80e00 pc=0x5107ae
+runtime.chanrecv1(0x110540ccbb30?, 0x110547215c20?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051ba80ea0 sp=0x11051ba80e78 pc=0x5102d2
+main.main.func25()
+	/workspaces/prompp/cmd/prometheus/main.go:1501 +0x24c fp=0x11051ba80f88 sp=0x11051ba80ea0 pc=0x30c082c
+github.com/oklog/run.(*Group).Run.func1({0x11051c212ae0?, 0x11051ba040c0?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051ba80fc0 sp=0x11051ba80f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051ba80fe0 sp=0x11051ba80fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ba80fe8 sp=0x11051ba80fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 129 gp=0x11051b483680 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b089ec8 sp=0x11051b089ea8 pc=0x58234e
+runtime.chanrecv(0x11051c216380, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b089f40 sp=0x11051b089ec8 pc=0x5107ae
+runtime.chanrecv1(0x0?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b089f68 sp=0x11051b089f40 pc=0x5102d2
+main.main.func27()
+	/workspaces/prompp/cmd/prometheus/main.go:1517 +0x19 fp=0x11051b089f88 sp=0x11051b089f68 pc=0x30c0579
+github.com/oklog/run.(*Group).Run.func1({0x11051ba040d0?, 0x11051bb4a000?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b089fc0 sp=0x11051b089f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b089fe0 sp=0x11051b089fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b089fe8 sp=0x11051b089fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 450 gp=0x11051b483860 m=nil [select, 839 minutes]:
+runtime.gopark(0x11051ba7de88?, 0x2?, 0xe0?, 0xd4?, 0x11051ba7ddac?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051be83c20 sp=0x11051be83c00 pc=0x58234e
+runtime.selectgo(0x11051be83e88, 0x11051ba7dda8, 0x0?, 0x0, 0x11051ba7dea8?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051be83d50 sp=0x11051be83c20 pc=0x55e3a5
+github.com/prometheus/prometheus/web.(*Handler).Run(0x11051bb1d040, {0x54cec70, 0x11051b3a0960}, {0x11051bb036d0, 0x1, 0x1}, {0x7ffe60d89465, 0x2a})
+	/workspaces/prompp/web/web.go:703 +0xa85 fp=0x11051be83f28 sp=0x11051be83d50 pc=0x30a9ee5
+main.main.func31()
+	/workspaces/prompp/cmd/prometheus/main.go:1588 +0x3a fp=0x11051be83f88 sp=0x11051be83f28 pc=0x30bf85a
+github.com/oklog/run.(*Group).Run.func1({0x11051b050a80?, 0x11051ba040e0?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051be83fc0 sp=0x11051be83f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051be83fe0 sp=0x11051be83fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051be83fe8 sp=0x11051be83fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 451 gp=0x11051b483a40 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x70784eca7a00?, 0x4000000000060?, 0xd8?, 0x13?, 0x70784eca7a00?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3e8608 sp=0x11051b3e85e8 pc=0x58234e
+runtime.chanrecv(0x11051b0742a0, 0x11051b3e8708, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b3e8680 sp=0x11051b3e8608 pc=0x5107ae
+runtime.chanrecv1(0x0?, 0x6?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b3e86a8 sp=0x11051b3e8680 pc=0x5102d2
+github.com/oklog/run.(*Group).Run(0x11051b312840)
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:43 +0x155 fp=0x11051b3e8728 sp=0x11051b3e86a8 pc=0xa57a35
+github.com/prometheus/prometheus/pp/go/storage.(*Manager).Run(0x0?)
+	/workspaces/prompp/pp/go/storage/manager.go:247 +0x4d fp=0x11051b3e8770 sp=0x11051b3e8728 pc=0x14d95ed
+main.main.func33()
+	/workspaces/prompp/cmd/prometheus/main.go:1603 +0x17 fp=0x11051b3e8788 sp=0x11051b3e8770 pc=0x30bf7d7
+github.com/oklog/run.(*Group).Run.func1({0x11051ba040f0?, 0x11051bb4a030?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b3e87c0 sp=0x11051b3e8788 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b3e87e0 sp=0x11051b3e87c0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3e87e8 sp=0x11051b3e87e0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 452 gp=0x11051b483c20 m=nil [chan receive, 839 minutes]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3e8eb8 sp=0x11051b3e8e98 pc=0x58234e
+runtime.chanrecv(0x11051b1c8000, 0x11051b3e8f68, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x4ae fp=0x11051b3e8f30 sp=0x11051b3e8eb8 pc=0x5107ae
+runtime.chanrecv1(0x0?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0x11051b3e8f58 sp=0x11051b3e8f30 pc=0x5102d2
+main.main.func35()
+	/workspaces/prompp/cmd/prometheus/main.go:1618 +0x25 fp=0x11051b3e8f88 sp=0x11051b3e8f58 pc=0x30c7665
+github.com/oklog/run.(*Group).Run.func1({0x5467be0?, 0x11051c1191e8?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b3e8fc0 sp=0x11051b3e8f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b3e8fe0 sp=0x11051b3e8fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3e8fe8 sp=0x11051b3e8fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 453 gp=0x11051b337680 m=nil [select, 839 minutes]:
+runtime.gopark(0x11051ba7ba78?, 0x2?, 0xe0?, 0xf?, 0x11051ba7b68c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ba7b340 sp=0x11051ba7b320 pc=0x58234e
+runtime.selectgo(0x11051ba7ba78, 0x11051ba7b688, 0x11051b7871c0?, 0x0, 0xc?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051ba7b470 sp=0x11051ba7b340 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/remotewriter.(*RemoteWriter).Run(0x11051b312960, {0x54cec70, 0x11051c15a000})
+	/workspaces/prompp/pp/go/storage/remotewriter/remotewriter.go:85 +0x211 fp=0x11051ba7bf60 sp=0x11051ba7b470 pc=0x1268591
+main.main.func37()
+	/workspaces/prompp/cmd/prometheus/main.go:1636 +0x1f fp=0x11051ba7bf88 sp=0x11051ba7bf60 pc=0x30bf1bf
+github.com/oklog/run.(*Group).Run.func1({0x11051b788040?, 0x11051ba04180?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051ba7bfc0 sp=0x11051ba7bf88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051ba7bfe0 sp=0x11051ba7bfc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ba7bfe8 sp=0x11051ba7bfe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 454 gp=0x11051b337860 m=nil [select]:
+runtime.gopark(0x11051ba55ec8?, 0x4?, 0x70?, 0x0?, 0x11051ba55e8c?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051ba55d20 sp=0x11051ba55d00 pc=0x58234e
+runtime.selectgo(0x11051ba55ec8, 0x11051ba55e84, 0x0?, 0x0, 0x4?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051ba55e50 sp=0x11051ba55d20 pc=0x55e3a5
+github.com/prometheus/prometheus/pp/go/storage/catalog.(*GC).Run(0x11051b073420, {0x54cec70, 0x11051c15a050})
+	/workspaces/prompp/pp/go/storage/catalog/gc.go:146 +0x235 fp=0x11051ba55f60 sp=0x11051ba55e50 pc=0x1195ad5
+main.main.func39()
+	/workspaces/prompp/cmd/prometheus/main.go:1646 +0x1f fp=0x11051ba55f88 sp=0x11051ba55f60 pc=0x30bf15f
+github.com/oklog/run.(*Group).Run.func1({0x11051b788080?, 0x11051ba041a0?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051ba55fc0 sp=0x11051ba55f88 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051ba55fe0 sp=0x11051ba55fc0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051ba55fe8 sp=0x11051ba55fe0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 455 gp=0x11051b337a40 m=nil [sync.WaitGroup.Wait, 839 minutes]:
+runtime.gopark(0x11051b3ea620?, 0x519225?, 0x50?, 0xe1?, 0x528c80?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051b3ea5c0 sp=0x11051b3ea5a0 pc=0x58234e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.semacquire1(0x1105400198c8, 0x0, 0x1, 0x0, 0x19)
+	/usr/local/go/src/runtime/sema.go:192 +0x232 fp=0x11051b3ea628 sp=0x11051b3ea5c0 pc=0x55f232
+sync.runtime_SemacquireWaitGroup(0x11053eefc468?, 0x40?)
+	/usr/local/go/src/runtime/sema.go:114 +0x2e fp=0x11051b3ea660 sp=0x11051b3ea628 pc=0x583c4e
+sync.(*WaitGroup).Wait(0x1105400198c0)
+	/usr/local/go/src/sync/waitgroup.go:206 +0x85 fp=0x11051b3ea688 sp=0x11051b3ea660 pc=0x595645
+github.com/prometheus/prometheus/notifier.(*Manager).Run(0x11051b057030, 0x11051bc49570)
+	/workspaces/prompp/notifier/notifier.go:331 +0xf1 fp=0x11051b3ea6f8 sp=0x11051b3ea688 pc=0x14914b1
+main.main.func41()
+	/workspaces/prompp/cmd/prometheus/main.go:1664 +0x6f fp=0x11051b3ea788 sp=0x11051b3ea6f8 pc=0x30bf04f
+github.com/oklog/run.(*Group).Run.func1({0x11051b050ac0?, 0x11051ba041e0?})
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29 fp=0x11051b3ea7c0 sp=0x11051b3ea788 pc=0xa57b69
+github.com/oklog/run.(*Group).Run.gowrap1()
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:39 +0x1f fp=0x11051b3ea7e0 sp=0x11051b3ea7c0 pc=0xa57b1f
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051b3ea7e8 sp=0x11051b3ea7e0 pc=0x58a201
+created by github.com/oklog/run.(*Group).Run in goroutine 1
+	/root/go/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37 +0x67
+
+goroutine 456 gp=0x11051b337c20 m=nil [select]:
+runtime.gopark(0x11054addaf58?, 0x2?, 0x60?, 0xf0?, 0x11054addaf34?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11054addadc8 sp=0x11054addada8 pc=0x58234e
+runtime.selectgo(0x11054addaf58, 0x11054addaf30, 0x2?, 0x0, 0x0?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11054addaef8 sp=0x11054addadc8 pc=0x55e3a5
+github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).sender(0x11051bb2d080)
+	/workspaces/prompp/discovery/legacymanager/manager.go:209 +0xc5 fp=0x11054addafc8 sp=0x11054addaef8 pc=0x1502a25
+github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).Run.gowrap1()
+	/workspaces/prompp/discovery/legacymanager/manager.go:118 +0x17 fp=0x11054addafe0 sp=0x11054addafc8 pc=0x1501ab7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11054addafe8 sp=0x11054addafe0 pc=0x58a201
+created by github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).Run in goroutine 122
+	/workspaces/prompp/discovery/legacymanager/manager.go:118 +0x56
+
+goroutine 457 gp=0x11051ace10e0 m=nil [select]:
+runtime.gopark(0x11051c872f58?, 0x2?, 0x60?, 0xf0?, 0x11051c872f34?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x11051c872dc8 sp=0x11051c872da8 pc=0x58234e
+runtime.selectgo(0x11051c872f58, 0x11051c872f30, 0x2?, 0x0, 0x5dcd462d94f02fa9?, 0x1)
+	/usr/local/go/src/runtime/select.go:351 +0xaa5 fp=0x11051c872ef8 sp=0x11051c872dc8 pc=0x55e3a5
+github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).sender(0x11051bb2d140)
+	/workspaces/prompp/discovery/legacymanager/manager.go:209 +0xc5 fp=0x11051c872fc8 sp=0x11051c872ef8 pc=0x1502a25
+github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).Run.gowrap1()
+	/workspaces/prompp/discovery/legacymanager/manager.go:118 +0x17 fp=0x11051c872fe0 sp=0x11051c872fc8 pc=0x1501ab7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x11051c872fe8 sp=0x11051c872fe0 pc=0x58a201
+created by github.com/prometheus/prometheus/discovery/legacymanager.(*Manager).Run in goroutine 123
+	/workspaces/prompp/discovery/legacymanager/manager.go:118 +0x56
+
+goroutine 109 gp=0x11051beee000 m=nil [runnable (scan)]:
+runtime.sigpanic()
+	/usr/local/go/src/runtime/signal_unix.go:912 +0x3e5 fp=0x7071f75fd3e8 sp=0x7071f75fd3e0 pc=0x5847c5

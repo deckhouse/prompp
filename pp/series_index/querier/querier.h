@@ -66,6 +66,7 @@ class Querier {
     PROMPP_ALWAYS_INLINE void set_series_id_list(SeriesIdContainer&& ids, uint32_t size) noexcept {
       series_ids = std::move(ids);
       series_ids.resize(size);
+      series_ids.shrink_to_fit();
       status = series_ids.empty() ? QuerierStatus::kNoMatch : QuerierStatus::kMatch;
     }
 

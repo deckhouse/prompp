@@ -26,9 +26,7 @@ func NewHeadEncodedSegment(b []byte, samples uint32) *HeadEncodedSegment {
 		samples: samples,
 	}
 
-	runtime.SetFinalizer(s, func(s *HeadEncodedSegment) {
-		freeBytes(s.buf)
-	})
+	runtime.AddCleanup(s, freeBytes, s.buf)
 
 	return s
 }
@@ -81,9 +79,7 @@ func NewHeadWalEncoder(shardID uint16, logShards uint8, lss *LabelSetStorage) *H
 		encoder: headWalEncoderCtor(shardID, logShards, lss.Pointer()),
 	}
 
-	runtime.SetFinalizer(e, func(e *HeadWalEncoder) {
-		headWalEncoderDtor(e.encoder)
-	})
+	runtime.AddCleanup(e, headWalEncoderDtor, e.encoder)
 
 	return e
 }
@@ -131,9 +127,7 @@ func NewHeadWalDecoder(lss *LabelSetStorage, encoderVersion uint8) *HeadWalDecod
 		decoder: headWalDecoderCtor(lss.Pointer(), encoderVersion),
 	}
 
-	runtime.SetFinalizer(d, func(d *HeadWalDecoder) {
-		headWalDecoderDtor(d.decoder)
-	})
+	runtime.AddCleanup(d, headWalDecoderDtor, d.decoder)
 
 	return d
 }
@@ -172,9 +166,7 @@ func (d *HeadWalDecoder) CreateEncoder() (*HeadWalEncoder, error) {
 		encoder: encoder,
 	}
 
-	runtime.SetFinalizer(e, func(e *HeadWalEncoder) {
-		headWalEncoderDtor(e.encoder)
-	})
+	runtime.AddCleanup(e, headWalEncoderDtor, e.encoder)
 
 	return e, nil
 }
