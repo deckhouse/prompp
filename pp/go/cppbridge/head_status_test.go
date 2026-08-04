@@ -22,7 +22,7 @@ func TestHeadStatusSuite(t *testing.T) {
 }
 
 func (s *HeadStatusSuite) SetupTest() {
-	s.dataStorage = cppbridge.NewDataStorage(false)
+	s.dataStorage = cppbridge.NewDataStorage(false, false)
 	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
 	s.lssStorage = cppbridge.NewQueryableLssStorage()
 	s.limit = 10
