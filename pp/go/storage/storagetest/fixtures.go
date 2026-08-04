@@ -90,7 +90,8 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeS
 			context.Background(),
 			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
 			state,
-			true)
+			true,
+		)
 		s.NoError(err)
 	}
 }
@@ -285,6 +286,8 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}
+
+	runtime.KeepAlive(lssQueryResult)
 
 	return querier.NewInstantSeriesSet(snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
