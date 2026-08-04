@@ -1522,7 +1522,7 @@ func primitivesGroupSeriesByLabelNamesFree(res [][]uint32) {
 	)
 }
 
-func primitivesLabelSetMatchesFree(result *lssQueryResultCPP) {
+func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_query_result_free,
