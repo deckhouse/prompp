@@ -300,6 +300,7 @@ type segmentSamplesStorageListCPP struct {
 
 func freeSegmentSamplesStorageListCPP(s segmentSamplesStorageListCPP) {
 	walSegmentSamplesStorageListDtor(&s)
+	runtime.KeepAlive(s)
 }
 
 //
