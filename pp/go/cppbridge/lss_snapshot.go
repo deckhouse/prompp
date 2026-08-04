@@ -168,6 +168,7 @@ func newLSSQueryResult(
 		labelSetLengths: labelSetLengths,
 		status:          status,
 	}
+	lsQueryResultCreate.Inc()
 
 	if status != LSSQueryStatusMatch {
 		lqr.Close()
@@ -194,6 +195,7 @@ func (r *LSSQueryResult) Close() {
 	primitivesLabelSetMatchesFree(r)
 	r.matches = nil
 	r.labelSetLengths = nil
+	lsQueryResultFinalize.Inc()
 }
 
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
