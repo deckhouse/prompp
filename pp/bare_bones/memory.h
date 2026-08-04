@@ -404,7 +404,14 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr::ControlBlock::ItemCounter items_count() const noexcept { return data_.items_count(); }
-  PROMPP_ALWAYS_INLINE void set_items_count(SharedPtr::ControlBlock::ItemCounter count) noexcept { data_.set_items_count(count); }
+  PROMPP_ALWAYS_INLINE void set_items_count(SharedPtr::ControlBlock::ItemCounter count) noexcept {
+    // items_count lives in the shared control block. Growing/shrinking the logical size
+    // with spare capacity must COW first; otherwise SharedSpan viewers (e.g. post-shrink
+    // snapshot resolvers) observe the writer's new size while their owned side tables
+    // (symbols_tables_) stay frozen — leading to OOB in for_each_value_id.
+    ensure_unique();
+    data_.set_items_count(count);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return size_ * sizeof(T) + (data_.get() != nullptr ? sizeof(SharedPtr::kControlBlockSize) : 0);
@@ -427,6 +434,12 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
  private:
   SharedPtr data_{};
   uint32_t size_{};
+
+  PROMPP_ALWAYS_INLINE void ensure_unique() noexcept {
+    if (data_.get() != nullptr && !data_.non_atomic_is_unique()) [[unlikely]] {
+      data_.reallocate(size_, size_);
+    }
+  }
 };
 
 template <template <class> class ControlBlock, class T>

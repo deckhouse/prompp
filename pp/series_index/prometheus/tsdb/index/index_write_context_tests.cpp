@@ -1,6 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -117,6 +118,55 @@ TEST_F(IndexWriteContextFixture, ResolvesRefsForSeriesAddedAfterShrink) {
   EXPECT_EQ(new_name_ref, snapshot_name_ref);
   EXPECT_NE(new_value_ref, snapshot_value_ref);
   EXPECT_THAT(CollectSymbols(), testing::ElementsAre("", "a", "b", "c", "d", "job"));
+}
+
+// Production rotate path: resolve snapshot shares SharedSpans with the *destination*
+// LSS, which keeps receiving new series (and new label names) after shrink. Growing
+// destination with spare SharedVector capacity must not inflate the frozen snapshot
+// keys past symbols_tables_ (SIGSEGV in for_each_value_id / IndexWriteContext).
+TEST_F(IndexWriteContextFixture, IndexWriterSurvivesDestinationGrowthAfterSharedResolveSnapshot) {
+  // Arrange
+  Lss destination;
+  BareBones::Vector<uint32_t> dst_src_ids_mapping;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), destination, dst_src_ids_mapping);
+  copier.copy_added_series_and_build_indexes();
+
+  const uint32_t shrink_boundary = lss_.next_item_index();
+  lss_.set_pending_shrink_boundary(shrink_boundary);
+  const ReadonlyLss resolve_snapshot(destination);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
+
+  // Act: mutate destination like the new head after rotation (new label names).
+  destination.reserve(64);
+  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"region", "eu"}});
+  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"region", "us"}});
+  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "a"}});
+  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "b"}});
+  destination.find_or_emplace(LabelViewSet{{"env", "prod"}, {"job", "a"}});
+
+  // #region agent log
+  {
+    const auto snap_keys = resolve_snapshot.data_view().keys().size();
+    const auto dest_keys = destination.data_view().keys().size();
+    if (FILE* f = std::fopen("/home/veles/work/code/src/github.com/deckhouse/prompp/.cursor/debug-49406c.log", "a")) {
+      std::fprintf(f,
+                   "{\"sessionId\":\"49406c\",\"runId\":\"post-fix\",\"hypothesisId\":\"A\",\"location\":\"index_write_context_tests.cpp\","
+                   "\"message\":\"keys after destination growth\",\"data\":{\"snapshot_keys\":%u,\"destination_keys\":%u,\"cow_ok\":%s},\"timestamp\":0}\n",
+                   static_cast<unsigned>(snap_keys), static_cast<unsigned>(dest_keys), snap_keys < dest_keys ? "true" : "false");
+      std::fclose(f);
+    }
+    // Snapshot keys must stay frozen while destination grows (the gdb crash had snapshot keys > symbols_tables).
+    EXPECT_LT(snap_keys, dest_keys);
+  }
+  // #endregion
+
+  // Assert: building IndexWriteContext iterates snapshot values without OOB.
+  EXPECT_NO_THROW({
+    const auto context = IndexWriteContext<Lss>{lss_};
+    std::vector<std::string> symbols;
+    context.for_each_symbol([&](uint32_t, std::string_view symbol) { symbols.emplace_back(symbol); });
+    EXPECT_FALSE(symbols.empty());
+  });
 }
 
 }  // namespace
