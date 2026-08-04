@@ -203,12 +203,16 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   const auto out = new (res) Result();
 
   try {
-    const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
-
-    in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
-      in->decoder->label_set().mark_active(ls_id);
-      in->encoder_wrapper->encoder.encode(ls_id, timestamp, value);
-    });
+    std::visit(
+        [in](auto& wrapper) {
+          const auto arena_guard = wrapper.encoder.storage().thread_arena_guard();
+          in->decoder->decode(in->segment,
+                              [in, &wrapper](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
+                                in->decoder->label_set().mark_active(ls_id);
+                                wrapper.encoder.encode(ls_id, timestamp, value);
+                              });
+        },
+        *in->encoder_wrapper);
     out->create_timestamp = in->decoder->decoder().created_at_tsns();
     out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {

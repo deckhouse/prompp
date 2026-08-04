@@ -27,7 +27,8 @@ class SerializedDataGoFixture : public testing::Test {
   Encoder<> encoder_{storage_};
   Querier<> querier_{storage_};
 
-  [[nodiscard]] static SampleList decode_chunk(const entrypoint::types::SerializedDataGo& data, uint32_t chunk_id) {
+  template <class Storage>
+  [[nodiscard]] static SampleList decode_chunk(const entrypoint::types::SerializedDataGo<Storage>& data, uint32_t chunk_id) {
     SampleList decoded;
     std::ranges::copy(data.samples_iterator(chunk_id), DecodeIteratorSentinel{}, std::back_inserter(decoded));
     return decoded;

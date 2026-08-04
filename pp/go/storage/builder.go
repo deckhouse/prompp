@@ -109,7 +109,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 func (b *Builder) BuildTransactionHead() *TransactionHead {
 	sd := shard.NewShard(
 		shard.NewLSS(),
-		shard.NewDataStorage(false),
+		shard.NewDataStorage(false, false),
 		nil,
 		nil,
 		wal.NewNoopWal(),
@@ -167,8 +167,8 @@ func (b *Builder) createShardOnDisk(
 		shardID,
 		shardFile,
 		writer.WriteSegment[*cppbridge.HeadEncodedSegment], // V2: writer.WriteSegmentV2
-		swn,                        // V2: NoopSegmentWriteNotifier{}
-		writer.NoopSegmentMarkup{}, // V2: headRecord
+		swn,                                                // V2: NoopSegmentWriteNotifier{}
+		writer.NoopSegmentMarkup{},                         // V2: headRecord
 		// writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
 		// NoopSegmentWriteNotifier{},
 		// headRecord,
@@ -192,7 +192,7 @@ func (b *Builder) createShardOnDisk(
 
 	return shard.NewShard(
 		lss,
-		shard.NewDataStorage(true),
+		shard.NewDataStorage(true, true),
 		unloadedDataStorage,
 		queriedSeriesStorage,
 		wal.NewWal(shardWalEncoder, sw, lss, b.maxSegmentSize, shardID, b.registerer),

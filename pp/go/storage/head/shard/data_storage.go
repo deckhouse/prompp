@@ -16,8 +16,8 @@ type DataStorage struct {
 }
 
 // NewDataStorage int new [DataStorage].
-func NewDataStorage(collectMetrics bool) *DataStorage {
-	dataStorage := cppbridge.NewDataStorage(collectMetrics)
+func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
+	dataStorage := cppbridge.NewDataStorage(collectMetrics, useArenas)
 	return &DataStorage{
 		dataStorage: dataStorage,
 		encoder:     cppbridge.NewHeadEncoderWithDataStorage(dataStorage),

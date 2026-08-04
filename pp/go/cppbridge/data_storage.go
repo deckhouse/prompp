@@ -32,9 +32,9 @@ type DataStorage struct {
 }
 
 // NewDataStorage - constructor.
-func NewDataStorage(collectMetrics bool) *DataStorage {
+func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	ds := &DataStorage{
-		dataStorage:  seriesDataDataStorageCtor(collectMetrics),
+		dataStorage:  seriesDataDataStorageCtor(collectMetrics, useArenas),
 		timeInterval: atomic.Pointer[TimeInterval]{},
 	}
 	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
@@ -47,13 +47,6 @@ func NewDataStorage(collectMetrics bool) *DataStorage {
 	dsCreate.Inc()
 
 	return ds
-}
-
-// Reset - resets data storage.
-func (ds *DataStorage) Reset() {
-	seriesDataDataStorageReset(ds.dataStorage)
-	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
-	runtime.KeepAlive(ds)
 }
 
 func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {

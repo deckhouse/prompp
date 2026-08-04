@@ -23,7 +23,7 @@ enum HashdexType : uint8_t {
   kGoHead,
 };
 
-using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint::types::QueryableEncodingBimap, series_data::DataStorage<>>;
+using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint::types::QueryableEncodingBimap, entrypoint::types::DataStorageWithoutArenas>;
 
 using HashdexVariant = std::variant<PromPP::WAL::hashdex::Protobuf,
                                     PromPP::WAL::hashdex::GoModel,

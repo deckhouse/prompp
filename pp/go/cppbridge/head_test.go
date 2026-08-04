@@ -27,7 +27,7 @@ func TestHeadSuite(t *testing.T) {
 
 func (s *HeadSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.dataStorage = cppbridge.NewDataStorage(false)
+	s.dataStorage = cppbridge.NewDataStorage(false, true)
 	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
 }
 
@@ -160,7 +160,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 
 func (s *HeadSuite) TestTimeInterval() {
 	// Arrange
-	dataStorage := cppbridge.NewDataStorage(false)
+	dataStorage := cppbridge.NewDataStorage(false, false)
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	encoder.Encode(0, 1, 1.0)
 	encoder.Encode(0, 2, 1.0)
@@ -181,7 +181,7 @@ func (s *HeadSuite) TestTimeInterval() {
 
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
-	dataStorage := cppbridge.NewDataStorage(false)
+	dataStorage := cppbridge.NewDataStorage(false, false)
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	series := []struct {
 		SeriesID uint32
@@ -278,7 +278,7 @@ func TestDataStorageSerializedDataMultiSeriesIteratorSuite(t *testing.T) {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.ds = cppbridge.NewDataStorage(false)
+	s.ds = cppbridge.NewDataStorage(false, false)
 	s.enc = cppbridge.NewHeadEncoderWithDataStorage(s.ds)
 
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())

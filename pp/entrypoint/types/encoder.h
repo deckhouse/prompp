@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <variant>
 
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
@@ -8,16 +9,18 @@
 
 namespace entrypoint::types {
 
-using Encoder = series_data::Encoder<>;
-using OutdatedChunkMerger = series_data::OutdatedChunkMerger<Encoder>;
-
+template <class Storage>
 struct SeriesDataEncoderWrapper {
+  using Encoder = series_data::Encoder<Storage>;
+
   Encoder encoder;
 
-  explicit SeriesDataEncoderWrapper(series_data::DataStorage<>& data_storage) : encoder{data_storage} {}
+  explicit SeriesDataEncoderWrapper(Storage& data_storage) : encoder{data_storage} {}
 };
 
-using SeriesDataEncoderWrapperPtr = std::unique_ptr<SeriesDataEncoderWrapper>;
+using SeriesDataEncoderWrapperVariant =
+    std::variant<SeriesDataEncoderWrapper<series_data::DataStorage<true>>, SeriesDataEncoderWrapper<series_data::DataStorage<false>>>;
+using SeriesDataEncoderWrapperPtr = std::unique_ptr<SeriesDataEncoderWrapperVariant>;
 
 static_assert(sizeof(SeriesDataEncoderWrapperPtr) == sizeof(void*));
 

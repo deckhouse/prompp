@@ -390,15 +390,16 @@ class BasicSerializedDataView {
     }
   };
 
-  explicit BasicSerializedDataView(const BasicSerializedData<Reallocator>& serialized_data) : data_(serialized_data) {}
+  template <BareBones::ReallocatorInterface DataReallocator>
+  explicit BasicSerializedDataView(const BasicSerializedData<DataReallocator>& serialized_data)
+      : chunks_(serialized_data.chunks.data(), serialized_data.chunks.size()),
+        buffer_(serialized_data.bytes_buffer.control_block().data, serialized_data.bytes_buffer.size()) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return {data_.chunks.data(), data_.chunks.size()}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept {
-    return {data_.bytes_buffer.control_block().data, data_.bytes_buffer.size()};
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return chunks_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept { return buffer_; }
 
   [[nodiscard]] series_id_inner_chunk_id_t next_series() noexcept {
-    const auto& chunks = data_.chunks;
+    const auto& chunks = chunks_;
     if (series_first_chunk_id_ == kNoMoreSeries) [[unlikely]] {
       if (chunks.empty()) [[unlikely]] {
         return {kNoMoreSeries, series_first_chunk_id_};
@@ -442,7 +443,8 @@ class BasicSerializedDataView {
   }
 
  private:
-  const BasicSerializedData<Reallocator>& data_;
+  chunk::SerializedChunkSpan chunks_;
+  std::span<const unsigned char> buffer_;
   uint32_t series_first_chunk_id_{kNoMoreSeries};
 };
 
