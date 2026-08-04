@@ -294,10 +294,12 @@ func (s OutputDecoderStats) SampleCount() uint32 {
 // segmentSamplesStorageListCPP
 //
 
+// segmentSamplesStorageListCPP mirrors PromPP::WAL::SegmentSamplesStorageList.
 type segmentSamplesStorageListCPP struct {
 	storages []CppSegmentSamplesStorage
 }
 
+// freeSegmentSamplesStorageListCPP frees the C-allocated segmentSamplesStorageListCPP.
 func freeSegmentSamplesStorageListCPP(s segmentSamplesStorageListCPP) {
 	walSegmentSamplesStorageListDtor(&s)
 	runtime.KeepAlive(s)
@@ -307,15 +309,12 @@ func freeSegmentSamplesStorageListCPP(s segmentSamplesStorageListCPP) {
 // SegmentSamplesStorageList
 //
 
-// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList.
+// SegmentSamplesStorageList wrapper for segmentSamplesStorageListCPP.
 type SegmentSamplesStorageList struct {
 	cppList segmentSamplesStorageListCPP
 }
 
-func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
-	return &s.cppList.storages[segmentID]
-}
-
+// NewSegmentSamplesStorage creates a new [SegmentSamplesStorageList].
 func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
 	s := &SegmentSamplesStorageList{}
 	walSegmentSamplesStorageListCtor(count, &s.cppList)
@@ -324,8 +323,14 @@ func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
 	return s
 }
 
+// ClearSegmentSamplesStorage clears the segment samples storage.
 func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 	walSegmentSamplesStorageClear(storage)
+}
+
+// Get returns the segment samples storage by segment ID.
+func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
+	return &s.cppList.storages[segmentID]
 }
 
 // SplitMessages splits the storage list into messages by samples per message.
