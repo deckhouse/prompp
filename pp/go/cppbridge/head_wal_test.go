@@ -81,12 +81,11 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 	const kTestBufferVersion = 3
 
 	dataStorage := cppbridge.NewDataStorage(false, false)
-	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), kTestBufferVersion)
 	segment, _ := hex.DecodeString(hexSegment)
 
 	// Act
-	_, _, err := decoder.DecodeToDataStorage(segment, encoder)
+	_, _, err := decoder.DecodeToDataStorage(segment, dataStorage)
 
 	// Assert
 	require.NoError(t, err)

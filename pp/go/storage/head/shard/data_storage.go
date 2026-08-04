@@ -11,16 +11,13 @@ import (
 // DataStorage samles storage with labels IDs.
 type DataStorage struct {
 	dataStorage *cppbridge.DataStorage
-	encoder     *cppbridge.HeadEncoder
 	locker      sync.RWMutex
 }
 
 // NewDataStorage int new [DataStorage].
 func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
-	dataStorage := cppbridge.NewDataStorage(collectMetrics, useArenas)
 	return &DataStorage{
-		dataStorage: dataStorage,
-		encoder:     cppbridge.NewHeadEncoderWithDataStorage(dataStorage),
+		dataStorage: cppbridge.NewDataStorage(collectMetrics, useArenas),
 		locker:      sync.RWMutex{},
 	}
 }
@@ -37,17 +34,17 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 // AppendInnerSeriesSlice add InnerSeries to storage.
 func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.InnerSeries) {
 	ds.locker.Lock()
-	ds.encoder.EncodeInnerSeriesSlice(innerSeriesSlice)
+	ds.dataStorage.EncodeInnerSeriesSlice(innerSeriesSlice)
 	ds.locker.Unlock()
 }
 
 // DecodeSegment decode segment data from decoder [cppbridge.HeadWalDecoder]
-// and add to encoder [cppbridge.HeadEncoder], returns createTs, encodeTs.
+// and add to [cppbridge.DataStorage], returns createTs, encodeTs.
 //
 //revive:disable-next-line:confusing-results // returns createTs, encodeTs
 
 func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []byte) (int64, int64, error) {
-	return decoder.DecodeToDataStorage(data, ds.encoder)
+	return decoder.DecodeToDataStorage(data, ds.dataStorage)
 }
 
 // InstantQuery make instant query to data storage and fills samples in instant series.
@@ -64,14 +61,14 @@ func (ds *DataStorage) InstantQuery(
 
 func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {
 	ds.locker.Lock()
-	ds.encoder.Encode(seriesID, timestamp, value)
+	ds.dataStorage.Encode(seriesID, timestamp, value)
 	ds.locker.Unlock()
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.locker.Lock()
-	ds.encoder.MergeOutOfOrderChunks()
+	ds.dataStorage.MergeOutOfOrderChunks()
 	ds.locker.Unlock()
 }
 

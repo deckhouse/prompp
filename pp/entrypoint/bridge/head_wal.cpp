@@ -2,11 +2,12 @@
 
 #include <variant>
 
-#include "entrypoint/types/encoder.h"
+#include "entrypoint/types/data_storage.h"
 #include "entrypoint/types/exception.h"
 #include "entrypoint/types/hashdex.h"
 #include "entrypoint/types/lss.h"
 #include "primitives/go_slice.h"
+#include "series_data/encoder.h"
 #include "wal/decoder.h"
 #include "wal/encoder.h"
 #include "wal/wal.h"
@@ -190,7 +191,7 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   struct Arguments {
     DecoderPtr decoder;
     PromPP::Primitives::Go::SliceView<char> segment;
-    entrypoint::types::SeriesDataEncoderWrapperPtr encoder_wrapper;
+    entrypoint::types::DataStoragePtr data_storage;
   };
 
   struct Result {
@@ -204,15 +205,16 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
 
   try {
     std::visit(
-        [in](auto& wrapper) {
-          const auto arena_guard = wrapper.encoder.storage().thread_arena_guard();
+        [in](auto& storage) {
+          const auto arena_guard = storage.thread_arena_guard();
+          series_data::Encoder encoder{storage};
           in->decoder->decode(in->segment,
-                              [in, &wrapper](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
+                              [in, &encoder](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
                                 in->decoder->label_set().mark_active(ls_id);
-                                wrapper.encoder.encode(ls_id, timestamp, value);
+                                encoder.encode(ls_id, timestamp, value);
                               });
         },
-        *in->encoder_wrapper);
+        *in->data_storage);
     out->create_timestamp = in->decoder->decoder().created_at_tsns();
     out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {

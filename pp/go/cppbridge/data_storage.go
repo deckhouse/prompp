@@ -62,6 +62,24 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 	return res
 }
 
+// Encode encodes single triplet into the data storage.
+func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {
+	seriesDataEncoderEncode(ds.dataStorage, seriesID, timestamp, value)
+	runtime.KeepAlive(ds)
+}
+
+// EncodeInnerSeriesSlice encodes InnerSeries slice produced by relabeler into the data storage.
+func (ds *DataStorage) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
+	seriesDataEncoderEncodeInnerSeriesSlice(ds.dataStorage, innerSeriesSlice)
+	runtime.KeepAlive(ds)
+}
+
+// MergeOutOfOrderChunks merges out of order chunks in the data storage.
+func (ds *DataStorage) MergeOutOfOrderChunks() {
+	seriesDataEncoderMergeOutOfOrderChunks(ds.dataStorage)
+	runtime.KeepAlive(ds)
+}
+
 type UnusedSeriesDataUnloader struct {
 	unloader uintptr
 	ds       *DataStorage

@@ -149,10 +149,10 @@ func (d *HeadWalDecoder) Decode(segment []byte, innerSeries *InnerSeries) error 
 //
 //revive:disable-next-line:confusing-results // returns createTimestamp, encodeTimestamp, error.
 
-func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) (int64, int64, error) {
-	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
+func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, dataStorage *DataStorage) (int64, int64, error) {
+	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, dataStorage.dataStorage)
 	runtime.KeepAlive(d)
-	runtime.KeepAlive(headEncoder)
+	runtime.KeepAlive(dataStorage)
 	return createTimestamp, encodeTimestamp, err
 }
 
