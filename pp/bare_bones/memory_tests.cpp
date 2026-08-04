@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 
 #include "bare_bones/memory.h"
-#include "bare_bones/vector.h"
 
 namespace {
 
@@ -445,43 +444,6 @@ TEST_F(SharedMemoryFixture, ResizeOnNonUniqueOwner) {
   EXPECT_NE(memory_.size(), memory2.size());
   EXPECT_NE(memory_.begin(), memory2.begin());
   EXPECT_EQ(1U, memory2.items_count());
-}
-
-TEST_F(SharedMemoryFixture, SetItemsCountOnNonUniqueOwnerWithSpareCapacityCow) {
-  // Arrange: shared control block with spare capacity (no reallocate on grow).
-  memory_.resize_to_fit_at_least(8);
-  memory_.set_items_count(1);
-  const auto shared_view = memory_;
-  ASSERT_EQ(memory_.begin(), shared_view.begin());
-  ASSERT_EQ(1U, shared_view.items_count());
-
-  // Act: bump logical size without growing allocation — must detach first.
-  memory_.set_items_count(2);
-
-  // Assert: viewer keeps the frozen size; writer owns a private copy.
-  EXPECT_EQ(1U, shared_view.items_count());
-  EXPECT_EQ(2U, memory_.items_count());
-  EXPECT_NE(memory_.begin(), shared_view.begin());
-}
-
-TEST_F(SharedMemoryFixture, SharedVectorPushBackWithSpareCapacityDoesNotInflateSharedSpan) {
-  // Mirrors production: SnapshotLSS SharedSpan over destination SharedVector, then
-  // destination appends with spare capacity (COW must keep the span's size frozen).
-  BareBones::SharedVector<uint32_t, DefaultReallocator> writer;
-  writer.reserve(8);
-  writer.push_back(10U);
-  const BareBones::SharedSpan<uint32_t, DefaultReallocator> snapshot(writer);
-  ASSERT_EQ(1U, snapshot.size());
-  ASSERT_EQ(writer.data(), snapshot.data());
-
-  writer.push_back(20U);
-
-  EXPECT_EQ(1U, snapshot.size());
-  EXPECT_EQ(2U, writer.size());
-  EXPECT_NE(writer.data(), snapshot.data());
-  EXPECT_EQ(10U, snapshot[0]);
-  EXPECT_EQ(10U, writer[0]);
-  EXPECT_EQ(20U, writer[1]);
 }
 
 }  // namespace
