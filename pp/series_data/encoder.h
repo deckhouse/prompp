@@ -17,11 +17,12 @@ namespace series_data {
 template <class Storage = DataStorage<>, uint8_t kSamplesPerChunk = kSamplesPerChunkDefault>
 class Encoder {
  public:
-  using Reallocator = typename Storage::Reallocator;
+  using DataStorage = Storage;
+  using Reallocator = DataStorage::Reallocator;
 
-  Encoder(Storage& storage) : storage_(storage) {}
+  explicit Encoder(DataStorage& storage) : storage_(storage) {}
 
-  Storage& storage() noexcept { return storage_; }
+  DataStorage& storage() noexcept { return storage_; }
 
   PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value) {
     if (storage_.open_chunks.size() <= ls_id) [[unlikely]] {
@@ -38,7 +39,7 @@ class Encoder {
   PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) { encode_impl(ls_id, timestamp, value, chunk); }
 
  private:
-  Storage& storage_;
+  DataStorage& storage_;
 
   void encode_impl(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     if (should_skip_stalenan(value, chunk)) [[unlikely]] {

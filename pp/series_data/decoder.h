@@ -19,17 +19,16 @@
 
 namespace series_data {
 
-// Satisfied by the live per-series chunk data cursor (DataStorage<...>::SeriesChunkIterator::Data),
-// but not by chunk::SerializedChunkIterator::Data. Used to disambiguate Decoder overloads.
 template <class T>
-concept SeriesChunkDataInterface = requires(const T& data) {
+concept SeriesChunkIteratorData = requires(const T& data) {
   data.storage();
-  data.chunk_type();
+  { data.chunk_type() } -> std::same_as<chunk::DataChunk::Type>;
+  { data.chunk() } -> std::same_as<const chunk::DataChunk&>;
 };
 
 #pragma pack(push, 1)
 
-template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
+template <BareBones::ReallocatorInterface Reallocator>
 struct SerializedCompactBitSequence {
   template <class CompactBitSequence>
   PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequence(const CompactBitSequence& bit_sequence)
@@ -38,7 +37,7 @@ struct SerializedCompactBitSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
 
-  typename encoder::CompactBitSequence<Reallocator>::SharedPtr ptr;
+  encoder::CompactBitSequence<Reallocator>::SharedPtr ptr;
   uint32_t size_in_bits;
 };
 
@@ -46,20 +45,20 @@ struct SerializedCompactBitSequence {
 
 class Decoder {
  public:
-  template <chunk::DataChunk::Type chunk_type, class Storage, class Callback>
-  PROMPP_ALWAYS_INLINE static void decode_chunk(const Storage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
+  template <chunk::DataChunk::Type chunk_type, class DataStorage, class Callback>
+  PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
     create_decode_iterator<chunk_type>(storage, chunk,
                                        [&callback](auto&& begin, auto&& end) { std::ranges::for_each(begin, end, std::forward<Callback>(callback)); });
   }
 
-  template <class Storage>
-  static uint8_t get_samples_count(const Storage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {
+  template <class DataStorage>
+  static uint8_t get_samples_count(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {
     using enum chunk::DataChunk::Type;
 
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      return Storage::BitSequenceWithItemsCount::count(chunk_type == kOpen
-                                                           ? storage.template get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
-                                                           : storage.template get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
+      return DataStorage::BitSequenceWithItemsCount::count(chunk_type == kOpen
+                                                               ? storage.template get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
+                                                               : storage.template get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
     } else {
       return (chunk_type == kOpen ? storage.template get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
                                   : storage.template get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
@@ -67,8 +66,8 @@ class Decoder {
     }
   }
 
-  template <chunk::DataChunk::Type chunk_type, class Storage>
-  static encoder::SampleList decode_chunk(const Storage& storage, const chunk::DataChunk& chunk) {
+  template <chunk::DataChunk::Type chunk_type, class DataStorage>
+  static encoder::SampleList decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk) {
     encoder::SampleList result;
     decode_chunk<chunk_type>(storage, chunk, [&result](const encoder::Sample& sample) PROMPP_LAMBDA_INLINE {
       result.emplace_back(sample);
@@ -77,8 +76,8 @@ class Decoder {
     return result;
   }
 
-  template <class OutdatedChunkT>
-  static encoder::SampleList decode_outdated_chunk(const OutdatedChunkT& chunk) {
+  template <class OutdatedChunk>
+  static encoder::SampleList decode_outdated_chunk(const OutdatedChunk& chunk) {
     encoder::SampleList result;
     result.reserve(chunk.samples_count());
     std::ranges::copy(decoder::OutdatedDecodeIterator(chunk.samples_count(), chunk.stream().reader()), decoder::DecodeIteratorSentinel{},
@@ -86,8 +85,8 @@ class Decoder {
     return result;
   }
 
-  template <class Storage>
-  static BareBones::Vector<encoder::SampleList> decode_chunks(const Storage& storage, const chunk::FinalizedChunkList& chunks) {
+  template <class DataStorage>
+  static BareBones::Vector<encoder::SampleList> decode_chunks(const DataStorage& storage, const chunk::FinalizedChunkList& chunks) {
     BareBones::Vector<encoder::SampleList> result;
     for (auto& chunk : chunks) {
       result.emplace_back(decode_chunk<chunk::DataChunk::Type::kFinalized>(storage, chunk));
@@ -95,8 +94,8 @@ class Decoder {
     return result;
   }
 
-  template <class Storage>
-  static BareBones::Vector<encoder::SampleList> decode_chunks(const Storage& storage,
+  template <class DataStorage>
+  static BareBones::Vector<encoder::SampleList> decode_chunks(const DataStorage& storage,
                                                               const chunk::FinalizedChunkList& finalized_chunks,
                                                               const chunk::DataChunk& open_chunk) {
     auto result = decode_chunks(storage, finalized_chunks);
@@ -107,8 +106,8 @@ class Decoder {
     });
     return result;
   }
-  template <class Storage, class Callback>
-  static void decode_series(const Storage& storage, uint32_t ls_id, Callback&& callback) {
+  template <class DataStorage, class Callback>
+  static void decode_series(const DataStorage& storage, uint32_t ls_id, Callback&& callback) {
     auto& finalized_chunks = storage.finalized_chunks;
     if (const auto finalized_chunks_it = finalized_chunks.find(ls_id); finalized_chunks_it != finalized_chunks.end()) {
       for (const auto& chunk : finalized_chunks_it->second) {
@@ -119,8 +118,8 @@ class Decoder {
     Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage, storage.open_chunks[ls_id], callback);
   }
 
-  template <EncodingType encoding_type, chunk::DataChunk::Type chunk_type, class Storage>
-  static auto create_decode_iterator(const Storage& storage, const chunk::DataChunk& chunk) {
+  template <EncodingType encoding_type, chunk::DataChunk::Type chunk_type, class DataStorage>
+  static auto create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk) {
     using enum EncodingType;
     using enum chunk::DataChunk::Type;
 
@@ -155,8 +154,8 @@ class Decoder {
     }
   }
 
-  template <chunk::DataChunk::Type chunk_type, class Storage, class Callback>
-  static void create_decode_iterator(const Storage& storage, const chunk::DataChunk& chunk, Callback&& callback) {
+  template <chunk::DataChunk::Type chunk_type, class DataStorage, class Callback>
+  static void create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) {
     using enum EncodingType;
     using decoder::DecodeIteratorSentinel;
 
@@ -208,7 +207,7 @@ class Decoder {
     }
   }
 
-  template <SeriesChunkDataInterface ChunkData, class Callback>
+  template <SeriesChunkIteratorData ChunkData, class Callback>
   static void create_decode_iterator(const ChunkData& chunk_data, Callback&& callback) {
     using enum chunk::DataChunk::Type;
 
@@ -219,11 +218,11 @@ class Decoder {
     }
   }
 
-  template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator, class Callback>
+  template <class Callback>
   static auto create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk, Callback&& callback) {
     using enum EncodingType;
-    using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
-    using SerializedBitSequence = SerializedCompactBitSequence<Reallocator>;
+    using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<DataStorage<>::Reallocator>;
+    using SerializedBitSequence = SerializedCompactBitSequence<DataStorage<>::Reallocator>;
     using decoder::DecodeIteratorSentinel;
 
     switch (chunk.encoding_state.encoding_type) {
@@ -311,8 +310,8 @@ class Decoder {
     create_decode_iterator(chunk.buffer(), chunk.chunk(), std::forward<Callback>(callback));
   }
 
-  template <class Storage>
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_min_timestamp(const Storage& storage, uint32_t ls_id) noexcept {
+  template <class DataStorage>
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_min_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
     using enum chunk::DataChunk::Type;
 
     if (const auto it = storage.finalized_chunks.find(ls_id); it != storage.finalized_chunks.end()) {
@@ -321,26 +320,26 @@ class Decoder {
     return get_chunk_first_timestamp<kOpen>(storage, storage.open_chunks[ls_id]);
   }
 
-  template <class Storage>
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_max_timestamp(const Storage& storage, uint32_t ls_id) noexcept {
+  template <class DataStorage>
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_max_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
     using enum chunk::DataChunk::Type;
 
     return get_open_chunk_last_timestamp(storage, storage.open_chunks[ls_id]);
   }
 
-  template <class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_series_time_interval(const Storage& storage, uint32_t ls_id) {
+  template <class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_series_time_interval(const DataStorage& storage, uint32_t ls_id) {
     return {.min = get_series_min_timestamp(storage, ls_id), .max = get_series_max_timestamp(storage, ls_id)};
   }
 
-  template <chunk::DataChunk::Type chunk_type, class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const Storage& storage, const chunk::DataChunk& chunk) noexcept {
+  template <chunk::DataChunk::Type chunk_type, class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     assert(!chunk.is_empty());
     return encoder::timestamp::TimestampDecoder::decode_first(get_stream_reader<chunk_type>(storage, chunk));
   }
 
-  template <class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const Storage& storage,
+  template <class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage,
                                                                               const chunk::DataChunk& chunk,
                                                                               chunk::DataChunk::Type chunk_type) noexcept {
     if (chunk_type == chunk::DataChunk::Type::kOpen) {
@@ -349,13 +348,13 @@ class Decoder {
     return get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
   }
 
-  template <SeriesChunkDataInterface ChunkData>
+  template <SeriesChunkIteratorData ChunkData>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const ChunkData& chunk_data) noexcept {
     return get_chunk_first_timestamp(*chunk_data.storage(), chunk_data.chunk(), chunk_data.chunk_type());
   }
 
-  template <class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_open_chunk_last_timestamp(const Storage& storage, const chunk::DataChunk& chunk) noexcept {
+  template <class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_open_chunk_last_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
       return storage.gorilla_encoders[chunk.encoder.external_index].timestamp();
     }
@@ -364,8 +363,8 @@ class Decoder {
     return storage.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id).timestamp();
   }
 
-  template <class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_finalized_chunk_last_timestamp(const Storage& storage,
+  template <class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_finalized_chunk_last_timestamp(const DataStorage& storage,
                                                                                        uint32_t ls_id,
                                                                                        chunk::FinalizedChunkList::ChunksList::const_iterator chunk_it,
                                                                                        chunk::FinalizedChunkList::ChunksList::const_iterator end_it) noexcept {
@@ -375,7 +374,7 @@ class Decoder {
     return get_chunk_first_timestamp<chunk::DataChunk::Type::kOpen>(storage, storage.open_chunks[ls_id]) - 1;
   }
 
-  template <SeriesChunkDataInterface ChunkData>
+  template <SeriesChunkIteratorData ChunkData>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const ChunkData& chunk_data) noexcept {
     if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
       return get_chunk_last_timestamp<chunk::DataChunk::Type::kOpen>(chunk_data);
@@ -384,7 +383,7 @@ class Decoder {
     return get_chunk_last_timestamp<chunk::DataChunk::Type::kFinalized>(chunk_data);
   }
 
-  template <chunk::DataChunk::Type chunk_type, SeriesChunkDataInterface ChunkData>
+  template <chunk::DataChunk::Type chunk_type, SeriesChunkIteratorData ChunkData>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const ChunkData& chunk_data) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return get_open_chunk_last_timestamp(*chunk_data.storage(), chunk_data.chunk());
@@ -394,12 +393,12 @@ class Decoder {
                                               chunk_data.finalized_chunk_end_iterator());
   }
 
-  template <chunk::DataChunk::Type chunk_type, SeriesChunkDataInterface ChunkData>
+  template <chunk::DataChunk::Type chunk_type, SeriesChunkIteratorData ChunkData>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const ChunkData& chunk_data) {
     return {.min = get_chunk_first_timestamp<chunk_type>(*chunk_data.storage(), chunk_data.chunk()), .max = get_chunk_last_timestamp<chunk_type>(chunk_data)};
   }
 
-  template <SeriesChunkDataInterface ChunkData>
+  template <SeriesChunkIteratorData ChunkData>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const ChunkData& chunk_data) {
     if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
       return get_chunk_time_interval<chunk::DataChunk::Type::kOpen>(chunk_data);
@@ -407,8 +406,8 @@ class Decoder {
     return get_chunk_time_interval<chunk::DataChunk::Type::kFinalized>(chunk_data);
   }
 
-  template <class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static double get_open_chunk_last_value(const Storage& storage, const chunk::DataChunk& chunk) noexcept {
+  template <class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static double get_open_chunk_last_value(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     using enum EncodingType;
 
     switch (chunk.encoding_state.encoding_type) {
@@ -451,8 +450,8 @@ class Decoder {
     }
   }
 
-  template <class Storage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_time_interval(const Storage& storage) noexcept {
+  template <class DataStorage>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_time_interval(const DataStorage& storage) noexcept {
     PromPP::Primitives::TimeInterval interval;
 
     for (auto ls_id = 0U; ls_id < storage.open_chunks.size(); ++ls_id) {
@@ -466,8 +465,8 @@ class Decoder {
   }
 
  private:
-  template <chunk::DataChunk::Type chunk_type, class Storage>
-  [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const Storage& storage, const chunk::DataChunk& chunk) {
+  template <chunk::DataChunk::Type chunk_type, class DataStorage>
+  [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const DataStorage& storage, const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) [[likely]] {
       return storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id).reader();
     }
@@ -475,7 +474,7 @@ class Decoder {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return storage.gorilla_encoders[chunk.encoder.external_index].stream().reader();
     } else {
-      return Storage::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.external_index]);
+      return DataStorage::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.external_index]);
     }
   }
 };

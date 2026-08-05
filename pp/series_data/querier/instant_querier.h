@@ -10,6 +10,7 @@
 #include <ranges>
 
 namespace series_data {
+
 template <class Storage = DataStorage<>>
 class InstantQuerier {
   using Timestamp = PromPP::Primitives::Timestamp;
@@ -85,6 +86,7 @@ class InstantQuerier {
     }
   }
 };
+
 }  // namespace series_data
 
 static_assert(series_data::LoadableQuerierInterface<series_data::InstantQuerier<>>);

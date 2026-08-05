@@ -11,7 +11,7 @@ using series_data::ChunkFinalizer;
 using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::serialization::DataSerializer;
-using series_data::serialization::SerializedData;
+using SerializedData = series_data::serialization::SerializedData<>;
 using series_data::serialization::SerializedDataView;
 
 class SerializedDataViewEnumerateSeriesFixture : public testing::Test {

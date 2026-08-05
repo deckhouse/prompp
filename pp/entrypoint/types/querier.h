@@ -35,7 +35,7 @@ enum class QueryStatus : uint8_t {
   kNeedDataLoad,
 };
 
-template <typename LsIDStorage, typename SampleStorage, class DataStorage = ::series_data::DataStorage<>>
+template <typename LsIDStorage, typename SampleStorage, class DataStorage>
 class InstantQuerierWithArgumentsWrapper {
   using Timestamp = PromPP::Primitives::Timestamp;
 
@@ -79,11 +79,11 @@ struct StaleNaNSeriesWithGoLabels {
 };
 
 using InstantQuerierWithArgumentsWrapperEntrypoint =
-    InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>>;
+    InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>, DataStorageWithArenas>;
 using InstantQuerierWithArgumentsWrapperWithoutArenasEntrypoint =
     InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
                                        std::span<SampleWithGoLabels>,
-                                       ::series_data::DataStorage<false>>;
+                                       DataStorageWithoutArenas>;
 using GoSelectHints = PromPP::Prometheus::GenericSelectHints<PromPP::Primitives::Go::String, PromPP::Primitives::Go::SliceView>;
 
 template <class DataStorage>
@@ -146,8 +146,8 @@ enum class QuerierType : uint8_t {
   kRangeQuerierV2,
 };
 
-using RangeQuerierWithArgumentsWrapperV2 = BasicRangeQuerierWithArgumentsWrapperV2<::series_data::DataStorage<>>;
-using RangeQuerierWithArgumentsWrapperWithoutArenasV2 = BasicRangeQuerierWithArgumentsWrapperV2<::series_data::DataStorage<false>>;
+using RangeQuerierWithArgumentsWrapperV2 = BasicRangeQuerierWithArgumentsWrapperV2<DataStorageWithArenas>;
+using RangeQuerierWithArgumentsWrapperWithoutArenasV2 = BasicRangeQuerierWithArgumentsWrapperV2<DataStorageWithoutArenas>;
 
 using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint,
                                     RangeQuerierWithArgumentsWrapperV2,

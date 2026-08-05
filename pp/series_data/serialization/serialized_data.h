@@ -10,18 +10,18 @@
 namespace series_data::serialization {
 
 template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
-struct BasicSerializedData {
+struct SerializedData {
   using Memory = BareBones::Memory<BareBones::MemoryControlBlockWithItemCount, unsigned char>;
 
-  BasicSerializedData() = default;
+  SerializedData() = default;
 
-  BasicSerializedData(const BasicSerializedData&) = delete;
-  BasicSerializedData(BasicSerializedData&&) noexcept = default;
+  SerializedData(const SerializedData&) = delete;
+  SerializedData(SerializedData&&) noexcept = default;
 
-  BasicSerializedData& operator=(const BasicSerializedData&) = delete;
-  BasicSerializedData& operator=(BasicSerializedData&&) noexcept = default;
+  SerializedData& operator=(const SerializedData&) = delete;
+  SerializedData& operator=(SerializedData&&) noexcept = default;
 
-  ~BasicSerializedData() {
+  ~SerializedData() {
     uint32_t timestamp_offset{kNoTimestampOffset};
     for (auto& chunk : chunks) {
       destroy_chunk_data(chunk, timestamp_offset);
@@ -76,12 +76,10 @@ struct BasicSerializedData {
   }
 };
 
-using SerializedData = BasicSerializedData<DataStorage<>::Reallocator>;
-
 template <class Storage = DataStorage<>>
 class DataSerializer {
  public:
-  using SerializedData = BasicSerializedData<typename Storage::Reallocator>;
+  using SerializedData = ::series_data::serialization::SerializedData<typename Storage::Reallocator>;
   using SerializedCompactBitSequence = ::series_data::SerializedCompactBitSequence<typename Storage::Reallocator>;
 
   explicit DataSerializer(const Storage& storage) : storage_(storage) {}
@@ -224,7 +222,7 @@ class DataSerializer {
   }
 
   template <chunk::DataChunk::Type>
-  [[nodiscard]] static const chunk::DataChunk& get_chunk(const typename Storage::SeriesChunkIterator::Data& chunk) noexcept {
+  [[nodiscard]] static const chunk::DataChunk& get_chunk(const Storage::SeriesChunkIterator::Data& chunk) noexcept {
     return chunk.chunk();
   }
 
@@ -266,8 +264,7 @@ class DataSerializer {
   const Storage& storage_;
 };
 
-template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
-class BasicSerializedDataView {
+class SerializedDataView {
  public:
   using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
   static constexpr uint32_t kNoMoreSeries = std::numeric_limits<uint32_t>::max();
@@ -384,14 +381,14 @@ class BasicSerializedDataView {
 
     PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
                                                                                  chunk::SerializedChunkSpan::const_iterator chunk_iter) noexcept {
-      return Decoder::create_decode_iterator<Reallocator>(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+      return Decoder::create_decode_iterator(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
     }
   };
 
   template <BareBones::ReallocatorInterface DataReallocator>
-  explicit BasicSerializedDataView(const BasicSerializedData<DataReallocator>& serialized_data)
+  explicit SerializedDataView(const SerializedData<DataReallocator>& serialized_data)
       : chunks_(serialized_data.chunks.data(), serialized_data.chunks.size()),
         buffer_(serialized_data.bytes_buffer.control_block().data, serialized_data.bytes_buffer.size()) {}
 
@@ -430,7 +427,7 @@ class BasicSerializedDataView {
   }
 
   template <class SeriesChunkHandler>
-  void enumerate_series(const SeriesChunkHandler& handler) {
+  void enumerate_series(const SeriesChunkHandler& handler) const noexcept {
     const auto& chunks = get_chunks_view();
     for (auto it = chunks.begin(); it != chunks.end();) {
       handler(*it, it - chunks.begin());
@@ -448,5 +445,4 @@ class BasicSerializedDataView {
   uint32_t series_first_chunk_id_{kNoMoreSeries};
 };
 
-using SerializedDataView = BasicSerializedDataView<DataStorage<>::Reallocator>;
 }  // namespace series_data::serialization

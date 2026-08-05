@@ -5,8 +5,8 @@
 
 #include "bare_bones/iterator.h"
 #include "bare_bones/preprocess.h"
+#include "entrypoint/types/data_storage.h"
 #include "entrypoint/types/lss.h"
-#include "series_data/data_storage.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/reverter.h"
 
@@ -14,7 +14,7 @@ namespace entrypoint::types {
 
 class RevertableLoader {
  public:
-  RevertableLoader(::series_data::DataStorage<>& storage,
+  RevertableLoader(DataStorageWithArenas& storage,
                    QueryableEncodingBimap::LsIdSetIterator ls_id_begin,
                    QueryableEncodingBimap::LsIdSetIterator ls_id_end,
                    uint32_t ls_id_batch_size)
@@ -37,11 +37,11 @@ class RevertableLoader {
 
   PROMPP_ALWAYS_INLINE void revert() { reverter_.revert(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ::series_data::DataStorage<>& storage() noexcept { return loader_.storage(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorageWithArenas& storage() noexcept { return loader_.storage(); }
 
  private:
-  ::series_data::unloading::Loader<> loader_;
-  ::series_data::unloading::LoadReverter<> reverter_;
+  ::series_data::unloading::Loader<DataStorageWithArenas> loader_;
+  ::series_data::unloading::LoadReverter<DataStorageWithArenas> reverter_;
   BareBones::iterator::BatchIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator> iterator_;
   [[no_unique_address]] QueryableEncodingBimap::LsIdSetIterator end_iterator_;
 

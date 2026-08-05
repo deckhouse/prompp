@@ -22,7 +22,7 @@ using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
 using series_data::serialization::DataSerializer;
-using series_data::serialization::SerializedData;
+using SerializedData = series_data::serialization::SerializedData<>;
 using series_data::serialization::SerializedDataView;
 
 using series_data::decoder::SeekKind;

@@ -23,6 +23,7 @@
 using entrypoint::types::DataStoragePtr;
 using entrypoint::types::DataStorageType;
 using entrypoint::types::DataStorageVariant;
+using entrypoint::types::DataStorageWithArenas;
 using entrypoint::types::QueryableEncodingBimap;
 using entrypoint::types::QueryStatus;
 using PromPP::Primitives::LabelSetID;
@@ -193,8 +194,8 @@ extern "C" void prompp_series_data_serialized_data_next(void* args, void* res) {
     uint32_t chunk_ref;
   };
   const auto out = new (res) Result{};
-  std::tie(out->series_id, out->chunk_ref) =
-      std::visit([](auto& serialized_data) { return serialized_data.next(); }, *static_cast<Arguments*>(args)->serialized_data);
+  std::visit([out](auto& serialized_data) { std::tie(out->series_id, out->chunk_ref) = serialized_data.next(); },
+             *static_cast<Arguments*>(args)->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialized_data_dtor(void* args) {
@@ -341,10 +342,10 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
 
   new (res) Result{
-      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
-          std::in_place_type<ChunkRecoder>,
-          ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size, &std::get<DataStorage<>>(*in->data_storage), in->time_interval},
-          in->time_interval, in->downsampling_ms),
+      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(std::in_place_type<ChunkRecoder>,
+                                                             ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size,
+                                                                                  &std::get<DataStorageWithArenas>(*in->data_storage), in->time_interval},
+                                                             in->time_interval, in->downsampling_ms),
   };
 }
 
@@ -415,9 +416,9 @@ extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
 }
 
 struct Unloader {
-  explicit Unloader(DataStorage<>& storage) : unloader(storage) {}
+  explicit Unloader(DataStorageWithArenas& storage) : unloader(storage) {}
 
-  series_data::unloading::Unloader<> unloader;
+  series_data::unloading::Unloader<DataStorageWithArenas> unloader;
   Slice<char> snapshot;
 };
 
@@ -433,7 +434,7 @@ extern "C" void prompp_series_data_data_storage_unloader_ctor(void* args, void* 
     UnloaderPtr unloader;
   };
 
-  new (res) Result{.unloader = std::make_unique<Unloader>(std::get<DataStorage<>>(*static_cast<Arguments*>(args)->data_storage))};
+  new (res) Result{.unloader = std::make_unique<Unloader>(std::get<DataStorageWithArenas>(*static_cast<Arguments*>(args)->data_storage))};
 }
 
 extern "C" void prompp_series_data_data_storage_unloader_dtor(void* args) {
@@ -486,7 +487,8 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader<>>, std::get<DataStorage<>>(*in->data_storage))};
+  const auto out = new (res)
+      Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader<DataStorageWithArenas>>, std::get<DataStorageWithArenas>(*in->data_storage))};
   auto& loader = std::get<Loader<>>(*out->loader);
 
   for (const auto& rest : in->queriers) {
@@ -513,7 +515,7 @@ extern "C" void prompp_series_data_data_storage_revertable_loader_ctor(void* arg
   const auto in = static_cast<Arguments*>(args);
   auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
   new (res) Result{
-      .loader = std::make_unique<LoaderVariant>(std::in_place_type<RevertableLoader>, std::get<DataStorage<>>(*in->data_storage), ls_id_set.begin(),
+      .loader = std::make_unique<LoaderVariant>(std::in_place_type<RevertableLoader>, std::get<DataStorageWithArenas>(*in->data_storage), ls_id_set.begin(),
                                                 ls_id_set.end(), in->ls_id_batch_size),
   };
 }

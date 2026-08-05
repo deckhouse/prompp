@@ -381,9 +381,9 @@ struct DataStorage {
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
 
-  void reset() noexcept {
+  void reset(bool collect_metrics = false) noexcept {
     std::destroy_at(this);
-    std::construct_at(this);
+    std::construct_at(this, collect_metrics);
   }
 
  private:

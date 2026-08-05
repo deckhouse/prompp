@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "aggregation_iterator.h"
+#include "entrypoint/types/data_storage.h"
 #include "multiseries_decode_iterator.h"
 #include "primitives/primitives.h"
 #include "prometheus/query.h"
@@ -13,10 +14,10 @@ namespace entrypoint::types {
 
 using SamplesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
 
-template <class DataStorage = ::series_data::DataStorage<>>
+template <class DataStorage>
 class SerializedDataGo {
-  using Reallocator = typename DataStorage::Reallocator;
-  using SerializedData = ::series_data::serialization::BasicSerializedData<Reallocator>;
+  using Reallocator = DataStorage::Reallocator;
+  using SerializedData = ::series_data::serialization::SerializedData<Reallocator>;
 
  public:
   explicit SerializedDataGo(const DataStorage& storage,
@@ -52,7 +53,7 @@ class SerializedDataGo {
   PromPP::Primitives::Timestamp downsampling_ms_{};
 };
 
-using SerializedDataVariant = std::variant<SerializedDataGo<::series_data::DataStorage<true>>, SerializedDataGo<::series_data::DataStorage<false>>>;
+using SerializedDataVariant = std::variant<SerializedDataGo<DataStorageWithArenas>, SerializedDataGo<DataStorageWithoutArenas>>;
 using SerializedDataPtr = std::unique_ptr<SerializedDataVariant>;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
