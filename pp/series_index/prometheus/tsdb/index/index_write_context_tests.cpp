@@ -1,7 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -120,63 +119,57 @@ TEST_F(IndexWriteContextFixture, ResolvesRefsForSeriesAddedAfterShrink) {
   EXPECT_THAT(CollectSymbols(), testing::ElementsAre("", "a", "b", "c", "d", "job"));
 }
 
-// Direct repro of the spare-capacity COW hole (gdb root cause). Without
-// SharedMemory::ensure_unique() in set_items_count this MUST fail: the SharedSpan
-// observes the writer's new items_count while still pointing at the same buffer.
-TEST(SharedMemoryCowTest, SharedSpanSizeFrozenWhenWriterGrowsWithSpareCapacity) {
-  BareBones::SharedVector<uint32_t, BareBones::DefaultReallocator> writer;
-  writer.reserve(8);
-  ASSERT_GE(writer.capacity(), 8U);
-  writer.push_back(10U);
+// Production rotate: resolve snapshot shares SharedSpans with destination. If destination
+// later appends label names using spare SharedVector capacity (no reallocate), a missing
+// set_items_count COW inflates snapshot keys past the resolver's frozen symbols_tables_
+// and IndexWriteContext::rebuild / for_each_value_id goes OOB (gdb: keys=118, tables=113).
+//
+// Warm symbol capacity on an EncodingBimap head, checkpoint/rollback so items_count shrinks
+// while capacity stays, share into the post-shrink resolver, then grow without reserve().
+TEST_F(IndexWriteContextFixture, IndexWriterSurvivesSharedResolveSnapshotSpareCapacityGrowth) {
+  using LsBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<DefaultSharedVector>;
 
-  const BareBones::SharedSpan<uint32_t, BareBones::DefaultReallocator> snapshot(writer);
-  ASSERT_EQ(1U, snapshot.size());
-  ASSERT_EQ(writer.data(), snapshot.data());
-  ASSERT_GT(writer.capacity(), writer.size());
+  LsBimap head;
+  head.find_or_emplace(ls0_);
+  head.find_or_emplace(ls1_);
+  head.find_or_emplace(ls2_);
 
-  writer.push_back(20U);
+  const auto warmed = head.checkpoint();
+  std::vector<std::pair<std::string, std::string>> held_labels;
+  held_labels.reserve(80);
+  for (uint32_t i = 0; i < 64; ++i) {
+    held_labels.emplace_back("cap_" + std::to_string(i), "v");
+    head.find_or_emplace(LabelViewSet{{"job", "a"}, {held_labels.back().first, held_labels.back().second}});
+  }
+  ASSERT_GT(head.data_view().keys().size(), 64U);
+  head.rollback(warmed);
+  ASSERT_EQ(1U, head.data_view().keys().size());
 
-  EXPECT_EQ(1U, snapshot.size());
-  EXPECT_EQ(2U, writer.size());
-  EXPECT_NE(snapshot.data(), writer.data());
-  EXPECT_EQ(10U, snapshot[0]);
-}
-
-// Production rotate path: resolve snapshot shares SharedSpans with destination.
-TEST_F(IndexWriteContextFixture, IndexWriterSurvivesDestinationGrowthAfterSharedResolveSnapshot) {
-  // Arrange
-  Lss destination;
+  Lss copied;
   BareBones::Vector<uint32_t> dst_src_ids_mapping;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), destination, dst_src_ids_mapping);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), copied, dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
-
-  // While unique: ensure name-symbol SharedVector has spare capacity (growth policy),
-  // otherwise the first post-snapshot insert may reallocate and mask the items_count bug.
-  destination.find_or_emplace(LabelViewSet{{"warmup_name", "warmup_value"}});
 
   const uint32_t shrink_boundary = lss_.next_item_index();
   lss_.set_pending_shrink_boundary(shrink_boundary);
-  const ReadonlyLss resolve_snapshot(destination);
+  const ReadonlyLss resolve_snapshot(head);
   lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
 
   const auto keys_at_freeze = resolve_snapshot.data_view().keys().size();
-  ASSERT_GT(keys_at_freeze, 0U);
-  // Setup check: snapshot must alias destination symbol bytes (shared control block).
-  ASSERT_EQ((*resolve_snapshot.data_view().keys().begin()).data(), (*destination.data_view().keys().begin()).data());
+  ASSERT_EQ(1U, keys_at_freeze);
+  ASSERT_EQ((*resolve_snapshot.data_view().keys().begin()).data(), (*head.data_view().keys().begin()).data());
 
-  // Act: grow destination with new label names. Do not reserve() here — that COWs via reallocate.
-  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"region", "eu"}});
-  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"region", "us"}});
-  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "a"}});
-  destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "b"}});
-  destination.find_or_emplace(LabelViewSet{{"env", "prod"}, {"job", "a"}});
+  for (uint32_t i = 0; i < 8; ++i) {
+    held_labels.emplace_back("post_" + std::to_string(i), "v");
+    head.find_or_emplace(LabelViewSet{{"job", "a"}, {held_labels.back().first, held_labels.back().second}});
+  }
 
   const auto snap_keys = resolve_snapshot.data_view().keys().size();
-  const auto dest_keys = destination.data_view().keys().size();
+  const auto dest_keys = head.data_view().keys().size();
 
-  ASSERT_GT(dest_keys, keys_at_freeze) << "destination must add new label names";
-  EXPECT_EQ(keys_at_freeze, snap_keys) << "shared resolve snapshot keys inflated — set_items_count COW missing "
-                                          "(see SharedMemoryCowTest.SharedSpanSizeFrozenWhenWriterGrowsWithSpareCapacity)";
+  ASSERT_GT(dest_keys, keys_at_freeze);
+  // Fails without SharedMemory::ensure_unique() in set_items_count (snap keys inflate).
+  ASSERT_EQ(keys_at_freeze, snap_keys);
 
   const auto context = IndexWriteContext<Lss>{lss_};
   std::vector<std::string> symbols;
