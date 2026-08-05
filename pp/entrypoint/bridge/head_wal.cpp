@@ -206,7 +206,7 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   try {
     std::visit(
         [in](auto& storage) {
-          const auto arena_guard = storage.thread_arena_guard();
+          [[maybe_unused]] const auto arena_guard = storage.thread_arena_guard();
           series_data::Encoder encoder{storage};
           in->decoder->decode(in->segment,
                               [in, &encoder](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {

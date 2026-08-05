@@ -114,7 +114,7 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
 
   std::visit(
       [&stream, res](auto& data_storage) {
-        const auto arena_guard = data_storage.thread_arena_guard();
+        [[maybe_unused]] const auto arena_guard = data_storage.thread_arena_guard();
         const auto result = data_storage.queried_series_bitmap.read_from(stream);
         if (!result) {
           data_storage.queried_series_bitmap.reset(0);

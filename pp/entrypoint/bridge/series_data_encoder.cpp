@@ -18,7 +18,7 @@ extern "C" void prompp_series_data_encoder_encode(void* args) {
   const auto* in = static_cast<Arguments*>(args);
   std::visit(
       [in](auto& storage) {
-        const auto arena_guard = storage.thread_arena_guard();
+        [[maybe_unused]] const auto arena_guard = storage.thread_arena_guard();
         series_data::Encoder{storage}.encode(in->series_id, in->timestamp, in->value);
       },
       *in->data_storage);
@@ -33,7 +33,7 @@ extern "C" void prompp_series_data_encoder_encode_inner_series_slice(void* args)
   auto* in = static_cast<Arguments*>(args);
   std::visit(
       [in](auto& storage) {
-        const auto arena_guard = storage.thread_arena_guard();
+        [[maybe_unused]] const auto arena_guard = storage.thread_arena_guard();
         series_data::Encoder encoder{storage};
 
         std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries& inner_series) {
@@ -57,7 +57,7 @@ extern "C" void prompp_series_data_encoder_merge_out_of_order_chunks(void* args)
   const auto in = static_cast<Arguments*>(args);
   std::visit(
       [](auto& storage) {
-        const auto arena_guard = storage.thread_arena_guard();
+        [[maybe_unused]] const auto arena_guard = storage.thread_arena_guard();
         series_data::Encoder encoder{storage};
         series_data::OutdatedChunkMerger{encoder}.merge();
       },
