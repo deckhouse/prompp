@@ -69,14 +69,14 @@ INSTANTIATE_TEST_SUITE_P(
                                              .selector = {.matchers = {{.status = MatchStatus::kEmptyMatch, .type = MatcherType::kExactNotMatch}}}}},
         SelectorQuerierTestCase{.label_matchers = {{.name = "job", .value = "|cron", .type = MatcherType::kRegexpMatch}},
                                 .expected = {.status = QuerierStatus::kNoPositiveMatchers,
-                                             .selector = {.matchers = {{.status = MatchStatus::kAllMatchWithExcludes, .type = MatcherType::kUnknown}}}}},
-        SelectorQuerierTestCase{.label_sets = {{{"job", "cron"}}},
-                                .label_matchers = {{.name = "job", .value = "|cron", .type = MatcherType::kRegexpMatch}},
-                                .expected = {.status = QuerierStatus::kNoPositiveMatchers,
-                                             .selector = {.matchers = {{.matches = {0},
-                                                                        .label_name_match = 0,
-                                                                        .status = MatchStatus::kAllMatchWithExcludes,
-                                                                        .type = MatcherType::kRegexpNotMatch}}}}}));
+                                             .selector = {.matchers = {{.status = MatchStatus::kEmptyMatch, .type = MatcherType::kUnknown}}}}},
+        SelectorQuerierTestCase{
+            .label_sets = {{{"job", "cron"}}},
+            .label_matchers = {{.name = "job", .value = "|cron", .type = MatcherType::kRegexpMatch}},
+            .expected = {
+                .status = QuerierStatus::kNoPositiveMatchers,
+                .selector = {
+                    .matchers = {{.matches = {}, .label_name_match = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpNotMatch}}}}}));
 
 INSTANTIATE_TEST_SUITE_P(
     LabelNameNotFound,
@@ -272,11 +272,9 @@ INSTANTIATE_TEST_SUITE_P(
                                {.name = "process", .value = "|python", .type = MatcherType::kRegexpMatch}},
             .expected =
                 {.status = QuerierStatus::kMatch,
-                 .selector = {.matchers = {{.matches = {0}, .label_name_match = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kExactMatch},
-                                           {.matches = {2},
-                                            .label_name_match = 1,
-                                            .status = MatchStatus::kAllMatchWithExcludes,
-                                            .type = MatcherType::kRegexpNotMatch}}}}},
+                 .selector =
+                     {.matchers = {{.matches = {0}, .label_name_match = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kExactMatch},
+                                   {.matches = {0, 1}, .label_name_match = 1, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpNotMatch}}}}},
         SelectorQuerierTestCase{
             .label_sets =
                 {
@@ -294,23 +292,63 @@ INSTANTIATE_TEST_SUITE_P(
             .label_sets =
                 {
                     {{"job", "cron"}, {"process", "php"}},
+                    {{"job", "cron"}, {"process", "nodejs"}},
+                    {{"job", "cron"}, {"process", "python"}},
+                },
+            .label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
+                               {.name = "process", .value = "|php|p.p", .type = MatcherType::kRegexpMatch}},
+            .expected =
+                {.status = QuerierStatus::kMatch,
+                 .selector =
+                     {.matchers = {{.matches = {0}, .label_name_match = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kExactMatch},
+                                   {.matches = {1, 2}, .label_name_match = 1, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpNotMatch}}}}},
+        SelectorQuerierTestCase{
+            .label_sets =
+                {
+                    {{"job", "cron"}, {"process", "php"}},
                 },
             .label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
                                {.name = "process1", .value = "|php", .type = MatcherType::kRegexpMatch}},
             .expected = {
                 .status = QuerierStatus::kMatch,
                 .selector = {.matchers = {{.matches = {0}, .label_name_match = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kExactMatch},
-                                          {.status = MatchStatus::kAllMatchWithExcludes, .type = MatcherType::kUnknown}}}}}));
+                                          {.status = MatchStatus::kEmptyMatch, .type = MatcherType::kUnknown}}}}}));
 
-INSTANTIATE_TEST_SUITE_P(RegexpNegativeMatchersWithEmptyAlternative,
-                         SelectorQuerierFixture,
-                         testing::Values(SelectorQuerierTestCase{
-                             .label_sets =
-                                 {
-                                     {{"job", "cron"}, {"process", "php"}},
-                                 },
-                             .label_matchers = {{.name = "process1", .value = "|php", .type = MatcherType::kRegexpNotMatch}},
-                             .expected = {.status = QuerierStatus::kNoMatch,
-                                          .selector = {.matchers = {{.status = MatchStatus::kAllMatchWithExcludes, .type = MatcherType::kUnknown}}}}}));
+INSTANTIATE_TEST_SUITE_P(
+    RegexpNegativeMatchersWithEmptyAlternative,
+    SelectorQuerierFixture,
+    testing::Values(
+        SelectorQuerierTestCase{
+            .label_sets =
+                {
+                    {{"job", "cron"}, {"process", "php"}},
+                },
+            .label_matchers = {{.name = "process1", .value = "|php", .type = MatcherType::kRegexpNotMatch}},
+            .expected = {.status = QuerierStatus::kNoMatch, .selector = {.matchers = {{.status = MatchStatus::kEmptyMatch, .type = MatcherType::kUnknown}}}}},
+        SelectorQuerierTestCase{
+            .label_sets =
+                {
+                    {{"job", "cron"}, {"process", "php"}},
+                },
+            .label_matchers = {{.name = "process", .value = "|php", .type = MatcherType::kRegexpNotMatch}},
+            .expected =
+                {.status = QuerierStatus::kMatch,
+                 .selector = {.matchers = {{.matches = {0}, .label_name_match = 1, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpNotMatch},
+                                           {.matches = {}, .label_name_match = 1, .status = MatchStatus::kAllMatch, .type = MatcherType::kRegexpMatch}}}},
+        },
+        SelectorQuerierTestCase{
+            .label_sets =
+                {
+                    {{"job", "cron"}, {"process", "php"}},
+                    {{"job", "cron"}, {"process", "nodejs"}},
+                },
+            .label_matchers = {{.name = "process", .value = "|php", .type = MatcherType::kRegexpNotMatch},
+                               {.name = "process", .value = "nodejs", .type = MatcherType::kExactMatch}},
+            .expected =
+                {.status = QuerierStatus::kMatch,
+                 .selector = {.matchers = {{.matches = {0}, .label_name_match = 1, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpNotMatch},
+                                           {.matches = {1}, .label_name_match = 1, .status = MatchStatus::kPartialMatch, .type = MatcherType::kExactMatch},
+                                           {.matches = {}, .label_name_match = 1, .status = MatchStatus::kAllMatch, .type = MatcherType::kRegexpMatch}}}},
+        }));
 
 }  // namespace
