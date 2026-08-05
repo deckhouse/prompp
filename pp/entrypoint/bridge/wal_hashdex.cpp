@@ -162,8 +162,18 @@ PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  new (res) Result{.error = std::get<Scraper>(*in->hashdex).parse({const_cast<char*>(in->buffer.data()), in->buffer.size()}, in->default_timestamp),
-                   .scraped = static_cast<uint32_t>(std::get<Scraper>(*in->hashdex).floats().size())};
+  auto& scraper = std::get<Scraper>(*in->hashdex);
+
+  ScraperError error{ScraperError::kNoError};
+  try {
+    error = scraper.parse({const_cast<char*>(in->buffer.data()), in->buffer.size()}, in->default_timestamp);
+  } catch (const BareBones::Exception&) {
+    // The only BareBones::Exception raised on the scrape parse path is the markup
+    // buffer 4 GiB guard (marked.h, code 0xc3064f4ce46a3183).
+    error = ScraperError::kMarkupBufferOverflow;
+  }
+
+  new (res) Result{.error = error, .scraped = static_cast<uint32_t>(scraper.floats().size())};
 }
 
 template <class Scraper>

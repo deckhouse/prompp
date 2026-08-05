@@ -1,7 +1,10 @@
 #pragma once
 
+#include <cstddef>
+#include <limits>
 #include <string_view>
 
+#include "bare_bones/exception.h"
 #include "bare_bones/vector.h"
 #include "encoding.h"
 #include "marked_common.h"
@@ -136,7 +139,7 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
   [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
   void bytes_enlarge(uint32_t extra_bytes) noexcept {
-    const uint32_t offset = bytes_count();
+    const size_t offset = bytes_count();
 
     bytes_buffer_.grow_to_fit_at_least(offset + extra_bytes);
 
@@ -158,8 +161,12 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
 
   PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
 
-  PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
-    this->buffer_.push_back(MarkedMetric{.hash = {}, .base_offset = global_offset, .data_offset = bytes_count()});
+  void add_metric(uint64_t global_offset) {
+    const size_t data_offset = bytes_count();
+    if (data_offset > std::numeric_limits<uint32_t>::max()) [[unlikely]] {
+      throw BareBones::Exception(0xc3064f4ce46a3183, "scraper markup buffer size exceeds 4 GiB (%zu bytes)", data_offset);
+    }
+    this->buffer_.push_back(MarkedMetric{.hash = {}, .base_offset = global_offset, .data_offset = static_cast<uint32_t>(data_offset)});
   }
 
   void add_layout_and_count(const encoding::LayoutMarker layout, const uint32_t count) noexcept {
@@ -178,7 +185,7 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
   }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_ptr_ - bytes_buffer_.control_block().data; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t bytes_count() const noexcept { return bytes_ptr_ - bytes_buffer_.control_block().data; }
 
   BareBones::Memory<BareBones::MemoryControlBlock, char> bytes_buffer_;
   char* bytes_ptr_{};

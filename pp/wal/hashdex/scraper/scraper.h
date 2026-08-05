@@ -160,7 +160,7 @@ class Scraper {
     bool have_metric_name = false;
     auto& tokenizer = parser_.tokenizer();
 
-    const uint32_t metric_offset = tokenizer.token_str().data() - tokenizer.buffer().data();
+    const uint64_t metric_offset = tokenizer.token_str().data() - tokenizer.buffer().data();
 
     if (tokenizer.token() == Token::kMetricName) [[likely]] {
       labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
@@ -301,7 +301,7 @@ class Scraper {
     return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
-  void encode_metric_data(const uint32_t metric_offset) noexcept {
+  void encode_metric_data(const uint64_t metric_offset) {
     metric_buffer_.add_metric(metric_offset);
 
     sort_and_filter_labels();
@@ -317,7 +317,7 @@ class Scraper {
     metric_buffer_.add_sample(layout, marked_sample_.sample);
   }
 
-  void encode_labels(const uint32_t offset) noexcept {
+  void encode_labels(const uint64_t offset) noexcept {
     for (auto label : labels_) {
       if (!label.name.is_reserved_name()) [[likely]] {
         label.name.offset -= offset;
