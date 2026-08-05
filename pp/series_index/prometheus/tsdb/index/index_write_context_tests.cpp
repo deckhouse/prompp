@@ -120,10 +120,29 @@ TEST_F(IndexWriteContextFixture, ResolvesRefsForSeriesAddedAfterShrink) {
   EXPECT_THAT(CollectSymbols(), testing::ElementsAre("", "a", "b", "c", "d", "job"));
 }
 
-// Production rotate path: resolve snapshot shares SharedSpans with the *destination*
-// LSS, which keeps receiving new series (and new label names) after shrink. Growing
-// destination with spare SharedVector capacity must not inflate the frozen snapshot
-// keys past symbols_tables_ (SIGSEGV in for_each_value_id / IndexWriteContext).
+// Direct repro of the spare-capacity COW hole (gdb root cause). Without
+// SharedMemory::ensure_unique() in set_items_count this MUST fail: the SharedSpan
+// observes the writer's new items_count while still pointing at the same buffer.
+TEST(SharedMemoryCowTest, SharedSpanSizeFrozenWhenWriterGrowsWithSpareCapacity) {
+  BareBones::SharedVector<uint32_t, BareBones::DefaultReallocator> writer;
+  writer.reserve(8);
+  ASSERT_GE(writer.capacity(), 8U);
+  writer.push_back(10U);
+
+  const BareBones::SharedSpan<uint32_t, BareBones::DefaultReallocator> snapshot(writer);
+  ASSERT_EQ(1U, snapshot.size());
+  ASSERT_EQ(writer.data(), snapshot.data());
+  ASSERT_GT(writer.capacity(), writer.size());
+
+  writer.push_back(20U);
+
+  EXPECT_EQ(1U, snapshot.size());
+  EXPECT_EQ(2U, writer.size());
+  EXPECT_NE(snapshot.data(), writer.data());
+  EXPECT_EQ(10U, snapshot[0]);
+}
+
+// Production rotate path: resolve snapshot shares SharedSpans with destination.
 TEST_F(IndexWriteContextFixture, IndexWriterSurvivesDestinationGrowthAfterSharedResolveSnapshot) {
   // Arrange
   Lss destination;
@@ -131,42 +150,38 @@ TEST_F(IndexWriteContextFixture, IndexWriterSurvivesDestinationGrowthAfterShared
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), destination, dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
 
+  // While unique: ensure name-symbol SharedVector has spare capacity (growth policy),
+  // otherwise the first post-snapshot insert may reallocate and mask the items_count bug.
+  destination.find_or_emplace(LabelViewSet{{"warmup_name", "warmup_value"}});
+
   const uint32_t shrink_boundary = lss_.next_item_index();
   lss_.set_pending_shrink_boundary(shrink_boundary);
   const ReadonlyLss resolve_snapshot(destination);
   lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
 
-  // Act: mutate destination like the new head after rotation (new label names).
-  destination.reserve(64);
+  const auto keys_at_freeze = resolve_snapshot.data_view().keys().size();
+  ASSERT_GT(keys_at_freeze, 0U);
+  // Setup check: snapshot must alias destination symbol bytes (shared control block).
+  ASSERT_EQ((*resolve_snapshot.data_view().keys().begin()).data(), (*destination.data_view().keys().begin()).data());
+
+  // Act: grow destination with new label names. Do not reserve() here — that COWs via reallocate.
   destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"region", "eu"}});
   destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"region", "us"}});
   destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "a"}});
   destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "b"}});
   destination.find_or_emplace(LabelViewSet{{"env", "prod"}, {"job", "a"}});
 
-  // #region agent log
-  {
-    const auto snap_keys = resolve_snapshot.data_view().keys().size();
-    const auto dest_keys = destination.data_view().keys().size();
-    if (FILE* f = std::fopen("/home/veles/work/code/src/github.com/deckhouse/prompp/.cursor/debug-49406c.log", "a")) {
-      std::fprintf(f,
-                   "{\"sessionId\":\"49406c\",\"runId\":\"post-fix\",\"hypothesisId\":\"A\",\"location\":\"index_write_context_tests.cpp\","
-                   "\"message\":\"keys after destination growth\",\"data\":{\"snapshot_keys\":%u,\"destination_keys\":%u,\"cow_ok\":%s},\"timestamp\":0}\n",
-                   static_cast<unsigned>(snap_keys), static_cast<unsigned>(dest_keys), snap_keys < dest_keys ? "true" : "false");
-      std::fclose(f);
-    }
-    // Snapshot keys must stay frozen while destination grows (the gdb crash had snapshot keys > symbols_tables).
-    EXPECT_LT(snap_keys, dest_keys);
-  }
-  // #endregion
+  const auto snap_keys = resolve_snapshot.data_view().keys().size();
+  const auto dest_keys = destination.data_view().keys().size();
 
-  // Assert: building IndexWriteContext iterates snapshot values without OOB.
-  EXPECT_NO_THROW({
-    const auto context = IndexWriteContext<Lss>{lss_};
-    std::vector<std::string> symbols;
-    context.for_each_symbol([&](uint32_t, std::string_view symbol) { symbols.emplace_back(symbol); });
-    EXPECT_FALSE(symbols.empty());
-  });
+  ASSERT_GT(dest_keys, keys_at_freeze) << "destination must add new label names";
+  EXPECT_EQ(keys_at_freeze, snap_keys) << "shared resolve snapshot keys inflated — set_items_count COW missing "
+                                          "(see SharedMemoryCowTest.SharedSpanSizeFrozenWhenWriterGrowsWithSpareCapacity)";
+
+  const auto context = IndexWriteContext<Lss>{lss_};
+  std::vector<std::string> symbols;
+  context.for_each_symbol([&](uint32_t, std::string_view symbol) { symbols.emplace_back(symbol); });
+  EXPECT_FALSE(symbols.empty());
 }
 
 }  // namespace
