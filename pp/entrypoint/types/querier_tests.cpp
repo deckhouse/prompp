@@ -18,6 +18,7 @@ using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Go::Slice;
 using DataStorage = series_data::DataStorage<>;
+using entrypoint::types::DataStorageWithArenas;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::decoder::DecodeIteratorSentinel;
@@ -25,7 +26,7 @@ using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
 using series_data::unloading::Loader;
 using series_data::unloading::Unloader;
-using InstantQuerierWrapper = entrypoint::types::InstantQuerierWithArgumentsWrapper<std::vector<LabelSetID>, std::span<Sample>>;
+using InstantQuerierWrapper = entrypoint::types::InstantQuerierWithArgumentsWrapper<std::vector<LabelSetID>, std::span<Sample>, DataStorageWithArenas>;
 using RangeQuery = series_data::querier::Query<Slice<LabelSetID>>;
 
 class RangeQuerierWrapperFixture : public testing::Test {
