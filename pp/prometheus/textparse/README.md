@@ -3,19 +3,21 @@ We use re2c as lexer generator for parse prometheus text metrics format.
 ## Installation
 
 ```bash
-apt install re2c
+apt install re2c=4.5.1-1
 ```
 
 ## Prometheus lexer code generation
 
 ```bash
-re2c prometheus/textparse/prometheus/tokenizer.cxx -o prometheus/textparse/prometheus/tokenizer.cpp --no-debug-info --conditions --bit-vectors --no-generation-date --no-version
+re2c prometheus/textparse/prometheus/tokenizer.cxx -o prometheus/textparse/prometheus/tokenizer.cpp --no-debug-info --conditions --bit-vectors --computed-gotos-relative --no-generation-date --no-version -Werror
+clang-format -i prometheus/textparse/prometheus/tokenizer.cpp
 ```
 
 ## Open metrics Lexer code generation
 
 ```bash
-re2c prometheus/textparse/open_metrics/tokenizer.cxx -o prometheus/textparse/open_metrics/tokenizer.cpp --no-debug-info --conditions --bit-vectors --no-generation-date --no-version
+re2c prometheus/textparse/open_metrics/tokenizer.cxx -o prometheus/textparse/open_metrics/tokenizer.cpp --no-debug-info --conditions --bit-vectors --computed-gotos-relative --no-generation-date --no-version -Werror
+clang-format -i prometheus/textparse/open_metrics/tokenizer.cpp
 ```
 
 ## Links
