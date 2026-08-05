@@ -34,7 +34,9 @@ class Scraper {
       switch (tokenizer.next()) {
         case Token::kEOF:
         case Token::kEOFWord: {
-          metric_buffer_.add_padding();
+          if (!metric_buffer_.add_padding()) [[unlikely]] {
+            return Error::kMarkupBufferOverflow;
+          }
           return parser_.validate_parse_result();
         }
 
@@ -185,13 +187,11 @@ class Scraper {
       return Error::kNoMetricName;
     }
 
-    const auto error = parse_metric_suffix();
-
-    if (error == Error::kNoError) [[likely]] {
-      encode_metric_data(metric_offset);
+    if (const auto error = parse_metric_suffix(); error != Error::kNoError) [[unlikely]] {
+      return error;
     }
 
-    return error;
+    return encode_metric_data(metric_offset);
   }
 
   [[nodiscard]] Error tokenize_label_set(bool& have_metric_name) noexcept {
@@ -301,13 +301,15 @@ class Scraper {
     return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
-  void encode_metric_data(const uint64_t metric_offset) {
+  [[nodiscard]] Error encode_metric_data(const uint64_t metric_offset) noexcept {
     metric_buffer_.add_metric(metric_offset);
 
     sort_and_filter_labels();
     append_labels_hash();
 
-    metric_buffer_.bytes_enlarge(encoding::metric_maximum_encoding_size(labels_.size()));
+    if (!metric_buffer_.bytes_enlarge(encoding::metric_maximum_encoding_size(labels_.size()))) [[unlikely]] {
+      return Error::kMarkupBufferOverflow;
+    }
 
     const encoding::LayoutMarker layout =
         encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::SampleCodec::value_type(marked_sample_.sample.value()));
@@ -315,6 +317,7 @@ class Scraper {
 
     encode_labels(metric_offset);
     metric_buffer_.add_sample(layout, marked_sample_.sample);
+    return Error::kNoError;
   }
 
   void encode_labels(const uint64_t offset) noexcept {

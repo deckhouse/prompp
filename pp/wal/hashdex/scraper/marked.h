@@ -4,7 +4,6 @@
 #include <limits>
 #include <string_view>
 
-#include "bare_bones/exception.h"
 #include "bare_bones/vector.h"
 #include "encoding.h"
 #include "marked_common.h"
@@ -138,12 +137,19 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
-  void bytes_enlarge(uint32_t extra_bytes) noexcept {
+  [[nodiscard]] bool bytes_enlarge(uint32_t extra_bytes) noexcept {
     const size_t offset = bytes_count();
+
+    // data_offset (MarkedMetric) indexes this buffer and stays 32-bit; refuse to grow past the
+    // 4 GiB addressable range instead of silently truncating offsets.
+    if (offset + extra_bytes > std::numeric_limits<uint32_t>::max()) [[unlikely]] {
+      return false;
+    }
 
     bytes_buffer_.grow_to_fit_at_least(offset + extra_bytes);
 
     bytes_ptr_ = bytes_buffer_.control_block().data + offset;
+    return true;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return Base::buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
@@ -161,12 +167,8 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
 
   PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
 
-  void add_metric(uint64_t global_offset) {
-    const size_t data_offset = bytes_count();
-    if (data_offset > std::numeric_limits<uint32_t>::max()) [[unlikely]] {
-      throw BareBones::Exception(0xc3064f4ce46a3183, "scraper markup buffer size exceeds 4 GiB (%zu bytes)", data_offset);
-    }
-    this->buffer_.push_back(MarkedMetric{.hash = {}, .base_offset = global_offset, .data_offset = static_cast<uint32_t>(data_offset)});
+  PROMPP_ALWAYS_INLINE void add_metric(uint64_t global_offset) noexcept {
+    this->buffer_.push_back(MarkedMetric{.hash = {}, .base_offset = global_offset, .data_offset = static_cast<uint32_t>(bytes_count())});
   }
 
   void add_layout_and_count(const encoding::LayoutMarker layout, const uint32_t count) noexcept {
@@ -179,9 +181,9 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
     bytes_ptr_ = encoding::SampleCodec::encode(bytes_ptr_, layout, sample);
   }
 
-  void add_padding() noexcept {
-    constexpr size_t kPaddingSizeBytes = 16;
-    bytes_enlarge(kPaddingSizeBytes);
+  [[nodiscard]] bool add_padding() noexcept {
+    constexpr uint32_t kPaddingSizeBytes = 16;
+    return bytes_enlarge(kPaddingSizeBytes);
   }
 
  private:
