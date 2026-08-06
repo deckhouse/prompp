@@ -913,8 +913,8 @@ TEST(PrometheusScraperOverflowTest, DISABLED_ResolvesEntriesBeyond4GiBOffset) {
 
   // Act
   const auto result = scraper.parse(buffer, kDefaultTimestamp);
-  const auto metadata = PromPP::WAL::hashdex::get_metadata(scraper);
-  const auto floats = PromPP::WAL::hashdex::get_floats(scraper);
+  const auto metadata = PromPP::WAL::hashdex::get_metadata(scraper.metadata());
+  const auto metrics = PromPP::WAL::hashdex::get_metrics(scraper.metrics());
 
   // Assert
   EXPECT_EQ(Error::kNoError, result);
@@ -922,7 +922,7 @@ TEST(PrometheusScraperOverflowTest, DISABLED_ResolvesEntriesBeyond4GiBOffset) {
   EXPECT_EQ("demo_metric"sv, metadata[0].metric_name);
   EXPECT_EQ("untyped"sv, metadata[0].text);
   EXPECT_EQ(MetadataType::kType, metadata[0].type);
-  EXPECT_EQ(1U, floats.size());
+  EXPECT_EQ(1U, metrics.size());
 }
 
 }  // namespace
