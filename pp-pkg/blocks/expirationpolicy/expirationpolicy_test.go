@@ -436,7 +436,7 @@ func (c *testCatalog) OnDiskSize() int64 {
 // List returns the list of heads in the catalog.
 func (c *testCatalog) List(
 	func(record *catalog.Record) bool,
-	func(lhs *catalog.Record, rhs *catalog.Record) bool,
+	func(lhs, rhs *catalog.Record) bool,
 ) []*catalog.Record {
 	return c.list
 }

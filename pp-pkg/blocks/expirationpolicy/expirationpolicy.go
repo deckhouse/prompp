@@ -6,6 +6,7 @@ import (
 
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
@@ -40,7 +41,7 @@ type Catalog interface {
 	// List returns the list of heads in the catalog.
 	List(
 		filterFn func(record *catalog.Record) bool,
-		sortLess func(lhs *catalog.Record, rhs *catalog.Record) bool,
+		sortLess func(lhs, rhs *catalog.Record) bool,
 	) []*catalog.Record
 }
 
