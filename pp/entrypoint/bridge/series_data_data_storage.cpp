@@ -270,10 +270,10 @@ extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* arg
 
   const auto in = static_cast<Arguments*>(args);
 
-  assert(in->series_ids.size() == out->timestamps.size());
+  assert(in->series_ids.size() == in->timestamps.size());
   std::visit(
-      [in, out](const auto& data_storage) {
-        std::ranges::transform(in->series_ids, out->timestamps.begin(),
+      [in](const auto& data_storage) {
+        std::ranges::transform(in->series_ids, in->timestamps.begin(),
                                [&data_storage](uint32_t series_id) { return Decoder::get_series_min_timestamp(data_storage, series_id); });
       },
       *in->data_storage);
