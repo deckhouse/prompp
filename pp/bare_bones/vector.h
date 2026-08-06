@@ -43,48 +43,17 @@ class GenericVector {
   PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept { derived()->memory().resize_to_fit_at_least(size()); }
 
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
-    reserve(new_size);
-
-    if constexpr (!std::is_trivial_v<T>) {
-      const auto current_size = size();
-      auto memory = data();
-
-      if constexpr (IsZeroInitializable<T>::value) {
-        if constexpr (IsTriviallyDestructible<T>::value) {
-          if (new_size > current_size) {
-            zero_memory(memory + current_size, new_size - current_size);
-          } else {
-            zero_memory(memory + new_size, current_size - new_size);
-          }
-        } else {
-          if (new_size > current_size) {
-            zero_memory(memory + current_size, new_size - current_size);
-          } else {
-            std::destroy_n(memory + new_size, current_size - new_size);
-          }
-        }
-      } else {
-        if (new_size > current_size) {
-          // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
-          memory += current_size;
-          for (SizeType i = current_size; i != new_size; ++i) {
-            std::construct_at(memory++);
-          }
-        } else {
-          std::destroy_n(memory + new_size, current_size - new_size);
-        }
-      }
-    }
-
+    resize_storage(new_size);
     derived()->set_size(new_size);
   }
 
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) noexcept {
     const auto current_size = size();
-    resize(new_size);
+    resize_storage(new_size);
     if (new_size > current_size) {
       std::fill(data() + current_size, data() + new_size, value);
     }
+    derived()->set_size(new_size);
   }
 
   template <class Writer>
@@ -156,8 +125,9 @@ class GenericVector {
   template <class Item>
   PROMPP_ALWAYS_INLINE void push_back(Item&& item) noexcept {
     auto pos = size();
-    resize(pos + 1);
+    reserve(pos + 1);
     std::construct_at(data() + pos, std::forward<Item>(item));
+    derived()->set_size(pos + 1);
   }
 
   template <class Item>
@@ -166,25 +136,28 @@ class GenericVector {
     assert(pos <= data() + size());
 
     const auto idx = pos - data();
-    reserve(size() + 1);
+    const auto old_size = size();
+    reserve(old_size + 1);
     const auto memory = data();
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
     // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memmove(memory + idx + 1, memory + idx, (size() - idx) * sizeof(T));
+    std::memmove(memory + idx + 1, memory + idx, (old_size - idx) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
-    derived()->set_size(size() + 1);
-    return std::construct_at(memory + idx, std::forward<Item>(item));
+    auto* inserted = std::construct_at(memory + idx, std::forward<Item>(item));
+    derived()->set_size(old_size + 1);
+    return inserted;
   }
 
   template <class... Args>
   PROMPP_ALWAYS_INLINE T& emplace_back(Args&&... args) noexcept {
     auto pos = size();
     reserve(pos + 1);
+    auto& ref = *std::construct_at(data() + pos, std::forward<Args>(args)...);
     derived()->set_size(pos + 1);
-    return *std::construct_at(data() + pos, std::forward<Args>(args)...);
+    return ref;
   }
 
   template <std::random_access_iterator IteratorType, class IteratorSentinelType>
@@ -192,13 +165,15 @@ class GenericVector {
   PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
     const auto pos = size();
     const auto size = std::distance(begin, end);
-    resize(pos + size);
+    resize_storage(pos + size);
 
     if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
       std::memcpy(data() + pos, begin, size);
     } else {
       std::ranges::copy(begin, end, data() + pos);
     }
+
+    derived()->set_size(pos + size);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return derived()->get_size(); }
@@ -304,6 +279,41 @@ class GenericVector {
   }
 
  private:
+  PROMPP_ALWAYS_INLINE void resize_storage(SizeType new_size) noexcept {
+    reserve(new_size);
+
+    if constexpr (!std::is_trivial_v<T>) {
+      const auto current_size = size();
+      auto memory = data();
+
+      if constexpr (IsZeroInitializable<T>::value) {
+        if constexpr (IsTriviallyDestructible<T>::value) {
+          if (new_size > current_size) {
+            zero_memory(memory + current_size, new_size - current_size);
+          } else {
+            zero_memory(memory + new_size, current_size - new_size);
+          }
+        } else {
+          if (new_size > current_size) {
+            zero_memory(memory + current_size, new_size - current_size);
+          } else {
+            std::destroy_n(memory + new_size, current_size - new_size);
+          }
+        }
+      } else {
+        if (new_size > current_size) {
+          // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
+          memory += current_size;
+          for (SizeType i = current_size; i != new_size; ++i) {
+            std::construct_at(memory++);
+          }
+        } else {
+          std::destroy_n(memory + new_size, current_size - new_size);
+        }
+      }
+    }
+  }
+
   PROMPP_ALWAYS_INLINE static void zero_memory(void* memory, SizeType size) {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
