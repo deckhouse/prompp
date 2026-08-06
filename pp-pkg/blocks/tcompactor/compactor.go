@@ -104,9 +104,10 @@ func NewTCompactor(
 
 // Compact creates a new block in the compactor's directory from the blocks in the provided directories.
 //
-//  1. The compactor builds a plan for the compact itself.
-//  2. The compactor compacts the blocks in the plan.
-//  3. The compactor returns the ULIDs of the compacted blocks.
+//  1. Groups the blocks by their time ranges and labels.
+//  2. The compactor builds a plan for the compact itself.
+//  3. The compactor compacts the blocks in the plan.
+//  4. The compactor returns the ULIDs of the compacted blocks.
 func (c *TCompactor) Compact(open []*block.Block) ([]ulid.ULID, error) {
 	c.metrics.compactionsTriggered.Inc()
 	groups, err := c.grouper.Groups(open)

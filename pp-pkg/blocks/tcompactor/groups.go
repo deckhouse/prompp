@@ -121,6 +121,10 @@ func (g *DefaultGrouper) Groups(blocks []*block.Block) (res []*Group, err error)
 		}
 	}
 
+	for _, group := range res {
+		group.SortMetasByMinTime()
+	}
+
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].Key() < res[j].Key()
 	})
@@ -187,9 +191,6 @@ func (cg *Group) AppendMeta(meta *metadata.Meta) error {
 	}
 
 	cg.metasByMinTime = append(cg.metasByMinTime, meta)
-	sort.Slice(cg.metasByMinTime, func(i, j int) bool {
-		return cg.metasByMinTime[i].MinTime < cg.metasByMinTime[j].MinTime
-	})
 
 	return nil
 }
@@ -291,6 +292,13 @@ func (cg *Group) OverlappingBlocks(overlapGroups block.Overlaps) {
 
 		overlapGroups[minRange] = overlap
 	}
+}
+
+// SortMetasByMinTime sorts the metas in the group by their min time.
+func (cg *Group) SortMetasByMinTime() {
+	sort.Slice(cg.metasByMinTime, func(i, j int) bool {
+		return cg.metasByMinTime[i].MinTime < cg.metasByMinTime[j].MinTime
+	})
 }
 
 // String returns a human readable string representation of the group.

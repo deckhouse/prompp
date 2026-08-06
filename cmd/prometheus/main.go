@@ -866,7 +866,7 @@ func main() {
 	// PP_CHANGES.md: rebuild on cpp start
 	// Server mode supports two historical-block storage schemes selected by the
 	// PROMPP_FEATURES=enable_block_manager feature flag:
-	// 1) enabled:  block.Manager + block.Compactor for persisted blocks.
+	// 1) enabled:  manager.Manager + tcompactor.TCompactor for persisted blocks.
 	// 2) disabled (default): pre-PR-377 mode with tsdb.DB serving persisted blocks.
 	// In both modes, PP head manager + adapter remain the write path.
 	var (
@@ -1848,7 +1848,7 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 }
 
 // PP_CHANGES.md: rebuild on cpp
-// blockStorage adapts a read-only block.Manager (persisted blocks) to
+// blockStorage adapts a read-only manager.Manager (persisted blocks) to
 // storage.Storage so it can be used as a fanout secondary. Appends are dropped:
 // the head adapter is the fanout primary that stores samples.
 type blockStorage struct {

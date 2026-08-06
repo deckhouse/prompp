@@ -83,6 +83,9 @@ func (p *TsdbBasedPlanner) getPlan(
 	noCompactMarked map[ulid.ULID]*metadata.NoCompactMark,
 	metasByMinTime []*metadata.Meta,
 ) ([]*metadata.Meta, bool) {
+	if len(metasByMinTime) < 2 { //revive:disable-line:add-constant // check if metasByMinTime is valid
+		return nil, false
+	}
 	notExcludedMetasByMinTime := make([]*metadata.Meta, 0, len(metasByMinTime))
 	for _, meta := range metasByMinTime {
 		if _, excluded := noCompactMarked[meta.ULID]; excluded {

@@ -17,7 +17,7 @@ func WriteThanosMetaFileAdapter(
 	ls labels.Labels,
 ) func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error) {
 	return func(logger log.Logger, dir string, meta *tsdb.BlockMeta) (int64, error) {
-		if meta.Compaction.IsCorrupted() || meta.Compaction.Failed {
+		if meta.Compaction.IsCorrupted() || meta.Compaction.Failed || meta.Compaction.Deletable {
 			rmeta, _, err := block.ReadFromDir(dir)
 			if err != nil {
 				return 0, err
