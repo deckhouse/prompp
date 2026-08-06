@@ -56,8 +56,8 @@ class GenericVector {
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) noexcept {
     const auto current_size = size();
     if (new_size > current_size) {
-      grow_storage(new_size);
-      std::fill(data() + current_size, data() + new_size, value);
+      reserve(new_size);
+      std::uninitialized_fill(data() + current_size, data() + new_size, value);
       derived()->set_size(new_size);
     } else {
       resize(new_size);
@@ -178,7 +178,7 @@ class GenericVector {
     grow_storage(pos + size);
 
     if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
-      std::memcpy(data() + pos, begin, size);
+      std::memcpy(data() + pos, begin, size * sizeof(T));
     } else {
       std::ranges::copy(begin, end, data() + pos);
     }
@@ -451,7 +451,7 @@ class SharedSpan {
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
   SharedSpan& operator=(const SharedSpan&) = default;
   SharedSpan& operator=(SharedSpan&& other) noexcept {
-    if (this != other) [[likely]] {
+    if (this != &other) [[likely]] {
       data_ = std::move(other.data_);
     }
 
