@@ -239,6 +239,8 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 
 // IsDownsamplingBlock returns true if the block is a downsampling block.
 func (pb *Block) IsDownsamplingBlock() bool {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.Thanos.Downsample.Resolution > 0
 }
 
@@ -272,6 +274,8 @@ func (pb *Block) Metadata() metadata.Meta {
 func (pb *Block) OverlapsClosedInterval(mint, maxt int64) bool {
 	// The block itself is a half-open interval
 	// [pb.meta.MinTime, pb.meta.MaxTime).
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.MinTime <= maxt && mint < pb.meta.MaxTime
 }
 
@@ -319,6 +323,8 @@ func (pb *Block) Size() int64 {
 
 // String returns the string representation of the block.
 func (pb *Block) String() string {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.ULID.String()
 }
 

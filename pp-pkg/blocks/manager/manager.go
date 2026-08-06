@@ -426,9 +426,9 @@ func (m *Manager) reloadBlocks() (err error) {
 
 	// Only check overlapping blocks when overlapping compaction is enabled.
 	if m.opts.EnableOverlappingCompaction {
-		overlaps, err := m.compactor.OverlappingBlocks(toLoad)
-		if err != nil {
-			_ = level.Error(m.logger).Log("msg", "get overlapping blocks failed", "err", err)
+		overlaps, errOverlaps := m.compactor.OverlappingBlocks(toLoad)
+		if errOverlaps != nil {
+			_ = level.Error(m.logger).Log("msg", "get overlapping blocks failed", "err", errOverlaps)
 		} else if len(overlaps) > 0 {
 			_ = level.Warn(m.logger).Log(
 				"msg", "Overlapping blocks found during reloadBlocks",
@@ -444,18 +444,22 @@ func (m *Manager) reloadBlocks() (err error) {
 		}
 	}
 
-	if err := m.renameForDeletionBlocks(deletable); err != nil {
-		return fmt.Errorf("rename for deletion %v blocks: %w", len(deletable), err)
+	toDelete, err := m.renameForDeletionBlocks(deletable)
+	if err != nil {
+		err = fmt.Errorf("rename for deletion %v blocks: %w", len(deletable), err)
 	}
 
-	m.deleteBlocksWG.Add(1)
-	go m.closeAndDeleteBlocks(deletable)
+	if len(toDelete) > 0 {
+		m.deleteBlocksWG.Add(1)
+		go m.closeAndDeleteBlocks(toDelete)
+	}
 
-	return nil
+	return err
 }
 
 // renameForDeletionBlocks renames the given blocks for deletion.
-func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) error {
+func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) (map[ulid.ULID]*block.Block, error) {
+	toDelete := make(map[ulid.ULID]*block.Block, len(blocks))
 	for uid := range blocks {
 		from := filepath.Join(m.dir, uid.String())
 		switch _, err := os.Stat(from); {
@@ -463,17 +467,19 @@ func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) err
 			// Noop.
 			continue
 		case err != nil:
-			return fmt.Errorf("stat dir %v: %w", from, err)
+			return toDelete, fmt.Errorf("stat dir %v: %w", from, err)
 		}
 
 		// Replace atomically to avoid partial block when process would crash during deletion.
 		tmpToDelete := filepath.Join(m.dir, fmt.Sprintf("%s%s", uid, tmpForDeletionBlockDirSuffix))
 		if err := fileutil.Replace(from, tmpToDelete); err != nil {
-			return fmt.Errorf("replace of obsolete block for deletion %s: %w", uid, err)
+			return toDelete, fmt.Errorf("replace of obsolete block for deletion %s: %w", uid, err)
 		}
+
+		toDelete[uid] = blocks[uid]
 	}
 
-	return nil
+	return toDelete, nil
 }
 
 // closeAndDeleteBlocks closes the given blocks and deletes the temporary files for deletion.

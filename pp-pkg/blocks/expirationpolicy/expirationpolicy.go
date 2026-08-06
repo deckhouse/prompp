@@ -3,6 +3,7 @@ package expirationpolicy
 import (
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -88,7 +89,7 @@ func NewMetrics(r prometheus.Registerer) *Metrics {
 
 // Options is the configuration for the expiration policy.
 type Options struct {
-	// RetentionDuration is the time retention in milliseconds, used for the corrupted-block outdated check.
+	// RetentionDuration is the time retention in milliseconds.
 	RetentionDuration int64
 	// MaxBytes is the maximum number of bytes to be retained in the tsdb blocks, configured 0 means disabled.
 	MaxBytes int64
@@ -114,12 +115,19 @@ func NewExpirationPolicy[TBlock Block](
 	opts *Options,
 	r prometheus.Registerer,
 ) *ExpirationPolicy[TBlock] {
-	return &ExpirationPolicy[TBlock]{
+	ep := &ExpirationPolicy[TBlock]{
 		dir:     dir,
 		c:       c,
 		opts:    opts,
 		metrics: NewMetrics(r),
 	}
+
+	// Report the configured retention constraints
+	limitBytes := max(ep.opts.MaxBytes, 0)
+	ep.metrics.maxBytes.Set(float64(limitBytes))
+	ep.metrics.retentionDuration.Set((time.Duration(ep.opts.RetentionDuration) * time.Millisecond).Seconds())
+
+	return ep
 }
 
 // BeyondSizeRetention returns those blocks which are beyond the size retention.
@@ -223,7 +231,6 @@ func (ep *ExpirationPolicy[TBlock]) BlocksToDelete(blocks []TBlock) map[ulid.ULI
 }
 
 // CatalogHeadsSize returns the on-disk size of the catalog and all of its heads.
-// It is useful to build the extraSize function passed to NewBlocksToDelete.
 func (ep *ExpirationPolicy[TBlock]) CatalogHeadsSize() int64 {
 	catalogSize := ep.c.OnDiskSize()
 	heads := ep.c.List(nil, nil)
