@@ -14,10 +14,11 @@
 
 namespace series_data {
 
+template <bool kUseArenas = true>
 struct DataStorage {
 #if JEMALLOC_AVAILABLE
   struct DataStorageAllocatorTag {};
-  using Reallocator = BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>;
+  using Reallocator = std::conditional_t<kUseArenas, BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>, BareBones::DefaultReallocator>;
 #else
   using Reallocator = BareBones::DefaultReallocator;
 #endif
@@ -380,9 +381,9 @@ struct DataStorage {
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
 
-  void reset() noexcept {
+  void reset(bool collect_metrics = false) noexcept {
     std::destroy_at(this);
-    std::construct_at(this);
+    std::construct_at(this, collect_metrics);
   }
 
  private:

@@ -16,15 +16,6 @@ extern "C" {
 void prompp_series_data_data_storage_ctor(void* args, void* res);
 
 /**
- * @brief Resets DataStorage to initial state
- *
- * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- * }
- */
-void prompp_series_data_data_storage_reset(void* args);
-
-/**
  * @brief Get min max timestamps in storage
  *
  * @param args {

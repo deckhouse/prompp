@@ -17,9 +17,9 @@ class UnloaderFixture : public ::testing::Test {
  protected:
   static constexpr auto kEmptySnapshot = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
 
-  series_data::DataStorage storage_;
+  series_data::DataStorage<> storage_;
   series_data::Encoder<> encoder_{storage_};
-  Unloader unloader_{storage_};
+  Unloader<> unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 

@@ -11,7 +11,7 @@ namespace series_data {
 template <EncoderInterface Encoder>
 class OutdatedChunkMerger {
  public:
-  using OutdatedChunk = DataStorage::OutdatedChunk;
+  using OutdatedChunk = Encoder::DataStorage::OutdatedChunk;
 
   explicit OutdatedChunkMerger(Encoder& encoder) : encoder_(encoder) {}
 

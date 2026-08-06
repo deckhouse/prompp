@@ -1581,15 +1581,6 @@ extern "C" {
 void prompp_series_data_data_storage_ctor(void* args, void* res);
 
 /**
- * @brief Resets DataStorage to initial state
- *
- * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- * }
- */
-void prompp_series_data_data_storage_reset(void* args);
-
-/**
  * @brief Get min max timestamps in storage
  *
  * @param args {
@@ -1968,23 +1959,10 @@ extern "C" {
 #endif
 
 /**
- * @brief series data Encoder constructor.
+ * @brief adds single series sample to data storage
  *
  * @param args {
  *     data_storage uintptr // pointer to constructed data storage
- * }
- *
- * @param res {
- *     encoder uintptr // pointer to constructed encoder
- * }
- */
-void prompp_series_data_encoder_ctor(void* args, void* res);
-
-/**
- * @brief adds single series to data storage
- *
- * @param args {
- *     encoder uintptr // pointer to constructed encoder
  *     seriesID uint32 // series id
  *     timestamp int64 // timestamp
  *     value float64   // value
@@ -1996,7 +1974,7 @@ void prompp_series_data_encoder_encode(void* args);
  * @brief adds slice of inner series to data storage
  *
  * @param args {
- *     encoder uintptr // pointer to constructed encoder
+ *     data_storage uintptr // pointer to constructed data storage
  *     innerSeriesSlice []*InnerSeries // pointer to inner series slice.
  * }
  */
@@ -2006,19 +1984,10 @@ void prompp_series_data_encoder_encode_inner_series_slice(void* args);
  * @brief merge outdated chunks
  *
  * @param args {
- *     encoder uintptr // pointer to constructed encoder
+ *     data_storage uintptr // pointer to constructed data storage
  * }
  */
 void prompp_series_data_encoder_merge_out_of_order_chunks(void* args);
-
-/**
- * @brief series data Encoder destructor.
- *
- * @param args {
- *     encoder uintptr // pointer to constructed encoder
- * }
- */
-void prompp_series_data_encoder_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
