@@ -347,6 +347,9 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer poolProvider.PutSnapshots(snapshots)
 	lssQueryResults := poolProvider.GetLSSQueryResults()
 	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+	// The instant series sets copy out the series ids they need, so the query result
+	// buffers can be released on return (after all in-flight C queries have completed).
+	defer closeLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to instant: %s", err)
@@ -384,7 +387,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			}
 
 			seriesSets[shardID] = NewInstantSeriesSet(
-				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
 				instantSeries,
@@ -440,6 +442,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer poolProvider.PutSnapshots(snapshots)
 	lssQueryResults := poolProvider.GetLSSQueryResults()
 	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+	// Range/aggr series sets only use the result length at construction, so the query
+	// result buffers can be released on return (queryDataStorage has already waited for
+	// all in-flight C queries by then).
+	defer closeLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
@@ -558,14 +564,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	hints *storage.SelectHints,
 ) storage.SeriesSet {
-	poolProvider := q.head.PoolProvider()
-	timestamps := poolProvider.GetSliceOfTimestamps()
-	for i := range timestamps {
+	staleNaNSeries := make([][]StaleNaNSeries, len(lssQueryResults))
+	for i := range staleNaNSeries {
 		if lssQueryResults[i] == nil {
 			continue
 		}
 
-		timestamps[i] = poolProvider.GetTimestamps(lssQueryResults[i].Len())
+		staleNaNSeries[i] = NewStaleNaNSeriesSlice(lssQueryResults[i].Len(), DefaultNotFoundTimestampValue)
 	}
 
 	tds := q.head.CreateTask(
@@ -577,13 +582,17 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 				return nil
 			}
 
-			shard.DataStorage().QueryFirstTimestamps(res.IDs(), timestamps[shardID], DefaultNotFoundTimestampValue)
+			shard.DataStorage().QueryStaleNaNSeries(
+				res.IDs(),
+				uintptr(unsafe.Pointer(unsafe.SliceData(staleNaNSeries[shardID]))), // #nosec G103 // it's safe to use
+			)
 
 			return nil
 		},
 	)
 	q.head.Enqueue(tds)
 
+	poolProvider := q.head.PoolProvider()
 	seriesGroups := poolProvider.GetSeriesGroups()
 	tlss := q.head.CreateTask(
 		lssGroupSeriesByLabelNames,
@@ -619,8 +628,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 		}
 
 		sNaNSeriesSets[shardID] = NewStaleNaNSeriesSet(
-			NewStaleNaNSeriesSliceFromTimestamps(timestamps[shardID]),
-			lssQueryResults[shardID],
+			staleNaNSeries[shardID],
 			snapshots[shardID],
 			DefaultNotFoundTimestampValue,
 		)
@@ -642,12 +650,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	poolProvider.PutSeriesSet(sNaNSeriesSets)
 	poolProvider.PutSeriesSet(seriesSets)
 	poolProvider.PutSeriesGroups(seriesGroups)
-	for i := range timestamps {
-		if timestamps[i] != nil {
-			poolProvider.PutTimestamps(timestamps[i])
-		}
-	}
-	poolProvider.PutSliceOfTimestamps(timestamps)
 
 	return resultSeriesSets
 }
@@ -1032,6 +1034,18 @@ func queryLabelValues[
 	sort.Strings(lvs)
 
 	return lvs, anns, nil
+}
+
+// closeLSSQueryResults releases the C-allocated buffers held by the query results.
+// It is safe to call once every series set built from these results has copied out
+// (or no longer needs) the data it references. Nil entries are skipped and Close is
+// idempotent, so the finalizer stays a harmless fallback.
+func closeLSSQueryResults(lssQueryResults []*cppbridge.LSSQueryResult) {
+	for _, lssQueryResult := range lssQueryResults {
+		if lssQueryResult != nil {
+			lssQueryResult.Close()
+		}
+	}
 }
 
 // queryLss returns query results and snapshots.

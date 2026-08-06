@@ -16,15 +16,6 @@ extern "C" {
 void prompp_series_data_data_storage_ctor(void* args, void* res);
 
 /**
- * @brief Resets DataStorage to initial state
- *
- * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- * }
- */
-void prompp_series_data_data_storage_reset(void* args);
-
-/**
  * @brief Get min max timestamps in storage
  *
  * @param args {
@@ -179,6 +170,18 @@ void prompp_series_data_data_storage_instant_query(void* args, void* res);
  * }
  */
 void prompp_series_data_data_storage_query_first_timestamps(void* args);
+
+/**
+ * @brief Fill stalenan series (first sample timestamp + series id) per series id.
+ *
+ * @param args {
+ *        dataStorage uintptr  // pointer to constructed data storage
+ *        seriesIds   []uint32 // series ids
+ *        series      uintptr  // pointer to []querier.StaleNaNSeries (same length as seriesIds);
+ *                             // timestamp and seriesID fields are filled from storage
+ * }
+ */
+void prompp_series_data_data_storage_query_stalenan_series(void* args);
 
 /**
  * @brief finishes all Queriers after data load.

@@ -3,6 +3,7 @@ package querier_test
 import (
 	"math"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/suite"
 
@@ -29,7 +30,7 @@ func TestCrossSeriesSetSuite(t *testing.T) {
 
 func (s *CrossSeriesSetSuite) SetupTest() {
 	s.lss = shard.NewLSS()
-	s.ds = shard.NewDataStorage(false)
+	s.ds = shard.NewDataStorage(false, false)
 
 	timeSeries := []storagetest.TimeSeries{
 		{
@@ -85,12 +86,14 @@ func (s *CrossSeriesSetSuite) query(
 	}
 
 	valueNotFoundTimestampValue := int64(0)
-	timestamps := make([]int64, lssQueryResult.Len())
-	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps, 0)
+	staleNaNSeries := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
+	ds.QueryStaleNaNSeries(
+		lssQueryResult.IDs(),
+		uintptr(unsafe.Pointer(unsafe.SliceData(staleNaNSeries))), // #nosec G103 // it's meant to be that way
+	)
 
 	sNaNSS := querier.NewStaleNaNSeriesSet(
-		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
-		lssQueryResult,
+		staleNaNSeries,
 		snapshot,
 		valueNotFoundTimestampValue,
 	)

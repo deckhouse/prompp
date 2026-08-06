@@ -3,6 +3,7 @@ FROM debian:trixie-slim
 # Align with Deckhouse module (debian-trixie) and libunwind+lzma static link expectations.
 # LLVM 21 from apt.llvm.org (trixie toolchain).
 # gcc-16/g++-16: not yet in Trixie; install from sid with apt pinning (default compiler).
+# re2c is pinned because generated tokenizers are committed.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -30,7 +31,7 @@ RUN set -eux; \
     echo "deb [signed-by=/usr/share/keyrings/debian-archive-keyring.pgp] http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list; \
     printf 'Package: *\nPin: release a=sid\nPin-Priority: 100\n' > /etc/apt/preferences.d/sid; \
     apt-get update; \
-    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21 libclang-21-dev; \
+    apt-get install -y --no-install-recommends clang-format-21 clang-tidy-21 libclang-21-dev re2c=4.5.1-1; \
     apt-get install -y --no-install-recommends -t sid gcc-16 g++-16 libstdc++-16-dev; \
     apt-get install -y binutils; \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100; \

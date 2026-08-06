@@ -14,10 +14,11 @@
 
 namespace series_data {
 
+template <bool kUseArenas = true>
 struct DataStorage {
 #if JEMALLOC_AVAILABLE
   struct DataStorageAllocatorTag {};
-  using Reallocator = BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>;
+  using Reallocator = std::conditional_t<kUseArenas, BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>, BareBones::DefaultReallocator>;
 #else
   using Reallocator = BareBones::DefaultReallocator;
 #endif
@@ -369,6 +370,7 @@ struct DataStorage {
       // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
       metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
     } else {
+      static Metrics<Reallocator> dummy_metrics_{""};
       metrics = &dummy_metrics_;
     }
 
@@ -379,14 +381,12 @@ struct DataStorage {
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
 
-  void reset() noexcept {
+  void reset(bool collect_metrics = false) noexcept {
     std::destroy_at(this);
-    std::construct_at(this);
+    std::construct_at(this, collect_metrics);
   }
 
  private:
-  inline static Metrics<Reallocator> dummy_metrics_{""};
-
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk_timestamp_and_encoder(const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {
