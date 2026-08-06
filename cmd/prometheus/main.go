@@ -930,7 +930,6 @@ func main() {
 				headCatalog,
 				&expirationpolicy.Options{
 					RetentionDuration: retentionMS,
-					DownsamplingMS:    downsamplingMS,
 					MaxBytes:          int64(cfg.tsdb.MaxBytes),
 				},
 				prometheus.DefaultRegisterer,

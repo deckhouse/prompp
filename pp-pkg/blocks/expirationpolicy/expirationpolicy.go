@@ -89,8 +89,6 @@ func NewMetrics(r prometheus.Registerer) *Metrics {
 type Options struct {
 	// RetentionDuration is the time retention in milliseconds, used for the corrupted-block outdated check.
 	RetentionDuration int64
-	// DownsamplingMS is the downsampling duration in milliseconds, used for the downsampling block check.
-	DownsamplingMS int64
 	// MaxBytes is the maximum number of bytes to be retained in the tsdb blocks, configured 0 means disabled.
 	MaxBytes int64
 }

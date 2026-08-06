@@ -215,6 +215,8 @@ func (pb *Block) Close() error {
 
 // Deletable returns true if the block is deletable.
 func (pb *Block) Deletable() bool {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.Compaction.Deletable
 }
 
@@ -237,6 +239,8 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 
 // IsDownsamplingBlock returns true if the block is a downsampling block.
 func (pb *Block) IsDownsamplingBlock() bool {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.Thanos.Downsample.Resolution > 0
 }
 
@@ -247,6 +251,8 @@ func (pb *Block) LabelNames(ctx context.Context) ([]string, error) {
 
 // MaxTime returns the maximum time of the block.
 func (pb *Block) MaxTime() int64 {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.MaxTime
 }
 
@@ -329,6 +335,8 @@ func (pb *Block) Tombstones() (tombstones.Reader, error) {
 
 // ULID returns the ULID of the block.
 func (pb *Block) ULID() ulid.ULID {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
 	return pb.meta.ULID
 }
 

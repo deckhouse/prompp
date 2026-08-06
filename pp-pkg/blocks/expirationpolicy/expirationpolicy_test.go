@@ -25,7 +25,6 @@ func TestExpirationPolicySuite(t *testing.T) {
 func (s *ExpirationPolicySuite) TestHappyPath() {
 	ep := s.newEP(&expirationpolicy.Options{
 		RetentionDuration: 100,
-		DownsamplingMS:    100,
 		MaxBytes:          100,
 	}, s.newCatalog(100), nil)
 
