@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.6 / 2026-07-31
+
+### Performance
+1. **Deterministic release of LSS query result buffers.** Series-id buffers allocated in C for querier results were previously kept alive by series sets and only freed by a Go GC finalizer. Because the real bytes live off the Go heap (jemalloc), finalization lagged and large over-allocated buffers piled up under query load. Series sets now carry the series id inline, so the query result can be closed as soon as construction finishes (#447).
+2. **Pooled buffers for WAL segment reads.** `Segment` resize now reuses buffers from a size-class pool instead of allocating a fresh slice on every read, cutting allocation churn when loading WAL segments (#452).
+
+### Fixes
+1. **ActiveQueryTracker SIGBUS on sparse query-log files.** Creating the active-queries mmap file via `Truncate` alone left a sparse file on some filesystems, so writes into the mapping could fault with SIGBUS. The file is now explicitly zero-filled (and synced) before mmap (#433).
+2. **DataStorage dummy-metrics static initialization race.** When per-`DataStorage` metrics collection was disabled, concurrent construction could race on the shared inline-static dummy metrics page. The dummy is now a function-local static initialized on first use (#455).
+3. **Dependency security updates.** Bumped Go modules `github.com/klauspost/compress` to v1.18.7 (#453) and `go.opentelemetry.io/otel` to v1.44.0 (#450), and the web UI `postcss` package to v8.5.18 (#449), picking up upstream security fixes.
+
 ## v0.8.5 / 2026-07-23
 
 ### Enhancements
