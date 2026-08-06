@@ -62,6 +62,9 @@ ENV PATH="$PATH:/usr/local/go/bin:/opt/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/prometheus/promu@latest
 
+# govulncheck for the pre-release dependency vulnerability scan
+RUN go install golang.org/x/vuln/cmd/govulncheck@latest
+
 # goyacc for generating promql/parser (make test, make build)
 ARG GOYACC_VERSION=v0.6.0
 RUN go install golang.org/x/tools/cmd/goyacc@${GOYACC_VERSION}
