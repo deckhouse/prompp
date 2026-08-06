@@ -279,8 +279,8 @@ func (s *HeadSuite) TestQueryFirstTimestampsRotatedLSSWithEmptySeries() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(1, 5, 1.0)
-	s.encoder.Encode(1, 9, 1.0)
+	s.dataStorage.Encode(1, 5, 1.0)
+	s.dataStorage.Encode(1, 9, 1.0)
 
 	// Act
 	timestamps := make([]int64, 2)
