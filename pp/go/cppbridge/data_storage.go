@@ -145,6 +145,13 @@ func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int
 	runtime.KeepAlive(ds)
 }
 
+// QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
+// series in seriesIDs directly into the C-shared series slice (pointed to by series).
+func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
+	seriesDataDataStorageQueryStaleNaNSeries(ds.dataStorage, seriesIDs, series)
+	runtime.KeepAlive(ds)
+}
+
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	seriesDataDataStorageQueryFinal(queriers)
 	runtime.KeepAlive(queriers)

@@ -58,6 +58,20 @@ class InstantQuerierWithArgumentsWrapper {
 };
 
 struct SampleWithGoLabels : public ::series_data::encoder::Sample {
+  // series_id is filled by the instant querier alongside the sample; go_labels_ is written
+  // from the Go side (querier.InstantSeries.LabelSet). This layout mirrors the Go struct.
+  uint32_t series_id;
+
+ private:
+  char go_labels_[Sizeof_GoLabels];
+};
+
+struct StaleNaNSeriesWithGoLabels {
+  // timestamp and series_id are filled by the data storage stalenan query; go_labels_ is
+  // written from the Go side (querier.StaleNaNSeries.labelSet). This layout mirrors the Go struct.
+  PromPP::Primitives::Timestamp timestamp;
+  uint32_t series_id;
+
  private:
   char go_labels_[Sizeof_GoLabels];
 };

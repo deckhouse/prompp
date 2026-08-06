@@ -2215,6 +2215,20 @@ func seriesDataDataStorageQueryFirstTimestamps(
 	)
 }
 
+func seriesDataDataStorageQueryStaleNaNSeries(dataStorage uintptr, seriesIDs []uint32, series uintptr) {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+		series      uintptr
+	}{dataStorage, seriesIDs, series}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_query_stalenan_series,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {
 	args := struct {
 		queriers []uintptr

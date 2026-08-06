@@ -1,6 +1,8 @@
 #include "series_data_data_storage.h"
 
 #include <cassert>
+#include <ranges>
+#include <span>
 #include <spanstream>
 
 #include "entrypoint/types/data_storage.h"
@@ -268,6 +270,25 @@ extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* arg
 
     return in->not_found_timestamp_value;
   });
+}
+
+extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args) {
+  using series_data::Decoder;
+
+  struct Arguments {
+    DataStoragePtr data_storage;
+    SliceView<LabelSetID> series_ids;
+    entrypoint::types::StaleNaNSeriesWithGoLabels* series;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto& storage = *in->data_storage;
+
+  auto series = std::span(in->series, in->series_ids.size());
+  for (auto&& [stalenan_series, series_id] : std::ranges::views::zip(series, in->series_ids)) {
+    stalenan_series.timestamp = Decoder::get_series_min_timestamp(storage, series_id);
+    stalenan_series.series_id = series_id;
+  }
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {

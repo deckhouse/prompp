@@ -15,11 +15,9 @@ import (
 
 // ChunkSeriesSet contains a set of chunked series.
 type ChunkSeriesSet struct {
-	lssQueryResult   *cppbridge.LSSQueryResult
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	chunkRecoder     *cppbridge.ChunkRecoder
 
-	index            int
 	lastRecodedChunk *cppbridge.RecodedChunk
 	chunkSeries      *ChunkSeries
 
@@ -27,13 +25,13 @@ type ChunkSeriesSet struct {
 }
 
 // NewChunkSeriesSet init new [ChunkSeriesSet].
+// The series id is taken directly from the recoded chunks during iteration, so the
+// query result buffer does not need to be retained (see [cppbridge.LSSQueryResult.Close]).
 func NewChunkSeriesSet(
-	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	chunkRecoder *cppbridge.ChunkRecoder,
 ) *ChunkSeriesSet {
 	return &ChunkSeriesSet{
-		lssQueryResult:   lssQueryResult,
 		labelSetSnapshot: labelSetSnapshot,
 		chunkRecoder:     chunkRecoder,
 	}
@@ -72,24 +70,8 @@ func (css *ChunkSeriesSet) Next() bool {
 		css.lastRecodedChunk = nil
 	}
 
-	var lsID uint32
-
-	for {
-		if css.index >= css.lssQueryResult.Len() {
-			return false
-		}
-
-		lsID, _ = css.lssQueryResult.GetByIndex(css.index)
-
-		if lsID == seriesID {
-			break
-		}
-
-		css.index++
-	}
-
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID),
+		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, seriesID),
 		recodedChunks: recodedChunks,
 	}
 
