@@ -12,7 +12,7 @@ namespace {
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::Timestamp;
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
@@ -22,7 +22,7 @@ using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
 using series_data::serialization::DataSerializer;
-using series_data::serialization::SerializedData;
+using SerializedData = series_data::serialization::SerializedData<>;
 using series_data::serialization::SerializedDataView;
 
 using series_data::decoder::SeekKind;
@@ -32,7 +32,7 @@ class SerializerDeserializerTrait {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  DataSerializer serializer_{storage_};
+  DataSerializer<> serializer_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
     EXPECT_EQ(series_id, data.next_series().first);

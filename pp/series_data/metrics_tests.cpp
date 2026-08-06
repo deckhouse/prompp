@@ -6,7 +6,7 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::OutdatedChunkMerger;
@@ -16,7 +16,7 @@ template <uint8_t kSamplesPerChunk = series_data::kSamplesPerChunkDefault>
 class DataStorageMetricsTestTrait {
  protected:
   DataStorage storage_{true};
-  Encoder<kSamplesPerChunk> encoder_{storage_};
+  Encoder<DataStorage, kSamplesPerChunk> encoder_{storage_};
 
   [[nodiscard]] double chunk_count(EncodingType encoding_type) const noexcept { return storage_.metrics->get_chunk_count(encoding_type); }
 
