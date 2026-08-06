@@ -59,6 +59,7 @@ import (
 	klogv2 "k8s.io/klog/v2"
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
@@ -883,13 +884,7 @@ func main() {
 				"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
-			retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-			blocksToDelete := block.NewBlocksToDelete(
-				retentionMs,
-				int64(cfg.tsdb.MaxBytes),
-				block.CatalogHeadsExtraSize(dataDir, headCatalog),
-				prometheus.DefaultRegisterer,
-			)
+			retentionMS := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
 
 			chunkPool := chunkenc.NewPool()
 			compactCtx, compactCancel := context.WithCancel(context.Background())
@@ -911,10 +906,20 @@ func main() {
 				os.Exit(1)
 			}
 
+			blocksToDelete := expirationpolicy.NewExpirationPolicy[*block.Block](
+				dataDir,
+				headCatalog,
+				&expirationpolicy.Options{
+					RetentionDuration: retentionMS,
+					MaxBytes:          int64(cfg.tsdb.MaxBytes),
+				},
+				prometheus.DefaultRegisterer,
+			).BlocksToDelete
+
 			blockManager, err := manager.NewManager(
 				localStoragePath,
 				&manager.Options{
-					RetentionDuration:           retentionMs,
+					RetentionDuration:           retentionMS,
 					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 				},
