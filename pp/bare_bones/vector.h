@@ -43,17 +43,25 @@ class GenericVector {
   PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept { derived()->memory().resize_to_fit_at_least(size()); }
 
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
-    resize_storage(new_size);
-    derived()->set_size(new_size);
+    const auto current_size = size();
+    if (new_size > current_size) {
+      grow_storage(new_size);
+      derived()->set_size(new_size);
+    } else {
+      derived()->set_size(new_size);
+      decrease_storage(new_size, current_size);
+    }
   }
 
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) noexcept {
     const auto current_size = size();
-    resize_storage(new_size);
     if (new_size > current_size) {
+      grow_storage(new_size);
       std::fill(data() + current_size, data() + new_size, value);
+      derived()->set_size(new_size);
+    } else {
+      resize(new_size);
     }
-    derived()->set_size(new_size);
   }
 
   template <class Writer>
@@ -64,18 +72,17 @@ class GenericVector {
   }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept {
+    const auto current_size = size();
+    derived()->set_size(0);
+
     if constexpr (!std::is_trivial_v<T>) {
       auto memory = data();
-      const auto current_size = size();
-
       if constexpr (IsTriviallyDestructible<T>::value) {
         zero_memory(memory, current_size);
       } else {
         std::destroy_n(memory, current_size);
       }
     }
-
-    derived()->set_size(0);
   }
 
   PROMPP_ALWAYS_INLINE iterator erase(iterator it) noexcept {
@@ -95,17 +102,20 @@ class GenericVector {
       return first;
     }
 
+    const auto count = last - first;
+    const auto tail = end() - last;
+    derived()->set_size(size() - count);
+
     if constexpr (!IsTriviallyDestructible<T>::value) {
-      std::destroy_n(first, last - first);
+      std::destroy_n(first, count);
     }
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
     // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memmove(first, last, (end() - last) * sizeof(T));
+    std::memmove(first, last, tail * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
-    derived()->set_size(size() - (last - first));
     return first;
   }
 
@@ -165,7 +175,7 @@ class GenericVector {
   PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
     const auto pos = size();
     const auto size = std::distance(begin, end);
-    resize_storage(pos + size);
+    grow_storage(pos + size);
 
     if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
       std::memcpy(data() + pos, begin, size);
@@ -279,7 +289,7 @@ class GenericVector {
   }
 
  private:
-  PROMPP_ALWAYS_INLINE void resize_storage(SizeType new_size) noexcept {
+  PROMPP_ALWAYS_INLINE void grow_storage(SizeType new_size) noexcept {
     reserve(new_size);
 
     if constexpr (!std::is_trivial_v<T>) {
@@ -287,29 +297,25 @@ class GenericVector {
       auto memory = data();
 
       if constexpr (IsZeroInitializable<T>::value) {
-        if constexpr (IsTriviallyDestructible<T>::value) {
-          if (new_size > current_size) {
-            zero_memory(memory + current_size, new_size - current_size);
-          } else {
-            zero_memory(memory + new_size, current_size - new_size);
-          }
-        } else {
-          if (new_size > current_size) {
-            zero_memory(memory + current_size, new_size - current_size);
-          } else {
-            std::destroy_n(memory + new_size, current_size - new_size);
-          }
-        }
+        zero_memory(memory + current_size, new_size - current_size);
       } else {
-        if (new_size > current_size) {
-          // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
-          memory += current_size;
-          for (SizeType i = current_size; i != new_size; ++i) {
-            std::construct_at(memory++);
-          }
-        } else {
-          std::destroy_n(memory + new_size, current_size - new_size);
+        // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
+        memory += current_size;
+        for (SizeType i = current_size; i != new_size; ++i) {
+          std::construct_at(memory++);
         }
+      }
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void decrease_storage(SizeType new_size, SizeType current_size) noexcept {
+    if constexpr (!std::is_trivial_v<T>) {
+      auto memory = data();
+
+      if constexpr (IsZeroInitializable<T>::value && IsTriviallyDestructible<T>::value) {
+        zero_memory(memory + new_size, current_size - new_size);
+      } else {
+        std::destroy_n(memory + new_size, current_size - new_size);
       }
     }
   }
