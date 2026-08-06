@@ -886,4 +886,43 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                        },
                                                                                        BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
+// Builds a scrape buffer whose real `# TYPE`/metric lines sit past the 4 GiB mark, preceded by
+// filler comment lines that the scraper skips.
+std::string make_scrape_buffer_past_4gib() {
+  constexpr size_t kFourGiB = 4ULL * 1024 * 1024 * 1024;
+  constexpr std::string_view kFiller = "# padding comment used only to push the real metric past the four gib mark\n"sv;
+
+  std::string buffer;
+  buffer.reserve(kFourGiB + 4096);
+  while (buffer.size() < kFourGiB + 1024) {
+    buffer.append(kFiller);
+  }
+  buffer.append("# TYPE demo_metric untyped\ndemo_metric{label=\"value\"} 1\n"sv);
+  return buffer;
+}
+
+// Regression for the 64-bit offset widening (MarkedString::offset / MarkedMetric::base_offset):
+// an entry beyond 4 GiB used to have its offset truncated mod 2^32, so view() read the correct
+// length from a wrapped position and returned a garbage symbol. Disabled by default because it
+// allocates a > 4 GiB buffer; run explicitly by passing these test args to //:wal_test:
+//   --gtest_also_run_disabled_tests --gtest_filter='*ResolvesEntriesBeyond4GiBOffset*'
+TEST(PrometheusScraperOverflowTest, DISABLED_ResolvesEntriesBeyond4GiBOffset) {
+  // Arrange
+  std::string buffer = make_scrape_buffer_past_4gib();
+  PrometheusScraper scraper;
+
+  // Act
+  const auto result = scraper.parse(buffer, kDefaultTimestamp);
+  const auto metadata = PromPP::WAL::hashdex::get_metadata(scraper);
+  const auto floats = PromPP::WAL::hashdex::get_floats(scraper);
+
+  // Assert
+  EXPECT_EQ(Error::kNoError, result);
+  ASSERT_EQ(1U, metadata.size());
+  EXPECT_EQ("demo_metric"sv, metadata[0].metric_name);
+  EXPECT_EQ("untyped"sv, metadata[0].text);
+  EXPECT_EQ(MetadataType::kType, metadata[0].type);
+  EXPECT_EQ(1U, floats.size());
+}
+
 }  // namespace
