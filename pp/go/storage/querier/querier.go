@@ -534,14 +534,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	hints *storage.SelectHints,
 ) storage.SeriesSet {
-	poolProvider := q.head.PoolProvider()
-	timestamps := poolProvider.GetSliceOfTimestamps()
-	for i := range timestamps {
+	staleNaNSeries := make([][]StaleNaNSeries, len(lssQueryResults))
+	for i := range staleNaNSeries {
 		if lssQueryResults[i] == nil {
 			continue
 		}
 
-		timestamps[i] = poolProvider.GetTimestamps(lssQueryResults[i].Len())
+		staleNaNSeries[i] = NewStaleNaNSeriesSlice(lssQueryResults[i].Len(), DefaultNotFoundTimestampValue)
 	}
 
 	tds := q.head.CreateTask(
@@ -553,13 +552,17 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 				return nil
 			}
 
-			shard.DataStorage().QueryFirstTimestamps(res.IDs(), timestamps[shardID], DefaultNotFoundTimestampValue)
+			shard.DataStorage().QueryStaleNaNSeries(
+				res.IDs(),
+				uintptr(unsafe.Pointer(unsafe.SliceData(staleNaNSeries[shardID]))), // #nosec G103 // it's safe to use
+			)
 
 			return nil
 		},
 	)
 	q.head.Enqueue(tds)
 
+	poolProvider := q.head.PoolProvider()
 	seriesGroups := poolProvider.GetSeriesGroups()
 	tlss := q.head.CreateTask(
 		lssGroupSeriesByLabelNames,
@@ -595,8 +598,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 		}
 
 		sNaNSeriesSets[shardID] = NewStaleNaNSeriesSet(
-			NewStaleNaNSeriesSliceFromTimestamps(timestamps[shardID]),
-			lssQueryResults[shardID],
+			staleNaNSeries[shardID],
 			snapshots[shardID],
 			DefaultNotFoundTimestampValue,
 		)
@@ -618,12 +620,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	poolProvider.PutSeriesSet(sNaNSeriesSets)
 	poolProvider.PutSeriesSet(seriesSets)
 	poolProvider.PutSeriesGroups(seriesGroups)
-	for i := range timestamps {
-		if timestamps[i] != nil {
-			poolProvider.PutTimestamps(timestamps[i])
-		}
-	}
-	poolProvider.PutSliceOfTimestamps(timestamps)
 
 	return resultSeriesSets
 }
