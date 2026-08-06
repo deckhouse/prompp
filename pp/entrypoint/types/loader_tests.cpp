@@ -12,7 +12,7 @@ namespace {
 
 using entrypoint::types::QueryableEncodingBimap;
 using PromPP::Primitives::LabelViewSet;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::chunk::DataChunk;
@@ -23,7 +23,7 @@ class RevertableLoaderFixture : public testing::Test {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  Unloader unloader_{storage_};
+  Unloader<> unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
   QueryableEncodingBimap lss_;
 
