@@ -273,8 +273,13 @@ extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* arg
   assert(in->series_ids.size() == in->timestamps.size());
   std::visit(
       [in](const auto& data_storage) {
-        std::ranges::transform(in->series_ids, in->timestamps.begin(),
-                               [&data_storage](uint32_t series_id) { return Decoder::get_series_min_timestamp(data_storage, series_id); });
+        std::ranges::transform(in->series_ids, in->timestamps.begin(), [&](uint32_t series_id) {
+          if (!data_storage.finalized_chunks.contains(series_id) &&
+              (series_id >= data_storage.open_chunks.size() || data_storage.open_chunks[series_id].is_empty())) [[unlikely]] {
+            return in->not_found_timestamp_value;
+          }
+          return Decoder::get_series_min_timestamp(data_storage, series_id);
+        });
       },
       *in->data_storage);
 }
@@ -293,8 +298,14 @@ extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args
   std::visit(
       [in, series](const auto& data_storage) mutable {
         for (auto&& [stalenan_series, series_id] : std::ranges::views::zip(series, in->series_ids)) {
-          stalenan_series.timestamp = Decoder::get_series_min_timestamp(data_storage, series_id);
           stalenan_series.series_id = series_id;
+
+          if (!data_storage.finalized_chunks.contains(series_id) &&
+              (series_id >= data_storage.open_chunks.size() || data_storage.open_chunks[series_id].is_empty())) [[unlikely]] {
+            continue;
+          }
+
+          stalenan_series.timestamp = Decoder::get_series_min_timestamp(data_storage, series_id);
         }
       },
       *in->data_storage);

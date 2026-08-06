@@ -290,6 +290,54 @@ func (s *HeadSuite) TestQueryFirstTimestampsRotatedLSSWithEmptySeries() {
 	s.Equal([]int64{5, -1}, timestamps)
 }
 
+// testStaleNaNSeries is a struct that represents a series that has been marked as stale NaN.
+type testStaleNaNSeries struct {
+	timestamp int64
+	seriesID  uint32
+	labelSet  string
+}
+
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSS() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
+
+	// Act
+	series := make([]testStaleNaNSeries, 2)
+	for i := range series {
+		series[i].timestamp = -1
+	}
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{1, 0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	// Assert
+	s.Equal([]testStaleNaNSeries{{timestamp: -1, seriesID: 1}, {timestamp: -1, seriesID: 0}}, series)
+}
+
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithEmptySeries() {
+	// Arrange
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
+	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
+
+	s.dataStorage.Encode(1, 5, 1.0)
+	s.dataStorage.Encode(1, 9, 1.0)
+
+	// Act
+	series := make([]testStaleNaNSeries, 2)
+	for i := range series {
+		series[i].timestamp = -1
+	}
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{1, 0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	// Assert
+	s.Equal([]testStaleNaNSeries{{timestamp: 5, seriesID: 1}, {timestamp: -1, seriesID: 0}}, series)
+}
+
 type DataStorageSerializedDataMultiSeriesIteratorSuite struct {
 	suite.Suite
 	lss *cppbridge.LabelSetStorage
