@@ -444,22 +444,17 @@ func (m *Manager) reloadBlocks() (err error) {
 		}
 	}
 
-	toDelete, err := m.renameForDeletionBlocks(deletable)
-	if err != nil {
-		err = fmt.Errorf("rename for deletion %v blocks: %w", len(deletable), err)
-	}
-
-	if len(toDelete) > 0 {
+	m.renameForDeletionBlocks(deletable)
+	if len(deletable) > 0 {
 		m.deleteBlocksWG.Add(1)
-		go m.closeAndDeleteBlocks(toDelete)
+		go m.closeAndDeleteBlocks(deletable)
 	}
 
-	return err
+	return nil
 }
 
 // renameForDeletionBlocks renames the given blocks for deletion.
-func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) (map[ulid.ULID]*block.Block, error) {
-	toDelete := make(map[ulid.ULID]*block.Block, len(blocks))
+func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) {
 	for uid := range blocks {
 		from := filepath.Join(m.dir, uid.String())
 		switch _, err := os.Stat(from); {
@@ -467,19 +462,24 @@ func (m *Manager) renameForDeletionBlocks(blocks map[ulid.ULID]*block.Block) (ma
 			// Noop.
 			continue
 		case err != nil:
-			return toDelete, fmt.Errorf("stat dir %v: %w", from, err)
+			_ = level.Warn(m.logger).Log(
+				"msg", "get stat block failed",
+				"from", from,
+				"err", err,
+			)
+			continue
 		}
 
 		// Replace atomically to avoid partial block when process would crash during deletion.
 		tmpToDelete := filepath.Join(m.dir, fmt.Sprintf("%s%s", uid, tmpForDeletionBlockDirSuffix))
 		if err := fileutil.Replace(from, tmpToDelete); err != nil {
-			return toDelete, fmt.Errorf("replace of obsolete block for deletion %s: %w", uid, err)
+			_ = level.Warn(m.logger).Log(
+				"msg", "replace of obsolete block for deletion failed",
+				"block_id", uid,
+				"err", err,
+			)
 		}
-
-		toDelete[uid] = blocks[uid]
 	}
-
-	return toDelete, nil
 }
 
 // closeAndDeleteBlocks closes the given blocks and deletes the temporary files for deletion.
