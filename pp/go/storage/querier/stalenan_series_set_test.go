@@ -29,7 +29,7 @@ func TestStaleNaNSeriesSetTestSuite(t *testing.T) {
 
 func (s *StaleNaNSeriesSetTestSuite) SetupTest() {
 	s.lss = shard.NewLSS()
-	s.ds = shard.NewDataStorage(false)
+	s.ds = shard.NewDataStorage(false, false)
 	s.valueNotFoundTimestampValue = 0
 
 	s.data = []storagetest.TimeSeries{

@@ -62,7 +62,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	var start int64 = 0
 	var end = int64(size)
 	lss := shard.NewLSS()
-	ds := shard.NewDataStorage(false)
+	ds := shard.NewDataStorage(false, false)
 	prepareData(lss, ds, size)
 
 	for b.Loop() {

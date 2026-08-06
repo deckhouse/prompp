@@ -16,7 +16,6 @@ type HeadSuite struct {
 	suite.Suite
 	lss         *cppbridge.LabelSetStorage
 	dataStorage *cppbridge.DataStorage
-	encoder     *cppbridge.HeadEncoder
 }
 
 func TestHeadSuite(t *testing.T) {
@@ -25,8 +24,7 @@ func TestHeadSuite(t *testing.T) {
 
 func (s *HeadSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.dataStorage = cppbridge.NewDataStorage(false)
-	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
+	s.dataStorage = cppbridge.NewDataStorage(false, true)
 }
 
 func (s *HeadSuite) TestChunkRecoder() {
@@ -34,10 +32,10 @@ func (s *HeadSuite) TestChunkRecoder() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(0, 2, 1.0)
-	s.encoder.Encode(1, 3, 2.0)
-	s.encoder.Encode(1, 4, 2.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(0, 2, 1.0)
+	s.dataStorage.Encode(1, 3, 2.0)
+	s.dataStorage.Encode(1, 4, 2.0)
 	recoder := cppbridge.NewChunkRecoder(s.lss, 2, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4})
 
 	// Act
@@ -73,10 +71,10 @@ func (s *HeadSuite) TestChunkRecoderWithBatchIterator() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(0, 2, 1.0)
-	s.encoder.Encode(1, 3, 2.0)
-	s.encoder.Encode(1, 4, 2.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(0, 2, 1.0)
+	s.dataStorage.Encode(1, 3, 2.0)
+	s.dataStorage.Encode(1, 4, 2.0)
 
 	recoder := cppbridge.NewChunkRecoder(s.lss, 1, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4})
 
@@ -114,10 +112,10 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(0, 2, 1.0)
-	s.encoder.Encode(1, 3, 2.0)
-	s.encoder.Encode(1, 4, 2.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(0, 2, 1.0)
+	s.dataStorage.Encode(1, 3, 2.0)
+	s.dataStorage.Encode(1, 4, 2.0)
 
 	timeInterval := cppbridge.TimeInterval{MinT: 0, MaxT: 4}
 	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
@@ -158,16 +156,15 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 
 func (s *HeadSuite) TestTimeInterval() {
 	// Arrange
-	dataStorage := cppbridge.NewDataStorage(false)
-	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	encoder.Encode(0, 1, 1.0)
-	encoder.Encode(0, 2, 1.0)
-	encoder.Encode(1, 2, 1.0)
-	encoder.Encode(1, 3, 1.0)
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	dataStorage.Encode(0, 1, 1.0)
+	dataStorage.Encode(0, 2, 1.0)
+	dataStorage.Encode(1, 2, 1.0)
+	dataStorage.Encode(1, 3, 1.0)
 
 	// Act
 	timeInterval := dataStorage.TimeInterval(false)
-	encoder.Encode(1, 4, 1.0)
+	dataStorage.Encode(1, 4, 1.0)
 	cachedTimeInterval := dataStorage.TimeInterval(false)
 	actualTimeInterval := dataStorage.TimeInterval(true)
 
@@ -179,9 +176,8 @@ func (s *HeadSuite) TestTimeInterval() {
 
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
-	dataStorage := cppbridge.NewDataStorage(false)
-	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	var series = []struct {
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
 	}{
@@ -196,7 +192,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	}
 
 	for _, serie := range series {
-		encoder.Encode(serie.SeriesID, serie.Timestamp, serie.Value)
+		dataStorage.Encode(serie.SeriesID, serie.Timestamp, serie.Value)
 	}
 
 	seriesIDs := []uint32{0, 1, 2, 3}
@@ -233,10 +229,10 @@ func (s *HeadSuite) TestQueryFirstTimestamps() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 5, 1.0)
-	s.encoder.Encode(0, 9, 1.0)
-	s.encoder.Encode(1, 2, 2.0)
-	s.encoder.Encode(1, 7, 2.0)
+	s.dataStorage.Encode(0, 5, 1.0)
+	s.dataStorage.Encode(0, 9, 1.0)
+	s.dataStorage.Encode(1, 2, 2.0)
+	s.dataStorage.Encode(1, 7, 2.0)
 
 	// Act
 	timestamps := make([]int64, 2)
@@ -250,10 +246,10 @@ func (s *HeadSuite) TestQueryFirstTimestampsInFinalizedChunk() {
 	// Arrange
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 
-	s.encoder.Encode(0, 9, 1.0)
-	s.encoder.Encode(0, 5, 1.0)
+	s.dataStorage.Encode(0, 9, 1.0)
+	s.dataStorage.Encode(0, 5, 1.0)
 
-	s.encoder.MergeOutOfOrderChunks()
+	s.dataStorage.MergeOutOfOrderChunks()
 
 	// Act
 	timestamps := make([]int64, 1)

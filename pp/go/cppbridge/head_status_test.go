@@ -11,7 +11,6 @@ import (
 type HeadStatusSuite struct {
 	suite.Suite
 	dataStorage *cppbridge.DataStorage
-	encoder     *cppbridge.HeadEncoder
 	lssStorage  *cppbridge.LabelSetStorage
 	limit       int
 }
@@ -21,8 +20,7 @@ func TestHeadStatusSuite(t *testing.T) {
 }
 
 func (s *HeadStatusSuite) SetupTest() {
-	s.dataStorage = cppbridge.NewDataStorage(false)
-	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
+	s.dataStorage = cppbridge.NewDataStorage(false, false)
 	s.lssStorage = cppbridge.NewQueryableLssStorage()
 	s.limit = 10
 }
@@ -38,9 +36,9 @@ func (s *HeadStatusSuite) TestFromLSS() {
 		s.lssStorage.FindOrEmplace(labelSet)
 	}
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(1, 3, 1.0)
-	s.encoder.Encode(2, 3, 1.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(1, 3, 1.0)
+	s.dataStorage.Encode(2, 3, 1.0)
 
 	// Act
 	status := cppbridge.NewHeadStatus()
@@ -108,9 +106,9 @@ func (s *HeadStatusSuite) TestFromDataStorage() {
 		s.lssStorage.FindOrEmplace(labelSet)
 	}
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(1, 3, 1.0)
-	s.encoder.Encode(2, 3, 1.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(1, 3, 1.0)
+	s.dataStorage.Encode(2, 3, 1.0)
 
 	// Act
 	status := cppbridge.NewHeadStatus()
@@ -143,9 +141,9 @@ func (s *HeadStatusSuite) TestFull() {
 		s.lssStorage.FindOrEmplace(labelSet)
 	}
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(1, 3, 1.0)
-	s.encoder.Encode(2, 3, 1.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(1, 3, 1.0)
+	s.dataStorage.Encode(2, 3, 1.0)
 
 	// Act
 	status := cppbridge.NewHeadStatus()

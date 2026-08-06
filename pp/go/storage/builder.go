@@ -108,7 +108,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 func (b *Builder) BuildTransactionHead() *TransactionHead {
 	sd := shard.NewShard(
 		shard.NewLSS(),
-		shard.NewDataStorage(false),
+		shard.NewDataStorage(false, false),
 		nil,
 		nil,
 		wal.NewNoopWal(),
@@ -191,7 +191,7 @@ func (b *Builder) createShardOnDisk(
 
 	return shard.NewShard(
 		lss,
-		shard.NewDataStorage(true),
+		shard.NewDataStorage(true, true),
 		unloadedDataStorage,
 		queriedSeriesStorage,
 		wal.NewWal(shardWalEncoder, sw, lss, b.maxSegmentSize, shardID, b.registerer),

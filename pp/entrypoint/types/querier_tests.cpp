@@ -17,7 +17,8 @@ namespace {
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Go::Slice;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
+using entrypoint::types::DataStorageWithArenas;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::decoder::DecodeIteratorSentinel;
@@ -25,7 +26,7 @@ using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
 using series_data::unloading::Loader;
 using series_data::unloading::Unloader;
-using InstantQuerierWrapper = entrypoint::types::InstantQuerierWithArgumentsWrapper<std::vector<LabelSetID>, std::span<Sample>>;
+using InstantQuerierWrapper = entrypoint::types::InstantQuerierWithArgumentsWrapper<std::vector<LabelSetID>, std::span<Sample>, DataStorageWithArenas>;
 using RangeQuery = series_data::querier::Query<Slice<LabelSetID>>;
 
 class RangeQuerierWrapperFixture : public testing::Test {
@@ -43,8 +44,13 @@ class RangeQuerierWrapperFixture : public testing::Test {
 
   [[nodiscard]] SampleList decode_chunk(uint32_t chunk_id) const {
     SampleList decoded;
-    std::ranges::copy(serialized_data_->iterator(chunk_id), DecodeIteratorSentinel{}, std::back_inserter(decoded));
+    std::ranges::copy(std::visit([chunk_id](auto& serialized_data) { return serialized_data.iterator(chunk_id); }, *serialized_data_),
+                      DecodeIteratorSentinel{}, std::back_inserter(decoded));
     return decoded;
+  }
+
+  [[nodiscard]] size_t serialized_chunks_count() const {
+    return std::visit([](auto& serialized_data) { return serialized_data.get_chunks_view().size(); }, *serialized_data_);
   }
 
   [[nodiscard]] entrypoint::types::SerializedDataPtr* serialized_data_ptr() noexcept { return &serialized_data_; }
@@ -198,7 +204,7 @@ TEST_F(RangeQuerierWrapperFixture, QuerySerializesMatchingOpenChunk) {
   // Assert
   ASSERT_FALSE(wrapper.need_loading());
   ASSERT_NE(nullptr, serialized_data_);
-  ASSERT_EQ(1U, serialized_data_->get_chunks_view().size());
+  ASSERT_EQ(1U, serialized_chunks_count());
   EXPECT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}}), decoded);
 }
 
@@ -214,7 +220,7 @@ TEST_F(RangeQuerierWrapperFixture, QuerySerializesEmptyResultWhenSeriesDoesNotMa
   // Assert
   ASSERT_FALSE(wrapper.need_loading());
   ASSERT_NE(nullptr, serialized_data_);
-  EXPECT_EQ(0U, serialized_data_->get_chunks_view().size());
+  EXPECT_EQ(0U, serialized_chunks_count());
 }
 
 TEST_F(RangeQuerierWrapperFixture, QueryDefersSerializationUntilUnloadedSeriesIsLoaded) {
@@ -243,7 +249,7 @@ TEST_F(RangeQuerierWrapperFixture, QueryDefersSerializationUntilUnloadedSeriesIs
   EXPECT_TRUE(series_to_load_0);
   EXPECT_TRUE(was_null_before_finalize);
   ASSERT_NE(nullptr, serialized_data_);
-  ASSERT_EQ(1U, serialized_data_->get_chunks_view().size());
+  ASSERT_EQ(1U, serialized_chunks_count());
   EXPECT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}}), decode_chunk(0));
 }
 

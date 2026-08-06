@@ -24,7 +24,7 @@ template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
 class ChunkRecoderIterator {
  public:
   using iterator_category = std::forward_iterator_tag;
-  using value_type = series_data::DataStorage::SeriesChunkIterator::Data;
+  using value_type = series_data::DataStorage<>::SeriesChunkIterator::Data;
   using difference_type = ptrdiff_t;
   using pointer = value_type*;
   using reference = value_type&;
@@ -35,7 +35,7 @@ class ChunkRecoderIterator {
   ChunkRecoderIterator(LsIdSetIterator&& ls_id_iterator_,
                        LsIdSetIteratorSentinel&& ls_id_end_iterator,
                        uint32_t ls_id_batch_size,
-                       const series_data::DataStorage* data_storage,
+                       const series_data::DataStorage<>* data_storage,
                        const PromPP::Primitives::TimeInterval time_interval)
       : time_interval_(time_interval),
         ls_id_iterator_(std::forward<LsIdSetIterator>(ls_id_iterator_), ls_id_batch_size),
@@ -49,7 +49,7 @@ class ChunkRecoderIterator {
     ls_id_iterator_.next_batch();
 
     if (*this != IteratorSentinel{}) {
-      chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
       advance_to_non_empty_chunk();
       return *this != IteratorSentinel{};
     }
@@ -78,12 +78,12 @@ class ChunkRecoderIterator {
   const PromPP::Primitives::TimeInterval time_interval_;
   BareBones::iterator::BatchIterator<LsIdSetIterator, LsIdSetIteratorSentinel> ls_id_iterator_;
   [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
-  series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
+  series_data::DataStorage<>::SeriesChunkIterator chunk_iterator_;
 
   PROMPP_ALWAYS_INLINE void advance_iterator() noexcept {
     if (++chunk_iterator_ == IteratorSentinel{}) {
       if (++ls_id_iterator_ != ls_id_end_iterator_) {
-        chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+        chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
       }
     }
   }

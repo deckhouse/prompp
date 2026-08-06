@@ -1,5 +1,7 @@
 #include "series_data_serialization_serialized_data.h"
 
+#include <variant>
+
 #include "entrypoint/types/serialized_data.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
@@ -12,7 +14,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_next(void* args
     uint32_t chunk_ref;
   };
   const auto out = new (res) Result{};
-  std::tie(out->series_id, out->chunk_ref) = static_cast<Arguments*>(args)->serialized_data->next();
+  std::visit([out](auto& serialized_data) { std::tie(out->series_id, out->chunk_ref) = serialized_data.next(); },
+             *static_cast<Arguments*>(args)->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args) {
@@ -23,7 +26,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(v
   };
 
   const auto in = static_cast<Arguments*>(args);
-  new (in->iterator) entrypoint::types::SerializedDataIterator(in->serialized_data->iterator(in->chunk_ref));
+  std::visit([in](const auto& serialized_data) { new (in->iterator) entrypoint::types::SerializedDataIterator(serialized_data.iterator(in->chunk_ref)); },
+             *in->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator) {
@@ -52,7 +56,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(
   };
 
   const Arguments* in = static_cast<Arguments*>(args);
-  in->iterator->reset(in->serialized_data->get_buffer_view(), in->serialized_data->get_chunks_view(), in->chunk_ref);
+  std::visit([in](const auto& serialized_data) { in->iterator->reset(serialized_data.get_buffer_view(), serialized_data.get_chunks_view(), in->chunk_ref); },
+             *in->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_dtor(void* args) {
