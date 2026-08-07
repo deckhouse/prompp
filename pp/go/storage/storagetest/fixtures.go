@@ -288,7 +288,6 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 	}
 
 	runtime.KeepAlive(lssQueryResult)
-
 	return querier.NewInstantSeriesSet(snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
 

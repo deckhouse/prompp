@@ -55,40 +55,6 @@ type Sample struct {
 	Value     float64
 }
 
-// HeadEncoder is Go wrapper around series_data::Encoder.
-type HeadEncoder struct {
-	encoder     uintptr
-	dataStorage *DataStorage
-}
-
-// NewHeadEncoderWithDataStorage - constructor.
-func NewHeadEncoderWithDataStorage(dataStorage *DataStorage) *HeadEncoder {
-	encoder := &HeadEncoder{
-		encoder:     seriesDataEncoderCtor(dataStorage.dataStorage),
-		dataStorage: dataStorage,
-	}
-	runtime.AddCleanup(encoder, seriesDataEncoderDtor, encoder.encoder)
-
-	return encoder
-}
-
-// Encode - encodes single triplet.
-func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
-	seriesDataEncoderEncode(e.encoder, seriesID, timestamp, value)
-	runtime.KeepAlive(e)
-}
-
-// EncodeInnerSeriesSlice - encodes InnerSeries slice produced by relabeler.
-func (e *HeadEncoder) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
-	seriesDataEncoderEncodeInnerSeriesSlice(e.encoder, innerSeriesSlice)
-	runtime.KeepAlive(e)
-}
-
-func (e *HeadEncoder) MergeOutOfOrderChunks() {
-	seriesDataEncoderMergeOutOfOrderChunks(e.encoder)
-	runtime.KeepAlive(e)
-}
-
 type RecodedChunk struct {
 	TimeInterval
 	SeriesId     uint32

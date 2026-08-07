@@ -260,6 +260,7 @@ const (
 	scraperInvalidUtf8
 	scraperParseInvalidValue
 	scraperParseInvalidTimestamp
+	scraperMarkupBufferOverflow
 )
 
 var (
@@ -273,6 +274,8 @@ var (
 	ErrScraperParseInvalidValue = errors.New("scraper parse invalid value")
 	// ErrScraperParseInvalidTimestamp error when parse invalid timestamp.
 	ErrScraperParseInvalidTimestamp = errors.New("scraper parse invalid timestamp")
+	// ErrScraperMarkupBufferOverflow error when the scrape markup buffer exceeds 4 GiB.
+	ErrScraperMarkupBufferOverflow = errors.New("scraper markup buffer size exceeds 4 GiB")
 
 	codeToError = map[uint32]error{
 		scraperParseNoError:          nil,
@@ -281,6 +284,7 @@ var (
 		scraperInvalidUtf8:           ErrScraperInvalidUtf8,
 		scraperParseInvalidValue:     ErrScraperParseInvalidValue,
 		scraperParseInvalidTimestamp: ErrScraperParseInvalidTimestamp,
+		scraperMarkupBufferOverflow:  ErrScraperMarkupBufferOverflow,
 	}
 )
 
