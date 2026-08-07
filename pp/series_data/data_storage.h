@@ -232,6 +232,10 @@ struct DataStorage {
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool series_exists(uint32_t ls_id) const noexcept {
+    return open_chunks.size() > ls_id && !open_chunks[ls_id].is_empty();
+  }
+
   void delete_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) noexcept {
     if (const auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {
       metrics->dec_chunk_count(chunk.encoding_state.encoding_type);

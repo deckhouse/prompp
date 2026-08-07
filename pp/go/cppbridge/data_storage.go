@@ -151,13 +151,6 @@ func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32,
 	return seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
-// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-// Deprecated: use QueryStaleNaNSeries instead.
-func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64, notFoundTimestampValue int64) {
-	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, notFoundTimestampValue, seriesIDs, timestamps)
-	runtime.KeepAlive(ds)
-}
-
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 // series in seriesIDs directly into the C-shared series slice (pointed to by series).
 func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
