@@ -257,33 +257,6 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   }
 }
 
-extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* args) {
-  using PromPP::Primitives::Timestamp;
-  using series_data::Decoder;
-
-  struct Arguments {
-    DataStoragePtr data_storage;
-    Timestamp not_found_timestamp_value;
-    SliceView<LabelSetID> series_ids;
-    Slice<Timestamp> timestamps;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-
-  assert(in->series_ids.size() == in->timestamps.size());
-  std::visit(
-      [in](const auto& data_storage) {
-        std::ranges::transform(in->series_ids, in->timestamps.begin(), [&](uint32_t series_id) {
-          if (!data_storage.finalized_chunks.contains(series_id) &&
-              (series_id >= data_storage.open_chunks.size() || data_storage.open_chunks[series_id].is_empty())) [[unlikely]] {
-            return in->not_found_timestamp_value;
-          }
-          return Decoder::get_series_min_timestamp(data_storage, series_id);
-        });
-      },
-      *in->data_storage);
-}
-
 extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args) {
   using series_data::Decoder;
 
@@ -299,13 +272,9 @@ extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args
       [in, series](const auto& data_storage) mutable {
         for (auto&& [stalenan_series, series_id] : std::ranges::views::zip(series, in->series_ids)) {
           stalenan_series.series_id = series_id;
-
-          if (!data_storage.finalized_chunks.contains(series_id) &&
-              (series_id >= data_storage.open_chunks.size() || data_storage.open_chunks[series_id].is_empty())) [[unlikely]] {
-            continue;
+          if (data_storage.series_exists(series_id)) [[likely]] {
+            stalenan_series.timestamp = Decoder::get_series_min_timestamp(data_storage, series_id);
           }
-
-          stalenan_series.timestamp = Decoder::get_series_min_timestamp(data_storage, series_id);
         }
       },
       *in->data_storage);
