@@ -147,6 +147,11 @@ func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
 	// Initializing size counter with the injected extra size (heads + catalog).
 	blocksSize := ep.CatalogHeadsSize()
 	for i, blk := range rawBlocks {
+		if _, ok := deletable[blk.ULID()]; ok {
+			// This block is already marked for deletion, so we don't count its size.
+			continue
+		}
+
 		blocksSize += blk.Size()
 		if blocksSize > ep.opts.MaxBytes {
 			// Add this and all following blocks for deletion.
@@ -154,6 +159,9 @@ func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
 				deletable[b.ULID()] = struct{}{}
 			}
 
+			// Exclude the blocks just marked for deletion from the budget, so the
+			// downsampled loop below sees the size of the set that will actually remain.
+			blocksSize -= blk.Size()
 			reachedLimit = true
 
 			break
@@ -180,10 +188,10 @@ func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
 }
 
 // BeyondTimeRetention returns those blocks which are beyond the time retention.
-func (ep *ExpirationPolicy[TBlock]) BeyondTimeRetention(rawBlocks []TBlock, deletable map[ulid.ULID]struct{}) bool {
+func (ep *ExpirationPolicy[TBlock]) BeyondTimeRetention(rawBlocks []TBlock, deletable map[ulid.ULID]struct{}) {
 	// Time retention is disabled or no blocks to work with.
 	if len(rawBlocks) == 0 || ep.opts.RetentionDuration == 0 {
-		return false
+		return
 	}
 
 	for i, blk := range rawBlocks {
@@ -195,11 +203,9 @@ func (ep *ExpirationPolicy[TBlock]) BeyondTimeRetention(rawBlocks []TBlock, dele
 			}
 
 			ep.metrics.timeRetentions.Inc()
-			return true
+			break
 		}
 	}
-
-	return false
 }
 
 // BlocksToDelete returns the blocks that should be deleted based on the retention policy
@@ -220,9 +226,7 @@ func (ep *ExpirationPolicy[TBlock]) BlocksToDelete(blocks []TBlock) map[ulid.ULI
 	rawBlocks, downsampledBlocks := splitBlocks(blocks)
 
 	// Beyond time retention.
-	if ep.BeyondTimeRetention(rawBlocks, deletable) {
-		return deletable
-	}
+	ep.BeyondTimeRetention(rawBlocks, deletable)
 
 	// Beyond size retention.
 	ep.BeyondSizeRetention(rawBlocks, downsampledBlocks, deletable)

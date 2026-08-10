@@ -2,6 +2,7 @@ package tcompactor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-kit/log"
@@ -117,17 +118,25 @@ func (c *TCompactor) Compact(open []*block.Block) ([]ulid.ULID, error) {
 	}
 
 	res := make([]ulid.ULID, 0, len(groups))
+	var errs []error
 	for _, group := range groups {
 		compIDs, err := group.Compact(c.ctx, c.dir, c.planner, c.lCompactor, c.blockPopulator, open)
 		if err != nil {
 			c.metrics.compactionsFailed.Inc()
-			return res, fmt.Errorf("compact group: %w", err)
+			errs = append(errs, fmt.Errorf("compact group %s: %w", group.Key(), err))
+
+			if c.ctx.Err() != nil {
+				// If the context is canceled, we don't want to continue compacting other groups.
+				break
+			}
+
+			continue
 		}
 
 		res = append(res, compIDs...)
 	}
 
-	return res, nil
+	return res, errors.Join(errs...)
 }
 
 // OverlappingBlocks returns all overlapping blocks from given meta files.
