@@ -55,14 +55,12 @@ const (
 )
 
 var (
-	// UnloadDataStorage flags for unloading [DataStorage].
-	UnloadDataStorage = true
-
 	// DefaultNumberOfShards default number of shards.
 	DefaultNumberOfShards uint16 = 2
 
 	// ShrinkShardCopier flags for shrinking the shard copier.
-	ShrinkShardCopier = false
+	// Enabled by default; disable via PROMPP_FEATURES=disable_shrink_shard_copier.
+	ShrinkShardCopier = true
 )
 
 //
@@ -171,10 +169,7 @@ func NewManager(
 		return nil, fmt.Errorf("%s is not directory", o.DataDir)
 	}
 
-	var unloadDataStorageInterval time.Duration
-	if UnloadDataStorage {
-		unloadDataStorageInterval = DefaultUnloadDataStorageInterval
-	}
+	unloadDataStorageInterval := DefaultUnloadDataStorageInterval
 
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)

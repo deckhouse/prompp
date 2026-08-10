@@ -325,7 +325,7 @@ func main() {
 			Gatherer:   prometheus.DefaultGatherer,
 		},
 		promlogConfig:          promlog.Config{},
-		UseBlockManagerStorage: false,
+		UseBlockManagerStorage: true,
 	}
 
 	a := kingpin.New(filepath.Base(os.Args[0]), "The Prom++ monitoring server").UsageWriter(os.Stdout)
@@ -865,9 +865,11 @@ func main() {
 
 	// PP_CHANGES.md: rebuild on cpp start
 	// Server mode supports two historical-block storage schemes selected by the
-	// PROMPP_FEATURES=enable_block_manager feature flag:
-	// 1) enabled:  manager.Manager + tcompactor.TCompactor for persisted blocks.
-	// 2) disabled (default): pre-PR-377 mode with tsdb.DB serving persisted blocks.
+	// PROMPP_FEATURES feature flag:
+	// 1) block.Manager + block.Compactor for persisted blocks. This is the
+	//    default; it can be turned off with PROMPP_FEATURES=disable_block_manager.
+	// 2) pre-PR-377 mode with tsdb.DB serving persisted blocks, used when the
+	//    block manager is disabled.
 	// In both modes, PP head manager + adapter remain the write path.
 	var (
 		tsdbHistorical   *tsdbHistoricalStorage
@@ -2373,10 +2375,6 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 			rwprocessor.AlwaysCommit = false
 			pp_pkg_handler.OTLPAlwaysCommit = false
 
-		case "disable_unload_data_storage":
-			pp_storage.UnloadDataStorage = false
-			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is disabled.")
-
 		case "disable_block_compaction":
 			pp_pkg_tsdb.BlockCompactionDisabled = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
@@ -2421,19 +2419,19 @@ func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
 
 			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
 
-		case "enable_instant_query_feature":
-			querier.InstantQueryFeature = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is enabled.")
+		case "disable_instant_query_feature":
+			querier.InstantQueryFeature = false
+			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is disabled.")
 
-		case "shrink_shard_copier":
-			pp_storage.ShrinkShardCopier = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is enabled.")
+		case "disable_shrink_shard_copier":
+			pp_storage.ShrinkShardCopier = false
+			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is disabled.")
 
-		case "enable_block_manager":
+		case "disable_block_manager":
 			if cfg != nil {
-				cfg.UseBlockManagerStorage = true
+				cfg.UseBlockManagerStorage = false
 			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
+			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is disabled; using pre-PR-377 TSDB storage.")
 
 		case "disable_coredumps":
 			if err := prom_runtime.DisableCoreDumps(); err != nil {

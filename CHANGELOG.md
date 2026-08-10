@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.8.7 / 2026-08-07
+
+### Performance
+1. **Faster scrape tokenization.** Bumped re2c and regenerated the text tokenizers, speeding up parsing of scraped exposition data (#448).
+2. **Lower memory use in the series index querier.** Reworked matcher merging into a dedicated `MatchesMerger`, dropped the redundant `kAllMatchWithExcludes` match status and shrank the series-id sequence snapshot iterator, cutting allocations on queries with many matchers (#457).
+3. **Arena allocation is now opt-in per data storage.** With a large number of rule groups (1000+) the process ends up with so many jemalloc arenas that jemalloc itself slows down when working with them. Transaction heads never report `allocated_memory` and have cheap destructors, so arenas bring them no benefit — only that slowdown. `DataStorage` now takes an explicit flag and transaction heads are created without arenas, while long-lived ingestion heads keep using them (#464).
+4. **Earlier collection of C++ objects.** The garbage collector for objects allocated in C++ but owned from Go used a single knob for both the moving average and the trigger threshold, which fired at 1.67x the average. The threshold is now a separate 30% headroom over the average, and the average itself is smoother (decay 0.2), so C++ memory is reclaimed noticeably earlier under growing load (#451).
+
+### Fixes
+1. **Scrapes larger than 4 GiB were dropped entirely.** The Prometheus/OpenMetrics text scraper stored markup offsets as 32-bit values, so a response over 4 GiB — a `/federate` from an instance federating everything, for example — overflowed them. Everything past that boundary was then resolved from a wrapped position: not only `# TYPE` lines (which surfaced first, as "invalid metric type"), but the metrics themselves, since label and sample offsets are rebased on the same per-metric base offset. The scrape failed to append and nothing was stored. Absolute buffer offsets are now 64-bit, and the markup byte buffer refuses to grow past 4 GiB instead of silently truncating offsets (#465).
+2. **Dependency security updates.** Bumped the web UI packages `postcss` to v8.5.23 (#462) and `sanitize-html` to v2.17.6, picking up upstream security fixes (GHSA-vccv-cmxp-4j9h — `javascript:` URIs could pass URI scheme validation via the `action`, `formaction`, `data`, `poster` and `background` attributes).
+
+### Other
+1. **Source layout rework.** Entrypoint types and bridge bindings were split into `entrypoint/types/` and `entrypoint/bridge/` (#392), tests were added for the extracted entrypoint types (#393), and unit tests were moved out of `tests/` directories to sit next to the headers they cover (#410). No behaviour change.
+
 ## v0.8.6 / 2026-07-31
 
 ### Performance
