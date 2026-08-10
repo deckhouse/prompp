@@ -33,6 +33,14 @@ const (
 	blockDurationMinuteMS        = int64(time.Minute / time.Millisecond)
 )
 
+//
+// BlocksToDeleteFunc
+//
+
+// BlocksToDeleteFunc is a function that returns a map of block IDs to delete.
+// It is used to determine which blocks to delete based on the block manager's retention policy.
+type BlocksToDeleteFunc func(blocks []*block.Block) map[ulid.ULID]struct{}
+
 // Options configures block reload, mirroring the relevant tsdb.Options fields.
 type Options struct {
 	// RetentionDuration is the time retention in milliseconds, used for the corrupted-block outdated check.
@@ -54,7 +62,7 @@ func (o *Options) needDownsampling(delta int64) bool {
 type Manager struct {
 	dir            string
 	opts           *Options
-	blocksToDelete block.BlocksToDeleteFunc
+	blocksToDelete BlocksToDeleteFunc
 	logger         log.Logger
 	chunkPool      chunkenc.Pool
 	metrics        *metrics
@@ -95,7 +103,7 @@ func NewManager(
 	dir string,
 	opts *Options,
 	compactor compactionRunner,
-	blocksToDelete block.BlocksToDeleteFunc,
+	blocksToDelete BlocksToDeleteFunc,
 	chunkPool chunkenc.Pool,
 	lsObserver LocalStorageObserver,
 	logger log.Logger,

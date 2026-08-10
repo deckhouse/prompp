@@ -29,10 +29,11 @@ import (
 var shardWalFilePattern = regexp.MustCompile(`^shard_(\d+)\.wal$`)
 
 type cmdPersistHead struct {
-	headPath       string
-	outputDir      string
-	blockDuration  model.Duration
-	numberOfShards uint16
+	headPath               string
+	outputDir              string
+	blockDuration          model.Duration
+	numberOfShards         uint16
+	enableBlockShardLabels bool
 }
 
 func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
@@ -48,6 +49,9 @@ func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
 
 	clause.Flag("number-of-shards", "Number of shards in the head. 0 means autodetect by shard_*.wal files.").
 		Default("0").Uint16Var(&cmd.numberOfShards)
+
+	clause.Flag("enable_block_shard_labels", "Enable shard labels in the persisted blocks.").
+		Default("false").BoolVar(&cmd.enableBlockShardLabels)
 }
 
 // Do loads a single head directly by path (without consulting head.log) and writes TSDB blocks.
@@ -67,6 +71,11 @@ func (cmd *cmdPersistHead) Do(
 
 	dataDir := filepath.Dir(headPath)
 	headID := filepath.Base(headPath)
+
+	if cmd.enableBlockShardLabels {
+		block.EnableBlockShardLabels = true
+		_ = level.Info(logger).Log("msg", "[FEATURE] Block shard labels are enabled.")
+	}
 
 	// The loader resolves the head directory as filepath.Join(dataDir, record.ID()),
 	// so the directory name must be a valid head UUID.
