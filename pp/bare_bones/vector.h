@@ -384,10 +384,11 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
 template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
 using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T, Reallocator>;
 
-template <class T, ReallocatorInterface Reallocator>
-class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+class SharedVector
+    : public GenericVector<SharedVector<T, ControlBlockType, Reallocator>, typename SharedMemory<T, ControlBlockType, Reallocator>::SizeType, T> {
  public:
-  using SizeType = typename SharedMemory<T, Reallocator>::SizeType;
+  using SizeType = typename SharedMemory<T, ControlBlockType, Reallocator>::SizeType;
   using Base = GenericVector<SharedVector, SizeType, T>;
 
   SharedVector() = default;
@@ -411,41 +412,41 @@ class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename
   PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_items_count(size); }
 
  private:
-  SharedMemory<T, Reallocator> memory_;
+  SharedMemory<T, ControlBlockType, Reallocator> memory_;
 };
 
 template <class T>
 struct IsTriviallyReallocatable<Vector<T>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsTriviallyReallocatable<SharedVector<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<SharedVector<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 template <class T>
 struct IsZeroInitializable<Vector<T>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsZeroInitializable<SharedVector<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsZeroInitializable<SharedVector<T, ControlBlockType, Reallocator>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
 class SharedSpan {
  public:
   using iterator_category = std::contiguous_iterator_tag;
   using value_type = T;
   using iterator = T*;
   using const_iterator = const T*;
-  using SizeType = typename SharedVector<T, Reallocator>::SizeType;
+  using SizeType = typename SharedVector<T, ControlBlockType, Reallocator>::SizeType;
 
   SharedSpan() noexcept = default;
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector)
-      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(vector.shared_ptr())) {}
+  explicit SharedSpan(const SharedVector<Item, ControlBlockType, Reallocator>& vector)
+      : data_(reinterpret_cast<const SharedPtr<T, ControlBlockType, Reallocator>&>(vector.shared_ptr())) {}
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedMemory<Item, Reallocator>& memory)
-      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(memory.ptr())) {}
+  explicit SharedSpan(const SharedMemory<Item, ControlBlockType, Reallocator>& memory)
+      : data_(reinterpret_cast<const SharedPtr<T, ControlBlockType, Reallocator>&>(memory.ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
@@ -474,13 +475,13 @@ class SharedSpan {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
 
  private:
-  SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator> data_;
+  SharedPtr<T, ControlBlockType, Reallocator> data_;
 };
 
 template <class T>
 struct IsSharedSpan : std::false_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsSharedSpan<SharedSpan<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsSharedSpan<SharedSpan<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

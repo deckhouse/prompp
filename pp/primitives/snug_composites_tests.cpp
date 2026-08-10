@@ -10,7 +10,7 @@
 namespace {
 
 template <class T>
-using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using SharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
 static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::DecodingTable<BareBones::Vector>::value_type,
                            PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<BareBones::Vector>::value_type>);
@@ -327,10 +327,10 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainWithPartialShr
 class SharedDataFixture : public testing::Test {
  protected:
   template <class T>
-  using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+  using SharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   template <class T>
-  using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+  using SharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   using SymbolEncodingBimap = PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<SharedVector>;
   using SymbolDecodingTable = PromPP::Primitives::SnugComposites::Symbol::DecodingTable<SharedSpan>;

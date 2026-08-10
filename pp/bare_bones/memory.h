@@ -200,7 +200,8 @@ concept SharedPtrControlBlockInterface = requires(ControlBlock control_block, co
   { control_block.set_items_count(typename ControlBlock::ItemCounter()) };
 };
 
-class SharedPtrControlBlockWithItemCount {
+template <class ItemCounterType>
+class GenericSharedPtrControlBlockWithItemCount {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
@@ -215,9 +216,14 @@ class SharedPtrControlBlockWithItemCount {
 
  private:
   RefCounter ref_count_{1};
-  ItemCounter items_count_{};
+  ItemCounterType items_count_{};
 };
+
+using SharedPtrControlBlockWithItemCount = GenericSharedPtrControlBlockWithItemCount<uint32_t>;
 static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlockWithItemCount>);
+
+using AtomicSharedPtrControlBlockWithItemCount = GenericSharedPtrControlBlockWithItemCount<std::atomic<uint32_t>>;
+static_assert(SharedPtrControlBlockInterface<AtomicSharedPtrControlBlockWithItemCount>);
 
 class SharedPtrControlBlock {
  public:
@@ -383,11 +389,11 @@ class SharedPtr {
   [[nodiscard]] PROMPP_ALWAYS_INLINE void* raw_memory() const noexcept { return data_ == nullptr ? nullptr : reinterpret_cast<ControlBlock*>(data_) - 1; }
 };
 
-template <class T, ReallocatorInterface Reallocator>
-class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t, T> {
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+class SharedMemory : public GenericMemory<SharedMemory<T, ControlBlockType, Reallocator>, uint32_t, T> {
  public:
   using SizeType = uint32_t;
-  using SharedPtr = BareBones::SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>;
+  using SharedPtr = BareBones::SharedPtr<T, ControlBlockType, Reallocator>;
 
   SharedMemory() = default;
   SharedMemory(const SharedMemory&) = default;
@@ -432,14 +438,14 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
 template <template <class> class ControlBlock, class T>
 struct IsTriviallyReallocatable<Memory<ControlBlock, T>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsTriviallyReallocatable<SharedMemory<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<SharedMemory<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 template <template <class> class ControlBlock, class T>
 struct IsZeroInitializable<Memory<ControlBlock, T>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsZeroInitializable<SharedMemory<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsZeroInitializable<SharedMemory<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 template <class T>
 using MemoryWithItemCount = Memory<MemoryControlBlockWithItemCount, T>;
@@ -447,7 +453,7 @@ using MemoryWithItemCount = Memory<MemoryControlBlockWithItemCount, T>;
 template <class T>
 struct IsSharedMemory : std::false_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsSharedMemory<SharedMemory<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsSharedMemory<SharedMemory<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones
