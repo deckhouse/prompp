@@ -5944,7 +5944,7 @@ func labelsWithHashCollision() (labels.Labels, labels.Labels) {
 	ls2 := labels.FromStrings("__name__", "metric", "lbl1", "value", "lbl2", "v7uDlF")
 
 	if ls1.Hash() != ls2.Hash() {
-		// These ones are the same when using -tags stringlabels
+		// These ones are the same with the default string-labels representation.
 		ls1 = labels.FromStrings("__name__", "metric", "lbl", "HFnEaGl")
 		ls2 = labels.FromStrings("__name__", "metric", "lbl", "RqcXatm")
 	}
