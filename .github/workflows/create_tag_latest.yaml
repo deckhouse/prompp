@@ -1,6 +1,13 @@
 name: Tag Docker Image as Latest
 
 on:
+  # Automatic path: after a successful "Build with Werf Dockerhub" run for a stable tag.
+  # It has to wait for that workflow rather than trigger on the tag push itself — the
+  # per-arch images it references are only pushed by that build.
+  workflow_run:
+    workflows: ["Build with Werf Dockerhub"]
+    types: [completed]
+  # Manual path: re-tag an already published version as latest.
   workflow_dispatch:
     inputs:
       tag:
@@ -10,7 +17,16 @@ on:
 
 jobs:
   tag_latest:
+    # Manual runs always proceed. Automatic ones only for a successful build of a stable
+    # tag: release candidates must never move `latest`.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v') &&
+      !contains(github.event.workflow_run.head_branch, '-rc'))
     runs-on: fsn-dev-gitlab-runner
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -19,6 +35,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Image tags carry no leading "v" (see the normalize step of the build workflow),
+      # so strip it when the tag comes from the triggering run.
+      - name: Resolve image tag
+        id: resolve
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.event.workflow_run.head_branch }}"
+            TAG="${TAG#v}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Tagging ${TAG} as latest"
 
       - name: Login to registry
         uses: docker/login-action@v2.1.0
@@ -29,9 +60,9 @@ jobs:
 
       - name: Tag the image as latest
         run: |
-          docker manifest create docker.io/prompp/prompp:latest \
-            docker.io/prompp/prompp:${{ github.event.inputs.tag }}-amd64 \
-            docker.io/prompp/prompp:${{ github.event.inputs.tag }}-arm64
+          docker manifest create --amend docker.io/prompp/prompp:latest \
+            docker.io/prompp/prompp:${{ steps.resolve.outputs.tag }}-amd64 \
+            docker.io/prompp/prompp:${{ steps.resolve.outputs.tag }}-arm64
 
       - name: Push the image with latest tag
         run: |
@@ -47,4 +78,4 @@ jobs:
     steps:
       - name: Cleanup remaining Docker images
         run: |
-          docker rmi docker.io/prompp/prompp:${{ github.event.inputs.tag }}-${{ matrix.arch }} || true
+          docker rmi docker.io/prompp/prompp:${{ needs.tag_latest.outputs.tag }}-${{ matrix.arch }} || true
