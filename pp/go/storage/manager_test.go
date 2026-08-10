@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
@@ -16,7 +18,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/stretchr/testify/suite"
 )
 
 var defaultSortCatalogRecordsFunc = func(lhs, rhs *catalog.Record) bool {
@@ -27,7 +28,7 @@ type UploadOrBuildHeadSuite struct {
 	suite.Suite
 	dataDir         string
 	clock           *clockwork.FakeClock
-	headIdGenerator catalog.IDGenerator
+	headIDGenerator catalog.IDGenerator
 	catalog         *catalog.Catalog
 	builder         *storage.Builder
 	loader          *storage.Loader
@@ -43,7 +44,7 @@ func (s *UploadOrBuildHeadSuite) SetupTest() {
 	s.dataDir = dataDir
 
 	s.clock = clockwork.NewFakeClockAt(time.Now())
-	s.headIdGenerator = catalog.DefaultIDGenerator{}
+	s.headIDGenerator = catalog.DefaultIDGenerator{}
 	s.createCatalog()
 	s.createBuilder()
 	s.createLoader()
@@ -51,7 +52,7 @@ func (s *UploadOrBuildHeadSuite) SetupTest() {
 
 func (s *UploadOrBuildHeadSuite) createCatalog() {
 	var err error
-	s.catalog, err = storagetest.CreateCatalog(s.clock, filepath.Join(s.dataDir, "catalog.log"), s.headIdGenerator)
+	s.catalog, err = storagetest.CreateCatalog(s.clock, filepath.Join(s.dataDir, "catalog.log"), s.headIDGenerator)
 	s.Require().NoError(err)
 }
 

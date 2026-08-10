@@ -4,19 +4,6 @@
 
 namespace series_data::decoder::decorator {
 
-PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
-  const auto t = sum + inc;
-  if (std::isinf(t)) {
-    c = 0;
-  } else if (std::abs(sum) >= std::abs(inc)) {
-    c += sum - t + inc;
-  } else {
-    c += inc - t + sum;
-  }
-
-  sum = t;
-}
-
 class SumOfElements {
  public:
   explicit SumOfElements(encoder::Sample& sum, const PromPP::Primitives::TimeInterval& interval) : sum_(sum), interval_(interval) {}
@@ -44,9 +31,22 @@ class SumOfElements {
   encoder::Sample& sum_;
   const PromPP::Primitives::TimeInterval& interval_;
   double c_{};
+
+  PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
+    const auto t = sum + inc;
+    if (std::isinf(t)) {
+      c = 0;
+    } else if (std::abs(sum) >= std::abs(inc)) {
+      c += sum - t + inc;
+    } else {
+      c += inc - t + sum;
+    }
+
+    sum = t;
+  }
 };
 
 template <class Iterator = UniversalDecodeIterator>
-using SumOverTimeIterator = OverTimeFuncIterator<SumOfElements, Iterator>;
+using SumOverTimeIterator = OverTimeFuncIterator<SumOfElements, Iterator, true>;
 
 }  // namespace series_data::decoder::decorator

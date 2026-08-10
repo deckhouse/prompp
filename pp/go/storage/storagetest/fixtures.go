@@ -13,6 +13,8 @@ import (
 	"github.com/jonboulle/clockwork"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -28,7 +30,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/suite"
 )
 
 // TimeSeries test data.
@@ -285,7 +286,8 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}
 
-	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, instantSeries), nil
+	runtime.KeepAlive(lssQueryResult)
+	return querier.NewInstantSeriesSet(snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
 
 const (
@@ -341,13 +343,12 @@ func StaleNaNQuery(
 		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
-	timestamps := querier.MakeTimestampsSliceWithDefault(lssQueryResult.Len(), valueNotFoundTimestampValue)
-	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps)
+	series := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
-	return querier.NewStaleNaNSeriesSet(
-		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
-		lssQueryResult,
-		snapshot,
-		valueNotFoundTimestampValue,
-	), nil
+	ds.QueryStaleNaNSeries(
+		lssQueryResult.IDs(),
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	return querier.NewStaleNaNSeriesSet(series, snapshot, valueNotFoundTimestampValue), nil
 }

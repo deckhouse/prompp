@@ -8,6 +8,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -28,7 +29,7 @@ const (
 	DefaultBlockSizePercentThresholdForDownscaling = 10
 	// DefaultDelayAfterNotify - default delay after notify reject.
 	DefaultDelayAfterNotify = 300 * time.Second
-	// magic byte for header
+	// magic byte for header.
 	magicByte byte = 189
 	// AlwaysToRefill - specific value for ManagerKeeperConfig.UncommittedTimeWindow parameter for scenario
 	// when all data should always be written to the refill.
@@ -75,7 +76,7 @@ func DefaultLimits() *Limits {
 	}
 }
 
-// OpenHeadLimits configure how long encoder should accumulate data for one segment
+// OpenHeadLimits configure how long encoder should accumulate data for one segment.
 type OpenHeadLimits struct {
 	MaxDuration    time.Duration `validate:"required"`
 	LastAddTimeout time.Duration `validate:"required"`
@@ -178,7 +179,7 @@ func (l *BlockLimits) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// Segment is an universal interface for blob segment data
+// Segment is an universal interface for blob segment data.
 type Segment interface {
 	frames.WritePayload
 }
@@ -202,7 +203,7 @@ type SendPromise struct {
 
 var _ Promise = (*SendPromise)(nil)
 
-// NewSendPromise is a constructor
+// NewSendPromise is a constructor.
 func NewSendPromise(shardsNumber int) *SendPromise {
 	return &SendPromise{
 		done:    make(chan struct{}),
@@ -211,14 +212,14 @@ func NewSendPromise(shardsNumber int) *SendPromise {
 	}
 }
 
-// Ack marks that one of shards has been ack
+// Ack marks that one of shards has been ack.
 func (promise *SendPromise) Ack() {
 	if atomic.AddInt32(&promise.counter, -1) == 0 {
 		close(promise.done)
 	}
 }
 
-// Refill marks that one of shards has been refill
+// Refill marks that one of shards has been refill.
 func (promise *SendPromise) Refill() {
 	atomic.AddInt32(&promise.refills, 1)
 	counter := atomic.AddInt32(&promise.counter, -1)
@@ -275,7 +276,7 @@ var limitsCause = map[uint8]string{
 	timeoutLimit:  "timeout_limit",
 }
 
-// OpenHeadPromise is a SendPromise wrapper to combine several Sends in one segment
+// OpenHeadPromise is a SendPromise wrapper to combine several Sends in one segment.
 type OpenHeadPromise struct {
 	*SendPromise
 	done       chan struct{}
@@ -289,7 +290,7 @@ type OpenHeadPromise struct {
 
 var _ Promise = (*OpenHeadPromise)(nil)
 
-// NewOpenHeadPromise is a constructor
+// NewOpenHeadPromise is a constructor.
 func NewOpenHeadPromise(
 	shards int,
 	limits OpenHeadLimits,
@@ -365,7 +366,7 @@ func (promise *OpenHeadPromise) Add(segmentStats []cppbridge.SegmentStats) (limi
 	return noLimit, func() {}
 }
 
-// Finalized wait until Close method call
+// Finalized wait until Close method call.
 func (promise *OpenHeadPromise) Finalized() <-chan struct{} {
 	return promise.done
 }

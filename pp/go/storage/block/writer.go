@@ -6,6 +6,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -19,8 +20,8 @@ const (
 	DefaultBlockDuration = 2 * time.Hour
 )
 
-// LsIdBatchSize is the batch size for label set ID.
-var LsIdBatchSize uint32 = 100000
+// LsIDBatchSize is the batch size for label set ID.
+var LsIDBatchSize uint32 = 100000
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
@@ -80,8 +81,8 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 			return err
 		}
 		defer func() {
-			if err := writers.Close(); err != nil {
-				logger.Warnf("Failed to close block writers: %v", err)
+			if closeErr := writers.Close(); closeErr != nil {
+				logger.Warnf("Failed to close block writers: %v", closeErr)
 			}
 		}()
 
@@ -116,7 +117,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 		}
 
 		// Skip blocks whose whole time range is already beyond the retention
-		//period: they would be deleted on the next retention pass anyway.
+		// period: they would be deleted on the next retention pass anyway.
 		if applyRetention && maxT <= retentionCutoffMs {
 			continue
 		}
@@ -140,7 +141,7 @@ func (w *Writer[TShard]) createWriter(
 ) (blockWriter, error) {
 	var chunkIterator ChunkIterator
 	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
-		chunkIterator = NewChunkIterator(lss, LsIdBatchSize, ds, minT, maxT, downsamplingMs)
+		chunkIterator = NewChunkIterator(lss, LsIDBatchSize, ds, minT, maxT, downsamplingMs)
 		return nil
 	})
 
@@ -168,7 +169,7 @@ func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
 	_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
+		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIDBatchSize)
 		return nil
 	})
 

@@ -7,6 +7,7 @@
 
 #define Sizeof_SerializedDataSamplesIterator 152
 #define Sizeof_SerializedDataAggregationIterator 208
+#define Sizeof_MultiSeriesDecodeIterator 48
 
 #define Sizeof_MetricsIterator 24
 
@@ -627,6 +628,49 @@ void prompp_metrics_page_for_test_detach(void* args);
 
 #ifdef __cplusplus
 }
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Construct a multi-series decode iterator over the given series ids.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to storage of size Sizeof_MultiSeriesDecodeIterator (placement new).
+ *     serializedData uintptr // pointer to serialized data.
+ *     seriesIDs []uint32 // slice view of series ids to use in iterator.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor(void* args);
+
+/**
+ * @brief Reset a multi-series decode iterator into the given series ids.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to a constructed MultiSeriesDecodeIterator.
+ *     serializedData uintptr // pointer to serialized data.
+ *     seriesIDs []uint32 // slice view of series ids to use in iterator.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_reset(void* args);
+
+/**
+ * @brief Advance multi-series decode iterator.
+ *
+ * @param iterator uintptr // pointer to multi-series decode iterator
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_next(void* iterator);
+
+/**
+ * @brief Destroy multi-series decode iterator (call before reusing).
+ *
+ * @param iterator uintptr // pointer to multi-series decode iterator
+ */
+void prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor(void* iterator);
+
+#ifdef __cplusplus
+}  // extern "C"
 #endif
 #ifdef __cplusplus
 extern "C" {
@@ -1537,15 +1581,6 @@ extern "C" {
 void prompp_series_data_data_storage_ctor(void* args, void* res);
 
 /**
- * @brief Resets DataStorage to initial state
- *
- * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- * }
- */
-void prompp_series_data_data_storage_reset(void* args);
-
-/**
  * @brief Get min max timestamps in storage
  *
  * @param args {
@@ -1701,6 +1736,18 @@ void prompp_series_data_data_storage_instant_query(void* args, void* res);
  * }
  */
 void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res);
+
+/**
+ * @brief Fill stalenan series (first sample timestamp + series id) per series id.
+ *
+ * @param args {
+ *        dataStorage uintptr  // pointer to constructed data storage
+ *        seriesIds   []uint32 // series ids
+ *        series      uintptr  // pointer to []querier.StaleNaNSeries (same length as seriesIds);
+ *                             // timestamp and seriesID fields are filled from storage
+ * }
+ */
+void prompp_series_data_data_storage_query_stalenan_series(void* args);
 
 /**
  * @brief finishes all Queriers after data load.
@@ -1912,23 +1959,10 @@ extern "C" {
 #endif
 
 /**
- * @brief series data Encoder constructor.
+ * @brief adds single series sample to data storage
  *
  * @param args {
  *     data_storage uintptr // pointer to constructed data storage
- * }
- *
- * @param res {
- *     encoder uintptr // pointer to constructed encoder
- * }
- */
-void prompp_series_data_encoder_ctor(void* args, void* res);
-
-/**
- * @brief adds single series to data storage
- *
- * @param args {
- *     encoder uintptr // pointer to constructed encoder
  *     seriesID uint32 // series id
  *     timestamp int64 // timestamp
  *     value float64   // value
@@ -1940,7 +1974,7 @@ void prompp_series_data_encoder_encode(void* args);
  * @brief adds slice of inner series to data storage
  *
  * @param args {
- *     encoder uintptr // pointer to constructed encoder
+ *     data_storage uintptr // pointer to constructed data storage
  *     innerSeriesSlice []*InnerSeries // pointer to inner series slice.
  * }
  */
@@ -1950,19 +1984,10 @@ void prompp_series_data_encoder_encode_inner_series_slice(void* args);
  * @brief merge outdated chunks
  *
  * @param args {
- *     encoder uintptr // pointer to constructed encoder
+ *     data_storage uintptr // pointer to constructed data storage
  * }
  */
 void prompp_series_data_encoder_merge_out_of_order_chunks(void* args);
-
-/**
- * @brief series data Encoder destructor.
- *
- * @param args {
- *     encoder uintptr // pointer to constructed encoder
- * }
- */
-void prompp_series_data_encoder_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

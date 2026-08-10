@@ -3,9 +3,6 @@ name: Linter
 on:
   pull_request:
     types: [opened, reopened, labeled, synchronize]
-  push:
-    branches:
-      - pp
   workflow_dispatch:
     inputs:
       release_branch:
@@ -13,11 +10,17 @@ on:
         required: false
 
 concurrency: 
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: clang-lint-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-ci-image:
+    # Skip linting for Renovate PRs until a human adds the `ready-for-ci` label.
+    # Merge stays blocked in the meantime via the tests-gate check (tests.yaml).
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.user.login != 'deckhouse-BOaTswain' ||
+      contains(github.event.pull_request.labels.*.name, 'ready-for-ci')
     uses: ./.github/workflows/build-ci-image.yaml
     with:
       pr_number: ${{ github.event_name == 'pull_request' && format('{0}', github.event.number) || '' }}

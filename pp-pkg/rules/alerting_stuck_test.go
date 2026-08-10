@@ -25,10 +25,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/stretchr/testify/require"
 )
 
 // scriptedQuery returns a QueryFunc that hands out canned promql.Vector values
@@ -85,9 +86,9 @@ func TestAlertingRule_OnePassEmpty_TransitionsToInactive(t *testing.T) {
 		F:      0,
 	}}
 	q, _ := scriptedQuery([]promql.Vector{
-		hot,         // t=0  : pending starts (new entry in r.active)
-		hot,         // t=1m : transitions to firing (holdDuration met)
-		nil,         // t=2m : empty → must transition to Inactive
+		hot, // t=0  : pending starts (new entry in r.active)
+		hot, // t=1m : transitions to firing (holdDuration met)
+		nil, // t=2m : empty → must transition to Inactive
 	})
 
 	t0 := time.Unix(0, 0).UTC()

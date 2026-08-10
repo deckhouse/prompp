@@ -14,9 +14,9 @@ type DataStorage struct {
 }
 
 // NewDataStorage - constructor.
-func NewDataStorage(collectMetrics bool) *DataStorage {
+func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	ds := &DataStorage{
-		dataStorage:       seriesDataDataStorageCtor(collectMetrics),
+		dataStorage:       seriesDataDataStorageCtor(collectMetrics, useArenas),
 		gcDestroyDetector: &gcDestroyDetector,
 		timeInterval:      atomic.Pointer[TimeInterval]{},
 	}
@@ -27,12 +27,6 @@ func NewDataStorage(collectMetrics bool) *DataStorage {
 	})
 
 	return ds
-}
-
-// Reset - resets data storage.
-func (ds *DataStorage) Reset() {
-	seriesDataDataStorageReset(ds.dataStorage)
-	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 }
 
 func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
@@ -66,6 +60,24 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 	res := seriesDataDataStorageAllocatedMemory(ds.dataStorage)
 	runtime.KeepAlive(ds)
 	return res
+}
+
+// Encode encodes single triplet into the data storage.
+func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {
+	seriesDataEncoderEncode(ds.dataStorage, seriesID, timestamp, value)
+	runtime.KeepAlive(ds)
+}
+
+// EncodeInnerSeriesSlice encodes InnerSeries slice produced by relabeler into the data storage.
+func (ds *DataStorage) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
+	seriesDataEncoderEncodeInnerSeriesSlice(ds.dataStorage, innerSeriesSlice)
+	runtime.KeepAlive(ds)
+}
+
+// MergeOutOfOrderChunks merges out of order chunks in the data storage.
+func (ds *DataStorage) MergeOutOfOrderChunks() {
+	seriesDataEncoderMergeOutOfOrderChunks(ds.dataStorage)
+	runtime.KeepAlive(ds)
 }
 
 type UnusedSeriesDataUnloader struct {
@@ -120,9 +132,16 @@ func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32,
 	return seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
-// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs
+// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
 func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64) {
 	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs, timestamps)
+	runtime.KeepAlive(ds)
+}
+
+// QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
+// series in seriesIDs directly into the C-shared series slice (pointed to by series).
+func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
+	seriesDataDataStorageQueryStaleNaNSeries(ds.dataStorage, seriesIDs, series)
 	runtime.KeepAlive(ds)
 }
 

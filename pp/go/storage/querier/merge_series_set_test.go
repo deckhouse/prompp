@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -11,7 +13,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/stretchr/testify/suite"
 )
 
 // mergeSeriesSetMatrix is exercised for happy-path, empty-set, and across-shard order scenarios.
@@ -171,7 +172,7 @@ func makeHead(numShards, numSeries, numSamples int) *testHead {
 	dss := make([]*shard.DataStorage, 0, numShards)
 	for shardID := range numShards {
 		lss := shard.NewLSS()
-		ds := shard.NewDataStorage(false)
+		ds := shard.NewDataStorage(false, false)
 		timeSeries := makeTimeSeries(numSeries, numSamples, shardID)
 		storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 		lsses = append(lsses, lss)

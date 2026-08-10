@@ -1,6 +1,11 @@
 #pragma once
 
+#include <memory>
+#include <variant>
+
 #include "aggregation_iterator.h"
+#include "entrypoint/types/data_storage.h"
+#include "multiseries_decode_iterator.h"
 #include "primitives/primitives.h"
 #include "prometheus/query.h"
 #include "series_data/serialization/serialized_data.h"
@@ -9,13 +14,17 @@ namespace entrypoint::types {
 
 using SamplesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
 
+template <class DataStorage>
 class SerializedDataGo {
+  using Reallocator = DataStorage::Reallocator;
+  using SerializedData = ::series_data::serialization::SerializedData<Reallocator>;
+
  public:
-  explicit SerializedDataGo(const ::series_data::DataStorage& storage,
+  explicit SerializedDataGo(const DataStorage& storage,
                             const ::series_data::querier::QueriedChunkList& queried_chunks,
                             SelectHints&& select_hints,
                             PromPP::Primitives::Timestamp downsampling_ms)
-      : data_{::series_data::serialization::DataSerializer{storage}.serialize(queried_chunks)},
+      : data_{::series_data::serialization::DataSerializer<DataStorage>{storage}.serialize(queried_chunks)},
         select_hints_(std::move(select_hints)),
         downsampling_ms_(downsampling_ms) {}
 
@@ -27,15 +36,25 @@ class SerializedDataGo {
   [[nodiscard]] PROMPP_ALWAYS_INLINE AggregationIterator aggregation_iterator(uint32_t chunk_id) const noexcept {
     return create_aggregation_iterator(data_view_.create_series_iterator(chunk_id), select_hints_, downsampling_ms_);
   }
+  PROMPP_ALWAYS_INLINE void construct_multi_series_iterator(MultiSeriesDecodeIterator* iterator, std::span<const uint32_t> series_ids) const noexcept {
+    return construct_multi_series_decode_iterator(iterator, select_hints_, series_ids, data_view_);
+  }
+
+  PROMPP_ALWAYS_INLINE void reset_multi_series_iterator(MultiSeriesDecodeIterator& iterator, std::span<const uint32_t> series_ids) const noexcept {
+    iterator.reset(select_hints_.function_parameters, [&](auto& iterators) PROMPP_LAMBDA_INLINE {
+      MultiSeriesDecodeIterator::create_series_iterators(select_hints_, series_ids, data_view_, iterators);
+    });
+  }
 
  private:
-  ::series_data::serialization::SerializedData data_;
+  SerializedData data_;
   ::series_data::serialization::SerializedDataView data_view_{data_};
   const SelectHints select_hints_;
   PromPP::Primitives::Timestamp downsampling_ms_{};
 };
 
-using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
+using SerializedDataVariant = std::variant<SerializedDataGo<DataStorageWithArenas>, SerializedDataGo<DataStorageWithoutArenas>>;
+using SerializedDataPtr = std::unique_ptr<SerializedDataVariant>;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 

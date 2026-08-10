@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.8.7 / 2026-08-07
+
+### Performance
+1. **Faster scrape tokenization.** Bumped re2c and regenerated the text tokenizers, speeding up parsing of scraped exposition data (#448).
+2. **Lower memory use in the series index querier.** Reworked matcher merging into a dedicated `MatchesMerger`, dropped the redundant `kAllMatchWithExcludes` match status and shrank the series-id sequence snapshot iterator, cutting allocations on queries with many matchers (#457).
+3. **Arena allocation is now opt-in per data storage.** With a large number of rule groups (1000+) the process ends up with so many jemalloc arenas that jemalloc itself slows down when working with them. Transaction heads never report `allocated_memory` and have cheap destructors, so arenas bring them no benefit — only that slowdown. `DataStorage` now takes an explicit flag and transaction heads are created without arenas, while long-lived ingestion heads keep using them (#464).
+4. **Earlier collection of C++ objects.** The garbage collector for objects allocated in C++ but owned from Go used a single knob for both the moving average and the trigger threshold, which fired at 1.67x the average. The threshold is now a separate 30% headroom over the average, and the average itself is smoother (decay 0.2), so C++ memory is reclaimed noticeably earlier under growing load (#451).
+
+### Fixes
+1. **Scrapes larger than 4 GiB were dropped entirely.** The Prometheus/OpenMetrics text scraper stored markup offsets as 32-bit values, so a response over 4 GiB — a `/federate` from an instance federating everything, for example — overflowed them. Everything past that boundary was then resolved from a wrapped position: not only `# TYPE` lines (which surfaced first, as "invalid metric type"), but the metrics themselves, since label and sample offsets are rebased on the same per-metric base offset. The scrape failed to append and nothing was stored. Absolute buffer offsets are now 64-bit, and the markup byte buffer refuses to grow past 4 GiB instead of silently truncating offsets (#465).
+2. **Dependency security updates.** Bumped the web UI packages `postcss` to v8.5.23 (#462) and `sanitize-html` to v2.17.6, picking up upstream security fixes (GHSA-vccv-cmxp-4j9h — `javascript:` URIs could pass URI scheme validation via the `action`, `formaction`, `data`, `poster` and `background` attributes).
+
+### Other
+1. **Source layout rework.** Entrypoint types and bridge bindings were split into `entrypoint/types/` and `entrypoint/bridge/` (#392), tests were added for the extracted entrypoint types (#393), and unit tests were moved out of `tests/` directories to sit next to the headers they cover (#410). No behaviour change.
+
+## v0.8.6 / 2026-07-31
+
+### Performance
+1. **Deterministic release of LSS query result buffers.** Series-id buffers allocated in C for querier results were previously kept alive by series sets and only freed by a Go GC finalizer. Because the real bytes live off the Go heap (jemalloc), finalization lagged and large over-allocated buffers piled up under query load. Series sets now carry the series id inline, so the query result can be closed as soon as construction finishes (#447).
+2. **Pooled buffers for WAL segment reads.** `Segment` resize now reuses buffers from a size-class pool instead of allocating a fresh slice on every read, cutting allocation churn when loading WAL segments (#452).
+
+### Fixes
+1. **ActiveQueryTracker SIGBUS on sparse query-log files.** Creating the active-queries mmap file via `Truncate` alone left a sparse file on some filesystems, so writes into the mapping could fault with SIGBUS. The file is now explicitly zero-filled (and synced) before mmap (#433).
+2. **DataStorage dummy-metrics static initialization race.** When per-`DataStorage` metrics collection was disabled, concurrent construction could race on the shared inline-static dummy metrics page. The dummy is now a function-local static initialized on first use (#455).
+3. **Dependency security updates.** Bumped Go modules `github.com/klauspost/compress` to v1.18.7 (#453) and `go.opentelemetry.io/otel` to v1.44.0 (#450), and the web UI `postcss` package to v8.5.18 (#449), picking up upstream security fixes.
+
+## v0.8.5 / 2026-07-23
+
+### Enhancements
+1. **Optional DataStorage metrics collection.** The per-`DataStorage` `prompp_data_storage_*` metrics (removed by default in v0.8.3 to fix a page leak) can now be collected again on an opt-in basis: `DataStorage` takes an explicit flag so metrics are gathered only where needed, keeping the default hot path allocation-free (#418).
+
+### Performance
+1. **Faster scrape parsing.** Reworked the scraper WAL hashdex encoding/marking, reducing parse and read-parse time (also benefiting from the newer compiler) (#329).
+2. **Release transaction snapshot on commit.** `TransactionHead` now resets its LSS snapshot as soon as the transaction is committed instead of holding it, lowering peak memory during ingestion (#422).
+
+### Fixes
+1. **CPU flavor detection selected baseline bindings on all CPUs.** `determine_arch_flavor()` called `__builtin_cpu_supports()` without first initializing `__cpu_model`, so the entrypoint could run before libgcc's CPU-detection constructor and every feature check returned 0 — the generic/k8 baseline bindings were always chosen even on modern CPUs (visible as `amd64_k8_*` symbols in profiles). It now calls `__builtin_cpu_init()` before feature detection, so the real CPU flavor is selected (#423).
+2. **Use-after-free with detached C++ metrics pages.** Reworked metrics-page iteration around a generation-based wrapper cache with an atomic active/detach handshake, so a page physically freed by `remove_unused_pages()` can no longer be reclaimed while another scrape is still iterating it. Replaces the earlier mitigation with a robust fix (#413).
+3. **Dependency security updates.** Bumped Go modules `golang.org/x/text` to v0.39.0 (#430), `golang.org/x/net` to v0.56.0 (#429) and `google.golang.org/grpc` to v1.82.1 (#431), and web UI packages `body-parser` to v1.20.6 (#420), `webpack-dev-server` to v5.2.6 (#421) and `immutable` to v4.3.9 (GHSA-v56q-mh7h-f735, GHSA-xvcm-6775-5m9r), picking up upstream security fixes.
+
 ## v0.8.4
 
 ### Features

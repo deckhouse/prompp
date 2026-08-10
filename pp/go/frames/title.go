@@ -9,11 +9,9 @@ import (
 )
 
 const (
-	// titleV1Size -contant size.
-	// sum = 1(logOfNumberOfShards=uint8)+16(blockID=uuid.UUID)
+	// sum = 1(logOfNumberOfShards=uint8)+16(blockID=uuid.UUID).
 	titleV1Size int = 17
-	// titleV2Size -contant size.
-	// sum = 1(logOfNumberOfShards=uint8)+16(blockID=uuid.UUID)+1(encodersVersion=uint8)
+	// sum = 1(logOfNumberOfShards=uint8)+16(blockID=uuid.UUID)+1(encodersVersion=uint8).
 	titleV2Size int = 18
 )
 

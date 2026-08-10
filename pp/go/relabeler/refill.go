@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 const (

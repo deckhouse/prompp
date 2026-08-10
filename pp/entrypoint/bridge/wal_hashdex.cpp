@@ -211,5 +211,6 @@ extern "C" void prompp_wal_go_head_hashdex_presharding(void* args) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  std::get<GoHeadHashdex>(*in->hashdex).presharding(&std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss), in->data_storage.get());
+  std::get<GoHeadHashdex>(*in->hashdex)
+      .presharding(&std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss), &std::get<entrypoint::types::DataStorageWithoutArenas>(*in->data_storage));
 }

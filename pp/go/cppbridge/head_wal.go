@@ -148,11 +148,11 @@ func (d *HeadWalDecoder) Decode(segment []byte, innerSeries *InnerSeries) error 
 // DecodeToDataStorage decodes a segment into a data storage.
 //
 //revive:disable-next-line:confusing-results // returns createTimestamp, encodeTimestamp, error.
-//nolint:gocritic // unnamedResult // returns createTimestamp, encodeTimestamp, error.
-func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) (int64, int64, error) {
-	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
+
+func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, dataStorage *DataStorage) (int64, int64, error) {
+	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, dataStorage.dataStorage)
 	runtime.KeepAlive(d)
-	runtime.KeepAlive(headEncoder)
+	runtime.KeepAlive(dataStorage)
 	return createTimestamp, encodeTimestamp, err
 }
 
@@ -164,7 +164,7 @@ func (d *HeadWalDecoder) CreateEncoder() (*HeadWalEncoder, error) {
 	encoder, err := headWalDecoderCreateEncoder(d.decoder)
 	// the only error for now is: invalid encoder version
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidEncoderVersion, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidEncoderVersion, err)
 	}
 
 	e := &HeadWalEncoder{

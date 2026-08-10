@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/model"
 )
 
-// ShardedData - array of structures with (*LabelSet, timestamp, value, LSHash)
+// ShardedData - array of structures with (*LabelSet, timestamp, value, LSHash).
 type ShardedData interface {
 	Cluster() string
 	Replica() string
@@ -137,7 +137,7 @@ type WALGoModelHashdex struct {
 }
 
 func (h *WALGoModelHashdex) RangeMetadata(f func(metadata WALScraperHashdexMetadata) bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -202,7 +202,7 @@ type WALBasicDecoderHashdex struct {
 }
 
 func (h *WALBasicDecoderHashdex) RangeMetadata(f func(metadata WALScraperHashdexMetadata) bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -248,6 +248,7 @@ const (
 	scraperInvalidUtf8
 	scraperParseInvalidValue
 	scraperParseInvalidTimestamp
+	scraperMarkupBufferOverflow
 )
 
 var (
@@ -261,6 +262,8 @@ var (
 	ErrScraperParseInvalidValue = errors.New("scraper parse invalid value")
 	// ErrScraperParseInvalidTimestamp error when parse invalid timestamp.
 	ErrScraperParseInvalidTimestamp = errors.New("scraper parse invalid timestamp")
+	// ErrScraperMarkupBufferOverflow error when the scrape markup buffer exceeds 4 GiB.
+	ErrScraperMarkupBufferOverflow = errors.New("scraper markup buffer size exceeds 4 GiB")
 
 	codeToError = map[uint32]error{
 		scraperParseNoError:          nil,
@@ -269,6 +272,7 @@ var (
 		scraperInvalidUtf8:           ErrScraperInvalidUtf8,
 		scraperParseInvalidValue:     ErrScraperParseInvalidValue,
 		scraperParseInvalidTimestamp: ErrScraperParseInvalidTimestamp,
+		scraperMarkupBufferOverflow:  ErrScraperMarkupBufferOverflow,
 	}
 )
 

@@ -33,6 +33,7 @@ type (
 	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
 	CppSerializedDataSamplesIterator     = [C.Sizeof_SerializedDataSamplesIterator]byte
 	CppSerializedDataAggregationIterator = [C.Sizeof_SerializedDataAggregationIterator]byte
+	CppSerializedDataMultiSeriesIterator = [C.Sizeof_MultiSeriesDecodeIterator]byte
 	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
 	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
 	CppRemoteWriteMessageEncoder         = [C.Sizeof_RemoteWriteMessageEncoder]byte
@@ -2065,10 +2066,11 @@ func prometheusPerShardRelabelerResetTo(
 	)
 }
 
-func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
+func seriesDataDataStorageCtor(collectMetrics, useArenas bool) uintptr {
 	args := struct {
 		collectMetrics bool
-	}{collectMetrics}
+		useArenas      bool
+	}{collectMetrics, useArenas}
 	var res struct {
 		dataStorage uintptr
 	}
@@ -2081,18 +2083,6 @@ func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
 	)
 
 	return res.dataStorage
-}
-
-func seriesDataDataStorageReset(dataStorage uintptr) {
-	args := struct {
-		dataStorage uintptr
-	}{dataStorage}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_data_storage_reset,
-		uintptr(unsafe.Pointer(&args)),
-	)
 }
 
 func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
@@ -2210,6 +2200,20 @@ func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []
 		C.prompp_series_data_data_storage_query_first_timestamps,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
+	)
+}
+
+func seriesDataDataStorageQueryStaleNaNSeries(dataStorage uintptr, seriesIDs []uint32, series uintptr) {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+		series      uintptr
+	}{dataStorage, seriesIDs, series}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_query_stalenan_series,
+		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
@@ -2363,6 +2367,60 @@ func seriesDataSerializedDataAggregationIteratorReset(
 	)
 }
 
+func seriesDataSerializedDataMultiSeriesIteratorCtor(
+	iterator *DataStorageSerializedDataMultiSeriesIterator,
+	serializedData uintptr,
+	seriesIDs []uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		seriesIDs      []uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, seriesIDs}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(seriesIDs)
+}
+
+func seriesDataSerializedDataMultiSeriesIteratorReset(
+	iterator *DataStorageSerializedDataMultiSeriesIterator,
+	serializedData uintptr,
+	seriesIDs []uint32,
+) {
+	args := struct {
+		iterator       uintptr
+		serializedData uintptr
+		seriesIDs      []uint32
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, seriesIDs}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(seriesIDs)
+}
+
+func seriesDataSerializedDataMultiSeriesIteratorNext(iterator *DataStorageSerializedDataMultiSeriesIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_next,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+}
+
+func seriesDataSerializedDataMultiSeriesIteratorDtor(iterator *DataStorageSerializedDataMultiSeriesIterator) {
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_multi_series_iterator_dtor,
+		uintptr(unsafe.Pointer(iterator)),
+	)
+}
+
 func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
 	args := struct {
 		dataStorage uintptr
@@ -2448,31 +2506,13 @@ func seriesDataDataStorageDtor(dataStorage uintptr) {
 	)
 }
 
-func seriesDataEncoderCtor(dataStorage uintptr) uintptr {
+func seriesDataEncoderEncode(dataStorage uintptr, seriesID uint32, timestamp int64, value float64) {
 	args := struct {
 		dataStorage uintptr
-	}{dataStorage}
-	var res struct {
-		encoder uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_encoder_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.encoder
-}
-
-func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, value float64) {
-	args := struct {
-		encoder   uintptr
-		seriesID  uint32
-		timestamp int64
-		value     float64
-	}{encoder, seriesID, timestamp, value}
+		seriesID    uint32
+		timestamp   int64
+		value       float64
+	}{dataStorage, seriesID, timestamp, value}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2481,11 +2521,11 @@ func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, 
 	)
 }
 
-func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice []InnerSeries) {
+func seriesDataEncoderEncodeInnerSeriesSlice(dataStorage uintptr, innerSeriesSlice []InnerSeries) {
 	args := struct {
-		encoder          uintptr
+		dataStorage      uintptr
 		innerSeriesSlice []InnerSeries
-	}{encoder, innerSeriesSlice}
+	}{dataStorage, innerSeriesSlice}
 	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2496,10 +2536,10 @@ func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice [
 	headDataStorageEncodeInnerSeriesSliceCount.Inc()
 }
 
-func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
+func seriesDataEncoderMergeOutOfOrderChunks(dataStorage uintptr) {
 	args := struct {
-		encoder uintptr
-	}{encoder}
+		dataStorage uintptr
+	}{dataStorage}
 	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2508,18 +2548,6 @@ func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
 	)
 	headDataStorageMergeOutOfOrderChunksSum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageMergeOutOfOrderChunksCount.Inc()
-}
-
-func seriesDataEncoderDtor(encoder uintptr) {
-	args := struct {
-		encoder uintptr
-	}{encoder}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_encoder_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
 }
 
 func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval, downsamplingMs int64) uintptr {
@@ -3269,12 +3297,12 @@ func headWalDecoderDecode(decoder uintptr, segment []byte, innerSeries *InnerSer
 	return handleException(res.exception)
 }
 
-func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder uintptr) (int64, int64, error) {
+func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, dataStorage uintptr) (int64, int64, error) {
 	args := struct {
-		decoder uintptr
-		segment []byte
-		encoder uintptr
-	}{decoder, segment, encoder}
+		decoder     uintptr
+		segment     []byte
+		dataStorage uintptr
+	}{decoder, segment, dataStorage}
 	var res struct {
 		createTimestamp int64
 		encodeTimestamp int64

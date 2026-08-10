@@ -55,9 +55,9 @@ constexpr std::array kFunctions = {
     Function{.name = "delta", .type = FunctionType::kExtrapolatedRate},
     Function{.name = "resets", .type = FunctionType::kNone},
     Function{.name = "changes", .type = FunctionType::kThinning},
-    Function{.name = "sum", .type = FunctionType::kNone},
-    Function{.name = "min", .type = FunctionType::kNone},
-    Function{.name = "max", .type = FunctionType::kNone},
+    Function{.name = "sum", .type = FunctionType::kCrossSeriesSynthesizing},
+    Function{.name = "min", .type = FunctionType::kCrossSeriesSynthesizing},
+    Function{.name = "max", .type = FunctionType::kCrossSeriesSynthesizing},
 };
 
 constexpr uint32_t function_name_hash(std::string_view str) {
@@ -92,6 +92,9 @@ constexpr uint32_t function_name_hash(std::string_view str) {
     PROMQL_WINDOW_FUNC_CASE(kDelta)
     PROMQL_WINDOW_FUNC_CASE(kResets)
     PROMQL_WINDOW_FUNC_CASE(kChanges)
+    PROMQL_WINDOW_FUNC_CASE(kSum)
+    PROMQL_WINDOW_FUNC_CASE(kMax)
+    PROMQL_WINDOW_FUNC_CASE(kMin)
     default:
       return WindowFunction::kNone;
   }
