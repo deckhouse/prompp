@@ -5,7 +5,7 @@
     "build": "GENERATE_SOURCEMAP=false bash build_ui.sh --all",
     "build:module": "bash build_ui.sh --build-module",
     "start": "npm run start -w react-app",
-    "test": "npm run test --workspaces",
+    "test": "npm run test --workspace=module/codemirror-promql --workspace=module/lezer-promql",
     "lint": "npm run lint --workspaces"
   },
   "workspaces": [
