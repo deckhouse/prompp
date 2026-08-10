@@ -32,6 +32,7 @@ jobs:
     runs-on: fsn-dev-gitlab-runner
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
+      ui: ${{ steps.filter.outputs.ui }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -61,6 +62,12 @@ jobs:
             echo "cpp=true" >> "$GITHUB_OUTPUT"
           else
             echo "cpp=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Web UI Jest suites run only when the UI sources change.
+          if echo "$changed" | grep -qE '^web/ui/'; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
           fi
 
   cpp-tests:
@@ -401,6 +408,53 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  ui-tests:
+    # Jest tests for the web UI PromQL modules (codemirror-promql, lezer-promql).
+    # The legacy react-app is intentionally excluded from `make ui-test` (see
+    # web/ui/package.json), so this only needs Node, which is baked into the CI
+    # image — no C++/Go bindings required, hence it depends solely on the image.
+    # Runs only when web/ui changed (on PRs); always on push/manual dispatch.
+    needs: [build-ci-image, changes]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.ui == 'true'
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-werf
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
+
+      - name: Pull Latest Image
+        run: |
+          echo "Attempting to pull latest ci-gcc-image..."
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} || \
+            echo "Pull failed, continuing with cached image"
+
+      - name: Run UI Tests
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e CI=true \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} \
+            bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace
+              # ui-build-module builds lezer-promql's dist, which codemirror-promql's
+              # Jest config maps onto; ui-test then runs the module suites.
+              make ui-install ui-build-module ui-test
+            "
+
   build_dev:
     needs: [go-test-all]
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
@@ -415,7 +469,7 @@ jobs:
     # gate fails only when a required job failed or was cancelled.
     # The optional label-gated jobs (go-test-pp asan, build_dev) are intentionally
     # excluded, so they never block merge.
-    needs: [build-ci-image, changes, cpp-tests, build-go-bindings, go-test-all]
+    needs: [build-ci-image, changes, cpp-tests, build-go-bindings, go-test-all, ui-tests]
     if: always()
     runs-on: fsn-dev-gitlab-runner
     steps:

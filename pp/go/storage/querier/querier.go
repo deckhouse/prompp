@@ -20,7 +20,8 @@ import (
 )
 
 // InstantQueryFeature is a feature flag for instant query when hints step is 0 and range is 0.
-var InstantQueryFeature = false
+// Enabled by default; disable via PROMPP_FEATURES=disable_instant_query_feature.
+var InstantQueryFeature = true
 
 const (
 	// lssQueryInstantQuerySelector name of task.

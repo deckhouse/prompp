@@ -65,6 +65,9 @@ RUN go install github.com/prometheus/promu@latest
 RUN go install github.com/afunix/gocov/gocov@latest
 RUN go install github.com/AlekSi/gocov-xml@latest
 
+# govulncheck for the pre-release dependency vulnerability scan
+RUN go install golang.org/x/vuln/cmd/govulncheck@latest
+
 # goyacc for generating promql/parser (make test, make build)
 ARG GOYACC_VERSION=v0.6.0
 RUN go install golang.org/x/tools/cmd/goyacc@${GOYACC_VERSION}
