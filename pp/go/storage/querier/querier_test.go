@@ -215,7 +215,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	// Act
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 	s.appendTimeSeries(timeSeriesAfterUnload)
-	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{}, matcher)
+	seriesSet := q.Select(s.context, false, &prom_storage.SelectHints{Step: 1}, matcher)
 
 	// Assert
 	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
