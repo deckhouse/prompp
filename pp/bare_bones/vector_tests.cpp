@@ -84,7 +84,9 @@ TEST_F(BareBonesVectorAllocatedMemoryFixture, DereferencableWithAllocatedMemoryM
   EXPECT_EQ(vector.capacity() * sizeof(Vector::value_type) + vector.size() * kObjectAllocatedMemory, allocated_memory);
 }
 
-TEST(BareBonesVector, InitializerListConstructor) {
+class BareBonesVectorFixture : public testing::Test {};
+
+TEST_F(BareBonesVectorFixture, InitializerListConstructor) {
   // Arrange
 
   // Act
@@ -95,6 +97,18 @@ TEST(BareBonesVector, InitializerListConstructor) {
   EXPECT_EQ("123", vector[0]);
   EXPECT_EQ("456", vector[1]);
   EXPECT_EQ("789", vector[2]);
+}
+
+TEST_F(BareBonesVectorFixture, PushBack) {
+  // Arrange
+  Vector<uint32_t> vector;
+  std::array items{1U, 2U, 3U, 4U, 5U};
+
+  // Act
+  vector.push_back(items.begin(), items.end());
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(vector, items));
 }
 
 class BareBonesVectorEraseFixture : public testing::Test {

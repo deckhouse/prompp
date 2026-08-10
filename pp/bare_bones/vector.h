@@ -175,7 +175,7 @@ class GenericVector {
   PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
     const auto pos = size();
     const auto size = std::distance(begin, end);
-    grow_storage(pos + size);
+    reserve(pos + size);
 
     if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
       std::memcpy(data() + pos, begin, size * sizeof(T));
