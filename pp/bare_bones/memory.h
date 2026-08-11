@@ -238,6 +238,8 @@ class AtomicSharedPtrControlBlockWithItemCount {
   std::atomic<ItemCounter> items_count_{};
 };
 
+static_assert(SharedPtrControlBlockInterface<AtomicSharedPtrControlBlockWithItemCount>);
+
 class SharedPtrControlBlock {
  public:
   using RefCounter = uint32_t;
