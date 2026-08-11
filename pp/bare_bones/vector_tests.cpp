@@ -111,6 +111,18 @@ TEST_F(BareBonesVectorFixture, PushBack) {
   EXPECT_TRUE(std::ranges::equal(vector, items));
 }
 
+TEST_F(BareBonesVectorFixture, PushBackNonTriviallyCopyableObjects) {
+  // Arrange
+  Vector<Vector<uint32_t>> vector;
+  std::array items{Vector{1U, 2U, 3U}, Vector{4U, 5U, 6U}};
+
+  // Act
+  vector.push_back(items.begin(), items.end());
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(vector, items));
+}
+
 class BareBonesVectorEraseFixture : public testing::Test {
  protected:
   Vector<std::unique_ptr<std::string_view>> vector_;

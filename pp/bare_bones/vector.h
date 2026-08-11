@@ -180,7 +180,7 @@ class GenericVector {
     if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
       std::memcpy(data() + pos, begin, size * sizeof(T));
     } else {
-      std::ranges::copy(begin, end, data() + pos);
+      std::uninitialized_copy(begin, end, data() + pos);
     }
 
     derived()->set_size(pos + size);
