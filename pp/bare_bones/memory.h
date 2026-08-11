@@ -200,8 +200,7 @@ concept SharedPtrControlBlockInterface = requires(ControlBlock control_block, co
   { control_block.set_items_count(typename ControlBlock::ItemCounter()) };
 };
 
-template <class ItemCounterType>
-class GenericSharedPtrControlBlockWithItemCount {
+class SharedPtrControlBlockWithItemCount {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
@@ -216,14 +215,28 @@ class GenericSharedPtrControlBlockWithItemCount {
 
  private:
   RefCounter ref_count_{1};
-  ItemCounterType items_count_{};
+  ItemCounter items_count_{};
 };
 
-using SharedPtrControlBlockWithItemCount = GenericSharedPtrControlBlockWithItemCount<uint32_t>;
 static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlockWithItemCount>);
 
-using AtomicSharedPtrControlBlockWithItemCount = GenericSharedPtrControlBlockWithItemCount<std::atomic<uint32_t>>;
-static_assert(SharedPtrControlBlockInterface<AtomicSharedPtrControlBlockWithItemCount>);
+class AtomicSharedPtrControlBlockWithItemCount {
+ public:
+  using RefCounter = uint32_t;
+  using ItemCounter = uint32_t;
+  using AtomicRefCounter = std::atomic_ref<RefCounter>;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter items_count() const noexcept { return items_count_.load(std::memory_order_acquire); }
+  PROMPP_ALWAYS_INLINE void set_items_count(ItemCounter count) noexcept { items_count_.store(count, std::memory_order_release); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+
+ private:
+  RefCounter ref_count_{1};
+  std::atomic<ItemCounter> items_count_{};
+};
 
 class SharedPtrControlBlock {
  public:
