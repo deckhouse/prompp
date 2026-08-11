@@ -211,3 +211,6 @@ type noopFlagConfig struct{}
 
 // DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
+
+// SetDownsampling is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
+func (noopFlagConfig) SetDownsampling(model.Duration) {}

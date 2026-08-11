@@ -78,7 +78,7 @@ import (
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
 	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/catalog" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/head"
+
 	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
@@ -294,6 +294,11 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 // DisableBlockManagerStorage disables the storage of blocks in the block manager.
 func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
+}
+
+// SetDownsampling sets the downsampling duration for the flagConfig.
+func (c *flagConfig) SetDownsampling(downsampling model.Duration) {
+	c.Downsampling = downsampling
 }
 
 func main() {
@@ -2305,215 +2310,4 @@ func (p *rwProtoMsgFlagParser) Set(opt string) error {
 	}
 	*p.msgs = append(*p.msgs, t)
 	return nil
-}
-
-func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
-	features := os.Getenv("PROMPP_FEATURES")
-	if features == "" {
-		return
-	}
-
-	for _, feature := range strings.Split(features, ",") {
-		fname, fvalue, _ := strings.Cut(feature, "=")
-		switch strings.TrimSpace(fname) {
-		case "head_read_concurrency":
-			var (
-				v   = 1
-				err error
-			)
-
-			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
-				v, err = strconv.Atoi(fvalue)
-				if err != nil {
-					level.Error(logger).Log("msg", "[FEATURE] Error parsing head_read_concurrency value", "err", err)
-					continue
-				}
-			}
-
-			head.ExtraWorkers = v
-			level.Info(logger).Log(
-				"msg",
-				"[FEATURE] Concurrency reading is enabled.",
-				"extra",
-				v,
-			)
-
-		case "head_default_number_of_shards":
-			fvalue := strings.TrimSpace(fvalue)
-			if fvalue == "" {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is empty, no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-				continue
-			}
-
-			v, err := strconv.Atoi(fvalue)
-			switch {
-			case err != nil:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-					"err", err,
-				)
-
-			case v > math.MaxUint16:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-			case v < 1:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-			default:
-				pp_storage.DefaultNumberOfShards = uint16(v)
-				level.Info(logger).Log(
-					"msg", "[FEATURE] Changed default number of shards.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-			}
-
-		case "disable_commits_on_remote_write":
-			rwprocessor.AlwaysCommit = false
-			pp_pkg_handler.OTLPAlwaysCommit = false
-
-		case "disable_block_compaction":
-			pp_pkg_tsdb.BlockCompactionDisabled = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
-
-		case "federation_split_families":
-			fvalue := strings.TrimSpace(fvalue)
-			if fvalue == "" {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The federation_split_families should be setted with number.",
-				)
-				continue
-			}
-			v, err := strconv.Atoi(fvalue)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing federation_split_families value",
-					"err", err,
-				)
-				continue
-			}
-			_ = level.Info(logger).Log(
-				"msg", "[FEATURE] Split federation families with pages.",
-				"pages", v,
-			)
-			web.FederationSplitFamiliesPageSize = v
-
-		case "default_sample_age_limit":
-			fvalue = strings.TrimSpace(fvalue)
-			defaultSampleAgeLimit, err := model.ParseDuration(fvalue)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
-					"err", err,
-				)
-				continue
-			}
-
-			_ = level.Info(logger).Log(
-				"msg", "[FEATURE] default_sample_age_limit is set.",
-				"limit", fvalue,
-			)
-
-			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
-
-		case "disable_instant_query_feature":
-			querier.InstantQueryFeature = false
-			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is disabled.")
-
-		case "disable_shrink_shard_copier":
-			pp_storage.ShrinkShardCopier = false
-			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is disabled.")
-
-		case "disable_block_manager":
-			if cfg != nil {
-				cfg.UseBlockManagerStorage = false
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is disabled; using pre-PR-377 TSDB storage.")
-
-		case "disable_coredumps":
-			if err := prom_runtime.DisableCoreDumps(); err != nil {
-				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
-				continue
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
-
-		case "select_func_optimization":
-			if err := selectFuncOptimization(strings.TrimSpace(fvalue)); err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing select_func_optimization value",
-					"err", err,
-				)
-				continue
-			}
-
-			level.Info(logger).Log(
-				"msg", "[FEATURE] Select function optimization is set.",
-				"optimization", fvalue,
-			)
-
-		case "enable_block_shard_labels":
-			pp_block.EnableBlockShardLabels = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Block shard labels are enabled.")
-
-		case "downsampling":
-			parseDownsampling(logger, cfg, strings.TrimSpace(fvalue))
-		}
-	}
-}
-
-// selectFuncOptimization sets the select function optimization.
-func selectFuncOptimization(fvalue string) error {
-	for opt := range strings.SplitSeq(fvalue, "|") {
-		if err := querier.SetSelectFuncOptimize(opt); err != nil {
-			querier.SetDefaultOptimizeType() // reset to default if error
-			return err
-		}
-	}
-
-	return nil
-}
-
-// parseDownsampling parses the downsampling value and sets the downsampling value in the configuration.
-func parseDownsampling(logger log.Logger, cfg *flagConfig, fvalue string) {
-	if fvalue == "" {
-		_ = level.Error(logger).Log(
-			"msg", "[FEATURE] The downsampling should be setted with duration.",
-		)
-
-		return
-	}
-
-	downsampling, err := model.ParseDuration(fvalue)
-	if err != nil {
-		_ = level.Error(logger).Log(
-			"msg", "[FEATURE] Error parsing downsampling value",
-			"err", err,
-		)
-
-		return
-	}
-
-	if downsampling <= 0 {
-		_ = level.Error(logger).Log(
-			"msg", "[FEATURE] The downsampling value must be greater than 0",
-		)
-
-		return
-	}
-
-	cfg.Downsampling = downsampling
-	_ = level.Info(logger).Log(
-		"msg", "[FEATURE] Downsampling is set.",
-		"downsampling", downsampling,
-	)
 }

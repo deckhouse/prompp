@@ -35,6 +35,9 @@ const (
 type FlagConfig interface {
 	// DisableBlockManagerStorage disables the storage of blocks in the block manager.
 	DisableBlockManagerStorage()
+
+	// SetDownsampling sets the downsampling duration for the flagConfig.
+	SetDownsampling(downsampling model.Duration)
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -94,6 +97,9 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		case "enable_block_shard_labels":
 			block.EnableBlockShardLabels = true
 			_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
+
+		case "downsampling":
+			setDownsampling(logger, cfg, fvalue)
 		}
 	}
 }
@@ -231,17 +237,54 @@ func setDisableCoredumps(logger log.Logger) {
 
 // setSelectFuncOptimization sets the select function optimization for the querier based on the provided feature value.
 func setSelectFuncOptimization(logger log.Logger, fvalue string) {
-	if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
-		_ = level.Error(logger).Log(
-			msgStr, "Error parsing select_func_optimization value",
-			errStr, err,
-		)
+	fvalue = strings.TrimSpace(fvalue)
+	if fvalue == "" {
+		_ = level.Error(logger).Log(msgStr, "The select_func_optimization should be setted with optimization type.")
 
 		return
+	}
+
+	for opt := range strings.SplitSeq(fvalue, "|") {
+		if err := querier.SetSelectFuncOptimize(opt); err != nil {
+			querier.SetDefaultOptimizeType() // reset to default if error
+			_ = level.Error(logger).Log(
+				msgStr, "Error parsing select_func_optimization value, reset to default.",
+				errStr, err,
+			)
+
+			return
+		}
 	}
 
 	_ = level.Info(logger).Log(
 		msgStr, "Select function optimization is set.",
 		"optimization", fvalue,
 	)
+}
+
+// setDownsampling sets the downsampling value in the configuration.
+func setDownsampling(logger log.Logger, cfg FlagConfig, fvalue string) {
+	fvalue = strings.TrimSpace(fvalue)
+
+	if fvalue == "" {
+		_ = level.Error(logger).Log(msgStr, "The downsampling should be setted with duration.")
+
+		return
+	}
+
+	downsampling, err := model.ParseDuration(fvalue)
+	if err != nil {
+		_ = level.Error(logger).Log(msgStr, "Error parsing downsampling value", errStr, err)
+
+		return
+	}
+
+	if downsampling <= 0 {
+		_ = level.Error(logger).Log(msgStr, "The downsampling value must be greater than 0")
+
+		return
+	}
+
+	cfg.SetDownsampling(downsampling)
+	_ = level.Info(logger).Log(msgStr, "Downsampling is set.", "downsampling", downsampling)
 }
