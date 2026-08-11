@@ -460,7 +460,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
-	downsamplingMs := q.getDownsamplingMs()
+	downsamplingMS := q.getDownsamplingMS()
 	queryDataStorage(
 		dsQueryRangeQuerier,
 		q.head,
@@ -468,12 +468,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		shardedSerializedData,
 		q.mint,
 		q.maxt,
-		downsamplingMs,
+		downsamplingMS,
 		hints,
 	)
 
 	// downsampling has higher priority than aggregation or cross series
-	if downsamplingMs != cppbridge.NoDownsampling {
+	if downsamplingMS != cppbridge.NoDownsampling {
 		if q.metrics != nil {
 			q.metrics.OptimizationType.WithLabelValues("downsampling").Inc()
 		}
@@ -655,10 +655,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	return resultSeriesSets
 }
 
-// getDownsamplingMs calculates the downsampling milliseconds based on the time range.
+// getDownsamplingMS calculates the downsampling milliseconds based on the time range.
 //
 //revive:disable-next-line:confusing-naming // this is a getter function
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) getDownsamplingMs() int64 {
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) getDownsamplingMS() int64 {
 	if q.maxt-q.mint > q.retentionMS {
 		return q.downsamplingMS
 	}
@@ -862,7 +862,7 @@ func queryDataStorage[
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
-	mint, maxt, downsamplingMs int64,
+	mint, maxt, downsamplingMS int64,
 	hints *storage.SelectHints,
 ) {
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
@@ -881,7 +881,7 @@ func queryDataStorage[
 					EndTimestampMs:   maxt,
 					LabelSetIDs:      lssQueryResult.IDs(),
 				},
-				downsamplingMs,
+				downsamplingMS,
 				hints,
 			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
