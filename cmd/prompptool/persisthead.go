@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 
+	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
@@ -29,11 +30,10 @@ import (
 var shardWalFilePattern = regexp.MustCompile(`^shard_(\d+)\.wal$`)
 
 type cmdPersistHead struct {
-	headPath               string
-	outputDir              string
-	blockDuration          model.Duration
-	numberOfShards         uint16
-	enableBlockShardLabels bool
+	headPath       string
+	outputDir      string
+	blockDuration  model.Duration
+	numberOfShards uint16
 }
 
 func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
@@ -49,9 +49,6 @@ func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
 
 	clause.Flag("number-of-shards", "Number of shards in the head. 0 means autodetect by shard_*.wal files.").
 		Default("0").Uint16Var(&cmd.numberOfShards)
-
-	clause.Flag("enable_block_shard_labels", "Enable shard labels in the persisted blocks.").
-		Default("false").BoolVar(&cmd.enableBlockShardLabels)
 }
 
 // Do loads a single head directly by path (without consulting head.log) and writes TSDB blocks.
@@ -72,10 +69,7 @@ func (cmd *cmdPersistHead) Do(
 	dataDir := filepath.Dir(headPath)
 	headID := filepath.Base(headPath)
 
-	if cmd.enableBlockShardLabels {
-		block.EnableBlockShardLabels = true
-		_ = level.Info(logger).Log("msg", "[FEATURE] Block shard labels are enabled.")
-	}
+	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{})
 
 	// The loader resolves the head directory as filepath.Join(dataDir, record.ID()),
 	// so the directory name must be a valid head UUID.
@@ -207,3 +201,13 @@ func detectNumberOfShards(headPath string) (uint16, error) {
 
 	return uint16(maxShardID + 1), nil //nolint:gosec // shard count fits uint16
 }
+
+//
+// noopFlagConfig
+//
+
+// noopFlagConfig is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
+type noopFlagConfig struct{}
+
+// DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
+func (noopFlagConfig) DisableBlockManagerStorage() {}
