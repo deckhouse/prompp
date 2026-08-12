@@ -459,19 +459,22 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = SwitchFuncOptimize(
-		hints,
-		IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
-		q.queryOptimize,
-	)
-	shardedSerializedData := poolProvider.GetSerializedData()
-	defer poolProvider.PutSerializedData(shardedSerializedData)
 	downsamplingMS := q.getDownsamplingMS()
 	// Bypass downsampling when upsampling will handle interpolation for rate/increase/delta/deriv.
 	// This allows these functions to use raw dense data, avoiding spurious NaN results from sparse downsampled data.
 	if downsamplingMS != cppbridge.NoDownsampling && upsampler.NeedsUpsampling(hints) {
 		downsamplingMS = cppbridge.NoDownsampling
 	}
+
+	hints = SwitchFuncOptimize(
+		hints,
+		IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
+		q.queryOptimize,
+		downsamplingMS,
+	)
+	shardedSerializedData := poolProvider.GetSerializedData()
+	defer poolProvider.PutSerializedData(shardedSerializedData)
+
 	queryDataStorage(
 		dsQueryRangeQuerier,
 		q.head,
@@ -682,6 +685,7 @@ func SwitchFuncOptimize(
 	hints *storage.SelectHints,
 	possibleToOptimize func() bool,
 	queryOptimize queryOptimizeType,
+	downsamplingMS int64,
 ) *storage.SelectHints {
 	if hints == nil {
 		return emptySelectHints
@@ -695,6 +699,10 @@ func SwitchFuncOptimize(
 		isNotWithout(hints) &&
 		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) &&
 		possibleToOptimize() {
+		return hints
+	}
+
+	if downsamplingMS != cppbridge.NoDownsampling {
 		return hints
 	}
 

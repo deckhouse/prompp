@@ -91,7 +91,7 @@ func (s *SwitchFuncOptimizeSuite) TestNone() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -136,7 +136,7 @@ func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -181,7 +181,7 @@ func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -226,7 +226,7 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -271,7 +271,7 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
