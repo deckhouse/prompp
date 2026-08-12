@@ -119,6 +119,7 @@ func (s *IteratorSuite) TestHappyPathV1() {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(it.Close()) }()
@@ -230,6 +231,7 @@ func (s *IteratorSuite) TestHappyPathV2() {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(it.Close()) }()
@@ -350,6 +352,7 @@ func BenchmarkIteratorV1(b *testing.B) {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	require.NoError(b, err)
 	defer func() { require.NoError(b, it.Close()) }()
@@ -437,6 +440,7 @@ func BenchmarkIteratorV2(b *testing.B) {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	require.NoError(b, err)
 	defer func() { require.NoError(b, it.Close()) }()
