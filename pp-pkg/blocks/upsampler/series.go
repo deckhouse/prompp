@@ -10,7 +10,7 @@ import (
 // while Iterator() returns an upsampling iterator.
 type Series struct {
 	base    storage.Series
-	rangeMs int64
+	rangeMS int64
 }
 
 // Labels returns the labels of the underlying series.
@@ -24,11 +24,11 @@ func (s *Series) Labels() labels.Labels {
 func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	upsampler, ok := it.(*Iterator)
 	if !ok {
-		upsampler = NewIterator(nil, s.rangeMs)
+		upsampler = NewIterator(nil, s.rangeMS)
 	}
 
 	baseIt := s.base.Iterator(nil)
-	upsampler.Reset(baseIt, s.rangeMs)
+	upsampler.Reset(baseIt, s.rangeMS)
 
 	return upsampler
 }

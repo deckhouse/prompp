@@ -8,14 +8,14 @@ import (
 // SeriesSet wraps a [storage.SeriesSet] and provides interpolation capability.
 type SeriesSet struct {
 	base    storage.SeriesSet
-	rangeMs int64
+	rangeMS int64
 }
 
 // NewSeriesSet wraps a base [storage.SeriesSet] for interpolation.
-func NewSeriesSet(base storage.SeriesSet, rangeMs int64) *SeriesSet {
+func NewSeriesSet(base storage.SeriesSet, rangeMS int64) *SeriesSet {
 	return &SeriesSet{
 		base:    base,
-		rangeMs: rangeMs,
+		rangeMS: rangeMS,
 	}
 }
 
@@ -28,7 +28,7 @@ func (ss *SeriesSet) Next() bool {
 func (ss *SeriesSet) At() storage.Series {
 	return &Series{
 		base:    ss.base.At(),
-		rangeMs: ss.rangeMs,
+		rangeMS: ss.rangeMS,
 	}
 }
 
