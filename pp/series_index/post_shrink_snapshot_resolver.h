@@ -49,14 +49,14 @@ class TypedPostShrinkSnapshotResolver final : public PostShrinkSnapshotResolver<
 
   void for_each_key_id(const PostShrinkSnapshotResolver<ValueType>::ForEachKeyIdCallback& callback) const override {
     const auto keys = snapshot_.data_view().keys();
-    for (auto it = keys.begin(), e = keys.end(); it != e; ++it) {
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
       callback(it.id());
     }
   }
 
   void for_each_value_id(const PostShrinkSnapshotResolver<ValueType>::ForEachValueIdCallback& callback) const override {
     const auto values = snapshot_.data_view().values();
-    for (auto it = values.begin(), e = values.end(); it != e; ++it) {
+    for (auto it = values.begin(); it != values.end(); ++it) {
       callback(it.key_id(), it.value_id());
     }
   }

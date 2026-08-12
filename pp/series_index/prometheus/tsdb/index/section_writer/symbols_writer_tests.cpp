@@ -200,4 +200,42 @@ TEST_F(SymbolsWriterShrunkLssFixture, ReallocateValuesSymbolTableAfterShrunkAndW
             "\xCB\xE1\x54\x24"sv);
 }
 
+TEST_F(SymbolsWriterShrunkLssFixture, ReallocateKeysSymbolTableAfterShrunkAndWrite) {
+  // Arrange
+  fill_lss({
+      {{"job", "cron"}, {"server", "localhost"}},
+      {{"job", "cron"}, {"server", "127.0.0.1"}},
+  });
+
+  copy_lss();
+
+  lss_.set_pending_shrink_boundary(lss_.next_item_index());
+  const ReadonlyLss resolve_snapshot(lss_copy_);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping_);
+
+  lss_copy_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"very_long_string_for_trigger_memory_reallocation_in_symbol_data_container", "server"}});
+
+  // Act
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext{lss_};
+  SymbolsWriter writer(index_write_context, stream_writer_);
+  writer.write();
+
+  // Assert
+  EXPECT_EQ(stream_.view(),
+            "\x00\x00\x00\x29"
+            "\x00\x00\x00\x06"
+            "\x00"
+            "\x09"
+            "127.0.0.1"
+            "\x04"
+            "cron"
+            "\x03"
+            "job"
+            "\x09"
+            "localhost"
+            "\x06"
+            "server"
+            "\xCB\xE1\x54\x24"sv);
+}
+
 }  // namespace
