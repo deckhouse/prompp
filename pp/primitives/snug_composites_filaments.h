@@ -108,7 +108,10 @@ struct Symbol {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
+
+        explicit iterator_type(const storage_type& storage) noexcept : storage_ptr_(&storage), sentinel_id_(storage_ptr_->get_sentinel_id()) {}
+        explicit iterator_type(const storage_type& storage, uint32_t sentinel_id) noexcept
+            : storage_ptr_(&storage), id_(sentinel_id), sentinel_id_(sentinel_id) {}
 
         PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
@@ -122,7 +125,7 @@ struct Symbol {
         }
 
         PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
@@ -131,10 +134,11 @@ struct Symbol {
        private:
         const storage_type* storage_ptr_;
         uint32_t id_{0};
+        uint32_t sentinel_id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->get_sentinel_id()}; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
 
@@ -175,8 +179,13 @@ struct Symbol {
       sync_read_view();
     }
 
+    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+      const auto item = items_[id];
+      return item.pos + item.length <= data_.size();
+    }
+
     void validate(uint32_t id) const {
-      if (const auto item = items_[id]; item.pos + item.length > data_.size()) {
+      if (!is_valid(id)) {
         throw BareBones::Exception(0x75555f55ebe357a3, "Symbol validation error: length is out of data vector range");
       }
     }
@@ -265,6 +274,19 @@ struct Symbol {
     PROMPP_ALWAYS_INLINE void sync_read_view() noexcept {
       read_view_.data = data_.data();
       read_view_.items = items_.data();
+    }
+
+    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+      if constexpr (kIsReadOnly) {
+        uint32_t id = items_.size();
+        while (id > 0 && !is_valid(id - 1)) {
+          --id;
+        }
+
+        return id;
+      } else {
+        return items_.size();
+      }
     }
 
     template <template <class> class>

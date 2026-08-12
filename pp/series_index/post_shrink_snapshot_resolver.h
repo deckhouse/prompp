@@ -47,16 +47,16 @@ class TypedPostShrinkSnapshotResolver final : public PostShrinkSnapshotResolver<
     return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
   }
 
-  void for_each_key_id(const typename PostShrinkSnapshotResolver<ValueType>::ForEachKeyIdCallback& callback) const override {
-    const auto view = snapshot_.data_view();
-    for (auto it = view.keys().begin(), e = view.keys().end(); it != e; ++it) {
+  void for_each_key_id(const PostShrinkSnapshotResolver<ValueType>::ForEachKeyIdCallback& callback) const override {
+    const auto keys = snapshot_.data_view().keys();
+    for (auto it = keys.begin(), e = keys.end(); it != e; ++it) {
       callback(it.id());
     }
   }
 
-  void for_each_value_id(const typename PostShrinkSnapshotResolver<ValueType>::ForEachValueIdCallback& callback) const override {
-    const auto view = snapshot_.data_view();
-    for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
+  void for_each_value_id(const PostShrinkSnapshotResolver<ValueType>::ForEachValueIdCallback& callback) const override {
+    const auto values = snapshot_.data_view().values();
+    for (auto it = values.begin(), e = values.end(); it != e; ++it) {
       callback(it.key_id(), it.value_id());
     }
   }
