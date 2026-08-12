@@ -232,6 +232,8 @@ func (cg *Group) OverlappingBlocks(overlapGroups block.Overlaps) {
 		return
 	}
 
+	cg.SortMetasByMinTime()
+
 	var (
 		overlaps [][]tsdb.BlockMeta
 		// pending contains not ended blocks in regards to "current" timestamp.

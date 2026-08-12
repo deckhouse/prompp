@@ -133,6 +133,7 @@ func NewExpirationPolicy[TBlock Block](
 // BeyondSizeRetention returns those blocks which are beyond the size retention.
 //
 //revive:disable-next-line:cyclomatic // complex logic is necessary for this function
+//revive:disable-next-line:function-length // complex logic is necessary for this function
 func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
 	rawBlocks, downsampledBlocks []TBlock,
 	deletable map[ulid.ULID]struct{},
@@ -169,6 +170,11 @@ func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
 	}
 
 	for i, blk := range downsampledBlocks {
+		if _, ok := deletable[blk.ULID()]; ok {
+			// This block is already marked for deletion, so we don't count its size.
+			continue
+		}
+
 		blocksSize += blk.Size()
 		if blocksSize > ep.opts.MaxBytes {
 			// Add this and all following blocks for deletion.

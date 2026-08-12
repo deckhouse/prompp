@@ -18,7 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 
-	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
@@ -68,8 +67,6 @@ func (cmd *cmdPersistHead) Do(
 
 	dataDir := filepath.Dir(headPath)
 	headID := filepath.Base(headPath)
-
-	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{})
 
 	// The loader resolves the head directory as filepath.Join(dataDir, record.ID()),
 	// so the directory name must be a valid head UUID.
@@ -201,16 +198,3 @@ func detectNumberOfShards(headPath string) (uint16, error) {
 
 	return uint16(maxShardID + 1), nil //nolint:gosec // shard count fits uint16
 }
-
-//
-// noopFlagConfig
-//
-
-// noopFlagConfig is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
-type noopFlagConfig struct{}
-
-// DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
-func (noopFlagConfig) DisableBlockManagerStorage() {}
-
-// SetDownsampling is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
-func (noopFlagConfig) SetDownsampling(model.Duration) {}
