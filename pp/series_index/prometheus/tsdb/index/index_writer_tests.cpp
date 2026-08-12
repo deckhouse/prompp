@@ -14,7 +14,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::prometheus::tsdb::index::IndexWriter;
@@ -23,7 +23,7 @@ template <class DecodingTable, class SortingIndex, class SeriesIds, class Querya
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
 using Stream = std::ostringstream;
 using Writer = IndexWriter<Lss, Stream>;

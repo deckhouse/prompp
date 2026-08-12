@@ -12,7 +12,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
 using series_index::QueryableEncodingBimapCopier;
@@ -24,7 +24,7 @@ template <class DecodingTable, class SortingIndex, class SeriesIds, class Querya
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
 using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
@@ -57,10 +57,10 @@ class SymbolsWriterFixture : public testing::TestWithParam<SymbolsWriterCase> {
 
 TEST_P(SymbolsWriterFixture, Test) {
   // Arrange
-  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>{lss_};
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext{lss_};
 
   // Act
-  SymbolsWriter<QueryableEncodingBimap, decltype(stream_)> symbols_writer{index_write_context, stream_writer_};
+  SymbolsWriter symbols_writer{index_write_context, stream_writer_};
   symbols_writer.write();
 
   // Assert
@@ -108,26 +108,116 @@ class SymbolsWriterShrunkLssFixture : public testing::Test {
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   Lss lss_;
+  Lss lss_copy_;
+  BareBones::Vector<uint32_t> dst_src_ids_mapping_;
+
+  void fill_lss(std::initializer_list<LabelViewSet> label_sets) {
+    for (const auto& label_set : label_sets) {
+      lss_.find_or_emplace(label_set);
+    }
+
+    lss_.build_deferred_indexes();
+  }
+
+  void copy_lss() {
+    Copier<Lss, decltype(lss_.sorting_index()), decltype(lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(
+        lss_, lss_.sorting_index(), lss_.added_series(), lss_copy_, dst_src_ids_mapping_);
+    copier.copy_added_series_and_build_indexes();
+  }
 };
 
 TEST_F(SymbolsWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   // Arrange
-  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "localhost"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "127.0.0.1"}});
-  lss_.build_deferred_indexes();
-  const uint32_t shrink_boundary = lss_.next_item_index();
-  Lss lss_copy;
-  BareBones::Vector<uint32_t> dst_src_ids_mapping;
-  Copier<Lss, decltype(lss_.sorting_index()), decltype(lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(
-      lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping);
-  copier.copy_added_series_and_build_indexes();
-  lss_.set_pending_shrink_boundary(shrink_boundary);
-  const ReadonlyLss resolve_snapshot(lss_copy);
-  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping);
+  fill_lss({
+      {{"job", "cron"}, {"server", "localhost"}},
+      {{"job", "cron"}, {"server", "127.0.0.1"}},
+  });
+
+  copy_lss();
+
+  lss_.set_pending_shrink_boundary(lss_.next_item_index());
+  const ReadonlyLss resolve_snapshot(lss_copy_);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping_);
 
   // Act
-  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
-  SymbolsWriter<Lss, decltype(stream_)> writer(index_write_context, stream_writer_);
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext{lss_};
+  SymbolsWriter writer(index_write_context, stream_writer_);
+  writer.write();
+
+  // Assert
+  EXPECT_EQ(stream_.view(),
+            "\x00\x00\x00\x29"
+            "\x00\x00\x00\x06"
+            "\x00"
+            "\x09"
+            "127.0.0.1"
+            "\x04"
+            "cron"
+            "\x03"
+            "job"
+            "\x09"
+            "localhost"
+            "\x06"
+            "server"
+            "\xCB\xE1\x54\x24"sv);
+}
+
+TEST_F(SymbolsWriterShrunkLssFixture, ReallocateValuesSymbolTableAfterShrunkAndWrite) {
+  // Arrange
+  fill_lss({
+      {{"job", "cron"}, {"server", "localhost"}},
+      {{"job", "cron"}, {"server", "127.0.0.1"}},
+  });
+
+  copy_lss();
+
+  lss_.set_pending_shrink_boundary(lss_.next_item_index());
+  const ReadonlyLss resolve_snapshot(lss_copy_);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping_);
+
+  lss_copy_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"server", "very_long_string_for_trigger_memory_reallocation_in_symbol_data_container"}});
+
+  // Act
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext{lss_};
+  SymbolsWriter writer(index_write_context, stream_writer_);
+  writer.write();
+
+  // Assert
+  EXPECT_EQ(stream_.view(),
+            "\x00\x00\x00\x29"
+            "\x00\x00\x00\x06"
+            "\x00"
+            "\x09"
+            "127.0.0.1"
+            "\x04"
+            "cron"
+            "\x03"
+            "job"
+            "\x09"
+            "localhost"
+            "\x06"
+            "server"
+            "\xCB\xE1\x54\x24"sv);
+}
+
+TEST_F(SymbolsWriterShrunkLssFixture, ReallocateKeysSymbolTableAfterShrunkAndWrite) {
+  // Arrange
+  fill_lss({
+      {{"job", "cron"}, {"server", "localhost"}},
+      {{"job", "cron"}, {"server", "127.0.0.1"}},
+  });
+
+  copy_lss();
+
+  lss_.set_pending_shrink_boundary(lss_.next_item_index());
+  const ReadonlyLss resolve_snapshot(lss_copy_);
+  lss_.finalize_copy_and_shrink(resolve_snapshot, dst_src_ids_mapping_);
+
+  lss_copy_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"very_long_string_for_trigger_memory_reallocation_in_symbol_data_container", "server"}});
+
+  // Act
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext{lss_};
+  SymbolsWriter writer(index_write_context, stream_writer_);
   writer.write();
 
   // Assert
