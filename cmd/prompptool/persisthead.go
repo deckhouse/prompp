@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/google/uuid"
+	"github.com/grafana/regexp"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
@@ -142,7 +142,7 @@ func (cmd *cmdPersistHead) Do(
 			return err
 		}
 
-		writtenBlocks, writeErr := bw.Write(sd)
+		writtenBlocks, writeErr := bw.Write(sd, numberOfShards)
 		if writeErr != nil {
 			return fmt.Errorf("failed to write tsdb block [id: %s, dir: %s]: %w", id.String(), headID, writeErr)
 		}

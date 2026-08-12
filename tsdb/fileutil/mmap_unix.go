@@ -22,18 +22,7 @@ import (
 )
 
 func mmap(f *os.File, length int) ([]byte, error) {
-	b, err := unix.Mmap(int(f.Fd()), 0, length, unix.PROT_READ, unix.MAP_SHARED)
-	if err != nil {
-		return nil, err
-	}
-
-	// Disable kernel readahead for this mapping. Block index/chunk files are
-	// accessed randomly, so the default sequential prefetch only pulls large
-	// chunks of the file into the (active) page cache on first touch, inflating
-	// the container working set for a long time after a restart.
-	_ = unix.Madvise(b, unix.MADV_RANDOM)
-
-	return b, nil
+	return unix.Mmap(int(f.Fd()), 0, length, unix.PROT_READ, unix.MAP_SHARED)
 }
 
 func munmap(b []byte) (err error) {
