@@ -11,7 +11,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
@@ -20,7 +20,7 @@ template <class DecodingTable, class SortingIndex, class SeriesIds, class Querya
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = QueryableEncodingBimap<DefaultSharedVector>;
 using LsIdProxy = typename Lss::LsIdSet::value_type;
 
