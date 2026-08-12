@@ -87,7 +87,7 @@ func (wl *writeLoop) run(ctx context.Context) {
 		}
 
 		if wl.client == nil {
-			wl.client, err = createClient(wl.destination.Config())
+			wl.client, err = createClient(wl.destination.Config(), wl.destination.metrics)
 			if err != nil {
 				logger.Errorf("create client: %v", err)
 				delay = defaultDelay
@@ -262,6 +262,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 		dcfg.ReadTimeout,
 		protobufWriter,
 		wl.destination.metrics,
+		newDeliveryTarget(dcfg.Name, dcfg.URL.Redacted(), nextHeadRecord.ID()),
 	)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("create data source: %w", err), crw.Close(), ds.Close())
@@ -335,9 +336,7 @@ func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
 }
 
 // createClient creates a new [remote.WriteClient].
-//
-
-func createClient(config DestinationConfig) (client remote.WriteClient, err error) {
+func createClient(config DestinationConfig, metrics *DestinationMetrics) (client remote.WriteClient, err error) {
 	clientConfig := remote.ClientConfig{
 		URL:              config.URL,
 		Timeout:          config.RemoteTimeout,
@@ -350,8 +349,15 @@ func createClient(config DestinationConfig) (client remote.WriteClient, err erro
 
 	client, err = remote.NewWriteClient(config.Name, &clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("falied to create client: %w", err)
+		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
+
+	// the write loop replays undelivered messages itself, so every POST carries its idempotency key
+	writeClient, ok := client.(*remote.Client)
+	if !ok {
+		return nil, fmt.Errorf("unexpected write client type: %T", client)
+	}
+	writeClient.Client.Transport = newDeliveryRoundTripper(writeClient.Client.Transport, metrics)
 
 	return client, nil
 }
