@@ -336,8 +336,6 @@ func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
 }
 
 // createClient creates a new [remote.WriteClient].
-//
-
 func createClient(config DestinationConfig, metrics *DestinationMetrics) (client remote.WriteClient, err error) {
 	clientConfig := remote.ClientConfig{
 		URL:              config.URL,
@@ -351,7 +349,7 @@ func createClient(config DestinationConfig, metrics *DestinationMetrics) (client
 
 	client, err = remote.NewWriteClient(config.Name, &clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("falied to create client: %w", err)
+		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
 	// the write loop replays undelivered messages itself, so every POST carries its idempotency key

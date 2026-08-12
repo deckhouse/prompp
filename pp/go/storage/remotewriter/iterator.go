@@ -366,18 +366,18 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 			idempotencyKey := i.target.messageIdempotencyKey(msg.TargetSegmentID, index)
 			sendCtx := withDeliveryMarks(ctx, idempotencyKey, sendIteration)
 
-			go func(msg *cppbridge.RWMessage, idempotencyKey string, attempt int) {
+			go func(message *cppbridge.RWMessage, idempotencyKey string, attempt int) {
 				defer sendSemaphore.Release(1)
 				sendStartTime := i.clock.Now()
-				writeErr := i.protobufWriter.Write(sendCtx, msg.Buffer)
-				sendDuration := time.Since(sendStartTime)
+				writeErr := i.protobufWriter.Write(sendCtx, message.Buffer)
+				sendDuration := i.clock.Since(sendStartTime)
 				i.metrics.sentMessageDuration.Observe(sendDuration.Seconds())
 
 				if writeErr != nil {
-					i.logSendError(writeErr, msg, sendDuration, idempotencyKey, attempt)
+					i.logSendError(writeErr, message, sendDuration, idempotencyKey, attempt)
 				}
 
-				msg.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
+				message.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
 			}(&msg.Messages[index], idempotencyKey, sendIteration)
 		}
 		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
