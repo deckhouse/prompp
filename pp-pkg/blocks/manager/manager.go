@@ -254,9 +254,7 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 
 	needDownsampling := m.opts.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
-		if !b.OverlapsClosedInterval(mint, maxt) ||
-			(needDownsampling && !b.IsDownsamplingBlock()) ||
-			(!needDownsampling && b.IsDownsamplingBlock()) {
+		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue
 		}
 
@@ -293,9 +291,7 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 
 	needDownsampling := m.opts.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
-		if !b.OverlapsClosedInterval(mint, maxt) ||
-			(needDownsampling && !b.IsDownsamplingBlock()) ||
-			(!needDownsampling && b.IsDownsamplingBlock()) {
+		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue
 		}
 
