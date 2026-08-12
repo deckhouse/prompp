@@ -13,6 +13,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 
+	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
 	pppkglogger "github.com/prometheus/prometheus/pp-pkg/logger"
 )
 
@@ -49,6 +50,8 @@ func main() {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	logger := initLogger(*verbose)
 	logger = log.With(logger, "cmd", cmd)
+
+	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{})
 
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 	switch cmd {
@@ -90,3 +93,13 @@ func initLogger(verbose bool) log.Logger {
 func initLogHandler(logger log.Logger) {
 	pppkglogger.InitLogHandler(logger)
 }
+
+//
+// noopFlagConfig
+//
+
+// noopFlagConfig is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
+type noopFlagConfig struct{}
+
+// DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
+func (noopFlagConfig) DisableBlockManagerStorage() {}

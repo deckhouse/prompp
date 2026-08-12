@@ -150,9 +150,9 @@ func (s *ExpirationPolicySuite) TestBlocksToDelete_TimePrecedenceOverSize() {
 	}, s.newCatalog(0), reg)
 
 	actual := ep.BlocksToDelete([]*testBlock{b1, b2, b3})
-	s.assertDeletable(actual, b1.ULID())
+	s.assertDeletable(actual, b1.ULID(), b2.ULID())
 	s.Equal(1.0, s.metricValue(reg, "prometheus_tsdb_time_retentions_total"))
-	s.Equal(0.0, s.metricValue(reg, "prometheus_tsdb_size_retentions_total"))
+	s.Equal(1.0, s.metricValue(reg, "prometheus_tsdb_size_retentions_total"))
 }
 
 func (s *ExpirationPolicySuite) TestBlocksToDelete_SizeRetention() {
