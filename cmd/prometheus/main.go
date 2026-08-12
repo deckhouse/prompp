@@ -61,8 +61,8 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manager" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
 
 	// PP_CHANGES.md: rebuild on cpp
@@ -75,11 +75,8 @@ import (
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
 
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
-	// PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/catalog" // PP_CHANGES.md: rebuild on cpp
-
-	// PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
