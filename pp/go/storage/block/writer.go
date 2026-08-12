@@ -2,6 +2,7 @@ package block
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -18,16 +19,35 @@ const (
 	DefaultChunkSegmentSize = 512 * 1024 * 1024
 	// DefaultBlockDuration is the default block duration.
 	DefaultBlockDuration = 2 * time.Hour
+
+	// shardIDLabel is the Thanos meta label holding the source shard ID. It is
+	// written to block meta.json only (it does not become a series label, so
+	// queries are unaffected) and is used as the compaction group key, so blocks
+	// from different shards are never compacted together.
+	shardIDLabel = "shard_id"
+
+	// numberOfShardsLabel is the Thanos meta label holding the number of shards.
+	// Adding number_of_shards keeps each (shard_id, number_of_shards) generation
+	// isolated so blocks are never merged across a shard-count change.
+	numberOfShardsLabel = "number_of_shards"
 )
 
-// LsIDBatchSize is the batch size for label set ID.
-var LsIDBatchSize uint32 = 100000
+var (
+	// LsIDBatchSize is the batch size for label set ID.
+	LsIDBatchSize uint32 = 100000
+
+	// EnableBlockShardLabels is a flag to enable block shard labels.
+	EnableBlockShardLabels = false
+)
 
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
+	DataStorage() *shard.DataStorage
+
 	LSS() *shard.LSS
 
-	DataStorage() *shard.DataStorage
+	// ShardID returns the shard ID.
+	ShardID() uint16
 
 	UnloadedDataStorage() *shard.UnloadedDataStorage
 }
@@ -37,6 +57,7 @@ type Writer[TShard Shard] struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
+	shardLabelsCtor          func(numberOfShards, shardID uint16) map[string]string
 	retentionPeriod          time.Duration
 	clock                    clockwork.Clock
 	blockWriteDuration       *prometheus.GaugeVec
@@ -58,12 +79,19 @@ func NewWriter[TShard Shard](
 	if clock == nil {
 		clock = clockwork.NewRealClock()
 	}
+
+	shardLabelsCtor := noopShardLabelsCtorFunc
+	if EnableBlockShardLabels {
+		shardLabelsCtor = shardLabelsCtorFunc
+	}
+
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Writer[TShard]{
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
 		retentionPeriod:          retentionPeriod,
+		shardLabelsCtor:          shardLabelsCtor,
 		clock:                    clock,
 		blockWriteDuration: factory.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prompp_block_write_duration",
@@ -73,10 +101,10 @@ func NewWriter[TShard Shard](
 }
 
 // Write writes blocks to disk from a shard.
-func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err error) {
+func (w *Writer[TShard]) Write(sd TShard, numberOfShards uint16) (writtenBlocks []WrittenBlock, err error) {
 	_ = sd.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
 		var writers blockWriters
-		writers, err = w.createWriters(sd)
+		writers, err = w.createWriters(sd, numberOfShards)
 		if err != nil {
 			return err
 		}
@@ -99,13 +127,12 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 }
 
 // createWriters creates writers for the shard.
-func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
+func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockWriters, error) {
 	var writers blockWriters
 
 	timeInterval := sd.DataStorage().TimeInterval(true)
-
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
-
+	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -122,7 +149,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			continue
 		}
 
-		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling)
+		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
@@ -138,6 +165,7 @@ func (w *Writer[TShard]) createWriter(
 	sd TShard,
 	lss *cppbridge.LabelSetStorage,
 	minT, maxT, downsamplingMs int64,
+	tLabels map[string]string,
 ) (blockWriter, error) {
 	var chunkIterator ChunkIterator
 	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
@@ -150,6 +178,7 @@ func (w *Writer[TShard]) createWriter(
 		w.maxBlockChunkSegmentSize,
 		NewIndexWriter(lss),
 		chunkIterator,
+		tLabels,
 	)
 }
 
@@ -213,4 +242,19 @@ func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) err
 	}
 
 	return writers.writeRestOfRecodedChunks()
+}
+
+// shardLabelsCtorFunc constructs the shard labels.
+func shardLabelsCtorFunc(numberOfShards, shardID uint16) map[string]string {
+	return map[string]string{
+		//revive:disable-next-line:add-constant // it's base 10
+		shardIDLabel: strconv.FormatUint(uint64(shardID), 10),
+		//revive:disable-next-line:add-constant // it's base 10
+		numberOfShardsLabel: strconv.FormatUint(uint64(numberOfShards), 10),
+	}
+}
+
+// noopShardLabelsCtorFunc constructs the shard labels.
+func noopShardLabelsCtorFunc(_, _ uint16) map[string]string {
+	return nil
 }

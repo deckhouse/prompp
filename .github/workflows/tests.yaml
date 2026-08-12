@@ -233,7 +233,12 @@ jobs:
     # variant is covered by `go-test-all` (full repository).
     # Optional: runs only when the PR carries the `go-test-asan` label.
     needs: [build-ci-image, build-go-bindings]
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'go-test-asan')
+    # See the note on go-test-all: `always()` is required so a skipped cpp-tests
+    # does not silently disable this job as well.
+    if: >-
+      ${{ always() && needs.build-go-bindings.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'go-test-asan') }}
     strategy:
       max-parallel: 2
       matrix:
@@ -322,6 +327,11 @@ jobs:
     # replace with pp-pkg counterparts or do not ship in cmd/prometheus).
     # Single combination: opt + jemalloc (no sanitizers), on amd64 and arm64.
     needs: [build-ci-image, build-go-bindings]
+    # `skipped` propagates transitively through the dependency graph, so without
+    # `always()` this job is skipped on every Go-only PR (where cpp-tests is
+    # skipped) even though build-go-bindings itself succeeded. Gate on the
+    # actual upstream result instead.
+    if: ${{ always() && needs.build-go-bindings.result == 'success' }}
     strategy:
       max-parallel: 2
       matrix:
@@ -457,7 +467,10 @@ jobs:
 
   build_dev:
     needs: [go-test-all]
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
+    if: >-
+      ${{ always() && needs.go-test-all.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'build-dev-image') }}
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit
 
@@ -494,3 +507,15 @@ jobs:
             exit 1
           fi
           echo "All required test jobs passed or were safely skipped."
+
+      # cpp-tests and ui-tests are legitimately skipped when their sources are
+      # untouched, but the Go suite has no such path filter: a skipped
+      # go-test-all always means the pipeline silently lost its Go coverage.
+      - name: Require the Go test suite to have run
+        if: github.event_name == 'pull_request'
+        run: |
+          result="${{ needs.go-test-all.result }}"
+          if [[ "$result" != "success" ]]; then
+            echo "::error::go-test-all did not run (result: $result); Go tests must run on every PR"
+            exit 1
+          fi
