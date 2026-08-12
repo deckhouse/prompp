@@ -351,7 +351,7 @@ struct LabelNameSetComposite {
     }
 
     PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
-      iterator_type retval = *this;
+      const iterator_type retval = *this;
       ++(*this);
       return retval;
     }
@@ -737,7 +737,7 @@ struct LabelSetComposite {
     }
 
     PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
-      iterator_type retval = *this;
+      const iterator_type retval = *this;
       ++(*this);
       return retval;
     }
@@ -776,7 +776,7 @@ struct LabelSetComposite {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return name_set_id_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept {
-    auto values = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(values_stream_begin_, label_name_set_.size());
+    const auto values = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(values_stream_begin_, label_name_set_.size());
     return iterator_type(symbols_tables_base_, stride_, label_name_set_.begin(), values.first);
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept {

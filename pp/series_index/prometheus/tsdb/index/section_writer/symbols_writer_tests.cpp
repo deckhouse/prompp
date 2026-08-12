@@ -162,7 +162,7 @@ TEST_F(SymbolsWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
             "\xCB\xE1\x54\x24"sv);
 }
 
-TEST_F(SymbolsWriterShrunkLssFixture, ModifyLssCopyAfterShrunkAndWrite) {
+TEST_F(SymbolsWriterShrunkLssFixture, ReallocateValuesSymbolTableAfterShrunkAndWrite) {
   // Arrange
   fill_lss({
       {{"job", "cron"}, {"server", "localhost"}},
