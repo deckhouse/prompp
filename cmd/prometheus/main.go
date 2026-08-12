@@ -58,8 +58,14 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
-	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
-	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
+
+	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"         // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
@@ -69,10 +75,10 @@ import (
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
 
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
-	block "github.com/prometheus/prometheus/pp/go/storage/block"  // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
+	// PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog" // PP_CHANGES.md: rebuild on cpp
+	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
@@ -94,6 +100,7 @@ import (
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/wlog"
 	"github.com/prometheus/prometheus/util/documentcli"
 	"github.com/prometheus/prometheus/util/logging"
@@ -279,6 +286,11 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 	}
 
 	return nil
+}
+
+// DisableBlockManagerStorage disables the storage of blocks in the block manager.
+func (c *flagConfig) DisableBlockManagerStorage() {
+	c.UseBlockManagerStorage = false
 }
 
 func main() {
@@ -565,7 +577,7 @@ func main() {
 
 	logger := promlog.New(&cfg.promlogConfig)
 
-	readPromPPFeatures(logger, &cfg)
+	featuresflags.ReadPromPPFeatures(logger, &cfg)
 
 	if err := cfg.setFeatureListOptions(logger); err != nil {
 		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing feature list: %w", err))
@@ -844,12 +856,9 @@ func main() {
 	// 2) disabled (default): pre-PR-377 mode with tsdb.DB serving persisted blocks.
 	// In both modes, PP head manager + adapter remain the write path.
 	var (
-		blockManager     *block.Manager
-		blockCompactor   *block.Compactor
 		tsdbHistorical   *tsdbHistoricalStorage
-		compactCancel    context.CancelFunc
-		persistedStorage storage.Storage       = localStorage
-		startTimeFn      func() (int64, error) = localStorage.StartTime
+		persistedStorage storage.Storage = localStorage
+		startTimeFn                      = localStorage.StartTime
 	)
 	if !agentMode {
 		// Storage is constructed eagerly here for both schemes. The historical
@@ -881,21 +890,48 @@ func main() {
 				"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
-			retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-			blocksToDelete := pp_pkg_tsdb.NewBlocksToDelete(
-				retentionMs,
-				int64(cfg.tsdb.MaxBytes),
-				pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
-				prometheus.DefaultRegisterer,
-			)
-			blockManager, err = block.NewManager(
+			retentionMS := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
+
+			chunkPool := chunkenc.NewPool()
+			compactCtx, compactCancel := context.WithCancel(context.Background())
+			blockCompactor, err := tcompactor.NewTCompactor(
+				compactCtx,
+				log.With(logger, "component", "tcompactor"),
 				localStoragePath,
-				&block.Options{
-					RetentionDuration:           retentionMs,
+				tcompactor.Options{
+					TsdbOptions: lcompactor.LeveledCompactorOptions{
+						MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
+						EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+					},
+					MinBlockDuration: int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+					MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
+				}, chunkPool, prometheus.DefaultRegisterer,
+			)
+			if err != nil {
+				level.Error(logger).Log("msg", "failed to create tcompactor", "err", err)
+				os.Exit(1)
+			}
+
+			blocksToDelete := expirationpolicy.NewExpirationPolicy[*block.Block](
+				dataDir,
+				headCatalog,
+				&expirationpolicy.Options{
+					RetentionDuration: retentionMS,
+					MaxBytes:          int64(cfg.tsdb.MaxBytes),
+				},
+				prometheus.DefaultRegisterer,
+			).BlocksToDelete
+
+			blockManager, err := manager.NewManager(
+				localStoragePath,
+				&manager.Options{
+					RetentionDuration:           retentionMS,
 					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 				},
+				blockCompactor,
 				blocksToDelete,
+				chunkPool,
 				localstorageobserver.NewLocalStorageObserver(
 					localStoragePath,
 					headCatalog,
@@ -909,22 +945,6 @@ func main() {
 				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
 				os.Exit(1)
 			}
-
-			var compactCtx context.Context
-			compactCtx, compactCancel = context.WithCancel(context.Background())
-			blockCompactor, err = block.NewCompactor(compactCtx, localStoragePath, &block.CompactorOptions{
-				MinBlockDuration:            int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
-				MaxBlockDuration:            int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
-				MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
-				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-			}, blockManager, log.With(logger, "component", "blockcompactor"), prometheus.DefaultRegisterer)
-			if err != nil {
-				level.Error(logger).Log("msg", "failed to create block compactor", "err", err)
-				os.Exit(1)
-			}
-			// Drive compaction from the manager's single reload loop so compact
-			// and block deletion never run concurrently.
-			blockManager.SetCompactor(blockCompactor)
 
 			bs := &blockStorage{m: blockManager, onClose: func() error {
 				// Cancel any in-flight leveled compaction first so the manager
@@ -1811,12 +1831,12 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 	return eu, nil
 }
 
-// blockStorage adapts a read-only block.Manager (persisted blocks) to
+// PP_CHANGES.md: rebuild on cpp
+// blockStorage adapts a read-only manager.Manager (persisted blocks) to
 // storage.Storage so it can be used as a fanout secondary. Appends are dropped:
 // the head adapter is the fanout primary that stores samples.
-// PP_CHANGES.md: rebuild on cpp
 type blockStorage struct {
-	m       *block.Manager
+	m       *manager.Manager
 	onClose func() error
 }
 
@@ -1870,10 +1890,10 @@ func (s *tsdbHistoricalStorage) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
+// PP_CHANGES.md: rebuild on cpp
 // noopAppender silently drops samples and reports success, so that the fanout
 // appender (which appends to every secondary) does not fail on the read-only
 // blockStorage secondary.
-// PP_CHANGES.md: rebuild on cpp
 type noopAppender struct{}
 
 func (noopAppender) Append(storage.SeriesRef, labels.Labels, int64, float64) (storage.SeriesRef, error) {
@@ -2260,151 +2280,4 @@ func (p *rwProtoMsgFlagParser) Set(opt string) error {
 	}
 	*p.msgs = append(*p.msgs, t)
 	return nil
-}
-
-func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
-	features := os.Getenv("PROMPP_FEATURES")
-	if features == "" {
-		return
-	}
-
-	for _, feature := range strings.Split(features, ",") {
-		fname, fvalue, _ := strings.Cut(feature, "=")
-		switch strings.TrimSpace(fname) {
-		case "head_read_concurrency":
-			var (
-				v   = 1
-				err error
-			)
-
-			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
-				v, err = strconv.Atoi(fvalue)
-				if err != nil {
-					level.Error(logger).Log("msg", "[FEATURE] Error parsing head_read_concurrency value", "err", err)
-					continue
-				}
-			}
-
-			head.ExtraWorkers = v
-			level.Info(logger).Log(
-				"msg",
-				"[FEATURE] Concurrency reading is enabled.",
-				"extra",
-				v,
-			)
-
-		case "head_default_number_of_shards":
-			fvalue := strings.TrimSpace(fvalue)
-			if fvalue == "" {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is empty, no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-				continue
-			}
-
-			v, err := strconv.Atoi(fvalue)
-			switch {
-			case err != nil:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-					"err", err,
-				)
-
-			case v > math.MaxUint16:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-			case v < 1:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-			default:
-				pp_storage.DefaultNumberOfShards = uint16(v)
-				level.Info(logger).Log(
-					"msg", "[FEATURE] Changed default number of shards.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-			}
-
-		case "disable_commits_on_remote_write":
-			rwprocessor.AlwaysCommit = false
-			pp_pkg_handler.OTLPAlwaysCommit = false
-
-		case "disable_unload_data_storage":
-			pp_storage.UnloadDataStorage = false
-			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is disabled.")
-
-		case "disable_block_compaction":
-			pp_pkg_tsdb.BlockCompactionDisabled = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
-
-		case "federation_split_families":
-			fvalue := strings.TrimSpace(fvalue)
-			if fvalue == "" {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The federation_split_families should be setted with number.",
-				)
-				continue
-			}
-			v, err := strconv.Atoi(fvalue)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing federation_split_families value",
-					"err", err,
-				)
-				continue
-			}
-			_ = level.Info(logger).Log(
-				"msg", "[FEATURE] Split federation families with pages.",
-				"pages", v,
-			)
-			web.FederationSplitFamiliesPageSize = v
-
-		case "default_sample_age_limit":
-			fvalue = strings.TrimSpace(fvalue)
-			defaultSampleAgeLimit, err := model.ParseDuration(fvalue)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
-					"err", err,
-				)
-				continue
-			}
-
-			_ = level.Info(logger).Log(
-				"msg", "[FEATURE] default_sample_age_limit is set.",
-				"limit", fvalue,
-			)
-
-			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
-
-		case "enable_instant_query_feature":
-			querier.InstantQueryFeature = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is enabled.")
-
-		case "shrink_shard_copier":
-			pp_storage.ShrinkShardCopier = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is enabled.")
-
-		case "enable_block_manager":
-			if cfg != nil {
-				cfg.UseBlockManagerStorage = true
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
-
-		case "disable_coredumps":
-			if err := prom_runtime.DisableCoreDumps(); err != nil {
-				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
-				continue
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
-		}
-	}
 }
