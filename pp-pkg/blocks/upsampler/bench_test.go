@@ -23,14 +23,15 @@ func BenchmarkIteratorSeekLinear(b *testing.B) {
 		t int64
 		v float64
 	}, numSamples)
-	for i := 0; i < numSamples; i++ {
+	for i := range numSamples {
 		samples[i].t = int64(i * 1000) // Every 1 second
 		samples[i].v = float64(i)
 	}
 
 	baseIterator := newMockIterator(samples)
+	ls := labels.FromStrings("__name__", "bench_metric")
 	baseSeries := &mockSeries{
-		labels: labels.FromStrings("__name__", "bench_metric"),
+		labels: ls,
 		iteratorFunc: func(chunkenc.Iterator) chunkenc.Iterator {
 			return baseIterator
 		},
@@ -92,7 +93,7 @@ func BenchmarkSeriesSetIterationWrapped(b *testing.B) {
 
 	// Pre-allocate series list
 	seriesList := make([]*mockSeries, numSeries)
-	for i := 0; i < numSeries; i++ {
+	for i := range numSeries {
 		idx := i
 		seriesList[i] = &mockSeries{
 			labels: labels.FromStrings("__name__", "metric", "index", string(rune(idx))),
@@ -141,7 +142,7 @@ func BenchmarkSeriesSetIterationNoWrap(b *testing.B) {
 	const numSeries = 1000
 
 	seriesList := make([]*mockSeries, numSeries)
-	for i := 0; i < numSeries; i++ {
+	for i := range numSeries {
 		seriesList[i] = &mockSeries{
 			labels: labels.FromStrings("__name__", "metric", "index", string(rune(i))),
 		}
@@ -178,6 +179,7 @@ func BenchmarkSeriesSetIterationNoWrap(b *testing.B) {
 // BenchmarkQuerierSelectWrapped measures Select performance when upsampling is triggered.
 // This tests the wrapped path where Querier wraps the SeriesSet.
 func BenchmarkQuerierSelectWrapped(b *testing.B) {
+	ls := labels.FromStrings("__name__", "metric")
 	baseQuerier := &mockQuerier{
 		selectFunc: func(context.Context, bool, *storage.SelectHints, ...*labels.Matcher) storage.SeriesSet {
 			// Return a base series set with some series
@@ -189,7 +191,7 @@ func BenchmarkQuerierSelectWrapped(b *testing.B) {
 				},
 				atFunc: func() storage.Series {
 					return &mockSeries{
-						labels: labels.FromStrings("__name__", "metric"),
+						labels: ls,
 					}
 				},
 			}
@@ -216,6 +218,7 @@ func BenchmarkQuerierSelectWrapped(b *testing.B) {
 // BenchmarkQuerierSelectNoWrap measures Select performance when wrapping is not triggered.
 // This is the baseline: no upsampling overhead.
 func BenchmarkQuerierSelectNoWrap(b *testing.B) {
+	ls := labels.FromStrings("__name__", "metric")
 	baseQuerier := &mockQuerier{
 		selectFunc: func(context.Context, bool, *storage.SelectHints, ...*labels.Matcher) storage.SeriesSet {
 			seriesIndex := 0
@@ -226,7 +229,7 @@ func BenchmarkQuerierSelectNoWrap(b *testing.B) {
 				},
 				atFunc: func() storage.Series {
 					return &mockSeries{
-						labels: labels.FromStrings("__name__", "metric"),
+						labels: ls,
 					}
 				},
 			}
