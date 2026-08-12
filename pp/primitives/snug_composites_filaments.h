@@ -187,8 +187,9 @@ struct Symbol {
 
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items_.size());
-      items_.emplace_back(static_cast<uint32_t>(data_.size()), static_cast<uint32_t>(str.length()));
+      const auto data_size = static_cast<uint32_t>(data_.size());
       data_.push_back(str.begin(), str.end());
+      items_.emplace_back(data_size, static_cast<uint32_t>(str.length()));
       sync_read_view();
       return id;
     }
