@@ -15,6 +15,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -109,6 +110,83 @@ func (s *ManagerSuite) TestManagerExportsLoadedBlocksMetrics() {
 	}
 }
 
+func (s *ManagerSuite) TestManagerQuerierWrapsDownsamplingBlocks() {
+	workDir := s.T().TempDir()
+	// Create a downsampling block
+	s.createTestDownsamplingBlock(s.dir, 1000, workDir, 60000)
+
+	m, err := NewManager(s.dir, &Options{
+		RetentionDuration: 100,
+		DownsamplingMS:    60000, // 1 minute downsampling
+	}, s.compactor, nil, s.chunkPool, nil, s.logger, nil)
+	s.Require().NoError(err)
+	s.T().Cleanup(m.Close)
+
+	// Get blocks and verify they were loaded (now we have 3: 2 from SetupTest + 1 downsampling)
+	blocks := m.Blocks()
+	s.Require().Len(blocks, 3)
+
+	// Verify at least one block is a downsampling block
+	hasDownsamplingBlock := false
+	for _, b := range blocks {
+		if b.IsDownsamplingBlock() {
+			hasDownsamplingBlock = true
+			break
+		}
+	}
+	s.Require().True(hasDownsamplingBlock, "should have at least one downsampling block")
+
+	// Create a querier for a range that triggers downsampling
+	// needDownsampling returns true when (maxt - mint) > retentionMS
+	mintMS, maxtMS := int64(0), int64(1000) // Wide range to trigger downsampling
+	q, err := m.Querier(mintMS, maxtMS)
+	s.Require().NoError(err)
+	s.T().Cleanup(func() { _ = q.Close() })
+
+	// Verify that querier was created and is functional
+	s.NotNil(q)
+
+	uq, ok := q.(*upsampler.Querier)
+	s.Require().True(ok)
+	s.NotNil(uq)
+
+	// Try a simple select (without upsample because no SelectHints provided)
+	ss := q.Select(s.T().Context(), false, nil)
+	s.NotNil(ss)
+}
+
+func (s *ManagerSuite) TestSkipBlock() {
+	workDir := s.T().TempDir()
+	// Create a downsampling block
+	s.createTestDownsamplingBlock(s.dir, 1000, workDir, 60000)
+
+	m, err := NewManager(s.dir, &Options{
+		RetentionDuration: 100,
+		DownsamplingMS:    60000, // 1 minute downsampling
+	}, s.compactor, nil, s.chunkPool, nil, s.logger, nil)
+	s.Require().NoError(err)
+	s.T().Cleanup(m.Close)
+
+	// Get blocks and verify they were loaded (now we have 3: 2 from SetupTest + 1 downsampling)
+	blocks := m.Blocks()
+	s.Require().Len(blocks, 3)
+
+	// Verify at least one block is a downsampling block
+	mintMS, maxtMS := int64(0), int64(1000) // Wide range to trigger downsampling
+	hasDownsamplingBlock := false
+	for _, b := range blocks {
+		if b.IsDownsamplingBlock() {
+			s.Require().False(m.skipBlock(b, mintMS, maxtMS, true))
+			s.Require().True(m.skipBlock(b, mintMS, maxtMS, false))
+			hasDownsamplingBlock = true
+			break
+		}
+		s.Require().True(m.skipBlock(b, mintMS, maxtMS, true))
+		s.Require().False(m.skipBlock(b, mintMS, maxtMS, false))
+	}
+	s.Require().True(hasDownsamplingBlock, "should have at least one downsampling block")
+}
+
 func (s *ManagerSuite) createTestBlock(dir string, startTS int, metric string) {
 	s.T().Helper()
 
@@ -116,6 +194,26 @@ func (s *ManagerSuite) createTestBlock(dir string, startTS int, metric string) {
 		storage.NewListSeries(labels.FromStrings("__name__", metric), chunks.GenerateSamples(startTS, 2)),
 	}
 	_, err := tsdb.CreateBlock(series, dir, 0, log.NewNopLogger())
+	s.Require().NoError(err)
+}
+
+func (s *ManagerSuite) createTestDownsamplingBlock(dir string, startTS int, metric string, resolution int64) {
+	s.T().Helper()
+
+	// Create a normal block first
+	series := []storage.Series{
+		storage.NewListSeries(labels.FromStrings("__name__", metric), chunks.GenerateSamples(startTS, 2)),
+	}
+	blockIDStr, err := tsdb.CreateBlock(series, dir, 0, s.logger)
+	s.Require().NoError(err)
+
+	// Create Thanos metadata file for downsampling BEFORE loading the block
+	// This way when OpenBlocks loads the block, it will read the resolution
+	meta, _, err := block.ReadFromDir(blockIDStr)
+	s.Require().NoError(err)
+	meta.Thanos.Downsample.Resolution = resolution
+
+	_, err = block.WriteThanosMetaFile(s.logger, blockIDStr, meta)
 	s.Require().NoError(err)
 }
 

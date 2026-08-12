@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -235,6 +236,8 @@ func (m *Manager) Close() {
 
 // Querier returns a new querier over the persisted blocks overlapping the time
 // range [mint, maxt]. It implements [storage.Queryable].
+//
+//revive:disable-next-line:cyclomatic // complex logic is necessary for this function
 func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
@@ -252,14 +255,18 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 	needDownsampling := m.opts.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
 		if !b.OverlapsClosedInterval(mint, maxt) ||
-			needDownsampling && !b.IsDownsamplingBlock() ||
-			!needDownsampling && b.IsDownsamplingBlock() {
+			(needDownsampling && !b.IsDownsamplingBlock()) ||
+			(!needDownsampling && b.IsDownsamplingBlock()) {
 			continue
 		}
 
 		q, err := tsdb.NewBlockQuerier(b, mint, maxt)
 		if err != nil {
 			return nil, fmt.Errorf("open querier for block %s: %w", b, err)
+		}
+
+		if b.IsDownsamplingBlock() {
+			q = upsampler.NewQuerier(q, b.Metadata().Thanos.Downsample.Resolution)
 		}
 
 		blockQueriers = append(blockQueriers, q)
@@ -287,8 +294,8 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 	needDownsampling := m.opts.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
 		if !b.OverlapsClosedInterval(mint, maxt) ||
-			needDownsampling && !b.IsDownsamplingBlock() ||
-			!needDownsampling && b.IsDownsamplingBlock() {
+			(needDownsampling && !b.IsDownsamplingBlock()) ||
+			(!needDownsampling && b.IsDownsamplingBlock()) {
 			continue
 		}
 
@@ -549,6 +556,12 @@ func (m *Manager) deleteCompactedBlocks(uids []ulid.ULID) {
 // isOutdatedBlock checks if a block is outdated based on its ULID and retention duration.
 func (*Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration) bool {
 	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli()) // #nosec G115 // no overflow
+}
+
+func (*Manager) skipBlock(b *block.Block, mint, maxt int64, needDownsampling bool) bool {
+	return !b.OverlapsClosedInterval(mint, maxt) ||
+		(needDownsampling && !b.IsDownsamplingBlock()) ||
+		(!needDownsampling && b.IsDownsamplingBlock())
 }
 
 // normalizeBlockDurationMinutes normalizes a block duration in milliseconds to minutes.
