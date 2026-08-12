@@ -1728,9 +1728,8 @@ func openBlocks(l log.Logger, dir string, loaded []*Block, chunkPool chunkenc.Po
 		}
 
 		// PP_CHANGES.md: rebuild on cpp start
-		if meta.Compaction.containsHint(CompactionHintCorrupted) {
+		if meta.Compaction.UnsetCorrupted() {
 			// unmark block as corrupted
-			meta.Compaction.deleteHint(CompactionHintCorrupted)
 			if _, err := writeMetaFile(l, bDir, meta); err != nil {
 				level.Error(l).Log(
 					"msg", "Failed to update meta.json for a block during reloadBlocks",

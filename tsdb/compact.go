@@ -501,13 +501,13 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 				)
 
 				// mark as corrupted for skipping
-				meta.Compaction.addHint(CompactionHintCorrupted)
-				if _, err := writeMetaFile(c.logger, d, meta); err != nil {
-					return nil, fmt.Errorf("write meta file: %w", err)
+				if meta.Compaction.SetCorrupted() {
+					if _, err := writeMetaFile(c.logger, d, meta); err != nil {
+						return nil, fmt.Errorf("write meta file: %w", err)
+					}
 				}
 
 				continue
-				// return nil, err
 				// PP_CHANGES.md: rebuild on cpp end
 			}
 			defer b.Close()
