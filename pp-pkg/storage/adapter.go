@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/hatracker"
@@ -23,6 +24,16 @@ import (
 
 // defaultCacheCheckIntervalMs is the default cache check interval in milliseconds.
 const defaultCacheCheckIntervalMs = int64(5*time.Minute) / 1e6 // ns to ms
+
+//
+// downsampler
+//
+
+// downsampler is an interface for types that know if downsampling would be applied.
+type downsampler interface {
+	// WouldDownsample reports whether the current query would apply downsampling.
+	WouldDownsample() bool
+}
 
 //
 // AdapterOptions
@@ -283,7 +294,7 @@ func (ar *Adapter) Close() error {
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	return querier.NewQuerier(
+	return ar.wrapIfWouldDownsample(querier.NewQuerier(
 		ahead,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
@@ -293,7 +304,7 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		ar.opts.RetentionMS,
 		ar.opts.DownsamplingMS,
 		ar.activeQuerierMetrics,
-	), nil
+	)), nil
 }
 
 // HeadStatus returns stats of Head.
@@ -317,20 +328,17 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	queriers = append(
-		queriers,
-		querier.NewQuerier(
-			ahead,
-			querier.NewNoOpShardedDeduplicator,
-			mint,
-			maxt,
-			ar.scrapeInterval.Load(),
-			aTimeInterval.MinT,
-			ar.opts.RetentionMS,
-			ar.opts.DownsamplingMS,
-			ar.activeQuerierMetrics,
-		),
-	)
+	queriers = append(queriers, ar.wrapIfWouldDownsample(querier.NewQuerier(
+		ahead,
+		querier.NewNoOpShardedDeduplicator,
+		mint,
+		maxt,
+		ar.scrapeInterval.Load(),
+		aTimeInterval.MinT,
+		ar.opts.RetentionMS,
+		ar.opts.DownsamplingMS,
+		ar.activeQuerierMetrics,
+	)))
 
 	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
@@ -342,20 +350,17 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
-		queriers = append(
-			queriers,
-			querier.NewQuerierWithOutSelectFuncOptimize(
-				head,
-				querier.NewNoOpShardedDeduplicator,
-				mint,
-				maxt,
-				ar.scrapeInterval.Load(),
-				aTimeInterval.MinT,
-				ar.opts.RetentionMS,
-				ar.opts.DownsamplingMS,
-				ar.storageQuerierMetrics,
-			),
-		)
+		queriers = append(queriers, ar.wrapIfWouldDownsample(querier.NewQuerierWithOutSelectFuncOptimize(
+			head,
+			querier.NewNoOpShardedDeduplicator,
+			mint,
+			maxt,
+			ar.scrapeInterval.Load(),
+			aTimeInterval.MinT,
+			ar.opts.RetentionMS,
+			ar.opts.DownsamplingMS,
+			ar.storageQuerierMetrics,
+		)))
 	}
 
 	return querier.NewMultiQuerier(queriers, nil), nil
@@ -365,6 +370,20 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
+}
+
+// wrapIfWouldDownsample wraps a head-querier in upsampler.Querier if downsampling would be applied.
+func (*Adapter) wrapIfWouldDownsample(hq storage.Querier) storage.Querier {
+	downsamplerQuerier, ok := hq.(downsampler)
+	if !ok {
+		return hq
+	}
+
+	if downsamplerQuerier.WouldDownsample() {
+		return upsampler.NewQuerier(hq, 0)
+	}
+
+	return hq
 }
 
 // headTimeIntervalWithValidateCache returns [cppbridge.TimeInterval] from [pp_storage.Head] with validate cache.

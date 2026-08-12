@@ -534,3 +534,69 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	s.Equal([]string{}, names)
 	s.Len(anns.AsErrors(), 1)
 }
+
+func (s *QuerierSuite) TestWouldDownsampleFalseWhenRangeLessThanRetention() {
+	// Arrange: range (maxt-mint) less than retention, so no downsampling should apply
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		5000,  // maxt (range = 5000, less than 10000 retention)
+		1,     // scrapeInterval
+		0,     // headMinTSMS
+		10000, // retentionMS
+		60000, // downsamplingMS (not applied)
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	// Act
+	wouldDownsample := q.WouldDownsample()
+
+	// Assert
+	s.False(wouldDownsample)
+}
+
+func (s *QuerierSuite) TestWouldDownsampleTrueWhenRangeGreaterThanRetention() {
+	// Arrange: range (maxt-mint) greater than retention, so downsampling should apply
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		15000, // maxt (range = 15000, greater than 10000 retention)
+		1,     // scrapeInterval
+		0,     // headMinTSMS
+		10000, // retentionMS
+		60000, // downsamplingMS
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	// Act
+	wouldDownsample := q.WouldDownsample()
+
+	// Assert
+	s.True(wouldDownsample)
+}
+
+func (s *QuerierSuite) TestWouldDownsampleFalseWhenDownsamplingDisabled() {
+	// Arrange: downsampling disabled (NoDownsampling)
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,                        // mint
+		15000,                    // maxt (range = 15000, greater than 10000 retention)
+		1,                        // scrapeInterval
+		0,                        // headMinTSMS
+		10000,                    // retentionMS
+		cppbridge.NoDownsampling, // downsamplingMS disabled
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	// Act
+	wouldDownsample := q.WouldDownsample()
+
+	// Assert
+	s.False(wouldDownsample)
+}

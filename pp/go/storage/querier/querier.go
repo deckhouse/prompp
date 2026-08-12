@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/storage/upsampler"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -313,6 +314,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
+// WouldDownsample reports whether the current query would apply downsampling.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) WouldDownsample() bool {
+	return q.getDownsamplingMS() != cppbridge.NoDownsampling
+}
+
 // selectInstant returns a instant set of series that matches the given label matchers.
 //
 //revive:disable-next-line:function-length long but readable.
@@ -461,6 +467,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	downsamplingMS := q.getDownsamplingMS()
+	// Bypass downsampling when upsampling will handle interpolation for rate/increase/delta/deriv.
+	// This allows these functions to use raw dense data, avoiding spurious NaN results from sparse downsampled data.
+	if downsamplingMS != cppbridge.NoDownsampling && upsampler.NeedsUpsampling(hints) {
+		downsamplingMS = cppbridge.NoDownsampling
+	}
 	queryDataStorage(
 		dsQueryRangeQuerier,
 		q.head,
