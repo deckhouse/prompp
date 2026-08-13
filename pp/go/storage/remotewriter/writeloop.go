@@ -347,6 +347,11 @@ func createClient(config DestinationConfig, metrics *DestinationMetrics) (client
 		RetryOnRateLimit: true,
 	}
 
+	// the client config owns its copy of the HTTP config, so the destination config keeps its own value
+	if !HTTP2Enabled {
+		clientConfig.HTTPClientConfig.EnableHTTP2 = false
+	}
+
 	client, err = remote.NewWriteClient(config.Name, &clientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)

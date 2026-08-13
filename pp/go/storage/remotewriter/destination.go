@@ -31,6 +31,14 @@ const (
 // DefaultSampleAgeLimit is the default maximum sample age. Dont send samples older than this.
 var DefaultSampleAgeLimit = model.Duration(time.Hour * 24 * 30)
 
+// HTTP2Enabled is a feature flag for HTTP/2 in the remote write clients of every destination.
+// Enabled by default; disable via PROMPP_FEATURES=disable_remote_write_http2.
+//
+// Turning it off makes the clients speak HTTP/1.1 only. Worth doing when a proxy or a receiver
+// mishandles HTTP/2 - Go had a series of cases where a dead HTTP/2 connection was kept in the pool
+// and every request on it failed, see https://github.com/golang/go/issues/32388.
+var HTTP2Enabled = true
+
 // DestinationConfig is a remote write destination config.
 type DestinationConfig struct {
 	config.RemoteWriteConfig
