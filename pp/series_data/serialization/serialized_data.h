@@ -57,7 +57,7 @@ struct SerializedData {
       }
 
       case kGorilla: {
-        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.values_offset));
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequenceWithItemsCount<Reallocator>*>(bytes_buffer + chunk.values_offset));
         break;
       }
 
@@ -201,7 +201,9 @@ class DataSerializer {
 
       case kGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.template get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        const auto& stream = storage_.template get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index);
+        write_compact_bit_sequence<SerializedCompactBitSequenceWithItemsCount>(
+            SerializedCompactBitSequenceWithItemsCount{stream, encoder::bit_sequence_items_count(stream.raw_bytes())}, buffer);
         break;
       }
 

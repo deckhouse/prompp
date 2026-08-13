@@ -47,6 +47,10 @@ struct SerializedCompactBitSequenceWithItemsCount {
   PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequenceWithItemsCount(const CompactBitSequenceWithItemsCount& bit_sequence)
       : ptr(bit_sequence.stream.shared_memory()), size_in_bits(bit_sequence.stream.size_in_bits()), items_count(bit_sequence.count()) {}
 
+  template <class CompactBitSequence>
+  PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequenceWithItemsCount(const CompactBitSequence& bit_sequence, uint8_t items_count)
+      : ptr(bit_sequence.shared_memory()), size_in_bits(bit_sequence.size_in_bits()), items_count(items_count) {}
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
 
@@ -237,12 +241,12 @@ class Decoder {
     using enum EncodingType;
     using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<DataStorage<>::Reallocator>;
     using SerializedBitSequence = SerializedCompactBitSequence<DataStorage<>::Reallocator>;
-    using SerializedTimestampBitSequence = SerializedCompactBitSequenceWithItemsCount<DataStorage<>::Reallocator>;
+    using SerializedBitSequenceWithItemsCount = SerializedCompactBitSequenceWithItemsCount<DataStorage<>::Reallocator>;
     using decoder::DecodeIteratorSentinel;
 
     switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         return std::forward<Callback>(callback)(
             decoder::ConstantDecodeIterator(timestamp_bit_sequence->items_count, BitSequenceWithItemsCount::reader(timestamp_bit_sequence->buffer()),
                                             chunk.values_offset, chunk.encoding_state.has_last_stalenan),
@@ -250,7 +254,7 @@ class Decoder {
       }
 
       case kFloat32Constant: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         return std::forward<Callback>(callback)(
             decoder::ConstantDecodeIterator(timestamp_bit_sequence->items_count, BitSequenceWithItemsCount::reader(timestamp_bit_sequence->buffer()),
                                             std::bit_cast<float>(chunk.values_offset), chunk.encoding_state.has_last_stalenan),
@@ -258,7 +262,7 @@ class Decoder {
       }
 
       case kDoubleConstant: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         const auto values_buffer = buffer.subspan(chunk.values_offset);
         assert(values_buffer.size() >= sizeof(double));
         return std::forward<Callback>(callback)(
@@ -268,7 +272,7 @@ class Decoder {
       }
 
       case kTwoDoubleConstant: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         const auto values_buffer = buffer.subspan(chunk.values_offset);
         assert(values_buffer.size() >= sizeof(encoder::value::TwoDoubleConstantEncoder));
         return std::forward<Callback>(callback)(
@@ -279,7 +283,7 @@ class Decoder {
       }
 
       case kAscInteger: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         const auto values_bit_sequence = reinterpret_cast<const SerializedBitSequence*>(buffer.data() + chunk.values_offset);
         return std::forward<Callback>(callback)(
             decoder::AscIntegerDecodeIterator(timestamp_bit_sequence->items_count, BitSequenceWithItemsCount::reader(timestamp_bit_sequence->buffer()),
@@ -288,7 +292,7 @@ class Decoder {
       }
 
       case kAscIntegerThenValuesGorilla: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         const auto values_bit_sequence = reinterpret_cast<const SerializedBitSequence*>(buffer.data() + chunk.values_offset);
         return std::forward<Callback>(callback)(
             decoder::AscIntegerThenValuesGorillaDecodeIterator(
@@ -297,7 +301,7 @@ class Decoder {
       }
 
       case kValuesGorilla: {
-        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedTimestampBitSequence*>(buffer.data() + chunk.timestamps_offset);
+        const auto timestamp_bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.timestamps_offset);
         const auto values_bit_sequence = reinterpret_cast<const SerializedBitSequence*>(buffer.data() + chunk.values_offset);
         return std::forward<Callback>(callback)(
             decoder::ValuesGorillaDecodeIterator(timestamp_bit_sequence->items_count, BitSequenceWithItemsCount::reader(timestamp_bit_sequence->buffer()),
@@ -306,10 +310,9 @@ class Decoder {
       }
 
       case kGorilla: {
-        const auto bit_sequence = reinterpret_cast<const SerializedBitSequence*>(buffer.data() + chunk.values_offset);
-        return std::forward<Callback>(callback)(decoder::GorillaDecodeIterator(BitSequenceWithItemsCount::count(bit_sequence->ptr.get()),
-                                                                               BitSequenceWithItemsCount::reader(bit_sequence->buffer())),
-                                                DecodeIteratorSentinel{});
+        const auto bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.values_offset);
+        return std::forward<Callback>(callback)(
+            decoder::GorillaDecodeIterator(bit_sequence->items_count, BitSequenceWithItemsCount::reader(bit_sequence->buffer())), DecodeIteratorSentinel{});
       }
 
       default: {
