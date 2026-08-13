@@ -148,7 +148,7 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockW
 			continue
 		}
 
-		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels)
+		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, tLabels)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
@@ -163,12 +163,12 @@ func (w *Writer[TShard]) createWriter(
 	dataDir string,
 	sd TShard,
 	lss *cppbridge.LabelSetStorage,
-	minT, maxT, downsamplingMs int64,
+	minT, maxT int64,
 	tLabels map[string]string,
 ) (blockWriter, error) {
 	var chunkIterator ChunkIterator
 	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
-		chunkIterator = NewChunkIterator(lss, LsIDBatchSize, ds, minT, maxT, downsamplingMs)
+		chunkIterator = NewChunkIterator(lss, LsIDBatchSize, ds, minT, maxT)
 		return nil
 	})
 
@@ -197,7 +197,7 @@ func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
 	_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
+		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIDBatchSize)
 		return nil
 	})
 

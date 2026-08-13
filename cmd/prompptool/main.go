@@ -103,3 +103,6 @@ type noopFlagConfig struct{}
 
 // DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
+
+// EnableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
+func (noopFlagConfig) EnableBlockManagerStorage() {}

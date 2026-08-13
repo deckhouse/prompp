@@ -293,6 +293,11 @@ func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
 }
 
+// EnableBlockManagerStorage enables the storage of blocks in the block manager.
+func (c *flagConfig) EnableBlockManagerStorage() {
+	c.UseBlockManagerStorage = true
+}
+
 func main() {
 	if os.Getenv("DEBUG") != "" {
 		runtime.SetBlockProfileRate(20)

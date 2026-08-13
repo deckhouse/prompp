@@ -35,6 +35,9 @@ const (
 type FlagConfig interface {
 	// DisableBlockManagerStorage disables the storage of blocks in the block manager.
 	DisableBlockManagerStorage()
+
+	// EnableBlockManagerStorage enables the storage of blocks in the block manager.
+	EnableBlockManagerStorage()
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -61,6 +64,10 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		case "disable_commits_on_remote_write":
 			setDisableCommitsOnRemoteWrite(logger)
 
+		case "disable_unload_data_storage":
+			storage.UnloadDataStorage = false
+			_ = level.Info(logger).Log(msgStr, "Data storage unloading is disabled.")
+
 		case "disable_block_compaction":
 			pp_pkg_tsdb.BlockCompactionDisabled = true
 			_ = level.Info(logger).Log(msgStr, "Prometheus compaction disabled.")
@@ -71,29 +78,27 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		case "default_sample_age_limit":
 			setDefaultSampleAgeLimit(logger, fvalue)
 
-		case "disable_instant_query_feature":
-			querier.InstantQueryFeature = false
-			_ = level.Info(logger).Log(msgStr, "Instant query feature is disabled.")
+		case "enable_instant_query_feature":
+			querier.InstantQueryFeature = true
+			_ = level.Info(logger).Log(msgStr, "Instant query feature is enabled.")
 
 		case "disable_remote_write_http2":
 			remotewriter.HTTP2Enabled = false
 			_ = level.Info(logger).Log(msgStr, "HTTP/2 for remote write is disabled.")
 
-		case "disable_shrink_shard_copier":
-			storage.ShrinkShardCopier = false
-			_ = level.Info(logger).Log(msgStr, "Shrink shard copier is disabled.")
+		case "shrink_shard_copier":
+			storage.ShrinkShardCopier = true
+			_ = level.Info(logger).Log(msgStr, "Shrink shard copier is enabled.")
 
-		case "disable_block_manager":
-			cfg.DisableBlockManagerStorage()
+		case "enable_block_manager":
+			cfg.EnableBlockManagerStorage()
+
 			_ = level.Info(logger).Log(
-				msgStr, "Block-manager historical storage is disabled; using pre-PR-377 TSDB storage.",
+				msgStr, "Block-manager historical storage is enabled.",
 			)
 
 		case "disable_coredumps":
 			setDisableCoredumps(logger)
-
-		case "select_func_optimization":
-			setSelectFuncOptimization(logger, fvalue)
 
 		case "enable_block_shard_labels":
 			block.EnableBlockShardLabels = true
@@ -231,21 +236,4 @@ func setDisableCoredumps(logger log.Logger) {
 	}
 
 	_ = level.Info(logger).Log(msgStr, "Core dumps are disabled (RLIMIT_CORE=0).")
-}
-
-// setSelectFuncOptimization sets the select function optimization for the querier based on the provided feature value.
-func setSelectFuncOptimization(logger log.Logger, fvalue string) {
-	if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
-		_ = level.Error(logger).Log(
-			msgStr, "Error parsing select_func_optimization value",
-			errStr, err,
-		)
-
-		return
-	}
-
-	_ = level.Info(logger).Log(
-		msgStr, "Select function optimization is set.",
-		"optimization", fvalue,
-	)
 }
