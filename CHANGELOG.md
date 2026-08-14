@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.8.8 / 2026-08-14
+
+### Features
+1. **New block-manager compactor (`TCompactor`).** Replaced the block-manager storage scheme's compactor with `TCompactor`, a Thanos-derived compactor with its own grouper and planner. Blocks can now be grouped by time range and segment before scheduling, so blocks from different segments are never combined (#397).
+2. **`PROMPP_FEATURES=disable_remote_write_http2`.** Switches every remote-write client to HTTP/1.1 in one place, instead of toggling `enable_http2` per destination — useful when a dead pooled HTTP/2 connection keeps failing requests, or a proxy in front of a receiver mishandles HTTP/2 (#472).
+
+### Enhancements
+1. **Remote-write retries are now identifiable on the wire.** Every remote-write POST now carries an `X-Idempotency-Key` (destination + head + segment + message index) that stays stable across retries, and a `Retry-Attempt` header with the real attempt number instead of a hardcoded 0. The failed-send log now also reports the destination URL, attempt number, duration and message size, and a new `connections_total{state="new"|"reused"}` counter tracks HTTP connection reuse (#471).
+
+### Performance
+1. **Lower page-cache footprint for block files.** Block index/chunk file mmaps are now advised `MADV_RANDOM`, disabling the kernel's sequential readahead — these files are accessed randomly, so readahead was inflating the container's working set for a long time after restart (#427).
+
+### Fixes
+1. **Potential race condition in the series index's atomic shared pointers.** Fixed the ordering of size updates in vector append/erase operations and introduced `AtomicSharedPtrControlBlockWithItemCount` with acquire/release memory ordering for the entrypoint QEB (#466).
+
 ## v0.8.7 / 2026-08-07
 
 ### Performance
