@@ -69,7 +69,7 @@ func (s *HTTP2Suite) send() error {
 				TLSConfig:   config_util.TLSConfig{InsecureSkipVerify: true},
 			},
 		},
-	}, newDestinationMetrics("dst", serverURL.Redacted()))
+	}, newDestinationMetrics("test", s.server.URL))
 	s.Require().NoError(err)
 
 	return newProtobufWriter(client).Write(s.T().Context(), []byte("message"))
