@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.8.8 / 2026-08-14
+## v0.8.9 / 2026-08-14
 
 ### Features
 1. **New block-manager compactor (`TCompactor`).** Replaced the block-manager storage scheme's compactor with `TCompactor`, a Thanos-derived compactor with its own grouper and planner. Blocks can now be grouped by time range and segment before scheduling, so blocks from different segments are never combined (#397).
