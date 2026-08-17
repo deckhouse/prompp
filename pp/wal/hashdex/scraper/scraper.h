@@ -21,6 +21,10 @@ template <ParserInterface Parser>
 class Scraper {
  public:
   [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    if (!simdutf::validate_utf8(buffer.data(), buffer.size())) [[unlikely]] {
+      return Error::kInvalidUtf8;
+    }
+
     metric_buffer_.initialize(buffer.size() / 4);
     metadata_buffer_.initialize(buffer.size() / 128);
     labels_.reserve(255);
@@ -144,10 +148,6 @@ class Scraper {
       return Error::kUnexpectedToken;
     }
 
-    if (type == Token::kHelp && !simdutf::validate_utf8(text.data(), text.size())) [[unlikely]] {
-      return Error::kInvalidUtf8;
-    }
-
     const auto buffer = tokenizer.buffer();
     metadata_buffer_.add(MarkedString::create(metric_name, buffer), MarkedString::create(text, buffer), get_metadata_type(type));
     return Error::kNoError;
@@ -265,10 +265,6 @@ class Scraper {
       copy_to += piece_of_string.size();
     });
     value.remove_suffix(value.size() - (copy_to - value.data()));
-
-    if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
-      return Error::kInvalidUtf8;
-    }
 
     string = MarkedString::create(value, tokenizer.buffer());
     return Error::kNoError;
