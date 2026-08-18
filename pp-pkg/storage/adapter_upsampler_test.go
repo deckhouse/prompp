@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -17,7 +16,7 @@ import (
 // mockQuerier
 //
 
-// mockQuerier is a simple mock Querier for testing wrapIfWouldDownsample.
+// mockQuerier is a simple mock Querier for testing wouldDownsample.
 type mockQuerier struct {
 	wouldDownsample bool
 }
@@ -57,10 +56,46 @@ func (m *mockQuerier) WouldDownsample() bool {
 }
 
 //
+// plainQuerier
+//
+
+// plainQuerier is a [storage.Querier] that does not implement the [downsampler] interface.
+type plainQuerier struct{}
+
+// Select implements the [storage.Querier] interface for plainQuerier.
+func (*plainQuerier) Select(context.Context, bool, *storage.SelectHints, ...*labels.Matcher) storage.SeriesSet {
+	return &mockSeriesSet{}
+}
+
+// LabelValues implements the [storage.Querier] interface for plainQuerier.
+func (*plainQuerier) LabelValues(
+	context.Context,
+	string,
+	*storage.LabelHints,
+	...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	return nil, nil, nil
+}
+
+// LabelNames implements the [storage.Querier] interface for plainQuerier.
+func (*plainQuerier) LabelNames(
+	context.Context,
+	*storage.LabelHints,
+	...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	return nil, nil, nil
+}
+
+// Close implements the [storage.Querier] interface for plainQuerier.
+func (*plainQuerier) Close() error {
+	return nil
+}
+
+//
 // mockSeriesSet
 //
 
-// mockSeriesSet is a simple mock [storage.SeriesSet] for testing wrapIfWouldDownsample.
+// mockSeriesSet is a simple mock [storage.SeriesSet] for testing wouldDownsample.
 type mockSeriesSet struct{}
 
 // Select implements the [storage.SeriesSet] interface for mockSeriesSet.
@@ -95,7 +130,7 @@ func TestAdapterSuite(t *testing.T) {
 	suite.Run(t, new(AdapterUpsamplerSuite))
 }
 
-func (s *AdapterUpsamplerSuite) TestWrapIfWouldDownsampleWrapsWhenNeeded() {
+func (s *AdapterUpsamplerSuite) TestWouldDownsampleReportsTrue() {
 	// Arrange
 	adapter := &Adapter{
 		opts: &AdapterOptions{
@@ -106,15 +141,13 @@ func (s *AdapterUpsamplerSuite) TestWrapIfWouldDownsampleWrapsWhenNeeded() {
 	mockQ := &mockQuerier{wouldDownsample: true}
 
 	// Act
-	wrapped := adapter.wrapIfWouldDownsample(mockQ)
+	wouldDownsample := adapter.wouldDownsample(mockQ)
 
 	// Assert
-	// Verify that the result is an upsampler.Querier
-	_, ok := wrapped.(*upsampler.Querier)
-	s.Require().True(ok, "expected wrapped querier to be of type upsampler.Querier")
+	s.Require().True(wouldDownsample)
 }
 
-func (s *AdapterUpsamplerSuite) TestWrapIfWouldDownsampleSkipsWhenNotNeeded() {
+func (s *AdapterUpsamplerSuite) TestWouldDownsampleReportsFalse() {
 	// Arrange
 	adapter := &Adapter{
 		opts: &AdapterOptions{
@@ -125,14 +158,13 @@ func (s *AdapterUpsamplerSuite) TestWrapIfWouldDownsampleSkipsWhenNotNeeded() {
 	mockQ := &mockQuerier{wouldDownsample: false}
 
 	// Act
-	wrapped := adapter.wrapIfWouldDownsample(mockQ)
+	wouldDownsample := adapter.wouldDownsample(mockQ)
 
 	// Assert
-	// Verify that the result is the original querier (not wrapped)
-	s.Require().Same(mockQ, wrapped)
+	s.Require().False(wouldDownsample)
 }
 
-func (s *AdapterUpsamplerSuite) TestWrapIfWouldDownsampleHandlesNonDownsampler() {
+func (s *AdapterUpsamplerSuite) TestWouldDownsampleHandlesNonDownsampler() {
 	// Arrange
 	adapter := &Adapter{
 		opts: &AdapterOptions{
@@ -140,13 +172,12 @@ func (s *AdapterUpsamplerSuite) TestWrapIfWouldDownsampleHandlesNonDownsampler()
 			DownsamplingMS: 60000,
 		},
 	}
-	// A simple storage.Querier that doesn't have WouldDownsample method
-	var mockQ storage.Querier = &mockQuerier{wouldDownsample: false}
+	// A simple storage.Querier without the WouldDownsample method.
+	var plainQ storage.Querier = &plainQuerier{}
 
 	// Act
-	wrapped := adapter.wrapIfWouldDownsample(mockQ)
+	wouldDownsample := adapter.wouldDownsample(plainQ)
 
 	// Assert
-	// Verify that the result is the original querier when it doesn't implement downsampler interface
-	s.Require().Same(mockQ, wrapped)
+	s.Require().False(wouldDownsample)
 }

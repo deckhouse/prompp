@@ -11,10 +11,12 @@ import "github.com/prometheus/prometheus/storage"
 // rate/increase/delta average over the whole range regardless of how many
 // real samples fall inside it, and deriv fits the same trend through
 // synthesized points as it would through the two real ones. irate/idelta
-// treat the two samples nearest the eval time as an instantaneous rate, and
-// changes/resets count discrete events between samples — interpolation would
-// fabricate information for those instead of merely smoothing it, so they are
-// deliberately excluded.
+// report the two samples nearest the eval time as an instantaneous rate — on
+// interpolated points that degrades to the average rate of the surrounding
+// gap, which is still closer to the truth than the NaN they return on sparse
+// data. changes/resets count discrete events between samples: interpolation
+// would fabricate information there instead of merely smoothing it, so they
+// stay excluded.
 var allowedFuncs = map[string]struct{}{
 	"rate":     {},
 	"increase": {},

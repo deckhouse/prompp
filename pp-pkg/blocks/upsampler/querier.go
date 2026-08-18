@@ -13,16 +13,18 @@ import (
 )
 
 // Querier wraps a [storage.Querier] and conditionally injects interpolation logic
-// into Select() results when hints match the allow-list and gaps exceed hints.Range.
+// into Select() results when hints match the allow-list and gaps exceed half of
+// hints.Range.
 type Querier struct {
 	base         storage.Querier
-	resolutionMS int64 // nominal resolution of the underlying data source (0 for head querier)
+	resolutionMS int64 // nominal resolution of the sparsest underlying data source
 }
 
 // NewQuerier wraps a base Querier. resolutionMS is used as a coarse filter
-// (optimization only): when resolutionMS <= hints.Range, gaps wider than Range
-// are unlikely by construction, so we skip the Upsampler wrapper. Pass 0 to skip
-// this filter entirely (used for head querier, where there is no nominal resolution).
+// (optimization only): when resolutionMS*2 < hints.Range, the data is denser than
+// the function window requires, so we skip the Upsampler wrapper. It is also the
+// amount by which the left border of the query is extended back, so that the first
+// sample of the window has a predecessor to interpolate from.
 func NewQuerier(base storage.Querier, resolutionMS int64) storage.Querier {
 	return &Querier{
 		base:         base,
@@ -48,10 +50,11 @@ func (q *Querier) Select(
 }
 
 // shouldWrap decides whether to wrap the SeriesSet based on hints and
-// the coarse resolution filter. It returns true only when:
+// the coarse resolution filter, and returns the hints to query base with.
+// It wraps only when:
 //  1. The function is in the allow-list (checked via headupsampler.NeedsUpsampling).
-//  2. Either resolutionMS <= 0 (no filter, e.g., head querier), or
-//     resolutionMS > hints.Range (gaps wider than the range are likely).
+//  2. resolutionMS*2 >= hints.Range — a window of hints.Range wide is not
+//     guaranteed to hold two real samples, so gaps have to be filled.
 func (q *Querier) shouldWrap(hints *storage.SelectHints) (*storage.SelectHints, bool) {
 	if !headupsampler.NeedsUpsampling(hints) {
 		return hints, false
@@ -60,21 +63,11 @@ func (q *Querier) shouldWrap(hints *storage.SelectHints) (*storage.SelectHints, 
 	//revive:disable-next-line:add-constant // resolutionMS must be x2 so that there are 2 points for the query
 	shouldWrap := q.resolutionMS*2 >= hints.Range
 	if shouldWrap {
-		hints = &storage.SelectHints{
-			Start:           hints.Start - q.resolutionMS,
-			End:             hints.End,
-			Limit:           hints.Limit,
-			Step:            hints.Step,
-			Func:            hints.Func,
-			Grouping:        hints.Grouping,
-			Range:           hints.Range,
-			ShardCount:      hints.ShardCount,
-			ShardIndex:      hints.ShardIndex,
-			LookbackDelta:   hints.LookbackDelta,
-			DisableTrimming: hints.DisableTrimming,
-			By:              hints.By,
-			IsSubquery:      hints.IsSubquery,
-		}
+		// Extend the left border back by one resolution so that the first sample
+		// of the window has a predecessor to interpolate from.
+		extended := *hints
+		extended.Start -= q.resolutionMS
+		hints = &extended
 	}
 
 	return hints, shouldWrap

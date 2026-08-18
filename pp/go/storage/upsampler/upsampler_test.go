@@ -37,7 +37,7 @@ func TestNeedsUpsampling(t *testing.T) {
 		},
 		{
 			name:  "func not in allow-list",
-			hints: &storage.SelectHints{Func: "irate", Range: 120_000},
+			hints: &storage.SelectHints{Func: "min_over_time", Range: 120_000},
 			want:  false,
 		},
 		{
@@ -51,9 +51,14 @@ func TestNeedsUpsampling(t *testing.T) {
 			want:  false,
 		},
 		{
-			name:  "idelta not in allow-list",
+			name:  "irate with positive range",
+			hints: &storage.SelectHints{Func: "irate", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "idelta with positive range",
 			hints: &storage.SelectHints{Func: "idelta", Range: 120_000},
-			want:  false,
+			want:  true,
 		},
 		{
 			name:  "rate with positive range",

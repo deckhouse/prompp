@@ -378,20 +378,7 @@ func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
-// wrapIfWouldDownsample wraps a head-querier in upsampler.Querier if downsampling would be applied.
-func (*Adapter) wrapIfWouldDownsample(hq storage.Querier) storage.Querier {
-	downsamplerQuerier, ok := hq.(downsampler)
-	if !ok {
-		return hq
-	}
-
-	if downsamplerQuerier.WouldDownsample() {
-		return upsampler.NewQuerier(hq, 0)
-	}
-
-	return hq
-}
-
+// wouldDownsample reports whether the querier would apply its own query-time downsampling.
 func (*Adapter) wouldDownsample(hq storage.Querier) bool {
 	downsamplerQuerier, ok := hq.(downsampler)
 	if !ok {
