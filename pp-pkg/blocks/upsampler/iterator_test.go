@@ -448,7 +448,7 @@ func (s *IteratorSuite) TestIteratorSeekAdvanceBase() {
 
 	vt = it.Next()
 	s.Require().Equal(chunkenc.ValFloat, vt)
-	s.Require().Equal(int64(200_000), it.AtT())
+	s.Require().Equal(int64(160_000), it.AtT())
 
 	// Seek to 350_000, which is beyond the buffered t1 (200_000).
 	// This tests seekAdvanceBase path.
@@ -457,7 +457,7 @@ func (s *IteratorSuite) TestIteratorSeekAdvanceBase() {
 
 	t := it.AtT()
 	s.Require().GreaterOrEqual(t, int64(350_000))
-	s.Require().Equal(int64(400_000), t)
+	s.Require().Equal(int64(360_000), t)
 }
 
 // TestIteratorSeekWithinStateWithBufferedT1 tests seeking within seekWithinState
@@ -517,7 +517,7 @@ func (s *IteratorSuite) TestIteratorReset() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 200_000, v: 20.0}, // gap of 100ms < 120ms range, no synthesis
+		{t: 200_000, v: 20.0}, // gap of 100ms < 60ms range, no synthesis
 	}
 	baseSecond := newMockIterator(samplesSecond)
 	it.Reset(baseSecond, 120_000)
@@ -533,8 +533,8 @@ func (s *IteratorSuite) TestIteratorReset() {
 	vt = it.Next()
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	t, v = it.At()
-	s.Require().Equal(int64(200_000), t)
-	s.Require().Equal(20.0, v)
+	s.Require().Equal(int64(160_000), t)
+	s.Require().Equal(16.0, v)
 }
 
 // TestIteratorSeekT0LessThanTargetLessThanT1WithoutSynthesis tests seeking
@@ -557,10 +557,10 @@ func (s *IteratorSuite) TestIteratorSeekT0LessThanTargetLessThanT1WithoutSynthes
 
 	// Read next without gap: t0=200k.
 	vt = it.Next()
-	s.Require().Equal(chunkenc.ValFloat, vt) // t0=200k
-	s.Require().Equal(int64(200_000), it.AtT())
+	s.Require().Equal(chunkenc.ValFloat, vt) // t0=160k
+	s.Require().Equal(int64(160_000), it.AtT())
 
-	// Now the base is positioned at 500k, and we have t0=200k, t1=500k (buffered)
+	// Now the base is positioned at 500k, and we have t0=160k, t1=500k (buffered)
 	// in haveT1=true state (gap > range triggered synthesis).
 	// Read one more Next() to start yielding synthetics.
 	vt = it.Next()
@@ -819,21 +819,21 @@ func (s *IteratorSuite) TestIteratorSeekNoSynthesisPath() {
 	vt = it.Next()
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	t, _ = it.At()
-	s.Require().Equal(int64(200_000), t)
+	s.Require().Equal(int64(175_000), t)
 
 	// Now: t0=200k, t1=200k (from second Next), nextSynthT=0
 	// Seek to 150k: target < t0, so seekWithinState is called and returns t0
 	vt = it.Seek(150_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	t, _ = it.At()
-	s.Require().Equal(int64(200_000), t)
+	s.Require().Equal(int64(175_000), t)
 
 	// Seek to 250k: target > t0 and target > t1 (200k), so seekAdvanceBase is called
 	// seekAdvanceBase reads next sample (300k)
 	vt = it.Seek(250_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	t, _ = it.At()
-	s.Require().Equal(int64(300_000), t)
+	s.Require().Equal(int64(275_000), t)
 }
 
 // TestIteratorHistogramPassthroughNoSynthesis tests Next() passing through

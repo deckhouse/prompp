@@ -101,8 +101,8 @@ func (it *Iterator) Next() chunkenc.ValueType {
 
 	// Float samples: check gap and decide.
 	gap := it.t1 - it.t0
-	if gap > it.rangeMS {
-		// Gap exceeds range: synthesize.
+	if gap > it.step {
+		// Gap exceeds step: synthesize.
 		it.nextSynthT = it.t0 + it.step
 		it.haveT1 = true
 		return it.Next() // Yield first synthetic sample.
@@ -110,6 +110,7 @@ func (it *Iterator) Next() chunkenc.ValueType {
 
 	// Gap is acceptable: yield t1 directly.
 	it.t0, it.v0 = it.t1, it.v1
+	it.nextSynthT = it.t0 + it.step
 	return chunkenc.ValFloat
 }
 
@@ -136,6 +137,18 @@ func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 	if target <= it.t0 {
 		// Target is before or at the current point; iterate through synthetic samples.
 		return it.seekWithinState(target)
+	}
+
+	// if t1 not initialized, try to initialize
+	if !it.haveT1 {
+		valType := it.base.Next()
+		if valType == chunkenc.ValNone {
+			return chunkenc.ValNone
+		}
+
+		it.t1, it.v1 = it.base.At()
+		it.haveT1 = true
+		it.nextSynthT = it.t0 + it.step
 	}
 
 	if target <= it.t1 {
@@ -205,10 +218,13 @@ func (it *Iterator) seekAdvanceBase(target int64) chunkenc.ValueType {
 		t, v := it.base.At()
 
 		// Advance anchor.
-		it.t0, it.v0 = t, v
+		it.t0, it.v0 = it.t1, it.v1
+		it.t1, it.v1 = t, v
 
-		if t >= target {
-			return chunkenc.ValFloat
+		if t > target {
+			it.haveT1 = true
+			it.nextSynthT = it.t0 + it.step
+			return it.seekWithinState(target)
 		}
 	}
 }

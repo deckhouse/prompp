@@ -20,6 +20,8 @@ var allowedFuncs = map[string]struct{}{
 	"increase": {},
 	"delta":    {},
 	"deriv":    {},
+	"irate":    {},
+	"idelta":   {},
 }
 
 // NeedsUpsampling reports whether hints describe a query for which gaps wider

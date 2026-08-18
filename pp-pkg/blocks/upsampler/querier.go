@@ -37,13 +37,14 @@ func (q *Querier) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
+	hints, shouldWrap := q.shouldWrap(hints)
 	base := q.base.Select(ctx, sortSeries, hints, matchers...)
 
-	if !q.shouldWrap(hints) {
-		return base
+	if shouldWrap {
+		return NewSeriesSet(base, hints.Range)
 	}
 
-	return NewSeriesSet(base, hints.Range)
+	return base
 }
 
 // shouldWrap decides whether to wrap the SeriesSet based on hints and
@@ -51,12 +52,32 @@ func (q *Querier) Select(
 //  1. The function is in the allow-list (checked via headupsampler.NeedsUpsampling).
 //  2. Either resolutionMS <= 0 (no filter, e.g., head querier), or
 //     resolutionMS > hints.Range (gaps wider than the range are likely).
-func (q *Querier) shouldWrap(hints *storage.SelectHints) bool {
+func (q *Querier) shouldWrap(hints *storage.SelectHints) (*storage.SelectHints, bool) {
 	if !headupsampler.NeedsUpsampling(hints) {
-		return false
+		return hints, false
 	}
 
-	return q.resolutionMS <= 0 || q.resolutionMS > hints.Range
+	//revive:disable-next-line:add-constant // resolutionMS must be x2 so that there are 2 points for the query
+	shouldWrap := q.resolutionMS*2 >= hints.Range
+	if shouldWrap {
+		hints = &storage.SelectHints{
+			Start:           hints.Start - q.resolutionMS,
+			End:             hints.End,
+			Limit:           hints.Limit,
+			Step:            hints.Step,
+			Func:            hints.Func,
+			Grouping:        hints.Grouping,
+			Range:           hints.Range,
+			ShardCount:      hints.ShardCount,
+			ShardIndex:      hints.ShardIndex,
+			LookbackDelta:   hints.LookbackDelta,
+			DisableTrimming: hints.DisableTrimming,
+			By:              hints.By,
+			IsSubquery:      hints.IsSubquery,
+		}
+	}
+
+	return hints, shouldWrap
 }
 
 // LabelValues returns label values, delegating to base.

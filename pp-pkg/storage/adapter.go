@@ -294,7 +294,7 @@ func (ar *Adapter) Close() error {
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	return ar.wrapIfWouldDownsample(querier.NewQuerier(
+	return querier.NewQuerier(
 		ahead,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
@@ -304,7 +304,7 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		ar.opts.RetentionMS,
 		ar.opts.DownsamplingMS,
 		ar.activeQuerierMetrics,
-	)), nil
+	), nil
 }
 
 // HeadStatus returns stats of Head.
@@ -328,7 +328,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	queriers = append(queriers, ar.wrapIfWouldDownsample(querier.NewQuerier(
+	queriers = append(queriers, querier.NewQuerier(
 		ahead,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
@@ -338,7 +338,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 		ar.opts.RetentionMS,
 		ar.opts.DownsamplingMS,
 		ar.activeQuerierMetrics,
-	)))
+	))
 
 	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
@@ -350,7 +350,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
-		queriers = append(queriers, ar.wrapIfWouldDownsample(querier.NewQuerierWithOutSelectFuncOptimize(
+		queriers = append(queriers, querier.NewQuerierWithOutSelectFuncOptimize(
 			head,
 			querier.NewNoOpShardedDeduplicator,
 			mint,
@@ -360,10 +360,16 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			ar.opts.RetentionMS,
 			ar.opts.DownsamplingMS,
 			ar.storageQuerierMetrics,
-		)))
+		))
 	}
 
-	return querier.NewMultiQuerier(queriers, nil), nil
+	mq := querier.NewMultiQuerier(queriers, nil)
+
+	if ar.wouldDownsample(queriers[0]) {
+		return upsampler.NewQuerier(mq, ar.opts.DownsamplingMS), nil
+	}
+
+	return mq, nil
 }
 
 // StartTime returns the oldest timestamp stored in the storage.
@@ -384,6 +390,15 @@ func (*Adapter) wrapIfWouldDownsample(hq storage.Querier) storage.Querier {
 	}
 
 	return hq
+}
+
+func (*Adapter) wouldDownsample(hq storage.Querier) bool {
+	downsamplerQuerier, ok := hq.(downsampler)
+	if !ok {
+		return false
+	}
+
+	return downsamplerQuerier.WouldDownsample()
 }
 
 // headTimeIntervalWithValidateCache returns [cppbridge.TimeInterval] from [pp_storage.Head] with validate cache.

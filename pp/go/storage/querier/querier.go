@@ -161,6 +161,7 @@ type Querier[
 	deduplicatorCtor deduplicatorCtor
 	metrics          *Metrics
 	queryOptimize    queryOptimizeType
+	activeHead       bool
 }
 
 // NewQuerier init new [Querier].
@@ -176,18 +177,19 @@ func NewQuerier[
 	mint, maxt, scrapeIntervalMS, headMinTSMS, retentionMS, downsamplingMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(
-		head,
-		deduplicatorCtor,
-		mint,
-		maxt,
-		scrapeIntervalMS,
-		headMinTSMS,
-		retentionMS,
-		downsamplingMS,
-		metrics,
-		selectFuncOptimize,
-	)
+	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
+		mint:             mint,
+		maxt:             maxt,
+		scrapeIntervalMS: scrapeIntervalMS,
+		headMinTSMS:      headMinTSMS,
+		retentionMS:      retentionMS,
+		downsamplingMS:   downsamplingMS,
+		head:             head,
+		deduplicatorCtor: deduplicatorCtor,
+		metrics:          metrics,
+		queryOptimize:    selectFuncOptimize,
+		activeHead:       true,
+	}
 }
 
 // NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
@@ -203,34 +205,6 @@ func NewQuerierWithOutSelectFuncOptimize[
 	mint, maxt, scrapeIntervalMS, headMinTSMS, retentionMS, downsamplingMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(
-		head,
-		deduplicatorCtor,
-		mint,
-		maxt,
-		scrapeIntervalMS,
-		headMinTSMS,
-		retentionMS,
-		downsamplingMS,
-		metrics,
-		selectFuncOptimize&dropPointOptimizeType,
-	)
-}
-
-// newQuerierWithSelectFuncOptimize init new [Querier] with select func optimization.
-func newQuerierWithSelectFuncOptimize[
-	TTask Task,
-	TDataStorage DataStorage,
-	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
-](
-	head THead,
-	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeIntervalMS, headMinTSMS, retentionMS, downsamplingMS int64,
-	metrics *Metrics,
-	queryOptimize queryOptimizeType,
-) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
@@ -241,7 +215,8 @@ func newQuerierWithSelectFuncOptimize[
 		head:             head,
 		deduplicatorCtor: deduplicatorCtor,
 		metrics:          metrics,
-		queryOptimize:    queryOptimize,
+		queryOptimize:    selectFuncOptimize & dropPointOptimizeType,
+		activeHead:       false,
 	}
 }
 
@@ -462,7 +437,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	downsamplingMS := q.getDownsamplingMS()
 	// Bypass downsampling when upsampling will handle interpolation for rate/increase/delta/deriv.
 	// This allows these functions to use raw dense data, avoiding spurious NaN results from sparse downsampled data.
-	if downsamplingMS != cppbridge.NoDownsampling && upsampler.NeedsUpsampling(hints) {
+	if q.activeHead && downsamplingMS != cppbridge.NoDownsampling && upsampler.NeedsUpsampling(hints) {
 		downsamplingMS = cppbridge.NoDownsampling
 	}
 

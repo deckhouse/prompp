@@ -253,6 +253,11 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 	}()
 
 	needDownsampling := m.opts.needDownsampling(maxt - mint)
+	resolutionMS := m.opts.DownsamplingMS
+	if needDownsampling {
+		// If we need downsampling, we need to reduce the mint for the resolution query for each block for upsampler.
+		mint -= resolutionMS
+	}
 	for _, b := range m.blocks {
 		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue
@@ -263,11 +268,15 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 			return nil, fmt.Errorf("open querier for block %s: %w", b, err)
 		}
 
-		if b.IsDownsamplingBlock() {
-			q = upsampler.NewQuerier(q, b.Metadata().Thanos.Downsample.Resolution)
-		}
-
+		resolutionMS = max(resolutionMS, b.Metadata().Thanos.Downsample.Resolution)
 		blockQueriers = append(blockQueriers, q)
+	}
+
+	if needDownsampling {
+		return upsampler.NewQuerier(
+			storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge),
+			resolutionMS,
+		), nil
 	}
 
 	return storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge), nil
