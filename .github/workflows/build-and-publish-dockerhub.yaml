@@ -1,9 +1,11 @@
 name: Build with Werf Dockerhub
 
 on:
-  push:
-    tags:
-      - "v*"
+  # This branch is the CSE patch line for v0.8.0 and must never publish to
+  # Dockerhub. Its tags carry semver build metadata (v0.8.0+cse.1), which is
+  # not a valid Docker image tag, and the CSE images are built by the
+  # deckhouse-cse pipeline from source rather than pulled from here.
+  # Manual dispatch is kept for emergencies.
   workflow_dispatch:
     inputs:
       release_branch:
