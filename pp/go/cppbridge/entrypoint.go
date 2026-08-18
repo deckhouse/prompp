@@ -413,6 +413,32 @@ func freeBytes(b []byte) {
 	runtime.KeepAlive(b)
 }
 
+// FeatureFlags is the C++ entrypoint feature mask.
+type FeatureFlags uint64
+
+const (
+	// FeatureScraperUTFPerToken selects legacy per-token UTF-8 validation.
+	FeatureScraperUTFPerToken FeatureFlags = C.PROMPP_FEATURE_SCRAPER_UTF_PER_TOKEN
+)
+
+// InitializeFeatureFlags configures C++ features at startup. Later calls are ignored.
+func InitializeFeatureFlags(features FeatureFlags) {
+	initializeFeatureFlags(uint64(features))
+}
+
+func initializeFeatureFlags(enabled uint64) {
+	args := struct {
+		enabledFeatures uint64
+	}{enabled}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_feature_flags_initialize,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(args)
+}
+
 // GetFlavor returns recognized architecture flavor
 //
 //revive:disable:confusing-naming // wrapper
