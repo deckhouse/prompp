@@ -7,20 +7,24 @@ import (
 
 // SeriesSet wraps a [storage.SeriesSet] and provides interpolation capability.
 type SeriesSet struct {
-	base         storage.SeriesSet
-	rangeMS      int64
-	resolutionMS int64
-	counterFunc  bool
+	base        storage.SeriesSet
+	stepMS      uint32
+	maxGapMS    uint32
+	counterFunc bool
 }
 
 // NewSeriesSet wraps a base [storage.SeriesSet] for interpolation of gaps between
-// rangeMS/2 and resolutionMS*2. counterFunc keeps a value drop inside a gap flat.
+// rangeMS/2 and resolutionMS*2. The thresholds are derived once here and carried down as
+// durations, so that every per-series [Series] stays small. counterFunc keeps a value drop
+// inside a gap flat.
 func NewSeriesSet(base storage.SeriesSet, rangeMS, resolutionMS int64, counterFunc bool) *SeriesSet {
+	stepMS, maxGapMS := gapThresholds(rangeMS, resolutionMS)
+
 	return &SeriesSet{
-		base:         base,
-		rangeMS:      rangeMS,
-		resolutionMS: resolutionMS,
-		counterFunc:  counterFunc,
+		base:        base,
+		stepMS:      stepMS,
+		maxGapMS:    maxGapMS,
+		counterFunc: counterFunc,
 	}
 }
 
@@ -32,10 +36,10 @@ func (ss *SeriesSet) Next() bool {
 // At returns the current [storage.Series].
 func (ss *SeriesSet) At() storage.Series {
 	return &Series{
-		base:         ss.base.At(),
-		rangeMS:      ss.rangeMS,
-		resolutionMS: ss.resolutionMS,
-		counterFunc:  ss.counterFunc,
+		base:        ss.base.At(),
+		stepMS:      ss.stepMS,
+		maxGapMS:    ss.maxGapMS,
+		counterFunc: ss.counterFunc,
 	}
 }
 

@@ -1,6 +1,8 @@
 package upsampler
 
 import (
+	"math"
+
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
@@ -17,30 +19,32 @@ const (
 )
 
 // Iterator wraps a [chunkenc.Iterator] and injects synthetic samples via linear
-// interpolation between two real samples when the gap between them exceeds step
-// (rangeMS/2) but stays within resolutionMS*2. Wider gaps are passed through
-// untouched.
+// interpolation between two real samples when the gap between them exceeds stepMS
+// but stays within maxGapMS. Wider gaps are passed through untouched.
 type Iterator struct {
 	base chunkenc.Iterator
 
 	// Anchor pair of real samples and state.
-	t0, t1              int64
-	v0, v1              float64
-	step                int64 // synthesis step and lower gap threshold: rangeMS / 2
-	maxGapResolutionsMS int64 // upper gap threshold: resolutionMS * maxGapResolutions
-	nextSynthT          int64 // next synthetic sample time, or 0 if no synthesis in progress
+	t0, t1     int64
+	v0, v1     float64
+	nextSynthT int64 // next synthetic sample time, or 0 if no synthesis in progress
+
+	// Both thresholds are durations, not timestamps, so 32 bits are enough for any
+	// sane range/resolution and keep the iterator one word smaller.
+	stepMS   uint32 // synthesis step and lower gap threshold: rangeMS / 2
+	maxGapMS uint32 // upper gap threshold: resolutionMS * maxGapResolutions
 
 	counterFunc bool // the query function reads the series as a counter
 	haveT1      bool // t1/v1 already read from base, not yet yielded
 	initialized bool // first call to Next/Seek
 }
 
-// NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps between
-// rangeMS/2 and resolutionMS*2. counterFunc keeps a value drop inside a gap flat,
-// see [Iterator.synthesizeAt].
-func NewIterator(base chunkenc.Iterator, rangeMS, resolutionMS int64, counterFunc bool) *Iterator {
+// NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps wider than
+// stepMS and no wider than maxGapMS, both produced by [gapThresholds]. counterFunc keeps
+// a value drop inside a gap flat, see [Iterator.synthesizeAt].
+func NewIterator(base chunkenc.Iterator, stepMS, maxGapMS uint32, counterFunc bool) *Iterator {
 	it := &Iterator{}
-	it.Reset(base, rangeMS, resolutionMS, counterFunc)
+	it.Reset(base, stepMS, maxGapMS, counterFunc)
 
 	return it
 }
@@ -79,7 +83,7 @@ func (it *Iterator) Next() chunkenc.ValueType {
 	// Step 1: yield synthetic sample if in progress.
 	if it.nextSynthT > 0 && it.nextSynthT < it.t1 {
 		vt := it.synthesizeAt(it.nextSynthT)
-		it.nextSynthT += it.step
+		it.nextSynthT += int64(it.stepMS)
 		return vt
 	}
 
@@ -185,11 +189,11 @@ func (it *Iterator) seekWithinState(target int64) chunkenc.ValueType {
 		if it.nextSynthT > 0 && it.nextSynthT < it.t1 {
 			if it.nextSynthT >= target {
 				vt := it.synthesizeAt(it.nextSynthT)
-				it.nextSynthT += it.step
+				it.nextSynthT += int64(it.stepMS)
 				return vt
 			}
 
-			it.nextSynthT += it.step
+			it.nextSynthT += int64(it.stepMS)
 
 			continue
 		}
@@ -236,12 +240,12 @@ func (it *Iterator) seekAdvanceBase(target int64) chunkenc.ValueType {
 // enough to be explained by decimation of the source. Otherwise synthesis is disarmed
 // and the pair is yielded as is.
 func (it *Iterator) armSynthesis() {
-	if gap := it.t1 - it.t0; gap <= it.step || gap > it.maxGapResolutionsMS {
+	if gap := it.t1 - it.t0; gap <= int64(it.stepMS) || gap > int64(it.maxGapMS) {
 		it.nextSynthT = 0
 		return
 	}
 
-	it.nextSynthT = it.t0 + it.step
+	it.nextSynthT = it.t0 + int64(it.stepMS)
 }
 
 // yieldT1 moves the anchor onto the buffered real sample and drops synthesis state.
@@ -276,10 +280,10 @@ func (it *Iterator) synthesizeAt(t int64) chunkenc.ValueType {
 
 // Reset resets the iterator to a clean state. Used by Series.Iterator()
 // to reuse the same Iterator across multiple calls.
-func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS, resolutionMS int64, counterFunc bool) {
+func (it *Iterator) Reset(base chunkenc.Iterator, stepMS, maxGapMS uint32, counterFunc bool) {
 	it.base = base
-	it.step = rangeMS / synthesisStepDivisor
-	it.maxGapResolutionsMS = resolutionMS * maxGapResolutions
+	it.stepMS = stepMS
+	it.maxGapMS = maxGapMS
 	it.counterFunc = counterFunc
 
 	it.t0 = 0
@@ -289,4 +293,20 @@ func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS, resolutionMS int64, c
 	it.haveT1 = false
 	it.nextSynthT = 0
 	it.initialized = false
+}
+
+// gapThresholds converts the millisecond query parameters into the pair of gap thresholds
+// the iterator works with: the synthesis step and the widest gap still interpolated. They
+// are 32-bit because both are durations, not timestamps. Parameters that don't fit — a range
+// above ~99 days or a resolution above ~24 days — yield zeros, which disarms synthesis
+// instead of wrapping around into a step that means nothing.
+func gapThresholds(rangeMS, resolutionMS int64) (stepMS, maxGapMS uint32) {
+	step := rangeMS / synthesisStepDivisor
+	maxGap := resolutionMS * maxGapResolutions
+	if step < 0 || step > math.MaxUint32 || maxGap < 0 || maxGap > math.MaxUint32 {
+		return 0, 0
+	}
+
+	//nolint:gosec // both values are range-checked right above
+	return uint32(step), uint32(maxGap)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
@@ -149,4 +150,39 @@ func (s *SeriesSetSuite) TestSeriesSetIteration() {
 	}
 
 	s.Equal(2, count)
+}
+
+// TestSeriesSetParametersOverflowingThresholds tests that a range or a resolution too large
+// for the 32-bit gap thresholds disarms synthesis instead of wrapping around into a step that
+// means nothing: the samples pass through as they are.
+func (s *SeriesSetSuite) TestSeriesSetParametersOverflowingThresholds() {
+	const dayMS = int64(24 * 60 * 60 * 1000)
+
+	samples := []struct {
+		t int64
+		v float64
+	}{
+		{t: 0, v: 0.0},
+		{t: 10 * dayMS, v: 10.0},
+	}
+
+	// A 100-day range asks for a 50-day step, which does not fit into the threshold.
+	ss := upsampler.NewSeriesSet(newSingleSeriesSet(newMockIterator(samples)), 100*dayMS, 50*dayMS, true)
+
+	s.Require().True(ss.Next())
+	it := ss.At().Iterator(nil)
+
+	var result []struct {
+		t int64
+		v float64
+	}
+	for it.Next() == chunkenc.ValFloat {
+		t, v := it.At()
+		result = append(result, struct {
+			t int64
+			v float64
+		}{t, v})
+	}
+
+	s.Require().Equal(samples, result)
 }
