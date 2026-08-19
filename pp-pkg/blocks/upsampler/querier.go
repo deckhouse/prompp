@@ -96,3 +96,26 @@ func (q *Querier) LabelNames(
 func (q *Querier) Close() error {
 	return q.base.Close()
 }
+
+//
+// ResolutionQuerier
+//
+
+// ResolutionQuerier wrappes a [storage.Querier] with a resolution.
+type ResolutionQuerier struct {
+	storage.Querier
+	resolutionMS int64 // nominal resolution of the sparsest underlying data source
+}
+
+// NewResolutionQuerier wraps a base [storage.Querier] with a resolution.
+func NewResolutionQuerier(q storage.Querier, resolutionMS int64) storage.Querier {
+	return &ResolutionQuerier{
+		Querier:      q,
+		resolutionMS: resolutionMS,
+	}
+}
+
+// Resolution returns the nominal resolution of the underlying data source.
+func (q *ResolutionQuerier) Resolution() int64 {
+	return q.resolutionMS
+}

@@ -272,14 +272,12 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		blockQueriers = append(blockQueriers, q)
 	}
 
+	q := storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge)
 	if needDownsampling {
-		return upsampler.NewQuerier(
-			storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge),
-			resolutionMS,
-		), nil
+		return upsampler.NewResolutionQuerier(q, resolutionMS), nil
 	}
 
-	return storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge), nil
+	return q, nil
 }
 
 // ChunkQuerier returns a new chunk querier over the persisted blocks overlapping
@@ -334,13 +332,14 @@ func (m *Manager) logLoadedBlocks() {
 	defer m.mtx.RUnlock()
 
 	for _, b := range m.blocks {
-		meta := b.Meta()
+		meta := b.Metadata()
 		_ = level.Info(m.logger).Log(
 			"msg", "Found healthy block",
 			"mint", meta.MinTime,
 			"maxt", meta.MaxTime,
 			"ulid", meta.ULID,
 			"duration_minutes", normalizeBlockDurationMinutes(meta.MaxTime-meta.MinTime),
+			"resolution", meta.Thanos.Downsample.Resolution,
 		)
 	}
 }

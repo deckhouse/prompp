@@ -60,6 +60,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/fanout"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/manager" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
@@ -1007,7 +1008,7 @@ func main() {
 		log.With(logger, "component", "remote"),
 		startTimeFn,
 	)
-	fanoutStorage := storage.NewFanout(
+	fanoutStorage := fanout.New(
 		logger,
 		adapter,
 		persistedStorage,

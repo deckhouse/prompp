@@ -364,9 +364,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	}
 
 	mq := querier.NewMultiQuerier(queriers, nil)
-
 	if ar.wouldDownsample(queriers[0]) {
-		return upsampler.NewQuerier(mq, ar.opts.DownsamplingMS), nil
+		return upsampler.NewResolutionQuerier(mq, ar.opts.DownsamplingMS), nil
 	}
 
 	return mq, nil
