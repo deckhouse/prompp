@@ -22,7 +22,7 @@ func TestSeriesSetSuite(t *testing.T) {
 // TestNewSeriesSet tests SeriesSet creation.
 func (s *SeriesSetSuite) TestNewSeriesSet() {
 	baseSS := &mockSeriesSet{}
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	s.NotNil(ss)
 	s.IsType((*upsampler.SeriesSet)(nil), ss)
@@ -38,7 +38,7 @@ func (s *SeriesSetSuite) TestSeriesSetNext() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	result := ss.Next()
 
@@ -54,7 +54,7 @@ func (s *SeriesSetSuite) TestSeriesSetNextFalse() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	result := ss.Next()
 
@@ -72,7 +72,7 @@ func (s *SeriesSetSuite) TestSeriesSetAt() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	series := ss.At()
 
@@ -91,7 +91,7 @@ func (s *SeriesSetSuite) TestSeriesSetErr() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	_ = ss.Err()
 
@@ -106,7 +106,7 @@ func (s *SeriesSetSuite) TestSeriesSetWarnings() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	warnings := ss.Warnings()
 
@@ -138,7 +138,7 @@ func (s *SeriesSetSuite) TestSeriesSetIteration() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 	// Iterate through all series
 	count := 0

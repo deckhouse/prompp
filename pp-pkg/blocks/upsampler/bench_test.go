@@ -43,7 +43,7 @@ func BenchmarkIteratorSeekLinear(b *testing.B) {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000)
+	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000)
 	series := ss.At()
 
 	// Create upsampler iterator
@@ -125,7 +125,7 @@ func BenchmarkSeriesSetIterationWrapped(b *testing.B) {
 			},
 		}
 
-		ss := upsampler.NewSeriesSet(baseSS, 60000)
+		ss := upsampler.NewSeriesSet(baseSS, 60000, 60000)
 
 		// Iterate through all series
 		count := 0

@@ -9,34 +9,36 @@ const (
 	// synthesisStepDivisor makes the synthesis step half of the function range, so that
 	// any window of that width holds at least two samples regardless of alignment.
 	synthesisStepDivisor = 2
-	// maxGapSteps limits, in steps, how wide a real gap may be to still be interpolated.
-	// Beyond that the data is genuinely missing rather than decimated, and filling it in
-	// would hide the outage instead of restoring dropped points.
-	maxGapSteps = 4
+	// maxGapResolutions limits, in source resolutions, how wide a real gap may be to
+	// still be interpolated. A gap of one resolution is what decimation itself leaves;
+	// beyond maxGapResolutions the data is genuinely missing, and filling it in would
+	// hide the outage instead of restoring dropped points.
+	maxGapResolutions = 2
 )
 
 // Iterator wraps a [chunkenc.Iterator] and injects synthetic samples via linear
 // interpolation between two real samples when the gap between them exceeds step
-// (rangeMS/2) but stays within step*4 (rangeMS*2). Wider gaps are passed through
+// (rangeMS/2) but stays within resolutionMS*2. Wider gaps are passed through
 // untouched.
 type Iterator struct {
 	base chunkenc.Iterator
 
 	// Anchor pair of real samples and state.
-	t0, t1     int64
-	v0, v1     float64
-	step       int64 // synthesis step and gap threshold: rangeMS / 2
-	nextSynthT int64 // next synthetic sample time, or 0 if no synthesis in progress
+	t0, t1              int64
+	v0, v1              float64
+	step                int64 // synthesis step and lower gap threshold: rangeMS / 2
+	maxGapResolutionsMS int64 // upper gap threshold: resolutionMS * maxGapResolutions
+	nextSynthT          int64 // next synthetic sample time, or 0 if no synthesis in progress
 
 	haveT1      bool // t1/v1 already read from base, not yet yielded
 	initialized bool // first call to Next/Seek
 }
 
 // NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps between
-// rangeMS/2 and rangeMS*2.
-func NewIterator(base chunkenc.Iterator, rangeMS int64) *Iterator {
+// rangeMS/2 and resolutionMS*2.
+func NewIterator(base chunkenc.Iterator, rangeMS, resolutionMS int64) *Iterator {
 	it := &Iterator{}
-	it.Reset(base, rangeMS)
+	it.Reset(base, rangeMS, resolutionMS)
 
 	return it
 }
@@ -229,10 +231,10 @@ func (it *Iterator) seekAdvanceBase(target int64) chunkenc.ValueType {
 
 // armSynthesis schedules synthetic samples between the current anchor pair when the
 // gap between them leaves windows of rangeMS with less than two samples, yet is narrow
-// enough for interpolation to still describe decimated data. Otherwise synthesis is
-// disarmed and the pair is yielded as is.
+// enough to be explained by decimation of the source. Otherwise synthesis is disarmed
+// and the pair is yielded as is.
 func (it *Iterator) armSynthesis() {
-	if gap := it.t1 - it.t0; gap <= it.step || gap > it.step*maxGapSteps {
+	if gap := it.t1 - it.t0; gap <= it.step || gap > it.maxGapResolutionsMS {
 		it.nextSynthT = 0
 		return
 	}
@@ -264,9 +266,10 @@ func (it *Iterator) synthesizeAt(t int64) chunkenc.ValueType {
 
 // Reset resets the iterator to a clean state. Used by Series.Iterator()
 // to reuse the same Iterator across multiple calls.
-func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS int64) {
+func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS, resolutionMS int64) {
 	it.base = base
 	it.step = rangeMS / synthesisStepDivisor
+	it.maxGapResolutionsMS = resolutionMS * maxGapResolutions
 
 	it.t0 = 0
 	it.t1 = 0

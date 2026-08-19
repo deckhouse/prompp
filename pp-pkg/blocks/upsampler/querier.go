@@ -24,7 +24,8 @@ type Querier struct {
 // (optimization only): when resolutionMS*2 < hints.Range, the data is denser than
 // the function window requires, so we skip the Upsampler wrapper. It is also the
 // amount by which the left border of the query is extended back, so that the first
-// sample of the window has a predecessor to interpolate from.
+// sample of the window has a predecessor to interpolate from, and the bound on the
+// gap width the [Iterator] still interpolates (resolutionMS*2).
 func NewQuerier(base storage.Querier, resolutionMS int64) storage.Querier {
 	return &Querier{
 		base:         base,
@@ -43,7 +44,7 @@ func (q *Querier) Select(
 	base := q.base.Select(ctx, sortSeries, hints, matchers...)
 
 	if shouldWrap {
-		return NewSeriesSet(base, hints.Range)
+		return NewSeriesSet(base, hints.Range, q.resolutionMS)
 	}
 
 	return base
