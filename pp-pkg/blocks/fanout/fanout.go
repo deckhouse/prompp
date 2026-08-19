@@ -30,8 +30,9 @@ type resolutionQuerier interface {
 // fstorage
 //
 
-// fstorage is [storage.Storage] witch multiple underlying storages.
-// fork from storage/fanout.go
+// fstorage is a [storage.Storage] with multiple underlying storages.
+// Fork of storage/fanout.go: the merged querier is additionally wrapped in
+// [upsampler.Querier] when any source declares a nominal resolution.
 type fstorage struct {
 	logger log.Logger
 

@@ -146,9 +146,11 @@ func (s *ManagerSuite) TestManagerQuerierWrapsDownsamplingBlocks() {
 	// Verify that querier was created and is functional
 	s.NotNil(q)
 
-	uq, ok := q.(*upsampler.Querier)
+	// The manager only reports the resolution of the sparsest block; the interpolating
+	// wrapper itself is put on top of the merged fanout querier.
+	rq, ok := q.(*upsampler.ResolutionQuerier)
 	s.Require().True(ok)
-	s.NotNil(uq)
+	s.Require().Equal(int64(60000), rq.Resolution())
 
 	// Try a simple select (without upsample because no SelectHints provided)
 	ss := q.Select(s.T().Context(), false, nil)
