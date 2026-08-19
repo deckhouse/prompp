@@ -2,7 +2,7 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://deckhouse.io/vex/prompp/images/prompp",
   "author": "Deckhouse <contact@deckhouse.io>",
-  "version": 1,
+  "version": 2,
   "statements": [
     {
       "vulnerability": {
@@ -68,7 +68,26 @@
       "status": "fixed",
       "impact_statement": "Stored XSS in the React web UI (GHSA-vffh-x6r8-xx99, GHSA-fw8g-cg8f-9j28). The fix is backported to Prom++ from upstream Prometheus: metric names and label values (including le) are escaped with escapeHTML before insertion into innerHTML in tooltips and axis labels. Scanners map findings to upstream Prometheus versions, while Prom++ is a fork with independent versioning, so this CVE may still be reported by version matching even though it is fixed in Prom++.",
       "timestamp": "2026-06-02T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2026-5932"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org/x/crypto"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The unmaintained golang.org/x/crypto/openpgp package tree (openpgp, openpgp/packet, openpgp/armor, openpgp/clearsign, openpgp/errors, openpgp/elgamal, openpgp/s2k) is not imported anywhere in Prom++. golang.org/x/crypto is an indirect dependency and only its bcrypt, blowfish, chacha20, chacha20poly1305, cryptobyte, hkdf, pkcs12 and sha3 packages reach the build graph, so no openpgp code is linked into the shipped binaries. Scanners flag this advisory by module version matching on golang.org/x/crypto rather than by imported package, so it may still be reported even though the vulnerable code is absent.",
+      "timestamp": "2026-08-13T00:00:00Z"
     }
   ],
-  "timestamp": "2026-06-02T00:00:00Z"
+  "timestamp": "2026-08-13T00:00:00Z"
 }
