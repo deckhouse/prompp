@@ -307,6 +307,5 @@ func gapThresholds(rangeMS, resolutionMS int64) (stepMS, maxGapMS uint32) {
 		return 0, 0
 	}
 
-	//nolint:gosec // both values are range-checked right above
-	return uint32(step), uint32(maxGap)
+	return uint32(step), uint32(maxGap) // #nosec G115 // both values are range-checked right above
 }
