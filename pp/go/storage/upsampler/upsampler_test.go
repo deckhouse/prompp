@@ -88,3 +88,68 @@ func TestNeedsUpsampling(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCounterFunc(t *testing.T) {
+	testCases := []struct {
+		name  string
+		hints *storage.SelectHints
+		want  bool
+	}{
+		{
+			name:  "nil hints",
+			hints: nil,
+			want:  false,
+		},
+		{
+			name:  "empty func",
+			hints: &storage.SelectHints{Func: "", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "rate is a counter func",
+			hints: &storage.SelectHints{Func: "rate", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "increase is a counter func",
+			hints: &storage.SelectHints{Func: "increase", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "irate is a counter func",
+			hints: &storage.SelectHints{Func: "irate", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "delta is a gauge func",
+			hints: &storage.SelectHints{Func: "delta", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "deriv is a gauge func",
+			hints: &storage.SelectHints{Func: "deriv", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "idelta is a gauge func",
+			hints: &storage.SelectHints{Func: "idelta", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "func outside the allow-list",
+			hints: &storage.SelectHints{Func: "min_over_time", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "range is not consulted",
+			hints: &storage.SelectHints{Func: "rate", Range: 0},
+			want:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, upsampler.IsCounterFunc(tc.hints))
+		})
+	}
+}

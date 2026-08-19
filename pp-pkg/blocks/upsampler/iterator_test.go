@@ -35,7 +35,7 @@ func (s *IteratorSuite) TestIteratorNoGap() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Collect all samples.
 	var result []struct {
@@ -76,7 +76,7 @@ func (s *IteratorSuite) TestIteratorWithGap() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Collect all samples.
 	var result []struct {
@@ -131,7 +131,7 @@ func (s *IteratorSuite) TestIteratorGapWiderThanMaxGap() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	var result []struct {
 		t int64
@@ -158,6 +158,99 @@ func (s *IteratorSuite) TestIteratorGapWiderThanMaxGap() {
 	}
 }
 
+// TestIteratorGapWithValueDrop tests that a value drop across the gap — a counter reset
+// hidden by decimation — is not interpolated downwards: synthetic samples hold the last
+// known value, so the whole drop stays on the step of the real sample that proves it.
+func (s *IteratorSuite) TestIteratorGapWithValueDrop() {
+	samples := []struct {
+		t int64
+		v float64
+	}{
+		{t: 60_000, v: 100.0},
+		{t: 300_000, v: 20.0}, // 4-minute gap with a counter reset inside it
+	}
+	base := newMockIterator(samples)
+
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
+
+	var result []struct {
+		t int64
+		v float64
+	}
+	for {
+		vt := it.Next()
+		if vt == chunkenc.ValNone {
+			break
+		}
+
+		t, v := it.At()
+		result = append(result, struct {
+			t int64
+			v float64
+		}{t, v})
+	}
+
+	s.Require().Equal(
+		[]struct {
+			t int64
+			v float64
+		}{
+			{t: 60_000, v: 100.0},
+			{t: 120_000, v: 100.0},
+			{t: 180_000, v: 100.0},
+			{t: 240_000, v: 100.0},
+			{t: 300_000, v: 20.0},
+		},
+		result,
+	)
+}
+
+// TestIteratorGapWithValueDropForGaugeFunc tests the opposite of the counter case: for a
+// gauge function a decrease is ordinary data, so the drop is interpolated like a rise.
+func (s *IteratorSuite) TestIteratorGapWithValueDropForGaugeFunc() {
+	samples := []struct {
+		t int64
+		v float64
+	}{
+		{t: 60_000, v: 100.0},
+		{t: 300_000, v: 20.0}, // 4-minute gap with a falling gauge inside it
+	}
+	base := newMockIterator(samples)
+
+	it := upsampler.NewIterator(base, 120_000, 120_000, false)
+
+	var result []struct {
+		t int64
+		v float64
+	}
+	for {
+		vt := it.Next()
+		if vt == chunkenc.ValNone {
+			break
+		}
+
+		t, v := it.At()
+		result = append(result, struct {
+			t int64
+			v float64
+		}{t, v})
+	}
+
+	s.Require().Equal(
+		[]struct {
+			t int64
+			v float64
+		}{
+			{t: 60_000, v: 100.0},
+			{t: 120_000, v: 80.0},
+			{t: 180_000, v: 60.0},
+			{t: 240_000, v: 40.0},
+			{t: 300_000, v: 20.0},
+		},
+		result,
+	)
+}
+
 // TestIteratorSeekIntoGapWiderThanMaxGap tests that seeking into a gap wider than
 // resolutionMS*2 returns the next real sample instead of a synthetic one.
 func (s *IteratorSuite) TestIteratorSeekIntoGapWiderThanMaxGap() {
@@ -170,7 +263,7 @@ func (s *IteratorSuite) TestIteratorSeekIntoGapWiderThanMaxGap() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	vt := it.Seek(200_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
@@ -195,7 +288,7 @@ func (s *IteratorSuite) TestIteratorWideGapWithinResolutionBound() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 600_000)
+	it := upsampler.NewIterator(base, 120_000, 600_000, true)
 
 	var result []struct {
 		t int64
@@ -236,7 +329,7 @@ func (s *IteratorSuite) TestIteratorGapWithinRangeButOverResolutionBound() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 600_000, 60_000)
+	it := upsampler.NewIterator(base, 600_000, 60_000, true)
 
 	var result []struct {
 		t int64
@@ -275,7 +368,7 @@ func (s *IteratorSuite) TestIteratorMultipleGaps() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	var result []struct {
 		t int64
@@ -312,7 +405,7 @@ func (s *IteratorSuite) TestIteratorGapAtEnd() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	var result []struct {
 		t int64
@@ -356,7 +449,7 @@ func (s *IteratorSuite) TestIteratorHistogramPassthrough() {
 	}
 	base := newMockIterator(samples)
 
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Collect all samples.
 	var result []struct {
@@ -400,7 +493,7 @@ func (s *IteratorSuite) TestIteratorSeekBeforeFirst() {
 		{t: 200_000, v: 20.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Seek to time before first sample.
 	vt := it.Seek(50_000)
@@ -422,7 +515,7 @@ func (s *IteratorSuite) TestIteratorSeekOnRealSample() {
 		{t: 300_000, v: 30.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Seek to the second sample.
 	vt := it.Seek(200_000)
@@ -444,7 +537,7 @@ func (s *IteratorSuite) TestIteratorSeekIntoGap() {
 		{t: 340_000, v: 50.0}, // 240s gap, range is 120s
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Seek into the middle of the gap.
 	vt := it.Seek(250_000)
@@ -471,7 +564,7 @@ func (s *IteratorSuite) TestIteratorSeekAfterLast() {
 		{t: 200_000, v: 20.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Seek beyond last sample.
 	vt := it.Seek(999_999)
@@ -489,7 +582,7 @@ func (s *IteratorSuite) TestIteratorSeekForwardInPartialGap() {
 		{t: 340_000, v: 60.0}, // 240s gap, range is 120s
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// First, advance to get into synthesis mode.
 	vt := it.Next()
@@ -524,7 +617,7 @@ func (s *IteratorSuite) TestIteratorSeekWithTargetLessOrEqualT0() {
 		{t: 300_000, v: 30.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize by advancing once.
 	vt := it.Next()
@@ -549,7 +642,7 @@ func (s *IteratorSuite) TestIteratorSeekWithBufferedT1() {
 		{t: 340_000, v: 50.0}, // 240s gap, triggers synthesis
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize: read first sample.
 	vt := it.Next()
@@ -584,7 +677,7 @@ func (s *IteratorSuite) TestIteratorSeekAdvanceBase() {
 		{t: 400_000, v: 40.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize and read first two samples.
 	vt := it.Next()
@@ -617,7 +710,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateWithBufferedT1() {
 		{t: 440_000, v: 60.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize and start synthesis.
 	vt := it.Next()
@@ -649,7 +742,7 @@ func (s *IteratorSuite) TestIteratorReset() {
 		{t: 20_000, v: 2.0},
 	}
 	baseFirst := newMockIterator(samplesFirst)
-	it := upsampler.NewIterator(baseFirst, 120_000, 120_000)
+	it := upsampler.NewIterator(baseFirst, 120_000, 120_000, true)
 
 	// Use the iterator once.
 	vt := it.Next()
@@ -665,7 +758,7 @@ func (s *IteratorSuite) TestIteratorReset() {
 		{t: 200_000, v: 20.0}, // gap of 100ms < 60ms range, no synthesis
 	}
 	baseSecond := newMockIterator(samplesSecond)
-	it.Reset(baseSecond, 120_000, 120_000)
+	it.Reset(baseSecond, 120_000, 120_000, true)
 
 	// Verify state is clean and we start fresh.
 	vt = it.Next()
@@ -694,7 +787,7 @@ func (s *IteratorSuite) TestIteratorSeekT0LessThanTargetLessThanT1WithoutSynthes
 		{t: 440_000, v: 50.0}, // 240s gap, will trigger synthesis
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize.
 	vt := it.Next()
@@ -733,7 +826,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateExhaustsBufferedAndReturnsNon
 		{t: 340_000, v: 50.0}, // large gap, will trigger synthesis
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize and start synthesis.
 	vt := it.Next()
@@ -760,7 +853,7 @@ func (s *IteratorSuite) TestIteratorSeekAdvanceBaseReturnsNone() {
 		{t: 200_000, v: 20.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize.
 	vt := it.Next()
@@ -788,7 +881,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateTransitionsHaveT1ToNext() {
 		{t: 600_000, v: 60.0}, // gap wider than resolution*2: no synthesis, real sample only
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize and trigger synthesis.
 	vt := it.Next()
@@ -824,7 +917,7 @@ func (s *IteratorSuite) TestIteratorSeekReturnT1DirectlyPath() {
 		{t: 400_000, v: 40.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Manually position: call Next() to get t0=200k, then seek to a value
 	// between t0 and t1 to force returning t1 directly.
@@ -860,7 +953,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateBufferedT1LessThanTarget() {
 		{t: 460_000, v: 70.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Start synthesis.
 	vt := it.Next()
@@ -892,7 +985,7 @@ func (s *IteratorSuite) TestIteratorSeekAdvanceBaseEOF() {
 		{t: 200_000, v: 20.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 120_000, 120_000)
+	it := upsampler.NewIterator(base, 120_000, 120_000, true)
 
 	// Initialize.
 	vt := it.Next()
@@ -918,7 +1011,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateConsumesT1() {
 		{t: 400_000, v: 60.0}, // gap 200s: step (75s) < gap <= resolution*2 (300s)
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 150_000, 150_000) // range = 150s
+	it := upsampler.NewIterator(base, 150_000, 150_000, true) // range = 150s
 
 	// Initialize with first two samples.
 	vt := it.Next()
@@ -951,7 +1044,7 @@ func (s *IteratorSuite) TestIteratorSeekNoSynthesisPath() {
 		{t: 300_000, v: 30.0},
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 150_000, 150_000) // range = 150ms
+	it := upsampler.NewIterator(base, 150_000, 150_000, true) // range = 150ms
 
 	// Read first sample.
 	vt := it.Next()
@@ -991,7 +1084,7 @@ func (s *IteratorSuite) TestIteratorHistogramPassthroughNoSynthesis() {
 		{t: 200_000, h: &histogram.FloatHistogram{Count: 2}},
 	}
 	base := newMockHistogramIterator(samples)
-	it := upsampler.NewIterator(base, 150_000, 150_000) // range = 150ms
+	it := upsampler.NewIterator(base, 150_000, 150_000, true) // range = 150ms
 
 	// First Next: reads histogram at 100k
 	vt := it.Next()

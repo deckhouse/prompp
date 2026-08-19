@@ -44,7 +44,7 @@ func (q *Querier) Select(
 	base := q.base.Select(ctx, sortSeries, hints, matchers...)
 
 	if shouldWrap {
-		return NewSeriesSet(base, hints.Range, q.resolutionMS)
+		return NewSeriesSet(base, hints.Range, q.resolutionMS, headupsampler.IsCounterFunc(hints))
 	}
 
 	return base

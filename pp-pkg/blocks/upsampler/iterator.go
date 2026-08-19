@@ -30,15 +30,17 @@ type Iterator struct {
 	maxGapResolutionsMS int64 // upper gap threshold: resolutionMS * maxGapResolutions
 	nextSynthT          int64 // next synthetic sample time, or 0 if no synthesis in progress
 
+	counterFunc bool // the query function reads the series as a counter
 	haveT1      bool // t1/v1 already read from base, not yet yielded
 	initialized bool // first call to Next/Seek
 }
 
 // NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps between
-// rangeMS/2 and resolutionMS*2.
-func NewIterator(base chunkenc.Iterator, rangeMS, resolutionMS int64) *Iterator {
+// rangeMS/2 and resolutionMS*2. counterFunc keeps a value drop inside a gap flat,
+// see [Iterator.synthesizeAt].
+func NewIterator(base chunkenc.Iterator, rangeMS, resolutionMS int64, counterFunc bool) *Iterator {
 	it := &Iterator{}
-	it.Reset(base, rangeMS, resolutionMS)
+	it.Reset(base, rangeMS, resolutionMS, counterFunc)
 
 	return it
 }
@@ -256,6 +258,14 @@ func (it *Iterator) synthesizeAt(t int64) chunkenc.ValueType {
 	dt := float64(t - it.t0)
 	dv := it.v1 - it.v0
 	dT := float64(it.t1 - it.t0)
+	// For a counter function a drop across the gap is a counter reset that decimation hid.
+	// Interpolating down to it would decrease on every synthetic step, so the function would
+	// see as many resets as there are synthetic samples and correct for each of them. Holding
+	// the last known value instead keeps the single reset on the step where the real sample
+	// proves it. For gauge functions a decrease is ordinary data and is interpolated as is.
+	if it.counterFunc && dv < 0 {
+		dv = 0
+	}
 
 	interpolated := it.v0 + dv*(dt/dT)
 	it.t0 = t
@@ -266,10 +276,11 @@ func (it *Iterator) synthesizeAt(t int64) chunkenc.ValueType {
 
 // Reset resets the iterator to a clean state. Used by Series.Iterator()
 // to reuse the same Iterator across multiple calls.
-func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS, resolutionMS int64) {
+func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS, resolutionMS int64, counterFunc bool) {
 	it.base = base
 	it.step = rangeMS / synthesisStepDivisor
 	it.maxGapResolutionsMS = resolutionMS * maxGapResolutions
+	it.counterFunc = counterFunc
 
 	it.t0 = 0
 	it.t1 = 0

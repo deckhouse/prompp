@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 //
@@ -115,6 +116,56 @@ func (s *QuerierSuite) TestQuerierSelectExtendsHintsStart() {
 	s.Equal(hints.End, passed.End)
 	s.Equal(hints.Range, passed.Range)
 	s.Equal(int64(1_000_000), hints.Start, "caller hints must not be mutated")
+}
+
+// TestQuerierSelectTakesCounterFuncFromHints tests that the value-drop handling is chosen by
+// hints.Func: a counter function holds the drop flat, a gauge function interpolates it.
+func (s *QuerierSuite) TestQuerierSelectTakesCounterFuncFromHints() {
+	const resolutionMS = int64(120_000)
+
+	testCases := []struct {
+		name           string
+		function       string
+		expectedSecond float64
+	}{
+		{name: "counter function holds the last known value", function: "rate", expectedSecond: 100.0},
+		{name: "gauge function interpolates the drop", function: "delta", expectedSecond: 80.0},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			base := newMockIterator([]struct {
+				t int64
+				v float64
+			}{
+				{t: 60_000, v: 100.0},
+				{t: 300_000, v: 20.0},
+			})
+			baseQuerier := &mockQuerier{
+				selectFunc: func(
+					_ context.Context,
+					_ bool,
+					_ *storage.SelectHints,
+					_ ...*labels.Matcher,
+				) storage.SeriesSet {
+					return newSingleSeriesSet(base)
+				},
+			}
+
+			q := upsampler.NewQuerier(baseQuerier, resolutionMS)
+			hints := &storage.SelectHints{Func: tc.function, Range: 120_000, Start: 0, End: 300_000}
+			ss := q.Select(s.T().Context(), false, hints)
+
+			s.Require().True(ss.Next())
+			it := ss.At().Iterator(nil)
+			s.Require().Equal(chunkenc.ValFloat, it.Next())
+			s.Require().Equal(chunkenc.ValFloat, it.Next())
+
+			ts, v := it.At()
+			s.Require().Equal(int64(120_000), ts)
+			s.Require().InDelta(tc.expectedSecond, v, 0.001)
+		})
+	}
 }
 
 // TestQuerierLabelValues tests delegation to base querier.

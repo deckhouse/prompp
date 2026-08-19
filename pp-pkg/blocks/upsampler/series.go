@@ -12,6 +12,7 @@ type Series struct {
 	base         storage.Series
 	rangeMS      int64
 	resolutionMS int64
+	counterFunc  bool
 }
 
 // Labels returns the labels of the underlying series.
@@ -25,11 +26,11 @@ func (s *Series) Labels() labels.Labels {
 func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	upsampler, ok := it.(*Iterator)
 	if !ok {
-		upsampler = NewIterator(nil, s.rangeMS, s.resolutionMS)
+		upsampler = NewIterator(nil, s.rangeMS, s.resolutionMS, s.counterFunc)
 	}
 
 	baseIt := s.base.Iterator(nil)
-	upsampler.Reset(baseIt, s.rangeMS, s.resolutionMS)
+	upsampler.Reset(baseIt, s.rangeMS, s.resolutionMS, s.counterFunc)
 
 	return upsampler
 }

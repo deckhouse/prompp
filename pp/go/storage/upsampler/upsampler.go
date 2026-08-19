@@ -26,6 +26,17 @@ var allowedFuncs = map[string]struct{}{
 	"idelta":   {},
 }
 
+// counterFuncs is the subset of allowedFuncs that reads the series as a counter and
+// corrects every value decrease as a counter reset. Interpolating a drop down for them
+// would spread the reset over every synthetic sample, so such a drop is held flat
+// instead. delta/deriv/idelta describe gauges, where a decrease is ordinary data and
+// has to be interpolated like a rise.
+var counterFuncs = map[string]struct{}{
+	"rate":     {},
+	"increase": {},
+	"irate":    {},
+}
+
 // NeedsUpsampling reports whether hints describe a query for which gaps wider
 // than the function's range may need synthetic samples inserted to avoid a
 // spurious NaN/empty result.
@@ -35,6 +46,18 @@ func NeedsUpsampling(hints *storage.SelectHints) bool {
 	}
 
 	_, ok := allowedFuncs[hints.Func]
+
+	return ok
+}
+
+// IsCounterFunc reports whether hints describe a function that treats a value decrease
+// as a counter reset.
+func IsCounterFunc(hints *storage.SelectHints) bool {
+	if hints == nil {
+		return false
+	}
+
+	_, ok := counterFuncs[hints.Func]
 
 	return ok
 }

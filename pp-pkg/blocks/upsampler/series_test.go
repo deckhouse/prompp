@@ -41,7 +41,7 @@ func (s *SeriesSuite) TestSeriesIteratorNewCreation() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000)
+	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000, true)
 	series := ss.At()
 
 	// Get iterator without passing one (triggers NewIterator creation)
@@ -74,7 +74,7 @@ func (s *SeriesSuite) TestSeriesIteratorReuse() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000)
+	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000, true)
 	series := ss.At()
 
 	// Create first iterator

@@ -406,3 +406,26 @@ func (q *closeableQuerier) Close() error {
 	q.closed = true
 	return nil
 }
+
+// newSingleSeriesSet returns a [storage.SeriesSet] with exactly one series backed by
+// the given iterator.
+func newSingleSeriesSet(it chunkenc.Iterator) storage.SeriesSet {
+	series := &mockSeries{
+		labels:       labels.FromStrings(labels.MetricName, "test_metric"),
+		iteratorFunc: func(chunkenc.Iterator) chunkenc.Iterator { return it },
+	}
+
+	yielded := false
+
+	return &mockSeriesSet{
+		nextFunc: func() bool {
+			if yielded {
+				return false
+			}
+			yielded = true
+
+			return true
+		},
+		atFunc: func() storage.Series { return series },
+	}
+}

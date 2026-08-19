@@ -10,15 +10,17 @@ type SeriesSet struct {
 	base         storage.SeriesSet
 	rangeMS      int64
 	resolutionMS int64
+	counterFunc  bool
 }
 
 // NewSeriesSet wraps a base [storage.SeriesSet] for interpolation of gaps between
-// rangeMS/2 and resolutionMS*2.
-func NewSeriesSet(base storage.SeriesSet, rangeMS, resolutionMS int64) *SeriesSet {
+// rangeMS/2 and resolutionMS*2. counterFunc keeps a value drop inside a gap flat.
+func NewSeriesSet(base storage.SeriesSet, rangeMS, resolutionMS int64, counterFunc bool) *SeriesSet {
 	return &SeriesSet{
 		base:         base,
 		rangeMS:      rangeMS,
 		resolutionMS: resolutionMS,
+		counterFunc:  counterFunc,
 	}
 }
 
@@ -33,6 +35,7 @@ func (ss *SeriesSet) At() storage.Series {
 		base:         ss.base.At(),
 		rangeMS:      ss.rangeMS,
 		resolutionMS: ss.resolutionMS,
+		counterFunc:  ss.counterFunc,
 	}
 }
 
