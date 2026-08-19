@@ -417,9 +417,10 @@ func (m *Manager) reloadBlocks() (err error) {
 	}
 
 	var (
-		toLoad               = make([]*block.Block, 0, len(loadable))
-		blocksSize           int64
-		blocksByDurationMins = map[int64]int{}
+		toLoad                          = make([]*block.Block, 0, len(loadable))
+		blocksSize                      int64
+		blocksByDurationMins            = map[int64]int{}
+		downsampledBlocksByDurationMins = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time
@@ -433,13 +434,16 @@ func (m *Manager) reloadBlocks() (err error) {
 		toLoad = append(toLoad, blk)
 		blocksSize += blk.Size()
 		durationMinutes := normalizeBlockDurationMinutes(blk.Meta().MaxTime - blk.Meta().MinTime)
+		if blk.IsDownsamplingBlock() {
+			downsampledBlocksByDurationMins[durationMinutes]++
+			continue
+		}
+
 		blocksByDurationMins[durationMinutes]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
-	m.metrics.loadedBlocksByDuration.Reset()
-	for durationMinutes, count := range blocksByDurationMins {
-		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
-	}
+	setBlocksByDuration(m.metrics.loadedBlocksByDuration, blocksByDurationMins)
+	setBlocksByDuration(m.metrics.loadedDownsampledBlocksByDuration, downsampledBlocksByDurationMins)
 
 	slices.SortFunc(toLoad, func(a, b *block.Block) int {
 		switch {
@@ -578,19 +582,28 @@ func normalizeBlockDurationMinutes(durationMS int64) int64 {
 	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
 }
 
+// setBlocksByDuration replaces the content of a by-duration gauge with the given counts.
+func setBlocksByDuration(gauge *prometheus.GaugeVec, blocksByDurationMins map[int64]int) {
+	gauge.Reset()
+	for durationMinutes, count := range blocksByDurationMins {
+		gauge.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
+	}
+}
+
 //
 // metrics
 //
 
 // metrics collects metrics for the block manager.
 type metrics struct {
-	loadedBlocks           prometheus.GaugeFunc
-	loadedBlocksByDuration *prometheus.GaugeVec
-	symbolTableSize        prometheus.GaugeFunc
-	reloads                prometheus.Counter
-	reloadsFailed          prometheus.Counter
-	corruptedBlocks        prometheus.Gauge
-	blocksBytes            prometheus.Gauge
+	loadedBlocks                      prometheus.GaugeFunc
+	loadedBlocksByDuration            *prometheus.GaugeVec
+	loadedDownsampledBlocksByDuration *prometheus.GaugeVec
+	symbolTableSize                   prometheus.GaugeFunc
+	reloads                           prometheus.Counter
+	reloadsFailed                     prometheus.Counter
+	corruptedBlocks                   prometheus.Gauge
+	blocksBytes                       prometheus.Gauge
 }
 
 // newMetrics creates new [metrics] for the block manager.
@@ -608,7 +621,11 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 		}),
 		loadedBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prometheus_tsdb_blocks_loaded_by_duration",
-			Help: "Number of currently loaded blocks grouped by block duration in minutes.",
+			Help: "Number of currently loaded raw blocks grouped by block duration in minutes.",
+		}, []string{"duration_minutes"}),
+		loadedDownsampledBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_downsampled_blocks_loaded_by_duration",
+			Help: "Number of currently loaded downsampled blocks grouped by block duration in minutes.",
 		}, []string{"duration_minutes"}),
 		symbolTableSize: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "prometheus_tsdb_symbol_table_size_bytes",
@@ -644,6 +661,7 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 		r.MustRegister(
 			m.loadedBlocks,
 			m.loadedBlocksByDuration,
+			m.loadedDownsampledBlocksByDuration,
 			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,

@@ -110,6 +110,34 @@ func (s *ManagerSuite) TestManagerExportsLoadedBlocksMetrics() {
 	}
 }
 
+func (s *ManagerSuite) TestManagerExportsDownsampledBlocksMetricSeparately() {
+	s.createTestDownsamplingBlock(s.dir, 9000, "metric_c", 60_000)
+
+	reg := prometheus.NewRegistry()
+	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, nil, s.logger, reg)
+	s.Require().NoError(err)
+	s.T().Cleanup(m.Close)
+
+	blocks := m.Blocks()
+	s.Require().Len(blocks, 3)
+
+	// Every test block is shorter than a minute, so all of them share one duration bucket.
+	durationLabel := strconv.FormatInt(
+		normalizeBlockDurationMinutes(blocks[0].Meta().MaxTime-blocks[0].Meta().MinTime),
+		10,
+	)
+
+	// The raw gauge counts the two raw blocks only, the downsampled one counts the third block.
+	s.Require().Equal(
+		float64(2),
+		testutil.ToFloat64(m.metrics.loadedBlocksByDuration.WithLabelValues(durationLabel)),
+	)
+	s.Require().Equal(
+		float64(1),
+		testutil.ToFloat64(m.metrics.loadedDownsampledBlocksByDuration.WithLabelValues(durationLabel)),
+	)
+}
+
 func (s *ManagerSuite) TestManagerQuerierWrapsDownsamplingBlocks() {
 	workDir := s.T().TempDir()
 	// Create a downsampling block
