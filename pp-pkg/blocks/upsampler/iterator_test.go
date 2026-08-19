@@ -3,11 +3,11 @@ package upsampler_test
 import (
 	"testing"
 
-	"github.com/prometheus/prometheus/model/histogram"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 //
@@ -64,15 +64,15 @@ func (s *IteratorSuite) TestIteratorNoGap() {
 	}
 }
 
-// TestIteratorWithGap tests that a gap wider than range triggers synthesis.
+// TestIteratorWithGap tests that a gap wider than step triggers synthesis.
 func (s *IteratorSuite) TestIteratorWithGap() {
-	// Gap of 5 minutes between first and second sample, range is 2 minutes.
+	// Gap of 4 minutes between first and second sample, range is 2 minutes.
 	samples := []struct {
 		t int64
 		v float64
 	}{
 		{t: 60_000, v: 10.0},
-		{t: 360_000, v: 30.0}, // 5-minute gap
+		{t: 300_000, v: 30.0}, // 4-minute gap: step < gap <= step*4
 	}
 	base := newMockIterator(samples)
 
@@ -97,36 +97,99 @@ func (s *IteratorSuite) TestIteratorWithGap() {
 	}
 
 	// Should have synthesized samples. With step = range/2 = 60s,
-	// synthetic points: 120_000, 180_000, 240_000, 300_000
-	// Plus real: 60_000, 360_000
-	// Total: ~6 samples (may vary by exact logic, but > 2 for sure).
-	s.Require().Greater(len(result), 2, "should have synthesized samples")
+	// synthetic points: 120_000, 180_000, 240_000
+	// Plus real: 60_000, 300_000
+	// Total: 5 samples.
+	s.Require().Len(result, 5, "should have synthesized samples")
 
 	// First sample should be real.
 	s.Require().Equal(int64(60_000), result[0].t)
 	s.Require().Equal(10.0, result[0].v)
 
 	// Last sample should be real.
-	s.Require().Equal(int64(360_000), result[len(result)-1].t)
+	s.Require().Equal(int64(300_000), result[len(result)-1].t)
 	s.Require().Equal(30.0, result[len(result)-1].v)
 
 	// Check that synthetic samples are in the gap.
 	for i := 1; i < len(result)-1; i++ {
 		s.Require().Greater(result[i].t, int64(60_000), "synthetic sample %d should be after first real", i)
-		s.Require().Less(result[i].t, int64(360_000), "synthetic sample %d should be before last real", i)
+		s.Require().Less(result[i].t, int64(300_000), "synthetic sample %d should be before last real", i)
 	}
 }
 
-// TestIteratorMultipleGaps tests multiple gaps across a sequence.
-func (s *IteratorSuite) TestIteratorMultipleGaps() {
-	// Two gaps, both wider than range.
+// TestIteratorGapWiderThanMaxGap tests that a gap wider than step*4 (rangeMS*2)
+// is treated as missing data and passed through without synthesis.
+func (s *IteratorSuite) TestIteratorGapWiderThanMaxGap() {
+	// Range is 2 minutes, so the widest interpolated gap is 4 minutes.
 	samples := []struct {
 		t int64
 		v float64
 	}{
 		{t: 60_000, v: 10.0},
-		{t: 360_000, v: 30.0}, // 5-minute gap
-		{t: 660_000, v: 50.0}, // 5-minute gap
+		{t: 360_000, v: 30.0}, // 5-minute gap: wider than step*4
+		{t: 420_000, v: 40.0},
+	}
+	base := newMockIterator(samples)
+
+	it := upsampler.NewIterator(base, 120_000)
+
+	var result []struct {
+		t int64
+		v float64
+	}
+	for {
+		vt := it.Next()
+		if vt == chunkenc.ValNone {
+			break
+		}
+
+		t, v := it.At()
+		result = append(result, struct {
+			t int64
+			v float64
+		}{t, v})
+	}
+
+	// Only the real samples, no synthesis across the outage.
+	s.Require().Len(result, len(samples))
+	for i, expected := range samples {
+		s.Require().Equal(expected.t, result[i].t, "sample %d time", i)
+		s.Require().Equal(expected.v, result[i].v, "sample %d value", i)
+	}
+}
+
+// TestIteratorSeekIntoGapWiderThanMaxGap tests that seeking into a gap wider than
+// step*4 returns the next real sample instead of a synthetic one.
+func (s *IteratorSuite) TestIteratorSeekIntoGapWiderThanMaxGap() {
+	samples := []struct {
+		t int64
+		v float64
+	}{
+		{t: 60_000, v: 10.0},
+		{t: 360_000, v: 30.0}, // 5-minute gap: wider than step*4
+	}
+	base := newMockIterator(samples)
+
+	it := upsampler.NewIterator(base, 120_000)
+
+	vt := it.Seek(200_000)
+	s.Require().Equal(chunkenc.ValFloat, vt)
+
+	t, v := it.At()
+	s.Require().Equal(int64(360_000), t)
+	s.Require().Equal(30.0, v)
+}
+
+// TestIteratorMultipleGaps tests multiple gaps across a sequence.
+func (s *IteratorSuite) TestIteratorMultipleGaps() {
+	// Two gaps, both wider than step and within step*4.
+	samples := []struct {
+		t int64
+		v float64
+	}{
+		{t: 60_000, v: 10.0},
+		{t: 300_000, v: 30.0}, // 4-minute gap
+		{t: 540_000, v: 50.0}, // 4-minute gap
 	}
 	base := newMockIterator(samples)
 
@@ -163,7 +226,7 @@ func (s *IteratorSuite) TestIteratorGapAtEnd() {
 	}{
 		{t: 60_000, v: 10.0},
 		{t: 120_000, v: 20.0},
-		{t: 600_000, v: 30.0}, // large gap before last sample
+		{t: 360_000, v: 30.0}, // large gap before last sample
 	}
 	base := newMockIterator(samples)
 
@@ -190,7 +253,7 @@ func (s *IteratorSuite) TestIteratorGapAtEnd() {
 	s.Require().Greater(len(result), 3)
 
 	// Last sample should be the real one.
-	s.Require().Equal(int64(600_000), result[len(result)-1].t)
+	s.Require().Equal(int64(360_000), result[len(result)-1].t)
 	s.Require().Equal(30.0, result[len(result)-1].v)
 }
 
@@ -296,7 +359,7 @@ func (s *IteratorSuite) TestIteratorSeekIntoGap() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 500_000, v: 50.0}, // 400ms gap, range is 120ms
+		{t: 340_000, v: 50.0}, // 240s gap, range is 120s
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -308,11 +371,11 @@ func (s *IteratorSuite) TestIteratorSeekIntoGap() {
 	t, v := it.At()
 	// Should get a synthetic point in the gap.
 	s.Require().Greater(t, int64(100_000))
-	s.Require().Less(t, int64(500_000))
+	s.Require().Less(t, int64(340_000))
 
 	// Check that interpolated value is reasonable.
-	// Linear interpolation: v = 10 + (50-10) * (t-100k) / (500k-100k)
-	expectedV := 10.0 + 40.0*float64(t-100_000)/400_000.0
+	// Linear interpolation: v = 10 + (50-10) * (t-100k) / (340k-100k)
+	expectedV := 10.0 + 40.0*float64(t-100_000)/240_000.0
 	s.Require().InDelta(expectedV, v, 0.1, "interpolated value should match linear interpolation")
 }
 
@@ -341,7 +404,7 @@ func (s *IteratorSuite) TestIteratorSeekForwardInPartialGap() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 600_000, v: 60.0}, // 500ms gap, range is 120ms
+		{t: 340_000, v: 60.0}, // 240s gap, range is 120s
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -363,7 +426,7 @@ func (s *IteratorSuite) TestIteratorSeekForwardInPartialGap() {
 	// Should get a synthetic sample >= targetT.
 	t := it.AtT()
 	s.Require().GreaterOrEqual(t, targetT)
-	s.Require().Less(t, int64(600_000))
+	s.Require().Less(t, int64(340_000))
 }
 
 // TestIteratorSeekWithTargetLessOrEqualT0 tests seeking with target <= t0
@@ -401,7 +464,7 @@ func (s *IteratorSuite) TestIteratorSeekWithBufferedT1() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 500_000, v: 50.0}, // 400ms gap, triggers synthesis
+		{t: 340_000, v: 50.0}, // 240s gap, triggers synthesis
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -417,14 +480,14 @@ func (s *IteratorSuite) TestIteratorSeekWithBufferedT1() {
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	// First synthetic should be returned.
 
-	// Now seek to a point between 100k and 500k.
-	// This tests the case where target <= t1 but nextSynthT == 0 (no synthesis started).
+	// Now seek to a point between 100k and 340k.
+	// This tests the case where target <= t1 and synthesis is already armed.
 	vt = it.Seek(250_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
 
 	t := it.AtT()
 	s.Require().GreaterOrEqual(t, int64(250_000))
-	s.Require().Less(t, int64(500_000))
+	s.Require().Less(t, int64(340_000))
 }
 
 // TestIteratorSeekAdvanceBase tests seeking beyond t1 into unconsumed base data.
@@ -468,8 +531,8 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateWithBufferedT1() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 500_000, v: 50.0}, // large gap
-		{t: 600_000, v: 60.0},
+		{t: 340_000, v: 50.0}, // large gap
+		{t: 440_000, v: 60.0},
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -482,7 +545,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateWithBufferedT1() {
 	s.Require().Equal(chunkenc.ValFloat, vt) // first synthetic
 
 	// Now seek to a point in the gap, which will be handled by seekWithinState.
-	// The buffered t1 (500k) should be accessible.
+	// The buffered t1 (340k) should be accessible.
 	targetT := it.AtT() + 50_000
 	vt = it.Seek(targetT)
 	s.Require().Equal(chunkenc.ValFloat, vt)
@@ -490,7 +553,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateWithBufferedT1() {
 	// Result should be at or after targetT, and within the gap.
 	t := it.AtT()
 	s.Require().GreaterOrEqual(t, targetT)
-	s.Require().Less(t, int64(500_000))
+	s.Require().Less(t, int64(340_000))
 }
 
 // TestIteratorReset tests that Reset() properly reinitializes the iterator
@@ -546,7 +609,7 @@ func (s *IteratorSuite) TestIteratorSeekT0LessThanTargetLessThanT1WithoutSynthes
 	}{
 		{t: 100_000, v: 10.0},
 		{t: 200_000, v: 20.0},
-		{t: 500_000, v: 50.0}, // 300ms gap, will trigger synthesis
+		{t: 440_000, v: 50.0}, // 240s gap, will trigger synthesis
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -560,8 +623,8 @@ func (s *IteratorSuite) TestIteratorSeekT0LessThanTargetLessThanT1WithoutSynthes
 	s.Require().Equal(chunkenc.ValFloat, vt) // t0=160k
 	s.Require().Equal(int64(160_000), it.AtT())
 
-	// Now the base is positioned at 500k, and we have t0=160k, t1=500k (buffered)
-	// in haveT1=true state (gap > range triggered synthesis).
+	// Now the base is positioned at 440k, and we have t0=200k, t1=440k (buffered)
+	// in haveT1=true state (gap > step triggered synthesis).
 	// Read one more Next() to start yielding synthetics.
 	vt = it.Next()
 	s.Require().Equal(chunkenc.ValFloat, vt) // first synthetic
@@ -573,7 +636,7 @@ func (s *IteratorSuite) TestIteratorSeekT0LessThanTargetLessThanT1WithoutSynthes
 
 	t := it.AtT()
 	s.Require().GreaterOrEqual(t, int64(300_000))
-	s.Require().Less(t, int64(500_000))
+	s.Require().Less(t, int64(440_000))
 }
 
 // TestIteratorSeekWithinStateExhaustsBufferedAndReturnsNone tests the path
@@ -585,7 +648,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateExhaustsBufferedAndReturnsNon
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 500_000, v: 50.0}, // large gap, will trigger synthesis
+		{t: 340_000, v: 50.0}, // large gap, will trigger synthesis
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -639,8 +702,8 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateTransitionsHaveT1ToNext() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 500_000, v: 50.0}, // large gap
-		{t: 600_000, v: 60.0},
+		{t: 340_000, v: 50.0}, // large gap
+		{t: 600_000, v: 60.0}, // gap wider than step*4: no synthesis, real sample only
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -652,7 +715,7 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateTransitionsHaveT1ToNext() {
 	vt = it.Next()
 	s.Require().Equal(chunkenc.ValFloat, vt) // first synthetic
 
-	// Now we're in synthesis with haveT1=true (t1=500k buffered).
+	// Now we're in synthesis with haveT1=true (t1=340k buffered).
 	// Seek to 150k (in the first synthetic batch).
 	vt = it.Seek(150_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
@@ -711,8 +774,8 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateBufferedT1LessThanTarget() {
 		v float64
 	}{
 		{t: 100_000, v: 10.0},
-		{t: 600_000, v: 60.0}, // 500ms gap, triggers synthesis
-		{t: 700_000, v: 70.0},
+		{t: 340_000, v: 60.0}, // 240s gap, triggers synthesis
+		{t: 460_000, v: 70.0},
 	}
 	base := newMockIterator(samples)
 	it := upsampler.NewIterator(base, 120_000)
@@ -722,19 +785,18 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateBufferedT1LessThanTarget() {
 	s.Require().Equal(chunkenc.ValFloat, vt) // t0=100k
 
 	vt = it.Next()
-	s.Require().Equal(chunkenc.ValFloat, vt) // first synthetic, t0=160k, t1=600k buffered
+	s.Require().Equal(chunkenc.ValFloat, vt) // first synthetic, t0=160k, t1=340k buffered
 
-	// Seek to a value in the gap, close to t1.
-	// This enters seekWithinState with haveT1=true.
-	// Then seek further to 620k, past t1.
-	// This should consume t1 (haveT1=false), then try to read next.
-	vt = it.Seek(550_000)
+	// Seek past the last synthetic point of the gap: seekWithinState exhausts the
+	// synthetic queue and yields the buffered t1 (haveT1=false afterwards).
+	vt = it.Seek(300_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
+	s.Require().Equal(int64(340_000), it.AtT())
 
-	// Now we're past some synthetics. Seek even further to exhaust and try reading.
-	vt = it.Seek(620_000)
+	// Now t1 is consumed, so the next Seek has to read from base again.
+	vt = it.Seek(400_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
-	s.Require().GreaterOrEqual(it.AtT(), int64(620_000))
+	s.Require().GreaterOrEqual(it.AtT(), int64(400_000))
 }
 
 // TestIteratorSeekAdvanceBaseEOF tests that seekAdvanceBase returns ValNone
@@ -771,10 +833,10 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateConsumesT1() {
 	}{
 		{t: 100_000, v: 10.0},
 		{t: 200_000, v: 20.0},
-		{t: 600_000, v: 60.0}, // gap 400ms > 150ms range, triggers synthesis
+		{t: 400_000, v: 60.0}, // gap 200s: step (75s) < gap <= step*4 (300s)
 	}
 	base := newMockIterator(samples)
-	it := upsampler.NewIterator(base, 150_000) // range = 150ms
+	it := upsampler.NewIterator(base, 150_000) // range = 150s
 
 	// Initialize with first two samples.
 	vt := it.Next()
@@ -783,16 +845,16 @@ func (s *IteratorSuite) TestIteratorSeekWithinStateConsumesT1() {
 	vt = it.Next()
 	s.Require().Equal(chunkenc.ValFloat, vt)
 
-	// Third Next: creates synthesis state with t0=200k, t1=600k, haveT1=true, nextSynthT > 0
+	// Third Next: yields the buffered real sample at 200k.
 	vt = it.Next()
-	s.Require().Equal(chunkenc.ValFloat, vt) // First synthetic
+	s.Require().Equal(chunkenc.ValFloat, vt)
 
-	// Seek to exactly t1 (600k)
+	// Seek to exactly t1 (400k)
 	// seekWithinState will iterate synthetics, consume t1, and return it
-	vt = it.Seek(600_000)
+	vt = it.Seek(400_000)
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	t, _ := it.At()
-	s.Require().Equal(int64(600_000), t)
+	s.Require().Equal(int64(400_000), t)
 }
 
 // TestIteratorSeekNoSynthesisPath tests Seek returning chunkenc.ValFloat

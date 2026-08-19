@@ -5,30 +5,40 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
+const (
+	// synthesisStepDivisor makes the synthesis step half of the function range, so that
+	// any window of that width holds at least two samples regardless of alignment.
+	synthesisStepDivisor = 2
+	// maxGapSteps limits, in steps, how wide a real gap may be to still be interpolated.
+	// Beyond that the data is genuinely missing rather than decimated, and filling it in
+	// would hide the outage instead of restoring dropped points.
+	maxGapSteps = 4
+)
+
 // Iterator wraps a [chunkenc.Iterator] and injects synthetic samples via linear
-// interpolation between real samples when the gap between them exceeds rangeMS.
+// interpolation between two real samples when the gap between them exceeds step
+// (rangeMS/2) but stays within step*4 (rangeMS*2). Wider gaps are passed through
+// untouched.
 type Iterator struct {
-	base    chunkenc.Iterator
-	rangeMS int64
+	base chunkenc.Iterator
 
 	// Anchor pair of real samples and state.
 	t0, t1     int64
 	v0, v1     float64
-	step       int64 // rangeMS / 2
+	step       int64 // synthesis step and gap threshold: rangeMS / 2
 	nextSynthT int64 // next synthetic sample time, or 0 if no synthesis in progress
 
 	haveT1      bool // t1/v1 already read from base, not yet yielded
 	initialized bool // first call to Next/Seek
 }
 
-// NewIterator wraps a base [chunkenc.Iterator] for interpolation when gaps exceed rangeMS.
+// NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps between
+// rangeMS/2 and rangeMS*2.
 func NewIterator(base chunkenc.Iterator, rangeMS int64) *Iterator {
-	return &Iterator{
-		base:    base,
-		rangeMS: rangeMS,
-		//revive:disable-next-line:add-constant // half the range is a reasonable default step for interpolation
-		step: rangeMS / 2,
-	}
+	it := &Iterator{}
+	it.Reset(base, rangeMS)
+
+	return it
 }
 
 // At returns the current timestamp/value pair for float samples.
@@ -71,8 +81,7 @@ func (it *Iterator) Next() chunkenc.ValueType {
 
 	// Step 2: yield buffered real sample if exists.
 	if it.haveT1 {
-		it.t0, it.v0 = it.t1, it.v1
-		it.haveT1 = false
+		it.yieldT1()
 		return chunkenc.ValFloat
 	}
 
@@ -96,21 +105,19 @@ func (it *Iterator) Next() chunkenc.ValueType {
 	// Non-float samples (histograms): pass through without synthesis.
 	if valType != chunkenc.ValFloat {
 		it.t0, it.v0 = it.t1, it.v1
+		it.nextSynthT = 0
 		return valType
 	}
 
 	// Float samples: check gap and decide.
-	gap := it.t1 - it.t0
-	if gap > it.step {
-		// Gap exceeds step: synthesize.
-		it.nextSynthT = it.t0 + it.step
+	it.armSynthesis()
+	if it.nextSynthT > 0 {
 		it.haveT1 = true
 		return it.Next() // Yield first synthetic sample.
 	}
 
-	// Gap is acceptable: yield t1 directly.
+	// Nothing to interpolate: yield t1 directly.
 	it.t0, it.v0 = it.t1, it.v1
-	it.nextSynthT = it.t0 + it.step
 	return chunkenc.ValFloat
 }
 
@@ -148,20 +155,13 @@ func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 
 		it.t1, it.v1 = it.base.At()
 		it.haveT1 = true
-		it.nextSynthT = it.t0 + it.step
+		it.armSynthesis()
 	}
 
 	if target <= it.t1 {
-		// Target is within the gap (or at the next real point).
-		// If we're in synthetic mode, iterate forward.
-		if it.nextSynthT > 0 {
-			return it.seekWithinState(target)
-		}
-		// Note: if nextSynthT==0 and target<=t1, then t0==t1 (no synthesis, gap < rangeMS).
-		// In this case, t0 >= target, so we return the current t0.
-		// However, after seekWithinState call, we always return, so we never reach here
-		// in normal flow. This path is logically unreachable.
-		// fallthrough to seekAdvanceBase as safety.
+		// Target is within the gap (or at the next real point): walk the synthetic
+		// queue, falling back to the buffered real sample when there is none.
+		return it.seekWithinState(target)
 	}
 
 	// target > t1: sequentially read from base until we find it.
@@ -195,14 +195,12 @@ func (it *Iterator) seekWithinState(target int64) chunkenc.ValueType {
 		// Since target <= t1 and we only reach here if target > t0,
 		// we have t0 < target <= t1. So t1 >= target is always true.
 		if it.haveT1 {
-			it.t0, it.v0 = it.t1, it.v1
-			it.haveT1 = false
+			it.yieldT1()
 			return chunkenc.ValFloat
 		}
 
-		// Unreachable: seekWithinState is only called with nextSynthT > 0,
-		// which guarantees haveT1 == true, so we always return above.
-		// Return as safeguard.
+		// Unreachable: seekWithinState is only called with a buffered t1,
+		// so we always return above. Return as safeguard.
 		return chunkenc.ValNone
 	}
 }
@@ -223,10 +221,30 @@ func (it *Iterator) seekAdvanceBase(target int64) chunkenc.ValueType {
 
 		if t > target {
 			it.haveT1 = true
-			it.nextSynthT = it.t0 + it.step
+			it.armSynthesis()
 			return it.seekWithinState(target)
 		}
 	}
+}
+
+// armSynthesis schedules synthetic samples between the current anchor pair when the
+// gap between them leaves windows of rangeMS with less than two samples, yet is narrow
+// enough for interpolation to still describe decimated data. Otherwise synthesis is
+// disarmed and the pair is yielded as is.
+func (it *Iterator) armSynthesis() {
+	if gap := it.t1 - it.t0; gap <= it.step || gap > it.step*maxGapSteps {
+		it.nextSynthT = 0
+		return
+	}
+
+	it.nextSynthT = it.t0 + it.step
+}
+
+// yieldT1 moves the anchor onto the buffered real sample and drops synthesis state.
+func (it *Iterator) yieldT1() {
+	it.t0, it.v0 = it.t1, it.v1
+	it.haveT1 = false
+	it.nextSynthT = 0
 }
 
 // synthesizeAt returns ValFloat for a synthetic sample at time t,
@@ -248,9 +266,7 @@ func (it *Iterator) synthesizeAt(t int64) chunkenc.ValueType {
 // to reuse the same Iterator across multiple calls.
 func (it *Iterator) Reset(base chunkenc.Iterator, rangeMS int64) {
 	it.base = base
-	it.rangeMS = rangeMS
-	//revive:disable-next-line:add-constant // half the range is a reasonable default step for interpolation
-	it.step = rangeMS / 2
+	it.step = rangeMS / synthesisStepDivisor
 
 	it.t0 = 0
 	it.t1 = 0
