@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 
 #include "bare_bones/memory.h"
-#include "bare_bones/vector.h"
 
 namespace {
 
