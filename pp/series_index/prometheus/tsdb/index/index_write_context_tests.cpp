@@ -1,7 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -144,23 +143,10 @@ TEST_F(IndexWriteContextFixture, IndexWriterSurvivesDestinationGrowthAfterShared
   destination.find_or_emplace(LabelViewSet{{"job", "a"}, {"zone", "b"}});
   destination.find_or_emplace(LabelViewSet{{"env", "prod"}, {"job", "a"}});
 
-  // #region agent log
-  {
-    const auto snap_keys = resolve_snapshot.data_view().keys().size();
-    const auto dest_keys = destination.data_view().keys().size();
-    if (FILE* f = std::fopen("/home/veles/work/code/src/github.com/deckhouse/prompp/.cursor/debug-49406c.log", "a")) {
-      std::fprintf(f,
-                   "{\"sessionId\":\"49406c\",\"runId\":\"post-fix\",\"hypothesisId\":\"A\",\"location\":\"index_write_context_tests.cpp\","
-                   "\"message\":\"keys after destination growth\",\"data\":{\"snapshot_keys\":%u,\"destination_keys\":%u,\"cow_ok\":%s},\"timestamp\":0}\n",
-                   static_cast<unsigned>(snap_keys), static_cast<unsigned>(dest_keys), snap_keys < dest_keys ? "true" : "false");
-      std::fclose(f);
-    }
-    // Snapshot keys must stay frozen while destination grows (the gdb crash had snapshot keys > symbols_tables).
-    EXPECT_LT(snap_keys, dest_keys);
-  }
-  // #endregion
+  // Assert: snapshot keys stay frozen while destination grows.
+  EXPECT_LT(resolve_snapshot.data_view().keys().size(), destination.data_view().keys().size());
 
-  // Assert: building IndexWriteContext iterates snapshot values without OOB.
+  // Building IndexWriteContext iterates snapshot values without OOB.
   EXPECT_NO_THROW({
     const auto context = IndexWriteContext<Lss>{lss_};
     std::vector<std::string> symbols;
