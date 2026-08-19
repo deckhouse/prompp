@@ -1,6 +1,8 @@
 package upsampler
 
 import (
+	"math"
+
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
@@ -51,4 +53,19 @@ func (ss *SeriesSet) Err() error {
 // Warnings returns annotations from the base SeriesSet.
 func (ss *SeriesSet) Warnings() annotations.Annotations {
 	return ss.base.Warnings()
+}
+
+// gapThresholds converts the millisecond query parameters into the pair of gap thresholds
+// the iterator works with: the synthesis step and the widest gap still interpolated. They
+// are 32-bit because both are durations, not timestamps. Parameters that don't fit — a range
+// above ~99 days or a resolution above ~24 days — yield zeros, which disarms synthesis
+// instead of wrapping around into a step that means nothing.
+func gapThresholds(rangeMS, resolutionMS int64) (stepMS, maxGapMS uint32) {
+	step := rangeMS / synthesisStepDivisor
+	maxGap := resolutionMS * maxGapResolutions
+	if step < 0 || step > math.MaxUint32 || maxGap < 0 || maxGap > math.MaxUint32 {
+		return 0, 0
+	}
+
+	return uint32(step), uint32(maxGap) // #nosec G115 // both values are range-checked right above
 }

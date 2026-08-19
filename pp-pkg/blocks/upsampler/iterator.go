@@ -1,8 +1,6 @@
 package upsampler
 
 import (
-	"math"
-
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
@@ -293,19 +291,4 @@ func (it *Iterator) Reset(base chunkenc.Iterator, stepMS, maxGapMS uint32, count
 	it.haveT1 = false
 	it.nextSynthT = 0
 	it.initialized = false
-}
-
-// gapThresholds converts the millisecond query parameters into the pair of gap thresholds
-// the iterator works with: the synthesis step and the widest gap still interpolated. They
-// are 32-bit because both are durations, not timestamps. Parameters that don't fit — a range
-// above ~99 days or a resolution above ~24 days — yield zeros, which disarms synthesis
-// instead of wrapping around into a step that means nothing.
-func gapThresholds(rangeMS, resolutionMS int64) (stepMS, maxGapMS uint32) {
-	step := rangeMS / synthesisStepDivisor
-	maxGap := resolutionMS * maxGapResolutions
-	if step < 0 || step > math.MaxUint32 || maxGap < 0 || maxGap > math.MaxUint32 {
-		return 0, 0
-	}
-
-	return uint32(step), uint32(maxGap) // #nosec G115 // both values are range-checked right above
 }
