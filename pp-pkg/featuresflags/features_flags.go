@@ -78,6 +78,10 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 			querier.InstantQueryFeature = false
 			_ = level.Info(logger).Log(msgStr, "Instant query feature is disabled.")
 
+		case "disable_remote_write_http2":
+			remotewriter.HTTP2Enabled = false
+			_ = level.Info(logger).Log(msgStr, "HTTP/2 for remote write is disabled.")
+
 		case "disable_shrink_shard_copier":
 			storage.ShrinkShardCopier = false
 			_ = level.Info(logger).Log(msgStr, "Shrink shard copier is disabled.")

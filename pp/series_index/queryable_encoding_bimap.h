@@ -439,7 +439,8 @@ class QueryableEncodingBimapCopier {
       values.resize(names_count);
 
       uint32_t v_id = 0;
-      for (auto it = source_view.keys().begin(), e = source_view.keys().end(); it != e; ++it, ++v_id) {
+      const auto keys = source_view.keys();
+      for (auto it = keys.begin(); it != keys.end(); ++it, ++v_id) {
         auto& value_cache = values[v_id];
 
         resize_and_fill_ids_list(value_cache, source_view.values(it.id()).size());

@@ -23,10 +23,21 @@ const (
 
 	reasonTooOld        = "too_old"
 	reasonDroppedSeries = "dropped_series"
+
+	connectionNew    = "new"
+	connectionReused = "reused"
 )
 
 // DefaultSampleAgeLimit is the default maximum sample age. Dont send samples older than this.
 var DefaultSampleAgeLimit = model.Duration(time.Hour * 24 * 30)
+
+// HTTP2Enabled is a feature flag for HTTP/2 in the remote write clients of every destination.
+// Enabled by default; disable via PROMPP_FEATURES=disable_remote_write_http2.
+//
+// Turning it off makes the clients speak HTTP/1.1 only. Worth doing when a proxy or a receiver
+// mishandles HTTP/2 - Go had a series of cases where a dead HTTP/2 connection was kept in the pool
+// and every request on it failed, see https://github.com/golang/go/issues/32388.
+var HTTP2Enabled = true
 
 // DestinationConfig is a remote write destination config.
 type DestinationConfig struct {
@@ -118,6 +129,7 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.minNumShards)
 	registerer.MustRegister(d.metrics.desiredNumShards)
 	registerer.MustRegister(d.metrics.bestNumShards)
+	registerer.MustRegister(d.metrics.connectionsTotal)
 	registerer.MustRegister(d.metrics.sentBytesTotal)
 	registerer.MustRegister(d.metrics.metadataBytesTotal)
 	registerer.MustRegister(d.metrics.maxSamplesPerSend)
@@ -163,6 +175,7 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.minNumShards)
 	registerer.Unregister(d.metrics.desiredNumShards)
 	registerer.Unregister(d.metrics.bestNumShards)
+	registerer.Unregister(d.metrics.connectionsTotal)
 	registerer.Unregister(d.metrics.sentBytesTotal)
 	registerer.Unregister(d.metrics.metadataBytesTotal)
 	registerer.Unregister(d.metrics.maxSamplesPerSend)
@@ -245,6 +258,7 @@ type DestinationMetrics struct {
 	minNumShards           prometheus.Gauge
 	desiredNumShards       prometheus.Gauge
 	bestNumShards          prometheus.Gauge
+	connectionsTotal       *prometheus.CounterVec
 	sentBytesTotal         prometheus.Counter
 	metadataBytesTotal     prometheus.Counter
 	maxSamplesPerSend      prometheus.Gauge
@@ -499,6 +513,14 @@ func newDestinationMetrics(name, ep string) *DestinationMetrics {
 			Help:        "The number of shards that are calculated from the actual number of accumulated segments.",
 			ConstLabels: constLabels,
 		}),
+		connectionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "connections_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of connections the requests to the remote storage went through, by whether an already established connection was reused. Note that the transport may replay a request on its own, so a single send can report more than one connection.",
+			ConstLabels: constLabels,
+		}, []string{"state"}),
 		sentBytesTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
