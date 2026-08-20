@@ -1,4 +1,6 @@
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -723,6 +725,84 @@ TEST_F(SharedDataFixture, LabelSetCompositeHashMatchesOriginalLabelSet) {
 
   // Assert
   EXPECT_EQ(original_hash, composite_hash);
+}
+
+TEST_F(SharedDataFixture, SymbolViewIteratorStopsAtItemWithReallocatedData) {
+  // Arrange
+  SymbolEncodingBimap encoding_bimap;
+  encoding_bimap.find_or_emplace("x"sv);
+  encoding_bimap.reserve(1024);
+
+  const SymbolDecodingTable decoding_table(encoding_bimap);
+
+  const std::string big(1000, 'y');
+  encoding_bimap.find_or_emplace(std::string_view{big});
+
+  // Act
+  std::vector<std::string_view> iterated;
+  std::ranges::copy(decoding_table.data_view(), std::back_inserter(iterated));
+
+  // Assert
+  EXPECT_EQ(std::vector{"x"sv}, iterated);
+}
+
+TEST_F(SharedDataFixture, LabelNameSetViewIteratorStopsAtItemWithReallocatedData) {
+  // Arrange
+  LabelNameSetEncodingBimap encoding_bimap;
+  const LabelViewSet baseline{{"a", "1"}};
+  encoding_bimap.find_or_emplace(baseline.names());
+  encoding_bimap.reserve(1024);
+
+  const LabelNameSetDecodingTable decoding_table(encoding_bimap);
+
+  encoding_bimap.find_or_emplace(LabelViewSet{{"very_very_very_long_label_name_which_trigger_memory_reallocation1", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation2", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation3", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation4", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation5", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation6", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation7", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation8", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation9", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation10", "1"}}
+                                     .names());
+
+  // Act
+  std::vector<LabelNameSetDecodingTable::value_type> iterated;
+  std::ranges::copy(decoding_table.data_view(), std::back_inserter(iterated));
+
+  // Assert
+  ASSERT_EQ(1U, iterated.size());
+  EXPECT_TRUE(std::ranges::equal(baseline.names(), iterated.front()));
+}
+
+TEST_F(SharedDataFixture, LabelSetViewIteratorStopsAtItemWithReallocatedData) {
+  // Arrange
+  LabelSetEncodingBimap encoding_bimap;
+  const LabelViewSet baseline{{"a", "1"}};
+  encoding_bimap.find_or_emplace(baseline);
+  encoding_bimap.reserve(1024);
+
+  const LabelSetDecodingTable decoding_table(encoding_bimap);
+
+  encoding_bimap.find_or_emplace(LabelViewSet{{"very_very_very_long_label_name_which_trigger_memory_reallocation1", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation2", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation3", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation4", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation5", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation6", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation7", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation8", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation9", "1"},
+                                              {"very_very_very_long_label_name_which_trigger_memory_reallocation10", "1"}});
+
+  // Act
+  std::vector<LabelSetDecodingTable::value_type> iterated;
+  std::ranges::copy(decoding_table.data_view(), std::back_inserter(iterated));
+
+  // Assert
+  ASSERT_EQ(1U, iterated.size());
+  EXPECT_TRUE(std::ranges::equal(baseline, iterated.front()));
 }
 
 class LabelNameSetEncodingBimapTest : public testing::Test {
