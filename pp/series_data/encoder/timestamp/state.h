@@ -79,7 +79,11 @@ struct PROMPP_ATTRIBUTE_PACKED State {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE void free_memory() noexcept { stream_data.stream.stream.clear(); }
+  PROMPP_ALWAYS_INLINE void free_memory() noexcept {
+    if (!is_finalized()) [[likely]] {
+      stream_data.stream.stream.clear();
+    }
+  }
 
  private:
   static constexpr auto kFinalizedState = std::numeric_limits<int64_t>::min();
