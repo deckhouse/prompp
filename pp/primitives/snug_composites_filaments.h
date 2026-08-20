@@ -999,8 +999,8 @@ struct LabelSet {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const symbols_tables_type& symbols_tables, const keys_view_type::iterator_type& key_it) noexcept
-            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it} {
+        explicit iterator_type(const symbols_tables_type& symbols_tables, uint32_t symbols_tables_count, const keys_view_type::iterator_type& key_it) noexcept
+            : symbols_tables_ptr_{&symbols_tables}, symbols_tables_count_{symbols_tables_count}, key_it_{key_it} {
           get_values_range();
         }
 
@@ -1021,7 +1021,7 @@ struct LabelSet {
 
         PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const = default;
         PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept {
-          return key_it_ == BareBones::iterator::kSentinel && value_it_ == BareBones::iterator::kSentinel;
+          return keys_exhausted() && value_it_ == BareBones::iterator::kSentinel;
         }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *value_it_; }
@@ -1030,9 +1030,17 @@ struct LabelSet {
         [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return value_it_.id(); }
 
        private:
+        // The keys table and symbols_tables_ are separate containers, and in a read only storage only the latter is frozen at the moment the
+        // storage was copied: the keys count is read from a control block shared with the writer, so it keeps growing while new label names are
+        // registered. Stopping at the remembered symbols_tables_ count keeps the traversal inside the copied tables; label names registered
+        // after the copy simply have no values table here and are skipped.
+        [[nodiscard]] PROMPP_ALWAYS_INLINE bool keys_exhausted() const noexcept {
+          return key_it_ == BareBones::iterator::kSentinel || key_it_.id() >= symbols_tables_count_;
+        }
+
         void get_values_range() noexcept {
           value_it_ = {};
-          while (key_it_ != BareBones::iterator::kSentinel) {
+          while (!keys_exhausted()) {
             const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].data_view();
             value_it_ = values_view.begin();
 
@@ -1045,20 +1053,24 @@ struct LabelSet {
 
         const symbols_tables_type* symbols_tables_ptr_;
 
+        uint32_t symbols_tables_count_{};
+
         keys_view_type::iterator_type key_it_;
 
         values_symbols_view_type::iterator_type value_it_;
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
-        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->label_name_sets_table_.data_view().symbols().begin()};
+        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->symbols_tables_.size(),
+                             storage_ptr->label_name_sets_table_.data_view().symbols().begin()};
       }
       [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
         size_t total_size = 0;
+        const auto symbols_tables_count = storage_ptr->symbols_tables_.size();
         const auto keys_view = storage_ptr->label_name_sets_table_.data_view().symbols();
-        for (auto key_it = keys_view.begin(); key_it != keys_view.end(); ++key_it) {
+        for (auto key_it = keys_view.begin(); key_it != keys_view.end() && key_it.id() < symbols_tables_count; ++key_it) {
           total_size += storage_ptr->symbols_tables_[key_it.id()].data_view().size();
         }
         return total_size;
