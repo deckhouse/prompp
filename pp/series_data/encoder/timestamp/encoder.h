@@ -96,7 +96,7 @@ class Encoder {
       TimestampEncoder::encode_first(state.encoder, timestamp, state.stream_data.stream);
       state_id = states_.index_of(state);
     } else {
-      auto& new_state = emplace_state(state_id);
+      auto& new_state = emplace_state(state_id, DoNotInitializeTag{});
 
       auto& state = states_[state_id];
       ++state.child_count;
@@ -170,8 +170,9 @@ class Encoder {
   // slot; erase just marks a hole and emplace_back reuses holes, so neither changes states_.size(). Therefore the gauge
   // only needs to be refreshed on state creation (not on erase). Pushing the exact size() keeps the gauge correct even
   // when a hole is reused, and doing it here (on the writer thread) means the scrape never touches the encoder.
-  PROMPP_ALWAYS_INLINE State& emplace_state(StateId previous_state_id) {
-    auto& state = states_.emplace_back(previous_state_id);
+  template <class... Args>
+  PROMPP_ALWAYS_INLINE State& emplace_state(StateId previous_state_id, Args&&... args) {
+    auto& state = states_.emplace_back(previous_state_id, std::forward<Args>(args)...);
     if (states_count_gauge_ != nullptr) [[likely]] {
       states_count_gauge_->set(states_.size());
     }
