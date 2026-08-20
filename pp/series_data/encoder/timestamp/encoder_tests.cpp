@@ -7,7 +7,6 @@ namespace {
 using series_data::encoder::timestamp::Encoder;
 using series_data::encoder::timestamp::kInvalidStateId;
 using series_data::encoder::timestamp::State;
-using BitSequence = series_data::encoder::BitSequenceWithItemsCount<BareBones::DefaultReallocator>;
 
 class TimestampEncoderFixture : public testing::Test {
  protected:
