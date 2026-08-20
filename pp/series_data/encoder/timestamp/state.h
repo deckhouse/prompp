@@ -31,6 +31,7 @@ struct PROMPP_ATTRIBUTE_PACKED State {
   StateId previous_state_id{kInvalidStateId};
 
   explicit State(StateId previous_id) : previous_state_id(previous_id) {}
+  State(StateId previous_id, DoNotInitializeTag tag) : stream_data{.stream{tag}}, previous_state_id(previous_id) {}
   ~State() {
     if (!is_finalized()) [[likely]] {
       stream_data.destruct_stream();
