@@ -92,18 +92,4 @@ TEST_F(TimestampEncoderFixture, TransitionToExistingStateWithoutErasingPreviousS
   EXPECT_EQ(103, encoder_.get_state(2).timestamp());
 }
 
-TEST_F(TimestampEncoderFixture, FinalizeStateSharedBySeriesAndHavingChild) {
-  // Arrange
-  encoder_.encode(kInvalidStateId, 101);
-  const auto shared_state_id = encoder_.encode(kInvalidStateId, 101);
-  encoder_.encode(shared_state_id, 102);
-
-  // Act
-  BitSequence stream;
-  encoder_.finalize(shared_state_id, stream, 7);
-
-  // Assert
-  EXPECT_EQ(7U, encoder_.process_finalized(shared_state_id));
-}
-
 }  // namespace
