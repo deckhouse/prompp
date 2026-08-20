@@ -119,21 +119,6 @@ class Encoder {
 
   PROMPP_ALWAYS_INLINE void erase(StateId state_id) { decrease_reference_count(states_[state_id], state_id); }
 
-  PROMPP_ALWAYS_INLINE void finalize_or_copy(StateId state_id, BitSequenceWithItemsCount& stream, uint32_t finalized_stream_id) {
-    if (auto& state = states_[state_id]; --state.reference_count == 0) {
-      stream = state.finalize(finalized_stream_id);
-
-      state_transitions_.erase(state);
-      decrease_previous_state_child_count(state_id, state.previous_state_id);
-      if (state.child_count == 0) {
-        states_.erase(state_id);
-      }
-    } else {
-      stream = state.stream_data.stream;
-      stream.stream.shrink_to_fit();
-    }
-  }
-
   PROMPP_ALWAYS_INLINE void finalize(StateId state_id, BitSequenceWithItemsCount& stream, uint32_t finalized_stream_id) {
     auto& state = states_[state_id];
     stream = state.finalize(finalized_stream_id);
