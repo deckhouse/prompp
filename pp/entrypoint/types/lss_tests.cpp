@@ -235,7 +235,7 @@ class SnapshotValuesFixture : public testing::Test {
     snapshot_ = std::make_unique<SnapshotLSS>(writer());
   }
 
-  [[nodiscard]] QueryableEncodingBimap& writer() const noexcept { return std::get<QueryableEncodingBimap>(*lss_); }
+  [[nodiscard]] QueryableEncodingBimap& writer() const { return std::get<QueryableEncodingBimap>(*lss_); }
   [[nodiscard]] const SnapshotLSS& snapshot() const noexcept { return *snapshot_; }
 
   void add_label_names(const std::string& prefix, uint32_t count) const {
