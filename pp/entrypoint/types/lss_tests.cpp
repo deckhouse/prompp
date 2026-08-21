@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <memory>
+#include <string>
 #include <tuple>
 #include <variant>
 
@@ -216,6 +218,56 @@ TEST(ReallocationsDetectorTest, StaysQuietWithoutChanges) {
 
   // Assert
   EXPECT_FALSE(detector.has_reallocations());
+}
+
+// The snapshot keeps its own copy of the per-key values tables, while the keys count comes from a control block shared with the writer. A label
+// name that fits into the already allocated keys memory raises that shared count without reallocating, so a snapshot taken earlier starts
+// reporting more keys than it has values tables. Iterating the values must stay inside the copied tables. Note that unit test and asan builds
+// allocate exactly the requested size (see BareBones::GenericMemory::get_allocation_size), so the keys count never grows in place there and this
+// test only guards the invariant; drop that special case and it fails without the bound.
+class SnapshotValuesFixture : public testing::Test {
+ protected:
+  static constexpr uint32_t kLabelNamesCount = 40;
+  static constexpr uint32_t kAddedLabelNamesCount = 8;
+
+  void SetUp() override {
+    add_label_names("name", kLabelNamesCount);
+    snapshot_ = std::make_unique<SnapshotLSS>(writer());
+  }
+
+  [[nodiscard]] QueryableEncodingBimap& writer() const { return std::get<QueryableEncodingBimap>(*lss_); }
+  [[nodiscard]] const SnapshotLSS& snapshot() const noexcept { return *snapshot_; }
+
+  void add_label_names(const std::string& prefix, uint32_t count) const {
+    for (uint32_t i = 0; i < count; ++i) {
+      writer().find_or_emplace(LabelViewSet{{prefix + std::to_string(i), "value"}});
+    }
+  }
+
+  [[nodiscard]] uint32_t count_snapshot_values() const {
+    uint32_t count = 0;
+    const auto values = snapshot_->data_view().values();
+    for (auto it = values.begin(); it != values.end(); ++it) {
+      ++count;
+    }
+    return count;
+  }
+
+  entrypoint::types::LssVariantPtr lss_{create_lss(LssType::kQueryableEncodingBimap)};
+  std::unique_ptr<SnapshotLSS> snapshot_;
+};
+
+TEST_F(SnapshotValuesFixture, ValuesIterationSkipsLabelNamesAddedAfterSnapshot) {
+  // Arrange
+  const auto values_at_snapshot = count_snapshot_values();
+
+  // Act
+  add_label_names("added", kAddedLabelNamesCount);
+
+  // Assert
+  EXPECT_EQ(kLabelNamesCount, values_at_snapshot);
+  EXPECT_EQ(values_at_snapshot, count_snapshot_values());
+  EXPECT_EQ(kLabelNamesCount, snapshot().data_view().values().size());
 }
 
 }  // namespace
