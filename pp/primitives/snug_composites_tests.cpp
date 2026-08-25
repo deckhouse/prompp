@@ -805,6 +805,20 @@ TEST_F(SharedDataFixture, LabelSetViewIteratorStopsAtItemWithReallocatedData) {
   EXPECT_TRUE(std::ranges::equal(baseline, iterated.front()));
 }
 
+TEST_F(SharedDataFixture, IterateOverValues) {
+  // Arrange
+  LabelSetEncodingBimap encoding_bimap;
+  encoding_bimap.find_or_emplace(LabelViewSet{{"name1", "value"}});
+
+  // Act
+  const LabelSetDecodingTable decoding_table(encoding_bimap);
+  encoding_bimap.find_or_emplace(LabelViewSet{{"added1", "value"}});
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(std::vector{"value"sv}, decoding_table.data_view().values()));
+  EXPECT_EQ(1U, decoding_table.data_view().values().size());
+}
+
 class LabelNameSetEncodingBimapTest : public testing::Test {
  protected:
   PromPP::Primitives::SnugComposites::LabelNameSet::EncodingBimap<Vector> encoding_table_;
