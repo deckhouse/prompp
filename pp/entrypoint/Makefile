@@ -75,8 +75,8 @@ install: $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a
 install: $(prefixed_archives)
 	@install $^ $(install_dir)
 
-# C-compatible constants shared with Go through the generated header.
-constant_headers := types/go_constants.h types/feature_flags_constants.h
+# C-compatible layouts shared with Go through the generated header.
+constant_headers := types/go_constants.h types/feature_flags_config.h
 
 $(result_dir)/entrypoint.h: $(constant_headers) $(headers) entrypoint.h.template ## Concat all headers in one
 	@mkdir -p ${@D}

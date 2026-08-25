@@ -166,7 +166,7 @@ PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
   auto& scraper = std::get<Scraper>(*in->hashdex);
   const auto buffer = std::span{const_cast<char*>(in->buffer.data()), in->buffer.size()};
   ScraperError error;
-  if (entrypoint::types::feature_flags().enabled(entrypoint::types::FeatureFlag::kScraperUtfPerToken)) [[unlikely]] {
+  if (entrypoint::types::feature_flags().features().scraper_validate_utf_per_token) [[unlikely]] {
     error = scraper.parse_validate_utf_per_token(buffer, in->default_timestamp);
   } else [[likely]] {
     error = scraper.parse(buffer, in->default_timestamp);

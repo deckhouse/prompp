@@ -6,7 +6,7 @@ extern "C" {
  * @brief Initialize C++ feature flags
  *
  * @param args {
- *     enabled_features uint64
+ *     features PromppFeatures
  * }
  */
 void prompp_feature_flags_initialize(void* args);

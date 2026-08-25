@@ -2,17 +2,17 @@
 
 namespace entrypoint::types {
 
-void FeatureFlags::initialize(const uint64_t enabled_features) noexcept {
+void FeatureFlags::initialize(const PromppFeatures features) noexcept {
   if (initialized_) {
     return;
   }
 
-  enabled_features_ = enabled_features;
+  features_ = features;
   initialized_ = true;
 }
 
-bool FeatureFlags::enabled(const FeatureFlag feature) const noexcept {
-  return (enabled_features_ & static_cast<uint64_t>(feature)) != 0;
+const PromppFeatures& FeatureFlags::features() const noexcept {
+  return features_;
 }
 
 FeatureFlags& feature_flags() noexcept {

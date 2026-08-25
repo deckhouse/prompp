@@ -16,8 +16,13 @@
 #define Sizeof_SegmentSamplesStorageListIterator 56
 #pragma once
 
-// C++/Go ABI feature bits remain stable while supported.
-#define PROMPP_FEATURE_SCRAPER_UTF_PER_TOKEN (1ull << 0)
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
+typedef struct {
+  bool scraper_validate_utf_per_token;
+} PromppFeatures;
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -96,20 +101,13 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize process-wide C++ feature flags.
- *
- * Calling this function repeatedly with the same mask is allowed. A different
- * mask after successful initialization is rejected.
+ * @brief Initialize C++ feature flags
  *
  * @param args {
- *     enabled_features uint64
- * }
- * @param res {
- *     features uint64 // already configured mask on error
- *     status   uint32
+ *     features PromppFeatures
  * }
  */
-void prompp_feature_flags_initialize(void* args, void* res);
+void prompp_feature_flags_initialize(void* args);
 
 #ifdef __cplusplus
 }

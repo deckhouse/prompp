@@ -104,7 +104,7 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 			_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
 
 		case "disable_scraper_full_utf8":
-			cppFeatures |= cppbridge.FeatureScraperUTFPerToken
+			cppFeatures.DisableScraperFullUTF8()
 			_ = level.Info(logger).Log(msgStr, "Whole-input UTF-8 validation for scraper is disabled.")
 
 		default:

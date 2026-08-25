@@ -4,14 +4,13 @@
 
 namespace {
 
-using entrypoint::types::FeatureFlag;
 using entrypoint::types::FeatureFlags;
 TEST(FeatureFlags, FeaturesAreDisabledBeforeInitialization) {
   // Arrange
   const FeatureFlags flags;
 
   // Act
-  const auto enabled = flags.enabled(FeatureFlag::kScraperUtfPerToken);
+  const auto enabled = flags.features().scraper_validate_utf_per_token;
 
   // Assert
   EXPECT_FALSE(enabled);
@@ -22,10 +21,10 @@ TEST(FeatureFlags, InitializesEnabledFeatures) {
   FeatureFlags flags;
 
   // Act
-  flags.initialize(PROMPP_FEATURE_SCRAPER_UTF_PER_TOKEN);
+  flags.initialize(PromppFeatures{.scraper_validate_utf_per_token = true});
 
   // Assert
-  EXPECT_TRUE(flags.enabled(FeatureFlag::kScraperUtfPerToken));
+  EXPECT_TRUE(flags.features().scraper_validate_utf_per_token);
 }
 
 TEST(FeatureFlags, EmptyInitializationKeepsFeaturesDisabled) {
@@ -33,22 +32,22 @@ TEST(FeatureFlags, EmptyInitializationKeepsFeaturesDisabled) {
   FeatureFlags flags;
 
   // Act
-  flags.initialize(0);
+  flags.initialize({});
 
   // Assert
-  EXPECT_FALSE(flags.enabled(FeatureFlag::kScraperUtfPerToken));
+  EXPECT_FALSE(flags.features().scraper_validate_utf_per_token);
 }
 
 TEST(FeatureFlags, RepeatedInitializationIsIgnored) {
   // Arrange
   FeatureFlags flags;
-  flags.initialize(PROMPP_FEATURE_SCRAPER_UTF_PER_TOKEN);
+  flags.initialize(PromppFeatures{.scraper_validate_utf_per_token = true});
 
   // Act
-  flags.initialize(0);
+  flags.initialize({});
 
   // Assert
-  EXPECT_TRUE(flags.enabled(FeatureFlag::kScraperUtfPerToken));
+  EXPECT_TRUE(flags.features().scraper_validate_utf_per_token);
 }
 
 }  // namespace

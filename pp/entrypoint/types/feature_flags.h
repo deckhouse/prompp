@@ -1,23 +1,17 @@
 #pragma once
 
-#include <cstdint>
-
-#include "feature_flags_constants.h"
+#include "feature_flags_config.h"
 
 namespace entrypoint::types {
-
-enum class FeatureFlag : uint64_t {
-  kScraperUtfPerToken = PROMPP_FEATURE_SCRAPER_UTF_PER_TOKEN,
-};
 
 class FeatureFlags {
  public:
   // Initialize before reading features; later calls are ignored.
-  void initialize(uint64_t enabled_features) noexcept;
-  [[nodiscard]] bool enabled(FeatureFlag feature) const noexcept;
+  void initialize(PromppFeatures features) noexcept;
+  [[nodiscard]] const PromppFeatures& features() const noexcept;
 
  private:
-  uint64_t enabled_features_{};
+  PromppFeatures features_{};
   bool initialized_{};
 };
 
