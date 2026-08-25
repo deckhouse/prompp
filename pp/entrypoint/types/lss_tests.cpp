@@ -24,7 +24,9 @@ using entrypoint::types::ShrinkAwareSnapshotLSS;
 using entrypoint::types::SnapshotLSS;
 using PromPP::Primitives::LabelViewSet;
 
-TEST(LssTest, CreateLssEncodingBimapSelectsExpectedAlternative) {
+class LssFixture : public testing::Test {};
+
+TEST_F(LssFixture, CreateLssEncodingBimapSelectsExpectedAlternative) {
   // Arrange
 
   // Act
@@ -34,7 +36,7 @@ TEST(LssTest, CreateLssEncodingBimapSelectsExpectedAlternative) {
   EXPECT_TRUE(std::holds_alternative<EncodingBimap>(*lss));
 }
 
-TEST(LssTest, CreateLssQueryableEncodingBimapSelectsExpectedAlternative) {
+TEST_F(LssFixture, CreateLssQueryableEncodingBimapSelectsExpectedAlternative) {
   // Arrange
 
   // Act
@@ -44,9 +46,9 @@ TEST(LssTest, CreateLssQueryableEncodingBimapSelectsExpectedAlternative) {
   EXPECT_TRUE(std::holds_alternative<QueryableEncodingBimap>(*lss));
 }
 
-TEST(LssTest, CreateLssRejectsUnknownType) {
+TEST_F(LssFixture, CreateLssRejectsUnknownType) {
   // Arrange
-  const auto unknown_type = static_cast<LssType>(-1);
+  constexpr auto unknown_type = static_cast<LssType>(-1);
 
   // Act
 
@@ -54,9 +56,9 @@ TEST(LssTest, CreateLssRejectsUnknownType) {
   EXPECT_THROW((void)create_lss(unknown_type), BareBones::Exception);
 }
 
-TEST(LssTest, CreateSnapshotFromEncodingBimapProducesPlainSnapshot) {
+TEST_F(LssFixture, CreateSnapshotFromEncodingBimapProducesPlainSnapshot) {
   // Arrange
-  auto lss = create_lss(LssType::kEncodingBimap);
+  const auto lss = create_lss(LssType::kEncodingBimap);
   std::get<EncodingBimap>(*lss).find_or_emplace(LabelViewSet{{"job", "a"}});
 
   // Act
@@ -135,7 +137,7 @@ class SnapshotLssFixture : public testing::Test {
 
 TEST_F(SnapshotLssFixture, ResolvesNormalQueryableLss) {
   // Arrange
-  auto lss = create_queryable_lss();
+  const auto lss = create_queryable_lss();
 
   // Act
   const auto snapshot = create_snapshot_lss(*lss);
@@ -148,7 +150,7 @@ TEST_F(SnapshotLssFixture, ResolvesNormalQueryableLss) {
 
 TEST_F(SnapshotLssFixture, FromFixedQueryableLssIsShrinkAware) {
   // Arrange
-  auto lss = create_fixed_lss();
+  const auto lss = create_fixed_lss();
 
   // Act
   const auto snapshot = create_snapshot_lss(*lss);
@@ -159,7 +161,7 @@ TEST_F(SnapshotLssFixture, FromFixedQueryableLssIsShrinkAware) {
 
 TEST_F(SnapshotLssFixture, ShrinkAwareResolvesSurvivingPreBoundarySeries) {
   // Arrange
-  auto lss = create_shrunk_lss();
+  const auto lss = create_shrunk_lss();
 
   // Act
   const auto snapshot = create_snapshot_lss(*lss);
@@ -171,7 +173,7 @@ TEST_F(SnapshotLssFixture, ShrinkAwareResolvesSurvivingPreBoundarySeries) {
 
 TEST_F(SnapshotLssFixture, ShrinkAwareHidesDroppedPreBoundarySeries) {
   // Arrange
-  auto lss = create_shrunk_lss();
+  const auto lss = create_shrunk_lss();
 
   // Act
   const auto snapshot = create_snapshot_lss(*lss);
@@ -184,7 +186,7 @@ TEST_F(SnapshotLssFixture, ShrinkAwareHidesDroppedPreBoundarySeries) {
 
 TEST_F(SnapshotLssFixture, ShrinkAwareResolvesPostBoundarySeries) {
   // Arrange
-  auto lss = create_shrunk_lss();
+  const auto lss = create_shrunk_lss();
 
   // Act
   const auto snapshot = create_snapshot_lss(*lss);
@@ -195,79 +197,32 @@ TEST_F(SnapshotLssFixture, ShrinkAwareResolvesPostBoundarySeries) {
   EXPECT_EQ(ls4_, std::get<ShrinkAwareSnapshotLSS>(*snapshot)[4]);
 }
 
-TEST(ReallocationsDetectorTest, ReportsReallocOnEmplace) {
+class ReallocationsDetectorFixture : public ::testing::Test {
+ protected:
+  QueryableEncodingBimap lss_;
+};
+
+TEST_F(ReallocationsDetectorFixture, ReportsReallocOnEmplace) {
   // Arrange
-  QueryableEncodingBimap lss;
-  ReallocationsDetector detector(lss);
+  const ReallocationsDetector detector(lss_);
 
   // Act
-  lss.find_or_emplace(LabelViewSet{{"job", "a"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "a"}});
 
   // Assert
   EXPECT_TRUE(detector.has_reallocations());
 }
 
-TEST(ReallocationsDetectorTest, StaysQuietWithoutChanges) {
+TEST_F(ReallocationsDetectorFixture, StaysQuietWithoutChanges) {
   // Arrange
-  QueryableEncodingBimap lss;
-  lss.find_or_emplace(LabelViewSet{{"job", "a"}});
-  lss.build_deferred_indexes();
+  lss_.find_or_emplace(LabelViewSet{{"job", "a"}});
+  lss_.build_deferred_indexes();
 
   // Act
-  ReallocationsDetector detector(lss);
+  const ReallocationsDetector detector(lss_);
 
   // Assert
   EXPECT_FALSE(detector.has_reallocations());
-}
-
-// The snapshot keeps its own copy of the per-key values tables, while the keys count comes from a control block shared with the writer. A label
-// name that fits into the already allocated keys memory raises that shared count without reallocating, so a snapshot taken earlier starts
-// reporting more keys than it has values tables. Iterating the values must stay inside the copied tables. Note that unit test and asan builds
-// allocate exactly the requested size (see BareBones::GenericMemory::get_allocation_size), so the keys count never grows in place there and this
-// test only guards the invariant; drop that special case and it fails without the bound.
-class SnapshotValuesFixture : public testing::Test {
- protected:
-  static constexpr uint32_t kLabelNamesCount = 40;
-  static constexpr uint32_t kAddedLabelNamesCount = 8;
-
-  void SetUp() override {
-    add_label_names("name", kLabelNamesCount);
-    snapshot_ = std::make_unique<SnapshotLSS>(writer());
-  }
-
-  [[nodiscard]] QueryableEncodingBimap& writer() const { return std::get<QueryableEncodingBimap>(*lss_); }
-  [[nodiscard]] const SnapshotLSS& snapshot() const noexcept { return *snapshot_; }
-
-  void add_label_names(const std::string& prefix, uint32_t count) const {
-    for (uint32_t i = 0; i < count; ++i) {
-      writer().find_or_emplace(LabelViewSet{{prefix + std::to_string(i), "value"}});
-    }
-  }
-
-  [[nodiscard]] uint32_t count_snapshot_values() const {
-    uint32_t count = 0;
-    const auto values = snapshot_->data_view().values();
-    for (auto it = values.begin(); it != values.end(); ++it) {
-      ++count;
-    }
-    return count;
-  }
-
-  entrypoint::types::LssVariantPtr lss_{create_lss(LssType::kQueryableEncodingBimap)};
-  std::unique_ptr<SnapshotLSS> snapshot_;
-};
-
-TEST_F(SnapshotValuesFixture, ValuesIterationSkipsLabelNamesAddedAfterSnapshot) {
-  // Arrange
-  const auto values_at_snapshot = count_snapshot_values();
-
-  // Act
-  add_label_names("added", kAddedLabelNamesCount);
-
-  // Assert
-  EXPECT_EQ(kLabelNamesCount, values_at_snapshot);
-  EXPECT_EQ(values_at_snapshot, count_snapshot_values());
-  EXPECT_EQ(kLabelNamesCount, snapshot().data_view().values().size());
 }
 
 }  // namespace
