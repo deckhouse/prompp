@@ -140,22 +140,26 @@ func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.Handler
 	}
 }
 
-func (api *API) remoteWriteWebsocket(middlewares ...middleware.Middleware) http.HandlerFunc {
+func (api *API) remoteWriteWebsocket(...middleware.Middleware) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		if api.opHandler != nil {
-			api.opHandler.Websocket(middlewares...).ServeHTTP(rw, r)
-		} else {
-			http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
-		}
+		// if api.opHandler != nil {
+		// 	api.opHandler.Websocket(middlewares...).ServeHTTP(rw, r)
+		// } else {
+		// 	http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+		// }
+
+		http.Error(rw, "remote write websocket is not supported", http.StatusNotFound)
 	}
 }
 
-func (api *API) remoteWriteRefill(middlewares ...middleware.Middleware) http.HandlerFunc {
+func (api *API) remoteWriteRefill(...middleware.Middleware) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		if api.opHandler != nil {
-			api.opHandler.Refill(middlewares...).ServeHTTP(rw, r)
-		} else {
-			http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
-		}
+		// if api.opHandler != nil {
+		// 	api.opHandler.Refill(middlewares...).ServeHTTP(rw, r)
+		// } else {
+		// 	http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+		// }
+
+		http.Error(rw, "remote write refill is not supported", http.StatusNotFound)
 	}
 }
