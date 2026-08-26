@@ -118,7 +118,6 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 			_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", strings.TrimSpace(fname))
 		}
 	}
-
 }
 
 // setHeadReadConcurrency sets the concurrency level for reading from the head based on the provided feature value.
