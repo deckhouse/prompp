@@ -441,7 +441,6 @@ func initializeFeatureFlags(features FeatureFlags) {
 		C.prompp_feature_flags_initialize,
 		uintptr(unsafe.Pointer(&args)),
 	)
-	runtime.KeepAlive(args)
 }
 
 // GetFlavor returns recognized architecture flavor

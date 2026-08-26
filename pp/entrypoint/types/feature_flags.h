@@ -8,7 +8,7 @@ class FeatureFlags {
  public:
   // Initialize before reading features; later calls are ignored.
   void initialize(PromppFeatures features) noexcept;
-  [[nodiscard]] const PromppFeatures& features() const noexcept;
+  [[nodiscard]] const PromppFeatures& features() const noexcept { return features_; }
 
  private:
   PromppFeatures features_{};

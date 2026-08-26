@@ -48,8 +48,10 @@ type FlagConfig interface {
 func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 	features := os.Getenv("PROMPP_FEATURES")
 	var cppFeatures cppbridge.FeatureFlags
-	if features == "" {
+	defer func() {
 		cppbridge.InitializeFeatureFlags(cppFeatures)
+	}()
+	if features == "" {
 		return
 	}
 
@@ -117,7 +119,6 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		}
 	}
 
-	cppbridge.InitializeFeatureFlags(cppFeatures)
 }
 
 // setHeadReadConcurrency sets the concurrency level for reading from the head based on the provided feature value.

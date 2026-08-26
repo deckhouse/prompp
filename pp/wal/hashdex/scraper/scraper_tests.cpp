@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <optional>
+
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
 #include "wal/hashdex/test_fixture.h"
@@ -25,6 +27,7 @@ using std::operator""s;
 struct ScraperCase {
   std::string_view buffer;
   Error result;
+  std::optional<Error> legacy_result{};
   std::vector<Metadata> metadata{};
   std::vector<FloatMetric> floats{};
 };
@@ -57,6 +60,22 @@ TEST_P(PrometheusScraperFixture, Test) {
 
   // Assert
   EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().floats, floats);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+TEST_P(PrometheusScraperFixture, LegacyPerTokenUtf8Validation) {
+  // Arrange
+  std::string buffer(GetParam().buffer.data(), GetParam().buffer.size());
+  buffer.shrink_to_fit();
+
+  // Act
+  const auto result = scraper_.parse_validate_utf_per_token(buffer, kDefaultTimestamp);
+  const auto floats = get_floats();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().legacy_result.value_or(GetParam().result), result);
   EXPECT_EQ(GetParam().floats, floats);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
@@ -136,11 +155,11 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(ScraperCase{.buffer = "a\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b='c'} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b=\n", .result = Error::kUnexpectedToken, .floats = {}},
-                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kInvalidUtf8, .floats = {}},
+                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b=\"\xff\"} 1\n", .result = Error::kInvalidUtf8, .floats = {}},
-                    ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .floats = {}},
-                    ScraperCase{.buffer = "# comment \xff\n", .result = Error::kInvalidUtf8, .floats = {}},
-                    ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .floats = {}},
+                    ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "# comment \xff\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
+                    ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
                     ScraperCase{.buffer = "{\"a\", \"b = \"c\"}\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
@@ -556,11 +575,11 @@ INSTANTIATE_TEST_SUITE_P(
         ScraperCase{.buffer = "a{b=\"c\"d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\"c\",,d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
-        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .floats = {}},
+        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\"\xff\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .floats = {}},
-        ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .floats = {}},
-        ScraperCase{.buffer = "# comment \xff\n# EOF\n", .result = Error::kInvalidUtf8, .floats = {}},
-        ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# comment \xff\n# EOF\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
+        ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
         ScraperCase{.buffer = "{\"a\",\"b = \"c\"}\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},

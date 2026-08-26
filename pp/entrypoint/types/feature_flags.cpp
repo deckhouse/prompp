@@ -11,10 +11,6 @@ void FeatureFlags::initialize(const PromppFeatures features) noexcept {
   initialized_ = true;
 }
 
-const PromppFeatures& FeatureFlags::features() const noexcept {
-  return features_;
-}
-
 FeatureFlags& feature_flags() noexcept {
   static FeatureFlags flags;
   return flags;
