@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Features
+1. **`PROMPP_FEATURES=enable_startup_cleanup`.** Adds a pre-start self-cleanup that runs in two phases before any background goroutine starts. The first phase needs nothing but the data dir and runs before the heads catalog is opened, removing leftover tmp block dirs (`*.tmp-for-creation`, `*.tmp-for-deletion`, pre-2.21 `*.tmp`) — that garbage can be the very reason the catalog cannot be created, e.g. when the disk is full. The second phase runs one catalog GC pass once the catalog is up, so heads already eligible for deletion are collected immediately instead of waiting for the collector's first tick.
+
 ## v0.8.10 / 2026-08-21
 
 ### Fixes

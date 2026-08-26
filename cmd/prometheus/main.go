@@ -71,6 +71,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/rules"                        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                       // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/startupcleanup"               // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"       // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
@@ -765,6 +766,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	startupcleanup.RemoveLeftoverTmpDirs(logger, dataDir)
+
 	fileLog, err := catalog.NewFileLogV2(filepath.Join(dataDir, "head.log"))
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
@@ -1363,6 +1366,8 @@ func main() {
 		removedHeadTriggerNotifier,
 		ppRetentionPeriod,
 	)
+
+	startupcleanup.CollectHeads(opGC, logger)
 
 	var g run.Group
 	{

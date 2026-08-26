@@ -12,6 +12,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/handler"
 	"github.com/prometheus/prometheus/pp-pkg/handler/processor"
+	"github.com/prometheus/prometheus/pp-pkg/startupcleanup"
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
@@ -103,6 +104,10 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		case "enable_madvise_random":
 			fileutil.EnabledMADVRANDOM = true
 			_ = level.Info(logger).Log(msgStr, "MADV_RANDOM for mmaped files is enabled.")
+
+		case "enable_startup_cleanup":
+			startupcleanup.Enabled = true
+			_ = level.Info(logger).Log(msgStr, "Pre-start cleanup is enabled.")
 		}
 	}
 }

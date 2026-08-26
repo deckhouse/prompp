@@ -126,12 +126,7 @@ func NewManager(
 	}
 	m.metrics = newMetrics(m, r)
 
-	// Best-effort cleanup of leftover tmp block dirs (e.g. *.tmp-for-creation) that
-	// may remain after a crash during compaction or persist. Unlike tsdb.DB.Open, the
-	// block Manager never loads these dirs, so without this they would leak on disk.
-	if err := tsdb.RemoveBestEffortTmpDirs(logger, dir); err != nil {
-		_ = level.Warn(logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", dir, "err", err)
-	}
+	m.cleanupLeftoverTmpDirs()
 
 	if err := m.reloadBlocks(); err != nil {
 		return nil, fmt.Errorf("initial reload blocks: %w", err)
@@ -141,6 +136,17 @@ func NewManager(
 	_ = level.Info(logger).Log("msg", "Block manager started", "dir", dir)
 	go m.loop()
 	return m, nil
+}
+
+// cleanupLeftoverTmpDirs performs a best-effort cleanup of leftover tmp block
+// dirs (e.g. *.tmp-for-creation, *.tmp-for-deletion) that may remain in m.dir
+// after a crash during compaction or persist. Unlike tsdb.DB.Open, the block
+// Manager never loads these dirs, so without this they would leak on disk.
+// It is called once during Manager initialization.
+func (m *Manager) cleanupLeftoverTmpDirs() {
+	if err := tsdb.RemoveBestEffortTmpDirs(m.logger, m.dir); err != nil {
+		_ = level.Warn(m.logger).Log("msg", "failed to remove leftover tmp block dirs", "dir", m.dir, "err", err)
+	}
 }
 
 func (m *Manager) loop() {
