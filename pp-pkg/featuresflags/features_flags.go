@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"
+	"github.com/prometheus/prometheus/tsdb/fileutil"
 	prom_runtime "github.com/prometheus/prometheus/util/runtime"
 	"github.com/prometheus/prometheus/web"
 )
@@ -98,6 +99,10 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 			case "enable_block_shard_labels":
 				block.EnableBlockShardLabels = true
 				_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
+
+			case "enable_madvise_random":
+				fileutil.EnabledMADVRANDOM = true
+				_ = level.Info(logger).Log(msgStr, "MADV_RANDOM for mmaped files is enabled.")
 
 			case "disable_scraper_full_utf8":
 				cppFeatures.DisableScraperFullUTF8()

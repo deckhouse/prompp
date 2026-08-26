@@ -31,11 +31,14 @@ template <class Buffer>
   return reader;
 }
 
+struct DoNotInitializeTag {};
+
 template <BareBones::ReallocatorInterface Reallocator>
 struct PROMPP_ATTRIBUTE_PACKED BitSequenceWithItemsCount {
   CompactBitSequence<Reallocator> stream;
 
   BitSequenceWithItemsCount() { stream.push_back_bits_u32(BareBones::Bit::to_bits(sizeof(uint8_t)), 1U); }
+  explicit BitSequenceWithItemsCount(DoNotInitializeTag) noexcept {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count() const noexcept { return *stream.raw_bytes(); }
   PROMPP_ALWAYS_INLINE uint8_t inc_count() noexcept { return (*stream.raw_bytes())++; }
