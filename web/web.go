@@ -49,6 +49,7 @@ import (
 	toolkit_web "github.com/prometheus/exporter-toolkit/web"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/atomic"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
@@ -217,6 +218,8 @@ type Handler struct {
 	now func() model.Time
 
 	ready atomic.Uint32 // ready is uint32 rather than boolean to be able to use atomic functions.
+
+	jemallocSem *semaphore.Weighted
 }
 
 // ApplyConfig updates the config field of the Handler struct.
@@ -314,7 +317,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		exemplarStorage: o.ExemplarStorage,
 		notifier:        o.Notifier,
 
-		now: model.Now,
+		now:         model.Now,
+		jemallocSem: semaphore.NewWeighted(1),
 	}
 	h.SetReady(false)
 
@@ -488,8 +492,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		w.Write([]byte("Only POST or PUT requests allowed"))
 	})
 
-	router.Get("/debug/*subpath", serveDebug)
-	router.Post("/debug/*subpath", serveDebug)
+	router.Get("/debug/*subpath", h.serveDebug)
+	router.Post("/debug/*subpath", h.serveDebug)
 
 	router.Get("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -509,11 +513,17 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 	return h
 }
 
-func serveDebug(w http.ResponseWriter, req *http.Request) {
+func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	subpath := route.Param(ctx, "subpath")
 
 	if subpath == "/jemalloc" {
+		if err := h.jemallocSem.Acquire(ctx, 1); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer h.jemallocSem.Release(1)
+
 		serveJemallocProfile(w, req)
 		return
 	}
