@@ -423,7 +423,8 @@ func (f *FeatureFlags) DisableScraperFullUTF8() {
 	f.features.scraper_validate_utf_per_token = true
 }
 
-// InitializeFeatureFlags configures C++ features at startup. Later calls are ignored.
+// InitializeFeatureFlags configures C++ features once at startup.
+// Passing zero FeatureFlags freezes the default configuration.
 func InitializeFeatureFlags(features FeatureFlags) {
 	initializeFeatureFlags(features)
 }
