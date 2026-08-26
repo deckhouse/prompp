@@ -21,17 +21,23 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// EnabledMADVRANDOM it is set to true if you want to activate madvise(MADV_RANDOM).
+// It allows you to reduce the size of the memory used, but it can increase the disk load (IOPS).
+var EnabledMADVRANDOM = false
+
 func mmap(f *os.File, length int) ([]byte, error) {
 	b, err := unix.Mmap(int(f.Fd()), 0, length, unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
 		return nil, err
 	}
 
-	// Disable kernel readahead for this mapping. Block index/chunk files are
-	// accessed randomly, so the default sequential prefetch only pulls large
-	// chunks of the file into the (active) page cache on first touch, inflating
-	// the container working set for a long time after a restart.
-	_ = unix.Madvise(b, unix.MADV_RANDOM)
+	if EnabledMADVRANDOM {
+		// Disable kernel readahead for this mapping. Block index/chunk files are
+		// accessed randomly, so the default sequential prefetch only pulls large
+		// chunks of the file into the (active) page cache on first touch, inflating
+		// the container working set for a long time after a restart.
+		_ = unix.Madvise(b, unix.MADV_RANDOM)
+	}
 
 	return b, nil
 }
