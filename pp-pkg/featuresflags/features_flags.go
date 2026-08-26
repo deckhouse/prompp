@@ -48,69 +48,72 @@ type FlagConfig interface {
 func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 	features := os.Getenv("PROMPP_FEATURES")
 	var cppFeatures cppbridge.FeatureFlags
-	if features != "" {
-		logger = log.With(logger, "component", "PROMPP_FEATURES")
-		for feature := range strings.SplitSeq(features, ",") {
-			fname, fvalue, _ := strings.Cut(feature, "=")
-			switch strings.TrimSpace(fname) {
-			case "head_read_concurrency":
-				setHeadReadConcurrency(logger, fvalue)
+	if features == "" {
+		cppbridge.InitializeFeatureFlags(cppFeatures)
+		return
+	}
 
-			case "head_default_number_of_shards":
-				setHeadDefaultNumberOfShards(logger, fvalue)
+	logger = log.With(logger, "component", "PROMPP_FEATURES")
+	for feature := range strings.SplitSeq(features, ",") {
+		fname, fvalue, _ := strings.Cut(feature, "=")
+		switch strings.TrimSpace(fname) {
+		case "head_read_concurrency":
+			setHeadReadConcurrency(logger, fvalue)
 
-			case "disable_commits_on_remote_write":
-				setDisableCommitsOnRemoteWrite(logger)
+		case "head_default_number_of_shards":
+			setHeadDefaultNumberOfShards(logger, fvalue)
 
-			case "disable_block_compaction":
-				pp_pkg_tsdb.BlockCompactionDisabled = true
-				_ = level.Info(logger).Log(msgStr, "Prometheus compaction disabled.")
+		case "disable_commits_on_remote_write":
+			setDisableCommitsOnRemoteWrite(logger)
 
-			case "federation_split_families":
-				setFederationSplitFamilies(logger, fvalue)
+		case "disable_block_compaction":
+			pp_pkg_tsdb.BlockCompactionDisabled = true
+			_ = level.Info(logger).Log(msgStr, "Prometheus compaction disabled.")
 
-			case "default_sample_age_limit":
-				setDefaultSampleAgeLimit(logger, fvalue)
+		case "federation_split_families":
+			setFederationSplitFamilies(logger, fvalue)
 
-			case "disable_instant_query_feature":
-				querier.InstantQueryFeature = false
-				_ = level.Info(logger).Log(msgStr, "Instant query feature is disabled.")
+		case "default_sample_age_limit":
+			setDefaultSampleAgeLimit(logger, fvalue)
 
-			case "disable_remote_write_http2":
-				remotewriter.HTTP2Enabled = false
-				_ = level.Info(logger).Log(msgStr, "HTTP/2 for remote write is disabled.")
+		case "disable_instant_query_feature":
+			querier.InstantQueryFeature = false
+			_ = level.Info(logger).Log(msgStr, "Instant query feature is disabled.")
 
-			case "disable_shrink_shard_copier":
-				storage.ShrinkShardCopier = false
-				_ = level.Info(logger).Log(msgStr, "Shrink shard copier is disabled.")
+		case "disable_remote_write_http2":
+			remotewriter.HTTP2Enabled = false
+			_ = level.Info(logger).Log(msgStr, "HTTP/2 for remote write is disabled.")
 
-			case "disable_block_manager":
-				cfg.DisableBlockManagerStorage()
-				_ = level.Info(logger).Log(
-					msgStr, "Block-manager historical storage is disabled; using pre-PR-377 TSDB storage.",
-				)
+		case "disable_shrink_shard_copier":
+			storage.ShrinkShardCopier = false
+			_ = level.Info(logger).Log(msgStr, "Shrink shard copier is disabled.")
 
-			case "disable_coredumps":
-				setDisableCoredumps(logger)
+		case "disable_block_manager":
+			cfg.DisableBlockManagerStorage()
+			_ = level.Info(logger).Log(
+				msgStr, "Block-manager historical storage is disabled; using pre-PR-377 TSDB storage.",
+			)
 
-			case "select_func_optimization":
-				setSelectFuncOptimization(logger, fvalue)
+		case "disable_coredumps":
+			setDisableCoredumps(logger)
 
-			case "enable_block_shard_labels":
-				block.EnableBlockShardLabels = true
-				_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
+		case "select_func_optimization":
+			setSelectFuncOptimization(logger, fvalue)
 
-			case "enable_madvise_random":
-				fileutil.EnabledMADVRANDOM = true
-				_ = level.Info(logger).Log(msgStr, "MADV_RANDOM for mmaped files is enabled.")
+		case "enable_block_shard_labels":
+			block.EnableBlockShardLabels = true
+			_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
 
-			case "disable_scraper_full_utf8":
-				cppFeatures.DisableScraperFullUTF8()
-				_ = level.Info(logger).Log(msgStr, "Whole-input UTF-8 validation for scraper is disabled.")
+		case "enable_madvise_random":
+			fileutil.EnabledMADVRANDOM = true
+			_ = level.Info(logger).Log(msgStr, "MADV_RANDOM for mmaped files is enabled.")
 
-			default:
-				_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", strings.TrimSpace(fname))
-			}
+		case "disable_scraper_full_utf8":
+			cppFeatures.DisableScraperFullUTF8()
+			_ = level.Info(logger).Log(msgStr, "Whole-input UTF-8 validation for scraper is disabled.")
+
+		default:
+			_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", strings.TrimSpace(fname))
 		}
 	}
 
