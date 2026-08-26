@@ -57,6 +57,28 @@ void ScraperParse(benchmark::State& state) {
   }
 }
 
+void ScraperParseValidateUtfPerToken(benchmark::State& state) {
+  ZoneScoped;
+  const auto str = get_file_content();
+
+  std::string tmp_str;
+  tmp_str.resize(str.size());
+
+  for ([[maybe_unused]] auto _ : state) {
+    std::memcpy(tmp_str.data(), str.data(), str.size());
+    PrometheusScraper scraper;
+    std::ignore = scraper.parse_validate_utf_per_token(tmp_str, 0);
+  }
+
+  {
+    PrometheusScraper scraper;
+    auto tmp_str2 = str;
+    std::ignore = scraper.parse_validate_utf_per_token(tmp_str2, 0);
+    state.counters["Alloc"] =
+        benchmark::Counter(static_cast<double>(scraper.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+  }
+}
+
 void ScraperRead(benchmark::State& state) {
   ZoneScoped;
   auto str = get_file_content();
@@ -78,6 +100,7 @@ void ScraperRead(benchmark::State& state) {
 
 BENCHMARK(Parser)->ComputeStatistics("min", benchmark::min_time);
 BENCHMARK(ScraperParse)->ComputeStatistics("min", benchmark::min_time);
+BENCHMARK(ScraperParseValidateUtfPerToken)->ComputeStatistics("min", benchmark::min_time);
 BENCHMARK(ScraperRead)->ComputeStatistics("min", benchmark::min_time);
 
 }  // namespace

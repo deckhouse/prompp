@@ -411,6 +411,36 @@ func freeBytes(b []byte) {
 	runtime.KeepAlive(b)
 }
 
+// FeatureFlags configures C++ entrypoint behavior.
+type FeatureFlags struct {
+	features C.PromppFeatures
+}
+
+// DisableScraperFullUTF8 selects legacy per-token UTF-8 validation.
+func (f *FeatureFlags) DisableScraperFullUTF8() {
+	f.features.scraper_validate_utf_per_token = true
+}
+
+// InitializeFeatureFlags configures C++ features once at startup.
+// Passing zero FeatureFlags freezes the default configuration.
+func InitializeFeatureFlags(features FeatureFlags) {
+	initializeFeatureFlags(features)
+}
+
+func initializeFeatureFlags(features FeatureFlags) {
+	args := struct {
+		features C.PromppFeatures
+	}{
+		features: features.features,
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_feature_flags_initialize,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 // GetFlavor returns recognized architecture flavor
 //
 //revive:disable:confusing-naming // wrapper

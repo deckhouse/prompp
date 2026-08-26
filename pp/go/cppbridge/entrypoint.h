@@ -12,6 +12,15 @@
 #define Sizeof_SegmentSamplesStorage 80
 #define Sizeof_RemoteWriteMessageEncoder 32
 #define Sizeof_SegmentSamplesStorageListIterator 56
+#pragma once
+
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
+typedef struct {
+  bool scraper_validate_utf_per_token;
+} PromppFeatures;
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -43,6 +52,22 @@ void prompp_mem_info(void* res);
  * }
  */
 void prompp_dump_memory_profile(void* args, void* res);
+
+#ifdef __cplusplus
+}
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Initialize C++ feature flags
+ *
+ * @param args {
+ *     features PromppFeatures
+ * }
+ */
+void prompp_feature_flags_initialize(void* args);
 
 #ifdef __cplusplus
 }
