@@ -2,8 +2,6 @@
 
 #include <optional>
 
-#include <optional>
-
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
 #include "wal/hashdex/test_fixture.h"
@@ -29,7 +27,6 @@ using std::operator""s;
 struct ScraperCase {
   std::string_view buffer;
   Error result;
-  std::optional<Error> legacy_result{};
   std::optional<Error> legacy_result{};
   std::vector<Metadata> metadata{};
   std::vector<FloatMetric> floats{};
