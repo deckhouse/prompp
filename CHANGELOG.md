@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Features
-1. **`PROMPP_FEATURES=enable_startup_cleanup`.** Adds a pre-start self-cleanup that runs in two phases before any background goroutine starts. The first phase needs nothing but the data dir and runs before the heads catalog is opened, removing leftover tmp block dirs (`*.tmp-for-creation`, `*.tmp-for-deletion`, pre-2.21 `*.tmp`) — that garbage can be the very reason the catalog cannot be created, e.g. when the disk is full. The second phase runs one catalog GC pass once the catalog is up, so heads already eligible for deletion are collected immediately instead of waiting for the collector's first tick.
+1. **`PROMPP_FEATURES=enable_startup_cleanup`.** Adds a pre-start self-cleanup that runs in two phases before any background goroutine starts. Both need nothing but the data dir and the retention config, so they run before the heads catalog is opened: on a full disk the space they free may be the only reason the rest of the startup can proceed. The first phase removes leftover tmp block dirs (`*.tmp-for-creation`, `*.tmp-for-deletion`, pre-2.21 `*.tmp`). The second one deletes the persisted blocks that do not fit the configured time and size retention, describing each block by its `meta.json` and its on-disk size instead of opening it; the decision is taken by the same expiration policy the block manager applies on every reload, except that here the size budget is charged with everything on disk that is not a block, not just with the catalog and its heads.
 
 ## v0.8.10 / 2026-08-21
 

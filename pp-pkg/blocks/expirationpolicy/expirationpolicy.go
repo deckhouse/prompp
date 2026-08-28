@@ -93,6 +93,11 @@ type Options struct {
 	RetentionDuration int64
 	// MaxBytes is the maximum number of bytes to be retained in the tsdb blocks, configured 0 means disabled.
 	MaxBytes int64
+	// ExtraSize reports the on-disk bytes used outside of the blocks, which are
+	// charged against MaxBytes. When nil the size is taken from the catalog via
+	// [ExpirationPolicy.CatalogHeadsSize]; it is useful for callers that have no
+	// catalog at hand, e.g. the pre-start cleanup.
+	ExtraSize func() int64
 }
 
 //
@@ -146,7 +151,7 @@ func (ep *ExpirationPolicy[TBlock]) BeyondSizeRetention(
 	var reachedLimit bool
 
 	// Initializing size counter with the injected extra size (heads + catalog).
-	blocksSize := ep.CatalogHeadsSize()
+	blocksSize := ep.extraSize()
 	for i, blk := range rawBlocks {
 		if _, ok := deletable[blk.ULID()]; ok {
 			// This block is already marked for deletion, so we don't count its size.
@@ -241,7 +246,12 @@ func (ep *ExpirationPolicy[TBlock]) BlocksToDelete(blocks []TBlock) map[ulid.ULI
 }
 
 // CatalogHeadsSize returns the on-disk size of the catalog and all of its heads.
+// It returns 0 when the policy was created without a catalog.
 func (ep *ExpirationPolicy[TBlock]) CatalogHeadsSize() int64 {
+	if ep.c == nil {
+		return 0
+	}
+
 	catalogSize := ep.c.OnDiskSize()
 	heads := ep.c.List(nil, nil)
 	for _, h := range heads {
@@ -249,6 +259,15 @@ func (ep *ExpirationPolicy[TBlock]) CatalogHeadsSize() int64 {
 	}
 
 	return catalogSize
+}
+
+// extraSize returns the on-disk bytes used outside of the blocks.
+func (ep *ExpirationPolicy[TBlock]) extraSize() int64 {
+	if ep.opts.ExtraSize != nil {
+		return ep.opts.ExtraSize()
+	}
+
+	return ep.CatalogHeadsSize()
 }
 
 // headSize returns the on-disk size of a head directory.

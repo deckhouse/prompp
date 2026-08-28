@@ -238,6 +238,42 @@ func (s *ExpirationPolicySuite) TestBlocksToDelete_UnsortedInputUsesNewestFirst(
 	s.Equal(1.0, s.metricValue(reg, "prometheus_tsdb_time_retentions_total"))
 }
 
+func (s *ExpirationPolicySuite) TestBlocksToDelete_ExtraSizeTakesPrecedence() {
+	b1 := s.newBlock(1, 2000, 0)
+	b2 := s.newBlock(2, 1000, 0)
+
+	ep := expirationpolicy.NewExpirationPolicy[*testBlock](
+		s.T().TempDir(),
+		s.newCatalog(0),
+		&expirationpolicy.Options{
+			MaxBytes:  100,
+			ExtraSize: func() int64 { return 150 },
+		},
+		nil,
+	)
+
+	actual := ep.BlocksToDelete([]*testBlock{b1, b2})
+	s.assertDeletable(actual, b1.ULID(), b2.ULID())
+}
+
+func (s *ExpirationPolicySuite) TestBlocksToDelete_WithoutCatalog() {
+	b1 := s.newBlock(1, 2000, 60)
+	b2 := s.newBlock(2, 1000, 60)
+
+	ep := expirationpolicy.NewExpirationPolicy[*testBlock](
+		s.T().TempDir(),
+		nil,
+		&expirationpolicy.Options{
+			MaxBytes:  100,
+			ExtraSize: func() int64 { return 0 },
+		},
+		nil,
+	)
+
+	actual := ep.BlocksToDelete([]*testBlock{b1, b2})
+	s.assertDeletable(actual, b2.ULID())
+}
+
 func (s *ExpirationPolicySuite) TestCatalogHeadsSize() {
 	dir := s.T().TempDir()
 
@@ -248,6 +284,16 @@ func (s *ExpirationPolicySuite) TestCatalogHeadsSize() {
 
 	record1 := catalog.NewRecordWithData(id1, 1, 0, 0, 0, false, 0, catalog.StatusActive, nil)
 	record2 := catalog.NewRecordWithData(id2, 1, 0, 0, 0, false, 0, catalog.StatusActive, nil)
+
+	s.Run("no catalog", func() {
+		ep := expirationpolicy.NewExpirationPolicy[*testBlock](
+			dir,
+			nil,
+			&expirationpolicy.Options{},
+			nil,
+		)
+		s.Zero(ep.CatalogHeadsSize())
+	})
 
 	s.Run("catalog only", func() {
 		ep := expirationpolicy.NewExpirationPolicy[*testBlock](

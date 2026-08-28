@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// Block dirs are named by ULID and head dirs by UUID, so the phase under test
+// Block dirs are named by ULID and head dirs by UUID, so the cleanup under test
 // can only recognize the former.
 const (
 	blockULID         = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -76,7 +76,7 @@ func (s *StartupCleanupSuite) TestRemoveLeftoverTmpDirs() {
 	s.requireNotExists(tmpForDeletion)
 	s.requireNotExists(tmpLegacy)
 
-	// Live data must survive: this phase runs without the catalog, so it may only
+	// Live data must survive: the cleanup runs without the catalog, so it may only
 	// touch dirs it can recognize as temporary on its own.
 	s.requireExists(block)
 	s.requireExists(head)
@@ -88,44 +88,4 @@ func (s *StartupCleanupSuite) TestRemoveLeftoverTmpDirsMissingDir() {
 	s.Require().NotPanics(func() {
 		RemoveLeftoverTmpDirs(log.NewNopLogger(), filepath.Join(s.T().TempDir(), "absent"))
 	})
-}
-
-func (s *StartupCleanupSuite) TestCollectHeadsDisabled() {
-	gc := &fakeHeadsGC{}
-
-	CollectHeads(gc, log.NewNopLogger())
-
-	s.Equal(0, gc.iterations)
-}
-
-func (s *StartupCleanupSuite) TestCollectHeads() {
-	s.enable()
-
-	gc := &fakeHeadsGC{}
-
-	CollectHeads(gc, log.NewNopLogger())
-
-	s.Equal(1, gc.iterations)
-}
-
-func (s *StartupCleanupSuite) TestCollectHeadsNilGC() {
-	s.enable()
-
-	s.Require().NotPanics(func() {
-		CollectHeads(nil, log.NewNopLogger())
-	})
-}
-
-//
-// fakeHeadsGC
-//
-
-// fakeHeadsGC is a [HeadsGC] counting the passes it was asked to run.
-type fakeHeadsGC struct {
-	iterations int
-}
-
-// Iterate implements the [HeadsGC] interface.
-func (gc *fakeHeadsGC) Iterate() {
-	gc.iterations++
 }

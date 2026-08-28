@@ -767,6 +767,26 @@ func main() {
 	}
 
 	startupcleanup.RemoveLeftoverTmpDirs(logger, dataDir)
+	if !agentMode {
+		// The retention metrics may only be registered for the block-manager
+		// scheme, where the block manager reuses the very same collectors. In the
+		// pre-PR-377 scheme tsdb.Open registers its own collectors under the same
+		// names and would panic on a duplicate registration.
+		var retentionRegisterer prometheus.Registerer
+		if cfg.UseBlockManagerStorage {
+			retentionRegisterer = prometheus.DefaultRegisterer
+		}
+
+		startupcleanup.RemoveExpiredBlocks(
+			logger,
+			dataDir,
+			&startupcleanup.BlocksOptions{
+				RetentionDuration: int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond),
+				MaxBytes:          int64(cfg.tsdb.MaxBytes),
+			},
+			retentionRegisterer,
+		)
+	}
 
 	fileLog, err := catalog.NewFileLogV2(filepath.Join(dataDir, "head.log"))
 	if err != nil {
@@ -1366,8 +1386,6 @@ func main() {
 		removedHeadTriggerNotifier,
 		ppRetentionPeriod,
 	)
-
-	startupcleanup.CollectHeads(opGC, logger)
 
 	var g run.Group
 	{
