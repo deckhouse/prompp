@@ -284,7 +284,6 @@ cc_binary(
     malloc = "@jemalloc",
     deps = [
         ":performance_tests_headers",
-        "@gtest//:gtest_main",
     ],
 )
 
