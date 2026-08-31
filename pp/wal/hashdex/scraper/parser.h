@@ -1,6 +1,6 @@
 #pragma once
 
-#include <fastfloat/fast_float.h>
+#include <charconv>
 
 #include "primitives/primitives.h"
 #include "prometheus/textparse/open_metrics/tokenizer.h"
@@ -24,7 +24,7 @@ template <class Value>
     str.remove_prefix(1);
   }
 
-  if (const auto [ptr, ec] = fast_float::from_chars(str.begin(), str.end(), value); ec != std::errc{} || ptr != str.end()) [[unlikely]] {
+  if (const auto [ptr, ec] = std::from_chars(str.begin(), str.end(), value); ec != std::errc{} || ptr != str.end()) [[unlikely]] {
     return false;
   }
 
