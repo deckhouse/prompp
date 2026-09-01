@@ -148,6 +148,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
   PROMPP_ALWAYS_INLINE void mark_active(uint32_t ls_id) noexcept { mark_series_as_added(ls_id); }
+  PROMPP_ALWAYS_INLINE void mark_active_atomic(uint32_t ls_id) noexcept { mark_series_as_added_atomic(ls_id); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
     assert(id < next_item_index_impl());
@@ -319,6 +320,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept { added_series_.set(ls_id); }
+  PROMPP_ALWAYS_INLINE void mark_series_as_added_atomic(uint32_t ls_id) noexcept { added_series_.set_atomic(ls_id); }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
 
@@ -481,6 +483,8 @@ class QueryableEncodingBimapCopier {
 
     const auto cmp = sorting_index_.get_comparator();
     std::sort(old_new_ids_.begin(), old_new_ids_.end(), [&](const id_pair& a, const id_pair& b) { return cmp(a.old_id, b.old_id); });
+
+    destination_.added_series_.resize(dst_src_ids_mapping_.size());
   }
 
   void copy_ls_id_set() {
