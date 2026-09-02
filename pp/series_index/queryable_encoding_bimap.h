@@ -356,7 +356,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
-    assert(boundary <= added_series_.size());
     const auto active_series_count = static_cast<size_t>(added_series_.popcount());
     const auto added_series_size = added_series_.last_significant_bit() + 1;
 
@@ -391,7 +390,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   void rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) noexcept {
     ls_id_set_.clear();
     ls_id_hash_set_.clear();
-    ls_id_hash_set_.reserve(active_series_count + added_series_size - boundary);
+    ls_id_hash_set_.reserve(active_series_count + (added_series_size > boundary ? (added_series_size - boundary) : 0));
 
     const auto hasher = this->hasher();
     for (const auto ls_id : added_series_) {
