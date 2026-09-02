@@ -24,6 +24,18 @@ var allowedFuncs = map[string]struct{}{
 	"deriv":    {},
 	"irate":    {},
 	"idelta":   {},
+
+	"avg_over_time":      {},
+	"min_over_time":      {},
+	"max_over_time":      {},
+	"sum_over_time":      {},
+	"count_over_time":    {},
+	"quantile_over_time": {},
+	"stddev_over_time":   {},
+	"stdvar_over_time":   {},
+	"mad_over_time":      {},
+	"last_over_time":     {},
+	"present_over_time":  {},
 }
 
 // counterFuncs is the subset of allowedFuncs that reads the series as a counter and
