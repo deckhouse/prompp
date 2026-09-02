@@ -1054,14 +1054,11 @@ struct LabelSet {
 
         void get_values_range() noexcept {
           value_it_ = {};
-          while (!keys_exhausted()) {
-            const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].data_view();
-            value_it_ = values_view.begin();
-
-            if (value_it_ != BareBones::iterator::kSentinel)
+          for (; !keys_exhausted(); ++key_it_) {
+            value_it_ = (*symbols_tables_ptr_)[key_it_.id()].data_view().begin();
+            if (value_it_ != BareBones::iterator::kSentinel) [[likely]] {
               return;
-
-            ++key_it_;
+            }
           }
         }
 
