@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/handler"
 	"github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
@@ -39,12 +40,17 @@ type FlagConfig interface {
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
-// and applies the specified feature flags to the system.
+// and applies the specified feature flags to the system. Unknown options are
+// reported and ignored.
 //
 //revive:disable-next-line:cyclomatic // complex logic is necessary for this function
 //revive:disable-next-line:function-length // complex logic is necessary for this function
 func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 	features := os.Getenv("PROMPP_FEATURES")
+	var cppFeatures cppbridge.FeatureFlags
+	defer func() {
+		cppbridge.InitializeFeatureFlags(cppFeatures)
+	}()
 	if features == "" {
 		return
 	}
@@ -103,6 +109,13 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		case "enable_madvise_random":
 			fileutil.EnabledMADVRANDOM = true
 			_ = level.Info(logger).Log(msgStr, "MADV_RANDOM for mmaped files is enabled.")
+
+		case "disable_scraper_full_utf8":
+			cppFeatures.DisableScraperFullUTF8()
+			_ = level.Info(logger).Log(msgStr, "Whole-input UTF-8 validation for scraper is disabled.")
+
+		default:
+			_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", strings.TrimSpace(fname))
 		}
 	}
 }

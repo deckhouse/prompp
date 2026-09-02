@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.11 / 2026-08-27
+
+### Fixes
+1. **`MADV_RANDOM` on block mmaps is now opt-in.** v0.8.9 (#427) unconditionally called `madvise(MADV_RANDOM)` on every block index/chunk mmap to shrink the page-cache footprint, but disabling kernel readahead can raise disk IOPS on some storage backends. The advise is now gated behind `PROMPP_FEATURES=enable_madvise_random` and off by default (#489).
+
+### Enhancements
+1. **Scraper validates UTF-8 over the whole scrape body by default.** The Prometheus/OpenMetrics text scraper previously ran `simdutf` validation per token (metric names, label names/values, `HELP` text), silently skipping comments and other bytes it didn't tokenize. Parsing now validates the entire input buffer up front, catching invalid UTF-8 anywhere in the payload; the old per-token behavior can be restored with `PROMPP_FEATURES=disable_scraper_full_utf8` (#482).
+
 ## v0.8.10 / 2026-08-21
 
 ### Fixes
