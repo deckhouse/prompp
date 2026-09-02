@@ -142,6 +142,8 @@ func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.Handler
 
 func (api *API) remoteWriteWebsocket(...middleware.Middleware) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		// temporarily disabled pending further development
+
 		// if api.opHandler != nil {
 		// 	api.opHandler.Websocket(middlewares...).ServeHTTP(rw, r)
 		// } else {
@@ -154,6 +156,8 @@ func (api *API) remoteWriteWebsocket(...middleware.Middleware) http.HandlerFunc 
 
 func (api *API) remoteWriteRefill(...middleware.Middleware) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		// temporarily disabled pending further development
+
 		// if api.opHandler != nil {
 		// 	api.opHandler.Refill(middlewares...).ServeHTTP(rw, r)
 		// } else {
