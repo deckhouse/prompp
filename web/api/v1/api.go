@@ -118,6 +118,9 @@ type RulesRetriever interface {
 	AlertingRules() []*rules.AlertingRule
 }
 
+// MinTimeBlocks is a function that returns the minimum time of all blocks managed by the manager.
+type MinTimeBlocks func() int64
+
 // StatsRenderer converts engine statistics into a format suitable for the API.
 type StatsRenderer func(context.Context, *stats.Statistics, string) stats.QueryStats
 
@@ -196,7 +199,7 @@ type API struct {
 
 	adapter                   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
 	opHandler                 *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
-	retentionDuration         time.Duration      // PP_CHANGES.md: rebuild on cpp
+	minTimeBlocks             MinTimeBlocks      // PP_CHANGES.md: rebuild on cpp
 	downsamplingLookbackDelta time.Duration      // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
@@ -235,7 +238,7 @@ func NewAPI(
 	eq storage.ExemplarQueryable,
 
 	adapter handler.Adapter, // PP_CHANGES.md: rebuild on cpp
-	retentionDuration time.Duration, // PP_CHANGES.md: rebuild on cpp
+	minTimeBlocks MinTimeBlocks, // PP_CHANGES.md: rebuild on cpp
 	downsamplingLookbackDelta time.Duration, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
@@ -264,13 +267,17 @@ func NewAPI(
 	acceptRemoteWriteProtoMsgs []config.RemoteWriteProtoMsg,
 	otlpEnabled bool,
 ) *API {
+	if minTimeBlocks == nil {
+		minTimeBlocks = defultMinTimeBlocks
+	}
+
 	a := &API{
 		QueryEngine:       qe,
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
 		adapter:                   adapter,                   // PP_CHANGES.md: rebuild on cpp
-		retentionDuration:         retentionDuration,         // PP_CHANGES.md: rebuild on cpp
+		minTimeBlocks:             minTimeBlocks,             // PP_CHANGES.md: rebuild on cpp
 		downsamplingLookbackDelta: downsamplingLookbackDelta, // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
@@ -455,7 +462,7 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 		defer cancel()
 	}
 
-	opts, err := extractQueryOpts(r, api.getLookbackDelta(api.now().Sub(ts)))
+	opts, err := extractQueryOpts(r, api.getLookbackDelta(ts.UnixMilli()))
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -503,8 +510,8 @@ func (api *API) formatQuery(r *http.Request) (result apiFuncResult) {
 	return apiFuncResult{expr.Pretty(0), nil, nil, nil}
 }
 
-func (api *API) getLookbackDelta(queryDuration time.Duration) time.Duration {
-	if queryDuration >= api.retentionDuration {
+func (api *API) getLookbackDelta(mint int64) time.Duration {
+	if api.downsamplingLookbackDelta > 0 && mint < api.minTimeBlocks() {
 		return api.downsamplingLookbackDelta
 	}
 
@@ -570,7 +577,7 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 		defer cancel()
 	}
 
-	opts, err := extractQueryOpts(r, api.getLookbackDelta(end.Sub(start)))
+	opts, err := extractQueryOpts(r, api.getLookbackDelta(start.UnixMilli()))
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -1973,4 +1980,9 @@ func toHintLimit(limit int) int {
 		return limit + 1
 	}
 	return limit
+}
+
+// defaultMinTimeBlocks returns the default value for the minimum time blocks.
+func defultMinTimeBlocks() int64 {
+	return math.MaxInt64
 }

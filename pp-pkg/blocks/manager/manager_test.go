@@ -165,7 +165,7 @@ func (s *ManagerSuite) TestManagerQuerierWrapsDownsamplingBlocks() {
 	s.Require().True(hasDownsamplingBlock, "should have at least one downsampling block")
 
 	// Create a querier for a range that triggers downsampling
-	// needDownsampling returns true when (maxt - mint) > retentionMS
+	// needDownsampling returns true when mint < mintBlocks
 	mintMS, maxtMS := int64(0), int64(1000) // Wide range to trigger downsampling
 	q, err := m.Querier(mintMS, maxtMS)
 	s.Require().NoError(err)

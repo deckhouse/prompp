@@ -3,11 +3,13 @@ package manager
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kit/log"
@@ -54,11 +56,6 @@ type Options struct {
 	EnableOverlappingCompaction bool
 }
 
-// needDownsampling checks if the delta is greater than the downsampling duration.
-func (o *Options) needDownsampling(delta int64) bool {
-	return o.DownsamplingMS > 0 && delta > o.RetentionDuration
-}
-
 // Manager reloads and applies retention to persisted blocks on disk.
 type Manager struct {
 	dir            string
@@ -77,6 +74,8 @@ type Manager struct {
 	stoppedc       chan struct{}
 	stopOnce       sync.Once
 	deleteBlocksWG sync.WaitGroup
+
+	mintBlocks int64
 }
 
 // compactionRunner runs a single compaction pass over the on-disk blocks,
@@ -131,6 +130,7 @@ func NewManager(
 		lsObserver:     lsObserver,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
+		mintBlocks:     math.MaxInt64,
 	}
 	m.metrics = newMetrics(m, r)
 
@@ -234,6 +234,11 @@ func (m *Manager) Close() {
 	m.blocks = nil
 }
 
+// MinTimeBlocks returns the minimum time of all blocks managed by the manager.
+func (m *Manager) MinTimeBlocks() int64 {
+	return atomic.LoadInt64(&m.mintBlocks)
+}
+
 // Querier returns a new querier over the persisted blocks overlapping the time
 // range [mint, maxt]. It implements [storage.Queryable].
 //
@@ -252,7 +257,7 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		}
 	}()
 
-	needDownsampling := m.opts.needDownsampling(maxt - mint)
+	needDownsampling := m.needDownsampling(mint)
 	resolutionMS := m.opts.DownsamplingMS
 	if needDownsampling {
 		// If we need downsampling, we need to reduce the mint for the resolution query for each block for upsampler.
@@ -296,7 +301,7 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 		}
 	}()
 
-	needDownsampling := m.opts.needDownsampling(maxt - mint)
+	needDownsampling := m.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
 		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue
@@ -459,6 +464,7 @@ func (m *Manager) reloadBlocks() (err error) {
 	// Swap new blocks first for subsequently created readers to be seen.
 	oldBlocks := m.blocks
 	m.blocks = toLoad
+	m.updateMinTime()
 
 	// Only check overlapping blocks when overlapping compaction is enabled.
 	if m.opts.EnableOverlappingCompaction {
@@ -566,10 +572,32 @@ func (*Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration) b
 	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli()) // #nosec G115 // no overflow
 }
 
+// needDownsampling checks if the minimum time of the block is greater than the minimum time of query.
+func (m *Manager) needDownsampling(mint int64) bool {
+	return m.opts.DownsamplingMS > 0 && mint < m.mintBlocks
+}
+
 func (*Manager) skipBlock(b *block.Block, mint, maxt int64, needDownsampling bool) bool {
 	return !b.OverlapsClosedInterval(mint, maxt) ||
 		(needDownsampling && !b.IsDownsamplingBlock()) ||
 		(!needDownsampling && b.IsDownsamplingBlock())
+}
+
+// updateMinTime updates the minimum time in blocks of the manager.
+func (m *Manager) updateMinTime() {
+	mintBlocks := int64(math.MaxInt64)
+
+	for _, blk := range m.blocks {
+		if blk.IsDownsamplingBlock() {
+			continue
+		}
+
+		if mint := blk.MinTime(); mint < mintBlocks {
+			mintBlocks = mint
+		}
+	}
+
+	atomic.StoreInt64(&m.mintBlocks, mintBlocks)
 }
 
 // normalizeBlockDurationMinutes normalizes a block duration in milliseconds to minutes.

@@ -65,6 +65,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/blocks/manager" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
+	v1 "github.com/prometheus/prometheus/web/api/v1"
 
 	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
@@ -885,6 +886,7 @@ func main() {
 		tsdbHistorical   *tsdbHistoricalStorage
 		persistedStorage storage.Storage = localStorage
 		startTimeFn                      = localStorage.StartTime
+		minTimeBlocks    v1.MinTimeBlocks
 	)
 	if !agentMode {
 		// Storage is constructed eagerly here for both schemes. The historical
@@ -971,6 +973,8 @@ func main() {
 				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
 				os.Exit(1)
 			}
+
+			minTimeBlocks = blockManager.MinTimeBlocks
 
 			bs := &blockStorage{m: blockManager, onClose: func() error {
 				// Cancel any in-flight leveled compaction first so the manager
@@ -1200,6 +1204,7 @@ func main() {
 	cfg.web.LookbackDelta = time.Duration(cfg.lookbackDelta)
 	// x2 because the needed minimum lookback delta is 2*downsampling
 	cfg.web.DownsamplingLookbackDelta = time.Duration(cfg.Downsampling * 2)
+	cfg.web.MinTimeBlocks = minTimeBlocks
 	cfg.web.IsAgent = agentMode
 	cfg.web.AppName = modeAppName
 
