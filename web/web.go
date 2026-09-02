@@ -219,7 +219,8 @@ type Handler struct {
 
 	ready atomic.Uint32 // ready is uint32 rather than boolean to be able to use atomic functions.
 
-	jemallocSem *semaphore.Weighted
+	jemallocSem              *semaphore.Weighted
+	jemallocProfilingEnabled bool
 }
 
 // ApplyConfig updates the config field of the Handler struct.
@@ -317,8 +318,9 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		exemplarStorage: o.ExemplarStorage,
 		notifier:        o.Notifier,
 
-		now:         model.Now,
-		jemallocSem: semaphore.NewWeighted(1),
+		now:                      model.Now,
+		jemallocSem:              semaphore.NewWeighted(1),
+		jemallocProfilingEnabled: jemallocProfilingIsEnable(),
 	}
 	h.SetReady(false)
 
@@ -514,6 +516,11 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 }
 
 func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
+	if !h.jemallocProfilingEnabled {
+		http.Error(w, "jemalloc profiling is not enabled", http.StatusNotFound)
+		return
+	}
+
 	ctx := req.Context()
 	subpath := route.Param(ctx, "subpath")
 
@@ -895,4 +902,14 @@ func setPathWithPrefix(prefix string) func(handlerName string, handler http.Hand
 			handler(w, r.WithContext(httputil.ContextWithPath(r.Context(), prefix+r.URL.Path)))
 		}
 	}
+}
+
+// jemallocProfilingIsEnable checks if jemalloc profiling is enabled from the environment variables.
+func jemallocProfilingIsEnable() bool {
+	v := os.Getenv("MALLOC_CONF")
+	if v == "" {
+		return false
+	}
+
+	return strings.Contains(v, "prof:true") && strings.Contains(v, "prof_active:true")
 }
