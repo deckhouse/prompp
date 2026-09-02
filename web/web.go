@@ -516,15 +516,15 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 }
 
 func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
-	if !h.jemallocProfilingEnabled {
-		http.Error(w, "jemalloc profiling is not enabled", http.StatusNotFound)
-		return
-	}
-
 	ctx := req.Context()
 	subpath := route.Param(ctx, "subpath")
 
 	if subpath == "/jemalloc" {
+		if !h.jemallocProfilingEnabled {
+			http.Error(w, "jemalloc profiling is not enabled", http.StatusNotFound)
+			return
+		}
+
 		if err := h.jemallocSem.Acquire(ctx, 1); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
