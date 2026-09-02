@@ -36,11 +36,6 @@ func TestNeedsUpsampling(t *testing.T) {
 			want:  false,
 		},
 		{
-			name:  "func not in allow-list",
-			hints: &storage.SelectHints{Func: "min_over_time", Range: 120_000},
-			want:  false,
-		},
-		{
 			name:  "changes not in allow-list",
 			hints: &storage.SelectHints{Func: "changes", Range: 120_000},
 			want:  false,
@@ -51,40 +46,50 @@ func TestNeedsUpsampling(t *testing.T) {
 			want:  false,
 		},
 		{
-			name:  "irate with positive range",
-			hints: &storage.SelectHints{Func: "irate", Range: 120_000},
-			want:  true,
+			name:  "predict_linear not in allow-list",
+			hints: &storage.SelectHints{Func: "predict_linear", Range: 120_000},
+			want:  false,
 		},
 		{
-			name:  "idelta with positive range",
-			hints: &storage.SelectHints{Func: "idelta", Range: 120_000},
-			want:  true,
-		},
-		{
-			name:  "rate with positive range",
-			hints: &storage.SelectHints{Func: "rate", Range: 120_000},
-			want:  true,
-		},
-		{
-			name:  "increase with positive range",
-			hints: &storage.SelectHints{Func: "increase", Range: 120_000},
-			want:  true,
-		},
-		{
-			name:  "delta with positive range",
-			hints: &storage.SelectHints{Func: "delta", Range: 120_000},
-			want:  true,
-		},
-		{
-			name:  "deriv with positive range",
-			hints: &storage.SelectHints{Func: "deriv", Range: 120_000},
-			want:  true,
+			name:  "last_over_step not in allow-list",
+			hints: &storage.SelectHints{Func: "last_over_step", Range: 120_000},
+			want:  false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, upsampler.NeedsUpsampling(tc.hints))
+		})
+	}
+}
+
+// TestNeedsUpsamplingAllowedFuncs pins the full allow-list: rate-like functions and the
+// _over_time family, all of which read a whole range window and so tolerate synthetic points.
+func TestNeedsUpsamplingAllowedFuncs(t *testing.T) {
+	allowedFuncs := []string{
+		"rate",
+		"increase",
+		"delta",
+		"deriv",
+		"irate",
+		"idelta",
+		"avg_over_time",
+		"min_over_time",
+		"max_over_time",
+		"sum_over_time",
+		"count_over_time",
+		"quantile_over_time",
+		"stddev_over_time",
+		"stdvar_over_time",
+		"mad_over_time",
+		"last_over_time",
+		"present_over_time",
+	}
+
+	for _, fn := range allowedFuncs {
+		t.Run(fn, func(t *testing.T) {
+			require.True(t, upsampler.NeedsUpsampling(&storage.SelectHints{Func: fn, Range: 120_000}))
 		})
 	}
 }
@@ -136,8 +141,18 @@ func TestIsCounterFunc(t *testing.T) {
 			want:  false,
 		},
 		{
-			name:  "func outside the allow-list",
+			name:  "min_over_time is a gauge func",
 			hints: &storage.SelectHints{Func: "min_over_time", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "sum_over_time is a gauge func",
+			hints: &storage.SelectHints{Func: "sum_over_time", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "func outside the allow-list",
+			hints: &storage.SelectHints{Func: "changes", Range: 120_000},
 			want:  false,
 		},
 		{

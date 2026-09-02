@@ -14,9 +14,12 @@ import "github.com/prometheus/prometheus/storage"
 // report the two samples nearest the eval time as an instantaneous rate — on
 // interpolated points that degrades to the average rate of the surrounding
 // gap, which is still closer to the truth than the NaN they return on sparse
-// data. changes/resets count discrete events between samples: interpolation
-// would fabricate information there instead of merely smoothing it, so they
-// stay excluded.
+// data. The _over_time family reads the whole window as well, so on a gap it
+// aggregates interpolated points instead of returning an empty result; the
+// price is that the point-counting members (count_over_time above all, and
+// through it avg/sum) report the synthetic points too. changes/resets count
+// discrete events between samples: interpolation would fabricate information
+// there instead of merely smoothing it, so they stay excluded.
 var allowedFuncs = map[string]struct{}{
 	"rate":     {},
 	"increase": {},
