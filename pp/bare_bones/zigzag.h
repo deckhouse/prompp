@@ -2,10 +2,10 @@
 
 #include <cstdint>
 
-namespace BareBones {
-namespace Encoding {
+#include "preprocess.h"
 
-namespace ZigZag {
+namespace BareBones::Encoding::ZigZag {
+
 PROMPP_ALWAYS_INLINE uint64_t encode(int64_t val) noexcept {
   // cppcheck-suppress shiftTooManyBitsSigned
   return (static_cast<uint64_t>(val) + static_cast<uint64_t>(val)) ^ (val >> 63);
@@ -23,7 +23,5 @@ PROMPP_ALWAYS_INLINE int64_t decode(uint64_t val) noexcept {
 PROMPP_ALWAYS_INLINE int32_t decode(uint32_t val) noexcept {
   return (val >> 1) ^ (0 - (val & 1));
 }
-}  // namespace ZigZag
 
-}  // namespace Encoding
-}  // namespace BareBones
+}  // namespace BareBones::Encoding::ZigZag
