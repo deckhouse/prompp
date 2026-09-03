@@ -851,7 +851,7 @@ class PerGoroutineRelabeler {
     fill_inner_series(floats, floats.begin(), shards_inner_series, [&](auto& item) {
       if (auto ls_id = target_lss.find(timeseries_buf_.label_set(), item.hash()); ls_id.has_value()) {
         shards_inner_series[shard_id_].emplace_back(timeseries_buf_.samples(), *ls_id, false);
-        
+
         if constexpr (LssWithActiveSeriesMark<TargetLSS>) {
           target_lss.mark_active_atomic(*ls_id);
         }
