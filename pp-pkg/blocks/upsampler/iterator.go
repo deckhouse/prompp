@@ -306,7 +306,7 @@ func (it *Iterator) synthesizeAt(t int64) {
 	dv := it.v1 - it.v0
 	dT := float64(it.t1 - it.t0)
 
-	it.v0 = it.v0 + dv*(dt/dT)
+	it.v0 += dv * (dt / dT)
 	it.t0 = t
 }
 
