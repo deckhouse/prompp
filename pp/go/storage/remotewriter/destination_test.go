@@ -3,16 +3,18 @@ package remotewriter_test
 import (
 	"testing"
 
-	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"
 )
 
 func TestDestinationConfigEqualTo_equal(t *testing.T) {
 	const example = `
 url: "http://thanos-receiver.monitoring.svc.cluster.local:19291/api/v1/receive"
-bearer_token: token1
+authorization:
+  credentials: token1
 queue_config:
   capacity: 10000
   max_shards: 50
@@ -32,7 +34,8 @@ queue_config:
 func TestDestinationConfigEqualTo_not_equal_secret(t *testing.T) {
 	const example1 = `
 url: "http://thanos-receiver.monitoring.svc.cluster.local:19291/api/v1/receive"
-bearer_token: token1
+authorization:
+  credentials: token1
 queue_config:
   capacity: 10000
   max_shards: 50
@@ -43,7 +46,8 @@ queue_config:
   max_backoff: 5s`
 	const example2 = `
 url: "http://thanos-receiver.monitoring.svc.cluster.local:19291/api/v1/receive"
-bearer_token: token2
+authorization:
+  credentials: token2
 queue_config:
   capacity: 10000
   max_shards: 50
