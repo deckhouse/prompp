@@ -6,7 +6,6 @@ package wal_test
 import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
-	"io"
 	"sync"
 )
 
@@ -37,7 +36,7 @@ import (
 //		// and then make assertions.
 //
 //	}
-type SegmentWriterMock[TSegment wal.EncodedSegment] struct {
+type SegmentWriterMock[TSegment any] struct {
 	// CloseFunc mocks the Close method.
 	CloseFunc func() error
 
@@ -232,8 +231,8 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //			FinalizeFunc: func() (TSegment, error) {
 //				panic("mock out the Finalize method")
 //			},
-//			MaxWrittenItemIndexFunc: func() uint32 {
-//				panic("mock out the MaxWrittenItemIndex method")
+//			WrittenSeriesIDSentinelFunc: func() uint32 {
+//				panic("mock out the WrittenSeriesIDSentinel method")
 //			},
 //		}
 //
@@ -248,8 +247,8 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
 
-	// MaxWrittenItemIndexFunc mocks the MaxWrittenItemIndex method.
-	MaxWrittenItemIndexFunc func() uint32
+	// WrittenSeriesIDSentinelFunc mocks the WrittenSeriesIDSentinel method.
+	WrittenSeriesIDSentinelFunc func() uint32
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -261,13 +260,13 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 		// Finalize holds details about calls to the Finalize method.
 		Finalize []struct {
 		}
-		// MaxWrittenItemIndex holds details about calls to the MaxWrittenItemIndex method.
-		MaxWrittenItemIndex []struct {
+		// WrittenSeriesIDSentinel holds details about calls to the WrittenSeriesIDSentinel method.
+		WrittenSeriesIDSentinel []struct {
 		}
 	}
-	lockEncode              sync.RWMutex
-	lockFinalize            sync.RWMutex
-	lockMaxWrittenItemIndex sync.RWMutex
+	lockEncode                  sync.RWMutex
+	lockFinalize                sync.RWMutex
+	lockWrittenSeriesIDSentinel sync.RWMutex
 }
 
 // Encode calls EncodeFunc.
@@ -329,30 +328,30 @@ func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 	return calls
 }
 
-// MaxWrittenItemIndex calls MaxWrittenItemIndexFunc.
-func (mock *EncoderMock[TSegment]) MaxWrittenItemIndex() uint32 {
-	if mock.MaxWrittenItemIndexFunc == nil {
-		panic("EncoderMock.MaxWrittenItemIndexFunc: method is nil but Encoder.MaxWrittenItemIndex was just called")
+// WrittenSeriesIDSentinel calls WrittenSeriesIDSentinelFunc.
+func (mock *EncoderMock[TSegment]) WrittenSeriesIDSentinel() uint32 {
+	if mock.WrittenSeriesIDSentinelFunc == nil {
+		panic("EncoderMock.WrittenSeriesIDSentinelFunc: method is nil but Encoder.WrittenSeriesIDSentinel was just called")
 	}
 	callInfo := struct {
 	}{}
-	mock.lockMaxWrittenItemIndex.Lock()
-	mock.calls.MaxWrittenItemIndex = append(mock.calls.MaxWrittenItemIndex, callInfo)
-	mock.lockMaxWrittenItemIndex.Unlock()
-	return mock.MaxWrittenItemIndexFunc()
+	mock.lockWrittenSeriesIDSentinel.Lock()
+	mock.calls.WrittenSeriesIDSentinel = append(mock.calls.WrittenSeriesIDSentinel, callInfo)
+	mock.lockWrittenSeriesIDSentinel.Unlock()
+	return mock.WrittenSeriesIDSentinelFunc()
 }
 
-// MaxWrittenItemIndexCalls gets all the calls that were made to MaxWrittenItemIndex.
+// WrittenSeriesIDSentinelCalls gets all the calls that were made to WrittenSeriesIDSentinel.
 // Check the length with:
 //
-//	len(mockedEncoder.MaxWrittenItemIndexCalls())
-func (mock *EncoderMock[TSegment]) MaxWrittenItemIndexCalls() []struct {
+//	len(mockedEncoder.WrittenSeriesIDSentinelCalls())
+func (mock *EncoderMock[TSegment]) WrittenSeriesIDSentinelCalls() []struct {
 } {
 	var calls []struct {
 	}
-	mock.lockMaxWrittenItemIndex.RLock()
-	calls = mock.calls.MaxWrittenItemIndex
-	mock.lockMaxWrittenItemIndex.RUnlock()
+	mock.lockWrittenSeriesIDSentinel.RLock()
+	calls = mock.calls.WrittenSeriesIDSentinel
+	mock.lockWrittenSeriesIDSentinel.RUnlock()
 	return calls
 }
 
@@ -362,17 +361,8 @@ func (mock *EncoderMock[TSegment]) MaxWrittenItemIndexCalls() []struct {
 //
 //		// make and configure a mocked wal.EncodedSegment
 //		mockedEncodedSegment := &EncodedSegmentMock{
-//			CRC32Func: func() uint32 {
-//				panic("mock out the CRC32 method")
-//			},
 //			SamplesFunc: func() uint32 {
 //				panic("mock out the Samples method")
-//			},
-//			SizeFunc: func() int64 {
-//				panic("mock out the Size method")
-//			},
-//			WriteToFunc: func(w io.Writer) (int64, error) {
-//				panic("mock out the WriteTo method")
 //			},
 //		}
 //
@@ -381,66 +371,16 @@ func (mock *EncoderMock[TSegment]) MaxWrittenItemIndexCalls() []struct {
 //
 //	}
 type EncodedSegmentMock struct {
-	// CRC32Func mocks the CRC32 method.
-	CRC32Func func() uint32
-
 	// SamplesFunc mocks the Samples method.
 	SamplesFunc func() uint32
 
-	// SizeFunc mocks the Size method.
-	SizeFunc func() int64
-
-	// WriteToFunc mocks the WriteTo method.
-	WriteToFunc func(w io.Writer) (int64, error)
-
 	// calls tracks calls to the methods.
 	calls struct {
-		// CRC32 holds details about calls to the CRC32 method.
-		CRC32 []struct {
-		}
 		// Samples holds details about calls to the Samples method.
 		Samples []struct {
 		}
-		// Size holds details about calls to the Size method.
-		Size []struct {
-		}
-		// WriteTo holds details about calls to the WriteTo method.
-		WriteTo []struct {
-			// W is the w argument value.
-			W io.Writer
-		}
 	}
-	lockCRC32   sync.RWMutex
 	lockSamples sync.RWMutex
-	lockSize    sync.RWMutex
-	lockWriteTo sync.RWMutex
-}
-
-// CRC32 calls CRC32Func.
-func (mock *EncodedSegmentMock) CRC32() uint32 {
-	if mock.CRC32Func == nil {
-		panic("EncodedSegmentMock.CRC32Func: method is nil but EncodedSegment.CRC32 was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockCRC32.Lock()
-	mock.calls.CRC32 = append(mock.calls.CRC32, callInfo)
-	mock.lockCRC32.Unlock()
-	return mock.CRC32Func()
-}
-
-// CRC32Calls gets all the calls that were made to CRC32.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.CRC32Calls())
-func (mock *EncodedSegmentMock) CRC32Calls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockCRC32.RLock()
-	calls = mock.calls.CRC32
-	mock.lockCRC32.RUnlock()
-	return calls
 }
 
 // Samples calls SamplesFunc.
@@ -467,64 +407,5 @@ func (mock *EncodedSegmentMock) SamplesCalls() []struct {
 	mock.lockSamples.RLock()
 	calls = mock.calls.Samples
 	mock.lockSamples.RUnlock()
-	return calls
-}
-
-// Size calls SizeFunc.
-func (mock *EncodedSegmentMock) Size() int64 {
-	if mock.SizeFunc == nil {
-		panic("EncodedSegmentMock.SizeFunc: method is nil but EncodedSegment.Size was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockSize.Lock()
-	mock.calls.Size = append(mock.calls.Size, callInfo)
-	mock.lockSize.Unlock()
-	return mock.SizeFunc()
-}
-
-// SizeCalls gets all the calls that were made to Size.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.SizeCalls())
-func (mock *EncodedSegmentMock) SizeCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockSize.RLock()
-	calls = mock.calls.Size
-	mock.lockSize.RUnlock()
-	return calls
-}
-
-// WriteTo calls WriteToFunc.
-func (mock *EncodedSegmentMock) WriteTo(w io.Writer) (int64, error) {
-	if mock.WriteToFunc == nil {
-		panic("EncodedSegmentMock.WriteToFunc: method is nil but EncodedSegment.WriteTo was just called")
-	}
-	callInfo := struct {
-		W io.Writer
-	}{
-		W: w,
-	}
-	mock.lockWriteTo.Lock()
-	mock.calls.WriteTo = append(mock.calls.WriteTo, callInfo)
-	mock.lockWriteTo.Unlock()
-	return mock.WriteToFunc(w)
-}
-
-// WriteToCalls gets all the calls that were made to WriteTo.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.WriteToCalls())
-func (mock *EncodedSegmentMock) WriteToCalls() []struct {
-	W io.Writer
-} {
-	var calls []struct {
-		W io.Writer
-	}
-	mock.lockWriteTo.RLock()
-	calls = mock.calls.WriteTo
-	mock.lockWriteTo.RUnlock()
 	return calls
 }
