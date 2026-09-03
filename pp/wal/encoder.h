@@ -47,7 +47,7 @@ class GenericEncoder {
 
   // add_wo_stalenans - add (without any stalenans) to encode incoming data(ShardedData) through C++ encoder.
   template <class Hashdex, class Stats>
-  inline __attribute__((always_inline)) void add(Hashdex& hx, Stats* stats) {
+  PROMPP_ALWAYS_INLINE void add(Hashdex& hx, Stats* stats) {
     for (const auto& item : hx.floats()) {
       if ((item.hash() % (1ULL << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
         item.read(timeseries_);
@@ -60,7 +60,7 @@ class GenericEncoder {
   }
 
   template <class Stats, template <class> class InnerSeriesContainer>
-  inline __attribute__((always_inline)) void add_inner_series(InnerSeriesContainer<Prometheus::Relabel::InnerSeries>& incoming_inner_series, Stats* stats) {
+  PROMPP_ALWAYS_INLINE void add_inner_series(InnerSeriesContainer<Prometheus::Relabel::InnerSeries>& incoming_inner_series, Stats* stats) {
     std::ranges::for_each(incoming_inner_series, [&](const Prometheus::Relabel::InnerSeries& inner_series) {
       if (inner_series.size() == 0) {
         return;
@@ -74,9 +74,9 @@ class GenericEncoder {
   }
 
   template <class Stats>
-  inline __attribute__((always_inline)) void add_relabeled_series(Prometheus::Relabel::RelabeledSeries* incoming_relabeled_series,
-                                                                  Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update,
-                                                                  Stats* stats) {
+  PROMPP_ALWAYS_INLINE void add_relabeled_series(Prometheus::Relabel::RelabeledSeries* incoming_relabeled_series,
+                                                 Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update,
+                                                 Stats* stats) {
     if (incoming_relabeled_series == nullptr || incoming_relabeled_series->size() == 0) {
       return;
     }
@@ -95,10 +95,7 @@ class GenericEncoder {
   }
 
   template <class Hashdex, class Stats>
-  inline __attribute__((always_inline)) Writer::SourceState add_with_stalenans(Hashdex& hx,
-                                                                               Stats* stats,
-                                                                               Primitives::Timestamp stale_ts,
-                                                                               Writer::SourceState state) {
+  PROMPP_ALWAYS_INLINE Writer::SourceState add_with_stalenans(Hashdex& hx, Stats* stats, Primitives::Timestamp stale_ts, Writer::SourceState state) {
     auto add_many_cb = [&](auto& add_cb) {
       for (const auto& item : hx.floats()) {
         if ((item.hash() % (1 << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
@@ -116,7 +113,7 @@ class GenericEncoder {
   }
 
   template <class Stats>
-  inline __attribute__((always_inline)) void collect_source(Stats* stats, Primitives::Timestamp stale_ts, Writer::SourceState state) {
+  PROMPP_ALWAYS_INLINE void collect_source(Stats* stats, Primitives::Timestamp stale_ts, Writer::SourceState state) {
     constexpr auto add_many_cb = [&](auto&) {};
     auto result =
         encoder_.template add_many<decltype(encoder_)::add_many_generator_callback_type::with_hash_value, decltype(timeseries_)>(state, stale_ts, add_many_cb);
@@ -124,11 +121,11 @@ class GenericEncoder {
     Writer::DestroySourceState(result);
   }
 
-  inline __attribute__((always_inline)) uint32_t max_written_item_index() const { return encoder_.max_written_item_index(); }
+  PROMPP_ALWAYS_INLINE uint32_t max_written_item_index() const { return encoder_.max_written_item_index(); }
 
   // finalize - finalize the encoded data in the C++ encoder to Segment.
   template <class Stats, class Output>
-  inline __attribute__((always_inline)) void finalize(Stats* stats, Output& out) {
+  PROMPP_ALWAYS_INLINE void finalize(Stats* stats, Output& out) {
     write_stats(stats);
     out << encoder_;
   }

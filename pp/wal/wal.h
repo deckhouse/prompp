@@ -296,38 +296,38 @@ class BasicEncoder {
   explicit BasicEncoder(uint16_t shard_id = 0, uint8_t pow_two_of_total_shards = 0)
       : label_sets_checkpoint_(label_sets_.checkpoint()), uuid_(generate_uuid()), shard_id_(shard_id), pow_two_of_total_shards_(pow_two_of_total_shards) {}
 
-  inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
+  PROMPP_ALWAYS_INLINE const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
+  PROMPP_ALWAYS_INLINE const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
 
   // Exclusive upper bound for label set ids written to WAL.
-  inline __attribute__((always_inline)) uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
+  PROMPP_ALWAYS_INLINE uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
 
-  inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
+  PROMPP_ALWAYS_INLINE const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
-  inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
+  PROMPP_ALWAYS_INLINE uint16_t shard_id() const noexcept { return shard_id_; }
 
-  inline __attribute__((always_inline)) uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
+  PROMPP_ALWAYS_INLINE uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
 
-  inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
+  PROMPP_ALWAYS_INLINE uint64_t samples() const { return samples_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
+  PROMPP_ALWAYS_INLINE uint32_t series() const { return label_sets_.items_count(); }
 
-  inline __attribute__((always_inline)) uint64_t metadata_bytes() const { return metadata_bytes_; }
+  PROMPP_ALWAYS_INLINE uint64_t metadata_bytes() const { return metadata_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t label_sets_bytes() const { return label_sets_bytes_; }
+  PROMPP_ALWAYS_INLINE uint64_t label_sets_bytes() const { return label_sets_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t ls_id_bytes() const { return ls_id_bytes_; }
+  PROMPP_ALWAYS_INLINE uint64_t ls_id_bytes() const { return ls_id_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t timestamps_bytes() const { return ts_bytes_; }
+  PROMPP_ALWAYS_INLINE uint64_t timestamps_bytes() const { return ts_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t values_bytes() const { return v_bytes_; }
+  PROMPP_ALWAYS_INLINE uint64_t values_bytes() const { return v_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t total_bytes() const { return metadata_bytes_ + label_sets_bytes_ + ls_id_bytes_ + ts_bytes_ + v_bytes_; }
+  PROMPP_ALWAYS_INLINE uint64_t total_bytes() const { return metadata_bytes_ + label_sets_bytes_ + ls_id_bytes_ + ts_bytes_ + v_bytes_; }
 
-  inline __attribute__((always_inline)) size_t remainder_size() const noexcept { return label_sets_.remainder_size(); }
+  PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept { return label_sets_.remainder_size(); }
 
-  inline __attribute__((always_inline)) size_t allocated_memory() const noexcept { return label_sets_.allocated_memory() + gorilla_.allocated_memory(); }
+  PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return label_sets_.allocated_memory() + gorilla_.allocated_memory(); }
 
   template <typename T>
   PROMPP_ALWAYS_INLINE Primitives::LabelSetID add(const T& tmsr) {
@@ -710,26 +710,26 @@ class BasicDecoder {
            this->pow_two_of_total_shards_ == reader.pow_two_of_total_shards_;
   }
 
-  inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
+  PROMPP_ALWAYS_INLINE const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
+  PROMPP_ALWAYS_INLINE uint32_t series() const { return label_sets_.items_count(); }
 
   /// \Returns Total processed samples count.
   /// \seealso \ref process_segment().
-  inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
+  PROMPP_ALWAYS_INLINE uint64_t samples() const { return samples_; }
 
-  inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
+  PROMPP_ALWAYS_INLINE uint16_t shard_id() const noexcept { return shard_id_; }
 
-  inline __attribute__((always_inline)) uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
+  PROMPP_ALWAYS_INLINE uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
 
-  inline __attribute__((always_inline)) uint32_t last_processed_segment() const { return last_processed_segment_; }
+  PROMPP_ALWAYS_INLINE uint32_t last_processed_segment() const { return last_processed_segment_; }
 
-  inline __attribute__((always_inline)) int64_t created_at_tsns() const { return created_at_tsns_; }
+  PROMPP_ALWAYS_INLINE int64_t created_at_tsns() const { return created_at_tsns_; }
 
-  inline __attribute__((always_inline)) int64_t encoded_at_tsns() const { return encoded_at_tsns_; }
+  PROMPP_ALWAYS_INLINE int64_t encoded_at_tsns() const { return encoded_at_tsns_; }
 
-  inline __attribute__((always_inline)) Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
-  inline __attribute__((always_inline)) Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
+  PROMPP_ALWAYS_INLINE Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
+  PROMPP_ALWAYS_INLINE Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
 
   template <class InputStream>
   friend InputStream& operator>>(InputStream& in, BasicDecoder& wal) {
