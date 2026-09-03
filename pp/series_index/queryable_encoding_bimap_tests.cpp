@@ -413,6 +413,36 @@ TEST_F(BimapFixedStateFixture, FixedStateSortingIndexSortKeepsOrder) {
   EXPECT_EQ(ids, expected_ids);
 }
 
+// prune_hidden_series_before_fixed_state derives the retained id range from
+// last_significant_bit() + 1 on purpose: the fixed region [boundary, ...) is kept
+// only up to the highest active series. Series whose id is >= boundary but sits
+// above the last set bit in added_series_ are intentionally dropped, and an empty
+// added_series_ (last_significant_bit() + 1 wraps to 0) must not underflow.
+class BimapPruneLastActiveBitFixture : public BimapFixture {
+ protected:
+  const LabelViewSet ls0_{{"job", "a"}};
+  const LabelViewSet ls1_{{"job", "b"}};
+  const LabelViewSet ls2_{{"job", "c"}};
+  const LabelViewSet ls3_{{"job", "d"}};
+  const LabelViewSet ls4_{{"job", "e"}};
+  const LabelViewSet ls5_{{"job", "f"}};
+
+  void SetUp() override {
+    Lss initial_lss;
+    initial_lss.find_or_emplace(ls0_);
+    initial_lss.find_or_emplace(ls1_);
+    initial_lss.find_or_emplace(ls2_);
+    initial_lss.find_or_emplace(ls3_);
+    initial_lss.find_or_emplace(ls4_);
+    initial_lss.find_or_emplace(ls5_);
+    initial_lss.build_deferred_indexes();
+
+    BareBones::Vector<uint32_t> dst_src_ids_mapping;
+    Copier copier(initial_lss, initial_lss.sorting_index(), initial_lss.added_series(), lss_, dst_src_ids_mapping);
+    copier.copy_added_series_and_build_indexes();
+  }
+};
+
 class BimapCopierFixture : public BimapFixture {
  protected:
   const LabelViewSet ls0_{{"job", "a"}};

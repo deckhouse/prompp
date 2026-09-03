@@ -356,10 +356,16 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
+    assert(added_series_.size() <= boundary || added_series_.is_set(boundary));
+    const auto added_series_size = next_item_index_impl();
     const auto active_series_count = static_cast<size_t>(added_series_.popcount());
-    const auto added_series_size = added_series_.last_significant_bit() + 1;
 
-    rebuild_before_fixed_state(boundary, added_series_size, active_series_count);
+    if (should_rebuild_before_fixed_state(boundary, added_series_size, active_series_count)) [[unlikely]] {
+      rebuild_before_fixed_state(boundary, added_series_size, active_series_count);
+    } else {
+      erase_before_fixed_state(boundary);
+    }
+
     sorting_index_.rebuild(next_item_index_impl() - 1);
   }
 
@@ -398,14 +404,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
         break;
       }
       ls_id_set_.emplace(ls_id);
-      const auto label_set = this->operator[](ls_id);
-      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(this->operator[](ls_id))), typename Base::Proxy(ls_id));
     }
 
     for (uint32_t ls_id = boundary; ls_id < added_series_size; ++ls_id) {
       ls_id_set_.emplace(ls_id);
-      const auto label_set = this->operator[](ls_id);
-      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(this->operator[](ls_id))), typename Base::Proxy(ls_id));
     }
   }
 };
