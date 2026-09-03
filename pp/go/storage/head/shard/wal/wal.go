@@ -53,7 +53,7 @@ type Encoder[TSegment EncodedSegment] interface {
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
 
-	// WrittenSeriesIDSentinel returns written series id sentinel
+	// WrittenSeriesIDSentinel returns written series id sentinel.
 	WrittenSeriesIDSentinel() uint32
 }
 
@@ -204,7 +204,7 @@ func (w *Wal[TSegment, TWriter]) Flush() error {
 	return w.segmentWriter.Flush()
 }
 
-// WrittenSeriesIDSentinel returns written series id sentinel
+// WrittenSeriesIDSentinel returns written series id sentinel.
 func (w *Wal[TSegment, TWriter]) WrittenSeriesIDSentinel() uint32 {
 	if w.corrupted {
 		return 0

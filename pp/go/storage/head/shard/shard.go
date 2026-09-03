@@ -25,7 +25,7 @@ type Wal interface {
 	// Flush flush all contetnt into wal.
 	Flush() error
 
-	// WrittenSeriesIDSentinel returns written series id sentinel
+	// WrittenSeriesIDSentinel returns written series id sentinel.
 	WrittenSeriesIDSentinel() uint32
 
 	// Sync commits the current contents of the [Wal].
