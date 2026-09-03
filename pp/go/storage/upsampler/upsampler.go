@@ -4,30 +4,33 @@
 // lives entirely in pp-pkg/blocks/upsampler.
 package upsampler
 
-import "github.com/prometheus/prometheus/storage"
+import (
+	"maps"
 
-// allowedFuncs is the allow-list of range-vector functions for which linear
-// interpolation of missing samples doesn't change the meaning of the result:
-// rate/increase/delta average over the whole range regardless of how many
-// real samples fall inside it, and deriv fits the same trend through
-// synthesized points as it would through the two real ones. irate/idelta
-// report the two samples nearest the eval time as an instantaneous rate — on
-// interpolated points that degrades to the average rate of the surrounding
-// gap, which is still closer to the truth than the NaN they return on sparse
-// data. The _over_time family reads the whole window as well, so on a gap it
-// aggregates interpolated points instead of returning an empty result; the
-// price is that the point-counting members (count_over_time above all, and
-// through it avg/sum) report the synthetic points too. changes/resets count
-// discrete events between samples: interpolation would fabricate information
-// there instead of merely smoothing it, so they stay excluded.
-var allowedFuncs = map[string]struct{}{
+	"github.com/prometheus/prometheus/storage"
+)
+
+// counterFuncs read the series as a counter and correct every value decrease as a counter
+// reset. Interpolating a drop down for them would spread the reset over every synthetic
+// sample, so such a drop is held flat instead.
+var counterFuncs = map[string]struct{}{
 	"rate":     {},
 	"increase": {},
-	"delta":    {},
-	"deriv":    {},
 	"irate":    {},
-	"idelta":   {},
+}
 
+// gaugeFuncs describe the trend of a gauge over the window, where a decrease is ordinary
+// data: for them a gap is interpolated in both directions, exactly like a rise.
+var gaugeFuncs = map[string]struct{}{
+	"delta":  {},
+	"deriv":  {},
+	"idelta": {},
+}
+
+// overTimeFuncs aggregate the values inside the window rather than their trend. A straight
+// line through a gap would feed them values that were never measured, so synthetic samples
+// hold the last known value instead; only the emptiness of the window is what they fix.
+var overTimeFuncs = map[string]struct{}{
 	"avg_over_time":      {},
 	"min_over_time":      {},
 	"max_over_time":      {},
@@ -41,16 +44,20 @@ var allowedFuncs = map[string]struct{}{
 	"present_over_time":  {},
 }
 
-// counterFuncs is the subset of allowedFuncs that reads the series as a counter and
-// corrects every value decrease as a counter reset. Interpolating a drop down for them
-// would spread the reset over every synthetic sample, so such a drop is held flat
-// instead. delta/deriv/idelta describe gauges, where a decrease is ordinary data and
-// has to be interpolated like a rise.
-var counterFuncs = map[string]struct{}{
-	"rate":     {},
-	"increase": {},
-	"irate":    {},
-}
+// allowedFuncs is the union of the three groups above — the range-vector functions for
+// which synthetic samples don't change the meaning of the result, only whether there is
+// one at all. It is derived rather than written out, so a function added to a group can
+// never be classified without being allowed, or allowed without a filling rule.
+// changes/resets stay out of every group: they count discrete events between samples, and
+// a synthetic sample would fabricate information there instead of merely smoothing it.
+var allowedFuncs = func() map[string]struct{} {
+	funcs := make(map[string]struct{}, len(counterFuncs)+len(gaugeFuncs)+len(overTimeFuncs))
+	maps.Copy(funcs, counterFuncs)
+	maps.Copy(funcs, gaugeFuncs)
+	maps.Copy(funcs, overTimeFuncs)
+
+	return funcs
+}()
 
 // NeedsUpsampling reports whether hints describe a query for which gaps wider
 // than the function's range may need synthetic samples inserted to avoid a
@@ -66,13 +73,25 @@ func NeedsUpsampling(hints *storage.SelectHints) bool {
 }
 
 // IsCounterFunc reports whether hints describe a function that treats a value decrease
-// as a counter reset.
+// as a counter reset, so that a drop inside a gap has to be held flat.
 func IsCounterFunc(hints *storage.SelectHints) bool {
 	if hints == nil {
 		return false
 	}
 
 	_, ok := counterFuncs[hints.Func]
+
+	return ok
+}
+
+// IsOverTimeFunc reports whether hints describe an _over_time function, for which a gap is
+// filled by holding the last known value instead of interpolating towards the next sample.
+func IsOverTimeFunc(hints *storage.SelectHints) bool {
+	if hints == nil {
+		return false
+	}
+
+	_, ok := overTimeFuncs[hints.Func]
 
 	return ok
 }

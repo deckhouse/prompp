@@ -44,7 +44,7 @@ func (q *Querier) Select(
 	base := q.base.Select(ctx, sortSeries, hints, matchers...)
 
 	if shouldWrap {
-		return NewSeriesSet(base, hints.Range, q.resolutionMS, headupsampler.IsCounterFunc(hints))
+		return NewSeriesSet(base, hints.Range, q.resolutionMS, typeOfFunc(hints))
 	}
 
 	return base
@@ -119,4 +119,17 @@ func NewResolutionQuerier(q storage.Querier, resolutionMS int64) storage.Querier
 // Resolution returns the nominal resolution of the underlying data source.
 func (q *ResolutionQuerier) Resolution() int64 {
 	return q.resolutionMS
+}
+
+// typeOfFunc maps the query function to the way a gap must be filled for it. The
+// classification itself lives in pp/go/storage/upsampler, next to the allow-list.
+func typeOfFunc(hints *storage.SelectHints) FuncKind {
+	switch {
+	case headupsampler.IsCounterFunc(hints):
+		return CounterFunc
+	case headupsampler.IsOverTimeFunc(hints):
+		return OverTimeFunc
+	default:
+		return GaugeFunc
+	}
 }

@@ -118,18 +118,23 @@ func (s *QuerierSuite) TestQuerierSelectExtendsHintsStart() {
 	s.Equal(int64(1_000_000), hints.Start, "caller hints must not be mutated")
 }
 
-// TestQuerierSelectTakesCounterFuncFromHints tests that the value-drop handling is chosen by
-// hints.Func: a counter function holds the drop flat, a gauge function interpolates it.
-func (s *QuerierSuite) TestQuerierSelectTakesCounterFuncFromHints() {
+// TestQuerierSelectTakesFuncKindFromHints tests that the shape of a synthetic sample is
+// chosen by hints.Func: a counter function holds a drop but interpolates a rise, a gauge
+// function interpolates both, and an _over_time function holds the last known value either way.
+func (s *QuerierSuite) TestQuerierSelectTakesFuncKindFromHints() {
 	const resolutionMS = int64(120_000)
 
 	testCases := []struct {
 		name           string
 		function       string
+		secondSample   float64
 		expectedSecond float64
 	}{
-		{name: "counter function holds the last known value", function: "rate", expectedSecond: 100.0},
-		{name: "gauge function interpolates the drop", function: "delta", expectedSecond: 80.0},
+		{name: "counter function holds a drop", function: "rate", secondSample: 20.0, expectedSecond: 100.0},
+		{name: "counter function interpolates a rise", function: "rate", secondSample: 300.0, expectedSecond: 150.0},
+		{name: "gauge function interpolates a drop", function: "delta", secondSample: 20.0, expectedSecond: 80.0},
+		{name: "over_time function holds a drop", function: "min_over_time", secondSample: 20.0, expectedSecond: 100.0},
+		{name: "over_time function holds a rise", function: "max_over_time", secondSample: 300.0, expectedSecond: 100.0},
 	}
 
 	for _, tc := range testCases {
@@ -139,7 +144,7 @@ func (s *QuerierSuite) TestQuerierSelectTakesCounterFuncFromHints() {
 				v float64
 			}{
 				{t: 60_000, v: 100.0},
-				{t: 300_000, v: 20.0},
+				{t: 300_000, v: tc.secondSample},
 			})
 			baseQuerier := &mockQuerier{
 				selectFunc: func(

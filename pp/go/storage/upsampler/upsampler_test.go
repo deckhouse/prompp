@@ -168,3 +168,63 @@ func TestIsCounterFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestIsOverTimeFunc(t *testing.T) {
+	testCases := []struct {
+		name  string
+		hints *storage.SelectHints
+		want  bool
+	}{
+		{
+			name:  "nil hints",
+			hints: nil,
+			want:  false,
+		},
+		{
+			name:  "empty func",
+			hints: &storage.SelectHints{Func: "", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "avg_over_time holds the last value",
+			hints: &storage.SelectHints{Func: "avg_over_time", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "count_over_time holds the last value",
+			hints: &storage.SelectHints{Func: "count_over_time", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "present_over_time holds the last value",
+			hints: &storage.SelectHints{Func: "present_over_time", Range: 120_000},
+			want:  true,
+		},
+		{
+			name:  "rate is interpolated",
+			hints: &storage.SelectHints{Func: "rate", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "delta is interpolated",
+			hints: &storage.SelectHints{Func: "delta", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "last_over_step is not an _over_time func of the allow-list",
+			hints: &storage.SelectHints{Func: "last_over_step", Range: 120_000},
+			want:  false,
+		},
+		{
+			name:  "range is not consulted",
+			hints: &storage.SelectHints{Func: "sum_over_time", Range: 0},
+			want:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, upsampler.IsOverTimeFunc(tc.hints))
+		})
+	}
+}

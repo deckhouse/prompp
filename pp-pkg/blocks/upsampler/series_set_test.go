@@ -23,7 +23,7 @@ func TestSeriesSetSuite(t *testing.T) {
 // TestNewSeriesSet tests SeriesSet creation.
 func (s *SeriesSetSuite) TestNewSeriesSet() {
 	baseSS := &mockSeriesSet{}
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	s.NotNil(ss)
 	s.IsType((*upsampler.SeriesSet)(nil), ss)
@@ -39,7 +39,7 @@ func (s *SeriesSetSuite) TestSeriesSetNext() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	result := ss.Next()
 
@@ -55,7 +55,7 @@ func (s *SeriesSetSuite) TestSeriesSetNextFalse() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	result := ss.Next()
 
@@ -73,7 +73,7 @@ func (s *SeriesSetSuite) TestSeriesSetAt() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	series := ss.At()
 
@@ -92,7 +92,7 @@ func (s *SeriesSetSuite) TestSeriesSetErr() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	_ = ss.Err()
 
@@ -107,7 +107,7 @@ func (s *SeriesSetSuite) TestSeriesSetWarnings() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	warnings := ss.Warnings()
 
@@ -139,7 +139,7 @@ func (s *SeriesSetSuite) TestSeriesSetIteration() {
 		},
 	}
 
-	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, true)
+	ss := upsampler.NewSeriesSet(baseSS, 60000, 60000, upsampler.CounterFunc)
 
 	// Iterate through all series
 	count := 0
@@ -167,7 +167,7 @@ func (s *SeriesSetSuite) TestSeriesSetParametersOverflowingThresholds() {
 	}
 
 	// A 100-day range asks for a 50-day step, which does not fit into the threshold.
-	ss := upsampler.NewSeriesSet(newSingleSeriesSet(newMockIterator(samples)), 100*dayMS, 50*dayMS, true)
+	ss := upsampler.NewSeriesSet(newSingleSeriesSet(newMockIterator(samples)), 100*dayMS, 50*dayMS, upsampler.CounterFunc)
 
 	s.Require().True(ss.Next())
 	it := ss.At().Iterator(nil)
