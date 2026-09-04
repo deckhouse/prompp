@@ -38,6 +38,12 @@ class Scraper {
 
   template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_impl(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    if constexpr (validation_mode == Utf8ValidationMode::kWholeInput) {
+      if (!simdutf::validate_utf8(buffer.data(), buffer.size())) [[unlikely]] {
+        return Error::kInvalidUtf8;
+      }
+    }
+
     metric_buffer_.initialize(buffer.size() / 4);
     metadata_buffer_.initialize(buffer.size() / 128);
     labels_.reserve(255);
@@ -46,15 +52,6 @@ class Scraper {
 
     auto& tokenizer = parser_.tokenizer();
     tokenizer.tokenize({buffer.data(), buffer.data() + buffer.size()});
-
-    // Validate only after the state above has been reset. A scraper is reusable,
-    // so returning early would leave the previous parse in place, and its markup
-    // points into a buffer the caller is free to release once parse() returns.
-    if constexpr (validation_mode == Utf8ValidationMode::kWholeInput) {
-      if (!simdutf::validate_utf8(buffer.data(), buffer.size())) [[unlikely]] {
-        return Error::kInvalidUtf8;
-      }
-    }
 
     while (true) {
       switch (tokenizer.next()) {
