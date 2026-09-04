@@ -75,9 +75,9 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/parallel_hashmap:btree.h.patch"),
             Label("//third_party/patches/parallel_hashmap:0003-custom_hash_eq.patch"),
         ],
-        sha256 = "b61435437713e2d98ce2a5539a0bff7e6e9e6a6b9fe507dbf490a852b8c2904f",
-        strip_prefix = "parallel-hashmap-1.35",
-        url = "https://github.com/greg7mdp/parallel-hashmap/archive/refs/tags/1.35.zip",
+        sha256 = "75959ad0fc9f1421cd6bb462b8f77e7de4328edd5e547ae798e417cb22b81d9c",
+        strip_prefix = "parallel-hashmap-1.37",
+        url = "https://github.com/greg7mdp/parallel-hashmap/archive/refs/tags/1.37.zip",
     )
 
     http_archive(
