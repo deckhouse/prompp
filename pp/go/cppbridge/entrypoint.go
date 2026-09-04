@@ -16,12 +16,14 @@ package cppbridge
 // #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
+
 import (
 	"runtime"
 	"time"
 	"unsafe" //nolint:gocritic // because otherwise it won't work
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge/fastcgo"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -240,6 +242,22 @@ var (
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "allocated_memory"},
+		},
+	)
+
+	// head_data_storage dtor
+	headDataStorageDtorSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "dtor"},
+		},
+	)
+	headDataStorageDtorCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "dtor"},
 		},
 	)
 
@@ -1100,7 +1118,7 @@ func walDecoderDtor(decoder uintptr) {
 	)
 }
 
-func walSegmentSamplesStorageListCtor(count uint64, storages *SegmentSamplesStorageList) {
+func walSegmentSamplesStorageListCtor(count uint64, storages *segmentSamplesStorageListCPP) {
 	args := struct {
 		count    uint64
 		storages uintptr
@@ -1145,7 +1163,7 @@ func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
 	)
 }
 
-func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
+func walSegmentSamplesStorageListDtor(s *segmentSamplesStorageListCPP) {
 	args := struct {
 		storages uintptr
 	}{uintptr(unsafe.Pointer(s))}
@@ -1158,7 +1176,7 @@ func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
 }
 
 func walSegmentSamplesStorageListSplitMessages(
-	s *SegmentSamplesStorageList,
+	s *segmentSamplesStorageListCPP,
 	messageSamplesThreshold uint32,
 ) []RWMessage {
 	args := struct {
@@ -2528,12 +2546,14 @@ func seriesDataDataStorageDtor(dataStorage uintptr) {
 	args := struct {
 		dataStorage uintptr
 	}{dataStorage}
-
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_data_storage_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
+	headDataStorageDtorSum.Add(float64(time.Since(start).Nanoseconds()))
+	headDataStorageDtorCount.Inc()
 }
 
 func seriesDataEncoderEncode(dataStorage uintptr, seriesID uint32, timestamp int64, value float64) {
