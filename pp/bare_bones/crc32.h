@@ -14,22 +14,23 @@
 
 #include <scope_exit.h>
 
-#include "bare_bones/exception.h"
-#include "bare_bones/streams.h"
-#include "bare_bones/type_traits.h"
+#include "exception.h"
+#include "preprocess.h"
+#include "streams.h"
+#include "type_traits.h"
 
 namespace BareBones {
 class CRC32 {
   uint32_t crc_ = 0;
 
 #if defined(__SSE4_2__)
-  inline __attribute__((always_inline)) void compute(uint32_t data) noexcept { crc_ = _mm_crc32_u32(crc_, data); }
+  PROMPP_ALWAYS_INLINE void compute(uint32_t data) noexcept { crc_ = _mm_crc32_u32(crc_, data); }
 
-  inline __attribute__((always_inline)) void compute(uint64_t data) noexcept { crc_ = _mm_crc32_u64(crc_, data); }
+  PROMPP_ALWAYS_INLINE void compute(uint64_t data) noexcept { crc_ = _mm_crc32_u64(crc_, data); }
 #elif defined(__ARM_FEATURE_CRC32)
-  inline __attribute__((always_inline)) void compute(uint32_t data) noexcept { crc_ = __crc32cw(crc_, data); }
+  PROMPP_ALWAYS_INLINE void compute(uint32_t data) noexcept { crc_ = __crc32cw(crc_, data); }
 
-  inline __attribute__((always_inline)) void compute(uint64_t data) noexcept { crc_ = __crc32cd(crc_, data); }
+  PROMPP_ALWAYS_INLINE void compute(uint64_t data) noexcept { crc_ = __crc32cd(crc_, data); }
 #else
   static constexpr auto generate_lut() noexcept {
     std::array<std::array<uint32_t, 256>, 8> lut{};
@@ -59,14 +60,14 @@ class CRC32 {
     return lut;
   }
 
-  inline __attribute__((always_inline)) void compute(uint32_t data) noexcept {
+  PROMPP_ALWAYS_INLINE void compute(uint32_t data) noexcept {
     static constexpr auto lut = generate_lut();
 
     uint32_t one = data ^ crc_;
     crc_ = lut[0][one >> 24 & 0xFF] ^ lut[1][(one >> 16) & 0xFF] ^ lut[2][(one >> 8) & 0xFF] ^ lut[3][one & 0xFF];
   }
 
-  inline __attribute__((always_inline)) void compute(uint64_t data) noexcept {
+  PROMPP_ALWAYS_INLINE void compute(uint64_t data) noexcept {
     static constexpr auto lut = generate_lut();
 
     const uint32_t data_one = static_cast<uint32_t>(data) ^ crc_;
@@ -79,23 +80,23 @@ class CRC32 {
  public:
   bool operator==(const CRC32& o) const noexcept { return crc_ == o.crc_; }
 
-  inline __attribute__((always_inline)) explicit operator uint32_t() const noexcept { return ~crc_; }
+  PROMPP_ALWAYS_INLINE explicit operator uint32_t() const noexcept { return ~crc_; }
 
-  inline __attribute__((always_inline)) void clear() noexcept { crc_ = 0; }
+  PROMPP_ALWAYS_INLINE void clear() noexcept { crc_ = 0; }
 
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, uint32_t data) noexcept {
+  PROMPP_ALWAYS_INLINE friend CRC32& operator<<(CRC32& crc, uint32_t data) noexcept {
     crc.compute(data);
     return crc;
   }
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, uint64_t data) noexcept {
+  PROMPP_ALWAYS_INLINE friend CRC32& operator<<(CRC32& crc, uint64_t data) noexcept {
     crc.compute(data);
     return crc;
   }
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, int64_t data) noexcept {
+  PROMPP_ALWAYS_INLINE friend CRC32& operator<<(CRC32& crc, int64_t data) noexcept {
     crc.compute(std::bit_cast<uint64_t>(data));
     return crc;
   }
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, double data) noexcept {
+  PROMPP_ALWAYS_INLINE friend CRC32& operator<<(CRC32& crc, double data) noexcept {
     crc.compute(std::bit_cast<uint64_t>(data));
     return crc;
   }
