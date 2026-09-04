@@ -150,7 +150,7 @@ func (api *API) remoteWriteWebsocket(...middleware.Middleware) http.HandlerFunc 
 		// 	http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
 		// }
 
-		http.Error(rw, "remote write websocket is not supported", http.StatusNotFound)
+		http.Error(rw, "remote write websocket is not supported", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -164,6 +164,6 @@ func (api *API) remoteWriteRefill(...middleware.Middleware) http.HandlerFunc {
 		// 	http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
 		// }
 
-		http.Error(rw, "remote write refill is not supported", http.StatusNotFound)
+		http.Error(rw, "remote write refill is not supported", http.StatusMethodNotAllowed)
 	}
 }
