@@ -91,6 +91,10 @@ func (css *ChunkSeriesSet) nextChunk() bool {
 
 	lastRecodedChunk := css.chunkRecoder.RecodeNextChunk()
 	css.recoderIsExhausted = !lastRecodedChunk.HasMoreData
+	if lastRecodedChunk.SeriesId == cppbridge.InvalidSeriesId {
+		return false
+	}
+
 	chunkData := make([]byte, len(lastRecodedChunk.ChunkData))
 	copy(chunkData, lastRecodedChunk.ChunkData)
 	lastRecodedChunk.ChunkData = chunkData
