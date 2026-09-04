@@ -18,9 +18,12 @@ type Metrics struct {
 	LabelNamesDuration  prometheus.Histogram
 	LabelValuesDuration prometheus.Histogram
 	SelectDuration      *prometheus.HistogramVec
+	OptimizationType    *prometheus.CounterVec
 }
 
 // NewMetrics init new [Metrics].
+//
+//revive:disable-next-line:function-length // metrics constructor.
 func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Metrics{
@@ -63,6 +66,14 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 				ConstLabels: prometheus.Labels{"source": source},
 			},
 			[]string{"query_type"},
+		),
+		OptimizationType: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name:        "prompp_querier_query_optimization_type_count",
+				Help:        "Optimization type count",
+				ConstLabels: prometheus.Labels{"source": source},
+			},
+			[]string{"optimization_type"},
 		),
 	}
 }
