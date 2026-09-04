@@ -1,6 +1,7 @@
 package mediator_test
 
 import (
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -142,6 +143,51 @@ func (s *MediatorSuite) TestTriggerWithResetTimer() {
 
 		require.Equal(t, 1, counter)
 		require.Len(t, timer.ResetCalls(), 1)
+	})
+}
+
+// TestCloseRacesWithTrigger reproduces the scenario where Close() closes the
+// event channel while another goroutine concurrently calls Trigger*() (e.g.
+// Rotator.rotate() racing with shutdown). Before the fix this either raced on
+// m.c or panicked with "send on closed channel"; now Trigger*() must observe
+// the closed state and become a no-op instead.
+func (s *MediatorSuite) TestCloseRacesWithTrigger() {
+	chTimer := make(chan time.Time, 1)
+
+	timer := &TimerMock{
+		ChanFunc:  func() <-chan time.Time { return chTimer },
+		ResetFunc: func() {},
+		StopFunc:  func() {},
+	}
+
+	m := mediator.NewMediator(timer)
+
+	require.NotPanics(s.T(), func() {
+		var wg sync.WaitGroup
+		wg.Add(3)
+
+		go func() {
+			defer wg.Done()
+
+			for range 1000 {
+				m.Trigger()
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			for range 1000 {
+				m.TriggerWithResetTimer()
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			m.Close()
+		}()
+
+		wg.Wait()
 	})
 }
 
