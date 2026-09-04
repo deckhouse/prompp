@@ -76,7 +76,6 @@ func (s *WalSuite) TestCommit() {
 	enc := &EncoderMock[*EncodedSegmentMock]{
 		FinalizeFunc: func() (*EncodedSegmentMock, error) {
 			return &EncodedSegmentMock{
-				SizeFunc:    func() int64 { return 42 },
 				SamplesFunc: func() uint32 { return 42 },
 			}, nil
 		},
@@ -115,7 +114,6 @@ func (s *WalSuite) TestCommitWriteError() {
 	enc := &EncoderMock[*EncodedSegmentMock]{
 		FinalizeFunc: func() (*EncodedSegmentMock, error) {
 			return &EncodedSegmentMock{
-				SizeFunc:    func() int64 { return 42 },
 				SamplesFunc: func() uint32 { return 42 },
 			}, nil
 		},

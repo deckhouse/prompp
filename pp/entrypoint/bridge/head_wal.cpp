@@ -115,18 +115,17 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   }
 }
 
-extern "C" void prompp_head_wal_encoder_max_written_item_index(void* args, void* res) {
+extern "C" void prompp_head_wal_encoder_written_series_id_sentinel(void* args, void* res) {
   struct Arguments {
     EncoderPtr encoder;
   };
 
   struct Result {
-    uint32_t max_written_item_index;
+    uint32_t written_series_id_sentinel;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto* out = static_cast<Result*>(res);
-  out->max_written_item_index = in->encoder->max_written_item_index();
+  new (res) Result{.written_series_id_sentinel = in->encoder->written_series_id_sentinel()};
 }
 
 extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {
