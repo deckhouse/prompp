@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+1. **The scraper kept the previous parse after a body with invalid UTF-8.** With whole-body UTF-8 validation (the default since v0.8.11), `Scraper::parse` returned `kInvalidUtf8` before resetting its metric and metadata buffers. A scraper is reused across scrapes, so the samples and metadata of the previous body stayed readable — pointing into a buffer the caller is free to reuse once `parse` returns. The validation now runs after the state has been reset. Found by the new scrape fuzz targets.
+2. **A negative `__sample_limit__` disabled the sample limit instead of being ignored.** The annotation is read from the target's labels, so relabelling can set it to any string. A negative value was passed through to the C++ relabeler, where the limit is unsigned, and wrapped around to "practically unlimited" — quietly dropping the limit from the scrape config. `Target.SampleLimit` now treats anything that is not a positive number as no override. Found by the new scrape fuzz targets.
+
+### Enhancements
+1. **Fuzz targets for the scrape path.** The exposition-format parsers, the response reader (gzip and `body_size_limit`) and target construction from discovered labels are now covered by Go fuzz targets, including a differential one that holds the C++ parser against upstream's Go parser. Seed corpora and the libFuzzer dictionary are shared through `util/fuzzing/scrapecorpus`; see the Scrape Path section of `TESTING.md`.
+
 ## v0.8.11 / 2026-08-27
 
 ### Fixes

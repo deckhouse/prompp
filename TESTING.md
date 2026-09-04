@@ -58,3 +58,43 @@ Currently, some HTTP interface service endpoints are covered by fuzzing tests. T
 ```bash
 GOGC=10 GOMEMLIMIT=50GiB go test --run Web --fuzz Web --fuzztime 1h .
 ```
+
+#### Scrape Path
+
+The scrape path — everything between a target's HTTP response and the relabeler — has its own set of targets. The exposition-format parser it feeds is written in C++, so those targets live next to the cgo bindings rather than in `util/fuzzing`.
+
+| Target | Package | What it covers |
+| --- | --- | --- |
+| `FuzzPrometheusScraperHashdexParse` | `pp/go/cppbridge` | The C++ Prometheus text parser: invariants of the samples and metadata a parse produces. |
+| `FuzzOpenMetricsScraperHashdexParse` | `pp/go/cppbridge` | The same for the OpenMetrics parser. |
+| `FuzzScraperHashdexReuse` | `pp/go/cppbridge` | Hashdex reuse: a scraper parsing several bodies must match a fresh one. |
+| `FuzzScraperHashdexAgainstTextparse` | `pp/go/cppbridge` | Differential: whatever upstream's Go parser accepts, the C++ parser must accept identically. |
+| `FuzzReadResponse` | `pp-pkg/scrape` | Reading a target's response: gzip, `body_size_limit`, and the pooled readers. |
+| `FuzzTargetsFromGroup` | `pp-pkg/scrape` | Target construction: discovered labels and relabel rules in, scrapeable targets out. |
+
+The seed corpora and the libFuzzer dictionary for the exposition formats are shared through `util/fuzzing/scrapecorpus`, which deliberately depends on nothing but the standard library so that both the cgo targets and an external corpus generator can use it.
+
+Every target also runs as an ordinary test over its seed corpus, so `make test` and CI already exercise the seeds. To actually fuzz, run one target at a time from the container described in [Environment](#environment) — the targets link against the C++ bindings, so build them first:
+```bash
+docker run --rm -it -v "$PWD":/workspace -w /workspace \
+  -e CGO_ENABLED=1 -e CGO_CFLAGS="-Wno-error -I/usr/include" -e CGO_LDFLAGS="-L/usr/lib/" \
+  prompp-build bash -c '
+    git config --global --add safe.directory /workspace
+    cd pp && make build-entrypoint && cd ..
+    go test -race -run=FuzzReadResponse -fuzz="^FuzzReadResponse$" -fuzztime=10m ./pp-pkg/scrape/
+  '
+```
+
+Go's coverage instrumentation does not reach the C++ parser, so the mutator gets no feedback from it: the corpus and the dictionary in `scrapecorpus` do most of the work for the hashdex targets, and it is worth extending them when adding syntax.
+
+A failing input is written to `testdata/fuzz/<target>/` inside the package. Since the container writes it as root, take ownership before committing it as a regression seed:
+```bash
+docker run --rm -v "$PWD":/workspace busybox chown -R "$(id -u):$(id -g)" /workspace
+```
+
+Four known parser bugs are pinned by skipped tests in `pp/go/cppbridge/wal_prometheus_scraper_hashdex_test.go` instead of being rediscovered on every run, and each one has a matching workaround in the harness that should be removed together with its skip:
+
+- `TestParseReadsPastBufferEnd` — the tokenizer reads a few bytes past the end of a body that ends mid-token, so the verdict depends on adjacent memory. `parseCopy` pads the buffer with zeroes to make the targets deterministic.
+- `TestParseUnterminatedLastLineAtEOF` — a body whose last line is not newline-terminated can be rejected outright, samples included. The differential target skips such bodies, since upstream's own recovery there is just as arbitrary.
+- `TestParseLabelWithoutSeparator` — a label name directly after the closing quote of the previous label value is rejected, while upstream reads both labels. The differential target skips those label sets.
+- `TestParseUnderflowingValue` — a sample value too small for a float64 is rejected, while upstream rounds it to zero and ingests the sample. The differential target skips bodies holding such a literal.

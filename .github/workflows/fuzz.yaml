@@ -1,0 +1,186 @@
+name: Run Fuzzing
+
+# The seed corpora of every fuzz target already run as ordinary tests in
+# `tests.yaml`; this workflow is the part that actually mutates input, which is
+# too slow for a PR. It runs nightly on `pp` and can be dispatched manually,
+# for example with a longer budget before a release.
+on:
+  schedule:
+    # 02:00 UTC, after the nightly image builds.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: 'Budget per target, as accepted by -fuzztime (e.g. 10m, 1h)'
+        type: string
+        required: false
+        default: '10m'
+      targets:
+        description: 'Space-separated target names to run (empty runs all of them)'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ci-image:
+    uses: ./.github/workflows/build-ci-image.yaml
+    secrets: inherit
+
+  build-go-bindings:
+    needs: [build-ci-image]
+    # The fuzz targets link against cppbridge, so the bindings have to be built
+    # first. One combination is enough here: opt + jemalloc on amd64, the same
+    # one `go-test-all` uses.
+    if: ${{ always() && needs.build-ci-image.result == 'success' }}
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-werf
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
+
+      - name: Build Go bindings
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} \
+            bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace && cd pp
+              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
+              make compilation_mode=opt asan=false build-entrypoint
+            "
+
+      - name: Fix build artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            chown -R "$(id -u):$(id -g)" /workspace/pp/go/cppbridge || true
+
+      - name: Upload Specific Static Libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-cppbridge-amd64-opt-fuzz
+          path: pp/go/cppbridge/amd64_*
+          retention-days: 7
+
+      - name: Clear workspace
+        run: rm -rf pp/go/cppbridge/amd64_*
+
+  fuzz:
+    needs: [build-ci-image, build-go-bindings]
+    if: ${{ always() && needs.build-go-bindings.result == 'success' }}
+    strategy:
+      # One target at a time: `go test -fuzz` accepts a single target and each
+      # one saturates the runner on its own.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - target: FuzzPrometheusScraperHashdexParse
+            package: ./pp/go/cppbridge/
+          - target: FuzzOpenMetricsScraperHashdexParse
+            package: ./pp/go/cppbridge/
+          - target: FuzzScraperHashdexReuse
+            package: ./pp/go/cppbridge/
+          - target: FuzzScraperHashdexAgainstTextparse
+            package: ./pp/go/cppbridge/
+          - target: FuzzReadResponse
+            package: ./pp-pkg/scrape/
+          - target: FuzzTargetsFromGroup
+            package: ./pp-pkg/scrape/
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-werf
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
+
+      - name: Download Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: go-cppbridge-amd64-opt-fuzz
+          path: pp/go/cppbridge/
+
+      - name: Skip target not selected for this run
+        id: select
+        run: |
+          selected="${{ inputs.targets }}"
+          if [ -z "$selected" ] || echo " $selected " | grep -q " ${{ matrix.target }} "; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "${{ matrix.target }} is not in the requested set, skipping"
+          fi
+
+      - name: Fuzz ${{ matrix.target }}
+        if: steps.select.outputs.run == 'true'
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e CI=true \
+            -e CGO_CFLAGS="-Wno-error -I/usr/include" \
+            -e CGO_LDFLAGS="-L/usr/lib/" \
+            -e CGO_ENABLED="1" \
+            -e GOPATH="${{ github.workspace }}/.cache" \
+            -e GOBIN="/usr/local/go/bin" \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} \
+            bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace
+              mkdir -p .cache
+
+              go test -race -count=1 \
+                -run='^${{ matrix.target }}\$' \
+                -fuzz='^${{ matrix.target }}\$' \
+                -fuzztime='${{ inputs.fuzztime || '10m' }}' \
+                ${{ matrix.package }}
+            "
+
+      - name: Fix corpus ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            chown -R "$(id -u):$(id -g)" /workspace || true
+
+      # A failing input is written next to the package it was found in. Keep it:
+      # it is the reproducer, and it becomes the regression seed once the bug is
+      # fixed.
+      - name: Upload Failing Input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failure-${{ matrix.target }}
+          path: |
+            pp/go/cppbridge/testdata/fuzz/**
+            pp-pkg/scrape/testdata/fuzz/**
+          if-no-files-found: warn
+          retention-days: 30

@@ -325,6 +325,16 @@ func NewPrometheusScraperHashdex() *WALPrometheusScraperHashdex {
 }
 
 // Parse parsing incoming slice byte with default timestamp to hashdex.
+//
+// Parse rewrites buffer in place: the C++ parser unescapes label values by
+// moving bytes towards the front of the buffer. The caller must therefore not
+// reuse buffer for anything else afterwards, and must not parse the same buffer
+// twice — the second parse would see a corrupted body.
+//
+// The hashdex keeps pointing into buffer until the next Parse call, so
+// everything read out of it (samples, metadata) borrows that memory. The
+// returned count is the number of samples read before parsing stopped, which
+// can be non-zero even when an error is returned.
 func (h *WALPrometheusScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walPrometheusScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
@@ -381,6 +391,9 @@ func NewOpenMetricsScraperHashdex() *WALOpenMetricsScraperHashdex {
 }
 
 // Parse parsing incoming slice byte with default timestamp to hashdex.
+//
+// The same buffer rules as for [WALPrometheusScraperHashdex.Parse] apply: the
+// buffer is rewritten in place and must not be parsed twice.
 func (h *WALOpenMetricsScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walOpenMetricsScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)

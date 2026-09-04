@@ -101,3 +101,28 @@ foo_total 17.0 1520879607.789 # {id="counter-test"} 5`
 	s.Equal(uint32(24), scraped)
 	s.Equal(expectedMetadata, actualMetadata)
 }
+
+// TestParseInvalidUtf8DiscardsPreviousParse is the OpenMetrics counterpart of
+// the Prometheus test with the same name: a scrape rejected by whole-input UTF-8
+// validation must not leave the previous scrape's samples and metadata behind.
+func (s *OpenMetricsScraperHashdexSuite) TestParseInvalidUtf8DiscardsPreviousParse() {
+	// Arrange
+	first := []byte("# HELP metric help text\nmetric 1\n# EOF\n")
+	second := []byte("metric{label=\"\xff\"} 1\n# EOF\n")
+
+	// Act
+	firstScraped, firstErr := s.hasdex.Parse(first, -1)
+	secondScraped, secondErr := s.hasdex.Parse(second, -1)
+	var metadata []cppbridge.WALScraperHashdexMetadata
+	s.hasdex.RangeMetadata(func(md cppbridge.WALScraperHashdexMetadata) bool {
+		metadata = append(metadata, md)
+		return true
+	})
+
+	// Assert
+	s.Require().NoError(firstErr)
+	s.Equal(uint32(1), firstScraped)
+	s.Require().ErrorIs(secondErr, cppbridge.ErrScraperInvalidUtf8)
+	s.Equal(uint32(0), secondScraped)
+	s.Empty(metadata)
+}

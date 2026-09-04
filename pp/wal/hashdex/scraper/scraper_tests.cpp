@@ -509,6 +509,35 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                            },
                                                                                            BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
+// A scraper is reusable across scrapes, and every parse must start from a clean
+// slate. Whole-input UTF-8 validation used to bail out before the markup buffers
+// were reset, so a rejected scrape reported the previous scrape's samples and
+// metadata — reading a buffer the caller was already free to release.
+template <class Scraper>
+class ScraperReuseTest : public ::testing::Test {
+ protected:
+  Scraper scraper_;
+};
+
+using ScraperTypes = ::testing::Types<PrometheusScraper, OpenMetricsScraper>;
+TYPED_TEST_SUITE(ScraperReuseTest, ScraperTypes);
+
+TYPED_TEST(ScraperReuseTest, InvalidUtf8DiscardsPreviousParse) {
+  // Arrange
+  std::string first = "# HELP metric help text\nmetric 1\n# EOF\n"s;
+  std::string second = "metric{label=\"\xff\"} 1\n# EOF\n"s;
+
+  // Act
+  const auto first_result = this->scraper_.parse(first, kDefaultTimestamp);
+  const auto second_result = this->scraper_.parse(second, kDefaultTimestamp);
+
+  // Assert
+  EXPECT_EQ(Error::kNoError, first_result);
+  EXPECT_EQ(Error::kInvalidUtf8, second_result);
+  EXPECT_TRUE(PromPP::WAL::hashdex::get_floats(this->scraper_).empty());
+  EXPECT_TRUE(PromPP::WAL::hashdex::get_metadata(this->scraper_).empty());
+}
+
 class OpenMetricsScraperFixture : public ScraperFixture<OpenMetricsScraper> {
  protected:
   void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).floats); }

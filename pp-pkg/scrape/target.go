@@ -268,13 +268,17 @@ func (t *Target) Health() TargetHealth {
 }
 
 // SampleLimit override sample limit. // PP_CHANGES.md override sample limit.
+//
+// A limit that is not a positive number means "no override": the value ends up
+// in MetricLimits.sample_limit, which is unsigned on the C++ side, so a negative
+// one would wrap around and disable the configured limit instead.
 func (t *Target) SampleLimit() int {
 	limit := t.labels.Get("__sample_limit__")
 	if limit == "" {
 		return 0
 	}
 	convertedLimit, err := strconv.Atoi(limit)
-	if err != nil {
+	if err != nil || convertedLimit < 0 {
 		return 0
 	}
 	return convertedLimit
