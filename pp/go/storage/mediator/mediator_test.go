@@ -162,7 +162,7 @@ func (s *MediatorSuite) TestCloseRacesWithTrigger() {
 
 	m := mediator.NewMediator(timer)
 
-	require.NotPanics(s.T(), func() {
+	s.Require().NotPanics(func() {
 		var wg sync.WaitGroup
 		wg.Add(3)
 
