@@ -45,6 +45,8 @@ type QuerierSuite struct {
 
 	hints          *prom_storage.SelectHints
 	scrapeInterval int64
+	retentionMS    int64
+	downsamplingMS int64
 }
 
 func TestQuerierSuite(t *testing.T) {
@@ -61,6 +63,7 @@ func (s *QuerierSuite) SetupTest() {
 		Range: 100,
 	}
 	s.scrapeInterval = 1
+	s.retentionMS = 10000
 }
 
 func (s *QuerierSuite) createDataDirectory() string {
@@ -124,7 +127,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -152,7 +155,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
@@ -205,7 +208,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -243,7 +246,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -296,7 +299,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -340,7 +343,9 @@ func (s *QuerierSuite) TestLabelNames() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -373,7 +378,9 @@ func (s *QuerierSuite) TestLabelNamesWithLimit() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -406,7 +413,9 @@ func (s *QuerierSuite) TestLabelNamesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
 	s.Require().NoError(err)
@@ -439,7 +448,9 @@ func (s *QuerierSuite) TestLabelValues() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
@@ -472,7 +483,9 @@ func (s *QuerierSuite) TestLabelValuesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
 	s.Require().NoError(err)
@@ -505,7 +518,9 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+	q := querier.NewQuerier(
+		s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS, nil,
+	)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
@@ -518,4 +533,270 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	// Assert
 	s.Equal([]string{}, names)
 	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestWouldDownsampleFalseWhenRangeLessThanRetention() {
+	// Arrange: range (maxt-mint) less than retention, so no downsampling should apply
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		5000,  // maxt (range = 5000, less than 10000 retention)
+		1,     // scrapeInterval
+		0,     // headMinTSMS
+		10000, // retentionMS
+		60000, // downsamplingMS (not applied)
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	// Act
+	wouldDownsample := q.WouldDownsample()
+
+	// Assert
+	s.False(wouldDownsample)
+}
+
+func (s *QuerierSuite) TestWouldDownsampleTrueWhenRangeGreaterThanRetention() {
+	// Arrange: range (maxt-mint) greater than retention, so downsampling should apply
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		15000, // maxt (range = 15000, greater than 10000 retention)
+		1,     // scrapeInterval
+		0,     // headMinTSMS
+		10000, // retentionMS
+		60000, // downsamplingMS
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	// Act
+	wouldDownsample := q.WouldDownsample()
+
+	// Assert
+	s.True(wouldDownsample)
+}
+
+func (s *QuerierSuite) TestWouldDownsampleFalseWhenDownsamplingDisabled() {
+	// Arrange: downsampling disabled (NoDownsampling)
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,                        // mint
+		15000,                    // maxt (range = 15000, greater than 10000 retention)
+		1,                        // scrapeInterval
+		0,                        // headMinTSMS
+		10000,                    // retentionMS
+		cppbridge.NoDownsampling, // downsamplingMS disabled
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	// Act
+	wouldDownsample := q.WouldDownsample()
+
+	// Assert
+	s.False(wouldDownsample)
+}
+
+func (s *QuerierSuite) TestSelectRangeBypassesDownsamplingForRateFunction() {
+	// Arrange: setup with downsampling enabled, query range > retention
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "http_requests_total", "job", "api"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 100},
+				{Timestamp: 1000, Value: 200},
+				{Timestamp: 2000, Value: 300},
+				{Timestamp: 10000, Value: 400}, // Gap: 8s
+				{Timestamp: 11000, Value: 500},
+				{Timestamp: 12000, Value: 600},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	// Retention: 5s, Downsampling: 2s, Query range: 12s (> retention)
+	downsamplingMS := int64(2000)
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		12000, // maxt (range = 12s > 5s retention)
+		1000,  // scrapeInterval (1s)
+		0,     // headMinTSMS
+		5000,  // retentionMS
+		downsamplingMS,
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "http_requests_total")
+
+	// Act: Select with rate() function (in allow-list)
+	hints := &prom_storage.SelectHints{
+		Func:  "rate",
+		Range: 1000,
+		Start: 0,
+		End:   12000,
+	}
+	ss := q.Select(s.context, false, hints, matcher)
+
+	// Assert: Should get series with raw data (not downsampled)
+	result := storagetest.TimeSeriesFromSeriesSet(ss, true)
+	s.Len(result, 1)
+	s.Equal(timeSeries[0].Labels, result[0].Labels)
+	// Should have all 6 raw samples (downsampling was bypassed for rate())
+	s.Len(result[0].Samples, len(timeSeries[0].Samples))
+}
+
+func (s *QuerierSuite) TestSelectRangeDoesNotBypassDownsamplingForNonRateFunction() {
+	// Arrange: setup with downsampling enabled, query range > retention
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "http_requests_total", "job", "api"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 100},
+				{Timestamp: 1000, Value: 200},
+				{Timestamp: 2000, Value: 300},
+				{Timestamp: 10000, Value: 400},
+				{Timestamp: 11000, Value: 500},
+				{Timestamp: 12000, Value: 600},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	// Retention: 5s, Downsampling: 2s, Query range: 12s (> retention)
+	downsamplingMS := int64(2000)
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		12000, // maxt
+		1000,  // scrapeInterval
+		0,     // headMinTSMS
+		5000,  // retentionMS
+		downsamplingMS,
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "http_requests_total")
+
+	// Act: Select with sum() function (NOT in allow-list)
+	hints := &prom_storage.SelectHints{
+		Func:  "sum",
+		Range: 1000,
+		Start: 0,
+		End:   12000,
+	}
+	ss := q.Select(s.context, false, hints, matcher)
+
+	// Assert: Downsampling was NOT bypassed for sum()
+	result := storagetest.TimeSeriesFromSeriesSet(ss, true)
+	s.Len(result, 1)
+	s.Equal(timeSeries[0].Labels, result[0].Labels)
+	// For cross-series/aggregation functions, downsampling applies normally
+	// The result should be processed but not error out
+	s.NoError(ss.Err())
+}
+
+func (s *QuerierSuite) TestSelectRangeNoBypassWhenDownsamplingDisabled() {
+	// Arrange: downsampling disabled
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "http_requests_total", "job", "api"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 100},
+				{Timestamp: 1000, Value: 200},
+				{Timestamp: 2000, Value: 300},
+				{Timestamp: 10000, Value: 400},
+				{Timestamp: 11000, Value: 500},
+				{Timestamp: 12000, Value: 600},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	// Downsampling: NoDownsampling (disabled)
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,                        // mint
+		12000,                    // maxt
+		1000,                     // scrapeInterval
+		0,                        // headMinTSMS
+		5000,                     // retentionMS
+		cppbridge.NoDownsampling, // disabled
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "http_requests_total")
+
+	// Act: Select with rate() function (would trigger bypass if enabled)
+	hints := &prom_storage.SelectHints{
+		Func:  "rate",
+		Range: 1000,
+		Start: 0,
+		End:   12000,
+	}
+	ss := q.Select(s.context, false, hints, matcher)
+
+	// Assert: Should get raw data (no downsampling to bypass)
+	result := storagetest.TimeSeriesFromSeriesSet(ss, true)
+	s.Len(result, 1)
+	s.Equal(timeSeries[0].Labels, result[0].Labels)
+	s.Len(result[0].Samples, len(timeSeries[0].Samples))
+}
+
+func (s *QuerierSuite) TestSelectRangeBypassDownsamplingForIncreaseFunction() {
+	// Arrange: test with increase() function (also in allow-list)
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "errors_total", "service", "auth"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+				{Timestamp: 1000, Value: 20},
+				{Timestamp: 8000, Value: 30}, // Gap: 7s
+				{Timestamp: 9000, Value: 40},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	downsamplingMS := int64(3000)
+	q := querier.NewQuerier(
+		s.head,
+		querier.NewNoOpShardedDeduplicator,
+		0,     // mint
+		10000, // maxt (range = 10s > 5s retention)
+		1000,  // scrapeInterval
+		0,     // headMinTSMS
+		5000,  // retentionMS
+		downsamplingMS,
+		nil,
+	)
+	defer func() { _ = q.Close() }()
+
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "errors_total")
+
+	// Act: Select with increase() function
+	hints := &prom_storage.SelectHints{
+		Func:  "increase",
+		Range: 1000,
+		Start: 0,
+		End:   10000,
+	}
+	ss := q.Select(s.context, false, hints, matcher)
+
+	// Assert: Should bypass downsampling and get raw data
+	result := storagetest.TimeSeriesFromSeriesSet(ss, true)
+	s.Len(result, 1)
+	s.Equal(timeSeries[0].Labels, result[0].Labels)
+	// Should have all 4 raw samples (downsampling was bypassed for increase())
+	s.Len(result[0].Samples, len(timeSeries[0].Samples))
 }

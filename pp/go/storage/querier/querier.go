@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/storage/upsampler"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -154,10 +155,13 @@ type Querier[
 	maxt             int64
 	scrapeIntervalMS int64
 	headMinTSMS      int64
+	retentionMS      int64
+	downsamplingMS   int64
 	head             THead
 	deduplicatorCtor deduplicatorCtor
 	metrics          *Metrics
 	queryOptimize    queryOptimizeType
+	activeHead       bool
 }
 
 // NewQuerier init new [Querier].
@@ -170,19 +174,22 @@ func NewQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
+	mint, maxt, scrapeIntervalMS, headMinTSMS, retentionMS, downsamplingMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(
-		head,
-		deduplicatorCtor,
-		mint,
-		maxt,
-		scrapeIntervalMS,
-		headMinTSMS,
-		metrics,
-		selectFuncOptimize,
-	)
+	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
+		mint:             mint,
+		maxt:             maxt,
+		scrapeIntervalMS: scrapeIntervalMS,
+		headMinTSMS:      headMinTSMS,
+		retentionMS:      retentionMS,
+		downsamplingMS:   downsamplingMS,
+		head:             head,
+		deduplicatorCtor: deduplicatorCtor,
+		metrics:          metrics,
+		queryOptimize:    selectFuncOptimize,
+		activeHead:       true,
+	}
 }
 
 // NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
@@ -195,44 +202,21 @@ func NewQuerierWithOutSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
+	mint, maxt, scrapeIntervalMS, headMinTSMS, retentionMS, downsamplingMS int64,
 	metrics *Metrics,
-) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(
-		head,
-		deduplicatorCtor,
-		mint,
-		maxt,
-		scrapeIntervalMS,
-		headMinTSMS,
-		metrics,
-		selectFuncOptimize&dropPointOptimizeType,
-	)
-}
-
-// newQuerierWithSelectFuncOptimize init new [Querier] with select func optimization.
-func newQuerierWithSelectFuncOptimize[
-	TTask Task,
-	TDataStorage DataStorage,
-	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
-](
-	head THead,
-	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
-	metrics *Metrics,
-	queryOptimize queryOptimizeType,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
 		scrapeIntervalMS: scrapeIntervalMS,
 		headMinTSMS:      headMinTSMS,
+		retentionMS:      retentionMS,
+		downsamplingMS:   downsamplingMS,
 		head:             head,
 		deduplicatorCtor: deduplicatorCtor,
 		metrics:          metrics,
-		queryOptimize:    queryOptimize,
+		queryOptimize:    selectFuncOptimize & dropPointOptimizeType,
+		activeHead:       false,
 	}
 }
 
@@ -303,6 +287,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	}
 
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
+}
+
+// WouldDownsample reports whether the current query would apply downsampling.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) WouldDownsample() bool {
+	return q.getDownsamplingMS() != cppbridge.NoDownsampling
 }
 
 // selectInstant returns a instant set of series that matches the given label matchers.
@@ -401,6 +390,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
+//
+//revive:disable-next-line:function-length // this is a complex algorithm
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
@@ -443,14 +434,40 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	downsamplingMS := q.getDownsamplingMS()
+	// Bypass downsampling when upsampling will handle interpolation for rate/increase/delta/deriv.
+	// This allows these functions to use raw dense data, avoiding spurious NaN results from sparse downsampled data.
+	if q.activeHead && downsamplingMS != cppbridge.NoDownsampling && upsampler.NeedsUpsampling(hints) {
+		downsamplingMS = cppbridge.NoDownsampling
+	}
+
 	hints = SwitchFuncOptimize(
 		hints,
 		IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
 		q.queryOptimize,
+		downsamplingMS,
 	)
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
-	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
+
+	queryDataStorage(
+		dsQueryRangeQuerier,
+		q.head,
+		lssQueryResults,
+		shardedSerializedData,
+		q.mint,
+		q.maxt,
+		downsamplingMS,
+		hints,
+	)
+
+	// downsampling has higher priority than aggregation or cross series
+	if downsamplingMS != cppbridge.NoDownsampling {
+		if q.metrics != nil {
+			q.metrics.OptimizationType.WithLabelValues("downsampling").Inc()
+		}
+		return q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+	}
 
 	if isCrossSeriesFunc(hints) {
 		if q.metrics != nil {
@@ -529,6 +546,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 }
 
 // makeCrossSeriesSet queries the cross series set.
+//
+//revive:disable-next-line:function-length // this is a complex algorithm
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
@@ -625,11 +644,23 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	return resultSeriesSets
 }
 
+// getDownsamplingMS calculates the downsampling milliseconds based on the time range.
+//
+//revive:disable-next-line:confusing-naming // this is a getter function
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) getDownsamplingMS() int64 {
+	if q.maxt-q.mint > q.retentionMS {
+		return q.downsamplingMS
+	}
+
+	return cppbridge.NoDownsampling
+}
+
 // SwitchFuncOptimize switch the function optimization hints.
 func SwitchFuncOptimize(
 	hints *storage.SelectHints,
 	possibleToOptimize func() bool,
 	queryOptimize queryOptimizeType,
+	downsamplingMS int64,
 ) *storage.SelectHints {
 	if hints == nil {
 		return emptySelectHints
@@ -643,6 +674,10 @@ func SwitchFuncOptimize(
 		isNotWithout(hints) &&
 		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) &&
 		possibleToOptimize() {
+		return hints
+	}
+
+	if downsamplingMS != cppbridge.NoDownsampling {
 		return hints
 	}
 
@@ -821,7 +856,7 @@ func queryDataStorage[
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
-	mint, maxt int64,
+	mint, maxt, downsamplingMS int64,
 	hints *storage.SelectHints,
 ) {
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
@@ -840,7 +875,7 @@ func queryDataStorage[
 					EndTimestampMs:   maxt,
 					LabelSetIDs:      lssQueryResult.IDs(),
 				},
-				cppbridge.NoDownsampling,
+				downsamplingMS,
 				hints,
 			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {

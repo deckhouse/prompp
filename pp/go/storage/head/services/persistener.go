@@ -147,7 +147,7 @@ func (*Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) headTimeIn
 ) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for shard := range head.RangeShards() {
-		interval := shard.TimeInterval(false)
+		interval := shard.TimeInterval(true)
 		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
 		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
 	}

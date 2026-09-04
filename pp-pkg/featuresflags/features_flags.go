@@ -37,6 +37,9 @@ const (
 type FlagConfig interface {
 	// DisableBlockManagerStorage disables the storage of blocks in the block manager.
 	DisableBlockManagerStorage()
+
+	// SetDownsampling sets the downsampling duration for the flagConfig.
+	SetDownsampling(downsampling model.Duration)
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -105,6 +108,9 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 		case "enable_block_shard_labels":
 			block.EnableBlockShardLabels = true
 			_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
+
+		case "downsampling":
+			setDownsampling(logger, cfg, fvalue)
 
 		case "enable_madvise_random":
 			fileutil.EnabledMADVRANDOM = true
@@ -276,4 +282,31 @@ func setSelectFuncOptimization(logger log.Logger, fvalue string) {
 		msgStr, "Select function optimization is set.",
 		"optimization", fvalue,
 	)
+}
+
+// setDownsampling sets the downsampling value in the configuration.
+func setDownsampling(logger log.Logger, cfg FlagConfig, fvalue string) {
+	fvalue = strings.TrimSpace(fvalue)
+
+	if fvalue == "" {
+		_ = level.Error(logger).Log(msgStr, "The downsampling should be setted with duration.")
+
+		return
+	}
+
+	downsampling, err := model.ParseDuration(fvalue)
+	if err != nil {
+		_ = level.Error(logger).Log(msgStr, "Error parsing downsampling value", errStr, err)
+
+		return
+	}
+
+	if downsampling <= 0 {
+		_ = level.Error(logger).Log(msgStr, "The downsampling value must be greater than 0")
+
+		return
+	}
+
+	cfg.SetDownsampling(downsampling)
+	_ = level.Info(logger).Log(msgStr, "Downsampling is set.", "downsampling", downsampling)
 }

@@ -91,7 +91,7 @@ func (s *SwitchFuncOptimizeSuite) TestNone() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -136,7 +136,7 @@ func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -181,7 +181,7 @@ func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -226,7 +226,7 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -271,7 +271,7 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7)
+		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7, cppbridge.NoDownsampling)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -457,11 +457,13 @@ func queryInstant(
 type querierOptimize struct {
 	noErrorFunc storagetest.NoErrorFunc
 
-	dataDir string
-	head    *storage.Head
-	start   time.Time
-	end     time.Time
-	step    time.Duration
+	dataDir        string
+	head           *storage.Head
+	start          time.Time
+	end            time.Time
+	step           time.Duration
+	retentionMS    int64
+	downsamplingMS int64
 
 	lookbackDelta time.Duration
 	queryOpts     promql.QueryOpts
@@ -482,6 +484,7 @@ func (s *querierOptimize) setup(
 	s.start = start
 	s.step = step
 	s.end = s.start.Add(s.step * time.Duration(countOfSteps))
+	s.retentionMS = 86400000
 
 	s.dataDir = filepath.Join(baseDir, "data")
 	s.noErrorFunc(os.MkdirAll(s.dataDir, os.ModeDir))
@@ -705,6 +708,8 @@ func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error
 		maxt,
 		s.step.Milliseconds(),
 		s.start.UnixMilli(),
+		s.retentionMS,
+		s.downsamplingMS,
 		nil,
 	), nil
 }

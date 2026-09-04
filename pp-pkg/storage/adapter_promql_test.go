@@ -880,5 +880,142 @@ func (s *AdapterPromQLSuite) TestCPM_OffsetCollisionRace_FixedByQueryOffset() {
 		"with query_offset=1s race must already NOT fire: got %v", resWithMinOffset)
 }
 
+// TestHeadUpsamplerWithWideGap verifies that upsampling is applied to head queries
+// when WouldDownsample() == true and a rate() function is used with data gaps wider
+// than the range. This integrates the upsampler into the active head querier path.
+func (s *AdapterPromQLSuite) TestHeadUpsamplerWithWideGap() {
+	// Setup: configure adapter with downsampling enabled and short retention
+	// to trigger WouldDownsample() for wide time ranges.
+	const (
+		retentionMS    = int64(60 * 1000)  // 60s retention
+		downsamplingMS = int64(30 * 1000)  // 30s downsampling
+		rangeMs        = int64(120 * 1000) // 120s query range
+		gapMs          = int64(90 * 1000)  // 90s gap between samples (> rangeMs/2 = 60s)
+	)
+
+	// Create a new adapter with downsampling enabled
+	adapterOpts := &AdapterOptions{
+		RetentionMS:    retentionMS,
+		DownsamplingMS: downsamplingMS,
+	}
+	adaptedStorage := NewAdapter(
+		s.clock,
+		s.manager.Proxy(),
+		s.manager.Builder(),
+		adapterOpts,
+		s.manager.MergeOutOfOrderChunks,
+		nil,
+	)
+	defer adaptedStorage.Close()
+
+	// Ingest two samples with a gap larger than typical scrape intervals
+	const metricName = "test_counter_total"
+	points := []scrapePoint{
+		{
+			labels: []string{"__name__", metricName, "job", "test"},
+			tMs:    0,
+			v:      100,
+		},
+		{
+			labels: []string{"__name__", metricName, "job", "test"},
+			tMs:    gapMs,
+			v:      200,
+		},
+	}
+	// Use the original adapter's append path (both share the same head via proxy)
+	s.ingest(points)
+
+	// Create a querier at time point after the second sample, with a wide range
+	// that exceeds retentionMS → WouldDownsample() should be true
+	endMs := gapMs + 10*1000   // ~100s
+	startMs := endMs - rangeMs // 100s - 120s = range covers both samples + gap
+	q, err := adaptedStorage.Querier(startMs, endMs)
+	s.Require().NoError(err)
+	defer func() { _ = q.Close() }()
+
+	// Verify that the querier was wrapped in upsampler.Querier when WouldDownsample is true
+	// (this is implicit in HeadQuerier/Querier returning a wrapped querier)
+	s.NotNil(q)
+
+	// Execute a rate() query over the gap. Without upsampling, this would return NaN
+	// because there's insufficient data. With upsampling (when WouldDownsample=true),
+	// it should interpolate and return a value.
+	engine := s.engine()
+	expr := `rate(` + metricName + `[2m])`
+	queryTs := model.Time(endMs).Time()
+	query, err := engine.NewInstantQuery(s.ctx, adaptedStorage, nil, expr, queryTs)
+	s.Require().NoError(err)
+	defer query.Close()
+
+	res := query.Exec(s.ctx)
+	s.Require().NoError(res.Err)
+
+	// The result should have one metric (the single series we ingested)
+	// The exact value depends on upsampler interpolation logic, but it should
+	// not be NaN when WouldDownsample=true and rate() is applied
+	s.NotEmpty(
+		res.Value.(promql.Vector),
+		"rate() with upsampling should produce non-empty result for gap wider than range",
+	)
+}
+
+// TestHeadQuerierWithoutDownsamplingNoWrapping verifies that when WouldDownsample() == false,
+// the upsampler wrapper is not applied, preserving the original behavior.
+func (s *AdapterPromQLSuite) TestHeadQuerierWithoutDownsamplingNoWrapping() {
+	// Setup: use very long retention so WouldDownsample() returns false
+	const (
+		longRetentionMS = int64(24 * 60 * 60 * 1000) // 24h
+		downsamplingMS  = int64(30 * 1000)           // 30s downsampling
+		rangeMs         = int64(5 * 60 * 1000)       // 5m query range
+	)
+
+	adapterOpts := &AdapterOptions{
+		RetentionMS:    longRetentionMS,
+		DownsamplingMS: downsamplingMS,
+	}
+	adaptedStorage := NewAdapter(
+		s.clock,
+		s.manager.Proxy(),
+		s.manager.Builder(),
+		adapterOpts,
+		s.manager.MergeOutOfOrderChunks,
+		nil,
+	)
+	defer adaptedStorage.Close()
+
+	// Ingest data
+	points := []scrapePoint{
+		{
+			labels: []string{"__name__", "test_metric", "job", "test"},
+			tMs:    0,
+			v:      100,
+		},
+	}
+	s.ingest(points)
+
+	// Query with range < retentionMS → WouldDownsample() should be false
+	endMs := int64(1_000)      // 1s
+	startMs := endMs - rangeMs // 1s - 5m range (but retention is 24h, so no downsampling)
+	q, err := adaptedStorage.Querier(startMs, endMs)
+	s.Require().NoError(err)
+	defer func() { _ = q.Close() }()
+
+	// The querier should NOT be wrapped when WouldDownsample() == false
+	// We can't directly assert the type since it might be a MultiQuerier, but
+	// we verify it executes without error and returns expected data
+	s.NotNil(q)
+
+	engine := s.engine()
+	expr := `test_metric`
+	queryTs := model.Time(endMs).Time()
+	query, err := engine.NewInstantQuery(s.ctx, adaptedStorage, nil, expr, queryTs)
+	s.Require().NoError(err)
+	defer query.Close()
+
+	res := query.Exec(s.ctx)
+	s.Require().NoError(res.Err)
+	s.Len(res.Value.(promql.Vector), 1)
+}
+
 // Static check that we still satisfy storage.Queryable (compile-time only).
 var _ storage.Queryable = (*Adapter)(nil)

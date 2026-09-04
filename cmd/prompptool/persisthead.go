@@ -130,6 +130,7 @@ func (cmd *cmdPersistHead) Do(
 	bw := block.NewWriter[*shard.Shard](
 		outputDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
 		clockwork.NewRealClock(),
