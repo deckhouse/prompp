@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.8.11 / 2026-08-27
+
+### Fixes
+1. **`MADV_RANDOM` on block mmaps is now opt-in.** v0.8.9 (#427) unconditionally called `madvise(MADV_RANDOM)` on every block index/chunk mmap to shrink the page-cache footprint, but disabling kernel readahead can raise disk IOPS on some storage backends. The advise is now gated behind `PROMPP_FEATURES=enable_madvise_random` and off by default (#489).
+
+### Enhancements
+1. **Scraper validates UTF-8 over the whole scrape body by default.** The Prometheus/OpenMetrics text scraper previously ran `simdutf` validation per token (metric names, label names/values, `HELP` text), silently skipping comments and other bytes it didn't tokenize. Parsing now validates the entire input buffer up front, catching invalid UTF-8 anywhere in the payload; the old per-token behavior can be restored with `PROMPP_FEATURES=disable_scraper_full_utf8` (#482).
+
+## v0.8.10 / 2026-08-21
+
+### Fixes
+1. **Snapshot iteration could read past the label set values table.** `label_sets_values_view` indexed `symbols_tables_` by key id without checking that a values table existed for it, and outside asan/unit-test builds a label name registered after a snapshot was taken could reuse over-allocated memory instead of triggering a reallocation, so the snapshot ended up reporting more keys than it had values tables. In production this crashed the Persistener while it wrote a block index, reading past the end of a values-table vector. The view now remembers the values-table count at creation time and stops traversal there (#485).
+2. **Freeing an already-finalized timestamp stream state could crash or corrupt memory.** `State::stream_data` is a union holding either an open bit sequence or, once finalized, a `finalized_stream_id`; `free_memory()` cleared it unconditionally instead of checking `is_finalized()` like the destructor does. Freeing a state finalized earlier — e.g. by `ChunkFinalizer::finalize` or by another series dropping a shared reference — reinterpreted the id as a `SharedPtr` and crashed or freed a bogus pointer through jemalloc, surfacing as a SIGSEGV inside the cgo bridge. `free_memory()` now checks `is_finalized()` first (#484).
+3. **Snug composite view iterators could read past label set/label name set data during a concurrent shrink.** Read-only `LabelNameSet`/`LabelSet` iterators bounded traversal by the raw item count, which could outrun the shared symbol/values data if a shrink resized it concurrently. Iterators now compute a sentinel id bounded by how much of that data is actually present (#479).
+4. **Data race on the item count of serialized timestamp and Gorilla streams.** Concurrent access could observe a torn item count read out of a shared pointer. Timestamp and Gorilla stream serialization now carry their item count through a bit-sequence representation that stores it atomically (#473).
+5. **Dependency security updates.** Bumped the Go module `golang.org/x/mod` to v0.40.0 (#475) and the web UI package `nanoid` to v3.3.18 (#474), picking up upstream security fixes.
+
 ## v0.8.9 / 2026-08-14
 
 ### Features

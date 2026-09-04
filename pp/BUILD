@@ -184,6 +184,10 @@ cc_test(
 
 cc_library(
     name = "entrypoint_types",
+    srcs = glob(
+        include = ["entrypoint/types/**/*.cpp"],
+        exclude = ["entrypoint/types/**/*_tests.cpp"],
+    ),
     hdrs = glob([
         "entrypoint/types/**/*.h",
     ]),
