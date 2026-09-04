@@ -521,7 +521,7 @@ func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
 
 	if subpath == "/jemalloc" {
 		if !h.jemallocProfilingEnabled {
-			http.Error(w, "jemalloc profiling is not enabled", http.StatusNotFound)
+			http.Error(w, "jemalloc profiling is not enabled", http.StatusMethodNotAllowed)
 			return
 		}
 
