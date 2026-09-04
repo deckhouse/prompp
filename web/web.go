@@ -49,6 +49,7 @@ import (
 	toolkit_web "github.com/prometheus/exporter-toolkit/web"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/atomic"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
@@ -217,6 +218,9 @@ type Handler struct {
 	now func() model.Time
 
 	ready atomic.Uint32 // ready is uint32 rather than boolean to be able to use atomic functions.
+
+	jemallocSem              *semaphore.Weighted
+	jemallocProfilingEnabled bool
 }
 
 // ApplyConfig updates the config field of the Handler struct.
@@ -318,7 +322,9 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 		exemplarStorage: o.ExemplarStorage,
 		notifier:        o.Notifier,
 
-		now: model.Now,
+		now:                      model.Now,
+		jemallocSem:              semaphore.NewWeighted(1),
+		jemallocProfilingEnabled: jemallocProfilingIsEnable(),
 	}
 	h.SetReady(false)
 
@@ -494,8 +500,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 		w.Write([]byte("Only POST or PUT requests allowed"))
 	})
 
-	router.Get("/debug/*subpath", serveDebug)
-	router.Post("/debug/*subpath", serveDebug)
+	router.Get("/debug/*subpath", h.serveDebug)
+	router.Post("/debug/*subpath", h.serveDebug)
 
 	router.Get("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -515,11 +521,22 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 	return h
 }
 
-func serveDebug(w http.ResponseWriter, req *http.Request) {
+func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	subpath := route.Param(ctx, "subpath")
 
 	if subpath == "/jemalloc" {
+		if !h.jemallocProfilingEnabled {
+			http.Error(w, "jemalloc profiling is not enabled", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if err := h.jemallocSem.Acquire(ctx, 1); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer h.jemallocSem.Release(1)
+
 		serveJemallocProfile(w, req)
 		return
 	}
@@ -891,4 +908,14 @@ func setPathWithPrefix(prefix string) func(handlerName string, handler http.Hand
 			handler(w, r.WithContext(httputil.ContextWithPath(r.Context(), prefix+r.URL.Path)))
 		}
 	}
+}
+
+// jemallocProfilingIsEnable checks if jemalloc profiling is enabled from the environment variables.
+func jemallocProfilingIsEnable() bool {
+	v := os.Getenv("MALLOC_CONF")
+	if v == "" {
+		return false
+	}
+
+	return strings.Contains(v, "prof:true") && strings.Contains(v, "prof_active:true")
 }
