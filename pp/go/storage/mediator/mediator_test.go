@@ -6,9 +6,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 )
 
 type MediatorSuite struct {
