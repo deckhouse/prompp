@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
