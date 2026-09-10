@@ -38,6 +38,8 @@ class GenericBitset {
   Memory data_;
 
  public:
+  static constexpr auto kNotFound = std::numeric_limits<uint32_t>::max();
+
   void reserve(size_t size) noexcept {
     if (__builtin_expect(size > std::numeric_limits<uint32_t>::max(), false))
       std::abort();
@@ -267,6 +269,17 @@ class GenericBitset {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t popcount() const noexcept {
     return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t count, uint64_t word) { return count + std::popcount(word); });
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t last_significant_bit() const noexcept {
+    const auto begin = data_.begin();
+    for (auto ptr = begin + data_.size(); ptr-- != begin;) {
+      if (*ptr != 0) {
+        return static_cast<uint32_t>((ptr - begin) * Bit::unit_bits<uint64_t> + std::bit_width(*ptr) - 1);
+      }
+    }
+
+    return std::numeric_limits<uint32_t>::max();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {

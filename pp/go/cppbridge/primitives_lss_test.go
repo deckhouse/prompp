@@ -781,7 +781,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceAfterBoundaryLS() {
 	// Arrange
 	rLSS := s.makeRotatedLSS("")
 	newLSS := cppbridge.NewQueryableLssStorage()
-	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) + 1
+	shrinkBoundary := uint32(len(s.labelSets))
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)

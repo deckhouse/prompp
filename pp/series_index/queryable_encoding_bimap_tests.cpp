@@ -606,6 +606,22 @@ TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrie) {
   EXPECT_EQ(ls1_, lss_[1]);
 }
 
+TEST_F(BimapCopierFixture, ShouldReserveMemoryForAddedSeriesBitset) {
+  // Arrange
+  const BareBones::Vector ids_for_copy{0U};
+  Lss lss_copy;
+
+  dst_src_ids_mapping_.clear();
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  // Act
+  lss_copy.mark_active_atomic(0U);
+
+  // Assert
+  EXPECT_TRUE(lss_copy.added_series().is_set(0U));
+}
+
 class BimapShrinkedStateFixture : public BimapFixture {
  protected:
   static constexpr uint32_t kShrinkBoundary = 3U;

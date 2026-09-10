@@ -300,9 +300,6 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
 
-  // Exclusive upper bound for label set ids written to WAL.
-  inline __attribute__((always_inline)) uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
-
   inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
   inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
