@@ -185,8 +185,8 @@ def _third_party_deps_impl(_ctx):
     http_archive(
         name = "simdutf",
         build_file = Label("//third_party:simdutf.BUILD"),
-        sha256 = "66c85f591133e3baa23cc441d6e2400dd2c94c4902820734ddbcd9e04dd3988b",
-        url = "https://github.com/simdutf/simdutf/releases/download/v6.2.0/singleheader.zip",
+        sha256 = "be74bbed96491196995f73d72a24472a0c2010b58e57ee1ae8880fecbe96a325",
+        url = "https://github.com/simdutf/simdutf/releases/download/v6.5.0/singleheader.zip",
     )
 
     http_file(
