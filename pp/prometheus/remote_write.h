@@ -26,12 +26,12 @@ struct TimeseriesProtobufHashdexRecord {
   size_t labelset_hashval;
   std::string_view timeseries_protobuf_message;
 
-  inline __attribute__((always_inline)) explicit TimeseriesProtobufHashdexRecord(size_t lshv, std::string_view& tpm) noexcept
+  PROMPP_ALWAYS_INLINE explicit TimeseriesProtobufHashdexRecord(size_t lshv, std::string_view& tpm) noexcept
       : labelset_hashval(lshv), timeseries_protobuf_message(tpm) {}
 };
 
 template <class Output, class Sample>
-inline __attribute__((always_inline)) void write_sample(protozero::basic_pbf_writer<Output>& pb, const Sample& sample) {
+PROMPP_ALWAYS_INLINE void write_sample(protozero::basic_pbf_writer<Output>& pb, const Sample& sample) {
   protozero::basic_pbf_writer<Output> pb_sample(pb, 2);
 
   if (__builtin_expect(sample.value() != 0.0, true)) {
@@ -44,23 +44,21 @@ inline __attribute__((always_inline)) void write_sample(protozero::basic_pbf_wri
 }
 
 template <class Output>
-inline __attribute__((always_inline)) void write_label(protozero::basic_pbf_writer<Output>& pb,
-                                                       const std::string_view& label_name,
-                                                       const std::string_view& label_value) {
+PROMPP_ALWAYS_INLINE void write_label(protozero::basic_pbf_writer<Output>& pb, const std::string_view& label_name, const std::string_view& label_value) {
   protozero::basic_pbf_writer<Output> pb_label(pb, 1);
   pb_label.add_string(1, label_name);
   pb_label.add_string(2, label_value);
 }
 
 template <class Output, class LabelSet>
-inline __attribute__((always_inline)) void write_label_set(protozero::basic_pbf_writer<Output>& pb, const LabelSet& label_set) {
+PROMPP_ALWAYS_INLINE void write_label_set(protozero::basic_pbf_writer<Output>& pb, const LabelSet& label_set) {
   for (const auto& [label_name, label_value] : label_set) {
     write_label(pb, label_name, label_value);
   }
 }
 
 template <class Output, class Timeseries>
-inline __attribute__((always_inline)) void write_timeseries(protozero::basic_pbf_writer<Output>& pb, const Timeseries& timeseries) {
+PROMPP_ALWAYS_INLINE void write_timeseries(protozero::basic_pbf_writer<Output>& pb, const Timeseries& timeseries) {
   protozero::basic_pbf_writer<Output> pb_timeseries(pb, 1);
 
   write_label_set(pb_timeseries, timeseries.label_set());
@@ -71,7 +69,7 @@ inline __attribute__((always_inline)) void write_timeseries(protozero::basic_pbf
 }
 
 template <class ProtobufReader, class Sample>
-inline __attribute__((always_inline)) void read_sample(ProtobufReader& pb_sample, Sample& sample) {
+PROMPP_ALWAYS_INLINE void read_sample(ProtobufReader& pb_sample, Sample& sample) {
   uint8_t parsed = 0;
 
   while (pb_sample.next()) {
@@ -99,7 +97,7 @@ inline __attribute__((always_inline)) void read_sample(ProtobufReader& pb_sample
 }
 
 template <class ProtobufReader, class Label>
-inline __attribute__((always_inline)) void read_label(ProtobufReader& pb_label, Label& label) {
+PROMPP_ALWAYS_INLINE void read_label(ProtobufReader& pb_label, Label& label) {
   uint8_t parsed = 0;
 
   while (pb_label.next()) {
@@ -123,7 +121,7 @@ inline __attribute__((always_inline)) void read_label(ProtobufReader& pb_label, 
 }
 
 template <class ProtobufReader, class LabelSet>
-inline __attribute__((always_inline)) void read_only_label_set(ProtobufReader& pb_timeseries, LabelSet& label_set) {
+PROMPP_ALWAYS_INLINE void read_only_label_set(ProtobufReader& pb_timeseries, LabelSet& label_set) {
   while (pb_timeseries.next(1)) {
     auto pb_label = pb_timeseries.get_message();
     typename LabelSet::label_type label;
@@ -137,7 +135,7 @@ inline __attribute__((always_inline)) void read_only_label_set(ProtobufReader& p
 }
 
 template <class ProtobufReader, class Timeseries>
-inline __attribute__((always_inline)) void read_timeseries(ProtobufReader&& pb_timeseries, Timeseries& timeseries) {
+PROMPP_ALWAYS_INLINE void read_timeseries(ProtobufReader&& pb_timeseries, Timeseries& timeseries) {
   while (pb_timeseries.next()) {
     switch (pb_timeseries.tag()) {
       case 1: {  // label
@@ -188,9 +186,7 @@ void read_many_timeseries(ProtobufReader& pb, Callback func) {
 
 // TODO: maybe delete it?
 template <class ProtobufReader, class Timeseries>
-inline __attribute__((always_inline)) void read_timeseries_without_samples(ProtobufReader&& pb_timeseries,
-                                                                           Timeseries& timeseries,
-                                                                           const PbLabelSetMemoryLimits& limits) {
+PROMPP_ALWAYS_INLINE void read_timeseries_without_samples(ProtobufReader&& pb_timeseries, Timeseries& timeseries, const PbLabelSetMemoryLimits& limits) {
   size_t current_message_n = 0;
   while (pb_timeseries.next(1)) {
     if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
@@ -217,9 +213,7 @@ inline __attribute__((always_inline)) void read_timeseries_without_samples(Proto
 }
 
 template <class ProtobufReader, class LabelSet>
-inline __attribute__((always_inline)) void read_timeseries_label_set(ProtobufReader&& pb_timeseries,
-                                                                     LabelSet& label_set,
-                                                                     const PbLabelSetMemoryLimits& limits) {
+PROMPP_ALWAYS_INLINE void read_timeseries_label_set(ProtobufReader&& pb_timeseries, LabelSet& label_set, const PbLabelSetMemoryLimits& limits) {
   size_t current_message_n = 0;
   while (pb_timeseries.next(1)) {
     if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
