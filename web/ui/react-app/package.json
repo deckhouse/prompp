@@ -42,7 +42,7 @@
     "tempusdominus-bootstrap-4": "^5.39.2",
     "tempusdominus-core": "^5.19.3",
     "i18next": "24.2.3",
-    "react-i18next": "15.4.1"
+    "react-i18next": "15.7.4"
   },
   "scripts": {
     "start": "react-scripts start",
