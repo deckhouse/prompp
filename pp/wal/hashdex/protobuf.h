@@ -3,7 +3,6 @@
 #include "snappy.h"
 
 #include "bare_bones/vector.h"
-#include "entrypoint/types/feature_flags.h"
 #include "metric.h"
 #include "primitives/label_set.h"
 #include "prometheus/hashdex.h"
@@ -64,6 +63,8 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
 
+  PROMPP_ALWAYS_INLINE void set_skip_no_samples_series(bool skip) noexcept { skip_no_samples_series_ = skip; }
+
  private:
   class Item {
     size_t hash_;
@@ -84,6 +85,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   BareBones::Vector<Metadata> metadata_;
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
   Primitives::LabelViewSet label_set_;
+  bool skip_no_samples_series_{false};
 
   void parse_timeseries(protozero::pbf_reader& pb) {
     if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
@@ -93,7 +95,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     bool has_samples = read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
 
     if (__builtin_expect(!has_samples, false)) {
-      if (entrypoint::types::feature_flags().features().skip_no_samples_series) [[unlikely]] {
+      if (skip_no_samples_series_) [[unlikely]] {
         label_set_.clear();
         return;
       }
