@@ -1750,19 +1750,6 @@ void prompp_series_data_serialized_data_dtor(void* args);
 void prompp_series_data_data_storage_instant_query(void* args, void* res);
 
 /**
- * @brief Get the first sample timestamp per series
- *
- * @param args {
- *        dataStorage uintptr  // pointer to constructed data storage
- *        seriesIds   []uint32 // series ids
- * }
- * @param res {
- *        timestamps []int64  // same length as seriesIds; filled from storage
- * }
- */
-void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res);
-
-/**
  * @brief Fill stalenan series (first sample timestamp + series id) per series id.
  *
  * @param args {

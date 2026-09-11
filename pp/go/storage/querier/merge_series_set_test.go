@@ -2,6 +2,7 @@ package querier_test
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -58,6 +59,7 @@ func TestMergeShardSeriesSetSuite(t *testing.T) {
 	suite.Run(t, new(MergeShardSeriesSetSuite))
 }
 
+//revive:disable-next-line:cognitive-complexity // this is a test.
 func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 	var start int64
 	matcher := model.LabelMatcher{
@@ -77,8 +79,24 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 				esets := make([]storage.SeriesSet, 0, bm.numShards)
 				asets := make([]storage.SeriesSet, 0, bm.numShards)
 				for i := 0; i < bm.numShards; i++ {
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					esets = append(esets, queryOpt(
+						s.T(),
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
+					asets = append(asets, queryOpt(
+						s.T(),
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -91,8 +109,24 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 						esets = append(esets, &querier.SeriesSet{})
 						asets = append(asets, &querier.SeriesSet{})
 					}
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					esets = append(esets, queryOpt(
+						s.T(),
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
+					asets = append(asets, queryOpt(
+						s.T(),
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -101,10 +135,26 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 				esets := make([]storage.SeriesSet, 0, bm.numShards)
 				asets := make([]storage.SeriesSet, 0, bm.numShards)
 				for i := 0; i < bm.numShards; i++ {
-					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					esets = append(esets, queryOpt(
+						s.T(),
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
 				}
 				for i := bm.numShards - 1; i >= 0; i-- {
-					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(
+						s.T(),
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
 				}
 				assertMergeShardSeriesSetsEqual(s, esets, asets)
 			})
@@ -142,7 +192,15 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 				b.StopTimer()
 				seriesSets = seriesSets[:0]
 				for i := 0; i < bm.numShards; i++ {
-					seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					seriesSets = append(seriesSets, queryOpt(
+						b,
+						head.lsses[i],
+						head.dss[i],
+						start,
+						end,
+						cppbridge.NoDownsampling,
+						matcher,
+					))
 				}
 				b.StartTimer()
 
@@ -186,15 +244,17 @@ func makeHead(numShards, numSeries, numSamples int) *testHead {
 func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries {
 	timeSeries := make([]storagetest.TimeSeries, 0, numSeries)
 	for j := range numSeries {
+		evenNumbered := j%2 == 0
 		ls := labels.FromStrings(
 			"__name__", "metric",
+			"even_numbered", strconv.FormatBool(evenNumbered),
 			"foo", fmt.Sprintf("bar%d", j),
 			"shard_id", fmt.Sprintf("id_%d", shardID),
 		)
 
 		samples := make([]cppbridge.Sample, 0, numSamples)
 		for k := range numSamples {
-			samples = append(samples, cppbridge.Sample{Timestamp: int64(k), Value: float64(k)})
+			samples = append(samples, cppbridge.Sample{Timestamp: int64(k + 1), Value: float64(k)})
 		}
 
 		timeSeries = append(timeSeries, storagetest.TimeSeries{Labels: ls, Samples: samples})

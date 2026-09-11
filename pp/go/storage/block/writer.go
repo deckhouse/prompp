@@ -130,7 +130,7 @@ func (w *Writer[TShard]) Write(sd TShard, numberOfShards uint16) (writtenBlocks 
 func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockWriters, error) {
 	var writers blockWriters
 
-	timeInterval := sd.DataStorage().TimeInterval(false)
+	timeInterval := sd.DataStorage().TimeInterval(true)
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
 	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
