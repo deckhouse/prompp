@@ -63,6 +63,8 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
 
+  PROMPP_ALWAYS_INLINE void set_skip_no_samples_series(bool skip) noexcept { skip_no_samples_series_ = skip; }
+
  private:
   class Item {
     size_t hash_;
@@ -83,13 +85,23 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   BareBones::Vector<Metadata> metadata_;
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
   Primitives::LabelViewSet label_set_;
+  bool skip_no_samples_series_{false};
 
   void parse_timeseries(protozero::pbf_reader& pb) {
     if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
     auto pb_view = pb.get_view();
-    read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+    bool has_samples = read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+
+    if (__builtin_expect(!has_samples, false)) {
+      if (skip_no_samples_series_) [[unlikely]] {
+        label_set_.clear();
+        return;
+      }
+
+      throw BareBones::Exception(0x2609ba8d388d48aa, "Protobuf message has no samples for label set");
+    }
 
     if (floats_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);
