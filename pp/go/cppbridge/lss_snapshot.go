@@ -5,21 +5,40 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 var (
-	snapshotCreate = promauto.NewCounter(
+	snapshotCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_create_count",
-			Help: "Current number of created snapshots.",
+			Name:        "prompp_cppbridge_cpp_objects_create_count",
+			Help:        "Current number of created C++ objects.",
+			ConstLabels: prometheus.Labels{"object": "label_set_snapshot"},
 		},
 	)
 
-	snapshotFinalize = promauto.NewCounter(
+	snapshotFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_finalize_count",
-			Help: "Current number of finalized snapshots.",
+			Name:        "prompp_cppbridge_cpp_objects_finalize_count",
+			Help:        "Current number of finalized C++ objects.",
+			ConstLabels: prometheus.Labels{"object": "label_set_snapshot"},
+		},
+	)
+
+	lsQueryResultCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_cpp_objects_create_count",
+			Help:        "Current number of created C++ objects.",
+			ConstLabels: prometheus.Labels{"object": "lss_query_result"},
+		},
+	)
+
+	lsQueryResultFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_cpp_objects_finalize_count",
+			Help:        "Current number of finalized C++ objects.",
+			ConstLabels: prometheus.Labels{"object": "lss_query_result"},
 		},
 	)
 )
@@ -40,11 +59,10 @@ type LabelSetSnapshot struct {
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(snapshotPtr uintptr) *LabelSetSnapshot {
 	lsst := &LabelSetSnapshot{pointer: snapshotPtr, gcDestroyDetector: &gcDestroyDetector}
-	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
-		primitivesSnapshotDtor(l.pointer)
-
+	runtime.AddCleanup(lsst, func(pointer uintptr) {
+		primitivesSnapshotDtor(pointer)
 		snapshotFinalize.Inc()
-	})
+	}, snapshotPtr)
 
 	snapshotCreate.Inc()
 
@@ -99,10 +117,7 @@ func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []u
 	result := &SeriesGroups{
 		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),
 	}
-	runtime.SetFinalizer(result, func(result *SeriesGroups) {
-		primitivesGroupSeriesByLabelNamesFree(result.Groups)
-	})
-
+	runtime.AddCleanup(result, primitivesGroupSeriesByLabelNamesFree, result.Groups)
 	runtime.KeepAlive(lss)
 	return result
 }
@@ -123,10 +138,7 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 		pointer:           primitivesSnapshotLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
 		gcDestroyDetector: &gcDestroyDetector,
 	}
-	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
-		primitivesFreeLsIdsMapping(idsMapping.pointer)
-	})
-
+	runtime.AddCleanup(idsMapping, primitivesFreeLsIdsMapping, idsMapping.pointer)
 	runtime.KeepAlive(lss)
 	runtime.KeepAlive(bitsetSeries)
 	runtime.KeepAlive(destination)
@@ -156,6 +168,7 @@ func newLSSQueryResult(
 		labelSetLengths: labelSetLengths,
 		status:          status,
 	}
+	lsQueryResultCreate.Inc()
 
 	if status != LSSQueryStatusMatch {
 		lqr.Close()
@@ -182,6 +195,7 @@ func (r *LSSQueryResult) Close() {
 	primitivesLabelSetMatchesFree(r)
 	r.matches = nil
 	r.labelSetLengths = nil
+	lsQueryResultFinalize.Inc()
 }
 
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {

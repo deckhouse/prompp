@@ -90,7 +90,8 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeS
 			context.Background(),
 			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
 			state,
-			true)
+			true,
+		)
 		s.NoError(err)
 	}
 }

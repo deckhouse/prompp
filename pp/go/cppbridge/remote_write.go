@@ -23,9 +23,7 @@ func NewRWMessageList(targetSegmentID uint32, messages []RWMessage) *RWMessageLi
 		TargetSegmentID: targetSegmentID,
 		Messages:        messages,
 	}
-	runtime.SetFinalizer(list, func(list *RWMessageList) {
-		walRemoteWriteDestroyMessages(list.Messages)
-	})
+	runtime.AddCleanup(list, walRemoteWriteDestroyMessages, list.Messages)
 
 	return list
 }
@@ -62,21 +60,21 @@ func (m *RWMessageList) UpdateStats() {
 
 type MessageEncoders struct {
 	encoders    []CppRemoteWriteMessageEncoder
+	lssList     []*LabelSetSnapshot
 	lssPointers []uintptr
 }
 
 func NewMessageEncoders(encodersCount uint64, lssList []*LabelSetSnapshot) *MessageEncoders {
 	encoders := &MessageEncoders{
 		encoders:    walRemoteWriteCreateMessageEncoders(encodersCount),
+		lssList:     lssList,
 		lssPointers: make([]uintptr, 0, len(lssList)),
 	}
 	for _, lss := range lssList {
 		encoders.lssPointers = append(encoders.lssPointers, lss.Pointer())
 	}
 
-	runtime.SetFinalizer(encoders, func(encoders *MessageEncoders) {
-		walRemoteWriteDestroyMessageEncoders(encoders.encoders)
-	})
+	runtime.AddCleanup(encoders, walRemoteWriteDestroyMessageEncoders, encoders.encoders)
 
 	return encoders
 }

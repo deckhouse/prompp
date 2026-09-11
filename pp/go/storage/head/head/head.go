@@ -127,10 +127,9 @@ func NewHead[TShard, TGShard Shard](
 
 	h.run()
 
-	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
-		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
-		logger.Debugf("[Head] %s destroyed", h.String())
-	})
+	runtime.AddCleanup(h, func(id string) {
+		logger.Debugf("[Head] %s destroyed", id)
+	}, h.String())
 
 	logger.Debugf("[Head] %s created", h.String())
 
@@ -147,6 +146,7 @@ func (h *Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (release func(
 // Close closes wals, query semaphore for the inability to get query and clear metrics.
 func (h *Head[TShard, TGShard]) Close() (err error) {
 	h.closeOnce.Do(func() {
+		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
 		if err = h.querySemaphore.Close(); err != nil {
 			return
 		}
