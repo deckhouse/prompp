@@ -397,24 +397,25 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void*
 
   auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
+  auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
+  const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
 
   try {
     std::visit(
-        [in, out](auto& hashdex) {
+        [in, out, &target_lss](auto& hashdex) {
           auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
-          const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
                                                         in->shards_inner_series, in->shards_relabeled_series);
-          target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
         },
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::types::handle_current_exception(err_stream);
   }
+
+  target_lss.build_deferred_indexes();
+  out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache(void* args, void* res) {
@@ -477,24 +478,26 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
 
   auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
+  auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
+  const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
 
   try {
     std::visit(
-        [in, out](auto& hashdex) {
+        [in, out, &target_lss](auto& hashdex) {
           auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
           auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
-          const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
                                                                        in->shards_inner_series, in->shards_relabeled_series, in->def_timestamp);
-          target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
         },
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::types::handle_current_exception(err_stream);
   }
+
+  target_lss.build_deferred_indexes();
+  out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res) {
@@ -552,22 +555,20 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
 
   auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
+  auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
+  const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
 
   try {
     std::visit(
-        [in, out](auto& hashdex) {
-          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
-
-          const entrypoint::types::ReallocationsDetector reallocation_detector(target_lss);
-          in->per_goroutine_relabeler->input_transition_relabeling(target_lss, hashdex, *out, in->shards_inner_series);
-          target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
-        },
+        [in, out, &target_lss](auto& hashdex) { in->per_goroutine_relabeler->input_transition_relabeling(target_lss, hashdex, *out, in->shards_inner_series); },
         *in->hashdex);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::types::handle_current_exception(err_stream);
   }
+
+  target_lss.build_deferred_indexes();
+  out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read(void* args, void* res) {
@@ -617,11 +618,10 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
 
   const auto in = static_cast<Arguments*>(args);
   const auto out = new (res) Result();
+  auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
+  const entrypoint::types::ReallocationsDetector reallocation_detector(lss);
 
   try {
-    auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
-    const entrypoint::types::ReallocationsDetector reallocation_detector(lss);
-
     for (size_t id = 0; id != in->shards_relabeled_series.size(); ++id) {
       if (in->shards_relabeled_series[id].size() == 0) {
         continue;
@@ -630,12 +630,13 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
       PerGoroutineRelabeler::append_relabeler_series(lss, in->shards_inner_series[id], in->shards_relabeled_series[id], in->shards_relabeler_state_update[id]);
     }
 
-    lss.build_deferred_indexes();
-    out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::types::handle_current_exception(err_stream);
   }
+
+  lss.build_deferred_indexes();
+  out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
