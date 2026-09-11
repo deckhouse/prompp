@@ -3,6 +3,7 @@
 #include "snappy.h"
 
 #include "bare_bones/vector.h"
+#include "entrypoint/types/feature_flags.h"
 #include "metric.h"
 #include "primitives/label_set.h"
 #include "prometheus/hashdex.h"
@@ -89,7 +90,16 @@ class Protobuf : public Prometheus::hashdex::Abstract {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
     auto pb_view = pb.get_view();
-    read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+    bool has_samples = read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+
+    if (__builtin_expect(!has_samples, false)) {
+      if (entrypoint::types::feature_flags().features().skip_no_samples_series) [[unlikely]] {
+        label_set_.clear();
+        return;
+      }
+
+      throw BareBones::Exception(0x2609ba8d388d48aa, "Protobuf message has no samples for label set");
+    }
 
     if (floats_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);

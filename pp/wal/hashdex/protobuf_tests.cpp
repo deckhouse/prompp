@@ -61,4 +61,15 @@ INSTANTIATE_TEST_SUITE_P(
                                               },
                                               BareBones::Vector<Sample>{Sample{-1654608420000, 4444}}}}}}));
 
+TEST(ProtobufNoSamples, ThrowsWhenTimeseriesHasNoSamples) {
+  // Arrange
+  constexpr auto protobuf =
+      "\x0a\x27\x0a\x1b\x0a\x08\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f\x12\x0f\x74\x65\x73\x74\x5f\x6e\x6f\x5f\x73\x61\x6d\x70\x6c\x65\x73\x0a\x08\x0a\x03\x6a\x6f"
+      "\x62\x12\x01\x78"sv;
+  PromPP::WAL::hashdex::Protobuf hashdex;
+
+  // Act & Assert
+  EXPECT_THROW(hashdex.presharding(protobuf), BareBones::Exception);
+}
+
 }  // namespace

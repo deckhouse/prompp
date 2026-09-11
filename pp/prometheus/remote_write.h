@@ -217,32 +217,47 @@ inline __attribute__((always_inline)) void read_timeseries_without_samples(Proto
 }
 
 template <class ProtobufReader, class LabelSet>
-inline __attribute__((always_inline)) void read_timeseries_label_set(ProtobufReader&& pb_timeseries,
+inline __attribute__((always_inline)) bool read_timeseries_label_set(ProtobufReader&& pb_timeseries,
                                                                      LabelSet& label_set,
                                                                      const PbLabelSetMemoryLimits& limits) {
   size_t current_message_n = 0;
-  while (pb_timeseries.next(1)) {
-    if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
-      throw BareBones::Exception(0xf666cea4f74038c7, "Max Label Names count per Timeseries limit exceeded");
-    }
+  bool has_samples = false;
+  while (pb_timeseries.next()) {
+    switch (pb_timeseries.tag()) {
+      case 1: {  // label
+        if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
+          throw BareBones::Exception(0xf666cea4f74038c7, "Max Label Names count per Timeseries limit exceeded");
+        }
 
-    auto pb_label = pb_timeseries.get_message();
-    typename LabelSet::label_type label;
-    read_label(pb_label, label);
-    if (size_t label_name_sz = std::size(std::get<0>(label)); limits.max_label_name_length && label_name_sz > limits.max_label_name_length) {
-      throw BareBones::Exception(0x01102a3321345745, "Label name size (%zd) exceeds the maximum name size limit", label_name_sz);
-    }
-    if (size_t label_value_sz = std::size(std::get<1>(label)); limits.max_label_value_length && label_value_sz > limits.max_label_value_length) {
-      throw BareBones::Exception(0x32b5ff9563758da8, "Label value size (%zd) exceeds the maximum value size limit", label_value_sz);
-    }
-    label_set.add(label);
+        auto pb_label = pb_timeseries.get_message();
+        typename LabelSet::label_type label;
+        read_label(pb_label, label);
+        if (size_t label_name_sz = std::size(std::get<0>(label)); limits.max_label_name_length && label_name_sz > limits.max_label_name_length) {
+          throw BareBones::Exception(0x01102a3321345745, "Label name size (%zd) exceeds the maximum name size limit", label_name_sz);
+        }
+        if (size_t label_value_sz = std::size(std::get<1>(label)); limits.max_label_value_length && label_value_sz > limits.max_label_value_length) {
+          throw BareBones::Exception(0x32b5ff9563758da8, "Label value size (%zd) exceeds the maximum value size limit", label_value_sz);
+        }
+        label_set.add(label);
 
-    current_message_n++;
+        current_message_n++;
+      } break;
+
+      case 2:  // sample
+        has_samples = true;
+        pb_timeseries.skip();
+        break;
+
+      default:
+        pb_timeseries.skip();
+    }
   }
 
   if (__builtin_expect(!label_set.size(), false)) {
     throw BareBones::Exception(0x68997b7d2e49de1e, "Protobuf message has an empty label set, can't read timeseries");
   }
+
+  return has_samples;
 }
 
 template <class Timeseries, class Hashdex, class ProtobufReader>
