@@ -485,7 +485,6 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
     std::visit(
         [in, out, &target_lss](auto& hashdex) {
           auto& input_lss = std::get<entrypoint::types::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->target_lss);
 
           in->per_goroutine_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
                                                                        in->shards_inner_series, in->shards_relabeled_series, in->def_timestamp);
