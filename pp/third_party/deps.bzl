@@ -192,8 +192,8 @@ def _third_party_deps_impl(_ctx):
     http_file(
         name = "fastfloat_header",
         downloaded_file_path = "fastfloat/fast_float.h",
-        sha256 = "1335e82c61fda54476ecbd94b92356deebeb3f0122802c3f103ee528ac08624e",
-        url = "https://github.com/fastfloat/fast_float/releases/download/v8.0.0/fast_float.h",
+        sha256 = "cd327808931bcd2db3a50900526d9f8fae349acc094af02e7b03d180360ea107",
+        url = "https://github.com/fastfloat/fast_float/releases/download/v8.2.10/fast_float.h",
     )
 
 third_party_deps = module_extension(implementation = _third_party_deps_impl)
