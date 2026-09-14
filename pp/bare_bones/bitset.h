@@ -279,7 +279,7 @@ class GenericBitset {
       }
     }
 
-    return std::numeric_limits<uint32_t>::max();
+    return kNotFound;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
