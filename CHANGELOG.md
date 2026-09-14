@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.12 / 2026-09-07
+
+### Fixes
+1. **`ChunkSeriesSet` could return a bogus series once the chunk recoder ran out of data.** `nextChunk` didn't check the series id on the chunk it got back from `RecodeNextChunk`; when the recoder returned `cppbridge.InvalidSeriesId`, iteration kept going and built a series from that invalid id instead of stopping. `nextChunk` now returns early on an invalid series id (#500).
+2. **Remote-write config reload could miss a rotated secret.** Destination configs were compared by marshaling both to YAML and diffing the bytes, but Prometheus's `Secret` type redacts its value on YAML marshal, so two configs differing only by an authorization token/credential always marshaled identically and reload skipped restarting the destination — leaving it sending with the old, now-invalid credential. Comparison now uses `reflect.DeepEqual` on the parsed config instead (#494).
+3. **The jemalloc profiling endpoint could be hit concurrently, and stayed reachable even when profiling wasn't enabled.** `/debug/jemalloc` now serializes requests behind a semaphore and returns `404` unless the binary was actually started with `MALLOC_CONF=prof:true,prof_active:true` (#493).
+4. **A race between closing and triggering the head-rotation mediator could panic with "send on closed channel".** `Trigger`/`TriggerWithResetTimer` now check a closed flag under a lock before sending, so a shutdown racing with a rotation trigger is a no-op instead of a crash (#498).
+5. **Dependency security updates.** Bumped `google.golang.org/grpc` to v1.83.1 and `go.opentelemetry.io/otel/sdk` to v1.44.0 (#491), and `golang.org/x/crypto` to v0.56.0 (#490).
+
+### Other
+1. **The experimental `pp_protocol` remote-write WebSocket/refill endpoints are temporarily disabled**, returning `404` instead of forwarding to the handler, while the protocol gets further work (#492).
+
 ## v0.8.11 / 2026-08-27
 
 ### Fixes
