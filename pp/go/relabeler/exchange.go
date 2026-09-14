@@ -315,7 +315,7 @@ type sendStatus struct {
 
 func newSendStatus(destinations int) *sendStatus {
 	return &sendStatus{
-		counter: int32(destinations),
+		counter: int32(destinations), // #nosec G115 // no overflow
 	}
 }
 

@@ -126,20 +126,20 @@ func (mqp ModifierQueryParams) Generate(rd *rand.Rand, _ int) reflect.Value {
 func (mqp *ModifierQueryParams) modGen(rd *rand.Rand) {
 	mqp.subGen(rd)
 
-	shiftMs := 100 * time.Millisecond
+	shift := 100 * time.Millisecond
 	diff := mqp.End.Sub(mqp.Start)
 
-	mqp.ModifierAt = mqp.Start.Add(shiftMs)
-	if diff <= shiftMs {
+	mqp.ModifierAt = mqp.Start.Add(shift)
+	if diff <= shift {
 		return
 	}
 
-	rndShiftMs := time.Duration(rd.Int63n(diff.Milliseconds()) * 1e6) // ms to ns
-	if rndShiftMs <= shiftMs {
+	rndShift := time.Duration(rd.Int63n(diff.Milliseconds()) * 1e6) // ms to ns
+	if rndShift <= shift {
 		return
 	}
 
-	mqp.ModifierAt = mqp.Start.Add(rndShiftMs)
+	mqp.ModifierAt = mqp.Start.Add(rndShift)
 }
 
 //

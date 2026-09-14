@@ -263,7 +263,7 @@ func testBlockQuerier(t *testing.T, c blockQuerierTestCase, ir IndexReader, cr C
 			rmChunkRefs(chksRes)
 			require.Equal(t, errExp, errRes)
 
-			require.Equal(t, len(chksExp), len(chksRes))
+			require.Len(t, chksRes, len(chksExp))
 			var exp, act [][]chunks.Sample
 			for i := range chksExp {
 				samples, err := storage.ExpandSamples(chksExp[i].Chunk.Iterator(nil), nil)
@@ -315,24 +315,30 @@ func TestBlockQuerier(t *testing.T) {
 			maxt: math.MaxInt64,
 			ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchRegexp, "a", ".*")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{1, 2, nil, nil}, sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{1, 1, nil, nil}, sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("b", "b"),
 					[]chunks.Sample{sample{1, 3, nil, nil}, sample{2, 2, nil, nil}, sample{3, 6, nil, nil}, sample{5, 1, nil, nil}, sample{6, 7, nil, nil}, sample{7, 2, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{1, 2, nil, nil}, sample{2, 3, nil, nil}, sample{3, 4, nil, nil}}, []chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{1, 1, nil, nil}, sample{2, 2, nil, nil}, sample{3, 3, nil, nil}}, []chunks.Sample{sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("b", "b"),
 					[]chunks.Sample{sample{1, 3, nil, nil}, sample{2, 2, nil, nil}, sample{3, 6, nil, nil}}, []chunks.Sample{sample{5, 1, nil, nil}, sample{6, 7, nil, nil}, sample{7, 2, nil, nil}},
 				),
 			}),
@@ -342,18 +348,22 @@ func TestBlockQuerier(t *testing.T) {
 			maxt: 6,
 			ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "a", "a")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{2, 3, nil, nil}, sample{3, 4, nil, nil}}, []chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{2, 2, nil, nil}, sample{3, 3, nil, nil}}, []chunks.Sample{sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
@@ -366,19 +376,23 @@ func TestBlockQuerier(t *testing.T) {
 			hints: &storage.SelectHints{Start: 2, End: 6, DisableTrimming: true},
 			ms:    []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "a", "a")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{1, 2, nil, nil}, sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{1, 1, nil, nil}, sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{1, 2, nil, nil}, sample{2, 3, nil, nil}, sample{3, 4, nil, nil}},
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{1, 1, nil, nil}, sample{2, 2, nil, nil}, sample{3, 3, nil, nil}},
 					[]chunks.Sample{sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
@@ -392,18 +406,22 @@ func TestBlockQuerier(t *testing.T) {
 			hints: &storage.SelectHints{Start: 5, End: 6, DisableTrimming: true},
 			ms:    []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "a", "a")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
@@ -451,24 +469,30 @@ func TestBlockQuerier_AgainstHeadWithOpenChunks(t *testing.T) {
 			maxt: math.MaxInt64,
 			ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchRegexp, "a", ".*")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{1, 2, nil, nil}, sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{1, 1, nil, nil}, sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("b", "b"),
 					[]chunks.Sample{sample{1, 3, nil, nil}, sample{2, 2, nil, nil}, sample{3, 6, nil, nil}, sample{5, 1, nil, nil}, sample{6, 7, nil, nil}, sample{7, 2, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{1, 2, nil, nil}, sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{1, 1, nil, nil}, sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("b", "b"),
 					[]chunks.Sample{sample{1, 3, nil, nil}, sample{2, 2, nil, nil}, sample{3, 6, nil, nil}, sample{5, 1, nil, nil}, sample{6, 7, nil, nil}, sample{7, 2, nil, nil}},
 				),
 			}),
@@ -478,18 +502,22 @@ func TestBlockQuerier_AgainstHeadWithOpenChunks(t *testing.T) {
 			maxt: 6,
 			ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "a", "a")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{2, 3, nil, nil}, sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{2, 2, nil, nil}, sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 				),
 			}),
@@ -534,18 +562,22 @@ func TestBlockQuerier_TrimmingDoesNotModifyOriginalTombstoneIntervals(t *testing
 		maxt: 6,
 		ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchRegexp, "a", "a")},
 		exp: newMockSeriesSet([]storage.Series{
-			storage.NewListSeries(labels.FromStrings("a", "a"),
+			storage.NewListSeries(
+				labels.FromStrings("a", "a"),
 				[]chunks.Sample{sample{3, 4, nil, nil}, sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 			),
-			storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+			storage.NewListSeries(
+				labels.FromStrings("a", "a", "b", "b"),
 				[]chunks.Sample{sample{3, 3, nil, nil}, sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 			),
 		}),
 		expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-			storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+			storage.NewListChunkSeriesFromSamples(
+				labels.FromStrings("a", "a"),
 				[]chunks.Sample{sample{3, 4, nil, nil}}, []chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 			),
-			storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+			storage.NewListChunkSeriesFromSamples(
+				labels.FromStrings("a", "a", "b", "b"),
 				[]chunks.Sample{sample{3, 3, nil, nil}}, []chunks.Sample{sample{5, 3, nil, nil}, sample{6, 6, nil, nil}},
 			),
 		}),
@@ -633,24 +665,30 @@ func TestBlockQuerierDelete(t *testing.T) {
 			maxt: math.MaxInt64,
 			ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchRegexp, "a", ".*")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{5, 3, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("b", "b"),
 					[]chunks.Sample{sample{1, 3, nil, nil}, sample{2, 2, nil, nil}, sample{3, 6, nil, nil}, sample{5, 1, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}, sample{7, 4, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{5, 3, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("b", "b"),
 					[]chunks.Sample{sample{1, 3, nil, nil}, sample{2, 2, nil, nil}, sample{3, 6, nil, nil}}, []chunks.Sample{sample{5, 1, nil, nil}},
 				),
 			}),
@@ -660,18 +698,22 @@ func TestBlockQuerierDelete(t *testing.T) {
 			maxt: 6,
 			ms:   []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "a", "a")},
 			exp: newMockSeriesSet([]storage.Series{
-				storage.NewListSeries(labels.FromStrings("a", "a"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 				),
-				storage.NewListSeries(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListSeries(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{5, 3, nil, nil}},
 				),
 			}),
 			expChks: newMockChunkSeriesSet([]storage.ChunkSeries{
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a"),
 					[]chunks.Sample{sample{5, 2, nil, nil}, sample{6, 3, nil, nil}},
 				),
-				storage.NewListChunkSeriesFromSamples(labels.FromStrings("a", "a", "b", "b"),
+				storage.NewListChunkSeriesFromSamples(
+					labels.FromStrings("a", "a", "b", "b"),
 					[]chunks.Sample{sample{5, 3, nil, nil}},
 				),
 			}),

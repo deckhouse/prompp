@@ -349,13 +349,14 @@ func NewEngine(opts EngineOpts) *Engine {
 		opts.Logger = log.NewNopLogger()
 	}
 
-	queryResultSummary := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace:  namespace,
-		Subsystem:  subsystem,
-		Name:       "query_duration_seconds",
-		Help:       "Query timings",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-	},
+	queryResultSummary := prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Namespace:  namespace,
+			Subsystem:  subsystem,
+			Name:       "query_duration_seconds",
+			Help:       "Query timings",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		},
 		[]string{"slice"},
 	)
 
@@ -3627,7 +3628,7 @@ func detectHistogramStatsDecoding(expr parser.Expr) {
 			return fmt.Errorf("stop")
 		}
 
-		n, ok := (node).(*parser.VectorSelector)
+		n, ok := node.(*parser.VectorSelector)
 		if !ok {
 			return nil
 		}

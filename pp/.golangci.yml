@@ -188,6 +188,9 @@ linters:
       - linters:
           - staticcheck
         text: 'ST1000:' # Incorrect or missing package comment
+      - linters:
+          - staticcheck
+        text: 'QF1008:' # embedded fields from selector
       - path: (.+)\.go$
         text: abcdef
     paths:

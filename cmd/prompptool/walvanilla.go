@@ -110,9 +110,7 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 	if err := head.Close(); err != nil {
 		return fmt.Errorf("close head: %w", err)
 	}
-	finalize := func(dir string) error {
-		return os.RemoveAll(dir)
-	}
+	finalize := os.RemoveAll
 	if cmd.backupWALs {
 		suffix := fmt.Sprintf(".%s.bak", time.Now().Format("2006010215040500"))
 		finalize = func(dir string) error {

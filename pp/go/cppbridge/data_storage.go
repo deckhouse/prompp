@@ -126,8 +126,8 @@ func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selec
 	}
 }
 
-// InstantQuery .
-// Deprecated: InstantQuery .
+// InstantQuery finds, for each series in labelSetIDs, the sample closest to (at or before) targetTimestamp
+// and writes it into the C-shared samples slice (pointed to by samples), in the same order as labelSetIDs.
 func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
 	return seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
