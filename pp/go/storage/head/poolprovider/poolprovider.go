@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/pool"
 	"github.com/prometheus/prometheus/util/zeropool"
 )
 
@@ -40,9 +41,13 @@ type HeadPool[TGShard Shard] struct {
 	chunkSeriesSetPool  zeropool.Pool[[]storage.ChunkSeriesSet]
 	serializedDataPool  zeropool.Pool[[]*cppbridge.DataStorageSerializedData]
 	errorsPool          zeropool.Pool[[]error]
+	seriesGroupsPool    zeropool.Pool[[]*cppbridge.SeriesGroups]
+	nameIDsPool         pool.SlicePool[uint32]
 }
 
 // NewHeadPool init new [HeadPool], pools for reusable objects.
+//
+//revive:disable-next-line:function-length // this is constructor.
 func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 	return &HeadPool[TGShard]{
 		// used to reuse tasks
@@ -92,6 +97,10 @@ func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 		errorsPool: zeropool.New(func() []error {
 			return make([]error, numberOfShards)
 		}),
+		seriesGroupsPool: zeropool.New(func() []*cppbridge.SeriesGroups {
+			return make([]*cppbridge.SeriesGroups, numberOfShards)
+		}),
+		nameIDsPool: pool.NewSlicePool[uint32]([]int{0, 1, 2, 3, 5}),
 	}
 }
 
@@ -224,4 +233,26 @@ func (hp *HeadPool[TGShard]) GetErrors() []error {
 func (hp *HeadPool[TGShard]) PutErrors(errs []error) {
 	clear(errs)
 	hp.errorsPool.Put(errs)
+}
+
+// GetSeriesGroups gets a slice of [cppbridge.SeriesGroups] from the pool.
+func (hp *HeadPool[TGShard]) GetSeriesGroups() []*cppbridge.SeriesGroups {
+	return hp.seriesGroupsPool.Get()
+}
+
+// PutSeriesGroups adds slice of [cppbridge.SeriesGroups] to the pool after resetting it.
+func (hp *HeadPool[TGShard]) PutSeriesGroups(groups []*cppbridge.SeriesGroups) {
+	clear(groups)
+	hp.seriesGroupsPool.Put(groups)
+}
+
+// GetNameIDs gets a slice of [uint32] from the pool.
+func (hp *HeadPool[TGShard]) GetNameIDs(size int) []uint32 {
+	return hp.nameIDsPool.Get(size)
+}
+
+// PutNameIDs adds slice of [uint32] to the pool after resetting it.
+func (hp *HeadPool[TGShard]) PutNameIDs(nameIDs []uint32) {
+	clear(nameIDs)
+	hp.nameIDsPool.Put(nameIDs)
 }
