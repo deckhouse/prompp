@@ -1351,7 +1351,7 @@ func TestTombstoneCleanFail(t *testing.T) {
 	actualBlockDirs, err := blockDirs(db.dir)
 	require.NoError(t, err)
 	// Only one block should have been replaced by a new block.
-	require.Equal(t, len(oldBlockDirs), len(actualBlockDirs))
+	require.Len(t, actualBlockDirs, len(oldBlockDirs))
 	require.Len(t, intersection(oldBlockDirs, actualBlockDirs), len(actualBlockDirs)-1)
 }
 
@@ -1595,7 +1595,7 @@ func TestSizeRetention(t *testing.T) {
 
 	// Test that registered size matches the actual disk size.
 	require.NoError(t, db.reloadBlocks())                               // Reload the db to register the new db size.
-	require.Equal(t, len(blocks), len(db.Blocks()))                     // Ensure all blocks are registered.
+	require.Len(t, db.Blocks(), len(blocks))                            // Ensure all blocks are registered.
 	blockSize := int64(prom_testutil.ToFloat64(db.metrics.blocksBytes)) // Use the actual internal metrics.
 	walSize, err := db.Head().wal.Size()
 	require.NoError(t, err)
@@ -2112,7 +2112,7 @@ func TestNoEmptyBlocks(t *testing.T) {
 		require.NoError(t, db.Compact(ctx))
 		actBlocks, err := blockDirs(db.Dir())
 		require.NoError(t, err)
-		require.Equal(t, len(db.Blocks()), len(actBlocks))
+		require.Len(t, actBlocks, len(db.Blocks()))
 		require.Empty(t, actBlocks)
 		require.Equal(t, 0, int(prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran)), "no compaction should be triggered here")
 	})
@@ -2132,7 +2132,7 @@ func TestNoEmptyBlocks(t *testing.T) {
 
 		actBlocks, err := blockDirs(db.Dir())
 		require.NoError(t, err)
-		require.Equal(t, len(db.Blocks()), len(actBlocks))
+		require.Len(t, actBlocks, len(db.Blocks()))
 		require.Empty(t, actBlocks)
 
 		app = db.Appender(ctx)
@@ -2153,7 +2153,7 @@ func TestNoEmptyBlocks(t *testing.T) {
 		require.Equal(t, 2, int(prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran)), "compaction should have been triggered here")
 		actBlocks, err = blockDirs(db.Dir())
 		require.NoError(t, err)
-		require.Equal(t, len(db.Blocks()), len(actBlocks))
+		require.Len(t, actBlocks, len(db.Blocks()))
 		require.Len(t, actBlocks, 1, "No blocks created when compacting with >0 samples")
 	})
 
@@ -2194,7 +2194,7 @@ func TestNoEmptyBlocks(t *testing.T) {
 
 		actBlocks, err := blockDirs(db.Dir())
 		require.NoError(t, err)
-		require.Equal(t, len(db.Blocks()), len(actBlocks))
+		require.Len(t, actBlocks, len(db.Blocks()))
 		require.Len(t, actBlocks, 1, "All samples are deleted. Only the most recent block should remain after compaction.")
 	})
 }
@@ -2508,7 +2508,7 @@ func TestDBReadOnly(t *testing.T) {
 	t.Run("blocks", func(t *testing.T) {
 		blocks, err := dbReadOnly.Blocks()
 		require.NoError(t, err)
-		require.Equal(t, len(expBlocks), len(blocks))
+		require.Len(t, blocks, len(expBlocks))
 		for i, expBlock := range expBlocks {
 			require.Equal(t, expBlock.Meta(), blocks[i].Meta(), "block meta mismatch")
 		}
@@ -2536,7 +2536,7 @@ func TestDBReadOnly(t *testing.T) {
 		readOnlySeries := query(t, q, matchAll)
 		readOnlyDBHash := testutil.DirHash(t, dbDir)
 
-		require.Equal(t, len(expSeries), len(readOnlySeries), "total series mismatch")
+		require.Len(t, readOnlySeries, len(expSeries), "total series mismatch")
 		require.Equal(t, expSeries, readOnlySeries, "series mismatch")
 		require.Equal(t, expDBHash, readOnlyDBHash, "after all read operations the db hash should remain the same")
 	})
@@ -2546,7 +2546,7 @@ func TestDBReadOnly(t *testing.T) {
 		readOnlySeries := queryAndExpandChunks(t, cq, matchAll)
 		readOnlyDBHash := testutil.DirHash(t, dbDir)
 
-		require.Equal(t, len(expChunks), len(readOnlySeries), "total series mismatch")
+		require.Len(t, readOnlySeries, len(expChunks), "total series mismatch")
 		require.Equal(t, expChunks, readOnlySeries, "series chunks mismatch")
 		require.Equal(t, expDBHash, readOnlyDBHash, "after all read operations the db hash should remain the same")
 	})
@@ -3270,7 +3270,8 @@ func TestOpen_VariousBlockStates(t *testing.T) {
 		compacted := createBlock(t, tmpDir, genSeries(10, 2, 50, 55))
 		expectedRemovedDirs[compacted] = struct{}{}
 
-		m.Compaction.Parents = append(m.Compaction.Parents,
+		m.Compaction.Parents = append(
+			m.Compaction.Parents,
 			BlockDesc{ULID: ulid.MustParse(filepath.Base(compacted))},
 			BlockDesc{ULID: ulid.MustNew(1, nil)},
 			BlockDesc{ULID: ulid.MustNew(123, nil)},
@@ -6616,7 +6617,7 @@ func testNoGapAfterRestartWithOOO(t *testing.T, scenario sampleTypeScenario) {
 			require.NoError(t, db.Compact(ctx))
 			verifyBlockRanges := func() {
 				blocks := db.Blocks()
-				require.Equal(t, len(c.blockRanges), len(blocks))
+				require.Len(t, blocks, len(c.blockRanges))
 				for j, br := range c.blockRanges {
 					require.Equal(t, br[0]*time.Minute.Milliseconds(), blocks[j].MinTime())
 					require.Equal(t, br[1]*time.Minute.Milliseconds(), blocks[j].MaxTime())
@@ -7218,7 +7219,8 @@ func TestQueryHistogramFromBlocksWithCompaction(t *testing.T) {
 	for _, floatHistogram := range []bool{false, true} {
 		t.Run(fmt.Sprintf("floatHistogram=%t", floatHistogram), func(t *testing.T) {
 			t.Run("serial blocks with only histograms", func(t *testing.T) {
-				testBlockQuerying(t,
+				testBlockQuerying(
+					t,
 					genHistogramSeries(10, 5, minute(0), minute(119), minute(1), floatHistogram),
 					genHistogramSeries(10, 5, minute(120), minute(239), minute(1), floatHistogram),
 					genHistogramSeries(10, 5, minute(240), minute(359), minute(1), floatHistogram),
@@ -7226,7 +7228,8 @@ func TestQueryHistogramFromBlocksWithCompaction(t *testing.T) {
 			})
 
 			t.Run("serial blocks with either histograms or floats in a block and not both", func(t *testing.T) {
-				testBlockQuerying(t,
+				testBlockQuerying(
+					t,
 					genHistogramSeries(10, 5, minute(0), minute(119), minute(1), floatHistogram),
 					genSeriesFromSampleGenerator(10, 5, minute(120), minute(239), minute(1), func(ts int64) chunks.Sample {
 						return sample{t: ts, f: rand.Float64()}
@@ -7236,7 +7239,8 @@ func TestQueryHistogramFromBlocksWithCompaction(t *testing.T) {
 			})
 
 			t.Run("serial blocks with mix of histograms and float64", func(t *testing.T) {
-				testBlockQuerying(t,
+				testBlockQuerying(
+					t,
 					genHistogramAndFloatSeries(10, 5, minute(0), minute(60), minute(1), floatHistogram),
 					genHistogramSeries(10, 5, minute(61), minute(120), minute(1), floatHistogram),
 					genHistogramAndFloatSeries(10, 5, minute(121), minute(180), minute(1), floatHistogram),
@@ -7247,7 +7251,8 @@ func TestQueryHistogramFromBlocksWithCompaction(t *testing.T) {
 			})
 
 			t.Run("overlapping blocks with only histograms", func(t *testing.T) {
-				testBlockQuerying(t,
+				testBlockQuerying(
+					t,
 					genHistogramSeries(10, 5, minute(0), minute(120), minute(3), floatHistogram),
 					genHistogramSeries(10, 5, minute(1), minute(120), minute(3), floatHistogram),
 					genHistogramSeries(10, 5, minute(2), minute(120), minute(3), floatHistogram),
@@ -7255,7 +7260,8 @@ func TestQueryHistogramFromBlocksWithCompaction(t *testing.T) {
 			})
 
 			t.Run("overlapping blocks with only histograms and only float in a series", func(t *testing.T) {
-				testBlockQuerying(t,
+				testBlockQuerying(
+					t,
 					genHistogramSeries(10, 5, minute(0), minute(120), minute(3), floatHistogram),
 					genSeriesFromSampleGenerator(10, 5, minute(1), minute(120), minute(3), func(ts int64) chunks.Sample {
 						return sample{t: ts, f: rand.Float64()}
@@ -7265,7 +7271,8 @@ func TestQueryHistogramFromBlocksWithCompaction(t *testing.T) {
 			})
 
 			t.Run("overlapping blocks with mix of histograms and float64", func(t *testing.T) {
-				testBlockQuerying(t,
+				testBlockQuerying(
+					t,
 					genHistogramAndFloatSeries(10, 5, minute(0), minute(60), minute(3), floatHistogram),
 					genHistogramSeries(10, 5, minute(46), minute(100), minute(3), floatHistogram),
 					genHistogramAndFloatSeries(10, 5, minute(89), minute(140), minute(3), floatHistogram),

@@ -851,7 +851,7 @@ func TestScrapeLoopRun(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "Cancellation during initial offset failed.")
 	case err := <-errc:
-		require.FailNow(t, "Unexpected error: %s", err)
+		require.FailNow(t, "Unexpected error", "%s", err)
 	}
 
 	// The provided timeout must cause cancellation of the context passed down to the
@@ -894,7 +894,7 @@ func TestScrapeLoopRun(t *testing.T) {
 	case <-signal:
 		// Loop terminated as expected.
 	case err := <-errc:
-		require.FailNow(t, "Unexpected error: %s", err)
+		require.FailNow(t, "Unexpected error", "%s", err)
 	case <-time.After(3 * time.Second):
 		require.FailNow(t, "Loop did not terminate on context cancellation")
 	}
@@ -1000,14 +1000,14 @@ test_metric 1
 	md, ok = cache.GetMetadata("test_metric_no_help")
 	require.True(t, ok, "expected metadata to be present")
 	require.Equal(t, model.MetricTypeGauge, md.Type, "unexpected metric type")
-	require.Equal(t, "", md.Help)
-	require.Equal(t, "", md.Unit)
+	require.Empty(t, md.Help)
+	require.Empty(t, md.Unit)
 
 	md, ok = cache.GetMetadata("test_metric_no_type")
 	require.True(t, ok, "expected metadata to be present")
 	require.Equal(t, model.MetricTypeUnknown, md.Type, "unexpected metric type")
 	require.Equal(t, "other help text", md.Help)
-	require.Equal(t, "", md.Unit)
+	require.Empty(t, md.Unit)
 }
 
 func simpleTestScrapeLoop(t testing.TB) (context.Context, *scrapeLoop) {
@@ -3411,7 +3411,7 @@ test_summary_count 199
 			foundLeValues[v] = true
 		}
 
-		require.Equal(t, len(expectedValues), len(foundLeValues), "number of label values not as expected")
+		require.Len(t, foundLeValues, len(expectedValues), "number of label values not as expected")
 		for _, v := range expectedValues {
 			require.Contains(t, foundLeValues, v, "label value not found")
 		}

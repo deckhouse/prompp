@@ -222,7 +222,7 @@ func TestWALSegmentSizeBounds(t *testing.T) {
 			go func() { done <- prom.Wait() }()
 			select {
 			case err := <-done:
-				require.Fail(t, "prometheus should be still running: %v", err)
+				require.Fail(t, "prometheus should be still running", "%v", err)
 			case <-time.After(startupTime):
 				prom.Process.Kill()
 				<-done
@@ -265,7 +265,7 @@ func TestMaxBlockChunkSegmentSizeBounds(t *testing.T) {
 			go func() { done <- prom.Wait() }()
 			select {
 			case err := <-done:
-				require.Fail(t, "prometheus should be still running: %v", err)
+				require.Fail(t, "prometheus should be still running", "%v", err)
 			case <-time.After(startupTime):
 				prom.Process.Kill()
 				<-done

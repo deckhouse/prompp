@@ -694,7 +694,7 @@ func TestTargetUpdatesOrder(t *testing.T) {
 			for x := 0; x < totalUpdatesCount; x++ {
 				select {
 				case <-ctx.Done():
-					require.FailNow(t, "%d: no update arrived within the timeout limit", x)
+					require.FailNow(t, "no update arrived within the timeout limit", "%d", x)
 				case tgs := <-provUpdates:
 					discoveryManager.updateGroup(poolKey{setName: strconv.Itoa(i), provider: tc.title}, tgs)
 					for _, got := range discoveryManager.allGroups() {
@@ -773,7 +773,7 @@ func verifyPresence(t *testing.T, tSets map[poolKey]map[string]*targetgroup.Grou
 		if !present {
 			msg = "not"
 		}
-		require.FailNow(t, "%q should %s be present in Targets labels: %q", label, msg, mergedTargets)
+		require.FailNow(t, "target labels presence check failed", "%q should %s be present in Targets labels: %q", label, msg, mergedTargets)
 	}
 }
 
@@ -1090,7 +1090,7 @@ func TestTargetSetRecreatesEmptyStaticConfigs(t *testing.T) {
 	targetGroups, ok := discoveryManager.targets[p]
 	require.True(t, ok, "'%v' should be present in targets", p)
 	// Otherwise the targetGroups will leak, see https://github.com/prometheus/prometheus/issues/12436.
-	require.Empty(t, targetGroups, 0, "'%v' should no longer have any associated target groups", p)
+	require.Empty(t, targetGroups, "'%v' should no longer have any associated target groups", p)
 	require.Len(t, syncedTargets, 1, "an update with no targetGroups should still be sent.")
 	require.Empty(t, syncedTargets["prometheus"], 0)
 }
@@ -1372,10 +1372,10 @@ func TestCoordinationWithReceiver(t *testing.T) {
 				time.Sleep(expected.delay)
 				select {
 				case <-ctx.Done():
-					require.FailNow(t, "step %d: no update received in the expected timeframe", i)
+					require.FailNow(t, "no update received in the expected timeframe", "step %d", i)
 				case tgs, ok := <-mgr.SyncCh():
 					require.True(t, ok, "step %d: discovery manager channel is closed", i)
-					require.Equal(t, len(expected.tgs), len(tgs), "step %d: targets mismatch", i)
+					require.Len(t, tgs, len(expected.tgs), "step %d: targets mismatch", i)
 
 					for k := range expected.tgs {
 						_, ok := tgs[k]
