@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.8.12 / 2026-09-07
+
+### Fixes
+1. **`ChunkSeriesSet` could return a bogus series once the chunk recoder ran out of data.** `nextChunk` didn't check the series id on the chunk it got back from `RecodeNextChunk`; when the recoder returned `cppbridge.InvalidSeriesId`, iteration kept going and built a series from that invalid id instead of stopping. `nextChunk` now returns early on an invalid series id (#500).
+2. **Remote-write config reload could miss a rotated secret.** Destination configs were compared by marshaling both to YAML and diffing the bytes, but Prometheus's `Secret` type redacts its value on YAML marshal, so two configs differing only by an authorization token/credential always marshaled identically and reload skipped restarting the destination — leaving it sending with the old, now-invalid credential. Comparison now uses `reflect.DeepEqual` on the parsed config instead (#494).
+3. **The jemalloc profiling endpoint could be hit concurrently, and stayed reachable even when profiling wasn't enabled.** `/debug/jemalloc` now serializes requests behind a semaphore and returns `404` unless the binary was actually started with `MALLOC_CONF=prof:true,prof_active:true` (#493).
+4. **A race between closing and triggering the head-rotation mediator could panic with "send on closed channel".** `Trigger`/`TriggerWithResetTimer` now check a closed flag under a lock before sending, so a shutdown racing with a rotation trigger is a no-op instead of a crash (#498).
+5. **Dependency security updates.** Bumped `google.golang.org/grpc` to v1.83.1 and `go.opentelemetry.io/otel/sdk` to v1.44.0 (#491), and `golang.org/x/crypto` to v0.56.0 (#490).
+
+### Other
+1. **The experimental `pp_protocol` remote-write WebSocket/refill endpoints are temporarily disabled**, returning `404` instead of forwarding to the handler, while the protocol gets further work (#492).
+
+## v0.8.11 / 2026-08-27
+
+### Fixes
+1. **`MADV_RANDOM` on block mmaps is now opt-in.** v0.8.9 (#427) unconditionally called `madvise(MADV_RANDOM)` on every block index/chunk mmap to shrink the page-cache footprint, but disabling kernel readahead can raise disk IOPS on some storage backends. The advise is now gated behind `PROMPP_FEATURES=enable_madvise_random` and off by default (#489).
+
+### Enhancements
+1. **Scraper validates UTF-8 over the whole scrape body by default.** The Prometheus/OpenMetrics text scraper previously ran `simdutf` validation per token (metric names, label names/values, `HELP` text), silently skipping comments and other bytes it didn't tokenize. Parsing now validates the entire input buffer up front, catching invalid UTF-8 anywhere in the payload; the old per-token behavior can be restored with `PROMPP_FEATURES=disable_scraper_full_utf8` (#482).
+
+## v0.8.10 / 2026-08-21
+
+### Fixes
+1. **Snapshot iteration could read past the label set values table.** `label_sets_values_view` indexed `symbols_tables_` by key id without checking that a values table existed for it, and outside asan/unit-test builds a label name registered after a snapshot was taken could reuse over-allocated memory instead of triggering a reallocation, so the snapshot ended up reporting more keys than it had values tables. In production this crashed the Persistener while it wrote a block index, reading past the end of a values-table vector. The view now remembers the values-table count at creation time and stops traversal there (#485).
+2. **Freeing an already-finalized timestamp stream state could crash or corrupt memory.** `State::stream_data` is a union holding either an open bit sequence or, once finalized, a `finalized_stream_id`; `free_memory()` cleared it unconditionally instead of checking `is_finalized()` like the destructor does. Freeing a state finalized earlier — e.g. by `ChunkFinalizer::finalize` or by another series dropping a shared reference — reinterpreted the id as a `SharedPtr` and crashed or freed a bogus pointer through jemalloc, surfacing as a SIGSEGV inside the cgo bridge. `free_memory()` now checks `is_finalized()` first (#484).
+3. **Snug composite view iterators could read past label set/label name set data during a concurrent shrink.** Read-only `LabelNameSet`/`LabelSet` iterators bounded traversal by the raw item count, which could outrun the shared symbol/values data if a shrink resized it concurrently. Iterators now compute a sentinel id bounded by how much of that data is actually present (#479).
+4. **Data race on the item count of serialized timestamp and Gorilla streams.** Concurrent access could observe a torn item count read out of a shared pointer. Timestamp and Gorilla stream serialization now carry their item count through a bit-sequence representation that stores it atomically (#473).
+5. **Dependency security updates.** Bumped the Go module `golang.org/x/mod` to v0.40.0 (#475) and the web UI package `nanoid` to v3.3.18 (#474), picking up upstream security fixes.
+
 ## v0.8.9 / 2026-08-14
 
 ### Features

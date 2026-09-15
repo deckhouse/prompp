@@ -1,8 +1,8 @@
 package remotewriter
 
 import (
-	"bytes"
 	"hash/crc32"
+	"reflect"
 	"sync"
 	"time"
 
@@ -41,9 +41,9 @@ var HTTP2Enabled = true
 
 // DestinationConfig is a remote write destination config.
 type DestinationConfig struct {
-	config.RemoteWriteConfig
-	ExternalLabels labels.Labels `yaml:"external_labels"`
-	ReadTimeout    time.Duration
+	config.RemoteWriteConfig `yaml:",inline"`
+	ExternalLabels           labels.Labels `yaml:"external_labels"`
+	ReadTimeout              time.Duration
 }
 
 // EqualTo checks if the config is equal to the other config.
@@ -190,9 +190,7 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 //
 
 func remoteWriteConfigsAreEqual(lrwc, rwrc config.RemoteWriteConfig) bool {
-	ldata, _ := yaml.Marshal(lrwc)
-	rdata, _ := yaml.Marshal(rwrc)
-	return bytes.Equal(ldata, rdata)
+	return reflect.DeepEqual(lrwc, rwrc)
 }
 
 // maxTimestamp is a metric for the highest sent timestamp.

@@ -31,6 +31,7 @@ struct PROMPP_ATTRIBUTE_PACKED State {
   StateId previous_state_id{kInvalidStateId};
 
   explicit State(StateId previous_id) : previous_state_id(previous_id) {}
+  State(StateId previous_id, DoNotInitializeTag tag) : stream_data{.stream{tag}}, previous_state_id(previous_id) {}
   ~State() {
     if (!is_finalized()) [[likely]] {
       stream_data.destruct_stream();
@@ -79,7 +80,11 @@ struct PROMPP_ATTRIBUTE_PACKED State {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE void free_memory() noexcept { stream_data.stream.stream.clear(); }
+  PROMPP_ALWAYS_INLINE void free_memory() noexcept {
+    if (!is_finalized()) [[likely]] {
+      stream_data.stream.stream.clear();
+    }
+  }
 
  private:
   static constexpr auto kFinalizedState = std::numeric_limits<int64_t>::min();

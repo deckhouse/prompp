@@ -779,7 +779,7 @@ INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantC
 INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.1));
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(-1.0));
 
-class OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {
+class OutdatedChunkMergerCornerCasesFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {
  protected:
   [[nodiscard]] SampleList decode_series(uint32_t ls_id) {
     SampleList result;
@@ -792,7 +792,7 @@ class OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture : publi
 // becomes empty after merging into it while there are still finalized chunks left to iterate.
 // merge_outdated_samples_in_finalized_chunks must stop instead of dereferencing samples.front()
 // on the empty span (heap-buffer-overflow reported by ASan in production heads).
-TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesNotReadPastEndOfSamples) {
+TEST_F(OutdatedChunkMergerCornerCasesFixture, DoesNotReadPastEndOfSamples) {
   // Arrange
   // 9 in-order samples produce 2 finalized chunks ({2,4,6,8}, {10,12,14,16})
   // plus an open chunk ({18}); kSamplesPerChunk == 4.
@@ -830,6 +830,53 @@ TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesN
           {.timestamp = 18, .value = 1.0},
       },
       decode_series(0)));
+}
+
+TEST_F(OutdatedChunkMergerCornerCasesFixture, FinalizeSharedStateWithChildsAtMerge) {
+  // Arrange
+  encoder_.encode(0, 10, 1.0);
+  encoder_.encode(1, 10, 1.0);
+  encoder_.encode(0, 20, 1.0);
+
+  encoder_.encode(2, 1, 1.0);
+  encoder_.encode(2, 2, 1.0);
+  encoder_.encode(2, 3, 1.0);
+  encoder_.encode(2, 4, 1.0);
+  encoder_.encode(2, 30, 1.0);
+  encoder_.encode(2, 10, 1.0);
+
+  merger_.merge();
+
+  // Act
+  encoder_.encode(1, 20, 1.0);
+  encoder_.encode(0, 30, 1.0);
+  encoder_.encode(1, 30, 1.0);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 20, .value = 1.0},
+          {.timestamp = 30, .value = 1.0},
+      },
+      decode_series(0)));
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 20, .value = 1.0},
+          {.timestamp = 30, .value = 1.0},
+      },
+      decode_series(1)));
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 1, .value = 1.0},
+          {.timestamp = 2, .value = 1.0},
+          {.timestamp = 3, .value = 1.0},
+          {.timestamp = 4, .value = 1.0},
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 30, .value = 1.0},
+      },
+      decode_series(2)));
 }
 
 }  // namespace
