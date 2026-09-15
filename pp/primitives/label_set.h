@@ -155,7 +155,7 @@ class BasicLabelSet {
     const Container<LabelType>& labels_;
 
     friend class BasicLabelSet;
-    inline __attribute__((always_inline)) explicit Names(const BasicLabelSet& label_set) : labels_(label_set.labels_) {}
+    PROMPP_ALWAYS_INLINE explicit Names(const BasicLabelSet& label_set) : labels_(label_set.labels_) {}
 
    public:
     class Iterator {
