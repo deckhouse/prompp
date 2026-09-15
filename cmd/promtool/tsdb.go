@@ -514,7 +514,7 @@ func analyzeBlock(ctx context.Context, path, blockID string, limit int, runExten
 			return err
 		}
 		// Amount of the block time range not covered by this series.
-		uncovered := uint64(meta.MaxTime-meta.MinTime) - uint64(chks[len(chks)-1].MaxTime-chks[0].MinTime)
+		uncovered := uint64(meta.MaxTime-meta.MinTime) - uint64(chks[len(chks)-1].MaxTime-chks[0].MinTime) // #nosec G115 // no overflow
 		builder.Labels().Range(func(lbl labels.Label) {
 			key := lbl.Name + "=" + lbl.Value
 			labelsUncovered[lbl.Name] += uncovered

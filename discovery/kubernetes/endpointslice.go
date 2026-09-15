@@ -296,7 +296,7 @@ func (e *EndpointSlice) buildEndpointSlice(eps endpointSliceAdaptor) *targetgrou
 	add := func(addr string, ep endpointSliceEndpointAdaptor, port endpointSlicePortAdaptor) {
 		a := addr
 		if port.port() != nil {
-			a = net.JoinHostPort(addr, strconv.FormatUint(uint64(*port.port()), 10))
+			a = net.JoinHostPort(addr, strconv.FormatUint(uint64(*port.port()), 10)) // #nosec G115 // no overflow
 		}
 
 		target := model.LabelSet{
@@ -312,7 +312,7 @@ func (e *EndpointSlice) buildEndpointSlice(eps endpointSliceAdaptor) *targetgrou
 		}
 
 		if port.port() != nil {
-			target[endpointSlicePortLabel] = lv(strconv.FormatUint(uint64(*port.port()), 10))
+			target[endpointSlicePortLabel] = lv(strconv.FormatUint(uint64(*port.port()), 10)) // #nosec G115 // no overflow
 		}
 
 		if port.appProtocol() != nil {
@@ -386,7 +386,7 @@ func (e *EndpointSlice) buildEndpointSlice(eps endpointSliceAdaptor) *targetgrou
 					continue
 				}
 				if *port.port() == cport.ContainerPort {
-					ports := strconv.FormatUint(uint64(*port.port()), 10)
+					ports := strconv.FormatUint(uint64(*port.port()), 10) // #nosec G115 // no overflow
 
 					target[podContainerNameLabel] = lv(c.Name)
 					target[podContainerImageLabel] = lv(c.Image)
@@ -437,8 +437,8 @@ func (e *EndpointSlice) buildEndpointSlice(eps endpointSliceAdaptor) *targetgrou
 					continue
 				}
 
-				a := net.JoinHostPort(pe.pod.Status.PodIP, strconv.FormatUint(uint64(cport.ContainerPort), 10))
-				ports := strconv.FormatUint(uint64(cport.ContainerPort), 10)
+				a := net.JoinHostPort(pe.pod.Status.PodIP, strconv.FormatUint(uint64(cport.ContainerPort), 10)) // #nosec G115 // no overflow
+				ports := strconv.FormatUint(uint64(cport.ContainerPort), 10)                                    // #nosec G115 // no overflow
 
 				target := model.LabelSet{
 					model.AddressLabel:            lv(a),

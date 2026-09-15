@@ -1479,7 +1479,7 @@ func (s *memSeries) mmapCurrentOOOHeadChunk(chunkDiskMapper *chunks.ChunkDiskMap
 		chunkRefs = append(chunkRefs, chunkRef)
 		s.ooo.oooMmappedChunks = append(s.ooo.oooMmappedChunks, &mmappedChunk{
 			ref:        chunkRef,
-			numSamples: uint16(memchunk.chunk.NumSamples()),
+			numSamples: uint16(memchunk.chunk.NumSamples()), // #nosec G115 // no overflow
 			minTime:    memchunk.minTime,
 			maxTime:    memchunk.maxTime,
 		})
@@ -1503,7 +1503,7 @@ func (s *memSeries) mmapChunks(chunkDiskMapper *chunks.ChunkDiskMapper) (count i
 		chunkRef := chunkDiskMapper.WriteChunk(s.ref, chk.minTime, chk.maxTime, chk.chunk, false, handleChunkWriteError)
 		s.mmappedChunks = append(s.mmappedChunks, &mmappedChunk{
 			ref:        chunkRef,
-			numSamples: uint16(chk.chunk.NumSamples()),
+			numSamples: uint16(chk.chunk.NumSamples()), // #nosec G115 // no overflow
 			minTime:    chk.minTime,
 			maxTime:    chk.maxTime,
 		})

@@ -177,7 +177,7 @@ func (f *chunkPos) bytesToWriteForChunk(chkLen uint64) uint64 {
 	bytes := uint64(SeriesRefSize) + 2*MintMaxtSize + ChunkEncodingSize
 
 	// Size of chunk length encoded as uvarint.
-	bytes += uint64(varint.UvarintSize(chkLen))
+	bytes += uint64(varint.UvarintSize(chkLen)) // #nosec G115 // no overflow
 
 	// Chunk length.
 	bytes += chkLen
@@ -359,7 +359,7 @@ func (cdm *ChunkDiskMapper) openMMapFiles() (returnErr error) {
 		}
 	}
 
-	cdm.evtlPos.setSeq(uint64(lastSeq))
+	cdm.evtlPos.setSeq(uint64(lastSeq)) // #nosec G115 // no overflow
 
 	return nil
 }
@@ -375,7 +375,7 @@ func listChunkFiles(dir string) (map[int]string, error) {
 		if err != nil {
 			continue
 		}
-		res[int(seq)] = filepath.Join(dir, fi.Name())
+		res[int(seq)] = filepath.Join(dir, fi.Name()) // #nosec G115 // no overflow
 	}
 
 	return res, nil
@@ -524,9 +524,9 @@ func (cdm *ChunkDiskMapper) writeChunk(seriesRef HeadSeriesRef, mint, maxt int64
 
 	binary.BigEndian.PutUint64(cdm.byteBuf[bytesWritten:], uint64(seriesRef))
 	bytesWritten += SeriesRefSize
-	binary.BigEndian.PutUint64(cdm.byteBuf[bytesWritten:], uint64(mint))
+	binary.BigEndian.PutUint64(cdm.byteBuf[bytesWritten:], uint64(mint)) // #nosec G115 // no overflow
 	bytesWritten += MintMaxtSize
-	binary.BigEndian.PutUint64(cdm.byteBuf[bytesWritten:], uint64(maxt))
+	binary.BigEndian.PutUint64(cdm.byteBuf[bytesWritten:], uint64(maxt)) // #nosec G115 // no overflow
 	bytesWritten += MintMaxtSize
 	enc := chk.Encoding()
 	if isOOO {
@@ -617,7 +617,7 @@ func (cdm *ChunkDiskMapper) cut() (seq, offset int, returnErr error) {
 		}
 	}()
 
-	cdm.curFileOffset.Store(uint64(offset))
+	cdm.curFileOffset.Store(uint64(offset)) // #nosec G115 // no overflow
 
 	if cdm.curFile != nil {
 		cdm.readPathMtx.Lock()
@@ -668,7 +668,7 @@ func (cdm *ChunkDiskMapper) finalizeCurFile() error {
 
 func (cdm *ChunkDiskMapper) write(b []byte) error {
 	n, err := cdm.chkWriter.Write(b)
-	cdm.curFileOffset.Add(uint64(n))
+	cdm.curFileOffset.Add(uint64(n)) // #nosec G115 // no overflow
 	return err
 }
 
@@ -769,7 +769,7 @@ func (cdm *ChunkDiskMapper) Chunk(ref ChunkDiskMapperRef) (chunkenc.Chunk, error
 	}
 
 	// Verify the chunk data end.
-	chkDataEnd := chkDataLenStart + n + int(chkDataLen)
+	chkDataEnd := chkDataLenStart + n + int(chkDataLen) // #nosec G115 // no overflow
 	if chkDataEnd > mmapFile.byteSlice.Len() {
 		return nil, &CorruptionErr{
 			Dir:       cdm.dir.Name(),
@@ -789,7 +789,7 @@ func (cdm *ChunkDiskMapper) Chunk(ref ChunkDiskMapperRef) (chunkenc.Chunk, error
 	}
 
 	// The chunk data itself.
-	chkData := mmapFile.byteSlice.Range(chkDataEnd-int(chkDataLen), chkDataEnd)
+	chkData := mmapFile.byteSlice.Range(chkDataEnd-int(chkDataLen), chkDataEnd) // #nosec G115 // no overflow
 
 	// Make a copy of the chunk data to prevent a panic occurring because the returned
 	// chunk data slice references an mmap-ed file which could be closed after the
@@ -830,7 +830,7 @@ func (cdm *ChunkDiskMapper) IterateAllChunks(f func(seriesRef HeadSeriesRef, chu
 		mmapFile := cdm.mmappedChunkFiles[segID]
 		fileEnd := mmapFile.byteSlice.Len()
 		if segID == cdm.curFileSequence {
-			fileEnd = int(cdm.curFileSize())
+			fileEnd = int(cdm.curFileSize()) // #nosec G115 // no overflow
 		}
 		idx := HeadChunkFileHeaderSize
 		for idx < fileEnd {
@@ -854,14 +854,14 @@ func (cdm *ChunkDiskMapper) IterateAllChunks(f func(seriesRef HeadSeriesRef, chu
 						" - required:%v, available:%v, file:%d", idx+MaxHeadChunkMetaSize, fileEnd, segID),
 				}
 			}
-			chunkRef := newChunkDiskMapperRef(uint64(segID), uint64(idx))
+			chunkRef := newChunkDiskMapperRef(uint64(segID), uint64(idx)) // #nosec G115 // no overflow
 
 			startIdx := idx
 			seriesRef := HeadSeriesRef(binary.BigEndian.Uint64(mmapFile.byteSlice.Range(idx, idx+SeriesRefSize)))
 			idx += SeriesRefSize
-			mint := int64(binary.BigEndian.Uint64(mmapFile.byteSlice.Range(idx, idx+MintMaxtSize)))
+			mint := int64(binary.BigEndian.Uint64(mmapFile.byteSlice.Range(idx, idx+MintMaxtSize))) // #nosec G115 // no overflow
 			idx += MintMaxtSize
-			maxt := int64(binary.BigEndian.Uint64(mmapFile.byteSlice.Range(idx, idx+MintMaxtSize)))
+			maxt := int64(binary.BigEndian.Uint64(mmapFile.byteSlice.Range(idx, idx+MintMaxtSize))) // #nosec G115 // no overflow
 			idx += MintMaxtSize
 
 			// We preallocate file to help with m-mapping (especially windows systems).
@@ -878,7 +878,7 @@ func (cdm *ChunkDiskMapper) IterateAllChunks(f func(seriesRef HeadSeriesRef, chu
 			idx += n
 
 			numSamples := binary.BigEndian.Uint16(mmapFile.byteSlice.Range(idx, idx+2))
-			idx += int(dataLen) // Skip the data.
+			idx += int(dataLen) // #nosec G115 // no overflow // Skip the data.
 
 			// In the beginning we only checked for the chunk meta size.
 			// Now that we have added the chunk data length, we check for sufficient bytes again.
@@ -945,7 +945,7 @@ func (cdm *ChunkDiskMapper) Truncate(fileNo uint32) error {
 
 	var removedFiles []int
 	for _, seq := range chkFileIndices {
-		if seq == cdm.curFileSequence || uint32(seq) >= fileNo {
+		if seq == cdm.curFileSequence || uint32(seq) >= fileNo { // #nosec G115 // no overflow
 			break
 		}
 		removedFiles = append(removedFiles, seq)
@@ -978,7 +978,7 @@ func (cdm *ChunkDiskMapper) Truncate(fileNo uint32) error {
 				cdm.evtlPos.setSeq(0)
 			} else {
 				// In case of error, set it to the last file number on the disk that was not deleted.
-				cdm.evtlPos.setSeq(uint64(pendingDeletes[len(pendingDeletes)-1]))
+				cdm.evtlPos.setSeq(uint64(pendingDeletes[len(pendingDeletes)-1])) // #nosec G115 // no overflow
 			}
 		}
 
@@ -1041,7 +1041,7 @@ func (cdm *ChunkDiskMapper) DeleteCorrupted(originalErr error) error {
 		cdm.evtlPos.setSeq(uint64(lastSeq))
 	} else {
 		// In case of error, set it to the last file number on the disk that was not deleted.
-		cdm.evtlPos.setSeq(uint64(pendingDeletes[len(pendingDeletes)-1]))
+		cdm.evtlPos.setSeq(uint64(pendingDeletes[len(pendingDeletes)-1])) // #nosec G115 // no overflow
 	}
 	cdm.evtlPosMtx.Unlock()
 

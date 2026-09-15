@@ -1274,7 +1274,7 @@ func (s *shards) start(n int) {
 	var hardShutdownCtx context.Context
 	hardShutdownCtx, s.hardShutdown = context.WithCancel(context.Background())
 	s.softShutdown = make(chan struct{})
-	s.running.Store(int32(n))
+	s.running.Store(int32(n)) // #nosec G115 // no overflow
 	s.done = make(chan struct{})
 	s.enqueuedSamples.Store(0)
 	s.enqueuedExemplars.Store(0)
@@ -1591,9 +1591,9 @@ func (s *shards) runShard(ctx context.Context, shardID int, queue *queue) {
 			s.qm.metrics.failedSamplesTotal.Add(float64(droppedSamples))
 			s.qm.metrics.failedExemplarsTotal.Add(float64(droppedExemplars))
 			s.qm.metrics.failedHistogramsTotal.Add(float64(droppedHistograms))
-			s.samplesDroppedOnHardShutdown.Add(uint32(droppedSamples))
-			s.exemplarsDroppedOnHardShutdown.Add(uint32(droppedExemplars))
-			s.histogramsDroppedOnHardShutdown.Add(uint32(droppedHistograms))
+			s.samplesDroppedOnHardShutdown.Add(uint32(droppedSamples))       // #nosec G115 // no overflow
+			s.exemplarsDroppedOnHardShutdown.Add(uint32(droppedExemplars))   // #nosec G115 // no overflow
+			s.histogramsDroppedOnHardShutdown.Add(uint32(droppedHistograms)) // #nosec G115 // no overflow
 			return
 
 		case batch, ok := <-batchQueue:

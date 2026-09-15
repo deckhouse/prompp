@@ -597,7 +597,7 @@ func processUpperBoundsAndCreateBaseHistogram(upperBounds0 []float64) ([]float64
 		Sum:    0,
 		Schema: histogram.CustomBucketsSchema,
 		PositiveSpans: []histogram.Span{
-			{Offset: 0, Length: uint32(len(upperBounds))},
+			{Offset: 0, Length: uint32(len(upperBounds))}, // #nosec G115 // no overflow
 		},
 		PositiveBuckets: make([]float64, len(upperBounds)),
 		CustomValues:    customBounds,

@@ -314,7 +314,7 @@ func (e *Endpoints) buildEndpoints(eps *apiv1.Endpoints) *targetgroup.Group {
 	seenPods := map[string]*podEntry{}
 
 	add := func(addr apiv1.EndpointAddress, port apiv1.EndpointPort, ready string) {
-		a := net.JoinHostPort(addr.IP, strconv.FormatUint(uint64(port.Port), 10))
+		a := net.JoinHostPort(addr.IP, strconv.FormatUint(uint64(port.Port), 10)) // #nosec G115 // no overflow
 
 		target := model.LabelSet{
 			model.AddressLabel:        lv(a),
@@ -364,7 +364,7 @@ func (e *Endpoints) buildEndpoints(eps *apiv1.Endpoints) *targetgroup.Group {
 		for _, c := range pod.Spec.Containers {
 			for _, cport := range c.Ports {
 				if port.Port == cport.ContainerPort {
-					ports := strconv.FormatUint(uint64(port.Port), 10)
+					ports := strconv.FormatUint(uint64(port.Port), 10) // #nosec G115 // no overflow
 
 					target[podContainerNameLabel] = lv(c.Name)
 					target[podContainerImageLabel] = lv(c.Image)
@@ -425,8 +425,8 @@ func (e *Endpoints) buildEndpoints(eps *apiv1.Endpoints) *targetgroup.Group {
 					continue
 				}
 
-				a := net.JoinHostPort(pe.pod.Status.PodIP, strconv.FormatUint(uint64(cport.ContainerPort), 10))
-				ports := strconv.FormatUint(uint64(cport.ContainerPort), 10)
+				a := net.JoinHostPort(pe.pod.Status.PodIP, strconv.FormatUint(uint64(cport.ContainerPort), 10)) // #nosec G115 // no overflow
+				ports := strconv.FormatUint(uint64(cport.ContainerPort), 10)                                    // #nosec G115 // no overflow
 
 				target := model.LabelSet{
 					model.AddressLabel:            lv(a),

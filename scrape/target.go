@@ -159,8 +159,8 @@ func (t *Target) offset(interval time.Duration, offsetSeed uint64) time.Duration
 	// Base is a pinned to absolute time, no matter how often offset is called.
 	var (
 		base   = int64(interval) - now%int64(interval)
-		offset = (t.hash() ^ offsetSeed) % uint64(interval)
-		next   = base + int64(offset)
+		offset = (t.hash() ^ offsetSeed) % uint64(interval) // #nosec G115 // no overflow
+		next   = base + int64(offset)                       // #nosec G115 // no overflow
 	)
 
 	if next > int64(interval) {

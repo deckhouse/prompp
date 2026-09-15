@@ -249,7 +249,7 @@ Outer:
 					multiRef[walSeries.Ref] = mSeries.ref
 				}
 
-				idx := uint64(mSeries.ref) % uint64(concurrency)
+				idx := uint64(mSeries.ref) % uint64(concurrency) // #nosec G115 // no overflow
 				processors[idx].input <- walSubsetProcessorInputItem{walSeriesRef: walSeries.Ref, existingSeries: mSeries}
 			}
 			seriesPool.Put(v)
@@ -277,7 +277,7 @@ Outer:
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					shards[mod] = append(shards[mod], sam)
 				}
 				for i := 0; i < concurrency; i++ {
@@ -332,7 +332,7 @@ Outer:
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					histogramShards[mod] = append(histogramShards[mod], histogramRecord{ref: sam.Ref, t: sam.T, h: sam.H})
 				}
 				for i := 0; i < concurrency; i++ {
@@ -368,7 +368,7 @@ Outer:
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					histogramShards[mod] = append(histogramShards[mod], histogramRecord{ref: sam.Ref, t: sam.T, fh: sam.FH})
 				}
 				for i := 0; i < concurrency; i++ {
@@ -756,7 +756,7 @@ func (h *Head) loadWBL(r *wlog.Reader, syms *labels.SymbolTable, multiRef map[ch
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					shards[mod] = append(shards[mod], sam)
 				}
 				for i := 0; i < concurrency; i++ {
@@ -788,7 +788,7 @@ func (h *Head) loadWBL(r *wlog.Reader, syms *labels.SymbolTable, multiRef map[ch
 					mmapMarkerUnknownRefs.Inc()
 					continue
 				}
-				idx := uint64(ms.ref) % uint64(concurrency)
+				idx := uint64(ms.ref) % uint64(concurrency) // #nosec G115 // no overflow
 				processors[idx].input <- wblSubsetProcessorInputItem{mmappedSeries: ms}
 			}
 		default:

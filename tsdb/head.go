@@ -1382,7 +1382,7 @@ func (h *Head) truncateSeriesAndChunkDiskMapper(caller string) error {
 	h.minOOOTime.Store(minOOOTime)
 
 	// Truncate the chunk m-mapper.
-	if err := h.chunkDiskMapper.Truncate(uint32(minMmapFile)); err != nil {
+	if err := h.chunkDiskMapper.Truncate(uint32(minMmapFile)); err != nil { // #nosec G115 // no overflow
 		return fmt.Errorf("truncate chunks.HeadReadWriter by file number: %w", err)
 	}
 	return nil
@@ -1926,7 +1926,7 @@ func (s *stripeSeries) gc(mint int64, minOOOMmapRef chunks.ChunkDiskMapperRef) (
 		// series alike.
 		// If we don't hold them all, there's a very small chance that a series receives
 		// samples again while we are half-way into deleting it.
-		refShard := int(series.ref) & (s.size - 1)
+		refShard := int(series.ref) & (s.size - 1) // #nosec G115 // no overflow
 		if hashShard != refShard {
 			s.locks[refShard].Lock()
 			defer s.locks[refShard].Unlock()
@@ -1978,7 +1978,7 @@ func (s *stripeSeries) iterForDeletion(checkDeletedFunc func(int, uint64, *memSe
 }
 
 func (s *stripeSeries) getByID(id chunks.HeadSeriesRef) *memSeries {
-	i := uint64(id) & uint64(s.size-1)
+	i := uint64(id) & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].RLock()
 	series := s.series[i][id]
@@ -1988,7 +1988,7 @@ func (s *stripeSeries) getByID(id chunks.HeadSeriesRef) *memSeries {
 }
 
 func (s *stripeSeries) getByHash(hash uint64, lset labels.Labels) *memSeries {
-	i := hash & uint64(s.size-1)
+	i := hash & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].RLock()
 	series := s.hashes[i].get(hash, lset)
@@ -2010,7 +2010,7 @@ func (s *stripeSeries) getOrSet(hash uint64, lset labels.Labels, createSeries fu
 		series = createSeries()
 	}
 
-	i := hash & uint64(s.size-1)
+	i := hash & uint64(s.size-1) // #nosec G115 // no overflow
 	s.locks[i].Lock()
 
 	if prev := s.hashes[i].get(hash, lset); prev != nil {
@@ -2030,7 +2030,7 @@ func (s *stripeSeries) getOrSet(hash uint64, lset labels.Labels, createSeries fu
 	// as any further calls to this methods would return that series.
 	s.seriesLifecycleCallback.PostCreation(series.labels())
 
-	i = uint64(series.ref) & uint64(s.size-1)
+	i = uint64(series.ref) & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].Lock()
 	s.series[i][series.ref] = series
@@ -2177,7 +2177,7 @@ func (s *memSeries) truncateChunksBefore(mint int64, minOOOMmapRef chunks.ChunkD
 			if chk.maxTime < mint {
 				// If any head chunk is truncated, we can truncate all mmapped chunks.
 				removedInOrder = chk.len() + len(s.mmappedChunks)
-				s.firstChunkID += chunks.HeadChunkID(removedInOrder)
+				s.firstChunkID += chunks.HeadChunkID(removedInOrder) // #nosec G115 // no overflow
 				if i == 0 {
 					// This is the first chunk on the list so we need to remove the entire list.
 					s.headChunks = nil

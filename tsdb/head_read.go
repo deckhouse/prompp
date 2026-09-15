@@ -251,7 +251,7 @@ func appendSeriesChunks(s *memSeries, mint, maxt int64, chks []chunks.Meta) []ch
 // * 0 <= pos < len(s.mmappedChunks) refer to s.mmappedChunks[pos]
 // * pos >= len(s.mmappedChunks) refers to s.headChunks linked list.
 func (s *memSeries) headChunkID(pos int) chunks.HeadChunkID {
-	return chunks.HeadChunkID(pos) + s.firstChunkID
+	return chunks.HeadChunkID(pos) + s.firstChunkID // #nosec G115 // no overflow
 }
 
 const oooChunkIDMask = 1 << 23
@@ -262,7 +262,7 @@ const oooChunkIDMask = 1 << 23
 // * pos == len(s.oooMmappedChunks) refers to s.oooHeadChunk
 // The caller must ensure that s.ooo is not nil.
 func (s *memSeries) oooHeadChunkID(pos int) chunks.HeadChunkID {
-	return (chunks.HeadChunkID(pos) + s.ooo.firstOOOChunkID) | oooChunkIDMask
+	return (chunks.HeadChunkID(pos) + s.ooo.firstOOOChunkID) | oooChunkIDMask // #nosec G115 // no overflow
 }
 
 func unpackHeadChunkRef(ref chunks.ChunkRef) (seriesID chunks.HeadSeriesRef, chunkID chunks.HeadChunkID, isOOO bool) {
@@ -453,7 +453,7 @@ func (s *memSeries) chunk(id chunks.HeadChunkID, chunkDiskMapper *chunks.ChunkDi
 	//   mmappedChunks: [t0, t1, t2]
 	//   headChunk:     {t5}->{t4}->{t3}
 	// }
-	ix := int(id) - int(s.firstChunkID)
+	ix := int(id) - int(s.firstChunkID) // #nosec G115 // no overflow
 
 	var headChunksLen int
 	if s.headChunks != nil {
@@ -501,7 +501,7 @@ func (s *memSeries) chunk(id chunks.HeadChunkID, chunkDiskMapper *chunks.ChunkDi
 func (s *memSeries) oooChunk(id chunks.HeadChunkID, chunkDiskMapper *chunks.ChunkDiskMapper, memChunkPool *sync.Pool) (chunk chunkenc.Chunk, maxTime int64, err error) {
 	// ix represents the index of chunk in the s.ooo.oooMmappedChunks slice. The chunk id's are
 	// incremented by 1 when new chunk is created, hence (id - firstOOOChunkID) gives the slice index.
-	ix := int(id) - int(s.ooo.firstOOOChunkID)
+	ix := int(id) - int(s.ooo.firstOOOChunkID) // #nosec G115 // no overflow
 
 	if ix < 0 || ix >= len(s.ooo.oooMmappedChunks) {
 		return nil, 0, storage.ErrNotFound
@@ -529,7 +529,7 @@ func (c *safeHeadChunk) Iterator(reuseIter chunkenc.Iterator) chunkenc.Iterator 
 // iterator returns a chunk iterator for the requested chunkID, or a NopIterator if the requested ID is out of range.
 // It is unsafe to call this concurrently with s.append(...) without holding the series lock.
 func (s *memSeries) iterator(id chunks.HeadChunkID, c chunkenc.Chunk, isoState *isolationState, it chunkenc.Iterator) chunkenc.Iterator {
-	ix := int(id) - int(s.firstChunkID)
+	ix := int(id) - int(s.firstChunkID) // #nosec G115 // no overflow
 
 	numSamples := c.NumSamples()
 	stopAfter := numSamples

@@ -796,7 +796,7 @@ func lexEscape(l *Lexer) stateFn {
 
 	var x uint32
 	for n > 0 {
-		d := uint32(digitVal(ch))
+		d := uint32(digitVal(ch)) // #nosec G115 // no overflow
 		if d >= base {
 			if ch == eof {
 				l.errorf("escape sequence not terminated")

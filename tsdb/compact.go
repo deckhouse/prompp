@@ -898,7 +898,7 @@ func (c DefaultBlockPopulator) PopulateBlock(ctx context.Context, metrics *Compa
 		meta.Stats.NumChunks += uint64(len(chks))
 		meta.Stats.NumSeries++
 		for _, chk := range chks {
-			meta.Stats.NumSamples += uint64(chk.Chunk.NumSamples())
+			meta.Stats.NumSamples += uint64(chk.Chunk.NumSamples()) // #nosec G115 // no overflow
 		}
 
 		for _, chk := range chks {

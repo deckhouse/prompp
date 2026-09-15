@@ -190,7 +190,7 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 			doLabelVPC:         model.LabelValue(droplet.VPCUUID),
 		}
 
-		addr := net.JoinHostPort(publicIPv4, strconv.FormatUint(uint64(d.port), 10))
+		addr := net.JoinHostPort(publicIPv4, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 		labels[model.AddressLabel] = model.LabelValue(addr)
 
 		if len(droplet.Features) > 0 {

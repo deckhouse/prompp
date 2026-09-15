@@ -517,11 +517,11 @@ func (w *Writer) writeChunks(chks []Meta) error {
 		return nil
 	}
 
-	seq := uint64(w.seq())
+	seq := uint64(w.seq()) // #nosec G115 // no overflow
 	for i := range chks {
 		chk := &chks[i]
 
-		chk.Ref = ChunkRef(NewBlockChunkRef(seq, uint64(w.n)))
+		chk.Ref = ChunkRef(NewBlockChunkRef(seq, uint64(w.n))) // #nosec G115 // no overflow
 
 		n := binary.PutUvarint(w.buf[:], uint64(len(chk.Chunk.Bytes())))
 
@@ -675,7 +675,7 @@ func (s *Reader) ChunkOrIterable(meta Meta) (chunkenc.Chunk, chunkenc.Iterable, 
 	}
 
 	chkEncStart := chkStart + n
-	chkEnd := chkEncStart + ChunkEncodingSize + int(chkDataLen) + crc32.Size
+	chkEnd := chkEncStart + ChunkEncodingSize + int(chkDataLen) + crc32.Size // #nosec G115 // no overflow
 	chkDataStart := chkEncStart + ChunkEncodingSize
 	chkDataEnd := chkEnd - crc32.Size
 

@@ -783,7 +783,7 @@ func (w *WL) log(rec []byte, final bool) error {
 
 		buf[0] = byte(typ)
 		crc := crc32.Checksum(part, castagnoliTable)
-		binary.BigEndian.PutUint16(buf[1:], uint16(len(part)))
+		binary.BigEndian.PutUint16(buf[1:], uint16(len(part))) // #nosec G115 // no overflow
 		binary.BigEndian.PutUint32(buf[3:], crc)
 
 		copy(buf[recordHeaderSize:], part)

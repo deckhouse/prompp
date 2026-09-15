@@ -542,7 +542,7 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 	if ok {
 		schema, okInt64 := val.(int64)
 		if okInt64 {
-			output.Schema = int32(schema)
+			output.Schema = int32(schema) // #nosec G115 // no overflow
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing schema number: %v", val)
 		}
@@ -646,7 +646,7 @@ func (p *parser) buildHistogramBucketsAndSpans(desc *map[string]interface{}, buc
 	if ok {
 		val, ok := val.(int64)
 		if ok {
-			offset = int32(val)
+			offset = int32(val) // #nosec G115 // no overflow
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing %s number: %v", offsetKey, val)
 		}

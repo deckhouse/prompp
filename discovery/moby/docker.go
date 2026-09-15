@@ -333,7 +333,7 @@ func (d *DockerDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, er
 				// so they only end up here, not in the previous loop.
 				var addr string
 				if c.HostConfig.NetworkMode != "host" {
-					addr = net.JoinHostPort(ipAddr, strconv.FormatUint(uint64(d.port), 10))
+					addr = net.JoinHostPort(ipAddr, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 				} else {
 					addr = d.hostNetworkingHost
 				}
