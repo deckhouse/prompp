@@ -773,9 +773,10 @@ func (w *WL) log(rec []byte, final bool) error {
 			typ = recMiddle
 		}
 		if compressed {
-			if w.compress == CompressionSnappy {
+			switch w.compress {
+			case CompressionSnappy:
 				typ |= snappyMask
-			} else if w.compress == CompressionZstd {
+			case CompressionZstd:
 				typ |= zstdMask
 			}
 		}

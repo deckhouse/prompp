@@ -4155,7 +4155,7 @@ func TestOOOWALWrite(t *testing.T) {
 
 		var (
 			records []interface{}
-			dec     record.Decoder = record.NewDecoder(labels.NewSymbolTable())
+			dec     = record.NewDecoder(labels.NewSymbolTable())
 		)
 		for r.Next() {
 			rec := r.Record()

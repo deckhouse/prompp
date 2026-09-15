@@ -3443,7 +3443,7 @@ func TestScrapeLoopRunCreatesStaleMarkersOnFailedScrapeForTimestampedMetrics(t *
 
 		switch numScrapes {
 		case 1:
-			w.Write([]byte(fmt.Sprintf("metric_a 42 %d\n", time.Now().UnixNano()/int64(time.Millisecond))))
+			fmt.Fprintf(w, "metric_a 42 %d\n", time.Now().UnixNano()/int64(time.Millisecond))
 			return nil
 		case 5:
 			cancel()
@@ -3494,7 +3494,7 @@ func TestScrapeLoopCompression(t *testing.T) {
 
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				require.Equal(t, tc.acceptEncoding, r.Header.Get("Accept-Encoding"), "invalid value of the Accept-Encoding header")
-				fmt.Fprint(w, metricsText)
+				fmt.Fprint(w, string(metricsText))
 				close(scraped)
 			}))
 			defer ts.Close()

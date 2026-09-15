@@ -145,7 +145,7 @@ func (t *Target) SetMetadataStore(s MetricMetadataStore) {
 func (t *Target) hash() uint64 {
 	h := fnv.New64a()
 
-	h.Write([]byte(fmt.Sprintf("%016d", t.labels.Hash())))
+	fmt.Fprintf(h, "%016d", t.labels.Hash())
 	h.Write([]byte(t.URL().String()))
 
 	return h.Sum64()
@@ -303,12 +303,12 @@ func (t *Target) intervalAndTimeout(defaultInterval, defaultDuration time.Durati
 	intervalLabel := t.labels.Get(model.ScrapeIntervalLabel)
 	interval, err := model.ParseDuration(intervalLabel)
 	if err != nil {
-		return defaultInterval, defaultDuration, fmt.Errorf("Error parsing interval label %q: %w", intervalLabel, err)
+		return defaultInterval, defaultDuration, fmt.Errorf("error parsing interval label %q: %w", intervalLabel, err)
 	}
 	timeoutLabel := t.labels.Get(model.ScrapeTimeoutLabel)
 	timeout, err := model.ParseDuration(timeoutLabel)
 	if err != nil {
-		return defaultInterval, defaultDuration, fmt.Errorf("Error parsing timeout label %q: %w", timeoutLabel, err)
+		return defaultInterval, defaultDuration, fmt.Errorf("error parsing timeout label %q: %w", timeoutLabel, err)
 	}
 
 	return time.Duration(interval), time.Duration(timeout), nil
