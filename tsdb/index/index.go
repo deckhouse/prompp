@@ -596,7 +596,7 @@ func (w *Writer) finishSymbols() error {
 	hash := crc32.Checksum(w.symbolFile.Bytes()[w.toc.Symbols+4:hashPos], castagnoliTable)
 	w.buf1.Reset()
 	w.buf1.PutBE32(hash)
-	if err := w.writeAt(w.buf1.Get(), hashPos); err != nil {
+	if err = w.writeAt(w.buf1.Get(), hashPos); err != nil {
 		return err
 	}
 
