@@ -459,14 +459,14 @@ func (w *WL) Repair(origErr error) error {
 			// close it first (Windows!). Can be closed safely
 			// as we set the current segment to repaired file
 			// below.
-			if err := w.segment.Close(); err != nil {
+			if err = w.segment.Close(); err != nil {
 				return fmt.Errorf("close active segment: %w", err)
 			}
 		}
 		if s.index <= cerr.Segment {
 			continue
 		}
-		if err := os.Remove(filepath.Join(w.Dir(), s.name)); err != nil {
+		if err = os.Remove(filepath.Join(w.Dir(), s.name)); err != nil {
 			return fmt.Errorf("delete segment:%v: %w", s.index, err)
 		}
 	}
@@ -478,7 +478,7 @@ func (w *WL) Repair(origErr error) error {
 	fn := SegmentName(w.Dir(), cerr.Segment)
 	tmpfn := fn + ".repair"
 
-	if err := fileutil.Rename(fn, tmpfn); err != nil {
+	if err = fileutil.Rename(fn, tmpfn); err != nil {
 		return err
 	}
 	// Create a clean segment and make it the active one.
@@ -486,7 +486,7 @@ func (w *WL) Repair(origErr error) error {
 	if err != nil {
 		return err
 	}
-	if err := w.setSegment(s); err != nil {
+	if err = w.setSegment(s); err != nil {
 		return err
 	}
 
@@ -503,24 +503,24 @@ func (w *WL) Repair(origErr error) error {
 		if r.Offset() >= cerr.Offset {
 			break
 		}
-		if err := w.Log(r.Record()); err != nil {
+		if err = w.Log(r.Record()); err != nil {
 			return fmt.Errorf("insert record: %w", err)
 		}
 	}
 	// We expect an error here from r.Err(), so nothing to handle.
 
 	// We need to pad to the end of the last page in the repaired segment
-	if err := w.flushPage(true); err != nil {
+	if err = w.flushPage(true); err != nil {
 		return fmt.Errorf("flush page in repair: %w", err)
 	}
 
 	// We explicitly close even when there is a defer for Windows to be
 	// able to delete it. The defer is in place to close it in-case there
 	// are errors above.
-	if err := f.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return fmt.Errorf("close corrupted file: %w", err)
 	}
-	if err := os.Remove(tmpfn); err != nil {
+	if err = os.Remove(tmpfn); err != nil {
 		return fmt.Errorf("delete corrupted segment: %w", err)
 	}
 
@@ -881,7 +881,7 @@ func (w *WL) Close() (err error) {
 	// We must not flush an empty page as it would falsely signal
 	// the segment is done if we start writing to it again after opening.
 	if w.page.alloc > 0 {
-		if err := w.flushPage(true); err != nil {
+		if err = w.flushPage(true); err != nil {
 			return err
 		}
 	}

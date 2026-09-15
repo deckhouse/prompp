@@ -847,7 +847,7 @@ func testOOOHeadChunkReader_Chunk(t *testing.T, scenario sampleTypeScenario) {
 			// OOO few samples for s1.
 			app = db.Appender(context.Background())
 			for _, s := range tc.inputSamples {
-				_, _, err := scenario.appendFunc(app, s1, s.Ts, s.V)
+				_, _, err = scenario.appendFunc(app, s1, s.Ts, s.V)
 				require.NoError(t, err)
 			}
 			require.NoError(t, app.Commit())

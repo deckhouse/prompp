@@ -88,12 +88,12 @@ func WriteFile(logger log.Logger, dir string, tr Reader) (int64, error) {
 	}
 	defer func() {
 		if f != nil {
-			if err := f.Close(); err != nil {
-				level.Error(logger).Log("msg", "close tmp file", "err", err.Error())
+			if errClose := f.Close(); errClose != nil {
+				level.Error(logger).Log("msg", "close tmp file", "err", errClose.Error())
 			}
 		}
-		if err := os.RemoveAll(tmp); err != nil {
-			level.Error(logger).Log("msg", "remove tmp file", "err", err.Error())
+		if errRemoveAll := os.RemoveAll(tmp); errRemoveAll != nil {
+			level.Error(logger).Log("msg", "remove tmp file", "err", errRemoveAll.Error())
 		}
 	}()
 
@@ -113,7 +113,7 @@ func WriteFile(logger log.Logger, dir string, tr Reader) (int64, error) {
 	}
 
 	// Ignore first byte which is the format type. We do this for compatibility.
-	if _, err := hash.Write(bytes[tombstoneFormatVersionSize:]); err != nil {
+	if _, err = hash.Write(bytes[tombstoneFormatVersionSize:]); err != nil {
 		return 0, fmt.Errorf("calculating hash for tombstones: %w", err)
 	}
 
@@ -129,7 +129,7 @@ func WriteFile(logger log.Logger, dir string, tr Reader) (int64, error) {
 	}
 	size += n
 
-	if err := f.Sync(); err != nil {
+	if err = f.Sync(); err != nil {
 		return 0, tsdb_errors.NewMulti(err, f.Close()).Err()
 	}
 
@@ -210,7 +210,7 @@ func ReadTombstones(dir string) (Reader, int64, error) {
 	// Verify checksum.
 	hash := newCRC32()
 	// Ignore first byte which is the format type.
-	if _, err := hash.Write(d.Get()[tombstoneFormatVersionSize:]); err != nil {
+	if _, err = hash.Write(d.Get()[tombstoneFormatVersionSize:]); err != nil {
 		return nil, 0, fmt.Errorf("write to hash: %w", err)
 	}
 	if binary.BigEndian.Uint32(b[len(b)-tombstonesCRCSize:]) != hash.Sum32() {

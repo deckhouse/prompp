@@ -68,10 +68,10 @@ func TestDirLockerUsage(t *testing.T, open func(t *testing.T, data string, creat
 
 			// Test preconditions (file already exists + lockfile option)
 			if c.fileAlreadyExists {
-				tmpLocker, err := NewDirLocker(tmpdir, "tsdb", log.NewNopLogger(), nil)
-				require.NoError(t, err)
-				err = os.WriteFile(tmpLocker.path, []byte{}, 0o644)
-				require.NoError(t, err)
+				tmpLocker, errDirLocker := NewDirLocker(tmpdir, "tsdb", log.NewNopLogger(), nil)
+				require.NoError(t, errDirLocker)
+				errDirLocker = os.WriteFile(tmpLocker.path, []byte{}, 0o644)
+				require.NoError(t, errDirLocker)
 			}
 
 			locker, closer := open(t, tmpdir, !c.lockFileDisabled)

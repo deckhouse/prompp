@@ -511,16 +511,16 @@ func TestSymbols(t *testing.T) {
 	require.Equal(t, 32, s.Size())
 
 	for i := 99; i >= 0; i-- {
-		s, err := s.Lookup(uint32(i))
-		require.NoError(t, err)
+		s, errLookup := s.Lookup(uint32(i))
+		require.NoError(t, errLookup)
 		require.Equal(t, string(rune(i)), s)
 	}
 	_, err = s.Lookup(100)
 	require.Error(t, err)
 
 	for i := 99; i >= 0; i-- {
-		r, err := s.ReverseLookup(string(rune(i)))
-		require.NoError(t, err)
+		r, errReverseLookup := s.ReverseLookup(string(rune(i)))
+		require.NoError(t, errReverseLookup)
 		require.Equal(t, uint32(i), r)
 	}
 	_, err = s.ReverseLookup(string(rune(100)))
@@ -594,18 +594,21 @@ func TestChunksTimeOrdering(t *testing.T) {
 	require.NoError(t, idx.AddSymbol("2"))
 	require.NoError(t, idx.AddSymbol("__name__"))
 
-	require.NoError(t, idx.AddSeries(1, labels.FromStrings("__name__", "1"),
+	require.NoError(t, idx.AddSeries(
+		1, labels.FromStrings("__name__", "1"),
 		chunks.Meta{Ref: 1, MinTime: 0, MaxTime: 10}, // Also checks that first chunk can have MinTime: 0.
 		chunks.Meta{Ref: 2, MinTime: 11, MaxTime: 20},
 		chunks.Meta{Ref: 3, MinTime: 21, MaxTime: 30},
 	))
 
-	require.EqualError(t, idx.AddSeries(1, labels.FromStrings("__name__", "2"),
+	require.EqualError(t, idx.AddSeries(
+		1, labels.FromStrings("__name__", "2"),
 		chunks.Meta{Ref: 10, MinTime: 0, MaxTime: 10},
 		chunks.Meta{Ref: 20, MinTime: 10, MaxTime: 20},
 	), "chunk minT 10 is not higher than previous chunk maxT 10")
 
-	require.EqualError(t, idx.AddSeries(1, labels.FromStrings("__name__", "2"),
+	require.EqualError(t, idx.AddSeries(
+		1, labels.FromStrings("__name__", "2"),
 		chunks.Meta{Ref: 10, MinTime: 100, MaxTime: 30},
 	), "chunk maxT 30 is less than minT 100")
 

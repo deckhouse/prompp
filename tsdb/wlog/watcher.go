@@ -496,7 +496,8 @@ func (w *Watcher) readSegment(r *LiveReader, segmentNum int, tail bool) error {
 
 		switch dec.Type(rec) {
 		case record.Series:
-			series, err := dec.Series(rec, series[:0])
+			var err error
+			series, err = dec.Series(rec, series[:0])
 			if err != nil {
 				w.recordDecodeFailsMetric.Inc()
 				return err
@@ -509,7 +510,8 @@ func (w *Watcher) readSegment(r *LiveReader, segmentNum int, tail bool) error {
 			if !tail {
 				break
 			}
-			samples, err := dec.Samples(rec, samples[:0])
+			var err error
+			samples, err = dec.Samples(rec, samples[:0])
 			if err != nil {
 				w.recordDecodeFailsMetric.Inc()
 				return err
@@ -539,7 +541,8 @@ func (w *Watcher) readSegment(r *LiveReader, segmentNum int, tail bool) error {
 			if !tail {
 				break
 			}
-			exemplars, err := dec.Exemplars(rec, exemplars[:0])
+			var err error
+			exemplars, err = dec.Exemplars(rec, exemplars[:0])
 			if err != nil {
 				w.recordDecodeFailsMetric.Inc()
 				return err
@@ -554,7 +557,8 @@ func (w *Watcher) readSegment(r *LiveReader, segmentNum int, tail bool) error {
 			if !tail {
 				break
 			}
-			histograms, err := dec.HistogramSamples(rec, histograms[:0])
+			var err error
+			histograms, err = dec.HistogramSamples(rec, histograms[:0])
 			if err != nil {
 				w.recordDecodeFailsMetric.Inc()
 				return err
@@ -582,7 +586,8 @@ func (w *Watcher) readSegment(r *LiveReader, segmentNum int, tail bool) error {
 			if !tail {
 				break
 			}
-			floatHistograms, err := dec.FloatHistogramSamples(rec, floatHistograms[:0])
+			var err error
+			floatHistograms, err = dec.FloatHistogramSamples(rec, floatHistograms[:0])
 			if err != nil {
 				w.recordDecodeFailsMetric.Inc()
 				return err
@@ -640,7 +645,8 @@ func (w *Watcher) readSegmentForGC(r *LiveReader, segmentNum int, _ bool) error 
 
 		switch dec.Type(rec) {
 		case record.Series:
-			series, err := dec.Series(rec, series[:0])
+			var err error
+			series, err = dec.Series(rec, series[:0])
 			if err != nil {
 				w.recordDecodeFailsMetric.Inc()
 				return err

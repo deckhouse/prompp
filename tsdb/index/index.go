@@ -210,7 +210,7 @@ func NewWriterWithEncoder(ctx context.Context, fn string, encoder PostingsEncode
 	}
 	defer df.Close() // Close for platform windows.
 
-	if err := os.RemoveAll(fn); err != nil {
+	if err = os.RemoveAll(fn); err != nil {
 		return nil, fmt.Errorf("remove any existing index at path: %w", err)
 	}
 
@@ -792,7 +792,7 @@ func (w *Writer) writePostingsOffsetTable() error {
 		w.buf1.PutUvarintStr(yoloString(d.UvarintBytes())) // Label value.
 		w.buf1.PutUvarint64(d.Uvarint64() + adjustment)    // Offset.
 		w.buf1.WriteToHash(w.crc32)
-		if err := w.write(w.buf1.Get()); err != nil {
+		if err = w.write(w.buf1.Get()); err != nil {
 			return err
 		}
 		cnt--
@@ -802,14 +802,14 @@ func (w *Writer) writePostingsOffsetTable() error {
 	}
 
 	// Cleanup temporary file.
-	if err := f.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return err
 	}
 	f = nil
-	if err := w.fPO.Close(); err != nil {
+	if err = w.fPO.Close(); err != nil {
 		return err
 	}
-	if err := w.fPO.Remove(); err != nil {
+	if err = w.fPO.Remove(); err != nil {
 		return err
 	}
 	w.fPO = nil

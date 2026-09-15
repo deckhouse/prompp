@@ -1348,13 +1348,14 @@ func TestHeadDeleteSimple(t *testing.T) {
 					actSeriesSet := q.Select(context.Background(), false, nil, labels.MustNewMatcher(labels.MatchEqual, lblDefault.Name, lblDefault.Value))
 					require.NoError(t, q.Close())
 					expSeriesSet := newMockSeriesSet([]storage.Series{
-						storage.NewListSeries(lblsDefault, func() []chunks.Sample {
-							ss := make([]chunks.Sample, 0, len(c.smplsExp))
-							for _, s := range c.smplsExp {
-								ss = append(ss, s)
-							}
-							return ss
-						}(),
+						storage.NewListSeries(
+							lblsDefault, func() []chunks.Sample {
+								ss := make([]chunks.Sample, 0, len(c.smplsExp))
+								for _, s := range c.smplsExp {
+									ss = append(ss, s)
+								}
+								return ss
+							}(),
 						),
 					})
 
@@ -3495,7 +3496,8 @@ func TestWaitForPendingReadersInTimeRange(t *testing.T) {
 }
 
 func TestQueryOOOHeadDuringTruncate(t *testing.T) {
-	testQueryOOOHeadDuringTruncate(t,
+	testQueryOOOHeadDuringTruncate(
+		t,
 		func(db *DB, minT, maxT int64) (storage.LabelQuerier, error) {
 			return db.Querier(minT, maxT)
 		},
@@ -3518,7 +3520,8 @@ func TestQueryOOOHeadDuringTruncate(t *testing.T) {
 }
 
 func TestChunkQueryOOOHeadDuringTruncate(t *testing.T) {
-	testQueryOOOHeadDuringTruncate(t,
+	testQueryOOOHeadDuringTruncate(
+		t,
 		func(db *DB, minT, maxT int64) (storage.LabelQuerier, error) {
 			return db.ChunkQuerier(minT, maxT)
 		},
@@ -4839,7 +4842,8 @@ func TestChunkSnapshotReplayBug(t *testing.T) {
 	// them have status_code="200".
 	q, err := NewBlockQuerier(head, math.MinInt64, math.MaxInt64)
 	require.NoError(t, err)
-	series := query(t, q,
+	series := query(
+		t, q,
 		labels.MustNewMatcher(labels.MatchEqual, "__name__", "request_duration"),
 		labels.MustNewMatcher(labels.MatchNotEqual, "status_code", "200"),
 	)

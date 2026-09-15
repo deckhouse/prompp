@@ -109,9 +109,9 @@ func TestReadyAndHealthy(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := webHandler.Run(ctx, l, "")
-		if err != nil {
-			panic(fmt.Sprintf("Can't start web handler:%s", err))
+		errHandler := webHandler.Run(ctx, l, "")
+		if errHandler != nil {
+			panic(fmt.Sprintf("Can't start web handler:%s", errHandler))
 		}
 	}()
 
@@ -227,9 +227,9 @@ func TestRoutePrefix(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := webHandler.Run(ctx, l, "")
-		if err != nil {
-			panic(fmt.Sprintf("Can't start web handler:%s", err))
+		errHandler := webHandler.Run(ctx, l, "")
+		if errHandler != nil {
+			panic(fmt.Sprintf("Can't start web handler:%s", errHandler))
 		}
 	}()
 
@@ -417,9 +417,9 @@ func TestShutdownWithStaleConnection(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err := webHandler.Run(ctx, l, "")
-		if err != nil {
-			panic(fmt.Sprintf("Can't start web handler:%s", err))
+		errHandler := webHandler.Run(ctx, l, "")
+		if errHandler != nil {
+			panic(fmt.Sprintf("Can't start web handler:%s", errHandler))
 		}
 		close(closed)
 	}()

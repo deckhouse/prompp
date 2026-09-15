@@ -757,6 +757,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// #nosec G301 // this is meant to be that way
 	if err = os.MkdirAll(dataDir, 0o777); err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
