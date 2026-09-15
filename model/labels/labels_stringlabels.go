@@ -320,7 +320,7 @@ func FromStrings(ss ...string) Labels {
 	}
 	ls := make([]Label, 0, len(ss)/2)
 	for i := 0; i < len(ss); i += 2 {
-		ls = append(ls, Label{Name: ss[i], Value: ss[i+1]})
+		ls = append(ls, Label{Name: ss[i], Value: ss[i+1]}) // #nosec G602 // i+1 is always within extras bounds due
 	}
 
 	return New(ls...)

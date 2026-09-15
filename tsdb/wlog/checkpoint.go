@@ -132,7 +132,7 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 		return nil, fmt.Errorf("remove previous temporary checkpoint dir: %w", err)
 	}
 
-	if err := os.MkdirAll(cpdirtmp, 0o777); err != nil {
+	if err := os.MkdirAll(cpdirtmp, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return nil, fmt.Errorf("create checkpoint dir: %w", err)
 	}
 	cp, err := New(nil, nil, cpdirtmp, w.CompressionType())

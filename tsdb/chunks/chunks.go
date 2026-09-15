@@ -310,7 +310,7 @@ func newWriter(dir string, segmentSize int64) (*Writer, error) {
 		segmentSize = DefaultChunkSegmentSize
 	}
 
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return nil, err
 	}
 	dirFile, err := fileutil.OpenDir(dir)
@@ -386,7 +386,7 @@ func cutSegmentFile(dirFile *os.File, magicNumber uint32, chunksFormat byte, all
 		return 0, nil, 0, fmt.Errorf("next sequence file: %w", err)
 	}
 	ptmp := p + ".tmp"
-	f, err := os.OpenFile(ptmp, os.O_WRONLY|os.O_CREATE, 0o666)
+	f, err := os.OpenFile(ptmp, os.O_WRONLY|os.O_CREATE, 0o666) // #nosec G304 G302 // it's meant to be that way
 	if err != nil {
 		return 0, nil, 0, fmt.Errorf("open temp file: %w", err)
 	}
@@ -428,7 +428,7 @@ func cutSegmentFile(dirFile *os.File, magicNumber uint32, chunksFormat byte, all
 		return 0, nil, 0, fmt.Errorf("replace file: %w", err)
 	}
 
-	f, err = os.OpenFile(p, os.O_WRONLY, 0o666)
+	f, err = os.OpenFile(p, os.O_WRONLY, 0o666) // #nosec G304 G302 // it's meant to be that way
 	if err != nil {
 		return 0, nil, 0, fmt.Errorf("open final file: %w", err)
 	}

@@ -830,7 +830,7 @@ func validateOpts(opts *Options, rngs []int64) (*Options, []int64) {
 // It initializes the lockfile, WAL, compactor, and Head (by replaying the WAL), and runs the database.
 // It is not safe to open more than one DB in the same directory.
 func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs []int64, stats *DBStats) (_ *DB, returnedErr error) {
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return nil, err
 	}
 	if l == nil {
@@ -2056,7 +2056,7 @@ func (db *DB) EnableCompactions() {
 
 func (db *DB) generateCompactionDelay() time.Duration {
 	// Up to 10% of the head's chunkRange.
-	return time.Duration(rand.Int63n(db.head.chunkRange.Load()/10)) * time.Millisecond
+	return time.Duration(rand.Int63n(db.head.chunkRange.Load()/10)) * time.Millisecond //nolint:gosec // G404: no need for cryptographic strength here
 }
 
 // ForceHeadMMap is intended for use only in tests and benchmarks.

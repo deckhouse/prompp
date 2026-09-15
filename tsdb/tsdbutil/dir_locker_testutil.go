@@ -70,7 +70,7 @@ func TestDirLockerUsage(t *testing.T, open func(t *testing.T, data string, creat
 			if c.fileAlreadyExists {
 				tmpLocker, errDirLocker := NewDirLocker(tmpdir, "tsdb", log.NewNopLogger(), nil)
 				require.NoError(t, errDirLocker)
-				errDirLocker = os.WriteFile(tmpLocker.path, []byte{}, 0o644)
+				errDirLocker = os.WriteFile(tmpLocker.path, []byte{}, 0o644) // #nosec G306 // it's meant to be that way
 				require.NoError(t, errDirLocker)
 			}
 

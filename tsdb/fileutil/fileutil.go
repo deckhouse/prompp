@@ -26,7 +26,7 @@ import (
 // CopyDirs copies all directories, subdirectories and files recursively including the empty folders.
 // Source and destination must be full paths.
 func CopyDirs(src, dest string) error {
-	if err := os.MkdirAll(dest, 0o777); err != nil {
+	if err := os.MkdirAll(dest, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return err
 	}
 	files, err := readDirs(src)
@@ -45,7 +45,7 @@ func CopyDirs(src, dest string) error {
 
 		// Empty directories are also created.
 		if stat.IsDir() {
-			if err := os.MkdirAll(dp, 0o777); err != nil {
+			if err := os.MkdirAll(dp, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 				return err
 			}
 			continue
@@ -59,12 +59,12 @@ func CopyDirs(src, dest string) error {
 }
 
 func copyFile(src, dest string) error {
-	data, err := os.ReadFile(src)
+	data, err := os.ReadFile(src) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return err
 	}
 
-	err = os.WriteFile(dest, data, 0o666)
+	err = os.WriteFile(dest, data, 0o666) // #nosec G306 G703 // it's meant to be that way
 	if err != nil {
 		return err
 	}

@@ -28,7 +28,7 @@ func OpenMmapFile(path string) (*MmapFile, error) {
 }
 
 func OpenMmapFileWithSize(path string, size int) (mf *MmapFile, retErr error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, fmt.Errorf("try lock file: %w", err)
 	}

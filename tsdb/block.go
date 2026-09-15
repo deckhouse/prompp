@@ -309,7 +309,7 @@ const (
 func chunkDir(dir string) string { return filepath.Join(dir, "chunks") }
 
 func readMetaFile(dir string) (*BlockMeta, int64, error) {
-	b, err := os.ReadFile(filepath.Join(dir, metaFilename))
+	b, err := os.ReadFile(filepath.Join(dir, metaFilename)) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, 0, err
 	}
@@ -337,7 +337,7 @@ func writeMetaFile(logger log.Logger, dir string, meta *BlockMeta) (int64, error
 		}
 	}()
 
-	f, err := os.Create(tmp)
+	f, err := os.Create(tmp) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return 0, err
 	}
@@ -735,12 +735,12 @@ func (pb *Block) CleanTombstones(dest string, c Compactor) ([]ulid.ULID, bool, e
 // Snapshot creates snapshot of the block into dir.
 func (pb *Block) Snapshot(dir string) error {
 	blockDir := filepath.Join(dir, pb.meta.ULID.String())
-	if err := os.MkdirAll(blockDir, 0o777); err != nil {
+	if err := os.MkdirAll(blockDir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return fmt.Errorf("create snapshot block dir: %w", err)
 	}
 
 	chunksDir := chunkDir(blockDir)
-	if err := os.MkdirAll(chunksDir, 0o777); err != nil {
+	if err := os.MkdirAll(chunksDir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return fmt.Errorf("create snapshot chunk dir: %w", err)
 	}
 

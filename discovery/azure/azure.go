@@ -720,7 +720,7 @@ func (client *azureClient) getVMScaleSetVMNetworkInterfaceByID(ctx context.Conte
 
 // addToCache will add the network interface information for the specified nicID.
 func (d *Discovery) addToCache(nicID string, netInt *armnetwork.Interface) {
-	random := rand.Int63n(int64(time.Duration(d.cfg.RefreshInterval * 3).Seconds()))
+	random := rand.Int63n(int64(time.Duration(d.cfg.RefreshInterval * 3).Seconds())) //nolint:gosec // G404: no need for cryptographic strength here
 	rs := time.Duration(random) * time.Second
 	exptime := time.Duration(d.cfg.RefreshInterval*10) + rs
 	d.cache.Set(nicID, netInt, cache.WithExpiration(exptime))

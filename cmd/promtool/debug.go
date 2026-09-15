@@ -35,7 +35,7 @@ func debugWrite(cfg debugWriterConfig) error {
 		for url, filename := range endPointGroup.urlToFilename {
 			fullURL := cfg.serverURL + url
 			fmt.Println("collecting:", fullURL)
-			res, errGet := http.Get(fullURL)
+			res, errGet := http.Get(fullURL) // #nosec G107 // it's meant to be that way, this is debug
 			if errGet != nil {
 				return fmt.Errorf("error executing HTTP request: %w", errGet)
 			}

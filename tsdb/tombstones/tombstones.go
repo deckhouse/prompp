@@ -82,7 +82,7 @@ func WriteFile(logger log.Logger, dir string, tr Reader) (int64, error) {
 	hash := newCRC32()
 	var size int
 
-	f, err := os.Create(tmp)
+	f, err := os.Create(tmp) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return 0, err
 	}
@@ -190,7 +190,7 @@ type Stone struct {
 }
 
 func ReadTombstones(dir string) (Reader, int64, error) {
-	b, err := os.ReadFile(filepath.Join(dir, TombstonesFilename))
+	b, err := os.ReadFile(filepath.Join(dir, TombstonesFilename)) // #nosec G304 // it's meant to be that way
 	switch {
 	case os.IsNotExist(err):
 		return NewMemTombstones(), 0, nil

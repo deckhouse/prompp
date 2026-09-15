@@ -123,7 +123,7 @@ func (e *CorruptionErr) Unwrap() error {
 // OpenWriteSegment opens segment k in dir. The returned segment is ready for new appends.
 func OpenWriteSegment(logger log.Logger, dir string, k int) (*Segment, error) {
 	segName := SegmentName(dir, k)
-	f, err := os.OpenFile(segName, os.O_WRONLY|os.O_APPEND, 0o666)
+	f, err := os.OpenFile(segName, os.O_WRONLY|os.O_APPEND, 0o666) // #nosec G304 G302 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func OpenWriteSegment(logger log.Logger, dir string, k int) (*Segment, error) {
 
 // CreateSegment creates a new segment k in dir.
 func CreateSegment(dir string, k int) (*Segment, error) {
-	f, err := os.OpenFile(SegmentName(dir, k), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o666)
+	f, err := os.OpenFile(SegmentName(dir, k), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o666) // #nosec G302 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func OpenReadSegment(fn string) (*Segment, error) {
 	if err != nil {
 		return nil, errors.New("not a valid filename")
 	}
-	f, err := os.Open(fn)
+	f, err := os.Open(fn) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func NewSize(logger log.Logger, reg prometheus.Registerer, dir string, segmentSi
 	if segmentSize%pageSize != 0 {
 		return nil, errors.New("invalid segment size")
 	}
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 G703 // this is meant to be that way
 		return nil, fmt.Errorf("create dir: %w", err)
 	}
 	if logger == nil {
@@ -466,7 +466,7 @@ func (w *WL) Repair(origErr error) error {
 		if s.index <= cerr.Segment {
 			continue
 		}
-		if err = os.Remove(filepath.Join(w.Dir(), s.name)); err != nil {
+		if err = os.Remove(filepath.Join(w.Dir(), s.name)); err != nil { // #nosec G703 // it's meant to be that way
 			return fmt.Errorf("delete segment:%v: %w", s.index, err)
 		}
 	}
@@ -490,7 +490,7 @@ func (w *WL) Repair(origErr error) error {
 		return err
 	}
 
-	f, err := os.Open(tmpfn)
+	f, err := os.Open(tmpfn) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return fmt.Errorf("open segment: %w", err)
 	}

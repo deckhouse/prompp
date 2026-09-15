@@ -536,6 +536,7 @@ func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if subpath == "/pprof" {
+		// #nosec G710 // relative path within this handler's own subtree, not attacker-controlled
 		http.Redirect(w, req, req.URL.Path+"/", http.StatusMovedPermanently)
 		return
 	}
@@ -585,14 +586,14 @@ func serveJemallocProfile(w http.ResponseWriter, req *http.Request) {
 	}
 	filename := tmpFile.Name()
 	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(filename) }()
+	defer func() { _ = os.Remove(filename) }() // #nosec G703 // it's meant to be that way
 
 	if !cppbridge.DumpMemoryProfile(filename) {
 		http.Error(w, "failed to dump jemalloc memory profile; ensure the process was started with MALLOC_CONF=\"prof:true\" and jemalloc profiling support", http.StatusInternalServerError)
 		return
 	}
 
-	f, err := os.Open(filename)
+	f, err := os.Open(filename) // #nosec G304 G703 // it's meant to be that way
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to open dumped profile: %s", err), http.StatusInternalServerError)
 		return

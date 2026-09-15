@@ -107,7 +107,7 @@ func allocateQueryLogFile(file syncWriter, filesize int) error {
 
 func logUnfinishedQueries(filename string, filesize int, logger log.Logger) {
 	if _, err := os.Stat(filename); err == nil {
-		fd, err := os.Open(filename)
+		fd, err := os.Open(filename) // #nosec G304 // it's meant to be that way
 		if err != nil {
 			level.Error(logger).Log("msg", "Failed to open query log file", "err", err)
 			return
@@ -147,7 +147,7 @@ func (f *mmappedFile) Close() error {
 }
 
 func getMMappedFile(filename string, filesize int, logger log.Logger) ([]byte, io.Closer, error) {
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o666)
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o666) // #nosec G304 G302 // it's meant to be that way
 	if err != nil {
 		absPath, pathErr := filepath.Abs(filename)
 		if pathErr != nil {
@@ -174,7 +174,7 @@ func getMMappedFile(filename string, filesize int, logger log.Logger) ([]byte, i
 }
 
 func NewActiveQueryTracker(localStoragePath string, maxConcurrent int, logger log.Logger) (*ActiveQueryTracker, error) {
-	err := os.MkdirAll(localStoragePath, 0o777)
+	err := os.MkdirAll(localStoragePath, 0o777) // #nosec G301 // this is meant to be that way
 	if err != nil {
 		level.Error(logger).Log("msg", "Failed to create directory for logging active queries")
 		return nil, fmt.Errorf("create active query log directory: %w", err)

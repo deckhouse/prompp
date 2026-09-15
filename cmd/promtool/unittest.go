@@ -83,7 +83,7 @@ func RulesUnitTestResult(results io.Writer, queryOpts promqltest.LazyLoaderOpts,
 }
 
 func ruleUnitTest(filename string, queryOpts promqltest.LazyLoaderOpts, run *regexp.Regexp, diffFlag bool, ts *junitxml.TestSuite) []error {
-	b, err := os.ReadFile(filename)
+	b, err := os.ReadFile(filename) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		ts.Abort(err)
 		return []error{err}

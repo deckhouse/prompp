@@ -250,7 +250,7 @@ func NewChunkDiskMapper(reg prometheus.Registerer, dir string, pool chunkenc.Poo
 		return nil, fmt.Errorf("ChunkDiskMapper write buffer size should be a multiple of 1024 (actual: %d)", writeBufferSize)
 	}
 
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return nil, err
 	}
 	dirFile, err := fileutil.OpenDir(dir)
@@ -391,7 +391,7 @@ func HardLinkChunkFiles(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("check source chunks dir: %w", err)
 	}
-	if err := os.MkdirAll(dst, 0o777); err != nil {
+	if err = os.MkdirAll(dst, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return fmt.Errorf("set up destination chunks dir: %w", err)
 	}
 	files, err := listChunkFiles(src)

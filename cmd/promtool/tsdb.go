@@ -81,7 +81,7 @@ func benchmarkWrite(outPath, samplesFile string, numMetrics, numScrapes int) err
 	if err := os.RemoveAll(b.outPath); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(b.outPath, 0o777); err != nil {
+	if err := os.MkdirAll(b.outPath, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return err
 	}
 
@@ -831,7 +831,7 @@ func backfillOpenMetrics(path, outputDir string, humanReadable, quiet bool, maxB
 	}
 	defer inputFile.Close()
 
-	if err := os.MkdirAll(outputDir, 0o777); err != nil {
+	if err := os.MkdirAll(outputDir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return checkErr(fmt.Errorf("create output dir: %w", err))
 	}
 

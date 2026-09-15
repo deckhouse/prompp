@@ -656,7 +656,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		return err
 	}
 
-	if err = os.MkdirAll(tmp, 0o777); err != nil {
+	if err = os.MkdirAll(tmp, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return err
 	}
 
