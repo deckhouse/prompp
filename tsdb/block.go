@@ -661,7 +661,7 @@ func (pb *Block) Delete(ctx context.Context, mint, maxt int64, ms ...*labels.Mat
 
 Outer:
 	for p.Next() {
-		err := ir.Series(p.At(), &builder, &chks)
+		err = ir.Series(p.At(), &builder, &chks)
 		if err != nil {
 			return err
 		}

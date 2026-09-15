@@ -476,13 +476,13 @@ func PopulateLabels(lb *labels.Builder, cfg *config.ScrapeConfig, noDefaultPort 
 	// If the address is not valid, we don't append a port either.
 	addPort := func(s string) (string, string, bool) {
 		// If we can split, a port exists and we don't have to add one.
-		if host, port, err := net.SplitHostPort(s); err == nil {
+		if host, port, errSplit := net.SplitHostPort(s); errSplit == nil {
 			return host, port, false
 		}
 		// If adding a port makes it valid, the previous error
 		// was not due to an invalid address and we can append a port.
-		_, _, err := net.SplitHostPort(s + ":1234")
-		return "", "", err == nil
+		_, _, errSplit := net.SplitHostPort(s + ":1234")
+		return "", "", errSplit == nil
 	}
 
 	addr := lb.Get(model.AddressLabel)
@@ -518,7 +518,7 @@ func PopulateLabels(lb *labels.Builder, cfg *config.ScrapeConfig, noDefaultPort 
 		}
 	}
 
-	if err := config.CheckTargetAddress(model.LabelValue(addr)); err != nil {
+	if err = config.CheckTargetAddress(model.LabelValue(addr)); err != nil {
 		return labels.EmptyLabels(), labels.EmptyLabels(), err
 	}
 

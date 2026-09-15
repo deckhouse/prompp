@@ -483,7 +483,7 @@ func (ng *Engine) NewInstantQuery(ctx context.Context, q storage.Queryable, opts
 	if err != nil {
 		return nil, err
 	}
-	if err := ng.validateOpts(expr); err != nil {
+	if err = ng.validateOpts(expr); err != nil {
 		return nil, err
 	}
 	*pExpr = PreprocessExpr(expr, ts, ts)
@@ -508,7 +508,7 @@ func (ng *Engine) NewRangeQuery(ctx context.Context, q storage.Queryable, opts Q
 	if err != nil {
 		return nil, err
 	}
-	if err := ng.validateOpts(expr); err != nil {
+	if err = ng.validateOpts(expr); err != nil {
 		return nil, err
 	}
 	if expr.Type() != parser.ValueTypeVector && expr.Type() != parser.ValueTypeScalar {
@@ -655,9 +655,9 @@ func (ng *Engine) exec(ctx context.Context, q *query) (v parser.Value, ws annota
 					f = append(f, k, v)
 				}
 			}
-			if err := l.Log(f...); err != nil {
+			if errLog := l.Log(f...); errLog != nil {
 				ng.metrics.queryLogFailures.Inc()
-				level.Error(ng.logger).Log("msg", "can't log query", "err", err)
+				level.Error(ng.logger).Log("msg", "can't log query", "err", errLog)
 			}
 		}
 		ng.queryLoggerLock.RUnlock()
@@ -748,12 +748,12 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 		}
 		query.sampleStats.InitStepTracking(start, start, 1)
 
-		val, warnings, err := evaluator.Eval(ctxInnerEval, s.Expr)
+		val, warnings, errEval := evaluator.Eval(ctxInnerEval, s.Expr)
 
 		evalSpanTimer.Finish()
 
-		if err != nil {
-			return nil, warnings, err
+		if errEval != nil {
+			return nil, warnings, errEval
 		}
 
 		var mat Matrix

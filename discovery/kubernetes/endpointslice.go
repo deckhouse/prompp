@@ -97,9 +97,9 @@ func NewEndpointSlice(l log.Logger, eps cache.SharedIndexInformer, svc, pod, nod
 	}
 
 	serviceUpdate := func(o interface{}) {
-		svc, err := convertToService(o)
-		if err != nil {
-			level.Error(e.logger).Log("msg", "converting to Service object failed", "err", err)
+		svc, errUpdate := convertToService(o)
+		if errUpdate != nil {
+			level.Error(e.logger).Log("msg", "converting to Service object failed", "err", errUpdate)
 			return
 		}
 
@@ -107,9 +107,9 @@ func NewEndpointSlice(l log.Logger, eps cache.SharedIndexInformer, svc, pod, nod
 		// disv1beta1.LabelServiceName so this operation doesn't have to
 		// iterate over all endpoint objects.
 		for _, obj := range e.endpointSliceStore.List() {
-			esa, err := e.getEndpointSliceAdaptor(obj)
-			if err != nil {
-				level.Error(e.logger).Log("msg", "converting to EndpointSlice object failed", "err", err)
+			esa, errGet := e.getEndpointSliceAdaptor(obj)
+			if errGet != nil {
+				level.Error(e.logger).Log("msg", "converting to EndpointSlice object failed", "err", errGet)
 				continue
 			}
 			if lv, exists := esa.labels()[esa.labelServiceName()]; exists && lv == svc.Name {

@@ -189,11 +189,11 @@ func TestSendAlerts(t *testing.T) {
 	for i, tc := range testCases {
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			senderFunc := senderFunc(func(alerts ...*notifier.Alert) {
+			sFunc := senderFunc(func(alerts ...*notifier.Alert) {
 				require.NotEmpty(t, tc.in, "sender called with 0 alert")
 				require.Equal(t, tc.exp, alerts)
 			})
-			rules.SendAlerts(senderFunc, "http://localhost:9090")(context.TODO(), "up", tc.in...)
+			rules.SendAlerts(sFunc, "http://localhost:9090")(context.TODO(), "up", tc.in...)
 		})
 	}
 }
@@ -221,8 +221,8 @@ func TestWALSegmentSizeBounds(t *testing.T) {
 			done := make(chan error, 1)
 			go func() { done <- prom.Wait() }()
 			select {
-			case err := <-done:
-				require.Fail(t, "prometheus should be still running", "%v", err)
+			case errDone := <-done:
+				require.Fail(t, "prometheus should be still running", "%v", errDone)
 			case <-time.After(startupTime):
 				prom.Process.Kill()
 				<-done
@@ -264,8 +264,8 @@ func TestMaxBlockChunkSegmentSizeBounds(t *testing.T) {
 			done := make(chan error, 1)
 			go func() { done <- prom.Wait() }()
 			select {
-			case err := <-done:
-				require.Fail(t, "prometheus should be still running", "%v", err)
+			case errDone := <-done:
+				require.Fail(t, "prometheus should be still running", "%v", errDone)
 			case <-time.After(startupTime):
 				prom.Process.Kill()
 				<-done
@@ -388,8 +388,8 @@ func TestModeSpecificFlags(t *testing.T) {
 				done := make(chan error, 1)
 				go func() { done <- prom.Wait() }()
 				select {
-				case err := <-done:
-					t.Errorf("prometheus should be still running: %v", err)
+				case errDone := <-done:
+					t.Errorf("prometheus should be still running: %v", errDone)
 				case <-time.After(startupTime):
 					prom.Process.Kill()
 					<-done

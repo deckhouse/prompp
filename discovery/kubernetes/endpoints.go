@@ -96,22 +96,22 @@ func NewEndpoints(l log.Logger, eps cache.SharedIndexInformer, svc, pod, node ca
 	}
 
 	serviceUpdate := func(o interface{}) {
-		svc, err := convertToService(o)
-		if err != nil {
-			level.Error(e.logger).Log("msg", "converting to Service object failed", "err", err)
+		svc, errUpdate := convertToService(o)
+		if errUpdate != nil {
+			level.Error(e.logger).Log("msg", "converting to Service object failed", "err", errUpdate)
 			return
 		}
 
 		ep := &apiv1.Endpoints{}
 		ep.Namespace = svc.Namespace
 		ep.Name = svc.Name
-		obj, exists, err := e.endpointsStore.Get(ep)
-		if exists && err == nil {
+		obj, exists, errUpdate := e.endpointsStore.Get(ep)
+		if exists && errUpdate == nil {
 			e.enqueue(obj.(*apiv1.Endpoints))
 		}
 
-		if err != nil {
-			level.Error(e.logger).Log("msg", "retrieving endpoints failed", "err", err)
+		if errUpdate != nil {
+			level.Error(e.logger).Log("msg", "retrieving endpoints failed", "err", errUpdate)
 		}
 	}
 	_, err = e.serviceInf.AddEventHandler(cache.ResourceEventHandlerFuncs{

@@ -267,7 +267,7 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal, wbl *wlog.WL, opts *Hea
 		stats: stats,
 		reg:   r,
 	}
-	if err := h.resetInMemoryState(); err != nil {
+	if err = h.resetInMemoryState(); err != nil {
 		return nil, err
 	}
 
@@ -785,8 +785,8 @@ func (h *Head) Init(minValidTime int64) error {
 			return fmt.Errorf("segment reader (offset=%d): %w", offset, err)
 		}
 		err = h.loadWAL(wlog.NewReader(sr), syms, multiRef, mmappedChunks, oooMmappedChunks)
-		if err := sr.Close(); err != nil {
-			level.Warn(h.logger).Log("msg", "Error while closing the wal segments reader", "err", err)
+		if errClose := sr.Close(); errClose != nil {
+			level.Warn(h.logger).Log("msg", "Error while closing the wal segments reader", "err", errClose)
 		}
 		if err != nil {
 			return err
@@ -813,8 +813,8 @@ func (h *Head) Init(minValidTime int64) error {
 
 			sr := wlog.NewSegmentBufReader(s)
 			err = h.loadWBL(wlog.NewReader(sr), syms, multiRef, lastMmapRef)
-			if err := sr.Close(); err != nil {
-				level.Warn(h.logger).Log("msg", "Error while closing the wbl segments reader", "err", err)
+			if errClose := sr.Close(); errClose != nil {
+				level.Warn(h.logger).Log("msg", "Error while closing the wbl segments reader", "err", errClose)
 			}
 			if err != nil {
 				return &errLoadWbl{err}
@@ -938,7 +938,7 @@ func (h *Head) loadMmappedChunks(refSeries map[chunks.HeadSeriesRef]*memSeries) 
 
 // removeCorruptedMmappedChunks attempts to delete the corrupted mmapped chunks and if it fails, it clears all the previously
 // loaded mmapped chunks.
-func (h *Head) removeCorruptedMmappedChunks(err error) (map[chunks.HeadSeriesRef][]*mmappedChunk, map[chunks.HeadSeriesRef][]*mmappedChunk, chunks.ChunkDiskMapperRef, error) {
+func (h *Head) removeCorruptedMmappedChunks(errIn error) (map[chunks.HeadSeriesRef][]*mmappedChunk, map[chunks.HeadSeriesRef][]*mmappedChunk, chunks.ChunkDiskMapperRef, error) {
 	level.Info(h.logger).Log("msg", "Deleting mmapped chunk files")
 	// We never want to preserve the in-memory series from snapshots if we are repairing m-map chunks.
 	if err := h.resetInMemoryState(); err != nil {
@@ -947,7 +947,7 @@ func (h *Head) removeCorruptedMmappedChunks(err error) (map[chunks.HeadSeriesRef
 
 	level.Info(h.logger).Log("msg", "Deleting mmapped chunk files")
 
-	if err := h.chunkDiskMapper.DeleteCorrupted(err); err != nil {
+	if err := h.chunkDiskMapper.DeleteCorrupted(errIn); err != nil {
 		level.Info(h.logger).Log("msg", "Deletion of corrupted mmap chunk files failed, discarding chunk files completely", "err", err)
 		if err := h.chunkDiskMapper.Truncate(math.MaxUint32); err != nil {
 			level.Error(h.logger).Log("msg", "Deletion of all mmap chunk files failed", "err", err)
@@ -956,9 +956,9 @@ func (h *Head) removeCorruptedMmappedChunks(err error) (map[chunks.HeadSeriesRef
 	}
 
 	level.Info(h.logger).Log("msg", "Deletion of mmap chunk files successful, reattempting m-mapping the on-disk chunks")
-	mmappedChunks, oooMmappedChunks, lastRef, err := h.loadMmappedChunks(make(map[chunks.HeadSeriesRef]*memSeries))
-	if err != nil {
-		level.Error(h.logger).Log("msg", "Loading on-disk chunks failed, discarding chunk files completely", "err", err)
+	mmappedChunks, oooMmappedChunks, lastRef, errIn := h.loadMmappedChunks(make(map[chunks.HeadSeriesRef]*memSeries))
+	if errIn != nil {
+		level.Error(h.logger).Log("msg", "Loading on-disk chunks failed, discarding chunk files completely", "err", errIn)
 		if err := h.chunkDiskMapper.Truncate(math.MaxUint32); err != nil {
 			level.Error(h.logger).Log("msg", "Deletion of all mmap chunk files failed after failed loading", "err", err)
 		}
@@ -1258,7 +1258,7 @@ func (h *Head) truncateWAL(mint int64) error {
 	}
 	// Start a new segment, so low ingestion volume TSDB don't have more WAL than
 	// needed.
-	if _, err := h.wal.NextSegment(); err != nil {
+	if _, err = h.wal.NextSegment(); err != nil {
 		return fmt.Errorf("next segment: %w", err)
 	}
 	last-- // Never consider last segment for checkpoint.

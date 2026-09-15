@@ -205,9 +205,9 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 		return []error{err}
 	}
 	defer func() {
-		err := suite.Close()
-		if err != nil {
-			outErr = append(outErr, err)
+		errClose := suite.Close()
+		if errClose != nil {
+			outErr = append(outErr, errClose)
 		}
 	}()
 	suite.SubqueryInterval = evalInterval
@@ -597,9 +597,13 @@ func (la labelsAndAnnotations) String() string {
 		return "[]"
 	}
 	var s strings.Builder
-	s.WriteString("[\n0:" + indentLines("\n"+la[0].String(), "  "))
+	s.WriteString("[\n0:")
+	s.WriteString(indentLines("\n"+la[0].String(), "  "))
 	for i, l := range la[1:] {
-		s.WriteString(",\n" + strconv.Itoa(i+1) + ":" + indentLines("\n"+l.String(), "  "))
+		s.WriteString(",\n")
+		s.WriteString(strconv.Itoa(i + 1))
+		s.WriteString(":")
+		s.WriteString(indentLines("\n"+l.String(), "  "))
 	}
 	s.WriteString("\n]")
 
@@ -657,7 +661,8 @@ func parsedSamplesString(pss []parsedSample) string {
 	var s strings.Builder
 	s.WriteString(pss[0].String())
 	for _, ps := range pss[1:] {
-		s.WriteString(", " + ps.String())
+		s.WriteString(", ")
+		s.WriteString(ps.String())
 	}
 	return s.String()
 }

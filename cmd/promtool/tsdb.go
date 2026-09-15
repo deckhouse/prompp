@@ -102,15 +102,15 @@ func benchmarkWrite(outPath, samplesFile string, numMetrics, numScrapes int) err
 	var lbs []labels.Labels
 
 	if _, err = measureTime("readData", func() error {
-		f, err := os.Open(b.samplesFile)
-		if err != nil {
-			return err
+		f, errOpen := os.Open(b.samplesFile)
+		if errOpen != nil {
+			return errOpen
 		}
 		defer f.Close()
 
-		lbs, err = readPrometheusLabels(f, b.numMetrics)
-		if err != nil {
-			return err
+		lbs, errOpen = readPrometheusLabels(f, b.numMetrics)
+		if errOpen != nil {
+			return errOpen
 		}
 		return nil
 	}); err != nil {
@@ -120,8 +120,8 @@ func benchmarkWrite(outPath, samplesFile string, numMetrics, numScrapes int) err
 	var total uint64
 
 	dur, err := measureTime("ingestScrapes", func() error {
-		if err := b.startProfiling(); err != nil {
-			return err
+		if errProfiling := b.startProfiling(); errProfiling != nil {
+			return errProfiling
 		}
 		total, err = b.ingestScrapes(lbs, numScrapes)
 		if err != nil {
@@ -137,8 +137,8 @@ func benchmarkWrite(outPath, samplesFile string, numMetrics, numScrapes int) err
 	fmt.Println(" > samples/sec:", float64(total)/dur.Seconds())
 
 	if _, err = measureTime("stopStorage", func() error {
-		if err := b.storage.Close(); err != nil {
-			return err
+		if errClose := b.storage.Close(); errClose != nil {
+			return errClose
 		}
 
 		return b.stopProfiling()
@@ -238,7 +238,7 @@ func (b *writeBenchmark) startProfiling() error {
 	if err != nil {
 		return fmt.Errorf("bench: could not create cpu profile: %w", err)
 	}
-	if err := pprof.StartCPUProfile(b.cpuprof); err != nil {
+	if err = pprof.StartCPUProfile(b.cpuprof); err != nil {
 		return fmt.Errorf("bench: could not start CPU profile: %w", err)
 	}
 
@@ -364,7 +364,8 @@ func printBlocks(blocks []tsdb.BlockReader, writeHeader, humanReadable bool) {
 	for _, b := range blocks {
 		meta := b.Meta()
 
-		fmt.Fprintf(tw,
+		fmt.Fprintf(
+			tw,
 			"%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
 			meta.ULID,
 			getFormatedTime(meta.MinTime, humanReadable),
@@ -554,9 +555,9 @@ func analyzeBlock(ctx context.Context, path, blockID string, limit int, runExten
 
 	postingInfos = postingInfos[:0]
 	for _, n := range allLabelNames {
-		values, err := ir.SortedLabelValues(ctx, n, selectors...)
-		if err != nil {
-			return err
+		values, errValues := ir.SortedLabelValues(ctx, n, selectors...)
+		if errValues != nil {
+			return errValues
 		}
 		var cumulativeLength uint64
 		for _, str := range values {
@@ -570,9 +571,9 @@ func analyzeBlock(ctx context.Context, path, blockID string, limit int, runExten
 
 	postingInfos = postingInfos[:0]
 	for _, n := range allLabelNames {
-		lv, err := ir.SortedLabelValues(ctx, n, selectors...)
-		if err != nil {
-			return err
+		lv, errLV := ir.SortedLabelValues(ctx, n, selectors...)
+		if errLV != nil {
+			return errLV
 		}
 		postingInfos = append(postingInfos, postingInfo{n, uint64(len(lv))})
 	}

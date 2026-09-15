@@ -75,7 +75,7 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 	if err != nil {
 		return fmt.Errorf("create head: %w", err)
 	}
-	if err := head.Init(int64(math.MinInt64)); err != nil {
+	if err = head.Init(int64(math.MinInt64)); err != nil {
 		return fmt.Errorf("init head: %w", err)
 	}
 

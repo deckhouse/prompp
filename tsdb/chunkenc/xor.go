@@ -332,15 +332,15 @@ func (it *xorIterator) Next() ValueType {
 	// read delta-of-delta
 	for i := 0; i < 4; i++ {
 		d <<= 1
-		bit, err := it.br.readBitFast()
+		bitFast, err := it.br.readBitFast()
 		if err != nil {
-			bit, err = it.br.readBit()
+			bitFast, err = it.br.readBit()
 		}
 		if err != nil {
 			it.err = err
 			return ValNone
 		}
-		if bit == zero {
+		if bitFast == zero {
 			break
 		}
 		d |= 1
@@ -442,19 +442,19 @@ func xorWrite(b *bstream, newValue, currentValue float64, leading, trailing *uin
 }
 
 func xorRead(br *bstreamReader, value *float64, leading, trailing *uint8) error {
-	bit, err := br.readBitFast()
+	bitFast, err := br.readBitFast()
 	if err != nil {
-		bit, err = br.readBit()
+		bitFast, err = br.readBit()
 	}
 	if err != nil {
 		return err
 	}
-	if bit == zero {
+	if bitFast == zero {
 		return nil
 	}
-	bit, err = br.readBitFast()
+	bitFast, err = br.readBitFast()
 	if err != nil {
-		bit, err = br.readBit()
+		bitFast, err = br.readBit()
 	}
 	if err != nil {
 		return err
@@ -465,7 +465,7 @@ func xorRead(br *bstreamReader, value *float64, leading, trailing *uint8) error 
 		newLeading, newTrailing, mbits uint8
 	)
 
-	if bit == zero {
+	if bitFast == zero {
 		// Reuse leading/trailing zero bits.
 		newLeading, newTrailing = *leading, *trailing
 		mbits = 64 - newLeading - newTrailing

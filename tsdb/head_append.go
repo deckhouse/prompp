@@ -939,8 +939,8 @@ func (a *headAppender) Commit() (err error) {
 			var mmapRefs []chunks.ChunkDiskMapperRef
 			ok, chunkCreated, mmapRefs = series.insert(s.T, s.V, nil, nil, a.head.chunkDiskMapper, oooCapMax, a.head.logger)
 			if chunkCreated {
-				r, ok := oooMmapMarkers[series.ref]
-				if !ok || r != nil {
+				r, find := oooMmapMarkers[series.ref]
+				if !find || r != nil {
 					// !ok means there are no markers collected for these samples yet. So we first flush the samples
 					// before setting this m-map marker.
 

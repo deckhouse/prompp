@@ -419,12 +419,12 @@ func cutSegmentFile(dirFile *os.File, magicNumber uint32, chunksFormat byte, all
 	if err != nil {
 		return 0, nil, 0, fmt.Errorf("write header: %w", err)
 	}
-	if err := f.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return 0, nil, 0, fmt.Errorf("close temp file: %w", err)
 	}
 	f = nil
 
-	if err := fileutil.Rename(ptmp, p); err != nil {
+	if err = fileutil.Rename(ptmp, p); err != nil {
 		return 0, nil, 0, fmt.Errorf("replace file: %w", err)
 	}
 
@@ -623,10 +623,10 @@ func NewDirReader(dir string, pool chunkenc.Pool) (*Reader, error) {
 		cs []io.Closer
 	)
 	for _, fn := range files {
-		f, err := fileutil.OpenMmapFile(fn)
-		if err != nil {
+		f, errOpen := fileutil.OpenMmapFile(fn)
+		if errOpen != nil {
 			return nil, tsdb_errors.NewMulti(
-				fmt.Errorf("mmap files: %w", err),
+				fmt.Errorf("mmap files: %w", errOpen),
 				tsdb_errors.CloseAll(cs),
 			).Err()
 		}

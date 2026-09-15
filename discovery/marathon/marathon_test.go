@@ -92,13 +92,13 @@ func marathonTestAppList(labels map[string]string, runningTasks int) *appList {
 		portMappings = []portMapping{
 			{Labels: labels, HostPort: 31000},
 		}
-		container = container{Docker: docker, PortMappings: portMappings}
-		a         = app{
+		c = container{Docker: docker, PortMappings: portMappings}
+		a = app{
 			ID:           "test-service",
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 		}
 	)
 	return &appList{
@@ -169,13 +169,13 @@ func marathonTestAppListWithMultiplePorts(labels map[string]string, runningTasks
 			{Labels: labels, HostPort: 31000},
 			{Labels: make(map[string]string), HostPort: 32000},
 		}
-		container = container{Docker: docker, PortMappings: portMappings}
-		a         = app{
+		c = container{Docker: docker, PortMappings: portMappings}
+		a = app{
 			ID:           "test-service",
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 		}
 	)
 	return &appList{
@@ -213,14 +213,14 @@ func marathonTestZeroTaskPortAppList(labels map[string]string, runningTasks int)
 			Host:  "mesos-slave-2",
 			Ports: []uint32{},
 		}
-		docker    = dockerContainer{Image: "repo/image:tag"}
-		container = container{Docker: docker}
-		a         = app{
+		docker = dockerContainer{Image: "repo/image:tag"}
+		c      = container{Docker: docker}
+		a      = app{
 			ID:           "test-service-zero-ports",
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 		}
 	)
 	return &appList{
@@ -267,13 +267,13 @@ func marathonTestAppListWithPortDefinitions(labels map[string]string, runningTas
 		docker = dockerContainer{
 			Image: "repo/image:tag",
 		}
-		container = container{Docker: docker}
-		a         = app{
+		c = container{Docker: docker}
+		a = app{
 			ID:           "test-service",
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 			PortDefinitions: []portDefinition{
 				{Labels: make(map[string]string), Port: 31000},
 				{Labels: labels, Port: 32000},
@@ -321,13 +321,13 @@ func marathonTestAppListWithPortDefinitionsRequirePorts(labels map[string]string
 		docker = dockerContainer{
 			Image: "repo/image:tag",
 		}
-		container = container{Docker: docker}
-		a         = app{
+		c = container{Docker: docker}
+		a = app{
 			ID:           "test-service",
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 			PortDefinitions: []portDefinition{
 				{Labels: make(map[string]string), Port: 31000},
 				{Labels: labels, Port: 32000},
@@ -373,13 +373,13 @@ func marathonTestAppListWithPorts(labels map[string]string, runningTasks int) *a
 		docker = dockerContainer{
 			Image: "repo/image:tag",
 		}
-		container = container{Docker: docker}
-		a         = app{
+		c = container{Docker: docker}
+		a = app{
 			ID:           "test-service",
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 		}
 	)
 	return &appList{
@@ -423,7 +423,7 @@ func marathonTestAppListWithContainerPortMappings(labels map[string]string, runn
 		docker = dockerContainer{
 			Image: "repo/image:tag",
 		}
-		container = container{
+		c = container{
 			Docker: docker,
 			PortMappings: []portMapping{
 				{Labels: labels, HostPort: 0},
@@ -435,7 +435,7 @@ func marathonTestAppListWithContainerPortMappings(labels map[string]string, runn
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 		}
 	)
 	return &appList{
@@ -483,7 +483,7 @@ func marathonTestAppListWithDockerContainerPortMappings(labels map[string]string
 				{Labels: make(map[string]string), HostPort: 0},
 			},
 		}
-		container = container{
+		c = container{
 			Docker: docker,
 		}
 		a = app{
@@ -491,7 +491,7 @@ func marathonTestAppListWithDockerContainerPortMappings(labels map[string]string
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 		}
 	)
 	return &appList{
@@ -538,7 +538,7 @@ func marathonTestAppListWithContainerNetworkAndPortMappings(labels map[string]st
 			{Labels: labels, ContainerPort: 8080, HostPort: 31000},
 			{Labels: make(map[string]string), ContainerPort: 1234, HostPort: 32000},
 		}
-		container = container{
+		c = container{
 			Docker:       docker,
 			PortMappings: portMappings,
 		}
@@ -550,7 +550,7 @@ func marathonTestAppListWithContainerNetworkAndPortMappings(labels map[string]st
 			Tasks:        []task{t},
 			RunningTasks: runningTasks,
 			Labels:       labels,
-			Container:    container,
+			Container:    c,
 			Networks:     networks,
 		}
 	)

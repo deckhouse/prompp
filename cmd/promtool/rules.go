@@ -110,11 +110,12 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 		for startWithAlignment.Unix() < currStart {
 			startWithAlignment = startWithAlignment.Add(grp.Interval())
 		}
-		end := time.Unix(min(endOfBlock/int64(time.Second/time.Millisecond), end.Unix()), 0).UTC()
+		end = time.Unix(min(endOfBlock/int64(time.Second/time.Millisecond), end.Unix()), 0).UTC()
 		if end.Before(startWithAlignment) {
 			break
 		}
-		val, warnings, err := importer.apiClient.QueryRange(ctx,
+		val, warnings, errQuery := importer.apiClient.QueryRange(
+			ctx,
 			ruleExpr,
 			v1.Range{
 				Start: startWithAlignment,
@@ -122,8 +123,8 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 				Step:  grp.Interval(),
 			},
 		)
-		if err != nil {
-			return fmt.Errorf("query range: %w", err)
+		if errQuery != nil {
+			return fmt.Errorf("query range: %w", errQuery)
 		}
 		if warnings != nil {
 			level.Warn(importer.logger).Log("msg", "Range query returned warnings.", "warnings", warnings)
@@ -135,14 +136,14 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 		// also need to append samples throughout the whole block range. To allow that, we
 		// pretend that the block is twice as large here, but only really add sample in the
 		// original interval later.
-		w, err := tsdb.NewBlockWriter(log.NewNopLogger(), importer.config.outputDir, 2*blockDuration)
-		if err != nil {
-			return fmt.Errorf("new block writer: %w", err)
+		w, errQuery := tsdb.NewBlockWriter(log.NewNopLogger(), importer.config.outputDir, 2*blockDuration)
+		if errQuery != nil {
+			return fmt.Errorf("new block writer: %w", errQuery)
 		}
 		var closed bool
 		defer func() {
 			if !closed {
-				err = tsdb_errors.NewMulti(err, w.Close()).Err()
+				errQuery = tsdb_errors.NewMulti(errQuery, w.Close()).Err()
 			}
 		}()
 		app := newMultipleAppender(ctx, w)
@@ -168,7 +169,7 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 				lbls := lb.Labels()
 
 				for _, value := range sample.Values {
-					if err := app.add(ctx, lbls, timestamp.FromTime(value.Timestamp.Time()), float64(value.Value)); err != nil {
+					if err = app.add(ctx, lbls, timestamp.FromTime(value.Timestamp.Time()), float64(value.Value)); err != nil {
 						return fmt.Errorf("add: %w", err)
 					}
 				}
@@ -177,10 +178,10 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 			return fmt.Errorf("rule result is wrong type %s", val.Type().String())
 		}
 
-		if err := app.flushAndCommit(ctx); err != nil {
+		if err = app.flushAndCommit(ctx); err != nil {
 			return fmt.Errorf("flush and commit: %w", err)
 		}
-		err = tsdb_errors.NewMulti(err, w.Close()).Err()
+		errQuery = tsdb_errors.NewMulti(errQuery, w.Close()).Err()
 		closed = true
 	}
 

@@ -157,7 +157,7 @@ func getMMappedFile(filename string, filesize int, logger log.Logger) ([]byte, i
 		return nil, nil, err
 	}
 
-	if err := allocateQueryLogFile(file, filesize); err != nil {
+	if err = allocateQueryLogFile(file, filesize); err != nil {
 		file.Close()
 		level.Error(logger).Log("msg", "Error allocating query log file", "filesize", filesize, "err", err)
 		return nil, nil, err

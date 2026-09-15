@@ -282,14 +282,14 @@ func TestNoPanicAfterWALCorruption(t *testing.T) {
 
 	// Query the data.
 	{
-		db, err := Open(db.Dir(), nil, nil, nil, nil)
+		dbQuery, err := Open(db.Dir(), nil, nil, nil, nil)
 		require.NoError(t, err)
 		defer func() {
-			require.NoError(t, db.Close())
+			require.NoError(t, dbQuery.Close())
 		}()
-		require.Equal(t, 1.0, prom_testutil.ToFloat64(db.head.metrics.walCorruptionsTotal), "WAL corruption count mismatch")
+		require.Equal(t, 1.0, prom_testutil.ToFloat64(dbQuery.head.metrics.walCorruptionsTotal), "WAL corruption count mismatch")
 
-		querier, err := db.Querier(0, maxt)
+		querier, err := dbQuery.Querier(0, maxt)
 		require.NoError(t, err)
 		seriesSet := query(t, querier, labels.MustNewMatcher(labels.MatchEqual, "", ""))
 		// The last sample should be missing as it was after the WAL segment corruption.
@@ -1638,7 +1638,7 @@ func TestSizeRetention(t *testing.T) {
 	// Add some out of order samples to check the size of WBL.
 	headApp = db.Head().Appender(context.Background())
 	for ts := int64(750); ts < 800; ts++ {
-		_, err := headApp.Append(0, aSeries, ts, float64(ts))
+		_, err = headApp.Append(0, aSeries, ts, float64(ts))
 		require.NoError(t, err)
 	}
 	require.NoError(t, headApp.Commit())
@@ -2278,10 +2278,10 @@ func TestDB_LabelNames(t *testing.T) {
 		// All blocks have same label names, hence check them individually.
 		// No need to aggregate and check.
 		for _, b := range db.Blocks() {
-			blockIndexr, err := b.Index()
-			require.NoError(t, err)
-			labelNames, err = blockIndexr.LabelNames(ctx)
-			require.NoError(t, err)
+			blockIndexr, errIndex := b.Index()
+			require.NoError(t, errIndex)
+			labelNames, errIndex = blockIndexr.LabelNames(ctx)
+			require.NoError(t, errIndex)
 			require.Equal(t, tst.exp1, labelNames)
 			require.NoError(t, blockIndexr.Close())
 		}
@@ -2464,36 +2464,36 @@ func TestDBReadOnly(t *testing.T) {
 		}
 
 		// Add head to test DBReadOnly WAL reading capabilities.
-		w, err := wlog.New(logger, nil, filepath.Join(dbDir, "wal"), wlog.CompressionSnappy)
-		require.NoError(t, err)
+		w, errNew := wlog.New(logger, nil, filepath.Join(dbDir, "wal"), wlog.CompressionSnappy)
+		require.NoError(t, errNew)
 		h := createHead(t, w, genSeries(1, 1, 16, 18), dbDir)
 		require.NoError(t, h.Close())
 	}
 
 	// Open a normal db to use for a comparison.
 	{
-		dbWritable, err := Open(dbDir, logger, nil, nil, nil)
-		require.NoError(t, err)
+		dbWritable, errOpen := Open(dbDir, logger, nil, nil, nil)
+		require.NoError(t, errOpen)
 		dbWritable.DisableCompactions()
 
-		dbSizeBeforeAppend, err := fileutil.DirSize(dbWritable.Dir())
-		require.NoError(t, err)
+		dbSizeBeforeAppend, errOpen := fileutil.DirSize(dbWritable.Dir())
+		require.NoError(t, errOpen)
 		app := dbWritable.Appender(context.Background())
-		_, err = app.Append(0, labels.FromStrings("foo", "bar"), dbWritable.Head().MaxTime()+1, 0)
-		require.NoError(t, err)
+		_, errOpen = app.Append(0, labels.FromStrings("foo", "bar"), dbWritable.Head().MaxTime()+1, 0)
+		require.NoError(t, errOpen)
 		require.NoError(t, app.Commit())
 
 		expBlocks = dbWritable.Blocks()
 		expBlock = expBlocks[0]
-		expDbSize, err := fileutil.DirSize(dbWritable.Dir())
-		require.NoError(t, err)
+		expDbSize, errOpen := fileutil.DirSize(dbWritable.Dir())
+		require.NoError(t, errOpen)
 		require.Greater(t, expDbSize, dbSizeBeforeAppend, "db size didn't increase after an append")
 
-		q, err := dbWritable.Querier(math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errOpen := dbWritable.Querier(math.MinInt64, math.MaxInt64)
+		require.NoError(t, errOpen)
 		expSeries = query(t, q, matchAll)
-		cq, err := dbWritable.ChunkQuerier(math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		cq, errOpen := dbWritable.ChunkQuerier(math.MinInt64, math.MaxInt64)
+		require.NoError(t, errOpen)
 		expChunks = queryAndExpandChunks(t, cq, matchAll)
 
 		require.NoError(t, dbWritable.Close()) // Close here to allow getting the dir hash for windows.
@@ -2584,13 +2584,13 @@ func TestDBReadOnly_FlushWAL(t *testing.T) {
 		dbDir = t.TempDir()
 
 		// Append data to the WAL.
-		db, err := Open(dbDir, logger, nil, nil, nil)
-		require.NoError(t, err)
+		db, errOpen := Open(dbDir, logger, nil, nil, nil)
+		require.NoError(t, errOpen)
 		db.DisableCompactions()
 		app := db.Appender(ctx)
 		maxt = 1000
 		for i := 0; i < maxt; i++ {
-			_, err := app.Append(0, labels.FromStrings(defaultLabelName, "flush"), int64(i), 1.0)
+			_, err = app.Append(0, labels.FromStrings(defaultLabelName, "flush"), int64(i), 1.0)
 			require.NoError(t, err)
 		}
 		require.NoError(t, app.Commit())
@@ -2732,8 +2732,8 @@ func TestDBCannotSeePartialCommits(t *testing.T) {
 			app := db.Appender(ctx)
 
 			for j := 0; j < 100; j++ {
-				_, err := app.Append(0, labels.FromStrings("foo", "bar", "a", strconv.Itoa(j)), int64(iter), float64(iter))
-				require.NoError(t, err)
+				_, errAppend := app.Append(0, labels.FromStrings("foo", "bar", "a", strconv.Itoa(j)), int64(iter), float64(iter))
+				require.NoError(t, errAppend)
 			}
 			err = app.Commit()
 			require.NoError(t, err)
@@ -3009,8 +3009,8 @@ func TestChunkWriter_ReadAfterWrite(t *testing.T) {
 			sizeExp += test.expSegmentsCount * chunks.SegmentHeaderSize // The segment header bytes.
 
 			for i, f := range files {
-				fi, err := f.Info()
-				require.NoError(t, err)
+				fi, errInfo := f.Info()
+				require.NoError(t, errInfo)
 				size := int(fi.Size())
 				// Verify that the segment is the same or smaller than the expected size.
 				require.GreaterOrEqual(t, chunks.SegmentHeaderSize+test.expSegmentSizes[i], size, "Segment:%v should NOT be bigger than:%v actual:%v", i, chunks.SegmentHeaderSize+test.expSegmentSizes[i], size)
@@ -3126,8 +3126,8 @@ func TestCompactHead(t *testing.T) {
 	maxt := 100
 	for i := 0; i < maxt; i++ {
 		val := rand.Float64()
-		_, err := app.Append(0, labels.FromStrings("a", "b"), int64(i), val)
-		require.NoError(t, err)
+		_, errAppend := app.Append(0, labels.FromStrings("a", "b"), int64(i), val)
+		require.NoError(t, errAppend)
 		expSamples = append(expSamples, sample{int64(i), val, nil, nil})
 	}
 	require.NoError(t, app.Commit())
@@ -3191,7 +3191,7 @@ func deleteNonBlocks(dbDir string) error {
 	}
 	for _, dir := range dirs {
 		if ok := isBlockDir(dir); !ok {
-			if err := os.RemoveAll(filepath.Join(dbDir, dir.Name())); err != nil {
+			if err = os.RemoveAll(filepath.Join(dbDir, dir.Name())); err != nil {
 				return err
 			}
 		}
@@ -3349,7 +3349,7 @@ func TestOneCheckpointPerCompactCall(t *testing.T) {
 	// Append samples spanning 59 block ranges.
 	app := db.Appender(context.Background())
 	for i := int64(0); i < 60; i++ {
-		_, err := app.Append(0, lbls, blockRange*i, rand.Float64())
+		_, err = app.Append(0, lbls, blockRange*i, rand.Float64())
 		require.NoError(t, err)
 		_, err = app.Append(0, lbls, (blockRange*i)+blockRange/2, rand.Float64())
 		require.NoError(t, err)
@@ -4535,10 +4535,10 @@ func testOOOCompaction(t *testing.T, scenario sampleTypeScenario, addExtraSample
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, _, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
-			_, _, err = scenario.appendFunc(app, series2, ts, 2*ts)
-			require.NoError(t, err)
+			_, _, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
+			_, _, errAppend = scenario.appendFunc(app, series2, ts, 2*ts)
+			require.NoError(t, errAppend)
 		}
 		require.NoError(t, app.Commit())
 	}
@@ -4548,8 +4548,8 @@ func testOOOCompaction(t *testing.T, scenario sampleTypeScenario, addExtraSample
 
 	// Verify that the in-memory ooo chunk is empty.
 	checkEmptyOOOChunk := func(lbls labels.Labels) {
-		ms, created, err := db.head.getOrCreate(lbls.Hash(), lbls)
-		require.NoError(t, err)
+		ms, created, errCreate := db.head.getOrCreate(lbls.Hash(), lbls)
+		require.NoError(t, errCreate)
 		require.False(t, created)
 		require.Nil(t, ms.ooo)
 	}
@@ -4581,8 +4581,8 @@ func testOOOCompaction(t *testing.T, scenario sampleTypeScenario, addExtraSample
 			series2.String(): series2Samples,
 		}
 
-		q, err := db.Querier(math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := db.Querier(math.MinInt64, math.MaxInt64)
+		require.NoError(t, errQuerier)
 
 		actRes := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
 		requireEqualSeries(t, expRes, actRes, true)
@@ -4592,8 +4592,8 @@ func testOOOCompaction(t *testing.T, scenario sampleTypeScenario, addExtraSample
 
 	// Verify that the in-memory ooo chunk is not empty.
 	checkNonEmptyOOOChunk := func(lbls labels.Labels) {
-		ms, created, err := db.head.getOrCreate(lbls.Hash(), lbls)
-		require.NoError(t, err)
+		ms, created, errCreate := db.head.getOrCreate(lbls.Hash(), lbls)
+		require.NoError(t, errCreate)
 		require.False(t, created)
 		require.Positive(t, ms.ooo.oooHeadChunk.chunk.NumSamples())
 		require.Len(t, ms.ooo.oooMmappedChunks, 13) // 7 original, 6 duplicate.
@@ -4659,8 +4659,8 @@ func testOOOCompaction(t *testing.T, scenario sampleTypeScenario, addExtraSample
 			series2.String(): series2Samples,
 		}
 
-		q, err := NewBlockQuerier(block, math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := NewBlockQuerier(block, math.MinInt64, math.MaxInt64)
+		require.NoError(t, errQuerier)
 
 		actRes := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
 		requireEqualSeries(t, expRes, actRes, true)
@@ -4954,10 +4954,10 @@ func testOOOQueryAfterRestartWithSnapshotAndRemovedWBL(t *testing.T, scenario sa
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, _, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
-			_, _, err = scenario.appendFunc(app, series2, ts, 2*ts)
-			require.NoError(t, err)
+			_, _, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
+			_, _, errAppend = scenario.appendFunc(app, series2, ts, 2*ts)
+			require.NoError(t, errAppend)
 		}
 		require.NoError(t, app.Commit())
 	}
@@ -4970,8 +4970,8 @@ func testOOOQueryAfterRestartWithSnapshotAndRemovedWBL(t *testing.T, scenario sa
 
 	// Checking that there are some ooo m-map chunks.
 	for _, lbls := range []labels.Labels{series1, series2} {
-		ms, created, err := db.head.getOrCreate(lbls.Hash(), lbls)
-		require.NoError(t, err)
+		ms, created, errCreate := db.head.getOrCreate(lbls.Hash(), lbls)
+		require.NoError(t, errCreate)
 		require.False(t, created)
 		require.Len(t, ms.ooo.oooMmappedChunks, 2)
 		require.NotNil(t, ms.ooo.oooHeadChunk)
@@ -5743,11 +5743,11 @@ func testWBLAndMmapReplay(t *testing.T, scenario sampleTypeScenario) {
 	require.NoError(t, err)
 	var s1MmapSamples []chunks.Sample
 	for _, mc := range ms.ooo.oooMmappedChunks {
-		chk, err := db.head.chunkDiskMapper.Chunk(mc.ref)
-		require.NoError(t, err)
+		chk, errChunk := db.head.chunkDiskMapper.Chunk(mc.ref)
+		require.NoError(t, errChunk)
 		it := chk.Iterator(nil)
-		smpls, err := storage.ExpandSamples(it, newSample)
-		require.NoError(t, err)
+		smpls, errChunk := storage.ExpandSamples(it, newSample)
+		require.NoError(t, errChunk)
 		s1MmapSamples = append(s1MmapSamples, smpls...)
 	}
 	require.NotEmpty(t, s1MmapSamples)
@@ -5894,8 +5894,8 @@ func testOOOCompactionFailure(t *testing.T, scenario sampleTypeScenario) {
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, _, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
+			_, _, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
 		}
 		require.NoError(t, app.Commit())
 	}
@@ -5912,20 +5912,20 @@ func testOOOCompactionFailure(t *testing.T, scenario sampleTypeScenario) {
 	// There is a 0th WBL file.
 	verifyFirstWBLFileIs0 := func(count int) {
 		require.NoError(t, db.head.wbl.Sync()) // syncing to make sure wbl is flushed in windows
-		files, err := os.ReadDir(db.head.wbl.Dir())
-		require.NoError(t, err)
+		files, errReadDir := os.ReadDir(db.head.wbl.Dir())
+		require.NoError(t, errReadDir)
 		require.Len(t, files, count)
 		require.Equal(t, "00000000", files[0].Name())
-		f, err := files[0].Info()
-		require.NoError(t, err)
+		f, errReadDir := files[0].Info()
+		require.NoError(t, errReadDir)
 		require.Greater(t, f.Size(), int64(100))
 	}
 	verifyFirstWBLFileIs0(1)
 
 	verifyMmapFiles := func(exp ...string) {
 		mmapDir := mmappedChunksDir(db.head.opts.ChunkDirRoot)
-		files, err := os.ReadDir(mmapDir)
-		require.NoError(t, err)
+		files, errReadDir := os.ReadDir(mmapDir)
+		require.NoError(t, errReadDir)
 		require.Len(t, files, len(exp))
 		for i, f := range files {
 			require.Equal(t, exp[i], f.Name())
@@ -5988,8 +5988,8 @@ func testOOOCompactionFailure(t *testing.T, scenario sampleTypeScenario) {
 			series1.String(): series1Samples,
 		}
 
-		q, err := NewBlockQuerier(block, math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := NewBlockQuerier(block, math.MinInt64, math.MaxInt64)
+		require.NoError(t, errQuerier)
 		actRes := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
 		requireEqualSeries(t, expRes, actRes, true)
 	}
@@ -6031,8 +6031,8 @@ func TestWBLCorruption(t *testing.T) {
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, err := app.Append(0, series1, ts, float64(ts))
-			require.NoError(t, err)
+			_, errAppend := app.Append(0, series1, ts, float64(ts))
+			require.NoError(t, errAppend)
 			allSamples = append(allSamples, sample{t: ts, f: float64(ts)})
 			if afterRestart {
 				expAfterRestart = append(expAfterRestart, sample{t: ts, f: float64(ts)})
@@ -6107,8 +6107,8 @@ func TestWBLCorruption(t *testing.T) {
 			series1.String(): expSamples,
 		}
 
-		q, err := db.Querier(math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := db.Querier(math.MinInt64, math.MaxInt64)
+		require.NoError(t, errQuerier)
 
 		actRes := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
 		require.Equal(t, expRes, actRes)
@@ -6185,8 +6185,8 @@ func testOOOMmapCorruption(t *testing.T, scenario sampleTypeScenario) {
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, s, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
+			_, s, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
 			allSamples = append(allSamples, s)
 			if inMmapAfterCorruption {
 				expInMmapChunks = append(expInMmapChunks, s)
@@ -6223,8 +6223,8 @@ func testOOOMmapCorruption(t *testing.T, scenario sampleTypeScenario) {
 			series1.String(): expSamples,
 		}
 
-		q, err := db.Querier(math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := db.Querier(math.MinInt64, math.MaxInt64)
+		require.NoError(t, errQuerier)
 
 		actRes := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
 		requireEqualSeries(t, expRes, actRes, true)
@@ -6669,8 +6669,8 @@ func testWblReplayAfterOOODisableAndRestart(t *testing.T, scenario sampleTypeSce
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, s, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
+			_, s, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
 			allSamples = append(allSamples, s)
 		}
 		require.NoError(t, app.Commit())
@@ -6690,8 +6690,8 @@ func testWblReplayAfterOOODisableAndRestart(t *testing.T, scenario sampleTypeSce
 			series1.String(): expSamples,
 		}
 
-		q, err := db.Querier(math.MinInt64, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := db.Querier(math.MinInt64, math.MaxInt64)
+		require.NoError(t, errQuerier)
 
 		actRes := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
 		requireEqualSeries(t, expRes, actRes, true)
@@ -6736,8 +6736,8 @@ func testPanicOnApplyConfig(t *testing.T, scenario sampleTypeScenario) {
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, s, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
+			_, s, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
 			allSamples = append(allSamples, s)
 		}
 		require.NoError(t, app.Commit())
@@ -6793,8 +6793,8 @@ func testDiskFillingUpAfterDisablingOOO(t *testing.T, scenario sampleTypeScenari
 		app := db.Appender(context.Background())
 		for m := fromMins; m <= toMins; m++ {
 			ts := m * time.Minute.Milliseconds()
-			_, s, err := scenario.appendFunc(app, series1, ts, ts)
-			require.NoError(t, err)
+			_, s, errAppend := scenario.appendFunc(app, series1, ts, ts)
+			require.NoError(t, errAppend)
 			allSamples = append(allSamples, s)
 		}
 		require.NoError(t, app.Commit())
@@ -6817,8 +6817,8 @@ func testDiskFillingUpAfterDisablingOOO(t *testing.T, scenario sampleTypeScenari
 
 	checkMmapFileContents := func(contains, notContains []string) {
 		mmapDir := mmappedChunksDir(db.head.opts.ChunkDirRoot)
-		files, err := os.ReadDir(mmapDir)
-		require.NoError(t, err)
+		files, errReadDir := os.ReadDir(mmapDir)
+		require.NoError(t, errReadDir)
 
 		fnames := make([]string, 0, len(files))
 		for _, f := range files {

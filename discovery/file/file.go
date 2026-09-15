@@ -395,11 +395,11 @@ func (d *Discovery) readFile(filename string) ([]*targetgroup.Group, error) {
 
 	switch ext := filepath.Ext(filename); strings.ToLower(ext) {
 	case ".json":
-		if err := json.Unmarshal(content, &targetGroups); err != nil {
+		if err = json.Unmarshal(content, &targetGroups); err != nil {
 			return nil, err
 		}
 	case ".yml", ".yaml":
-		if err := yaml.UnmarshalStrict(content, &targetGroups); err != nil {
+		if err = yaml.UnmarshalStrict(content, &targetGroups); err != nil {
 			return nil, err
 		}
 	default:

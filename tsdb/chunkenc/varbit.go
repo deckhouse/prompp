@@ -66,14 +66,14 @@ func readVarbitInt(b *bstreamReader) (int64, error) {
 	var d byte
 	for i := 0; i < 8; i++ {
 		d <<= 1
-		bit, err := b.readBitFast()
+		bitFast, err := b.readBitFast()
 		if err != nil {
-			bit, err = b.readBit()
+			bitFast, err = b.readBit()
 		}
 		if err != nil {
 			return 0, err
 		}
-		if bit == zero {
+		if bitFast == zero {
 			break
 		}
 		d |= 1
@@ -171,14 +171,14 @@ func readVarbitUint(b *bstreamReader) (uint64, error) {
 	var d byte
 	for i := 0; i < 8; i++ {
 		d <<= 1
-		bit, err := b.readBitFast()
+		bitFast, err := b.readBitFast()
 		if err != nil {
-			bit, err = b.readBit()
+			bitFast, err = b.readBit()
 		}
 		if err != nil {
 			return 0, err
 		}
-		if bit == zero {
+		if bitFast == zero {
 			break
 		}
 		d |= 1

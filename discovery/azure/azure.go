@@ -343,7 +343,7 @@ func newAzureResourceFromID(id string, logger log.Logger) (*arm.ResourceID, erro
 	}
 	resourceID, err := arm.ParseResourceID(id)
 	if err != nil {
-		err := fmt.Errorf("invalid ID '%s': %w", id, err)
+		err = fmt.Errorf("invalid ID '%s': %w", id, err)
 		level.Error(logger).Log("err", err)
 		return &arm.ResourceID{}, err
 	}
@@ -353,13 +353,13 @@ func newAzureResourceFromID(id string, logger log.Logger) (*arm.ResourceID, erro
 func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 	defer level.Debug(d.logger).Log("msg", "Azure discovery completed")
 
-	client, err := createAzureClient(*d.cfg, d.logger)
+	aclient, err := createAzureClient(*d.cfg, d.logger)
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, fmt.Errorf("could not create Azure client: %w", err)
 	}
 
-	machines, err := client.getVMs(ctx, d.cfg.ResourceGroup)
+	machines, err := aclient.getVMs(ctx, d.cfg.ResourceGroup)
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, fmt.Errorf("could not get virtual machines: %w", err)
@@ -368,14 +368,14 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 	level.Debug(d.logger).Log("msg", "Found virtual machines during Azure discovery.", "count", len(machines))
 
 	// Load the vms managed by scale sets.
-	scaleSets, err := client.getScaleSets(ctx, d.cfg.ResourceGroup)
+	scaleSets, err := aclient.getScaleSets(ctx, d.cfg.ResourceGroup)
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, fmt.Errorf("could not get virtual machine scale sets: %w", err)
 	}
 
 	for _, scaleSet := range scaleSets {
-		scaleSetVms, err := client.getScaleSetVMs(ctx, scaleSet)
+		scaleSetVms, err := aclient.getScaleSetVMs(ctx, scaleSet)
 		if err != nil {
 			d.metrics.failuresCount.Inc()
 			return nil, fmt.Errorf("could not get virtual machine scale set vms: %w", err)
@@ -396,7 +396,7 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 	for _, vm := range machines {
 		go func(vm virtualMachine) {
 			defer wg.Done()
-			labelSet, err := d.vmToLabelSet(ctx, client, vm)
+			labelSet, err := d.vmToLabelSet(ctx, aclient, vm)
 			ch <- target{labelSet: labelSet, err: err}
 		}(vm)
 	}

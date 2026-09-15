@@ -198,15 +198,15 @@ func (d *discovery) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
 			if name == "consul" {
 				continue
 			}
-			resp, err := http.Get(fmt.Sprintf("http://%s/v1/catalog/service/%s", d.address, name))
-			if err != nil {
-				level.Error(d.logger).Log("msg", "Error getting services nodes", "service", name, "err", err)
+			resp, errGet := http.Get(fmt.Sprintf("http://%s/v1/catalog/service/%s", d.address, name))
+			if errGet != nil {
+				level.Error(d.logger).Log("msg", "Error getting services nodes", "service", name, "err", errGet)
 				break
 			}
 
-			tg, err := d.parseServiceNodes(resp, name)
-			if err != nil {
-				level.Error(d.logger).Log("msg", "Error parsing services nodes", "service", name, "err", err)
+			tg, errGet := d.parseServiceNodes(resp, name)
+			if errGet != nil {
+				level.Error(d.logger).Log("msg", "Error parsing services nodes", "service", name, "err", errGet)
 				break
 			}
 			tgs = append(tgs, tg)

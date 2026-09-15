@@ -579,7 +579,7 @@ func (t *QueueManager) sendMetadataWithBackoff(ctx context.Context, metadata []p
 	metadataCount := len(metadata)
 
 	attemptStore := func(try int) error {
-		ctx, span := otel.Tracer("").Start(ctx, "Remote Metadata Send Batch")
+		ctxAttemptStore, span := otel.Tracer("").Start(ctx, "Remote Metadata Send Batch")
 		defer span.End()
 
 		span.SetAttributes(
@@ -596,12 +596,12 @@ func (t *QueueManager) sendMetadataWithBackoff(ctx context.Context, metadata []p
 		begin := time.Now()
 		// Ignoring WriteResponseStats, because there is nothing for metadata, since it's
 		// embedded in v2 calls now, and we do v1 here.
-		_, err := t.storeClient.Store(ctx, req, try)
+		_, errStore := t.storeClient.Store(ctxAttemptStore, req, try)
 		t.metrics.sentBatchDuration.Observe(time.Since(begin).Seconds())
 
-		if err != nil {
-			span.RecordError(err)
-			return err
+		if errStore != nil {
+			span.RecordError(errStore)
+			return errStore
 		}
 		return nil
 	}
@@ -1161,7 +1161,8 @@ func (t *QueueManager) calculateDesiredShards() int {
 		desiredShards = timePerSample * (dataInRate*dataKeptRatio + backlogCatchup)
 	)
 	t.metrics.desiredNumShards.Set(desiredShards)
-	level.Debug(t.logger).Log("msg", "QueueManager.calculateDesiredShards",
+	level.Debug(t.logger).Log(
+		"msg", "QueueManager.calculateDesiredShards",
 		"dataInRate", dataInRate,
 		"dataOutRate", dataOutRate,
 		"dataKeptRatio", dataKeptRatio,
@@ -1744,7 +1745,7 @@ func (s *shards) sendSamplesWithBackoff(ctx context.Context, samples []prompb.Ti
 		lowest := s.qm.buildRequestLimitTimestamp.Load()
 		if isSampleOld(currentTime, time.Duration(s.qm.cfg.SampleAgeLimit), lowest) {
 			// This will filter out old samples during retries.
-			req, _, lowest, err := buildWriteRequest(
+			req, _, lowest, errBuild := buildWriteRequest(
 				s.qm.logger,
 				samples,
 				nil,
@@ -1754,13 +1755,13 @@ func (s *shards) sendSamplesWithBackoff(ctx context.Context, samples []prompb.Ti
 				enc,
 			)
 			s.qm.buildRequestLimitTimestamp.Store(lowest)
-			if err != nil {
-				return err
+			if errBuild != nil {
+				return errBuild
 			}
 			*buf = req
 		}
 
-		ctx, span := otel.Tracer("").Start(ctx, "Remote Send Batch")
+		ctxAttemptStore, span := otel.Tracer("").Start(ctx, "Remote Send Batch")
 		defer span.End()
 
 		span.SetAttributes(
@@ -1785,17 +1786,17 @@ func (s *shards) sendSamplesWithBackoff(ctx context.Context, samples []prompb.Ti
 		s.qm.metrics.metadataTotal.Add(float64(metadataCount))
 		// Technically for v1, we will likely have empty response stats, but for
 		// newer Receivers this might be not, so used it in a best effort.
-		rs, err := s.qm.client().Store(ctx, *buf, try)
+		rs, errStore := s.qm.client().Store(ctxAttemptStore, *buf, try)
 		s.qm.metrics.sentBatchDuration.Observe(time.Since(begin).Seconds())
 		// TODO(bwplotka): Revisit this once we have Receivers doing retriable partial error
 		// so far we don't have those, so it's ok to potentially skew statistics.
 		addStats(rs)
 
-		if err == nil {
+		if errStore == nil {
 			return nil
 		}
-		span.RecordError(err)
-		return err
+		span.RecordError(errStore)
+		return errStore
 	}
 
 	onRetry := func() {
@@ -1858,7 +1859,7 @@ func (s *shards) sendV2SamplesWithBackoff(ctx context.Context, samples []writev2
 		lowest := s.qm.buildRequestLimitTimestamp.Load()
 		if isSampleOld(currentTime, time.Duration(s.qm.cfg.SampleAgeLimit), lowest) {
 			// This will filter out old samples during retries.
-			req, _, lowest, err := buildV2WriteRequest(
+			req, _, lowest, errBuild := buildV2WriteRequest(
 				s.qm.logger,
 				samples,
 				labels,
@@ -1868,13 +1869,13 @@ func (s *shards) sendV2SamplesWithBackoff(ctx context.Context, samples []writev2
 				enc,
 			)
 			s.qm.buildRequestLimitTimestamp.Store(lowest)
-			if err != nil {
-				return err
+			if errBuild != nil {
+				return errBuild
 			}
 			*buf = req
 		}
 
-		ctx, span := otel.Tracer("").Start(ctx, "Remote Send Batch")
+		ctxAttemptStore, span := otel.Tracer("").Start(ctx, "Remote Send Batch")
 		defer span.End()
 
 		span.SetAttributes(
@@ -1897,28 +1898,29 @@ func (s *shards) sendV2SamplesWithBackoff(ctx context.Context, samples []writev2
 		s.qm.metrics.exemplarsTotal.Add(float64(exemplarCount))
 		s.qm.metrics.histogramsTotal.Add(float64(histogramCount))
 		s.qm.metrics.metadataTotal.Add(float64(metadataCount))
-		rs, err := s.qm.client().Store(ctx, *buf, try)
+		rs, errStore := s.qm.client().Store(ctxAttemptStore, *buf, try)
 		s.qm.metrics.sentBatchDuration.Observe(time.Since(begin).Seconds())
 		// TODO(bwplotka): Revisit this once we have Receivers doing retriable partial error
 		// so far we don't have those, so it's ok to potentially skew statistics.
 		addStats(rs)
 
-		if err == nil {
+		if errStore == nil {
 			// Check the case mentioned in PRW 2.0
 			// https://prometheus.io/docs/specs/remote_write_spec_2_0/#required-written-response-headers.
 			if sampleCount+histogramCount+exemplarCount > 0 && rs.NoDataWritten() {
-				err = fmt.Errorf("sent v2 request with %v samples, %v histograms and %v exemplars; got 2xx, but PRW 2.0 response header statistics indicate %v samples, %v histograms and %v exemplars were accepted;"+
-					" assumining failure e.g. the target only supports PRW 1.0 prometheus.WriteRequest, but does not check the Content-Type header correctly",
+				errStore = fmt.Errorf(
+					"sent v2 request with %v samples, %v histograms and %v exemplars; got 2xx, but PRW 2.0 response header statistics indicate %v samples, %v histograms and %v exemplars were accepted;"+
+						" assumining failure e.g. the target only supports PRW 1.0 prometheus.WriteRequest, but does not check the Content-Type header correctly",
 					sampleCount, histogramCount, exemplarCount,
 					rs.Samples, rs.Histograms, rs.Exemplars,
 				)
-				span.RecordError(err)
-				return err
+				span.RecordError(errStore)
+				return errStore
 			}
 			return nil
 		}
-		span.RecordError(err)
-		return err
+		span.RecordError(errStore)
+		return errStore
 	}
 
 	onRetry := func() {
