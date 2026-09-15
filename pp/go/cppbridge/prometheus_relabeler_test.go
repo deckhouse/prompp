@@ -338,6 +338,60 @@ func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 	runtime.KeepAlive(shardsRelabeledSeries)
 }
 
+func (s *PerGoroutineRelabelerSuite) TestRelabelingWithError() {
+	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{},
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
+	s.Require().NoError(err)
+
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetRelabelerOptions(&s.options)
+	state.SetStatelessRelabeler(statelessRelabeler)
+	state.Reconfigure(0, s.numberOfShards, nil)
+
+	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
+	stats, hasReallocations, err := pgr.Relabeling(
+		s.baseCtx,
+		s.inputLss,
+		s.targetLss,
+		state,
+		h,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
+	)
+	s.Require().Error(err)
+	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
+	s.True(hasReallocations)
+	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
+
+	runtime.KeepAlive(shardsInnerSeries)
+	runtime.KeepAlive(shardsRelabeledSeries)
+}
+
 func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
 	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
 		Timeseries: []prompb.TimeSeries{
@@ -744,6 +798,54 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingTransition() {
 	runtime.KeepAlive(shardsRelabeledSeries)
 }
 
+func (s *PerGoroutineRelabelerSuite) TestRelabelingTransitionWithError() {
+	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{},
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
+
+	state := cppbridge.NewTransitionStateV2()
+	state.Reconfigure(0, s.numberOfShards, nil)
+
+	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
+	stats, hasReallocations, err := pgr.Relabeling(
+		s.baseCtx,
+		s.inputLss,
+		s.targetLss,
+		state,
+		h,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
+	)
+	s.Require().Error(err)
+	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
+	s.True(hasReallocations)
+
+	runtime.KeepAlive(shardsInnerSeries)
+	runtime.KeepAlive(shardsRelabeledSeries)
+}
+
 func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrueTransition() {
 	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
 		Timeseries: []prompb.TimeSeries{
@@ -1110,6 +1212,62 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
 	s.False(hasReallocations)
 
 	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
+	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
+
+	runtime.KeepAlive(shardsInnerSeries)
+	runtime.KeepAlive(shardsRelabeledSeries)
+}
+
+func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansWithError() {
+	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{},
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
+	s.Require().NoError(err)
+
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetRelabelerOptions(&s.options)
+	state.SetStatelessRelabeler(statelessRelabeler)
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, s.numberOfShards, nil)
+
+	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
+	stats, hasReallocations, err := pgr.Relabeling(
+		s.baseCtx,
+		s.inputLss,
+		s.targetLss,
+		state,
+		h,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
+	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
+	s.Require().Error(err)
+	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
+	s.True(hasReallocations)
 	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
 
 	runtime.KeepAlive(shardsInnerSeries)
