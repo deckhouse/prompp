@@ -16,7 +16,7 @@ namespace BareBones::Bit {
 
 static_assert(std::endian::native == std::endian::little, "big endian arch is not yet supported");
 
-inline __attribute__((always_inline)) uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) noexcept {
+PROMPP_ALWAYS_INLINE uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) noexcept {
 #ifdef __BMI__
   return _bextr_u32(src, start, len);
 #else
@@ -26,7 +26,7 @@ inline __attribute__((always_inline)) uint32_t bextr(uint32_t src, uint32_t star
 #endif
 }
 
-inline __attribute__((always_inline)) uint64_t bextr(uint64_t src, uint32_t start, uint32_t len) noexcept {
+PROMPP_ALWAYS_INLINE uint64_t bextr(uint64_t src, uint32_t start, uint32_t len) noexcept {
 #ifdef __BMI__
   return _bextr_u64(src, start, len);
 #else
