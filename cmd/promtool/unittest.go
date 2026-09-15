@@ -496,11 +496,12 @@ Outer:
 
 // seriesLoadingString returns the input series in PromQL notation.
 func (tg *testGroup) seriesLoadingString() string {
-	result := fmt.Sprintf("load %v\n", shortDuration(tg.Interval))
+	var result strings.Builder
+	fmt.Fprintf(&result, "load %v\n", shortDuration(tg.Interval))
 	for _, is := range tg.InputSeries {
-		result += fmt.Sprintf("  %v %v\n", is.Series, is.Values)
+		fmt.Fprintf(&result, "  %v %v\n", is.Series, is.Values)
 	}
-	return result
+	return result.String()
 }
 
 func shortDuration(d model.Duration) string {
@@ -599,13 +600,14 @@ func (la labelsAndAnnotations) String() string {
 	if len(la) == 0 {
 		return "[]"
 	}
-	s := "[\n0:" + indentLines("\n"+la[0].String(), "  ")
+	var s strings.Builder
+	s.WriteString("[\n0:" + indentLines("\n"+la[0].String(), "  "))
 	for i, l := range la[1:] {
-		s += ",\n" + strconv.Itoa(i+1) + ":" + indentLines("\n"+l.String(), "  ")
+		s.WriteString(",\n" + strconv.Itoa(i+1) + ":" + indentLines("\n"+l.String(), "  "))
 	}
-	s += "\n]"
+	s.WriteString("\n]")
 
-	return s
+	return s.String()
 }
 
 type labelAndAnnotation struct {
@@ -656,11 +658,12 @@ func parsedSamplesString(pss []parsedSample) string {
 	if len(pss) == 0 {
 		return "nil"
 	}
-	s := pss[0].String()
+	var s strings.Builder
+	s.WriteString(pss[0].String())
 	for _, ps := range pss[1:] {
-		s += ", " + ps.String()
+		s.WriteString(", " + ps.String())
 	}
-	return s
+	return s.String()
 }
 
 func (ps *parsedSample) String() string {
