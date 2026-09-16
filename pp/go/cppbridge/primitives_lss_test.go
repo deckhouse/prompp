@@ -689,7 +689,7 @@ func (s *RotateLSSSuite) TestCopyOnRotatePart() {
 	lname := "foo"
 	rLSS := s.makeRotatedLSS(lname)
 	newLSS := cppbridge.NewQueryableLssStorage()
-	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) + 1
+	shrinkBoundary := uint32(len(s.labelSets))
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
@@ -725,7 +725,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLSPart() {
 	// Arrange
 	rLSS := s.makeRotatedLSS("")
 	newLSS := cppbridge.NewQueryableLssStorage()
-	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) + 1
+	shrinkBoundary := uint32(len(s.labelSets))
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
@@ -755,7 +755,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceExistingLSPart() {
 	// Arrange
 	rLSS := s.makeRotatedLSS("")
 	newLSS := cppbridge.NewQueryableLssStorage()
-	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) + 1
+	shrinkBoundary := uint32(len(s.labelSets))
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
@@ -780,7 +780,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceAfterBoundaryLS() {
 	// Arrange
 	rLSS := s.makeRotatedLSS("")
 	newLSS := cppbridge.NewQueryableLssStorage()
-	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) + 1
+	shrinkBoundary := uint32(len(s.labelSets))
 
 	// Act
 	result := s.rotate(shrinkBoundary, rLSS.oldLSS, newLSS)
@@ -807,7 +807,7 @@ func (s *RotateLSSSuite) TestCopyOnRotateShrinkAndEmplacePart() {
 	// Arrange
 	rLSS := s.makeRotatedLSS("")
 	newLSS := cppbridge.NewQueryableLssStorage()
-	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) - 1
+	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs)
 
 	// Act
 	snapshot := rLSS.oldLSS.CreateLabelSetSnapshot()

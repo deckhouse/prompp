@@ -3120,8 +3120,8 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
-// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
-func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+// headWalEncoderWrittenSeriesIDSentinel returns max item index written to WAL.
+func headWalEncoderWrittenSeriesIDSentinel(encoder uintptr) uint32 {
 	args := struct {
 		encoder uintptr
 	}{encoder}
@@ -3131,7 +3131,7 @@ func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_head_wal_encoder_max_written_item_index,
+		C.prompp_head_wal_encoder_written_series_id_sentinel,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
