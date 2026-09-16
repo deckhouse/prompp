@@ -114,6 +114,12 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 			cppFeatures.DisableScraperFullUTF8()
 			_ = level.Info(logger).Log(msgStr, "Whole-input UTF-8 validation for scraper is disabled.")
 
+		case "enable_skip_no_samples_series":
+			cppFeatures.SkipNoSamplesSeries()
+			_ = level.Info(logger).Log(
+				msgStr, "Skipping series with no samples instead of throwing an error is enabled.",
+			)
+
 		default:
 			_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", strings.TrimSpace(fname))
 		}
