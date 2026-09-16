@@ -257,31 +257,6 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   }
 }
 
-extern "C" void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res) {
-  using PromPP::Primitives::Timestamp;
-  using series_data::Decoder;
-
-  struct Arguments {
-    DataStoragePtr data_storage;
-    SliceView<LabelSetID> series_ids;
-  };
-
-  struct Result {
-    Slice<Timestamp> timestamps;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  const auto out = static_cast<Result*>(res);
-
-  assert(in->series_ids.size() == out->timestamps.size());
-  std::visit(
-      [in, out](const auto& data_storage) {
-        std::ranges::transform(in->series_ids, out->timestamps.begin(),
-                               [&data_storage](uint32_t series_id) { return Decoder::get_series_min_timestamp(data_storage, series_id); });
-      },
-      *in->data_storage);
-}
-
 extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args) {
   using series_data::Decoder;
 
@@ -296,8 +271,10 @@ extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args
   std::visit(
       [in, series](const auto& data_storage) mutable {
         for (auto&& [stalenan_series, series_id] : std::ranges::views::zip(series, in->series_ids)) {
-          stalenan_series.timestamp = Decoder::get_series_min_timestamp(data_storage, series_id);
           stalenan_series.series_id = series_id;
+          if (data_storage.series_exists(series_id)) [[likely]] {
+            stalenan_series.timestamp = Decoder::get_series_min_timestamp(data_storage, series_id);
+          }
         }
       },
       *in->data_storage);
