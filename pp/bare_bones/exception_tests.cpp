@@ -6,7 +6,6 @@
 
 #include <sys/types.h>  // pid_t
 #include <sys/wait.h>   // waitpid()
-#include <unistd.h>     // fork()
 
 #define DUPE_5X_LITERAL(literal) literal literal literal literal literal
 #define DUPE_25X_LITERAL(literal) \

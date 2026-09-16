@@ -1,11 +1,9 @@
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
-#include "primitives/snug_composites.h"
 #include "series_data/encoder.h"
 #include "series_index/queried_series.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 #include "status.h"
 
 namespace {

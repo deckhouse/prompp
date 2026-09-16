@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <ranges>
 #include <spanstream>
 #include <sstream>
 #include <string>
