@@ -10,7 +10,7 @@ using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::OutdatedChunkMerger;
-using series_data::chunk::FinalizedChunkList;
+using FinalizedChunkList = DataStorage::FinalizedChunkList;
 
 template <uint8_t kSamplesPerChunk = series_data::kSamplesPerChunkDefault>
 class DataStorageMetricsTestTrait {

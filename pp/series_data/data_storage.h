@@ -25,6 +25,7 @@ struct DataStorage {
   using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
   using CompactBitSequence = encoder::CompactBitSequence<Reallocator>;
   using OutdatedChunk = chunk::OutdatedChunk<Reallocator>;
+  using FinalizedChunkList = chunk::FinalizedChunkList<Reallocator>;
 
   class SeriesChunkIterator {
    public:
@@ -50,10 +51,10 @@ struct DataStorage {
       [[nodiscard]] PROMPP_ALWAYS_INLINE const chunk::DataChunk& chunk() const noexcept {
         return chunk_type() == chunk::DataChunk::Type::kOpen ? *open_chunk_ : *finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
         return finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
         return finalized_chunk_end_iterator_;
       }
 
@@ -61,8 +62,8 @@ struct DataStorage {
       friend class SeriesChunkIterator;
 
       const DataStorage* storage_;
-      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
-      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
+      FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
+      FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
       const chunk::DataChunk* open_chunk_{};
 
       PROMPP_ALWAYS_INLINE void next_value() noexcept {
@@ -211,10 +212,10 @@ struct DataStorage {
   size_t finalized_chunks_map_allocated_memory{};
   union {
     phmap::flat_hash_map<uint32_t,
-                         chunk::FinalizedChunkList,
+                         FinalizedChunkList,
                          std::hash<uint32_t>,
                          std::equal_to<>,
-                         BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
+                         BareBones::Allocator<std::pair<const uint32_t, FinalizedChunkList>, Reallocator>>
         finalized_chunks;
   };
 
@@ -358,10 +359,7 @@ struct DataStorage {
 
   explicit DataStorage(bool collect_metrics = false) noexcept
       : outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}},
-        finalized_chunks{
-            {},
-            {},
-            BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}} {
+        finalized_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, FinalizedChunkList>, Reallocator>{finalized_chunks_map_allocated_memory}} {
     constructor_impl<Reallocator>();
 
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)

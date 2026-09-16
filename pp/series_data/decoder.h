@@ -105,8 +105,8 @@ class Decoder {
     return result;
   }
 
-  template <class DataStorage>
-  static BareBones::Vector<encoder::SampleList> decode_chunks(const DataStorage& storage, const chunk::FinalizedChunkList& chunks) {
+  template <class DataStorage, class FinalizedChunkList>
+  static BareBones::Vector<encoder::SampleList> decode_chunks(const DataStorage& storage, const FinalizedChunkList& chunks) {
     BareBones::Vector<encoder::SampleList> result;
     for (auto& chunk : chunks) {
       result.emplace_back(decode_chunk<chunk::DataChunk::Type::kFinalized>(storage, chunk));
@@ -114,9 +114,9 @@ class Decoder {
     return result;
   }
 
-  template <class DataStorage>
+  template <class DataStorage, class FinalizedChunkList>
   static BareBones::Vector<encoder::SampleList> decode_chunks(const DataStorage& storage,
-                                                              const chunk::FinalizedChunkList& finalized_chunks,
+                                                              const FinalizedChunkList& finalized_chunks,
                                                               const chunk::DataChunk& open_chunk) {
     auto result = decode_chunks(storage, finalized_chunks);
     auto& open_chunk_samples = result.emplace_back();
@@ -376,10 +376,11 @@ class Decoder {
   }
 
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_finalized_chunk_last_timestamp(const DataStorage& storage,
-                                                                                       uint32_t ls_id,
-                                                                                       chunk::FinalizedChunkList::ChunksList::const_iterator chunk_it,
-                                                                                       chunk::FinalizedChunkList::ChunksList::const_iterator end_it) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_finalized_chunk_last_timestamp(
+      const DataStorage& storage,
+      uint32_t ls_id,
+      typename DataStorage::FinalizedChunkList::ChunksList::const_iterator chunk_it,
+      typename DataStorage::FinalizedChunkList::ChunksList::const_iterator end_it) noexcept {
     if (const auto next_chunk_it = std::next(chunk_it); next_chunk_it != end_it) {
       return get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, *next_chunk_it) - 1;
     }

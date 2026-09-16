@@ -12,7 +12,7 @@ using series_data::Decoder;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
-using series_data::chunk::FinalizedChunkList;
+using FinalizedChunkList = DataStorage::FinalizedChunkList;
 using OutdatedChunk = DataStorage::OutdatedChunk;
 using BitSequenceWithItemsCount = DataStorage::BitSequenceWithItemsCount;
 using series_data::encoder::GorillaEncoder;
