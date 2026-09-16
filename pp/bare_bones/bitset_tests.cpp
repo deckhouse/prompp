@@ -10,11 +10,12 @@
 
 namespace {
 
+using BareBones::Bitset;
 using std::operator""sv;
 
 class BitsetFixture : public testing::Test {
  protected:
-  BareBones::Bitset bs_;
+  Bitset bs_;
 };
 
 TEST_F(BitsetFixture, valid_unset) {
@@ -370,10 +371,10 @@ TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorLess4Bytes) {
   std::span<const uint8_t> buffer(bytes_data_);
 
   // Act
-  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+  const auto it = Bitset::create_read_iterator(buffer);
 
   // Assert
-  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(it, Bitset::IteratorSentinel{});
   EXPECT_EQ(buffer.size(), 3);
 }
 
@@ -383,16 +384,16 @@ TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorWrongSize) {
   std::span<const uint8_t> buffer(bytes_data_);
 
   // Act
-  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+  const auto it = Bitset::create_read_iterator(buffer);
 
   // Assert
-  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(it, Bitset::IteratorSentinel{});
   EXPECT_EQ(buffer.size(), 1);
 }
 
 class BitsetCreateIteratorValidFixture : public testing::Test {
  protected:
-  BareBones::Bitset bs_;
+  Bitset bs_;
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 
@@ -414,16 +415,16 @@ TEST_F(BitsetCreateIteratorValidFixture, CreateReadIteratorValid) {
   std::span buffer = stream_.span<const uint8_t>();
 
   // Act
-  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+  const auto it = Bitset::create_read_iterator(buffer);
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(it, BareBones::Bitset::IteratorSentinel{}, bs_.begin(), bs_.end()));
+  EXPECT_TRUE(std::ranges::equal(it, Bitset::IteratorSentinel{}, bs_.begin(), bs_.end()));
   EXPECT_EQ(buffer.size(), 0);
 }
 
 class BitsetReadFromFixture : public testing::Test {
  protected:
-  BareBones::Bitset bs_;
+  Bitset bs_;
 };
 
 TEST_F(BitsetReadFromFixture, ReadSizeError) {
@@ -496,7 +497,7 @@ TEST_F(BitsetConstructorsFixture, CopyConstructor) {
   bs_.set(1000);
 
   // Act
-  BareBones::Bitset bs_copy(bs_);
+  Bitset bs_copy(bs_);
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(bs_, bs_copy));
@@ -510,7 +511,7 @@ TEST_F(BitsetConstructorsFixture, MoveConstructor) {
   bs_.set(1000);
 
   // Act
-  BareBones::Bitset bs_move(std::move(bs_));
+  Bitset bs_move(std::move(bs_));
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(bs_move, std::initializer_list<uint32_t>{1, 100, 1000}));
@@ -525,7 +526,7 @@ TEST_F(BitsetConstructorsFixture, CopyAssignment) {
   bs_.set(1000);
 
   // Act
-  BareBones::Bitset bs_copy = bs_;
+  Bitset bs_copy = bs_;
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(bs_, bs_copy));
@@ -539,7 +540,7 @@ TEST_F(BitsetConstructorsFixture, CopyAssignmentNonEmpty) {
   bs_.set(100);
   bs_.set(1000);
 
-  BareBones::Bitset bs_copy;
+  Bitset bs_copy;
   bs_copy.resize(3);
   bs_copy.set(0);
   bs_copy.set(1);
@@ -561,7 +562,7 @@ TEST_F(BitsetConstructorsFixture, MoveAssignment) {
   bs_.set(1000);
 
   // Act
-  BareBones::Bitset bs_move = std::move(bs_);
+  Bitset bs_move = std::move(bs_);
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(bs_move, std::initializer_list<uint32_t>{1, 100, 1000}));
@@ -575,7 +576,7 @@ TEST_F(BitsetConstructorsFixture, MoveAssignmentNonEmpty) {
   bs_.set(100);
   bs_.set(1000);
 
-  BareBones::Bitset bs_move;
+  Bitset bs_move;
   bs_move.resize(3);
   bs_move.set(0);
   bs_move.set(1);
@@ -586,6 +587,87 @@ TEST_F(BitsetConstructorsFixture, MoveAssignmentNonEmpty) {
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(bs_move, std::initializer_list<uint32_t>{1, 100, 1000}));
+}
+
+class LastSignificantBitFixture : public BitsetFixture {};
+
+TEST_F(LastSignificantBitFixture, EmptyBitsetReturnsNotFound) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(Bitset::kNotFound, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, ResizedButUnsetReturnsNotFound) {
+  // Arrange
+  bs_.resize(1000);
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(Bitset::kNotFound, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, SingleBitAtZero) {
+  // Arrange
+  bs_.set(0);
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(0U, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, SingleBitInsideFirstWord) {
+  // Arrange
+  bs_.set(5);
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(5U, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, SingleBitAtWordBoundary63) {
+  // Arrange
+  bs_.set(63);
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(63U, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, SingleBitAtStartOfSecondWord64) {
+  // Arrange
+  bs_.set(64);
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(64U, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, MultipleBitsInFirstWordReturnsHighest) {
+  // Arrange
+  bs_.set({1, 5, 10, 42});
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(42U, bs_.last_significant_bit());
+}
+
+TEST_F(LastSignificantBitFixture, BitsAcrossWordsReturnsHighest) {
+  // Arrange
+  bs_.set({2, 70, 130, 200});
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(200U, bs_.last_significant_bit());
 }
 
 }  // namespace
