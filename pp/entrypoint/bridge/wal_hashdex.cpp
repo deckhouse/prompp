@@ -83,7 +83,7 @@ extern "C" void prompp_wal_protobuf_hashdex_snappy_presharding(void* args, void*
 
   try {
     auto& hashdex = std::get<PromPP::WAL::hashdex::Protobuf>(*in->hashdex_variant);
-    hashdex.snappy_presharding(static_cast<std::string_view>(in->compressed_protobuf));
+    hashdex.snappy_presharding(static_cast<std::string_view>(in->compressed_protobuf), entrypoint::types::feature_flags().features().skip_no_samples_series);
     auto cluster = hashdex.cluster();
     out->cluster.reset_to(cluster.data(), cluster.size());
     auto replica = hashdex.replica();
