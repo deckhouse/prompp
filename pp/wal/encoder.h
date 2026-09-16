@@ -121,7 +121,7 @@ class GenericEncoder {
     Writer::DestroySourceState(result);
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t max_written_item_index() const { return encoder_.max_written_item_index(); }
+  PROMPP_ALWAYS_INLINE uint32_t written_series_id_sentinel() const { return encoder_.label_sets_checkpoint().next_item_index(); }
 
   // finalize - finalize the encoded data in the C++ encoder to Segment.
   template <class Stats, class Output>

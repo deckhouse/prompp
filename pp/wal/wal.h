@@ -300,10 +300,7 @@ class BasicEncoder {
 
   PROMPP_ALWAYS_INLINE const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
 
-  // Exclusive upper bound for label set ids written to WAL.
-  PROMPP_ALWAYS_INLINE uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
-
-  PROMPP_ALWAYS_INLINE const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
+  inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
   PROMPP_ALWAYS_INLINE uint16_t shard_id() const noexcept { return shard_id_; }
 

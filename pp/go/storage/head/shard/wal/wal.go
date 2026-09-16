@@ -53,8 +53,8 @@ type Encoder[TSegment EncodedSegment] interface {
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
 
-	// MaxWrittenItemIndex returns max item index written to WAL.
-	MaxWrittenItemIndex() uint32
+	// WrittenSeriesIDSentinel returns written series id sentinel.
+	WrittenSeriesIDSentinel() uint32
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
@@ -204,8 +204,8 @@ func (w *Wal[TSegment, TWriter]) Flush() error {
 	return w.segmentWriter.Flush()
 }
 
-// MaxWrittenItemIndex returns max item index written to WAL.
-func (w *Wal[TSegment, TWriter]) MaxWrittenItemIndex() uint32 {
+// WrittenSeriesIDSentinel returns written series id sentinel.
+func (w *Wal[TSegment, TWriter]) WrittenSeriesIDSentinel() uint32 {
 	if w.corrupted {
 		return 0
 	}
@@ -213,7 +213,7 @@ func (w *Wal[TSegment, TWriter]) MaxWrittenItemIndex() uint32 {
 	w.encLocker.Lock()
 	defer w.encLocker.Unlock()
 
-	return w.encoder.MaxWrittenItemIndex()
+	return w.encoder.WrittenSeriesIDSentinel()
 }
 
 // Sync commits the current contents of the [SegmentWriter].

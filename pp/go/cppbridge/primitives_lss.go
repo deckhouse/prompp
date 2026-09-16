@@ -117,6 +117,7 @@ func (lss *LabelSetStorage) QueryLabelNames(matchers []model.LabelMatcher) *LSSQ
 	runtime.SetFinalizer(result, func(result *LSSQueryLabelNamesResult) {
 		freeBytes(*(*[]byte)(unsafe.Pointer(&result.names))) // #nosec G103 // it's meant to be that way
 	})
+	runtime.KeepAlive(lss)
 	return result
 }
 
@@ -132,6 +133,7 @@ func (lss *LabelSetStorage) QueryLabelValues(
 	runtime.SetFinalizer(result, func(result *LSSQueryLabelValuesResult) {
 		freeBytes(*(*[]byte)(unsafe.Pointer(&result.values))) // #nosec G103 // it's meant to be that way
 	})
+	runtime.KeepAlive(lss)
 	return result
 }
 
