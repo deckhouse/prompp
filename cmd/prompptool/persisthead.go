@@ -195,5 +195,5 @@ func detectNumberOfShards(headPath string) (uint16, error) {
 		return 0, nil
 	}
 
-	return uint16(maxShardID + 1), nil //nolint:gosec // shard count fits uint16
+	return uint16(maxShardID + 1), nil
 }

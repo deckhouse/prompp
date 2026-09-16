@@ -36,28 +36,28 @@ func putVarbitInt(b *bstream, val int64) {
 		b.writeBit(zero)
 	case bitRange(val, 3): // -3 <= val <= 4, needs 5 bits.
 		b.writeBits(0b10, 2)
-		b.writeBits(uint64(val), 3)
+		b.writeBits(uint64(val), 3) // #nosec G115 // no overflow
 	case bitRange(val, 6): // -31 <= val <= 32, 9 bits.
 		b.writeBits(0b110, 3)
-		b.writeBits(uint64(val), 6)
+		b.writeBits(uint64(val), 6) // #nosec G115 // no overflow
 	case bitRange(val, 9): // -255 <= val <= 256, 13 bits.
 		b.writeBits(0b1110, 4)
-		b.writeBits(uint64(val), 9)
+		b.writeBits(uint64(val), 9) // #nosec G115 // no overflow
 	case bitRange(val, 12): // -2047 <= val <= 2048, 17 bits.
 		b.writeBits(0b11110, 5)
-		b.writeBits(uint64(val), 12)
+		b.writeBits(uint64(val), 12) // #nosec G115 // no overflow
 	case bitRange(val, 18): // -131071 <= val <= 131072, 3 bytes.
 		b.writeBits(0b111110, 6)
-		b.writeBits(uint64(val), 18)
+		b.writeBits(uint64(val), 18) // #nosec G115 // no overflow
 	case bitRange(val, 25): // -16777215 <= val <= 16777216, 4 bytes.
 		b.writeBits(0b1111110, 7)
-		b.writeBits(uint64(val), 25)
+		b.writeBits(uint64(val), 25) // #nosec G115 // no overflow
 	case bitRange(val, 56): // -36028797018963967 <= val <= 36028797018963968, 8 bytes.
 		b.writeBits(0b11111110, 8)
-		b.writeBits(uint64(val), 56)
+		b.writeBits(uint64(val), 56) // #nosec G115 // no overflow
 	default:
-		b.writeBits(0b11111111, 8) // Worst case, needs 9 bytes.
-		b.writeBits(uint64(val), 64)
+		b.writeBits(0b11111111, 8)   // Worst case, needs 9 bytes.
+		b.writeBits(uint64(val), 64) // #nosec G115 // no overflow
 	}
 }
 
@@ -66,14 +66,14 @@ func readVarbitInt(b *bstreamReader) (int64, error) {
 	var d byte
 	for i := 0; i < 8; i++ {
 		d <<= 1
-		bit, err := b.readBitFast()
+		bitFast, err := b.readBitFast()
 		if err != nil {
-			bit, err = b.readBit()
+			bitFast, err = b.readBit()
 		}
 		if err != nil {
 			return 0, err
 		}
-		if bit == zero {
+		if bitFast == zero {
 			break
 		}
 		d |= 1
@@ -106,7 +106,7 @@ func readVarbitInt(b *bstreamReader) (int64, error) {
 			return 0, err
 		}
 
-		val = int64(bits)
+		val = int64(bits) // #nosec G115 // no overflow
 	default:
 		return 0, fmt.Errorf("invalid bit pattern %b", d)
 	}
@@ -123,7 +123,7 @@ func readVarbitInt(b *bstreamReader) (int64, error) {
 			// Or something.
 			bits -= (1 << sz)
 		}
-		val = int64(bits)
+		val = int64(bits) // #nosec G115 // no overflow
 	}
 
 	return val, nil
@@ -171,14 +171,14 @@ func readVarbitUint(b *bstreamReader) (uint64, error) {
 	var d byte
 	for i := 0; i < 8; i++ {
 		d <<= 1
-		bit, err := b.readBitFast()
+		bitFast, err := b.readBitFast()
 		if err != nil {
-			bit, err = b.readBit()
+			bitFast, err = b.readBit()
 		}
 		if err != nil {
 			return 0, err
 		}
-		if bit == zero {
+		if bitFast == zero {
 			break
 		}
 		d |= 1

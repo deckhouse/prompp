@@ -96,9 +96,9 @@ func (i *InstanceDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, 
 	floatingIPList := make(map[floatingIPKey]string)
 	floatingIPPresent := make(map[string]struct{})
 	err = pagerFIP.EachPage(func(page pagination.Page) (bool, error) {
-		result, err := floatingips.ExtractFloatingIPs(page)
-		if err != nil {
-			return false, fmt.Errorf("could not extract floatingips: %w", err)
+		result, errExtract := floatingips.ExtractFloatingIPs(page)
+		if errExtract != nil {
+			return false, fmt.Errorf("could not extract floatingips: %w", errExtract)
 		}
 		for _, ip := range result {
 			// Skip not associated ips
@@ -127,9 +127,9 @@ func (i *InstanceDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, 
 		if ctx.Err() != nil {
 			return false, fmt.Errorf("could not extract instances: %w", ctx.Err())
 		}
-		instanceList, err := servers.ExtractServers(page)
-		if err != nil {
-			return false, fmt.Errorf("could not extract instances: %w", err)
+		instanceList, errExtractServers := servers.ExtractServers(page)
+		if errExtractServers != nil {
+			return false, fmt.Errorf("could not extract instances: %w", errExtractServers)
 		}
 
 		for _, s := range instanceList {

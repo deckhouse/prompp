@@ -191,7 +191,7 @@ func (d *instanceDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, 
 		}
 
 		if addr != "" {
-			addr := net.JoinHostPort(addr, strconv.FormatUint(uint64(d.port), 10))
+			addr = net.JoinHostPort(addr, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 			labels[model.AddressLabel] = model.LabelValue(addr)
 			targets = append(targets, labels)
 		}

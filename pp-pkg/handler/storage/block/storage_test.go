@@ -56,7 +56,7 @@ func TestStorage(t *testing.T) {
 	require.Equal(t, encodedSegment.ID, rSeg.ID)
 	require.Equal(t, encodedSegment.Size, rSeg.Size)
 	require.Equal(t, encodedSegment.CRC, rSeg.CRC)
-	require.EqualValues(t, encodedSegment.Body, rSeg.Body)
+	require.Equal(t, encodedSegment.Body, rSeg.Body)
 
 	err = blockReader.Close()
 	require.NoError(t, err)

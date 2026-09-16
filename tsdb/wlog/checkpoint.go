@@ -132,7 +132,7 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 		return nil, fmt.Errorf("remove previous temporary checkpoint dir: %w", err)
 	}
 
-	if err := os.MkdirAll(cpdirtmp, 0o777); err != nil {
+	if err := os.MkdirAll(cpdirtmp, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return nil, fmt.Errorf("create checkpoint dir: %w", err)
 	}
 	cp, err := New(nil, nil, cpdirtmp, w.CompressionType())
@@ -285,7 +285,7 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 			stats.TotalExemplars += len(exemplars)
 			stats.DroppedExemplars += len(exemplars) - len(repl)
 		case record.Metadata:
-			metadata, err := dec.Metadata(rec, metadata)
+			metadata, err = dec.Metadata(rec, metadata)
 			if err != nil {
 				return nil, fmt.Errorf("decode metadata: %w", err)
 			}
@@ -312,7 +312,7 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 
 		// Flush records in 1 MB increments.
 		if len(buf) > 1*1024*1024 {
-			if err := cp.Log(recs...); err != nil {
+			if err = cp.Log(recs...); err != nil {
 				return nil, fmt.Errorf("flush records: %w", err)
 			}
 			buf, recs = buf[:0], recs[:0]
@@ -325,7 +325,7 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 	}
 
 	// Flush remaining records.
-	if err := cp.Log(recs...); err != nil {
+	if err = cp.Log(recs...); err != nil {
 		return nil, fmt.Errorf("flush records: %w", err)
 	}
 
@@ -335,12 +335,12 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 		for _, m := range latestMetadataMap {
 			latestMetadata = append(latestMetadata, m)
 		}
-		if err := cp.Log(enc.Metadata(latestMetadata, buf[:0])); err != nil {
+		if err = cp.Log(enc.Metadata(latestMetadata, buf[:0])); err != nil {
 			return nil, fmt.Errorf("flush metadata records: %w", err)
 		}
 	}
 
-	if err := cp.Close(); err != nil {
+	if err = cp.Close(); err != nil {
 		return nil, fmt.Errorf("close checkpoint: %w", err)
 	}
 
@@ -349,7 +349,7 @@ func Checkpoint(logger log.Logger, w *WL, from, to int, keep func(id chunks.Head
 	if err != nil {
 		return nil, fmt.Errorf("open temporary checkpoint directory: %w", err)
 	}
-	if err := df.Sync(); err != nil {
+	if err = df.Sync(); err != nil {
 		df.Close()
 		return nil, fmt.Errorf("sync temporary checkpoint directory: %w", err)
 	}

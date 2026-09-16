@@ -214,7 +214,7 @@ func (b *bstreamReader) ReadByte() (byte, error) {
 	if err != nil {
 		return 0, err
 	}
-	return byte(v), nil
+	return byte(v), nil // #nosec G115 // no overflow
 }
 
 // loadNextBuffer loads the next bytes from the stream into the internal buffer.
@@ -259,7 +259,7 @@ func (b *bstreamReader) loadNextBuffer(nbits uint8) bool {
 
 	b.buffer = buffer
 	b.streamOffset += nbytes
-	b.valid = uint8(nbytes * 8)
+	b.valid = uint8(nbytes * 8) // #nosec G115 // no overflow
 
 	return true
 }

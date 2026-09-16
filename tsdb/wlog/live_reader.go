@@ -209,7 +209,7 @@ func (r *LiveReader) buildRecord() (bool, error) {
 			r.rec = append(r.rec, temp...)
 		}
 
-		if err := validateRecord(rt, r.index); err != nil {
+		if err = validateRecord(rt, r.index); err != nil {
 			r.index = 0
 			return false, err
 		}

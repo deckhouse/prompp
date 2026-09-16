@@ -44,7 +44,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	dto "github.com/prometheus/client_model/go"
-	promconfig "github.com/prometheus/common/config"
 	"github.com/prometheus/common/expfmt"
 
 	"github.com/prometheus/prometheus/config"
@@ -112,7 +111,8 @@ func main() {
 	).Default(lintOptionDuplicateRules).String()
 	checkConfigLintFatal := checkConfigCmd.Flag(
 		"lint-fatal",
-		"Make lint errors exit with exit code 3.").Default("false").Bool()
+		"Make lint errors exit with exit code 3.",
+	).Default("false").Bool()
 
 	checkWebConfigCmd := checkCmd.Command("web-config", "Check if the web config files are valid or not.")
 	webConfigFiles := checkWebConfigCmd.Arg(
@@ -139,7 +139,8 @@ func main() {
 	).Default(lintOptionDuplicateRules).String()
 	checkRulesLintFatal := checkRulesCmd.Flag(
 		"lint-fatal",
-		"Make lint errors exit with exit code 3.").Default("false").Bool()
+		"Make lint errors exit with exit code 3.",
+	).Default("false").Bool()
 
 	checkMetricsCmd := checkCmd.Command("metrics", checkMetricsUsage)
 	checkMetricsExtended := checkCmd.Flag("extended", "Print extended information related to the cardinality of the metrics.").Bool()
@@ -310,7 +311,7 @@ func main() {
 			kingpin.Fatalf("Failed to load HTTP config file: %v", err)
 		}
 
-		httpRoundTripper, err = promconfig.NewRoundTripperFromConfig(*httpConfig, "promtool", config_util.WithUserAgent("promtool/"+version.Version))
+		httpRoundTripper, err = config_util.NewRoundTripperFromConfig(*httpConfig, "promtool", config_util.WithUserAgent("promtool/"+version.Version))
 		if err != nil {
 			kingpin.Fatalf("Failed to create a new HTTP round tripper: %v", err)
 		}
@@ -384,14 +385,15 @@ func main() {
 		if *junitOutFile != nil {
 			results = *junitOutFile
 		}
-		os.Exit(RulesUnitTestResult(results,
-			promqltest.LazyLoaderOpts{
-				EnableAtModifier:     true,
-				EnableNegativeOffset: true,
-			},
-			*testRulesRun,
-			*testRulesDiff,
-			*testRulesFiles...),
+		os.Exit(
+			RulesUnitTestResult(results,
+				promqltest.LazyLoaderOpts{
+					EnableAtModifier:     true,
+					EnableNegativeOffset: true,
+				},
+				*testRulesRun,
+				*testRulesDiff,
+				*testRulesFiles...),
 		)
 
 	case tsdbBenchWriteCmd.FullCommand():
@@ -722,7 +724,7 @@ func checkTLSConfig(tlsConfig config_util.TLSConfig, checkSyntaxOnly bool) error
 }
 
 func checkSDFile(filename string) ([]*targetgroup.Group, error) {
-	fd, err := os.Open(filename)
+	fd, err := os.Open(filename) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -859,15 +861,16 @@ func checkRuleGroups(rgs *rulefmt.RuleGroups, lintSettings lintConfig) (int, []e
 	if lintSettings.lintDuplicateRules() {
 		dRules := checkDuplicates(rgs.Groups)
 		if len(dRules) != 0 {
-			errMessage := fmt.Sprintf("%d duplicate rule(s) found.\n", len(dRules))
+			var errMessage strings.Builder
+			fmt.Fprintf(&errMessage, "%d duplicate rule(s) found.\n", len(dRules))
 			for _, n := range dRules {
-				errMessage += fmt.Sprintf("Metric: %s\nLabel(s):\n", n.metric)
+				fmt.Fprintf(&errMessage, "Metric: %s\nLabel(s):\n", n.metric)
 				n.label.Range(func(l labels.Label) {
-					errMessage += fmt.Sprintf("\t%s: %s\n", l.Name, l.Value)
+					fmt.Fprintf(&errMessage, "\t%s: %s\n", l.Name, l.Value)
 				})
 			}
-			errMessage += "Might cause inconsistency while recording expressions"
-			return 0, []error{fmt.Errorf("%w %s", errLint, errMessage)}
+			errMessage.WriteString("Might cause inconsistency while recording expressions")
+			return 0, []error{fmt.Errorf("%w %s", errLint, errMessage.String())}
 		}
 	}
 

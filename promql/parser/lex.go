@@ -695,10 +695,10 @@ func lexInsideBraces(l *Lexer) stateFn {
 		l.backup()
 		l.emit(EQL)
 	case r == '!':
-		switch nr := l.next(); {
-		case nr == '~':
+		switch nr := l.next(); nr {
+		case '~':
 			l.emit(NEQ_REGEX)
-		case nr == '=':
+		case '=':
 			l.emit(NEQ)
 		default:
 			return l.errorf("unexpected character after '!' inside braces: %q", nr)
@@ -796,7 +796,7 @@ func lexEscape(l *Lexer) stateFn {
 
 	var x uint32
 	for n > 0 {
-		d := uint32(digitVal(ch))
+		d := uint32(digitVal(ch)) // #nosec G115 // no overflow
 		if d >= base {
 			if ch == eof {
 				l.errorf("escape sequence not terminated")

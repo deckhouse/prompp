@@ -133,7 +133,7 @@ func (d *vpsDiscovery) refresh(context.Context) ([]*targetgroup.Group, error) {
 	for _, vpsName := range vpsList {
 		vpsDetailed, err := getVpsDetails(client, vpsName)
 		if err != nil {
-			err := level.Warn(d.logger).Log("msg", fmt.Sprintf("%s: Could not get details of %s", d.getSource(), vpsName), "err", err.Error())
+			err = level.Warn(d.logger).Log("msg", fmt.Sprintf("%s: Could not get details of %s", d.getSource(), vpsName), "err", err.Error())
 			if err != nil {
 				return nil, err
 			}

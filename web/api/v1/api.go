@@ -440,9 +440,9 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 	ctx := r.Context()
 	if to := r.FormValue("timeout"); to != "" {
 		var cancel context.CancelFunc
-		timeout, err := parseDuration(to)
-		if err != nil {
-			return invalidParamError(err, "timeout")
+		timeout, errParse := parseDuration(to)
+		if errParse != nil {
+			return invalidParamError(errParse, "timeout")
 		}
 
 		ctx, cancel = context.WithDeadline(ctx, api.now().Add(timeout))
@@ -536,16 +536,16 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 	// For safety, limit the number of returned points per timeseries.
 	// This is sufficient for 60s resolution for a week or 1h resolution for a year.
 	if end.Sub(start)/step > 11000 {
-		err := errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
+		err = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
 
 	ctx := r.Context()
 	if to := r.FormValue("timeout"); to != "" {
 		var cancel context.CancelFunc
-		timeout, err := parseDuration(to)
-		if err != nil {
-			return invalidParamError(err, "timeout")
+		timeout, errParse := parseDuration(to)
+		if errParse != nil {
+			return invalidParamError(errParse, "timeout")
 		}
 
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -600,7 +600,7 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 		return invalidParamError(err, "end")
 	}
 	if end.Before(start) {
-		err := errors.New("end timestamp must not be before start timestamp")
+		err = errors.New("end timestamp must not be before start timestamp")
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
 
@@ -690,9 +690,9 @@ func (api *API) labelNames(r *http.Request) apiFuncResult {
 		labelNamesSet := make(map[string]struct{})
 
 		for _, matchers := range matcherSets {
-			vals, callWarnings, err := q.LabelNames(r.Context(), hints, matchers...)
-			if err != nil {
-				return apiFuncResult{nil, returnAPIError(err), warnings, nil}
+			vals, callWarnings, errLN := q.LabelNames(r.Context(), hints, matchers...)
+			if errLN != nil {
+				return apiFuncResult{nil, returnAPIError(errLN), warnings, nil}
 			}
 
 			warnings.Merge(callWarnings)
@@ -1746,10 +1746,10 @@ func (api *API) snapshot(r *http.Request) apiFuncResult {
 		snapdir = filepath.Join(api.dbDir, "snapshots")
 		name    = fmt.Sprintf("%s-%016x",
 			time.Now().UTC().Format("20060102T150405Z0700"),
-			rand.Int63())
+			rand.Int63()) //nolint:gosec // G404: no need for cryptographic strength here
 		dir = filepath.Join(snapdir, name)
 	)
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return apiFuncResult{nil, &apiError{errorInternal, fmt.Errorf("create snapshot directory: %w", err)}, nil, nil}
 	}
 	if err := api.db.Snapshot(dir, !skipHead); err != nil {
@@ -1870,7 +1870,7 @@ func parseTimeParam(r *http.Request, paramName string, defaultValue time.Time) (
 	}
 	result, err := parseTime(val)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("Invalid time value for '%s': %w", paramName, err)
+		return time.Time{}, fmt.Errorf("invalid time value for '%s': %w", paramName, err)
 	}
 	return result, nil
 }
