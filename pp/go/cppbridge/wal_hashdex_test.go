@@ -370,7 +370,7 @@ func (s *GoModelHashdexTestSuite) TestHappyPath() {
 	prometheusWriteRequest := &prompb.WriteRequest{}
 	s.Require().NoError(protoData.UnmarshalTo(prometheusWriteRequest))
 
-	s.Require().Len(len(prometheusWriteRequest.Timeseries), len(testData))
+	s.Require().Len(prometheusWriteRequest.Timeseries, len(testData))
 
 	for i := range testData {
 		s.Require().Len(prometheusWriteRequest.Timeseries[i].Samples, 1)
