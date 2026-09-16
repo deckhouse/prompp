@@ -54,29 +54,31 @@ func NewIndexWriter(lss *LabelSetStorage) *IndexWriter {
 		output: newIndexWriterOutput(buffer, hasMorePostings),
 		lss:    lss,
 	}
-	runtime.SetFinalizer(writer, func(writer *IndexWriter) {
-		indexWriterDtor(writer.writer)
-	})
+	runtime.AddCleanup(writer, indexWriterDtor, writer.writer)
 	return writer
 }
 
 func (writer *IndexWriter) WriteHeader() []byte {
 	indexWriterWriteHeader(writer.writer)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }
 
 func (writer *IndexWriter) WriteSymbols() []byte {
 	indexWriterWriteSymbols(writer.writer)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }
 
 func (writer *IndexWriter) WriteSeries(ls_id uint32, chunks_meta []ChunkMetadata) []byte {
 	indexWriterWriteNextSeriesBatch(writer.writer, ls_id, chunks_meta)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }
 
 func (writer *IndexWriter) WriteLabelIndices() []byte {
 	indexWriterWriteLabelIndices(writer.writer)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }
 
@@ -85,20 +87,24 @@ func (writer *IndexWriter) WriteLabelIndices() []byte {
 // memory and is valid only until the next write_* call, so callers must consume it before looping.
 func (writer *IndexWriter) WriteNextPostingsBatch(maxBatchSize uint32) ([]byte, bool) {
 	indexWriterWritePostings(writer.writer, maxBatchSize)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes(), writer.output.hasMore()
 }
 
 func (writer *IndexWriter) WriteLabelIndicesTable() []byte {
 	indexWriterWriteLabelIndicesTable(writer.writer)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }
 
 func (writer *IndexWriter) WritePostingsTableOffsets() []byte {
 	indexWriterWritePostingsTableOffsets(writer.writer)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }
 
 func (writer *IndexWriter) WriteTableOfContents() []byte {
 	indexWriterWriteTableOfContents(writer.writer)
+	runtime.KeepAlive(writer)
 	return writer.output.bytes()
 }

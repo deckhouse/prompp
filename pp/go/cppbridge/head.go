@@ -110,16 +110,14 @@ func initializeChunkRecoder(
 		dataStorage:    dataStorage,
 		serializedData: serializedData,
 	}
-
-	runtime.SetFinalizer(chunkRecoder, func(chunkRecoder *ChunkRecoder) {
-		seriesDataChunkRecoderDtor(chunkRecoder.recoder)
-	})
+	runtime.AddCleanup(chunkRecoder, seriesDataChunkRecoderDtor, chunkRecoder.recoder)
 
 	return chunkRecoder
 }
 
 func (recoder *ChunkRecoder) RecodeNextChunk() RecodedChunk {
 	seriesDataChunkRecoderRecodeNextChunk(recoder.recoder, &recoder.recodedChunk)
+	runtime.KeepAlive(recoder)
 	return recoder.recodedChunk
 }
 
@@ -234,6 +232,7 @@ type DataStorageSerializedDataSamplesIterator struct {
 func NewDataStorageSerializedDataSamplesIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataSamplesIterator {
 	it := DataStorageSerializedDataSamplesIterator{}
 	seriesDataSerializedDataSamplesIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
 	return it
 }
 
@@ -247,6 +246,7 @@ func (it *DataStorageSerializedDataSamplesIterator) Seek(timestamp int64) {
 
 func (it *DataStorageSerializedDataSamplesIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
 	seriesDataSerializedDataSamplesIteratorReset(it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
 }
 
 func (it *DataStorageSerializedDataSamplesIterator) HasData() bool {
@@ -286,6 +286,7 @@ type DataStorageSerializedDataAggregationIterator struct {
 func NewDataStorageSerializedDataAggregationIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataAggregationIterator {
 	it := DataStorageSerializedDataAggregationIterator{}
 	seriesDataSerializedDataAggregationIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
 	return it
 }
 
@@ -295,6 +296,7 @@ func (it *DataStorageSerializedDataAggregationIterator) Next() {
 
 func (it *DataStorageSerializedDataAggregationIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
 	seriesDataSerializedDataAggregationIteratorReset(it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
 }
 
 type DataStorageSerializedDataMultiSeriesIterator struct {
@@ -305,6 +307,7 @@ type DataStorageSerializedDataMultiSeriesIterator struct {
 func NewDataStorageSerializedDataMultiSeriesIterator(serializedData *DataStorageSerializedData, seriesIDs []uint32) DataStorageSerializedDataMultiSeriesIterator {
 	it := DataStorageSerializedDataMultiSeriesIterator{}
 	seriesDataSerializedDataMultiSeriesIteratorCtor(&it, serializedData.serializedData, seriesIDs)
+	runtime.KeepAlive(serializedData)
 	return it
 }
 
@@ -314,6 +317,7 @@ func (it *DataStorageSerializedDataMultiSeriesIterator) Next() {
 
 func (it *DataStorageSerializedDataMultiSeriesIterator) Reset(serializedData *DataStorageSerializedData, seriesIDs []uint32) {
 	seriesDataSerializedDataMultiSeriesIteratorReset(it, serializedData.serializedData, seriesIDs)
+	runtime.KeepAlive(serializedData)
 }
 
 func (it *DataStorageSerializedDataMultiSeriesIterator) Close() {
@@ -336,11 +340,10 @@ func (ds *DataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 		loader: seriesDataUnloadedDataLoaderCtor(ds.dataStorage, queriers),
 		ds:     ds,
 	}
+	runtime.KeepAlive(ds)
 	runtime.KeepAlive(queriers)
 
-	runtime.SetFinalizer(result, func(loader *UnloadedDataLoader) {
-		seriesDataUnloadedDataLoaderDtor(loader.loader)
-	})
+	runtime.AddCleanup(result, seriesDataUnloadedDataLoaderDtor, result.loader)
 
 	return result
 }
@@ -365,10 +368,9 @@ func (ds *DataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSiz
 		},
 		lss: lss,
 	}
-
-	runtime.SetFinalizer(result, func(loader *UnloadedDataRevertableLoader) {
-		seriesDataUnloadedDataLoaderDtor(loader.loader)
-	})
+	runtime.KeepAlive(ds)
+	runtime.KeepAlive(lss)
+	runtime.AddCleanup(result, seriesDataUnloadedDataLoaderDtor, result.loader)
 
 	return result
 }
