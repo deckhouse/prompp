@@ -102,7 +102,7 @@ bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, ti
 	@./bazel-bin/benchmarks_all \
 		--benchmark_repetitions=$(repetitions) \
 		--benchmark_time_unit=$(bench_all_time_unit) \
-		--benchmark_filter=$(filter) \
+		--benchmark_filter='$(filter)' \
 		--benchmark_list_tests=$(bench_all_print_list) \
 		--benchmark_counters_tabular=true \
 		--benchmark_context=encoded_sequence_values_file=$(encoded_sequence_values_file) \
