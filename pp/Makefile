@@ -97,6 +97,8 @@ bench_all_time_unit := $(if $(filter ns us ms s,$(time_unit)),$(time_unit),ns)
 bench_all_only_min := $(if $(filter 1 y Y on ON true TRUE yes YES,$(min)),| grep _min,)
 # list: set to 1/true/yes to print benchmarks list (default: off)
 bench_all_print_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),true,false)
+# registration order is link order and carries no meaning, so sort the printed list
+bench_all_sort_list := $(if $(filter 1 y Y on ON true TRUE yes YES,$(list)),| sort -V,)
 bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, time_unit=ns|us|ms|s, list=false)
 	@$(call bazel_build_march,native) benchmarks_all
 	@./bazel-bin/benchmarks_all \
@@ -111,4 +113,4 @@ bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, ti
 		--benchmark_context=compact_samples_ts_offset=$(compact_samples_ts_offset) \
 		--benchmark_context=prom_scraper_file=$(prom_scraper_file) \
 		--benchmark_context=stream_v_byte_values_count=$(stream_v_byte_values_count) \
-		$(bench_all_only_min)
+		$(bench_all_only_min) $(bench_all_sort_list)
