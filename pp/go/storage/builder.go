@@ -22,6 +22,74 @@ import (
 )
 
 //
+// WalWriter
+//
+
+// defaultWalVersion is the WAL file format version written into each shard's WAL header
+// (see [writer.WriteHeader] in Builder.createShardOnDisk). It must stay in sync with
+// defaultWalWriterCtor: ShardDataLoader picks its segment decoding path (loadSegments vs
+// loadSegmentsV2) based on this version byte, so it has to match the segment encoding the
+// active constructor actually produces. Defaults to V1; EnableWalWriterV2 switches both
+// together.
+var defaultWalVersion = uint8(wal.FileFormatVersion)
+
+// defaultWalWriterCtor builds the shard WAL segment writer used by Builder.createShardOnDisk.
+// It is a process-global switch between the V1 (default) and V2 ([walWriterCtorV2]) segment
+// writer constructors, toggled at startup by EnableWalWriterV2 via the "enable_wal_writer_v2"
+// PROMPP_FEATURES flag.
+//
+// The V1 constructor writes segments in the original format (writer.WriteSegment, no embedded
+// segment ID) and relies on the shared *writer.SegmentWriteNotifier passed in by the caller to
+// track, across all shards, the last segment durably synced to disk; it doesn't need a real
+// SegmentMarkup, since segment IDs aren't assigned or stored, so it passes writer.NoopSegmentMarkup{}.
+var defaultWalWriterCtor = func(
+	shardID uint16,
+	shardFile *util.FileAppender,
+	swn *writer.SegmentWriteNotifier,
+	_ *catalog.Record,
+) (*writer.Buffered[*cppbridge.HeadEncodedSegment], error) {
+	return writer.NewBuffered(
+		shardID,
+		shardFile,
+		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
+		swn,
+		writer.NoopSegmentMarkup{},
+	)
+}
+
+// walWriterCtorV2 is the V2 counterpart of defaultWalWriterCtor, installed by EnableWalWriterV2.
+// It writes segments with writer.WriteSegmentV2, which embeds each segment's globally assigned
+// ID directly in the WAL record. Segment IDs are assigned by headRecord (*catalog.Record
+// implements SegmentMarkup: NextSegmentID/SetSegmentIDByShard), so each segment's position is
+// self-describing on disk and the shared cross-shard SegmentWriteNotifier passed in by the
+// caller is no longer needed for that purpose — it's ignored in favor of NoopSegmentWriteNotifier{}.
+var walWriterCtorV2 = func(
+	shardID uint16,
+	shardFile *util.FileAppender,
+	_ *writer.SegmentWriteNotifier,
+	headRecord *catalog.Record,
+) (*writer.Buffered[*cppbridge.HeadEncodedSegment], error) {
+	return writer.NewBuffered(
+		shardID,
+		shardFile,
+		writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
+		NoopSegmentWriteNotifier{},
+		headRecord,
+	)
+}
+
+// EnableWalWriterV2 switches all subsequently created shard WAL writers to the V2 segment
+// format (walWriterCtorV2), and updates defaultWalVersion to match so new WAL headers are
+// tagged as V2 — required for ShardDataLoader to pick the matching V2 decode path on replay.
+// Called once at startup when the "enable_wal_writer_v2" PROMPP_FEATURES flag is set; it does
+// not affect WAL files already written with the V1 format.
+func EnableWalWriterV2() {
+	defaultWalVersion = uint8(wal.FileFormatVersionV2)
+
+	defaultWalWriterCtor = walWriterCtorV2
+}
+
+//
 // Builder
 //
 
@@ -135,7 +203,7 @@ func (b *Builder) BuildTransactionHead() *TransactionHead {
 func (b *Builder) createShardOnDisk(
 	headDir string,
 	swn *writer.SegmentWriteNotifier,
-	_ *catalog.Record, // headRecord
+	headRecord *catalog.Record,
 	shardID uint16,
 ) (*shard.Shard, error) {
 	headDir = filepath.Clean(headDir)
@@ -157,21 +225,16 @@ func (b *Builder) createShardOnDisk(
 	// logShards is 0 for single encoder
 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
 
-	// V2: wal.FileFormatVersionV2
-	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, shardWalEncoder.Version())
+	_, err = writer.WriteHeader(shardFile, defaultWalVersion, shardWalEncoder.Version())
 	if err != nil {
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
-	sw, err := writer.NewBuffered(
+	sw, err := defaultWalWriterCtor(
 		shardID,
 		shardFile,
-		writer.WriteSegment[*cppbridge.HeadEncodedSegment], // V2: writer.WriteSegmentV2
-		swn,                        // V2: NoopSegmentWriteNotifier{}
-		writer.NoopSegmentMarkup{}, // V2: headRecord
-		// writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
-		// NoopSegmentWriteNotifier{},
-		// headRecord,
+		swn,
+		headRecord,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
