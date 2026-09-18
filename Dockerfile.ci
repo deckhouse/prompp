@@ -4,6 +4,8 @@ FROM debian:trixie-slim
 # LLVM 21 from apt.llvm.org (trixie toolchain).
 # gcc-16/g++-16: not yet in Trixie; install from sid with apt pinning (default compiler).
 # re2c is pinned because generated tokenizers are committed.
+# patch is required by CPM, which patches Tracy's vendored PPQSort while building
+# the Tracy CLI tools (@tracy//:tracy_capture, @tracy//:tracy_csvexport).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -19,6 +21,7 @@ RUN set -eux; \
         git \
         autoconf \
         make \
+        patch \
         iproute2 \
         libtool \
         pkg-config \
