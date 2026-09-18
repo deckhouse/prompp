@@ -97,9 +97,9 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/lz4:0003-fix_offsetof_calculation.patch"),
             Label("//third_party/patches/lz4:0004-svacer_fixes.patch"),
         ],
-        sha256 = "658ba6191fa44c92280d4aa2c271b0f4fbc0e34d249578dd05e50e76d0e5efcc",
-        strip_prefix = "lz4-1.9.2",
-        url = "https://github.com/lz4/lz4/archive/v1.9.2.tar.gz",
+        sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b",
+        strip_prefix = "lz4-1.10.0",
+        url = "https://github.com/lz4/lz4/archive/v1.10.0.tar.gz",
     )
 
     http_archive(
