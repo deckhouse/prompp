@@ -90,6 +90,10 @@ compact_samples_ts_offset ?= 1698395400012
 prom_scraper_file ?= performance_tests/test_data/extended-monitoring-exporter.metrics
 # stream_v_byte_values_count: how many values to generate for stream_v_byte benchmarks
 stream_v_byte_values_count ?= 1000
+# min_time: --benchmark_min_time, e.g. `1x` for one iteration or `0.5s`. Google
+# Benchmark otherwise picks an iteration count, which profiling runs need to cap.
+min_time ?=
+bench_all_min_time := $(if $(min_time),--benchmark_min_time=$(min_time),)
 # time_unit: ns | us | ms | s (default: ns)
 time_unit ?= ns
 bench_all_time_unit := $(if $(filter ns us ms s,$(time_unit)),$(time_unit),ns)
@@ -101,6 +105,7 @@ bench_all: ## Run all benchmarks (optional: repetitions=10, filter=.*, min=1, ti
 	@$(call bazel_build_march,native) benchmarks_all
 	@./bazel-bin/benchmarks_all \
 		--benchmark_repetitions=$(repetitions) \
+		$(bench_all_min_time) \
 		--benchmark_time_unit=$(bench_all_time_unit) \
 		--benchmark_filter='$(filter)' \
 		--benchmark_list_tests=$(bench_all_print_list) \
