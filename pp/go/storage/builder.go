@@ -25,15 +25,15 @@ import (
 // WalWriter
 //
 
-// defaultWalVersion is the WAL file format version written into each shard's WAL header
+// walVersion is the WAL file format version written into each shard's WAL header
 // (see [writer.WriteHeader] in Builder.createShardOnDisk). It must stay in sync with
 // defaultWalWriterCtor: ShardDataLoader picks its segment decoding path (loadSegments vs
 // loadSegmentsV2) based on this version byte, so it has to match the segment encoding the
 // active constructor actually produces. Defaults to V1; EnableWalWriterV2 switches both
 // together.
-var defaultWalVersion = uint8(wal.FileFormatVersion)
+var walVersion = uint8(wal.FileFormatVersion)
 
-// defaultWalWriterCtor builds the shard WAL segment writer used by Builder.createShardOnDisk.
+// walWriterCtor builds the shard WAL segment writer used by Builder.createShardOnDisk.
 // It is a process-global switch between the V1 (default) and V2 ([walWriterCtorV2]) segment
 // writer constructors, toggled at startup by EnableWalWriterV2 via the "enable_wal_writer_v2"
 // PROMPP_FEATURES flag.
@@ -42,7 +42,7 @@ var defaultWalVersion = uint8(wal.FileFormatVersion)
 // segment ID) and relies on the shared *writer.SegmentWriteNotifier passed in by the caller to
 // track, across all shards, the last segment durably synced to disk; it doesn't need a real
 // SegmentMarkup, since segment IDs aren't assigned or stored, so it passes writer.NoopSegmentMarkup{}.
-var defaultWalWriterCtor = func(
+var walWriterCtor = func(
 	shardID uint16,
 	shardFile *util.FileAppender,
 	swn *writer.SegmentWriteNotifier,
@@ -84,9 +84,9 @@ var walWriterCtorV2 = func(
 // Called once at startup when the "enable_wal_writer_v2" PROMPP_FEATURES flag is set; it does
 // not affect WAL files already written with the V1 format.
 func EnableWalWriterV2() {
-	defaultWalVersion = uint8(wal.FileFormatVersionV2)
+	walVersion = uint8(wal.FileFormatVersionV2)
 
-	defaultWalWriterCtor = walWriterCtorV2
+	walWriterCtor = walWriterCtorV2
 }
 
 //
@@ -225,12 +225,12 @@ func (b *Builder) createShardOnDisk(
 	// logShards is 0 for single encoder
 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
 
-	_, err = writer.WriteHeader(shardFile, defaultWalVersion, shardWalEncoder.Version())
+	_, err = writer.WriteHeader(shardFile, walVersion, shardWalEncoder.Version())
 	if err != nil {
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
-	sw, err := defaultWalWriterCtor(
+	sw, err := walWriterCtor(
 		shardID,
 		shardFile,
 		swn,
