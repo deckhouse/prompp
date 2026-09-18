@@ -125,6 +125,12 @@ func ReadPromPPFeatures(logger log.Logger, cfg FlagConfig) {
 				msgStr, "Skipping series with no samples instead of throwing an error is enabled.",
 			)
 
+		case "enable_wal_writer_v2":
+			storage.EnableWalWriterV2()
+			_ = level.Info(logger).Log(
+				msgStr, "Wal Writer V2 is enabled.",
+			)
+
 		default:
 			_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", strings.TrimSpace(fname))
 		}
