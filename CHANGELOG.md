@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.13 / 2026-09-18
+
+### Features
+1. **Series carrying a label set but no samples are now rejected while the protobuf is parsed.** The check already existed, but only fired later, when the series was added to the LSS during relabeling — a much heavier operation that takes locks and does extra bookkeeping for input that was going to be rejected anyway. `read_timeseries_label_set` / `Protobuf::parse_timeseries` now throw right away instead. The new opt-in `PROMPP_FEATURES=enable_skip_no_samples_series` flag silently skips such series instead of erroring, for clients known to send them legitimately (#506).
+2. **The WAL V2 segment format can now actually be turned on.** The format (per-segment embedded ID, decoded by `loadSegmentsV2`) already existed, but `createShardOnDisk` always wrote V1 regardless: the `enable_wal_writer_v2` `PROMPP_FEATURES` flag had nothing wired to it. Shard WAL headers and segments now go through a pair of process-global switches that `EnableWalWriterV2()` flips together, so the segment encoding and the header version tag stay consistent and replay picks the matching decoder (#510).
+
+### Fixes
+1. **Finalized chunks leaked when jemalloc arenas were enabled.** `FinalizedChunkList` took no `Reallocator` and always allocated through plain `malloc`/`free`, bypassing the arena, so the finalized chunks of a `DataStorage` with arenas enabled were never freed when it was destroyed. It now takes a `Reallocator`, matching `OutdatedChunk` (#508).
+2. **Series still receiving samples over remote write could be pruned from the LSS as inactive.** On the read-only transition path (`input_transition_relabeling_only_read`) a series found in the target LSS was not marked active, and the active-series bitset was not resized after an LSS copy, so a later prune before the fixed state could drop series that were in fact live. The path now marks found series active atomically, the copier resizes the bitset, and `prune_hidden_series_before_fixed_state` bounds itself by the next item index instead of the bitset size (#495).
+3. **LSS reallocations were lost when relabeling returned an error.** The `prompp_prometheus_per_goroutine_relabeler_*` bridge functions computed `build_deferred_indexes()` and `target_lss_has_reallocations` only on the success path inside the `try`, and the appender skipped `LSSResetSnapshot()` whenever relabeling failed. Since allocations can happen before relabeling aborts, this left the head's allocated-memory tracking and LSS snapshot out of sync with an LSS that had actually grown. Both now run unconditionally (#504).
+4. **Dependency security updates.** Bumped `google.golang.org/grpc` to v1.83.2, picking up the fix for CVE-2026-84445 — a request missing both the `:authority` and `Host` headers panics an xDS gRPC server, taking the whole process down (#502).
+
+### Other
+1. **`inline __attribute__((always_inline))` replaced with the `PROMPP_ALWAYS_INLINE` macro** throughout the C++ core (#496).
+2. **The web UI Jest suites are green again.** `@codemirror/state` 6.5.x pulls in `@marijn/find-cluster-break`, whose package `main` is ESM-only, which aborted every `codemirror-promql` suite under Jest; it is now mapped to the shipped CommonJS build. The legacy `react-app` — whose enzyme 3.11 stack is incompatible with current `cheerio` — was dropped from `make ui-test`, mirroring upstream; it is still built and linted. A `ui-tests` CI job runs the module suites (#469).
+
 ## v0.8.12 / 2026-09-07
 
 ### Fixes
