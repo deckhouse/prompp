@@ -41,9 +41,9 @@ RUN set -eux; \
     ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
     rm -rf /var/lib/apt/lists/*
 
-# Node.js 20 from NodeSource. Debian's own npm on trixie/sid is broken
+# Node.js 22 from NodeSource. Debian's own npm on trixie/sid is broken
 # ("LRU is not a constructor": npm's semver uses the system node-lru-cache v11).
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends nodejs; \
     rm -rf /var/lib/apt/lists/*
 
@@ -54,7 +54,7 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
-ARG GO_VERSION=1.26.5
+ARG GO_VERSION=1.26.8
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"
@@ -69,5 +69,3 @@ RUN go install golang.org/x/vuln/cmd/govulncheck@latest
 ARG GOYACC_VERSION=v0.6.0
 RUN go install golang.org/x/tools/cmd/goyacc@${GOYACC_VERSION}
 
-# minio for getting perf test data
-RUN wget -O /usr/local/bin/mcli "https://dl.min.io/client/mc/release/linux-${GO_ARCH}/mc" && chmod +x /usr/local/bin/mcli

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.14 / 2026-09-19
+
+### Fixes
+1. **Go updated to 1.26.8**, closing the seven standard-library advisories `govulncheck` reported against the 1.26.5 toolchain the release was built with: quadratic `resolvePath` in `net/url` (GO-2026-6218), JavaScript regexp context tracking in `html/template` (GO-2026-6091), unbounded post-handshake messages in `crypto/tls` (GO-2026-6090), `ReadHeaderTimeout` not applied to the unencrypted HTTP/2 check in `net/http` (GO-2026-6089), missing recursion depth guards in `encoding/xml` (GO-2026-6088) and `encoding/asn1` (GO-2026-5972), and a panic when parsing an invalid SVCB or HTTPS DNS record (GO-2026-5942). Both the CI image and the werf build pin the new version.
+2. **`sanitize-html` updated to 2.17.7 in the web UI**, picking up the fix for GHSA-g8qq-57p8-ggw5 — a stored XSS where an SVG SMIL URI-list attribute could bypass the scheme policy. The release requires Node 22.12 or newer, so the build toolchain moved from Node 20 to Node 22.
+
+### Other
+1. **The MinIO client is no longer installed into the CI image.** MinIO archived the open-source `mc` client and retired its download endpoint, which now answers `410 Gone`, so the step failed every build of the image from scratch. Nothing in the repository ever invoked `mcli` — it was only there to fetch performance-test data by hand.
+2. **Two advisories are now recorded as not applicable in `known_vulnerabilities.vex`.** The AWS S3 Crypto SDK issues GO-2022-0646 (CBC padding oracle) and GO-2022-0635 (in-band key negotiation) have no fixed version, and scanners match them on the `aws-sdk-go` module version alone. Prom++ uses that module only for service discovery — `service/ec2` and `service/lightsail` — so no S3 or client-side-encryption code is linked into the shipped binaries.
+
 ## v0.8.13 / 2026-09-18
 
 ### Features
