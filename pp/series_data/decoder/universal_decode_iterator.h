@@ -5,7 +5,6 @@
 #include "asc_integer.h"
 #include "asc_integer_then_values_gorilla.h"
 #include "constant.h"
-#include "gorilla.h"
 #include "two_double_constant.h"
 #include "values_gorilla.h"
 
@@ -19,7 +18,6 @@ class UniversalDecodeIterator {
     kAscInteger,
     kAscIntegerThenValuesGorilla,
     kValuesGorilla,
-    kGorilla,
   };
 
   DECODE_ITERATOR_TYPE_TRAITS();
@@ -41,7 +39,6 @@ class UniversalDecodeIterator {
   DEFINE_CONSTRUCTOR(AscIntegerDecodeIterator, asc_int, kAscInteger)
   DEFINE_CONSTRUCTOR(AscIntegerThenValuesGorillaDecodeIterator, asc_int_then_values, kAscIntegerThenValuesGorilla)
   DEFINE_CONSTRUCTOR(ValuesGorillaDecodeIterator, values_gorilla, kValuesGorilla)
-  DEFINE_CONSTRUCTOR(GorillaDecodeIterator, gorilla, kGorilla)
 
 #undef DEFINE_CONSTRUCTOR
 
@@ -67,12 +64,8 @@ class UniversalDecodeIterator {
         return std::forward<Visitor>(visitor)(iterator_.asc_int_then_values);
       }
 
-      case Type::kValuesGorilla: {
-        return std::forward<Visitor>(visitor)(iterator_.values_gorilla);
-      }
-
       default: {
-        return std::forward<Visitor>(visitor)(iterator_.gorilla);
+        return std::forward<Visitor>(visitor)(iterator_.values_gorilla);
       }
     }
   }
@@ -120,7 +113,6 @@ class UniversalDecodeIterator {
     AscIntegerDecodeIterator asc_int;
     AscIntegerThenValuesGorillaDecodeIterator asc_int_then_values;
     ValuesGorillaDecodeIterator values_gorilla;
-    GorillaDecodeIterator gorilla;
   } iterator_;
 
   Type type_;
