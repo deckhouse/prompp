@@ -36,30 +36,32 @@ func tree(node Node, level string) string {
 	}
 	typs := strings.Split(fmt.Sprintf("%T", node), ".")[1]
 
-	t := fmt.Sprintf("%s |---- %s :: %s\n", level, typs, node)
+	var t strings.Builder
+	fmt.Fprintf(&t, "%s |---- %s :: %s\n", level, typs, node)
 
 	level += " · · ·"
 
 	for _, e := range Children(node) {
-		t += tree(e, level)
+		t.WriteString(tree(e, level))
 	}
 
-	return t
+	return t.String()
 }
 
 func (node *EvalStmt) String() string {
 	return "EVAL " + node.Expr.String()
 }
 
-func (es Expressions) String() (s string) {
+func (es Expressions) String() string {
 	if len(es) == 0 {
 		return ""
 	}
+	var s strings.Builder
 	for _, e := range es {
-		s += e.String()
-		s += ", "
+		s.WriteString(e.String())
+		s.WriteString(", ")
 	}
-	return s[:len(s)-2]
+	return s.String()[:s.Len()-2]
 }
 
 func (node *AggregateExpr) String() string {

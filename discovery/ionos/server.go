@@ -117,7 +117,7 @@ func (d *serverDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, er
 			continue
 		}
 
-		addr := net.JoinHostPort(ips[0], strconv.FormatUint(uint64(d.port), 10))
+		addr := net.JoinHostPort(ips[0], strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 		labels := model.LabelSet{
 			model.AddressLabel:          model.LabelValue(addr),
 			serverAvailabilityZoneLabel: model.LabelValue(*server.Properties.AvailabilityZone),

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1538,7 +1539,7 @@ load 1ms
 	ref, err := app.Append(0, lblsneg, -1000000, 1000)
 	require.NoError(t, err)
 	for ts := int64(-1000000 + 1000); ts <= 0; ts += 1000 {
-		_, err := app.Append(ref, labels.EmptyLabels(), ts, -float64(ts/1000)+1)
+		_, err = app.Append(ref, labels.EmptyLabels(), ts, -float64(ts/1000)+1)
 		require.NoError(t, err)
 	}
 
@@ -3341,11 +3342,12 @@ func TestNativeHistogram_SubOperator(t *testing.T) {
 				}
 
 				// - operator.
-				queryString := fmt.Sprintf(`%s{idx="0"}`, seriesName)
+				var queryStringBuilder strings.Builder
+				fmt.Fprintf(&queryStringBuilder, `%s{idx="0"}`, seriesName)
 				for idx := 1; idx < len(c.histograms); idx++ {
-					queryString += fmt.Sprintf(` - ignoring(idx) %s{idx="%d"}`, seriesName, idx)
+					fmt.Fprintf(&queryStringBuilder, ` - ignoring(idx) %s{idx="%d"}`, seriesName, idx)
 				}
-				queryAndCheck(queryString, []promql.Sample{{T: ts, H: &c.expected, Metric: labels.EmptyLabels()}})
+				queryAndCheck(queryStringBuilder.String(), []promql.Sample{{T: ts, H: &c.expected, Metric: labels.EmptyLabels()}})
 			})
 		}
 		idx0++

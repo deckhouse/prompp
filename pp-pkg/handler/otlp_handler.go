@@ -23,7 +23,6 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/prometheus/prometheus/config"
-	prom_config "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/value"
 	ppmodel "github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -44,8 +43,11 @@ const (
 	pInfStr          = "+Inf"
 	quantileStr      = "quantile"
 	targetMetricName = "target_info"
+	logMsg           = "msg"
+	logErr           = "err"
 )
 
+// OTLPAlwaysCommit commit flags.
 var OTLPAlwaysCommit = true
 
 // OTLPWriteHandler handler for otlp data via remote write.
@@ -55,6 +57,7 @@ type OTLPWriteHandler struct {
 	states  *StatesStorage
 }
 
+// NewOTLPWriteHandler init new [OTLPWriteHandler].
 func NewOTLPWriteHandler(logger log.Logger, adapter Adapter) *OTLPWriteHandler {
 	return &OTLPWriteHandler{
 		logger:  logger,
@@ -70,23 +73,23 @@ func (h *OTLPWriteHandler) ApplyConfig(conf *config.Config) error {
 
 // ServeHTTP implementation http.Handler.
 func (h *OTLPWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	state, ok := h.states.GetStateByID(prom_config.TransparentRelabeler)
+	state, ok := h.states.GetStateByID(config.TransparentRelabeler)
 	if !ok {
-		level.Error(h.logger).Log("msg", "failed get state", "err", "unknown relabler id")
+		_ = level.Error(h.logger).Log(logMsg, "failed get state", logErr, "unknown relabler id")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
 	req, err := DecodeOTLPWriteRequest(r)
 	if err != nil {
-		level.Error(h.logger).Log("msg", "Error decoding remote write request", "err", err.Error())
+		_ = level.Error(h.logger).Log(logMsg, "Error decoding remote write request", logErr, err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	converter := NewPPConverter(h.logger, req.Metrics().MetricCount())
-	if convErr := converter.FromMetrics(req.Metrics()); convErr != nil {
-		level.Warn(h.logger).Log("msg", "Error translating OTLP metrics to Prometheus write request", "err", convErr)
+	if cErr := converter.FromMetrics(req.Metrics()); cErr != nil {
+		_ = level.Warn(h.logger).Log(logMsg, "Error translating OTLP metrics to Prometheus write request", logErr, cErr)
 	}
 
 	stats, err := h.adapter.AppendTimeSeries(
@@ -105,12 +108,12 @@ func (h *OTLPWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	default:
-		level.Error(h.logger).Log("msg", "Error appending remote write", "err", err.Error())
+		_ = level.Error(h.logger).Log(logMsg, "Error appending remote write", logErr, err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	level.Debug(h.logger).Log("msg", "append metrics", "stats", stats)
+	_ = level.Debug(h.logger).Log(logMsg, "append metrics", "stats", stats)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -163,7 +166,7 @@ func DecodeOTLPWriteRequest(r *http.Request) (pmetricotlp.ExportRequest, error) 
 
 	body, err := io.ReadAll(reader)
 	if err != nil {
-		r.Body.Close()
+		_ = r.Body.Close()
 		return pmetricotlp.NewExportRequest(), err
 	}
 	if err = r.Body.Close(); err != nil {
@@ -294,7 +297,7 @@ func (c *PPConverter) FromMetrics(md pmetric.Metrics) (errs error) {
 		c.addResourceTargetInfo(resource, mostRecentTimestamp)
 	}
 
-	return
+	return errs
 }
 
 // TimeSeries returns a slice of the ppmodel.TimeSeries that were converted from OTel format.
@@ -327,10 +330,10 @@ func (c *PPConverter) addGaugeNumberDataPoints(
 			name,
 		)
 		if err := validateOnEmptyLabel(labels); err != nil {
-			level.Warn(c.logger).Log(
-				"msg", "Gauge DataPoints contains an invalid labelset, is dropped",
+			_ = level.Warn(c.logger).Log(
+				logMsg, "Gauge DataPoints contains an invalid labelset, is dropped",
 				"labels", labels,
-				"err", err,
+				logErr, err,
 			)
 
 			continue
@@ -367,10 +370,10 @@ func (c *PPConverter) addSumNumberDataPoints(
 			name,
 		)
 		if err := validateOnEmptyLabel(lbls); err != nil {
-			level.Warn(c.logger).Log(
-				"msg", "Sum DataPoints contains an invalid labelset, is dropped",
+			_ = level.Warn(c.logger).Log(
+				logMsg, "Sum DataPoints contains an invalid labelset, is dropped",
 				"labels", lbls,
-				"err", err,
+				logErr, err,
 			)
 
 			continue
@@ -401,10 +404,10 @@ func (c *PPConverter) addHistogramDataPoints(
 		timestamp := convertTimeStamp(pt.Timestamp())
 		baseLabels := c.createAttributes(resource, pt.Attributes(), nil, false)
 		if err := validateOnEmptyLabel(baseLabels); err != nil {
-			level.Warn(c.logger).Log(
-				"msg", "Histogram DataPoints contains an invalid labelset, is dropped",
+			_ = level.Warn(c.logger).Log(
+				logMsg, "Histogram DataPoints contains an invalid labelset, is dropped",
 				"labels", baseLabels,
-				"err", err,
+				logErr, err,
 			)
 
 			continue
@@ -463,7 +466,7 @@ func (c *PPConverter) addHistogramDataPoints(
 }
 
 // addExponentialHistogramDataPoints add ExponentialHistogram DataPoints. NotNot implemented.
-func (c *PPConverter) addExponentialHistogramDataPoints(
+func (*PPConverter) addExponentialHistogramDataPoints(
 	_ pmetric.ExponentialHistogramDataPointSlice,
 	_ pcommon.Resource,
 	_ string,
@@ -483,10 +486,10 @@ func (c *PPConverter) addSummaryDataPoints(
 		timestamp := convertTimeStamp(pt.Timestamp())
 		baseLabels := c.createAttributes(resource, pt.Attributes(), nil, false)
 		if err := validateOnEmptyLabel(baseLabels); err != nil {
-			level.Warn(c.logger).Log(
-				"msg", "Summary DataPoints contains an invalid labelset, is dropped",
+			_ = level.Warn(c.logger).Log(
+				logMsg, "Summary DataPoints contains an invalid labelset, is dropped",
 				"labels", baseLabels,
-				"err", err,
+				logErr, err,
 			)
 
 			continue
@@ -555,10 +558,10 @@ func (c *PPConverter) addResourceTargetInfo(
 
 	labels := c.createAttributes(resource, attributes, identifyingAttrs, false, model.MetricNameLabel, targetMetricName)
 	if err := validateOnEmptyLabel(labels); err != nil {
-		level.Warn(c.logger).Log(
-			"msg", "target_info contains an invalid labelset, is dropped",
+		_ = level.Warn(c.logger).Log(
+			logMsg, "target_info contains an invalid labelset, is dropped",
 			"labels", labels,
-			"err", err,
+			logErr, err,
 		)
 
 		return
@@ -593,7 +596,7 @@ func (c *PPConverter) addTimeSeries(lbls ppmodel.LabelSet, v float64, ts int64) 
 		c.timeSeries,
 		ppmodel.TimeSeries{
 			LabelSet:  *c.getLabelSet(lbls),
-			Timestamp: uint64(ts),
+			Timestamp: uint64(ts), // #nosec G115 // no overflow
 			Value:     v,
 		},
 	)
@@ -682,15 +685,17 @@ func (c *PPConverter) createAttributes(
 		}
 		_, found := l[extras[i]]
 		if found && logOnOverwrite {
-			level.Info(c.logger).Log(
-				"msg", "label "+extras[i]+" is overwritten. Check if Prometheus reserved labels are used.",
+			_ = level.Info(c.logger).Log(
+				logMsg, "label "+extras[i]+" is overwritten. Check if Prometheus reserved labels are used.",
 			)
 		}
 		// internal labels should be maintained
 		name := extras[i]
-		if !(len(name) > 4 && name[:2] == "__" && name[len(name)-2:] == "__") {
+		//revive:disable-next-line:add-constant // not need const
+		if len(name) <= 4 || name[:2] != "__" || name[len(name)-2:] != "__" {
 			name = prometheustranslator.NormalizeLabel(name)
 		}
+		// #nosec G602 // i+1 is always within extras bounds due to the loop's early break above
 		l[name] = extras[i+1]
 	}
 
@@ -779,6 +784,7 @@ func createLabels(name string, baseLabels ppmodel.LabelSet, extras ...string) pp
 	n := len(extras)
 	n -= n % 2
 	for extrasIdx := 0; extrasIdx < n; extrasIdx += 2 {
+		// #nosec G602 // i+1 is always within extras bounds due to the loop's early break above
 		builder.Set(extras[extrasIdx], extras[extrasIdx+1])
 	}
 

@@ -77,7 +77,7 @@ func createFlagRow(flag *kingpin.FlagModel) []string {
 	}
 
 	valueType := reflect.TypeOf(flag.Value)
-	if valueType.Kind() == reflect.Ptr {
+	if valueType.Kind() == reflect.Pointer {
 		valueType = valueType.Elem()
 	}
 	if valueType.Kind() == reflect.Struct {
@@ -172,13 +172,13 @@ func writeTable(writer io.Writer, data [][]string, header string) error {
 
 	buf := bytes.NewBuffer(nil)
 
-	buf.WriteString(fmt.Sprintf("\n\n%s\n\n", header))
+	fmt.Fprintf(buf, "\n\n%s\n\n", header)
 	columnsToRender := determineColumnsToRender(data)
 
 	headers := data[0]
 	buf.WriteString("|")
 	for _, j := range columnsToRender {
-		buf.WriteString(fmt.Sprintf(" %s |", headers[j]))
+		fmt.Fprintf(buf, " %s |", headers[j])
 	}
 	buf.WriteString("\n")
 
@@ -192,7 +192,7 @@ func writeTable(writer io.Writer, data [][]string, header string) error {
 		row := data[i]
 		buf.WriteString("|")
 		for _, j := range columnsToRender {
-			buf.WriteString(fmt.Sprintf(" %s |", row[j]))
+			fmt.Fprintf(buf, " %s |", row[j])
 		}
 		buf.WriteString("\n")
 	}
@@ -243,7 +243,7 @@ func writeSubcommands(writer io.Writer, level int, modelName string, commands []
 			help = cmd.HelpLong
 		}
 		help = formatHyphenatedWords(help)
-		if _, err := writer.Write([]byte(fmt.Sprintf("\n\n%s `%s %s`\n\n%s\n\n", strings.Repeat("#", level+1), modelName, cmd.FullCommand, help))); err != nil {
+		if _, err := fmt.Fprintf(writer, "\n\n%s `%s %s`\n\n%s\n\n", strings.Repeat("#", level+1), modelName, cmd.FullCommand, help); err != nil {
 			return err
 		}
 

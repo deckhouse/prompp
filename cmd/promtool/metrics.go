@@ -79,7 +79,7 @@ func PushMetrics(url *url.URL, roundTripper http.RoundTripper, headers map[strin
 	}
 
 	for _, file := range files {
-		data, err = os.ReadFile(file)
+		data, err = os.ReadFile(file) // #nosec G304 // it's meant to be that way
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "  FAILED:", err)
 			failed = true

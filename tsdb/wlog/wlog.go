@@ -123,7 +123,7 @@ func (e *CorruptionErr) Unwrap() error {
 // OpenWriteSegment opens segment k in dir. The returned segment is ready for new appends.
 func OpenWriteSegment(logger log.Logger, dir string, k int) (*Segment, error) {
 	segName := SegmentName(dir, k)
-	f, err := os.OpenFile(segName, os.O_WRONLY|os.O_APPEND, 0o666)
+	f, err := os.OpenFile(segName, os.O_WRONLY|os.O_APPEND, 0o666) // #nosec G304 G302 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func OpenWriteSegment(logger log.Logger, dir string, k int) (*Segment, error) {
 
 // CreateSegment creates a new segment k in dir.
 func CreateSegment(dir string, k int) (*Segment, error) {
-	f, err := os.OpenFile(SegmentName(dir, k), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o666)
+	f, err := os.OpenFile(SegmentName(dir, k), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o666) // #nosec G302 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func OpenReadSegment(fn string) (*Segment, error) {
 	if err != nil {
 		return nil, errors.New("not a valid filename")
 	}
-	f, err := os.Open(fn)
+	f, err := os.Open(fn) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func NewSize(logger log.Logger, reg prometheus.Registerer, dir string, segmentSi
 	if segmentSize%pageSize != 0 {
 		return nil, errors.New("invalid segment size")
 	}
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 G703 // this is meant to be that way
 		return nil, fmt.Errorf("create dir: %w", err)
 	}
 	if logger == nil {
@@ -459,14 +459,14 @@ func (w *WL) Repair(origErr error) error {
 			// close it first (Windows!). Can be closed safely
 			// as we set the current segment to repaired file
 			// below.
-			if err := w.segment.Close(); err != nil {
+			if err = w.segment.Close(); err != nil {
 				return fmt.Errorf("close active segment: %w", err)
 			}
 		}
 		if s.index <= cerr.Segment {
 			continue
 		}
-		if err := os.Remove(filepath.Join(w.Dir(), s.name)); err != nil {
+		if err = os.Remove(filepath.Join(w.Dir(), s.name)); err != nil { // #nosec G703 // it's meant to be that way
 			return fmt.Errorf("delete segment:%v: %w", s.index, err)
 		}
 	}
@@ -478,7 +478,7 @@ func (w *WL) Repair(origErr error) error {
 	fn := SegmentName(w.Dir(), cerr.Segment)
 	tmpfn := fn + ".repair"
 
-	if err := fileutil.Rename(fn, tmpfn); err != nil {
+	if err = fileutil.Rename(fn, tmpfn); err != nil {
 		return err
 	}
 	// Create a clean segment and make it the active one.
@@ -486,11 +486,11 @@ func (w *WL) Repair(origErr error) error {
 	if err != nil {
 		return err
 	}
-	if err := w.setSegment(s); err != nil {
+	if err = w.setSegment(s); err != nil {
 		return err
 	}
 
-	f, err := os.Open(tmpfn)
+	f, err := os.Open(tmpfn) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return fmt.Errorf("open segment: %w", err)
 	}
@@ -503,24 +503,24 @@ func (w *WL) Repair(origErr error) error {
 		if r.Offset() >= cerr.Offset {
 			break
 		}
-		if err := w.Log(r.Record()); err != nil {
+		if err = w.Log(r.Record()); err != nil {
 			return fmt.Errorf("insert record: %w", err)
 		}
 	}
 	// We expect an error here from r.Err(), so nothing to handle.
 
 	// We need to pad to the end of the last page in the repaired segment
-	if err := w.flushPage(true); err != nil {
+	if err = w.flushPage(true); err != nil {
 		return fmt.Errorf("flush page in repair: %w", err)
 	}
 
 	// We explicitly close even when there is a defer for Windows to be
 	// able to delete it. The defer is in place to close it in-case there
 	// are errors above.
-	if err := f.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return fmt.Errorf("close corrupted file: %w", err)
 	}
-	if err := os.Remove(tmpfn); err != nil {
+	if err = os.Remove(tmpfn); err != nil {
 		return fmt.Errorf("delete corrupted segment: %w", err)
 	}
 
@@ -773,16 +773,17 @@ func (w *WL) log(rec []byte, final bool) error {
 			typ = recMiddle
 		}
 		if compressed {
-			if w.compress == CompressionSnappy {
+			switch w.compress {
+			case CompressionSnappy:
 				typ |= snappyMask
-			} else if w.compress == CompressionZstd {
+			case CompressionZstd:
 				typ |= zstdMask
 			}
 		}
 
 		buf[0] = byte(typ)
 		crc := crc32.Checksum(part, castagnoliTable)
-		binary.BigEndian.PutUint16(buf[1:], uint16(len(part)))
+		binary.BigEndian.PutUint16(buf[1:], uint16(len(part))) // #nosec G115 // no overflow
 		binary.BigEndian.PutUint32(buf[3:], crc)
 
 		copy(buf[recordHeaderSize:], part)
@@ -880,7 +881,7 @@ func (w *WL) Close() (err error) {
 	// We must not flush an empty page as it would falsely signal
 	// the segment is done if we start writing to it again after opening.
 	if w.page.alloc > 0 {
-		if err := w.flushPage(true); err != nil {
+		if err = w.flushPage(true); err != nil {
 			return err
 		}
 	}

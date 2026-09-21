@@ -115,7 +115,7 @@ func (d *dedicatedServerDiscovery) refresh(context.Context) ([]*targetgroup.Grou
 	for _, dedicatedServerName := range dedicatedServerList {
 		dedicatedServer, err := getDedicatedServerDetails(client, dedicatedServerName)
 		if err != nil {
-			err := level.Warn(d.logger).Log("msg", fmt.Sprintf("%s: Could not get details of %s", d.getSource(), dedicatedServerName), "err", err.Error())
+			err = level.Warn(d.logger).Log("msg", fmt.Sprintf("%s: Could not get details of %s", d.getSource(), dedicatedServerName), "err", err.Error())
 			if err != nil {
 				return nil, err
 			}
