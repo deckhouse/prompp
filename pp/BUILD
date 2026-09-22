@@ -314,24 +314,6 @@ cc_library(
 )
 
 cc_library(
-    name = "integration_tests_headers",
-    hdrs = glob(["integration_tests/*.h"]),
-    deps = [
-        ":primitives",
-        "@gtest//:gtest_main",
-    ],
-)
-
-cc_binary(
-    name = "integration_tests",
-    srcs = glob(["integration_tests/*.cpp"]),
-    malloc = "@jemalloc",
-    deps = [
-        ":integration_tests_headers",
-    ],
-)
-
-cc_library(
     name = "series_index",
     hdrs = glob(["series_index/**/*.h"]),
     deps = [
