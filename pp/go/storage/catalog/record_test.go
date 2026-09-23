@@ -124,3 +124,49 @@ func (s *RecordSuite) TestSetLastSegmentIDLess() {
 
 	s.Require().Equal(sid+1, r.NextSegmentID())
 }
+
+func (s *RecordSuite) TestSetLastAppendedSegmentIDSetsNumberOfSegments() {
+	// Arrange
+	r := catalog.NewEmptyRecord()
+
+	// Act
+	r.SetLastAppendedSegmentID(4)
+
+	// Assert
+	s.Equal(uint32(5), r.NumberOfSegments())
+}
+
+func (s *RecordSuite) TestSetNumberOfSegmentsSetsLastAppendedSegmentID() {
+	// Arrange
+	r := catalog.NewEmptyRecord()
+
+	// Act
+	r.SetNumberOfSegments(5)
+
+	// Assert
+	s.Require().NotNil(r.LastAppendedSegmentID())
+	s.Equal(uint32(4), *r.LastAppendedSegmentID())
+}
+
+func (s *RecordSuite) TestSetZeroNumberOfSegmentsResetsLastAppendedSegmentID() {
+	// Arrange
+	r := catalog.NewEmptyRecord()
+	r.SetLastAppendedSegmentID(4)
+
+	// Act
+	r.SetNumberOfSegments(0)
+
+	// Assert
+	s.Nil(r.LastAppendedSegmentID())
+}
+
+func (s *RecordSuite) TestEmptyRecordHasNoTimeBounds() {
+	// Arrange
+	r := catalog.NewEmptyRecord()
+
+	// Act
+	hasTimeBounds := r.HasTimeBounds()
+
+	// Assert
+	s.False(hasTimeBounds)
+}

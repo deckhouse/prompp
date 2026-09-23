@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 	"time"
@@ -663,6 +664,158 @@ func (s *CatalogSuite) TestSetStatus_WriteError() {
 	s.Require().ErrorIs(err, expectedError)
 	s.Require().ErrorContains(err, "log write:")
 	s.Require().Equal(catalog.StatusNew, c.List(nil, nil)[0].Status())
+}
+
+func (s *CatalogSuite) TestCreate_UnknownTimeBounds() {
+	// Arrange
+	l := &LogMock{
+		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:  func() int { return 42 },
+		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+	}
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	// Act
+	r, err := c.Create(2)
+
+	// Assert
+	s.Require().NoError(err)
+	s.False(r.HasTimeBounds())
+	s.Equal(r.CreatedAt(), r.RetentionTimestamp())
+}
+
+func (s *CatalogSuite) TestSetTimeBounds() {
+	// Arrange
+	l := &LogMock{
+		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:  func() int { return 42 },
+		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+	}
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	r, err := c.Create(2)
+	s.Require().NoError(err)
+
+	// Act
+	_, err = c.SetTimeBounds(r.ID(), 10, 20)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(l.WriteCalls(), 2)
+	s.Equal(catalog.StatusNew, r.Status())
+	s.True(r.HasTimeBounds())
+	s.Equal(int64(10), r.Mint())
+	s.Equal(int64(20), r.Maxt())
+	s.Equal(int64(20), r.RetentionTimestamp())
+}
+
+func (s *CatalogSuite) TestSetTimeBounds_SameBoundsNoSecondWrite() {
+	// Arrange
+	l := &LogMock{
+		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:  func() int { return 42 },
+		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+	}
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	r, err := c.Create(2)
+	s.Require().NoError(err)
+
+	_, err = c.SetTimeBounds(r.ID(), 10, 20)
+	s.Require().NoError(err)
+
+	// Act
+	_, err = c.SetTimeBounds(r.ID(), 10, 20)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(l.WriteCalls(), 2)
+}
+
+func (s *CatalogSuite) TestSetTimeBounds_NotFound() {
+	// Arrange
+	l := &LogMock{
+		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc: func() int { return 42 },
+	}
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	// Act
+	nilID := uuid.Nil.String()
+	_, err = c.SetTimeBounds(nilID, 10, 20)
+
+	// Assert
+	s.Require().ErrorContains(err, "not found: "+nilID)
+}
+
+func (s *CatalogSuite) TestSetStatusWithTimeBounds_WriteError() {
+	// Arrange
+	l := &LogMock{
+		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:  func() int { return 42 },
+		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+	}
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	r, err := c.Create(2)
+	s.Require().NoError(err)
+
+	expectedError := errors.New("write failed")
+	l.WriteFunc = func(*catalog.SerializedRecord) error { return expectedError }
+
+	// Act
+	_, err = c.SetStatusWithTimeBounds(r.ID(), catalog.StatusRotated, 10, 20)
+
+	// Assert
+	s.Require().ErrorIs(err, expectedError)
+	s.Equal(catalog.StatusNew, r.Status())
+	s.False(r.HasTimeBounds())
+}
+
+func (s *CatalogSuite) TestSetStatusWithTimeBounds_KeptAfterReopenLogV3() {
+	// Arrange
+	logFileName := filepath.Join(s.T().TempDir(), "head.log")
+	l, err := catalog.NewFileLogV3(logFileName)
+	s.Require().NoError(err)
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	r, err := c.Create(2)
+	s.Require().NoError(err)
+	r.SetLastAppendedSegmentID(4)
+
+	_, err = c.SetStatusWithTimeBounds(r.ID(), catalog.StatusRotated, 10, 20)
+	s.Require().NoError(err)
+	s.Require().NoError(l.Close())
+
+	// Act
+	l, err = catalog.NewFileLogV3(logFileName)
+	s.Require().NoError(err)
+	defer func() { _ = l.Close() }()
+
+	c, err = catalog.New(s.clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	// Assert
+	restored, err := c.Get(r.ID())
+	s.Require().NoError(err)
+	s.Equal(catalog.StatusRotated, restored.Status())
+	s.Equal(int64(10), restored.Mint())
+	s.Equal(int64(20), restored.Maxt())
+	s.Equal(uint32(5), restored.NumberOfSegments())
+	s.Require().NotNil(restored.LastAppendedSegmentID())
+	s.Equal(uint32(4), *restored.LastAppendedSegmentID())
 }
 
 func (s *CatalogSuite) TestCompact_RemovesDeletedFromRewriteAndSortsByCreatedAt() {

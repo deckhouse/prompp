@@ -281,7 +281,46 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 		return nil, fmt.Errorf(notFoundErr, id)
 	}
 
-	if r.status == status {
+	return c.setStatusWithTimeBounds(r, status, r.mint, r.maxt)
+}
+
+// SetStatusWithTimeBounds set status and time bounds of the [Head] data for ID and returns [Record] if exist.
+func (c *Catalog) SetStatusWithTimeBounds(id string, status Status, mint, maxt int64) (_ *Record, err error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf(compactErr, err)
+	}
+
+	r, ok := c.records[id]
+	if !ok {
+		return nil, fmt.Errorf(notFoundErr, id)
+	}
+
+	return c.setStatusWithTimeBounds(r, status, mint, maxt)
+}
+
+// SetTimeBounds set time bounds of the [Head] data for ID and returns [Record] if exist.
+func (c *Catalog) SetTimeBounds(id string, mint, maxt int64) (_ *Record, err error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf(compactErr, err)
+	}
+
+	r, ok := c.records[id]
+	if !ok {
+		return nil, fmt.Errorf(notFoundErr, id)
+	}
+
+	return c.setStatusWithTimeBounds(r, r.status, mint, maxt)
+}
+
+// setStatusWithTimeBounds set status and time bounds for [Record] and write changes to [Log].
+func (c *Catalog) setStatusWithTimeBounds(r *Record, status Status, mint, maxt int64) (_ *Record, err error) {
+	if r.status == status && r.mint == mint && r.maxt == maxt {
 		if status == StatusActive {
 			c.activeHeadCreatedAt.Set(float64(r.createdAt))
 		}
@@ -291,6 +330,8 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.status = status
+	changed.mint = mint
+	changed.maxt = maxt
 	changed.updatedAt = c.clock.Now().UnixMilli()
 
 	if err = c.log.Write(changed); err != nil {
@@ -298,7 +339,7 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 	}
 
 	applyRecordChanges(r, changed)
-	c.records[id] = r
+	c.records[r.id.String()] = r
 
 	if status == StatusActive {
 		c.activeHeadCreatedAt.Set(float64(r.createdAt))

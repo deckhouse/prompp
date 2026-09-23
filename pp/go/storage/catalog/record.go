@@ -78,6 +78,10 @@ type Record struct {
 // NewEmptyRecord init new empty [Record].
 func NewEmptyRecord() *Record {
 	return &Record{
+		SerializedRecord: SerializedRecord{
+			mint: math.MaxInt64,
+			maxt: math.MinInt64,
+		},
 		lastSegmentID:   math.MaxUint32,
 		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
 		segmentsLock:    &sync.RWMutex{},
@@ -106,6 +110,9 @@ func NewRecordWithData(
 			corrupted:             corrupted,
 			status:                status,
 			lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
+			numberOfSegments:      numberOfSegmentsByLastAppendedSegmentID(lastAppendedSegmentID),
+			mint:                  math.MaxInt64,
+			maxt:                  math.MinInt64,
 		},
 		referenceCount: referenceCount,
 		// marking up through segment IDs by shards
@@ -130,16 +137,17 @@ func NewRecordWithDataV3(
 ) *Record {
 	return &Record{
 		SerializedRecord: SerializedRecord{
-			id:               id,
-			numberOfShards:   numberOfShards,
-			createdAt:        createdAt,
-			updatedAt:        updatedAt,
-			deletedAt:        deletedAt,
-			corrupted:        corrupted,
-			status:           status,
-			numberOfSegments: numberOfSegments,
-			mint:             mint,
-			maxt:             maxt,
+			id:                    id,
+			numberOfShards:        numberOfShards,
+			createdAt:             createdAt,
+			updatedAt:             updatedAt,
+			deletedAt:             deletedAt,
+			corrupted:             corrupted,
+			status:                status,
+			numberOfSegments:      numberOfSegments,
+			lastAppendedSegmentID: lastAppendedSegmentIDByNumberOfSegments(numberOfSegments),
+			mint:                  mint,
+			maxt:                  maxt,
 		},
 		// marking up through segment IDs by shards
 		lastSegmentID:   math.MaxUint32,
@@ -196,6 +204,11 @@ func (r *Record) GetShardBySegmentID(sid uint32) uint16 {
 	}
 
 	return math.MaxUint16
+}
+
+// HasTimeBounds returns true if the time bounds of the [Head] data are known.
+func (r *Record) HasTimeBounds() bool {
+	return r.mint <= r.maxt
 }
 
 // ID returns id of [Head].
@@ -255,14 +268,30 @@ func (r *Record) ReferenceCount() int64 {
 	return atomic.LoadInt64(&r.referenceCount)
 }
 
-// SetLastAppendedSegmentID set last appended segment id.
-func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
-	r.lastAppendedSegmentID.Set(segmentID)
+// RetentionTimestamp returns the timestamp from which the retention of the [Head] is counted:
+// the max timestamp of the data if the time bounds are known, otherwise the creation time.
+func (r *Record) RetentionTimestamp() int64 {
+	if r.HasTimeBounds() {
+		return r.maxt
+	}
+
+	return r.createdAt
 }
 
-// SetNumberOfSegments number of segments in [Head].
+// SetLastAppendedSegmentID set last appended segment id, keeps the number of segments in sync.
+//
+//go:norace
+func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
+	r.lastAppendedSegmentID.Set(segmentID)
+	r.numberOfSegments = segmentID + 1
+}
+
+// SetNumberOfSegments number of segments in [Head], keeps the last appended segment id in sync.
+//
+//go:norace
 func (r *Record) SetNumberOfSegments(numberOfSegments uint32) {
 	r.numberOfSegments = numberOfSegments
+	r.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(numberOfSegments)
 }
 
 // SetLastSegmentID set last through ID for the segment, if sid more current.
@@ -320,6 +349,25 @@ func applyRecordChanges(r *Record, changed *SerializedRecord) {
 	r.numberOfShards = changed.numberOfShards
 	r.mint = changed.mint
 	r.maxt = changed.maxt
+}
+
+// lastAppendedSegmentIDByNumberOfSegments converts the number of segments to the last appended segment id.
+func lastAppendedSegmentIDByNumberOfSegments(numberOfSegments uint32) optional.Optional[uint32] {
+	var lastAppendedSegmentID optional.Optional[uint32]
+	if numberOfSegments > 0 {
+		lastAppendedSegmentID.Set(numberOfSegments - 1)
+	}
+
+	return lastAppendedSegmentID
+}
+
+// numberOfSegmentsByLastAppendedSegmentID converts the last appended segment id to the number of segments.
+func numberOfSegmentsByLastAppendedSegmentID(lastAppendedSegmentID *uint32) uint32 {
+	if lastAppendedSegmentID == nil {
+		return 0
+	}
+
+	return *lastAppendedSegmentID + 1
 }
 
 // LessByUpdateAt less [Record] by UpdateAt.

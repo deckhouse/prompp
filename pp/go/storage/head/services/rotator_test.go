@@ -150,7 +150,7 @@ func (s *RotatorSuite) TestRotate() {
 	cfg := &mock.RotatorConfigMock{NumberOfShardsFunc: func() uint16 { return shardsCount }}
 	headInformer := &mock.HeadInformerMock{
 		SetActiveStatusFunc:  func(string) error { return nil },
-		SetRotatedStatusFunc: func(string) error { return nil },
+		SetRotatedStatusFunc: func(string, cppbridge.TimeInterval) error { return nil },
 		CreatedAtFunc:        func(string) time.Duration { return time.Duration(time.Now().UnixMilli()) },
 	}
 
@@ -216,6 +216,7 @@ func (s *RotatorSuite) TestRotate() {
 		s.Len(rHeads, 1)
 		s.Equal(s.nameIDGenerator(rotatedCounter-1), rHeads[0].ID())
 		s.Equal(headInformer.SetRotatedStatusCalls()[0].HeadID, rHeads[0].ID())
+		s.Equal(services.HeadTimeInterval(rHeads[0]), headInformer.SetRotatedStatusCalls()[0].TimeInterval)
 		s.True(rHeads[0].IsReadOnly())
 	})
 }
@@ -264,7 +265,7 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 	cfg := &mock.RotatorConfigMock{NumberOfShardsFunc: func() uint16 { return shardsCount }}
 	headInformer := &mock.HeadInformerMock{
 		SetActiveStatusFunc:  func(string) error { return nil },
-		SetRotatedStatusFunc: func(string) error { return nil },
+		SetRotatedStatusFunc: func(string, cppbridge.TimeInterval) error { return nil },
 		CreatedAtFunc:        func(string) time.Duration { return time.Duration(time.Now().UnixMilli()) },
 	}
 

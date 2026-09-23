@@ -3,6 +3,8 @@ package services
 import (
 	"errors"
 	"fmt"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 const (
@@ -125,4 +127,24 @@ func MergeOutOfOrderChunksWithHead[
 	h.Enqueue(t)
 
 	return t.Wait()
+}
+
+//
+// HeadTimeInterval
+//
+
+// HeadTimeInterval returns the time interval of the [Head] data across all shards,
+// the interval is invalid if the [Head] has no data.
+func HeadTimeInterval[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) cppbridge.TimeInterval {
+	timeInterval := cppbridge.NewInvalidTimeInterval()
+	for shard := range h.RangeShards() {
+		interval := shard.TimeInterval(false)
+		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
+		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
+	}
+
+	return timeInterval
 }

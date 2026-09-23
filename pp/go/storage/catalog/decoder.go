@@ -141,6 +141,7 @@ func (DecoderV2) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) 
 	if err = decodeOptionalValue(rReader, binary.LittleEndian, &sr.lastAppendedSegmentID); err != nil {
 		return fmt.Errorf("read last written segment id: %w", err)
 	}
+	sr.numberOfSegments = numberOfSegmentsByLastAppendedSegmentID(sr.lastAppendedSegmentID.RawValue())
 
 	return nil
 }
@@ -257,6 +258,7 @@ func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err erro
 	d.offset++
 
 	sr.numberOfSegments = binary.LittleEndian.Uint32(d.buffer[d.offset:])
+	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
 	d.offset += sizeOfUint32
 
 	sr.mint = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow

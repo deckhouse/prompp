@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
 var (
@@ -208,22 +208,17 @@ func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
 // MigrationV3 migrates record from v2 to v3 and vice versa.
 type MigrationV3 struct{}
 
-// Up migrates from v2 to v3.
+// Up migrates from v2 to v3. The time bounds are unknown in v2, so they are marked as unknown.
 func (MigrationV3) Up(sr *SerializedRecord) *SerializedRecord {
-	sr.numberOfSegments = 0
-	if !sr.lastAppendedSegmentID.IsNil() {
-		sr.numberOfSegments = sr.lastAppendedSegmentID.Value() + 1
-	}
+	sr.numberOfSegments = numberOfSegmentsByLastAppendedSegmentID(sr.lastAppendedSegmentID.RawValue())
+	sr.mint = math.MaxInt64
+	sr.maxt = math.MinInt64
 	return sr
 }
 
 // Down migrates from v3 to v2.
 func (MigrationV3) Down(sr *SerializedRecord) *SerializedRecord {
-	if sr.numberOfSegments > 0 {
-		sr.lastAppendedSegmentID.Set(sr.numberOfSegments - 1)
-	} else {
-		sr.lastAppendedSegmentID = optional.WithRawValue[uint32](nil)
-	}
+	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
 	return sr
 }
 

@@ -60,7 +60,7 @@ func (cmd *cmdWALPPToBlock) Do(
 	}
 
 	level.Debug(logger).Log("msg", "read file log")
-	fileLog, err := catalog.NewFileLogV2(filepath.Join(workingDir, "head.log"))
+	fileLog, err := catalog.NewFileLogV3(filepath.Join(workingDir, "head.log"))
 	if err != nil {
 		return fmt.Errorf("failed init file log reader: %w", err)
 	}
