@@ -16,6 +16,7 @@ package cppbridge
 // #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
+
 import (
 	"runtime"
 	"time"
@@ -421,6 +422,11 @@ type FeatureFlags struct {
 // DisableScraperFullUTF8 selects legacy per-token UTF-8 validation.
 func (f *FeatureFlags) DisableScraperFullUTF8() {
 	f.features.scraper_validate_utf_per_token = true
+}
+
+// SkipNoSamplesSeries hashdex skip no samples series.
+func (f *FeatureFlags) SkipNoSamplesSeries() {
+	f.features.skip_no_samples_series = true
 }
 
 // InitializeFeatureFlags configures C++ features once at startup.
@@ -3255,8 +3261,8 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
-// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
-func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+// headWalEncoderWrittenSeriesIDSentinel returns max item index written to WAL.
+func headWalEncoderWrittenSeriesIDSentinel(encoder uintptr) uint32 {
 	args := struct {
 		encoder uintptr
 	}{encoder}
@@ -3266,7 +3272,7 @@ func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_head_wal_encoder_max_written_item_index,
+		C.prompp_head_wal_encoder_written_series_id_sentinel,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

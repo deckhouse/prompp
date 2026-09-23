@@ -105,6 +105,7 @@ cc_test(
     srcs = glob(["prometheus/**/*_tests.cpp"]),
     deps = [
         ":prometheus",
+        ":series_index",
         "@gtest//:gtest_main",
         "@roaring",
     ],

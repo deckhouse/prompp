@@ -34,7 +34,7 @@ shell:
 ---
 image: prompp-src-artifact
 fromCacheVersion: "2025-03-31-12"
-from: golang:1.26.5-alpine3.23
+from: golang:1.26.8-alpine3.23
 final: false
 git:
   - add: /
@@ -44,7 +44,7 @@ git:
     tag: v0.17.0
 ---
 image: promu-artifact
-from: golang:1.26.5-alpine3.23
+from: golang:1.26.8-alpine3.23
 final: false
 git:
   - url: https://github.com/prometheus/promu.git
@@ -100,7 +100,7 @@ import:
 shell:
   beforeInstall:
     - apt update && apt install -y git bash gcc g++ curl ca-certificates
-    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     - apt install -y nodejs
   install:
     - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" }}

@@ -22,6 +22,7 @@
 
 typedef struct {
   bool scraper_validate_utf_per_token;
+  bool skip_no_samples_series;
 } PromppFeatures;
 #ifdef __cplusplus
 extern "C" {
@@ -250,16 +251,16 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
 void prompp_head_wal_encoder_finalize(void* args, void* res);
 
 /**
- * @brief Exclusive upper bound of series item indices written to WAL.
+ * @brief Series id sentinel written to WAL.
  *
  * @param args {
  *     encoder uintptr // pointer to constructed encoder
  * }
  * @param res {
- *     max_written_item_index uint32
+ *     written_series_id_sentinel uint32
  * }
  */
-void prompp_head_wal_encoder_max_written_item_index(void* args, void* res);
+void prompp_head_wal_encoder_written_series_id_sentinel(void* args, void* res);
 
 /**
  * @brief Construct a new Head WAL Decoder
