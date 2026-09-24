@@ -53,25 +53,25 @@ class SortingIndexBuilder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return index_.index.empty(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return index_.index.allocated_memory(); }
 
-  PROMPP_ALWAYS_INLINE void build(uint32_t ls_id_count) {
+  PROMPP_ALWAYS_INLINE void build(uint32_t ls_id_bound) {
     if (empty()) {
-      rebuild(ls_id_count);
+      rebuild(ls_id_bound);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void rebuild(uint32_t ls_id_count) {
+  PROMPP_ALWAYS_INLINE void rebuild(uint32_t ls_id_bound) {
     if (ls_id_set_.empty()) {
       index_.index.clear();
       return;
     }
 
-    index_.index.resize(ls_id_count);
+    index_.index.resize(ls_id_bound);
     std::memset(index_.index.data(), 0, index_.index.size() * sizeof(uint32_t));
 
     const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
     uint32_t index_value = 0;
     for (auto ls_id : ls_id_set_) {
-      assert(static_cast<uint32_t>(ls_id) < ls_id_count);
+      assert(static_cast<uint32_t>(ls_id) < ls_id_bound);
       index_value += step;
       index_.index[static_cast<uint32_t>(ls_id)] = index_value;
     }
@@ -95,8 +95,8 @@ class SortingIndexBuilder {
   }
 
   template <class Iterator>
-  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end, uint32_t ls_id_count) noexcept {
-    build(ls_id_count);
+  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end, uint32_t ls_id_bound) noexcept {
+    build(ls_id_bound);
     index_.sort(begin, end);
   }
 
