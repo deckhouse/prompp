@@ -4,7 +4,6 @@
 
 #include "entrypoint/types/data_storage.h"
 #include "entrypoint/types/exception.h"
-#include "entrypoint/types/hashdex.h"
 #include "entrypoint/types/lss.h"
 #include "primitives/go_slice.h"
 #include "series_data/encoder.h"

@@ -2,9 +2,7 @@
 
 #include <chrono>
 
-#include "bare_bones/lz4_stream.h"
 #include "log.h"
-#include "primitives/primitives.h"
 #include "wal/wal.h"
 
 using namespace PromPP;  // NOLINT

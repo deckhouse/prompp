@@ -6,8 +6,6 @@
 #include "bare_bones/vector.h"
 #include "performance_tests/dummy_wal.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
-#include "wal/wal.h"
 
 namespace performance_tests::series_index {
 
