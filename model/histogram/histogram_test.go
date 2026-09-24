@@ -1290,6 +1290,44 @@ func TestHistogramCompact(t *testing.T) {
 				CustomValues:    []float64{5, 10, 15, 20},
 			},
 		},
+		{
+			"leave untouched if all spans are zero-length but buckets exist",
+			&Histogram{
+				PositiveSpans:   []Span{{0, 0}, {0, 0}},
+				PositiveBuckets: []int64{24, 24, 24},
+				NegativeSpans:   []Span{{0, 0}},
+			},
+			0,
+			&Histogram{
+				PositiveSpans:   []Span{{0, 0}, {0, 0}},
+				PositiveBuckets: []int64{24, 24, 24},
+				NegativeSpans:   []Span{},
+			},
+		},
+		{
+			"leave untouched if spans need fewer buckets than exist",
+			&Histogram{
+				PositiveSpans:   []Span{{0, 1}},
+				PositiveBuckets: []int64{1, -1, 0},
+			},
+			2,
+			&Histogram{
+				PositiveSpans:   []Span{{0, 1}},
+				PositiveBuckets: []int64{1, -1, 0},
+			},
+		},
+		{
+			"leave untouched if spans need more buckets than exist",
+			&Histogram{
+				PositiveSpans:   []Span{{0, 3}},
+				PositiveBuckets: []int64{1},
+			},
+			2,
+			&Histogram{
+				PositiveSpans:   []Span{{0, 3}},
+				PositiveBuckets: []int64{1},
+			},
+		},
 	}
 
 	for _, c := range cases {
