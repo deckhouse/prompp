@@ -483,6 +483,12 @@ class PerShardRelabeler {
 // PerGoroutineRelabeler
 //
 
+template <class Lss>
+concept LssWithActiveSeriesMark = requires(Lss& lss) {
+  { lss.mark_active(uint32_t()) };
+  { lss.mark_active_atomic(uint32_t()) };
+};
+
 // PerGoroutineRelabeler stateful relabeler for shard goroutines.
 template <template <class> class SeriesContainer>
 class PerGoroutineRelabeler {
@@ -845,6 +851,11 @@ class PerGoroutineRelabeler {
     fill_inner_series(floats, floats.begin(), shards_inner_series, [&](auto& item) {
       if (auto ls_id = target_lss.find(timeseries_buf_.label_set(), item.hash()); ls_id.has_value()) {
         shards_inner_series[shard_id_].emplace_back(timeseries_buf_.samples(), *ls_id, false);
+
+        if constexpr (LssWithActiveSeriesMark<TargetLSS>) {
+          target_lss.mark_active_atomic(*ls_id);
+        }
+
         stats.samples_added += timeseries_buf_.samples().size();
         return true;
       }

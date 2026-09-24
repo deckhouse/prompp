@@ -50,7 +50,7 @@ func BenchmarkInstantSeriesSet(b *testing.B) {
 	}
 
 	lss := shard.NewLSS()
-	ds := shard.NewDataStorage(false)
+	ds := shard.NewDataStorage(false, false)
 	timestamps := []int64{0, 1, 2}
 	valueNotFoundTimestampValue := timestamps[0] - 1
 	prepareInstantData(lss, ds, timestamps, size)

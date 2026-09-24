@@ -186,6 +186,7 @@ class CedarTrie {
   [[nodiscard]] PROMPP_ALWAYS_INLINE CedarEnumerativeIterator make_enumerative_iterator() const noexcept { return {const_cast<Trie*>(&trie_), 0, 0, false}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CedarTraversal make_traversal() const { return CedarTraversal{const_cast<Trie*>(&trie_)}; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return count_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return trie_.allocated_memory(); }
 
   template <class OutputStream>
@@ -197,6 +198,7 @@ class CedarTrie {
   template <class InputStream>
   friend InputStream& operator>>(InputStream& stream, CedarTrie& trie) {
     stream >> trie.trie_;
+    trie.count_ = static_cast<uint32_t>(trie.trie_.num_keys());
     return stream;
   }
 

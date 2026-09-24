@@ -32,6 +32,7 @@ jobs:
     runs-on: fsn-dev-gitlab-runner
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
+      ui: ${{ steps.filter.outputs.ui }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -61,6 +62,12 @@ jobs:
             echo "cpp=true" >> "$GITHUB_OUTPUT"
           else
             echo "cpp=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Web UI Jest suites run only when the UI sources change.
+          if echo "$changed" | grep -qE '^web/ui/'; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
           fi
 
   cpp-tests:
@@ -226,7 +233,12 @@ jobs:
     # variant is covered by `go-test-all` (full repository).
     # Optional: runs only when the PR carries the `go-test-asan` label.
     needs: [build-ci-image, build-go-bindings]
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'go-test-asan')
+    # See the note on go-test-all: `always()` is required so a skipped cpp-tests
+    # does not silently disable this job as well.
+    if: >-
+      ${{ always() && needs.build-go-bindings.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'go-test-asan') }}
     strategy:
       max-parallel: 2
       matrix:
@@ -315,6 +327,11 @@ jobs:
     # replace with pp-pkg counterparts or do not ship in cmd/prometheus).
     # Single combination: opt + jemalloc (no sanitizers), on amd64 and arm64.
     needs: [build-ci-image, build-go-bindings]
+    # `skipped` propagates transitively through the dependency graph, so without
+    # `always()` this job is skipped on every Go-only PR (where cpp-tests is
+    # skipped) even though build-go-bindings itself succeeded. Gate on the
+    # actual upstream result instead.
+    if: ${{ always() && needs.build-go-bindings.result == 'success' }}
     strategy:
       max-parallel: 2
       matrix:
@@ -401,9 +418,59 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  ui-tests:
+    # Jest tests for the web UI PromQL modules (codemirror-promql, lezer-promql).
+    # The legacy react-app is intentionally excluded from `make ui-test` (see
+    # web/ui/package.json), so this only needs Node, which is baked into the CI
+    # image — no C++/Go bindings required, hence it depends solely on the image.
+    # Runs only when web/ui changed (on PRs); always on push/manual dispatch.
+    needs: [build-ci-image, changes]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.ui == 'true'
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-werf
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
+
+      - name: Pull Latest Image
+        run: |
+          echo "Attempting to pull latest ci-gcc-image..."
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} || \
+            echo "Pull failed, continuing with cached image"
+
+      - name: Run UI Tests
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e CI=true \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64${{ needs.build-ci-image.outputs.tag_suffix }} \
+            bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace
+              # ui-build-module builds lezer-promql's dist, which codemirror-promql's
+              # Jest config maps onto; ui-test then runs the module suites.
+              make ui-install ui-build-module ui-test
+            "
+
   build_dev:
     needs: [go-test-all]
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-dev-image')
+    if: >-
+      ${{ always() && needs.go-test-all.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'build-dev-image') }}
     uses: ./.github/workflows/build_dev.yaml
     secrets: inherit
 
@@ -415,7 +482,7 @@ jobs:
     # gate fails only when a required job failed or was cancelled.
     # The optional label-gated jobs (go-test-pp asan, build_dev) are intentionally
     # excluded, so they never block merge.
-    needs: [build-ci-image, changes, cpp-tests, build-go-bindings, go-test-all]
+    needs: [build-ci-image, changes, cpp-tests, build-go-bindings, go-test-all, ui-tests]
     if: always()
     runs-on: fsn-dev-gitlab-runner
     steps:
@@ -440,3 +507,15 @@ jobs:
             exit 1
           fi
           echo "All required test jobs passed or were safely skipped."
+
+      # cpp-tests and ui-tests are legitimately skipped when their sources are
+      # untouched, but the Go suite has no such path filter: a skipped
+      # go-test-all always means the pipeline silently lost its Go coverage.
+      - name: Require the Go test suite to have run
+        if: github.event_name == 'pull_request'
+        run: |
+          result="${{ needs.go-test-all.result }}"
+          if [[ "$result" != "success" ]]; then
+            echo "::error::go-test-all did not run (result: $result); Go tests must run on every PR"
+            exit 1
+          fi

@@ -9,7 +9,7 @@ namespace {
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::Timestamp;
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
@@ -19,7 +19,7 @@ using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
 using series_data::serialization::DataSerializer;
-using series_data::serialization::SerializedData;
+using SerializedData = series_data::serialization::SerializedData<>;
 using series_data::serialization::SerializedDataView;
 
 using series_data::decoder::SeekKind;
@@ -29,7 +29,7 @@ class SerializerDeserializerTrait {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  DataSerializer serializer_{storage_};
+  DataSerializer<> serializer_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
     EXPECT_EQ(series_id, data.next_series().first);
@@ -855,6 +855,120 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
           {.timestamp = 113, .value = STALE_NAN},
       },
       decode_current_chunk(serialized_view, 20)));
+}
+
+class SerializerDeserializerSharedPtrFixture : public SerializerDeserializerTrait, public testing::Test {};
+
+TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInAscInteger) {
+  // Arrange
+  encoder_.encode(0, 100, 101.0);
+  encoder_.encode(0, 200, 2001.0);
+  encoder_.encode(0, 300, 30001.0);
+  encoder_.encode(0, 400, 400001.0);
+  encoder_.encode(0, 500, 5000001.0);
+  encoder_.encode(0, 600, 60000001.0);
+
+  // Act
+  const auto serialized = serializer_.serialize();
+  SerializedDataView serialized_view(serialized);
+  encoder_.encode(0, 700, 700000001.0);
+
+  // Assert
+  ASSERT_EQ(1U, serialized_view.get_chunks_view().size());
+  ASSERT_EQ(EncodingType::kAscInteger, serialized_view.get_chunks_view()[0].encoding_state.encoding_type);
+
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 100, .value = 101.0},
+          {.timestamp = 200, .value = 2001.0},
+          {.timestamp = 300, .value = 30001.0},
+          {.timestamp = 400, .value = 400001.0},
+          {.timestamp = 500, .value = 5000001.0},
+          {.timestamp = 600, .value = 60000001.0},
+      },
+      decode_current_chunk(serialized_view, 0)));
+}
+
+TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInAscIntegerThenValuesGorilla) {
+  // Arrange
+  encoder_.encode(0, 100, 101.0);
+  encoder_.encode(0, 200, 2001.0);
+  encoder_.encode(0, 300, 30001.0);
+  encoder_.encode(0, 400, 400001.0);
+  encoder_.encode(0, 500, 5000001.1);
+
+  // Act
+  const auto serialized = serializer_.serialize();
+  SerializedDataView serialized_view(serialized);
+  encoder_.encode(0, 600, 60000001.1);
+
+  // Assert
+  ASSERT_EQ(1U, serialized_view.get_chunks_view().size());
+  ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, serialized_view.get_chunks_view()[0].encoding_state.encoding_type);
+
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 100, .value = 101.0},
+          {.timestamp = 200, .value = 2001.0},
+          {.timestamp = 300, .value = 30001.0},
+          {.timestamp = 400, .value = 400001.0},
+          {.timestamp = 500, .value = 5000001.1},
+      },
+      decode_current_chunk(serialized_view, 0)));
+}
+
+TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInValuesGorilla) {
+  // Arrange
+  encoder_.encode(0, 100, 101.1);
+  encoder_.encode(1, 100, 101.1);
+  encoder_.encode(0, 200, 2001.1);
+  encoder_.encode(1, 200, 2001.1);
+  encoder_.encode(0, 300, 30001.1);
+  encoder_.encode(0, 400, 400001.1);
+
+  // Act
+  const auto serialized = serializer_.serialize({QueriedChunk{0}});
+  SerializedDataView serialized_view(serialized);
+  encoder_.encode(0, 500, 5000001.1);
+
+  // Assert
+  ASSERT_EQ(1U, serialized_view.get_chunks_view().size());
+  ASSERT_EQ(EncodingType::kValuesGorilla, serialized_view.get_chunks_view()[0].encoding_state.encoding_type);
+
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 100, .value = 101.1},
+          {.timestamp = 200, .value = 2001.1},
+          {.timestamp = 300, .value = 30001.1},
+          {.timestamp = 400, .value = 400001.1},
+      },
+      decode_current_chunk(serialized_view, 0)));
+}
+
+TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInGorilla) {
+  // Arrange
+  encoder_.encode(0, 110, 1.1);
+  encoder_.encode(0, 111, 2.1);
+  encoder_.encode(0, 112, 3.1);
+  encoder_.encode(0, 113, 4.1);
+
+  // Act
+  const auto serialized = serializer_.serialize();
+  SerializedDataView serialized_view(serialized);
+  encoder_.encode(0, 114, 5.1);
+
+  // Assert
+  ASSERT_EQ(1U, serialized_view.get_chunks_view().size());
+  ASSERT_EQ(EncodingType::kGorilla, serialized_view.get_chunks_view()[0].encoding_state.encoding_type);
+
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 110, .value = 1.1},
+          {.timestamp = 111, .value = 2.1},
+          {.timestamp = 112, .value = 3.1},
+          {.timestamp = 113, .value = 4.1},
+      },
+      decode_current_chunk(serialized_view, 0)));
 }
 
 class SerializedDataNextIterFixture : public SerializerDeserializerTrait, public testing::Test {

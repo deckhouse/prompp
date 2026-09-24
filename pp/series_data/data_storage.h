@@ -14,16 +14,18 @@
 
 namespace series_data {
 
+template <bool kUseArenas = true>
 struct DataStorage {
 #if JEMALLOC_AVAILABLE
   struct DataStorageAllocatorTag {};
-  using Reallocator = BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>;
+  using Reallocator = std::conditional_t<kUseArenas, BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>, BareBones::DefaultReallocator>;
 #else
   using Reallocator = BareBones::DefaultReallocator;
 #endif
   using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
   using CompactBitSequence = encoder::CompactBitSequence<Reallocator>;
   using OutdatedChunk = chunk::OutdatedChunk<Reallocator>;
+  using FinalizedChunkList = chunk::FinalizedChunkList<Reallocator>;
 
   class SeriesChunkIterator {
    public:
@@ -49,10 +51,10 @@ struct DataStorage {
       [[nodiscard]] PROMPP_ALWAYS_INLINE const chunk::DataChunk& chunk() const noexcept {
         return chunk_type() == chunk::DataChunk::Type::kOpen ? *open_chunk_ : *finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
         return finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
         return finalized_chunk_end_iterator_;
       }
 
@@ -60,8 +62,8 @@ struct DataStorage {
       friend class SeriesChunkIterator;
 
       const DataStorage* storage_;
-      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
-      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
+      FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
+      FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
       const chunk::DataChunk* open_chunk_{};
 
       PROMPP_ALWAYS_INLINE void next_value() noexcept {
@@ -210,10 +212,10 @@ struct DataStorage {
   size_t finalized_chunks_map_allocated_memory{};
   union {
     phmap::flat_hash_map<uint32_t,
-                         chunk::FinalizedChunkList,
+                         FinalizedChunkList,
                          std::hash<uint32_t>,
                          std::equal_to<>,
-                         BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
+                         BareBones::Allocator<std::pair<const uint32_t, FinalizedChunkList>, Reallocator>>
         finalized_chunks;
   };
 
@@ -357,10 +359,7 @@ struct DataStorage {
 
   explicit DataStorage(bool collect_metrics = false) noexcept
       : outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}},
-        finalized_chunks{
-            {},
-            {},
-            BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}} {
+        finalized_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, FinalizedChunkList>, Reallocator>{finalized_chunks_map_allocated_memory}} {
     constructor_impl<Reallocator>();
 
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
@@ -369,6 +368,7 @@ struct DataStorage {
       // concurrent scrape can never read a label value whose backing storage was freed when this DataStorage was destroyed.
       metrics = metrics::CreateMetricsPage<Metrics<Reallocator>>(std::to_string(std::bit_cast<uint64_t>(this)));
     } else {
+      static Metrics<Reallocator> dummy_metrics_{""};
       metrics = &dummy_metrics_;
     }
 
@@ -379,14 +379,12 @@ struct DataStorage {
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
 
-  void reset() noexcept {
+  void reset(bool collect_metrics = false) noexcept {
     std::destroy_at(this);
-    std::construct_at(this);
+    std::construct_at(this, collect_metrics);
   }
 
  private:
-  inline static Metrics<Reallocator> dummy_metrics_{""};
-
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk_timestamp_and_encoder(const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {

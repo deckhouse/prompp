@@ -9,7 +9,7 @@ using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Timestamp;
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::InstantQuerier;
 using series_data::chunk::DataChunk;
@@ -245,7 +245,7 @@ class InstantQuerierLoaderUnloaderTestFixture : public testing::Test {
 
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  InstantQuerier instant_querier_{storage_};
+  InstantQuerier<> instant_querier_{storage_};
   const Sample default_sample_{.timestamp = -1, .value = STALE_NAN};
   std::vector<Sample> samples_{3, default_sample_};
 };

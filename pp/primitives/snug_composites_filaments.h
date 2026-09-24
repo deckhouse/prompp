@@ -108,7 +108,8 @@ struct Symbol {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
+
+        explicit iterator_type(const storage_type& storage) noexcept : storage_ptr_(&storage), sentinel_id_(storage_ptr_->get_sentinel_id()) {}
 
         PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
@@ -122,19 +123,21 @@ struct Symbol {
         }
 
         PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
         [[nodiscard]] uint32_t id() const noexcept { return id_; }
+        [[nodiscard]] uint32_t sentinel_id() const noexcept { return sentinel_id_; }
 
        private:
         const storage_type* storage_ptr_;
         uint32_t id_{0};
+        uint32_t sentinel_id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
 
@@ -175,8 +178,13 @@ struct Symbol {
       sync_read_view();
     }
 
+    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+      const auto item = items_[id];
+      return item.pos + item.length <= data_.size();
+    }
+
     void validate(uint32_t id) const {
-      if (const auto item = items_[id]; item.pos + item.length > data_.size()) {
+      if (!is_valid(id)) {
         throw BareBones::Exception(0x75555f55ebe357a3, "Symbol validation error: length is out of data vector range");
       }
     }
@@ -187,8 +195,9 @@ struct Symbol {
 
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items_.size());
-      items_.emplace_back(static_cast<uint32_t>(data_.size()), static_cast<uint32_t>(str.length()));
+      const auto data_size = static_cast<uint32_t>(data_.size());
       data_.push_back(str.begin(), str.end());
+      items_.emplace_back(data_size, static_cast<uint32_t>(str.length()));
       sync_read_view();
       return id;
     }
@@ -266,6 +275,19 @@ struct Symbol {
       read_view_.items = items_.data();
     }
 
+    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+      if constexpr (kIsReadOnly) {
+        uint32_t id = items_.size();
+        while (id > 0 && !is_valid(id - 1)) {
+          --id;
+        }
+
+        return id;
+      } else {
+        return items_.size();
+      }
+    }
+
     template <template <class> class>
     friend struct Symbol;
 
@@ -328,7 +350,7 @@ struct LabelNameSetComposite {
     }
 
     PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
-      iterator_type retval = *this;
+      const iterator_type retval = *this;
       ++(*this);
       return retval;
     }
@@ -485,7 +507,8 @@ struct LabelNameSet {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type* storage_ptr, uint32_t id) noexcept : storage_ptr_(storage_ptr), id_{id} {}
+        explicit iterator_type(const storage_type* storage_ptr, uint32_t id) noexcept
+            : storage_ptr_(storage_ptr), id_{id}, sentinel_id_{storage_ptr->get_sentinel_id()} {}
 
         PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
@@ -497,8 +520,7 @@ struct LabelNameSet {
           ++(*this);
           return retval;
         }
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
@@ -507,10 +529,11 @@ struct LabelNameSet {
        private:
         const storage_type* storage_ptr_;
         uint32_t id_{0};
+        uint32_t sentinel_id_{0};
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items_.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
 
@@ -548,6 +571,11 @@ struct LabelNameSet {
       const auto item = items_[id];
       const uint32_t* ids_begin = symbols_ids_sequences_.data() + item.pos;
       return composite_type(ids_begin, item.size, &symbols_table_.symbol_table_read_view());
+    }
+
+    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+      const auto item = items_[id];
+      return static_cast<uint64_t>(item.pos) + item.size <= symbols_ids_sequences_.size();
     }
 
     void validate(uint32_t id) const {
@@ -672,6 +700,19 @@ struct LabelNameSet {
     template <template <template <class> class> class, template <class> class>
     friend struct LabelNameSet;
 
+    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+      if constexpr (kIsReadOnly) {
+        uint32_t id = items_.size();
+        while (id > 0 && !is_valid(id - 1)) {
+          --id;
+        }
+
+        return id;
+      } else {
+        return items_.size();
+      }
+    }
+
     symbols_table_type symbols_table_;
     symbols_ids_sequences_type symbols_ids_sequences_;
     Vector<item_type> items_;
@@ -714,7 +755,7 @@ struct LabelSetComposite {
     }
 
     PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
-      iterator_type retval = *this;
+      const iterator_type retval = *this;
       ++(*this);
       return retval;
     }
@@ -753,7 +794,7 @@ struct LabelSetComposite {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return name_set_id_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept {
-    auto values = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(values_stream_begin_, label_name_set_.size());
+    const auto values = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(values_stream_begin_, label_name_set_.size());
     return iterator_type(symbols_tables_base_, stride_, label_name_set_.begin(), values.first);
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept {
@@ -978,16 +1019,14 @@ struct LabelSet {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const symbols_tables_type& symbols_tables,
-                               const keys_view_type::iterator_type& key_it,
-                               const keys_view_type::iterator_type& key_it_end) noexcept
-            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it}, key_it_end_(key_it_end) {
+        explicit iterator_type(const symbols_tables_type& symbols_tables, uint32_t symbols_tables_count, const keys_view_type::iterator_type& key_it) noexcept
+            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it}, sentinel_key_id_{std::min(key_it_.sentinel_id(), symbols_tables_count)} {
           get_values_range();
         }
 
         PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++value_it_;
-          if (value_it_ == value_it_end_) {
+          if (value_it_ == BareBones::iterator::kSentinel) {
             ++key_it_;
             get_values_range();
           }
@@ -1002,7 +1041,7 @@ struct LabelSet {
 
         PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const = default;
         PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept {
-          return key_it_ == key_it_end_ && value_it_ == value_it_end_;
+          return keys_exhausted() && value_it_ == BareBones::iterator::kSentinel;
         }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *value_it_; }
@@ -1011,43 +1050,34 @@ struct LabelSet {
         [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return value_it_.id(); }
 
        private:
+        [[nodiscard]] PROMPP_ALWAYS_INLINE bool keys_exhausted() const noexcept { return key_it_.id() >= sentinel_key_id_; }
+
         void get_values_range() noexcept {
           value_it_ = {};
-          value_it_end_ = {};
-          while (key_it_ != key_it_end_) {
-            const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].data_view();
-            value_it_ = values_view.begin();
-            value_it_end_ = values_view.end();
-
-            if (value_it_ != value_it_end_)
+          for (; !keys_exhausted(); ++key_it_) {
+            value_it_ = (*symbols_tables_ptr_)[key_it_.id()].data_view().begin();
+            if (value_it_ != BareBones::iterator::kSentinel) [[likely]] {
               return;
-
-            ++key_it_;
+            }
           }
         }
 
         const symbols_tables_type* symbols_tables_ptr_;
-
         keys_view_type::iterator_type key_it_;
-        keys_view_type::iterator_type key_it_end_;
-
         values_symbols_view_type::iterator_type value_it_;
-        values_symbols_view_type::iterator_type value_it_end_;
+        uint32_t sentinel_key_id_{};
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
-        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->label_name_sets_table_.data_view().symbols().begin(),
-                             storage_ptr->label_name_sets_table_.data_view().symbols().end()};
+        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->symbols_tables_.size(),
+                             storage_ptr->label_name_sets_table_.data_view().symbols().begin()};
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept {
-        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->label_name_sets_table_.data_view().symbols().end(),
-                             storage_ptr->label_name_sets_table_.data_view().symbols().end()};
-      }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
         size_t total_size = 0;
-        const auto keys_view = storage_ptr->label_name_sets_table_.data_view().symbols();
-        for (auto key_it = keys_view.begin(); key_it != keys_view.end(); ++key_it) {
+        auto key_it = storage_ptr->label_name_sets_table_.data_view().symbols().begin();
+        for (const auto key_sentinel_id = std::min(key_it.sentinel_id(), storage_ptr->symbols_tables_.size()); key_it.id() < key_sentinel_id; ++key_it) {
           total_size += storage_ptr->symbols_tables_[key_it.id()].data_view().size();
         }
         return total_size;
@@ -1066,7 +1096,7 @@ struct LabelSet {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id}, sentinel_id_{storage.get_sentinel_id()} {}
 
         PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
@@ -1079,8 +1109,7 @@ struct LabelSet {
           return retval;
         }
 
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
@@ -1089,10 +1118,11 @@ struct LabelSet {
        private:
         const storage_type* storage_ptr_;
         uint32_t id_{0};
+        uint32_t sentinel_id_{0};
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
 
@@ -1185,6 +1215,25 @@ struct LabelSet {
       auto lns = label_name_sets_table_[lns_id];
       const uint8_t* values_stream_begin = symbols_ids_sequences_.data() + (pos - shrinked_size_);
       return LabelSetComposite(&symbols_tables_[0], sizeof(symbols_tables_[0]), lns, values_stream_begin, lns_id);
+    }
+
+    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+      const auto [lns_id, pos] = items_[id];
+
+      if (lns_id >= label_name_sets_table_.items_count()) {
+        return false;
+      }
+
+      const auto lns = label_name_sets_table_[lns_id];
+      const auto data_offset = pos - shrinked_size_;
+      const auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
+      if (static_cast<uint64_t>(data_offset) + keys_size > symbols_ids_sequences_.size()) {
+        return false;
+      }
+
+      const uint32_t data_size =
+          BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(lns.size(), symbols_ids_sequences_.begin() + data_offset);
+      return static_cast<uint64_t>(data_offset) + keys_size + data_size <= symbols_ids_sequences_.size();
     }
 
     void validate(uint32_t id) const {
@@ -1423,6 +1472,19 @@ struct LabelSet {
    private:
     template <template <template <class> class> class, template <template <class> class> class, template <class> class>
     friend struct LabelSet;
+
+    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+      if constexpr (kIsReadOnly) {
+        uint32_t id = items_.size();
+        while (id > 0 && !is_valid(id - 1)) {
+          --id;
+        }
+
+        return id;
+      } else {
+        return items_.size();
+      }
+    }
 
     symbols_tables_type symbols_tables_;
     symbols_ids_sequences_type symbols_ids_sequences_;

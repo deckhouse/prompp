@@ -48,7 +48,7 @@ void WalSerializedData(benchmark::State& state) {
   const auto max_ts = max->timestamp();
   const auto delta_ts = max_ts - min_ts;
 
-  series_data::DataStorage storage;
+  series_data::DataStorage<> storage;
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
@@ -79,7 +79,7 @@ void WalConstantSerializedData(benchmark::State& state) {
   const auto max_ts = max->timestamp();
   const auto delta_ts = max_ts - min_ts;
 
-  series_data::DataStorage storage;
+  series_data::DataStorage<> storage;
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {

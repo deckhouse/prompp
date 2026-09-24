@@ -358,7 +358,7 @@ TEST_F(SharedPtrFixture, ReallocateWithCopiesToBiggerSize) {
 
 class SharedMemoryFixture : public ::testing::Test {
  protected:
-  SharedMemory<uint8_t, DefaultReallocator> memory_;
+  SharedMemory<uint8_t, SharedPtrControlBlockWithItemCount, DefaultReallocator> memory_;
 };
 
 TEST_F(SharedMemoryFixture, Empty) {
@@ -387,7 +387,7 @@ TEST_F(SharedMemoryFixture, CopyOperator) {
   memory_.resize_to_fit_at_least(1);
 
   // Act
-  SharedMemory<uint8_t, DefaultReallocator> memory2;
+  SharedMemory<uint8_t, SharedPtrControlBlockWithItemCount, DefaultReallocator> memory2;
   memory2.resize_to_fit_at_least(1);
   memory2 = memory_;
 
@@ -419,7 +419,7 @@ TEST_F(SharedMemoryFixture, MoveOperator) {
   const auto memory_size = memory_.size();
 
   // Act
-  SharedMemory<uint8_t, DefaultReallocator> memory2;
+  SharedMemory<uint8_t, SharedPtrControlBlockWithItemCount, DefaultReallocator> memory2;
   memory2.resize_to_fit_at_least(1);
   memory2 = std::move(memory_);
 

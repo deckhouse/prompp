@@ -10,7 +10,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
@@ -19,7 +19,7 @@ template <class DecodingTable, class SortingIndex, class SeriesIds, class Querya
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = QueryableEncodingBimap<DefaultSharedVector>;
 using LsIdProxy = typename Lss::LsIdSet::value_type;
 
@@ -603,6 +603,22 @@ TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrie) {
   ASSERT_NE(nullptr, lss_.trie_index().values_trie(*lss_.trie_index().names_trie().lookup("job")));
   EXPECT_EQ(ls0_, lss_[0]);
   EXPECT_EQ(ls1_, lss_[1]);
+}
+
+TEST_F(BimapCopierFixture, ShouldReserveMemoryForAddedSeriesBitset) {
+  // Arrange
+  const BareBones::Vector ids_for_copy{0U};
+  Lss lss_copy;
+
+  dst_src_ids_mapping_.clear();
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  // Act
+  lss_copy.mark_active_atomic(0U);
+
+  // Assert
+  EXPECT_TRUE(lss_copy.added_series().is_set(0U));
 }
 
 class BimapShrinkedStateFixture : public BimapFixture {

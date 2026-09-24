@@ -449,7 +449,7 @@ class EncodedSequence {
 
   class Iterator {
     typename DataSequence::const_iterator begin_;
-    typename DataSequence::sentinel end_;
+    [[no_unique_address]] typename DataSequence::sentinel end_;
     const typename E::Encoder* encoder_;
     typename E::Decoder decoder_;
 

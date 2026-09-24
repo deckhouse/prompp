@@ -40,7 +40,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_Finalize() {
 	segmentData, err := encoder.Finalize()
 	s.Require().NoError(err)
 
-	s.Equal(uint32(0), encoder.MaxWrittenItemIndex())
+	s.Equal(uint32(0), encoder.WrittenSeriesIDSentinel())
 	s.NotNil(segmentData)
 	s.Empty(segmentData.Samples())
 }
@@ -71,7 +71,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	segmentData, err := encoder.Finalize()
 	s.Require().NoError(err)
 
-	s.Equal(uint32(1), encoder.MaxWrittenItemIndex())
+	s.Equal(uint32(1), encoder.WrittenSeriesIDSentinel())
 	s.NotNil(segmentData)
 	s.Equal(expectedSamples, uint64(segmentData.Samples()))
 }
@@ -80,13 +80,12 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 	// Arrange
 	const kTestBufferVersion = 3
 
-	dataStorage := cppbridge.NewDataStorage(false)
-	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
+	dataStorage := cppbridge.NewDataStorage(false, false)
 	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), kTestBufferVersion)
 	segment, _ := hex.DecodeString(hexSegment)
 
 	// Act
-	_, _, err := decoder.DecodeToDataStorage(segment, encoder)
+	_, _, err := decoder.DecodeToDataStorage(segment, dataStorage)
 
 	// Assert
 	require.NoError(t, err)
