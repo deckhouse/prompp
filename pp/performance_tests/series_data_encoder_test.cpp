@@ -122,7 +122,6 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
       ChunkInfo{.type = series_data::EncodingType::kAscInteger, .name = "asc_integer"},
       ChunkInfo{.type = series_data::EncodingType::kAscIntegerThenValuesGorilla, .name = "asc_integer_then_values_gorilla"},
       ChunkInfo{.type = series_data::EncodingType::kValuesGorilla, .name = "values_gorilla"},
-      ChunkInfo{.type = series_data::EncodingType::kGorilla, .name = "gorilla"},
   };
   auto finalized_chunks_info = chunks_info;
 
@@ -158,9 +157,6 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
           break;
         case kValuesGorilla:
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kValuesGorilla) << std::endl;
-          break;
-        case kGorilla:
-          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.gorilla_encoders.allocated_memory() << std::endl;
           break;
         case kUnknown:
           std::cout << info.name << "_count: " << info.count << std::endl;

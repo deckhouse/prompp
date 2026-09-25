@@ -56,11 +56,6 @@ struct SerializedData {
         break;
       }
 
-      case kGorilla: {
-        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequenceWithItemsCount<Reallocator>*>(bytes_buffer + chunk.values_offset));
-        break;
-      }
-
       default: {
         assert(chunk.encoding_state.encoding_type != kUnknown);
         break;
@@ -148,9 +143,7 @@ class DataSerializer {
 
     uint32_t& data_size = buffer.control_block().items_count;
 
-    if (chunk.encoding_state.encoding_type != kGorilla) [[likely]] {
-      fill_timestamp_stream_offset<chunk_type>(storage_, timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, buffer);
-    }
+    fill_timestamp_stream_offset<chunk_type>(storage_, timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, buffer);
 
     switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
@@ -196,13 +189,6 @@ class DataSerializer {
       case kValuesGorilla: {
         serialized_chunk.set_offset(data_size);
         write_compact_bit_sequence(buffer, storage_.template get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index));
-        break;
-      }
-
-      case kGorilla: {
-        serialized_chunk.set_offset(data_size);
-        const auto& stream = storage_.template get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index);
-        write_compact_bit_sequence<SerializedCompactBitSequenceWithItemsCount>(buffer, stream, encoder::bit_sequence_items_count(stream.raw_bytes()));
         break;
       }
 

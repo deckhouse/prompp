@@ -143,10 +143,6 @@ class Encoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE State& get_state(StateId state_id) noexcept { return states_[state_id]; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const State& get_state(StateId state_id) const noexcept { return states_[state_id]; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::VectorWithHoles<State>& get_states() const noexcept { return states_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unique_state(StateId state_id) const noexcept {
-    auto& state = states_[state_id];
-    return state.reference_count == 1 && state.child_count == 0;
-  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t states_count() const noexcept { return states_.size(); }
 
