@@ -22,7 +22,6 @@ cc_library(
         "//third_party",
         "@lz4",
         "@parallel_hashmap",
-        "@scope_exit",
         "@xxHash",
         "@roaring",
     ],
