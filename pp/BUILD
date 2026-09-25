@@ -1,4 +1,5 @@
 load("//:bazel/rules/cc_static_library.bzl", "cc_static_library")
+load("//:bazel/rules/march_variant.bzl", "march_variants")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -277,6 +278,31 @@ cc_static_library(
     deps = [
         ":entrypoint_init",
     ],
+)
+
+# Keep in sync with amd64_flavors/arm64_flavors in entrypoint/Makefile.
+ENTRYPOINT_FLAVORS = [
+    "k8",
+    "nehalem",
+    "haswell",
+    "armv8-a",
+    "armv8-a+crc",
+]
+
+march_variants(
+    name = "entrypoint_aio",
+    marches = ENTRYPOINT_FLAVORS,
+    target = ":entrypoint_aio",
+)
+
+# The runtime init is built only for the generic (first) flavor of each platform.
+march_variants(
+    name = "entrypoint_init_aio",
+    marches = [
+        "k8",
+        "armv8-a",
+    ],
+    target = ":entrypoint_init_aio",
 )
 
 cc_library(
