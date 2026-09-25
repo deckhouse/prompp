@@ -70,7 +70,6 @@ use_repo(
     third_party,
     "cedar",
     "com_google_absl",
-    "fastfloat_header",
     "jemalloc",
     "lz4",
     "parallel_hashmap",
