@@ -1,7 +1,6 @@
 #include <chrono>
 #include <fstream>
 #include <vector>
-#include "gtest/gtest.h"
 
 #include "bare_bones/lz4_stream.h"
 #include "load_protobuf_wal_and_save_gorilla_to_sharded_wal_test.h"
