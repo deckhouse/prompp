@@ -14,11 +14,8 @@
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
-#include "series_data/querier/instant_querier.h"
-#include "series_data/querier/querier.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
-#include "series_index/querier/selector_querier.h"
 
 using entrypoint::types::DataStoragePtr;
 using entrypoint::types::DataStorageType;

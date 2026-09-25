@@ -1,9 +1,6 @@
-#include <chrono>
-#include <fstream>
 
 #include <benchmark/benchmark.h>
 
-#include <iostream>
 #include <random>
 
 #include "benchmark/compact_sample.h"

@@ -1,7 +1,5 @@
 #include "tests_database.h"
 
-#include <iostream>
-
 #include "log.h"
 #include "metrics.h"
 
