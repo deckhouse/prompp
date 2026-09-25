@@ -5,7 +5,6 @@
 #include "entrypoint/types/feature_flags.h"
 #include "entrypoint/types/hashdex.h"
 #include "primitives/go_slice.h"
-#include "wal/decoder.h"
 
 using PromPP::WAL::hashdex::scraper::OpenMetricsScraper;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;

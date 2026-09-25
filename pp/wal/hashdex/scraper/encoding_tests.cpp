@@ -1,9 +1,7 @@
 #include <gtest/gtest.h>
 
-#include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <type_traits>
 
 #include "encoding.h"
 #include "primitives/sample.h"
