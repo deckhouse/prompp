@@ -304,7 +304,6 @@ cc_binary(
         ":wal",
         "//third_party:protozero",
         "@cedar",
-        "@gtest//:gtest",
     ],
 )
 
