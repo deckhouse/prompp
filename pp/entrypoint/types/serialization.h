@@ -1,6 +1,10 @@
 #pragma once
 
+#include <memory>
+#include <variant>
+
 #include "aggregation_iterator.h"
+#include "entrypoint/types/data_storage.h"
 #include "multiseries_decode_iterator.h"
 #include "primitives/primitives.h"
 #include "prometheus/query.h"
@@ -10,13 +14,17 @@ namespace entrypoint::types {
 
 using SamplesIterator = ::series_data::serialization::SerializedDataView::SeriesIterator;
 
+template <class DataStorage>
 class SerializedDataGo {
+  using Reallocator = DataStorage::Reallocator;
+  using SerializedData = ::series_data::serialization::SerializedData<Reallocator>;
+
  public:
-  explicit SerializedDataGo(const ::series_data::DataStorage& storage,
+  explicit SerializedDataGo(const DataStorage& storage,
                             const ::series_data::querier::QueriedChunkList& queried_chunks,
                             SelectHints&& select_hints,
                             PromPP::Primitives::Timestamp downsampling_ms)
-      : data_{::series_data::serialization::DataSerializer{storage}.serialize(queried_chunks)},
+      : data_{::series_data::serialization::DataSerializer<DataStorage>{storage}.serialize(queried_chunks)},
         select_hints_(std::move(select_hints)),
         downsampling_ms_(downsampling_ms) {}
 
@@ -39,13 +47,14 @@ class SerializedDataGo {
   }
 
  private:
-  ::series_data::serialization::SerializedData data_;
+  SerializedData data_;
   ::series_data::serialization::SerializedDataView data_view_{data_};
   const SelectHints select_hints_;
   PromPP::Primitives::Timestamp downsampling_ms_{};
 };
 
-using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
+using SerializedDataVariant = std::variant<SerializedDataGo<DataStorageWithArenas>, SerializedDataGo<DataStorageWithoutArenas>>;
+using SerializedDataPtr = std::unique_ptr<SerializedDataVariant>;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 

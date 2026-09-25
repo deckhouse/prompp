@@ -2,9 +2,10 @@
 
 #include <chrono>
 
+#include "bare_bones/vector.h"
 #include "performance_tests/dummy_wal.h"
+#include "primitives/snug_composites.h"
 #include "series_index/reverse_index.h"
-#include "wal/wal.h"
 
 namespace performance_tests::series_index {
 

@@ -15,6 +15,7 @@ enum class Error : uint32_t {
   kInvalidUtf8,
   kInvalidValue,
   kInvalidTimestamp,
+  kMarkupBufferOverflow,
 };
 
 template <class Value>

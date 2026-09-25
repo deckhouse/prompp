@@ -3,7 +3,6 @@
 #include "bare_bones/streams.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
-#include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
 
 namespace {
@@ -17,9 +16,9 @@ class UnloaderFixture : public ::testing::Test {
  protected:
   static constexpr auto kEmptySnapshot = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
 
-  series_data::DataStorage storage_;
+  series_data::DataStorage<> storage_;
   series_data::Encoder<> encoder_{storage_};
-  Unloader unloader_{storage_};
+  Unloader<> unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 

@@ -67,7 +67,7 @@ func (*RotatorSuite) createShardOnMemory(
 
 	return shard.NewShard(
 		lss,
-		shard.NewDataStorage(false),
+		shard.NewDataStorage(false, false),
 		nil,
 		nil,
 		&testWal{Wal: wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil), maxWrittenItemIndex: 1},

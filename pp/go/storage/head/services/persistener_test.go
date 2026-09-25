@@ -229,8 +229,8 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
-		return blockWriter.Write(shard)
+	s.blockWriter.WriteFunc = func(shard *shard.Shard, numberOfShards uint16) ([]block.WrittenBlock, error) {
+		return blockWriter.Write(shard, numberOfShards)
 	}
 
 	head := s.mustCreateHead()
@@ -267,12 +267,12 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
+	s.blockWriter.WriteFunc = func(shard *shard.Shard, numberOfShards uint16) ([]block.WrittenBlock, error) {
 		if len(s.blockWriter.WriteCalls()) == 2 {
 			return nil, errors.New("some error")
 		}
 
-		return blockWriter.Write(shard)
+		return blockWriter.Write(shard, numberOfShards)
 	}
 
 	head := s.mustCreateHead()

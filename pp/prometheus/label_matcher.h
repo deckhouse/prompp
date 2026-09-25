@@ -47,7 +47,6 @@ enum class MatchStatus : uint8_t {
   kUnknown = 0,
   kEmptyMatch,
   kAllMatch,
-  kAllMatchWithExcludes,
   kPartialMatch,
   kError,
 };

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <variant>
 
+#include "entrypoint/types/data_storage.h"
 #include "entrypoint/types/lss.h"
 #include "wal/hashdex/basic_decoder.h"
 #include "wal/hashdex/go_head.h"
@@ -22,7 +23,7 @@ enum HashdexType : uint8_t {
   kGoHead,
 };
 
-using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint::types::QueryableEncodingBimap>;
+using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint::types::QueryableEncodingBimap, entrypoint::types::DataStorageWithoutArenas>;
 
 using HashdexVariant = std::variant<PromPP::WAL::hashdex::Protobuf,
                                     PromPP::WAL::hashdex::GoModel,

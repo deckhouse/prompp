@@ -6,7 +6,31 @@ import (
 	"hash/crc32"
 	"io"
 	"math"
+
+	"github.com/prometheus/prometheus/util/pool"
 )
+
+//
+// buffers
+//
+
+// buffers is a pool of buffers.
+// It is used to reuse buffers to avoid allocation overhead.
+var buffers = pool.New(1e3, 512e3, 2, func(sz int) any { return make([]byte, 0, sz) })
+
+// getBuffer gets a buffer from the pool.
+func getBuffer(size int) []byte {
+	return buffers.Get(size).([]byte)[:size]
+}
+
+// putBuffer puts a buffer into the pool.
+func putBuffer(buf []byte) {
+	buffers.Put(buf)
+}
+
+//
+// Segment
+//
 
 // Segment encoded segment from wal.
 type Segment struct {
@@ -79,11 +103,11 @@ func (s *Segment) Samples() uint32 {
 
 // resize [Segment] data.
 func (s *Segment) resize(size int) {
-	if cap(s.data) < size {
-		s.data = make([]byte, size)
-	} else {
-		s.data = s.data[:size]
+	if s.data != nil {
+		putBuffer(s.data)
 	}
+
+	s.data = getBuffer(size)
 }
 
 //

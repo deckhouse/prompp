@@ -5,7 +5,6 @@
 #include "bare_bones/lz4_stream.h"
 #include "load_protobuf_wal_and_save_gorilla_to_sharded_wal_test.h"
 #include "log.h"
-#include "primitives/primitives.h"
 #include "prometheus/remote_write.h"
 #include "wal/wal.h"
 
