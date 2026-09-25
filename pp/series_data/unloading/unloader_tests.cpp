@@ -3,7 +3,6 @@
 #include "bare_bones/streams.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
-#include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
 
 namespace {
