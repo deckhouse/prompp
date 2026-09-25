@@ -81,6 +81,18 @@ func CloseWals[
 	return errors.Join(errs...)
 }
 
+// Cleanup releases lookup structures (ls id set and hash set) of lss, sorting index is built beforehand for all shards.
+// Attention: works only with QueryableEncodingBimap type of LSS. After cleanup lss can't find or add label sets,
+// so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func Cleanup[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) {
+	for _, shard := range h.Shards() {
+		shard.LSSCleanup()
+	}
+}
+
 //
 // UnloadUnusedSeriesDataWithHead
 //

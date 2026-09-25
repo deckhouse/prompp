@@ -73,6 +73,14 @@ func (lss *LabelSetStorage) BitsetSeries() *BitsetSeries {
 	return newBitsetSeriesFromPointer(bsPointer)
 }
 
+// Cleanup releases lookup structures (ls id set and hash set) of lss, sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After cleanup lss can't find or add label sets,
+// so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func (lss *LabelSetStorage) Cleanup() {
+	primitivesLSSCleanup(lss.pointer)
+	runtime.KeepAlive(lss)
+}
+
 // FinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
 // Attention: works only with QueryableEncodingBimap type of LSS.
 // newToOldMapping is the copier output (new id in copy -> old id in source);

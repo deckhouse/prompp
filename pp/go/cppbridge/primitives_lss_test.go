@@ -2,6 +2,7 @@ package cppbridge_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"runtime"
 	"slices"
@@ -333,6 +334,23 @@ func (s *QueryableLSSSuite) testQueryLabelNamesImpl(test_case queryLabelNameCase
 	// Assert
 	s.Equal(test_case.expectedStatus, result.Status())
 	s.Equal(test_case.expectedNames, result.Names())
+}
+
+func (s *QueryableLSSSuite) TestCleanup() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	for i := range 100000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", fmt.Sprintf("lol_%d", i)))
+	}
+
+	prevMem := lss.AllocatedMemory()
+	lss.Cleanup()
+
+	// Assert
+	s.Less(lss.AllocatedMemory(), prevMem)
+	s.T().Log(prevMem - lss.AllocatedMemory())
 }
 
 type queryLabelValuesCase struct {

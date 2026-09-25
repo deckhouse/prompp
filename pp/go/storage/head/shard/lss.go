@@ -39,6 +39,15 @@ func (l *LSS) AllocatedMemory() uint64 {
 	return am
 }
 
+// Cleanup releases lookup structures (ls id set and hash set) of lss, sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After cleanup lss can't find or add label sets,
+// so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func (l *LSS) Cleanup() {
+	l.locker.Lock()
+	l.target.Cleanup()
+	l.locker.Unlock()
+}
+
 // CopyAddedSeriesTo copy the label sets from the source lss to the destination lss that were added source lss.
 func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	l.locker.RLock()

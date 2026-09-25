@@ -297,6 +297,18 @@ void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
  */
 void prompp_primitives_free_ls_ids_mapping(void* args);
 
+/**
+ * @brief Release lookup structures (ls id set and hash set) of queryable lss, sorting index is built beforehand.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After cleanup lss can't find or add label sets, so it's allowed only for read-only lss
+ * after chunk recoding and data loading are done.
+ */
+void prompp_primitives_lss_cleanup(void* args);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

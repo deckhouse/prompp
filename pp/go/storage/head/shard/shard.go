@@ -131,6 +131,13 @@ func (s *Shard) LSSAllocatedMemory() uint64 {
 	return s.lss.AllocatedMemory()
 }
 
+// LSSCleanup releases lookup structures (ls id set and hash set) of lss, sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After cleanup lss can't find or add label sets,
+// so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func (s *Shard) LSSCleanup() {
+	s.lss.Cleanup()
+}
+
 // LSSWithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.
 func (s *Shard) LSSWithLock(fn func(target, input *cppbridge.LabelSetStorage) error) error {
 	return s.lss.WithLock(fn)

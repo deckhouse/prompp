@@ -252,6 +252,17 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     added_series_.reserve(count);
   }
 
+  // Releases lookup structures that are only needed while series are being added: find()/find_or_emplace() and ls_id_set() stop working.
+  // The sorting index is built beforehand because it can't be rebuilt without ls_id_set_.
+  void cleanup() {
+    sorting_index_.build();
+
+    ls_id_set_.clear();
+    ls_id_hash_set_.clear();
+    // clear() keeps small tables (capacity <= 127) allocated, reserve(0) on an empty table releases them
+    ls_id_hash_set_.reserve(0);
+  }
+
  private:
   using LabelSet = typename Base::value_type;
   using Trie = trie::CedarTrie;
