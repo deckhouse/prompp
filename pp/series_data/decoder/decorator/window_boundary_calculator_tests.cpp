@@ -1,8 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "series_data/data_storage.h"
 #include "series_data/decoder/decorator/window_function_iterator.h"
-#include "series_data/encoder.h"
 
 namespace {
 
