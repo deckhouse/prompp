@@ -67,7 +67,6 @@ cc_library(
         ":bare_bones",
         "//third_party:protozero",
         "@parallel_hashmap",
-        "@scope_exit",
     ],
 )
 
@@ -126,7 +125,6 @@ cc_library(
         "//third_party:uuid",
         "//third_party/fastfloat",
         "@roaring",
-        "@scope_exit",
         "@simdutf",
         "@snappy",
     ],
