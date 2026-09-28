@@ -49,7 +49,6 @@ TEST_F(DataStorageMetricsTestFixture, InitialMetricsAreZero) {
   EXPECT_EQ(0, chunk_count(EncodingType::kAscInteger));
   EXPECT_EQ(0, chunk_count(EncodingType::kAscIntegerThenValuesGorilla));
   EXPECT_EQ(0, chunk_count(EncodingType::kValuesGorilla));
-  EXPECT_EQ(0, chunk_count(EncodingType::kGorilla));
 }
 
 TEST_F(DataStorageMetricsTestFixture, Uint32ConstantChunkCount) {
@@ -133,7 +132,7 @@ TEST_F(DataStorageMetricsTestFixture, SwitchToValuesGorillaUpdatesChunkCount) {
   EXPECT_EQ(1, chunk_count(EncodingType::kValuesGorilla));
 }
 
-TEST_F(DataStorageMetricsTestFixture, SwitchToGorillaUpdatesChunkCount) {
+TEST_F(DataStorageMetricsTestFixture, SwitchFromTwoDoubleConstantToValuesGorillaDecrementsSourceChunkCount) {
   // Arrange
 
   // Act
@@ -145,7 +144,7 @@ TEST_F(DataStorageMetricsTestFixture, SwitchToGorillaUpdatesChunkCount) {
 
   // Assert
   EXPECT_EQ(0, chunk_count(EncodingType::kTwoDoubleConstant));
-  EXPECT_EQ(1, chunk_count(EncodingType::kGorilla));
+  EXPECT_EQ(1, chunk_count(EncodingType::kValuesGorilla));
 }
 
 TEST_F(DataStorageMetricsTestFixture, OutdatedSamplesAndChunksCounters) {
