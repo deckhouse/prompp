@@ -119,6 +119,7 @@ func (s *IteratorSuite) TestHappyPathV1() {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(it.Close()) }()
@@ -230,6 +231,7 @@ func (s *IteratorSuite) TestHappyPathV2() {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(it.Close()) }()
@@ -274,7 +276,7 @@ func (*IteratorSuite) decodeToWriteRequest(wr *prompb.WriteRequest, data []byte)
 // Benchmark
 //
 
-// go test -test.fullpath=true -benchmem -run=^$ -tags stringlabels -bench ^BenchmarkIteratorV1$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x.
+// go test -test.fullpath=true -benchmem -run=^$ -bench ^BenchmarkIteratorV1$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x.
 func BenchmarkIteratorV1(b *testing.B) {
 	if b.N != 100 && b.N != 1000 {
 		return
@@ -350,6 +352,7 @@ func BenchmarkIteratorV1(b *testing.B) {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	require.NoError(b, err)
 	defer func() { require.NoError(b, it.Close()) }()
@@ -359,7 +362,7 @@ func BenchmarkIteratorV1(b *testing.B) {
 	}
 }
 
-// go test -test.fullpath=true -benchmem -run=^$ -tags stringlabels -bench ^BenchmarkIteratorV2$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x.
+// go test -test.fullpath=true -benchmem -run=^$ -bench ^BenchmarkIteratorV2$ github.com/prometheus/prometheus/pp/go/storage/remotewriter -v -count=1 -benchtime=1000x.
 func BenchmarkIteratorV2(b *testing.B) {
 	if b.N != 100 && b.N != 1000 {
 		return
@@ -437,6 +440,7 @@ func BenchmarkIteratorV2(b *testing.B) {
 		readTimeout,
 		protobufWriter,
 		metrics,
+		newDeliveryTarget("test", "http://test.com", "head-1"),
 	)
 	require.NoError(b, err)
 	defer func() { require.NoError(b, it.Close()) }()

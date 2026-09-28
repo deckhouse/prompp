@@ -9,7 +9,7 @@ namespace series_index {
 static constexpr uint32_t kOptimalPreAllocationElementsCount = 8;
 
 template <class T>
-using SharedMemory = BareBones::SharedMemory<T, BareBones::DefaultReallocator>;
+using SharedMemory = BareBones::SharedMemory<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
 class DeltaRLE {
  public:

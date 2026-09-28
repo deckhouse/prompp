@@ -21,6 +21,29 @@ template <ParserInterface Parser>
 class Scraper {
  public:
   [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    // Validates ignored comments too, unlike the legacy parser.
+    return parse_impl<Utf8ValidationMode::kWholeInput>(buffer, default_timestamp);
+  }
+
+  [[nodiscard]] Error parse_validate_utf_per_token(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    // Uses legacy per-token UTF-8 validation.
+    return parse_impl<Utf8ValidationMode::kPerToken>(buffer, default_timestamp);
+  }
+
+ private:
+  enum class Utf8ValidationMode : uint8_t {
+    kPerToken,
+    kWholeInput,
+  };
+
+  template <Utf8ValidationMode validation_mode>
+  [[nodiscard]] Error parse_impl(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    if constexpr (validation_mode == Utf8ValidationMode::kWholeInput) {
+      if (!simdutf::validate_utf8(buffer.data(), buffer.size())) [[unlikely]] {
+        return Error::kInvalidUtf8;
+      }
+    }
+
     metric_buffer_.initialize(buffer.size() / 4);
     metadata_buffer_.initialize(buffer.size() / 128);
     labels_.reserve(255);
@@ -34,7 +57,9 @@ class Scraper {
       switch (tokenizer.next()) {
         case Token::kEOF:
         case Token::kEOFWord: {
-          metric_buffer_.add_padding();
+          if (!metric_buffer_.add_padding()) [[unlikely]] {
+            return Error::kMarkupBufferOverflow;
+          }
           return parser_.validate_parse_result();
         }
 
@@ -47,7 +72,7 @@ class Scraper {
         case Token::kHelp:
         case Token::kUnit:
         case Token::kType: {
-          if (const auto error = parse_metadata(); error != Error::kNoError) [[unlikely]] {
+          if (const auto error = parse_metadata<validation_mode>(); error != Error::kNoError) [[unlikely]] {
             return error;
           }
           break;
@@ -55,7 +80,7 @@ class Scraper {
 
         case Token::kMetricName:
         case Token::kBraceOpen: {
-          if (const auto error = parse_metric(); error != Error::kNoError) [[unlikely]] {
+          if (const auto error = parse_metric<validation_mode>(); error != Error::kNoError) [[unlikely]] {
             return error;
           }
 
@@ -73,6 +98,7 @@ class Scraper {
     }
   }
 
+ public:
   class FloatsWrapper {
    public:
     explicit FloatsWrapper(const Scraper& scraper) : scraper_(scraper) {}
@@ -111,6 +137,7 @@ class Scraper {
  private:
   using Token = Prometheus::textparse::Token;
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_metadata() {
     static constexpr auto get_metadata_type = [](Token token) PROMPP_LAMBDA_INLINE {
       if (token == Token::kHelp) {
@@ -142,8 +169,10 @@ class Scraper {
       return Error::kUnexpectedToken;
     }
 
-    if (type == Token::kHelp && !simdutf::validate_utf8(text.data(), text.size())) [[unlikely]] {
-      return Error::kInvalidUtf8;
+    if constexpr (validation_mode == Utf8ValidationMode::kPerToken) {
+      if (type == Token::kHelp && !simdutf::validate_utf8(text.data(), text.size())) [[unlikely]] {
+        return Error::kInvalidUtf8;
+      }
     }
 
     const auto buffer = tokenizer.buffer();
@@ -151,6 +180,7 @@ class Scraper {
     return Error::kNoError;
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_metric() {
     labels_.clear();
 
@@ -160,7 +190,7 @@ class Scraper {
     bool have_metric_name = false;
     auto& tokenizer = parser_.tokenizer();
 
-    const uint32_t metric_offset = tokenizer.token_str().data() - tokenizer.buffer().data();
+    const uint64_t metric_offset = tokenizer.token_str().data() - tokenizer.buffer().data();
 
     if (tokenizer.token() == Token::kMetricName) [[likely]] {
       labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
@@ -172,7 +202,7 @@ class Scraper {
     }
 
     if (tokenizer.token() == Token::kBraceOpen) [[likely]] {
-      if (const auto error = tokenize_label_set(have_metric_name); error != Error::kNoError) {
+      if (const auto error = tokenize_label_set<validation_mode>(have_metric_name); error != Error::kNoError) {
         return error;
       }
 
@@ -185,22 +215,21 @@ class Scraper {
       return Error::kNoMetricName;
     }
 
-    const auto error = parse_metric_suffix();
-
-    if (error == Error::kNoError) [[likely]] {
-      encode_metric_data(metric_offset);
+    if (const auto error = parse_metric_suffix(); error != Error::kNoError) [[unlikely]] {
+      return error;
     }
 
-    return error;
+    return encode_metric_data(metric_offset);
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error tokenize_label_set(bool& have_metric_name) noexcept {
     auto& tokenizer = parser_.tokenizer();
     tokenizer.next_non_whitespace();
 
     while (tokenizer.token() != Token::kBraceClose) {
       MarkedLabel label;
-      if (const auto error = get_label_name(label.name); error != Error::kNoError) [[unlikely]] {
+      if (const auto error = get_label_name<validation_mode>(label.name); error != Error::kNoError) [[unlikely]] {
         return error;
       }
 
@@ -209,7 +238,7 @@ class Scraper {
           return Error::kUnexpectedToken;
         }
 
-        if (const auto error = get_quoted_value(label.value); error != Error::kNoError) [[unlikely]] {
+        if (const auto error = get_quoted_value<validation_mode>(label.value); error != Error::kNoError) [[unlikely]] {
           return error;
         }
 
@@ -236,6 +265,7 @@ class Scraper {
     return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error get_label_name(MarkedString& label_name) const noexcept {
     auto& tokenizer = parser_.tokenizer();
 
@@ -244,12 +274,13 @@ class Scraper {
       return Error::kNoError;
     }
     if (tokenizer.token() == Token::kQuotedString) {
-      return get_quoted_value(label_name);
+      return get_quoted_value<validation_mode>(label_name);
     }
 
     return Error::kUnexpectedToken;
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error get_quoted_value(MarkedString& string) const noexcept {
     auto& tokenizer = parser_.tokenizer();
 
@@ -266,8 +297,10 @@ class Scraper {
     });
     value.remove_suffix(value.size() - (copy_to - value.data()));
 
-    if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
-      return Error::kInvalidUtf8;
+    if constexpr (validation_mode == Utf8ValidationMode::kPerToken) {
+      if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
+        return Error::kInvalidUtf8;
+      }
     }
 
     string = MarkedString::create(value, tokenizer.buffer());
@@ -301,13 +334,15 @@ class Scraper {
     return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
-  void encode_metric_data(const uint32_t metric_offset) noexcept {
+  [[nodiscard]] Error encode_metric_data(const uint64_t metric_offset) noexcept {
     metric_buffer_.add_metric(metric_offset);
 
     sort_and_filter_labels();
     append_labels_hash();
 
-    metric_buffer_.bytes_enlarge(encoding::metric_maximum_encoding_size(labels_.size()));
+    if (!metric_buffer_.bytes_enlarge(encoding::metric_maximum_encoding_size(labels_.size()))) [[unlikely]] {
+      return Error::kMarkupBufferOverflow;
+    }
 
     const encoding::LayoutMarker layout =
         encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::SampleCodec::value_type(marked_sample_.sample.value()));
@@ -315,9 +350,10 @@ class Scraper {
 
     encode_labels(metric_offset);
     metric_buffer_.add_sample(layout, marked_sample_.sample);
+    return Error::kNoError;
   }
 
-  void encode_labels(const uint32_t offset) noexcept {
+  void encode_labels(const uint64_t offset) noexcept {
     for (auto label : labels_) {
       if (!label.name.is_reserved_name()) [[likely]] {
         label.name.offset -= offset;

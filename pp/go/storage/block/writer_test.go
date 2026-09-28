@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 	// Force a few GC cycles and give the finalizer goroutine a chance to free them first.
 	for i := 0; i < 3; i++ {
 		runtime.GC()
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	os.Exit(code)
 }
@@ -263,7 +263,7 @@ func (s *WriterSuite) TestWrite() {
 
 	// Act
 	block.LsIDBatchSize = 2
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -275,7 +275,7 @@ func (s *WriterSuite) TestWriteInBatches() {
 
 	// Act
 	block.LsIDBatchSize = 1
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -288,7 +288,7 @@ func (s *WriterSuite) TestWriteWithDataUnloading() {
 
 	// Act
 	block.LsIDBatchSize = 2
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -301,7 +301,7 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 	// Act
 	block.LsIDBatchSize = 1
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -320,7 +320,7 @@ func (s *WriterSuite) TestSkipEmptyBlock() {
 	})
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.Require().NoError(err)

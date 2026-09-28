@@ -80,10 +80,13 @@ class SymbolIdsCollector {
 
   void collect_current(ExportSymbolIds& symbol_ids) const {
     const auto view = lss_.data_view();
-    for (auto it = view.keys().begin(), e = view.keys().end(); it != e; ++it) {
+    const auto keys = view.keys();
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
       symbol_ids.emplace_back(SymbolSource::kCurrent, it.id(), kKeyOnlyValueId);
     }
-    for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
+
+    const auto values = view.values();
+    for (auto it = values.begin(); it != values.end(); ++it) {
       symbol_ids.emplace_back(SymbolSource::kCurrent, it.key_id(), it.value_id());
     }
   }

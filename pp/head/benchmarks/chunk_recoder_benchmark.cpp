@@ -9,11 +9,11 @@
 
 namespace {
 
-using DataStorage = series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using PromPP::Primitives::TimeInterval;
 
 const DataStorage& get_data_storage_for_benchmark() {
-  static series_data::DataStorage storage;
+  static series_data::DataStorage<> storage;
   if (storage.open_chunks.empty()) [[unlikely]] {
     const auto& samples = benchmark::get_compact_samples();
     series_data::Encoder encoder{storage};

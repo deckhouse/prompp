@@ -4,7 +4,7 @@
 
 namespace {
 
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::chunk::DataChunk;
 using EncodingType = series_data::EncodingType;
 using EncodingState = series_data::EncodingState;

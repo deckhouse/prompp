@@ -166,8 +166,9 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persiste
 }
 
 func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persistHead(head THead) error {
+	numberOfShards := head.NumberOfShards()
 	for shard := range head.RangeShards() {
-		if _, err := p.blockWriter.Write(shard); err != nil {
+		if _, err := p.blockWriter.Write(shard, numberOfShards); err != nil {
 			return err
 		}
 	}

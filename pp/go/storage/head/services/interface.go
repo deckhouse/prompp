@@ -270,5 +270,5 @@ type Loader[
 
 // HeadBlockWriter writes block on disk from [Head].
 type HeadBlockWriter[TShard Shard] interface {
-	Write(shard TShard) ([]block.WrittenBlock, error)
+	Write(shard TShard, numberOfShards uint16) ([]block.WrittenBlock, error)
 }

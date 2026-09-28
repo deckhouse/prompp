@@ -107,9 +107,9 @@ func (e *HeadWalEncoder) Finalize() (*HeadEncodedSegment, error) {
 	return NewHeadEncodedSegment(segment, samples), err
 }
 
-// MaxWrittenItemIndex returns max item index written to WAL.
-func (e *HeadWalEncoder) MaxWrittenItemIndex() uint32 {
-	lsid := headWalEncoderMaxWrittenItemIndex(e.encoder)
+// WrittenSeriesIDSentinel returns max item index written to WAL.
+func (e *HeadWalEncoder) WrittenSeriesIDSentinel() uint32 {
+	lsid := headWalEncoderWrittenSeriesIDSentinel(e.encoder)
 	runtime.KeepAlive(e)
 	return lsid
 }
@@ -149,10 +149,10 @@ func (d *HeadWalDecoder) Decode(segment []byte, innerSeries *InnerSeries) error 
 //
 //revive:disable-next-line:confusing-results // returns createTimestamp, encodeTimestamp, error.
 
-func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) (int64, int64, error) {
-	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
+func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, dataStorage *DataStorage) (int64, int64, error) {
+	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, dataStorage.dataStorage)
 	runtime.KeepAlive(d)
-	runtime.KeepAlive(headEncoder)
+	runtime.KeepAlive(dataStorage)
 	return createTimestamp, encodeTimestamp, err
 }
 

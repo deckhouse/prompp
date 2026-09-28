@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <cstdint>
 #include <limits>
 
 #include "bare_bones/gorilla.h"

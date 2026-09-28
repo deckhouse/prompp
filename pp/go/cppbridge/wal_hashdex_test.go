@@ -230,6 +230,82 @@ func (s *HashdexSuite) TestSnappyProtobufHashdex() {
 	s.Equal("super_cluster", cluster)
 }
 
+func (s *HashdexSuite) TestSnappyProtobufHashdexEmptySamplesError() {
+	wr := &prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "test"},
+					{Name: "__replica__", Value: "second_replica"},
+					{Name: "cluster", Value: "super_cluster"},
+					{Name: "job", Value: "tester"},
+					{Name: "instance", Value: "blablabla"},
+				},
+				Samples: []prompb.Sample{
+					{Timestamp: 1654608420000, Value: 4444},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "test"},
+					{Name: "__replica__", Value: "second_replica"},
+					{Name: "cluster", Value: "super_cluster"},
+					{Name: "job", Value: "tester"},
+					{Name: "instance", Value: "blablabla"},
+				},
+				Samples: []prompb.Sample{},
+			},
+		},
+	}
+	b, err := wr.Marshal()
+	s.Require().NoError(err)
+	compressed := snappy.Encode(nil, b)
+
+	hlimits := cppbridge.DefaultWALHashdexLimits()
+	_, err = cppbridge.NewWALSnappyProtobufHashdex(compressed, hlimits)
+	s.Require().Error(err)
+}
+
+func (s *HashdexSuite) TestSnappyProtobufHashdexEmptySamplesSkipNoSamplesSeries() {
+	var cppFeatures cppbridge.FeatureFlags
+	cppFeatures.SkipNoSamplesSeries()
+	cppbridge.InitializeFeatureFlags(cppFeatures)
+
+	wr := &prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "test"},
+					{Name: "__replica__", Value: "second_replica"},
+					{Name: "cluster", Value: "super_cluster"},
+					{Name: "job", Value: "tester"},
+					{Name: "instance", Value: "blablabla"},
+				},
+				Samples: []prompb.Sample{
+					{Timestamp: 1654608420000, Value: 4444},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "test"},
+					{Name: "__replica__", Value: "second_replica"},
+					{Name: "cluster", Value: "super_cluster"},
+					{Name: "job", Value: "tester"},
+					{Name: "instance", Value: "blablabla"},
+				},
+				Samples: []prompb.Sample{},
+			},
+		},
+	}
+	b, err := wr.Marshal()
+	s.Require().NoError(err)
+	compressed := snappy.Encode(nil, b)
+
+	hlimits := cppbridge.DefaultWALHashdexLimits()
+	_, err = cppbridge.NewWALSnappyProtobufHashdex(compressed, hlimits)
+	s.Require().NoError(err)
+}
+
 func TestHashdex_SuccessfulParse(t *testing.T) {
 	// Arrange
 	wr := &prompb.WriteRequest{

@@ -334,12 +334,13 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendRelabelerSeriesStage(
 					relabeledSeries,
 					shardedStateUpdates.DataByShard(shardID),
 				)
-				if err != nil {
-					return fmt.Errorf("shard %d: %w", shardID, err)
-				}
 
 				if hasReallocations {
 					shard.LSSResetSnapshot()
+				}
+
+				if err != nil {
+					return fmt.Errorf("shard %d: %w", shardID, err)
 				}
 
 				return nil

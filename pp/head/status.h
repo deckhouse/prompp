@@ -141,7 +141,8 @@ class StatusGetterLSS {
 
   void fill_lss_statistic() noexcept {
     const auto view = lss_.data_view();
-    for (auto k_it = view.keys().begin(), k_e = view.keys().end(); k_it != k_e; ++k_it) {
+    const auto keys = view.keys();
+    for (auto k_it = keys.begin(); k_it != keys.end(); ++k_it) {
       const auto count = view.values(k_it.id()).size();
 
       label_count_ += count;

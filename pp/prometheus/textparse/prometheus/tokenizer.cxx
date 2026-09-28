@@ -156,7 +156,7 @@ Token Tokenizer::next_impl() noexcept {
         return Token::kLinebreak;
       }
 
-      <label_value, value, timestamp, labels, init, meta_name, meta_text_with_leading_spaces>"" {
+      <label_value, value, timestamp, labels, init, meta_name>"" {
         return Token::kInvalid;
       }
   */

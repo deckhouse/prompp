@@ -7,6 +7,7 @@
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "prometheus/relabeler.h"
+#include "series_index/queryable_encoding_bimap.h"
 
 namespace {
 
@@ -28,6 +29,7 @@ using PromPP::Prometheus::Relabel::RelabelerStateUpdate;
 using PromPP::Prometheus::Relabel::relabelStatus;
 using PromPP::Prometheus::Relabel::StaleNaNsState;
 using PromPP::Prometheus::Relabel::StatelessRelabeler;
+using series_index::QueryableEncodingBimap;
 using enum PromPP::Prometheus::Relabel::rAction;
 using enum relabelStatus;
 
@@ -559,6 +561,36 @@ TEST_F(PerGoroutineRelabelerFixture, SampleLimitExceeded) {
   EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, kStaleNan), .ls_id = 0}, {.sample = Sample(2000, 0.1), .ls_id = 0}},
                                  shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 2, .series_added = 1}), stats_);
+}
+
+class InputTransitionRelabelingOnlyReadFixture : public testing::Test {};
+
+TEST_F(InputTransitionRelabelingOnlyReadFixture, ShouldMarkSeriesAsActive) {
+  // Arrange
+  QueryableEncodingBimap<BareBones::Vector> lss;
+  lss.find_or_emplace(LabelViewSet{{"name", "value"}});
+
+  QueryableEncodingBimap<BareBones::Vector> lss_copy;
+
+  BareBones::Vector<uint32_t> dst_src_ids_mapping;
+  series_index::QueryableEncodingBimapCopier copier(lss, lss.sorting_index(), lss.added_series(), lss_copy, dst_src_ids_mapping);
+  copier.copy_added_series_and_build_indexes();
+
+  const HashdexTest hashdex{
+      {{{"name", "value"}}, {{3000, 0.1}}},
+  };
+
+  Stats stats;
+  PromPP::Prometheus::Relabel::PerGoroutineRelabeler<std::vector> relabeler{1, 0};
+  std::vector<InnerSeries> shards_inner_series(1);
+
+  // Act
+  const auto result = relabeler.input_transition_relabeling_only_read(lss_copy, hashdex, stats, shards_inner_series);
+
+  // Assert
+  EXPECT_TRUE(result);
+  EXPECT_EQ((Stats{.samples_added = 1}), stats);
+  EXPECT_TRUE(lss_copy.added_series().is_set(0U));
 }
 
 class TargetLabelsFixture : public testing::Test {

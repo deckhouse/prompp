@@ -4,14 +4,13 @@
 #include "series_data/decoder.h"
 #include "series_data/decoder/decorator/rate_iterator.h"
 #include "series_data/encoder.h"
-#include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::TimeInterval;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::chunk::DataChunk;

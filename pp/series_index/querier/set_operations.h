@@ -1,53 +1,86 @@
 #pragma once
 
 #include <algorithm>
-#include <cstring>
-#include <ranges>
 #include <vector>
 
 #include "bare_bones/preprocess.h"
+#include "primitives/primitives.h"
+#include "selector.h"
+#include "series_index/reverse_index.h"
 
 namespace series_index::querier {
 
-struct SeriesSlice {
-  uint32_t begin;
-  uint32_t end;
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return end - begin; }
-};
-using SeriesSliceList = BareBones::Vector<SeriesSlice>;
 using SeriesIdSpan = std::span<uint32_t>;
 
-class SetMerger {
+class MatchesMerger {
  public:
-  static SeriesIdSpan merge(SeriesSliceList& slices, uint32_t*& memory, uint32_t*& temp_memory) {
-    while (slices.size() > 1) {
-      const auto merge_count = slices.size() / 2;
-      size_t slices_new_size = 0;
-      while (slices_new_size < merge_count) {
-        const auto first = &slices[slices_new_size * 2];
-        const auto second = first + 1;
-        merge(*first, *second, memory, temp_memory);
+  SeriesIdSpan merge(const Selector<SeriesIdSequenceSnapshot>::Matcher::Matches& matches, uint32_t* memory) noexcept {
+    merge_iterators_.clear();
 
-        slices[slices_new_size++] = SeriesSlice{.begin = first->begin, .end = second->end};
-      }
+    make_heap(matches);
+    const auto end = merge(memory);
 
-      if (slices.size() % 2 == 1) {
-        auto& back = slices.back();
-        std::memcpy(temp_memory + back.begin, memory + back.begin, back.count() * sizeof(uint32_t));
-        slices[slices_new_size++] = SeriesSlice{.begin = back.begin, .end = back.end};
-      }
-
-      slices.resize(slices_new_size);
-      std::swap(memory, temp_memory);
-    }
-
-    return {memory, slices.empty() ? 0 : slices.begin()->count()};
+    return {memory, static_cast<size_t>(end - memory)};
   }
 
  private:
-  PROMPP_ALWAYS_INLINE static void merge(const SeriesSlice& first, const SeriesSlice& second, uint32_t* memory, uint32_t* temp_memory) {
-    std::set_union(memory + first.begin, memory + first.end, memory + second.begin, memory + second.end, temp_memory + first.begin);
+  [[no_unique_address]] struct IteratorGreaterByValue {
+    PROMPP_ALWAYS_INLINE bool operator()(const SeriesIdSequenceSnapshot::Iterator& lhs, const SeriesIdSequenceSnapshot::Iterator& rhs) const noexcept {
+      return *lhs > *rhs;
+    }
+  } greater_;
+
+  std::vector<SeriesIdSequenceSnapshot::Iterator> merge_iterators_;
+
+  PROMPP_ALWAYS_INLINE void make_heap(const Selector<SeriesIdSequenceSnapshot>::Matcher::Matches& matches) {
+    merge_iterators_.reserve(matches.size());
+    for (const auto& label_value_match : matches) {
+      if (!label_value_match.empty()) {
+        merge_iterators_.emplace_back(label_value_match.begin());
+      }
+    }
+
+    std::ranges::make_heap(merge_iterators_, greater_);
+  }
+
+  PROMPP_ALWAYS_INLINE const uint32_t* merge(uint32_t* memory) {
+    uint32_t previous_series_id = PromPP::Primitives::kInvalidLabelSetID;
+    while (!merge_iterators_.empty()) {
+      if (const auto value = *merge_iterators_.front(); value != previous_series_id) {
+        *memory++ = value;
+        previous_series_id = value;
+      }
+
+      if (auto& next = merge_iterators_.front(); ++next == SeriesIdSequenceSnapshot::end()) {
+        std::ranges::pop_heap(merge_iterators_, greater_);
+        merge_iterators_.pop_back();
+      } else {
+        sift_down_root();
+      }
+    }
+
+    return memory;
+  }
+
+  PROMPP_ALWAYS_INLINE void sift_down_root() noexcept {
+    const size_t size = merge_iterators_.size();
+    for (size_t parent = 0;;) {
+      size_t child = 2 * parent + 1;
+      if (child >= size) {
+        break;
+      }
+
+      if (child + 1 < size && greater_(merge_iterators_[child], merge_iterators_[child + 1])) {
+        ++child;
+      }
+
+      if (!greater_(merge_iterators_[parent], merge_iterators_[child])) {
+        break;
+      }
+
+      std::swap(merge_iterators_[parent], merge_iterators_[child]);
+      parent = child;
+    }
   }
 };
 
