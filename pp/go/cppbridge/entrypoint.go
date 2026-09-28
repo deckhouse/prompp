@@ -1485,17 +1485,33 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-// primitivesLSSCleanup releases lookup structures (ls id set and hash set) of lss, sorting index is built beforehand.
-// Attention: works only with QueryableEncodingBimap type of LSS. After cleanup lss can't find or add label sets,
-// so it's allowed only for read-only lss after chunk recoding and data loading are done.
-func primitivesLSSCleanup(lss uintptr) {
+// primitivesLSSReleaseHashSet releases label set -> ls id hash set of lss.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func primitivesLSSReleaseHashSet(lss uintptr) {
 	args := struct {
 		lss uintptr
 	}{lss}
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_cleanup,
+		C.prompp_primitives_lss_release_hash_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// primitivesLSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func primitivesLSSReleaseLSIDSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_ls_id_set,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }

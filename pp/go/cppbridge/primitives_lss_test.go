@@ -2,10 +2,10 @@ package cppbridge_test
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 	"unique"
 
@@ -336,21 +336,34 @@ func (s *QueryableLSSSuite) testQueryLabelNamesImpl(test_case queryLabelNameCase
 	s.Equal(test_case.expectedNames, result.Names())
 }
 
-func (s *QueryableLSSSuite) TestCleanup() {
+func (s *QueryableLSSSuite) TestReleaseHashSet() {
 	// Arrange
 	lss := cppbridge.NewQueryableLssStorage()
+	for i := range 1000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", "lol_"+strconv.Itoa(i)))
+	}
+	prevMem := lss.AllocatedMemory()
 
 	// Act
-	for i := range 100000 {
-		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", fmt.Sprintf("lol_%d", i)))
-	}
-
-	prevMem := lss.AllocatedMemory()
-	lss.Cleanup()
+	lss.ReleaseHashSet()
 
 	// Assert
 	s.Less(lss.AllocatedMemory(), prevMem)
-	s.T().Log(prevMem - lss.AllocatedMemory())
+}
+
+func (s *QueryableLSSSuite) TestReleaseLSIDSet() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+	for i := range 1000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", "lol_"+strconv.Itoa(i)))
+	}
+	prevMem := lss.AllocatedMemory()
+
+	// Act
+	lss.ReleaseLSIDSet()
+
+	// Assert
+	s.Less(lss.AllocatedMemory(), prevMem)
 }
 
 type queryLabelValuesCase struct {

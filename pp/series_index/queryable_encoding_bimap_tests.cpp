@@ -220,7 +220,7 @@ TEST_F(BimapFixture, InsertedSeriesUpdatesMaxItemIndex) {
   EXPECT_EQ(2U, lss_.next_item_index());
 }
 
-class BimapCleanupFixture : public BimapFixture {
+class BimapReleaseFixture : public BimapFixture {
  protected:
   const LabelViewSet ls_b_{{"job", "b"}};
   const LabelViewSet ls_c_{{"job", "c"}};
@@ -233,52 +233,74 @@ class BimapCleanupFixture : public BimapFixture {
   }
 };
 
-TEST_F(BimapCleanupFixture, CleanupReleasesLookupStructuresMemory) {
+TEST_F(BimapReleaseFixture, ReleaseHashSetReleasesMemory) {
   // Arrange
+  const auto before = lss_.allocated_memory();
 
   // Act
-  lss_.cleanup();
+  lss_.release_hash_set();
 
   // Assert
-  EXPECT_EQ(lss_.trie_index().allocated_memory() + lss_.reverse_index().allocated_memory() + lss_.sorting_index().index.allocated_memory() +
-                lss_.shrink_state().post_shrink_mapping.allocated_memory() + lss_.Base::allocated_memory(),
-            lss_.allocated_memory());
-  EXPECT_TRUE(lss_.ls_id_set().empty());
+  EXPECT_LT(lss_.allocated_memory(), before);
 }
 
-TEST_F(BimapCleanupFixture, CleanupDisablesFind) {
+TEST_F(BimapReleaseFixture, ReleaseHashSetDisablesFind) {
   // Arrange
 
   // Act
-  lss_.cleanup();
+  lss_.release_hash_set();
 
   // Assert
   EXPECT_FALSE(lss_.find(ls_b_).has_value());
 }
 
-TEST_F(BimapCleanupFixture, CleanupKeepsSeriesResolvable) {
+TEST_F(BimapReleaseFixture, ReleaseHashSetKeepsLsIdSet) {
   // Arrange
 
   // Act
-  lss_.cleanup();
+  lss_.release_hash_set();
+
+  // Assert
+  EXPECT_EQ(3U, lss_.ls_id_set().size());
+}
+
+TEST_F(BimapReleaseFixture, ReleaseLsIdSetReleasesMemory) {
+  // Arrange
+  lss_.build_deferred_indexes();
+  const auto before = lss_.allocated_memory();
+
+  // Act
+  lss_.release_ls_id_set();
+
+  // Assert
+  EXPECT_LT(lss_.allocated_memory(), before);
+  EXPECT_TRUE(lss_.ls_id_set().empty());
+}
+
+TEST_F(BimapReleaseFixture, ReleaseLsIdSetBuildsSortingIndex) {
+  // Arrange
+  std::vector<uint32_t> ids = {0U, 1U, 2U};
+
+  // Act
+  lss_.release_ls_id_set();
+  lss_.sorting_index().sort(ids);
+
+  // Assert
+  EXPECT_EQ((std::vector<uint32_t>{2U, 0U, 1U}), ids);
+}
+
+TEST_F(BimapReleaseFixture, ReleaseAllKeepsSeriesResolvable) {
+  // Arrange
+
+  // Act
+  lss_.release_hash_set();
+  lss_.release_ls_id_set();
 
   // Assert
   EXPECT_EQ(3U, lss_.items_count());
   EXPECT_EQ(ls_b_, lss_[0]);
   EXPECT_EQ(ls_c_, lss_[1]);
   EXPECT_EQ(ls_a_, lss_[2]);
-}
-
-TEST_F(BimapCleanupFixture, CleanupBuildsSortingIndex) {
-  // Arrange
-  std::vector<uint32_t> ids = {0U, 1U, 2U};
-
-  // Act
-  lss_.cleanup();
-  lss_.sorting_index().sort(ids);
-
-  // Assert
-  EXPECT_EQ((std::vector<uint32_t>{2U, 0U, 1U}), ids);
 }
 
 class BimapFixedStateFixture : public BimapFixture {

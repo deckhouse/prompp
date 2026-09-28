@@ -33,19 +33,13 @@ func NewLSS() *LSS {
 // AllocatedMemory return size of allocated memory for labelset storages.
 func (l *LSS) AllocatedMemory() uint64 {
 	l.locker.RLock()
-	am := l.input.AllocatedMemory() + l.target.AllocatedMemory()
+	am := l.target.AllocatedMemory()
+	if l.input != nil {
+		am += l.input.AllocatedMemory()
+	}
 	l.locker.RUnlock()
 
 	return am
-}
-
-// Cleanup releases lookup structures (ls id set and hash set) of lss, sorting index is built beforehand.
-// Attention: works only with QueryableEncodingBimap type of LSS. After cleanup lss can't find or add label sets,
-// so it's allowed only for read-only lss after chunk recoding and data loading are done.
-func (l *LSS) Cleanup() {
-	l.locker.Lock()
-	l.target.Cleanup()
-	l.locker.Unlock()
 }
 
 // CopyAddedSeriesTo copy the label sets from the source lss to the destination lss that were added source lss.
@@ -168,6 +162,27 @@ func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
 	l.locker.RLock()
 	status.FromLSS(l.target, limit)
 	l.locker.RUnlock()
+}
+
+// ReleaseHashSet releases label set -> ls id hash set of target lss and drops input lss,
+// it's only needed while the head accepts data.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func (l *LSS) ReleaseHashSet() {
+	l.locker.Lock()
+	l.input = nil
+	l.target.ReleaseHashSet()
+	l.locker.Unlock()
+}
+
+// ReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of target lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func (l *LSS) ReleaseLSIDSet() {
+	l.locker.Lock()
+	l.target.ReleaseLSIDSet()
+	l.locker.Unlock()
 }
 
 // RLock locks the resource for reading.
