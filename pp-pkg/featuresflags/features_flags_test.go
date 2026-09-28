@@ -69,14 +69,47 @@ func (s *DiffFeaturesSuite) TestAddedRemovedChanged() {
 	s.Equal(featuresDiff{
 		added:   []string{"b"},
 		removed: []string{"d=4"},
-		changed: []string{"c: 3 -> 2"},
+		changed: []string{"c=3 -> c=2"},
 	}, diff)
 }
 
-func (s *DiffFeaturesSuite) TestValueWithoutAndWithDefaultValueDiffer() {
+func (s *DiffFeaturesSuite) TestUnknownFeatureValuesComparedAsIs() {
 	diff := diffFeatures(parseFeatures("a"), parseFeatures("a=1"))
 
-	s.Equal([]string{"a: 1 -> "}, diff.changed)
+	s.Equal([]string{"a=1 -> a"}, diff.changed)
+}
+
+func (s *DiffFeaturesSuite) TestHeadReadConcurrencyEmptyEqualsOne() {
+	diff := diffFeatures(parseFeatures("head_read_concurrency"), parseFeatures("head_read_concurrency=1"))
+
+	s.True(diff.isEmpty())
+}
+
+func (s *DiffFeaturesSuite) TestIntValuesComparedByMeaning() {
+	diff := diffFeatures(
+		parseFeatures("head_read_concurrency=04,head_default_number_of_shards=+8,federation_split_families=010"),
+		parseFeatures("head_read_concurrency=4,head_default_number_of_shards=8,federation_split_families=10"),
+	)
+
+	s.True(diff.isEmpty())
+}
+
+func (s *DiffFeaturesSuite) TestDurationValuesComparedByMeaning() {
+	diff := diffFeatures(parseFeatures("default_sample_age_limit=60m"), parseFeatures("default_sample_age_limit=1h"))
+
+	s.True(diff.isEmpty())
+}
+
+func (s *DiffFeaturesSuite) TestDifferentDurationValuesDiffer() {
+	diff := diffFeatures(parseFeatures("default_sample_age_limit=30m"), parseFeatures("default_sample_age_limit=1h"))
+
+	s.Equal([]string{"default_sample_age_limit=1h -> default_sample_age_limit=30m"}, diff.changed)
+}
+
+func (s *DiffFeaturesSuite) TestUnparsableValuesComparedAsIs() {
+	diff := diffFeatures(parseFeatures("head_default_number_of_shards=abc"), parseFeatures("head_default_number_of_shards=8"))
+
+	s.Equal([]string{"head_default_number_of_shards=8 -> head_default_number_of_shards=abc"}, diff.changed)
 }
 
 type FeaturesDefaultSuite struct {

@@ -214,7 +214,7 @@ func setHeadDefaultNumberOfShards(logger log.Logger, fvalue string) {
 	switch {
 	case err != nil:
 		_ = level.Error(logger).Log(
-			msgStr, "Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
+			msgStr, "Error parsing head_default_number_of_shards value",
 			defaultNumberOfShardsStr, storage.DefaultNumberOfShards,
 			errStr, err,
 		)
@@ -325,6 +325,21 @@ func setSelectFuncOptimization(logger log.Logger, fvalue string) {
 // featuresDiff
 //
 
+// featuresDiff describes the difference between the applied and the default feature sets.
+type featuresDiff struct {
+	// added contains features present only in the applied set.
+	added []string
+	// removed contains features present only in the default set.
+	removed []string
+	// changed contains features present in both sets with different values.
+	changed []string
+}
+
+// isEmpty reports whether the feature sets are equal.
+func (d featuresDiff) isEmpty() bool {
+	return len(d.added) == 0 && len(d.removed) == 0 && len(d.changed) == 0
+}
+
 // checkFeaturesDefault compares the applied features with PROMPP_FEATURES_DEFAULT, if it is set,
 // and reports the result via the prompp_features_differ_from_default gauge.
 func checkFeaturesDefault(logger log.Logger, registerer prometheus.Registerer, features map[string]string) {
@@ -357,12 +372,13 @@ func checkFeaturesDefault(logger log.Logger, registerer prometheus.Registerer, f
 func diffFeatures(features, defaults map[string]string) featuresDiff {
 	var diff featuresDiff
 	for _, fname := range slices.Sorted(maps.Keys(features)) {
+		fvalue := features[fname]
 		defaultValue, ok := defaults[fname]
 		switch {
 		case !ok:
 			diff.added = append(diff.added, formatFeature(fname, features[fname]))
-		case defaultValue != features[fname]:
-			diff.changed = append(diff.changed, fname+": "+defaultValue+" -> "+features[fname])
+		case normalizeFeatureValue(fname, defaultValue) != normalizeFeatureValue(fname, fvalue):
+			diff.changed = append(diff.changed, formatFeature(fname, defaultValue)+" -> "+formatFeature(fname, fvalue))
 		}
 	}
 
@@ -375,17 +391,40 @@ func diffFeatures(features, defaults map[string]string) featuresDiff {
 	return diff
 }
 
-// featuresDiff describes the difference between the applied and the default feature sets.
-type featuresDiff struct {
-	// added contains features present only in the applied set.
-	added []string
-	// removed contains features present only in the default set.
-	removed []string
-	// changed contains features present in both sets with different values.
-	changed []string
+// normalizeFeatureValue returns the canonical form of the feature value, so that values
+// with the same meaning (e.g. 1h and 60m) are compared as equal. Unknown features and
+// unparsable values are returned as is.
+func normalizeFeatureValue(fname, fvalue string) string {
+	switch fname {
+	case "head_read_concurrency":
+		if fvalue == "" {
+			return "1"
+		}
+
+		return normalizeIntValue(fvalue)
+
+	case "head_default_number_of_shards", "federation_split_families":
+		return normalizeIntValue(fvalue)
+
+	case "default_sample_age_limit":
+		d, err := model.ParseDuration(fvalue)
+		if err != nil {
+			return fvalue
+		}
+
+		return d.String()
+
+	default:
+		return fvalue
+	}
 }
 
-// isEmpty reports whether the feature sets are equal.
-func (d featuresDiff) isEmpty() bool {
-	return len(d.added) == 0 && len(d.removed) == 0 && len(d.changed) == 0
+// normalizeIntValue returns the canonical form of the integer value, or the value as is if it is not an integer.
+func normalizeIntValue(fvalue string) string {
+	v, err := strconv.Atoi(fvalue)
+	if err != nil {
+		return fvalue
+	}
+
+	return strconv.Itoa(v)
 }
