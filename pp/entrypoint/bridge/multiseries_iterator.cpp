@@ -10,7 +10,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_multi_series_it
   };
 
   const auto in = static_cast<Arguments*>(args);
-  in->serialized_data->construct_multi_series_iterator(in->iterator, in->series_ids.span());
+  std::visit([in](auto& serialized_data) { serialized_data.construct_multi_series_iterator(in->iterator, in->series_ids.span()); }, *in->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_reset(void* args) {
@@ -21,7 +21,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_multi_series_it
   };
 
   const auto in = static_cast<Arguments*>(args);
-  in->serialized_data->reset_multi_series_iterator(*in->iterator, in->series_ids.span());
+  std::visit([in](auto& serialized_data) { serialized_data.reset_multi_series_iterator(*in->iterator, in->series_ids.span()); }, *in->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_multi_series_iterator_next(void* iterator) {

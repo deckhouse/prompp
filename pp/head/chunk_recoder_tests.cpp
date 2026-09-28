@@ -2,7 +2,6 @@
 
 #include "chunk_recoder.h"
 #include "series_data/encoder.h"
-#include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace {
@@ -13,7 +12,7 @@ using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
 using PromPP::Primitives::Timestamp;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::serialization::DataSerializer;
 using std::operator""s;
@@ -157,7 +156,7 @@ TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
 
 TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -266,7 +265,7 @@ TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
 
 TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
@@ -282,7 +281,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
 
 TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);

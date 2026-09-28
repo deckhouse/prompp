@@ -54,19 +54,19 @@ static_assert(BareBones::ReallocatorInterface<Reallocator>);
 }  // namespace lss_memory
 
 template <class T>
-using SharedMemoryWithChangesDetection = BareBones::SharedMemory<T, lss_memory::Reallocator>;
+using SharedMemoryWithChangesDetection = BareBones::SharedMemory<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, lss_memory::Reallocator>;
 
 template <class T>
-using SharedSpanWithChangesDetection = BareBones::SharedSpan<T, lss_memory::Reallocator>;
+using SharedSpanWithChangesDetection = BareBones::SharedSpan<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, lss_memory::Reallocator>;
 
 template <class T>
-using SharedVectorWithChangesDetection = BareBones::SharedVector<T, lss_memory::Reallocator>;
+using SharedVectorWithChangesDetection = BareBones::SharedVector<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, lss_memory::Reallocator>;
 
 template <class T>
-using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using SharedSpan = BareBones::SharedSpan<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
 template <class T>
-using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using SharedVector = BareBones::SharedVector<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVectorWithChangesDetection>;
 using QueryableEncodingBimap = series_index::QueryableEncodingBimap<SharedVectorWithChangesDetection>;

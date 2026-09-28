@@ -2,8 +2,6 @@
 
 #include "prometheus/tsdb/chunkenc/bstream.h"
 
-#include "bare_bones/gorilla.h"
-
 namespace {
 
 using BareBones::AllocationSize;

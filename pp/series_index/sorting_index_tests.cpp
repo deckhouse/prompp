@@ -24,10 +24,10 @@ class SortingIndexFixture : public testing::Test {
   using Set = phmap::btree_set<uint32_t, LessComparator>;
 
   template <class T>
-  using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+  using SharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   template <class T>
-  using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+  using SharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   Set set_{{}, LessComparator{}};
   SortingIndexBuilder<Set, BareBones::Vector, kItems.size() + 1> index_{set_};

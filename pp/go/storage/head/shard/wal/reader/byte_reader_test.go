@@ -34,7 +34,7 @@ func BenchmarkBR1(b *testing.B) {
 
 	buf := []byte{1, 2, 3}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = bb.Write(buf)
 		_, _ = br.ReadByte()
 		_, _ = br.ReadByte()
