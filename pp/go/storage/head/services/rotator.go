@@ -186,7 +186,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	}
 
 	oldHead.SetReadOnly()
-	ReleaseHashSet(oldHead)
+	ReleaseIngestionStructures(oldHead)
 
 	s.events.WithLabelValues("rotated").Inc()
 	s.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))

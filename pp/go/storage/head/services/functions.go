@@ -81,15 +81,15 @@ func CloseWals[
 	return errors.Join(errs...)
 }
 
-// ReleaseHashSet releases label set -> ls id hash set of lss and drops input lss for all shards.
+// ReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss for all shards.
 // Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
 // so it's allowed only for read-only head.
-func ReleaseHashSet[
+func ReleaseIngestionStructures[
 	TShard Shard,
 	THead RangeHead[TShard],
 ](h THead) {
 	for _, shard := range h.Shards() {
-		shard.LSSReleaseHashSet()
+		shard.LSSReleaseIngestionStructures()
 	}
 }
 

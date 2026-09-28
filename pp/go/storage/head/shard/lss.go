@@ -164,11 +164,11 @@ func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
 	l.locker.RUnlock()
 }
 
-// ReleaseHashSet releases label set -> ls id hash set of target lss and drops input lss,
+// ReleaseIngestionStructures releases label set -> ls id hash set of target lss and drops input lss,
 // it's only needed while the head accepts data.
 // Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
 // so it's allowed only for read-only lss.
-func (l *LSS) ReleaseHashSet() {
+func (l *LSS) ReleaseIngestionStructures() {
 	l.locker.Lock()
 	l.input = nil
 	l.target.ReleaseHashSet()

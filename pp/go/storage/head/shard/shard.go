@@ -141,11 +141,11 @@ func (s *Shard) LSSWithRLock(fn func(target, input *cppbridge.LabelSetStorage) e
 	return s.lss.WithRLock(fn)
 }
 
-// LSSReleaseHashSet releases label set -> ls id hash set of lss and drops input lss.
+// LSSReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss.
 // Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
 // so it's allowed only for read-only lss.
-func (s *Shard) LSSReleaseHashSet() {
-	s.lss.ReleaseHashSet()
+func (s *Shard) LSSReleaseIngestionStructures() {
+	s.lss.ReleaseIngestionStructures()
 }
 
 // LSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,

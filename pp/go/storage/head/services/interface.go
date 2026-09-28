@@ -204,10 +204,10 @@ type Shard interface {
 	// LSSAllocatedMemory return size of allocated memory for labelset storages.
 	LSSAllocatedMemory() uint64
 
-	// LSSReleaseHashSet releases label set -> ls id hash set of lss and drops input lss.
+	// LSSReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss.
 	// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
 	// so it's allowed only for read-only lss.
-	LSSReleaseHashSet()
+	LSSReleaseIngestionStructures()
 
 	// LSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
 	// sorting index is built beforehand.
