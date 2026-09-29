@@ -1,11 +1,13 @@
 #include "generate_cedarpp_series_index_test.h"
 
 #include <chrono>
+#include <numeric>
 
 #include "cedar/cedarpp.h"
 
+#include "bare_bones/vector.h"
 #include "performance_tests/dummy_wal.h"
-#include "wal/wal.h"
+#include "primitives/snug_composites.h"
 
 namespace performance_tests::series_index {
 
