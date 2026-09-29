@@ -1,7 +1,6 @@
 package storage_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -546,7 +545,19 @@ func (s *HeadLoadSuite) TestLoadWalV2MissingFirstSegmentID() {
 	h, err := s.loadRecord(rec)
 
 	// Assert
-	s.Require().ErrorContains(err, "segment ids mismatch")
+	s.Require().ErrorContains(err, "missing segments by shard")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2MissingFirstSegmentIDAndDuplicateSegmentID() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{1, 2}, {2}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "missing segments by shard")
 	s.True(h.IsReadOnly())
 }
 
@@ -571,6 +582,27 @@ func (s *HeadLoadSuite) TestLoadWalV2NonIncreasingSegmentIDsInShard() {
 
 	// Assert
 	s.Require().ErrorContains(err, "segment id 0 is not greater than previous 1")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2CorruptedShardTailReportsOnlyShardError() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{0, 2}, {1}})
+	shardFilePath := storage.GetShardWalFilename(filepath.Join(s.dataDir, rec.Dir()), 0)
+	shardFile, err := os.OpenFile(shardFilePath, os.O_APPEND|os.O_WRONLY, 0o666)
+	s.Require().NoError(err)
+	_, err = shardFile.Write([]byte{0xff, 0xff, 0xff})
+	s.Require().NoError(err)
+	s.Require().NoError(shardFile.Close())
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().Error(err)
+	s.NotContains(err.Error(), "segment ids mismatch")
+	s.NotContains(err.Error(), "missing segments by shard")
+	s.Require().ErrorContains(err, "failed to read segment")
 	s.True(h.IsReadOnly())
 }
 
@@ -610,7 +642,7 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 	// every append exhausts the segment limit of shard 0 only
 	for i := range numberOfExhaustedSegments {
 		batch := timeSeries[i*int(storagetest.MaxSegmentSize) : (i+1)*int(storagetest.MaxSegmentSize)]
-		_, err = headAppender.Append(context.Background(), storagetest.NewIncomingData(&s.Suite, batch), state, false)
+		_, err = headAppender.Append(s.T().Context(), storagetest.NewIncomingData(&s.Suite, batch), state, false)
 		s.Require().NoError(err)
 	}
 	s.Require().NoError(services.CFSViaRange(sourceHead))
@@ -618,6 +650,7 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 
 	// Act
 	loadedHead := s.mustLoadHead(0)
+	s.T().Cleanup(func() { s.Require().NoError(loadedHead.Close()) })
 	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   math.MaxInt64,
@@ -635,7 +668,6 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 	s.Equal([]uint16{0, 0, 0, 0, 1}, segmentsByShard)
 	s.Equal(cppbridge.DataStorageQueryStatusSuccess, queryResult.Status)
 	s.Len(storagetest.GetSamplesFromSerializedData(queryResult.SerializedData)[0], len(timeSeries))
-	s.Require().NoError(loadedHead.Close())
 }
 
 type EnsureSameErrorTypesTestSuite struct {

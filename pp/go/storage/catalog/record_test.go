@@ -98,6 +98,15 @@ func (s *RecordSuite) TestIsMissingSegmentsByShardTrue_2() {
 	s.True(r.IsMissingSegmentsByShard())
 }
 
+func (s *RecordSuite) TestIsMissingSegmentsByShardFirstSegment() {
+	r := catalog.NewEmptyRecord()
+
+	r.SetSegmentIDByShard(1, 2)
+	r.SetSegmentIDByShard(2, 2)
+
+	s.True(r.IsMissingSegmentsByShard())
+}
+
 func (s *RecordSuite) TestNextSegmentID() {
 	r := catalog.NewEmptyRecord()
 

@@ -109,7 +109,7 @@ func (s *FunctionsSuite) TestCloseWalsAggregatesErrorsFromAllShards() {
 	}
 }
 
-func (s *FunctionsSuite) newCommittableSegmentWriters() []*mock.SegmentWriterMock {
+func (*FunctionsSuite) newCommittableSegmentWriters() []*mock.SegmentWriterMock {
 	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
 	for shardID := range shardsCount {
 		segmentWriters[shardID] = &mock.SegmentWriterMock{

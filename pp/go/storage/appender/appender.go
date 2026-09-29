@@ -205,14 +205,14 @@ func (a Appender[TTask, TShard, TGShard, THead]) Append(
 
 	a.trackStaleNans(shardedInnerSeries, state)
 
-	limitExhausted := a.poolProvider.GetShardsMask()
-	defer a.poolProvider.PutShardsMask(limitExhausted)
-	commitAll, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries, limitExhausted)
+	shardsToCommit := a.poolProvider.GetShardsMask()
+	defer a.poolProvider.PutShardsMask(shardsToCommit)
+	commitAll, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries, shardsToCommit)
 	if err != nil {
 		logger.Errorf("failed to write wal: %v", err)
 	}
 
-	if err := a.commitWal(commitToWal || commitAll, limitExhausted); err != nil {
+	if err := a.commitWal(commitToWal || commitAll, shardsToCommit); err != nil {
 		logger.Errorf("failed to commit wal: %v", err)
 	}
 
@@ -223,13 +223,13 @@ func (a Appender[TTask, TShard, TGShard, THead]) Append(
 // whose segment limit is exhausted.
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func (a *Appender[TTask, TShard, TGShard, THead]) commitWal(commitAll bool, limitExhausted []bool) error {
+func (a *Appender[TTask, TShard, TGShard, THead]) commitWal(commitAll bool, shardsToCommit []bool) error {
 	if commitAll {
 		return a.commitAndFlush(a.head, nil)
 	}
 
-	if slices.Contains(limitExhausted, true) {
-		return a.commitAndFlush(a.head, limitExhausted)
+	if slices.Contains(shardsToCommit, true) {
+		return a.commitAndFlush(a.head, shardsToCommit)
 	}
 
 	return nil
@@ -410,11 +410,11 @@ func (a *Appender[TTask, TShard, TGShard, THead]) trackStaleNans(
 }
 
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
-// It marks in limitExhausted the shards whose segment limit is exhausted and which can be committed independently,
+// It marks in shardsToCommit the shards whose segment limit is exhausted and which can be committed independently,
 // and returns true if a shard exhausted the limit but requires all shards to be committed together.
 func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
-	limitExhausted []bool,
+	shardsToCommit []bool,
 ) (bool, error) {
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
@@ -442,7 +442,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal
 			}
 
 			if shard.WalIndependentCommit() {
-				limitExhausted[shardID] = true
+				shardsToCommit[shardID] = true
 				return nil
 			}
 

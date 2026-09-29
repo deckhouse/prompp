@@ -122,7 +122,7 @@ func seriesWithSamples(name string, numberOfSamples int64) []model.TimeSeries {
 	timeSeries := make([]model.TimeSeries, 0, numberOfSamples)
 	for ts := range numberOfSamples {
 		timeSeries = append(timeSeries, model.TimeSeries{
-			LabelSet:  model.NewLabelSetBuilder().Set("__name__", name).Build(),
+			LabelSet:  model.LabelSetFromPairs("__name__", name),
 			Timestamp: uint64(ts + 1), // #nosec G115 // no overflow
 			Value:     1.1,
 		})
@@ -216,7 +216,8 @@ func (s *AppenderSuite) TestDropInvalidSeries() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -243,7 +244,8 @@ func (s *AppenderSuite) TestAppendMultipleSamplesInOneSeries() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -291,7 +293,8 @@ func (s *AppenderSuite) TestSeriesPerShardTransfer() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -349,7 +352,8 @@ func (s *AppenderSuite) TestShardedRelabeledSeriesFullNotEmpty() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -408,7 +412,8 @@ func (s *AppenderSuite) TestTrackStaleness() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -455,7 +460,8 @@ func (s *AppenderSuite) TestTrackStalenessWithoutHonorTimestamps() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -493,7 +499,8 @@ func (s *AppenderSuite) TestWithoutCommitToWal() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -515,7 +522,8 @@ func (s *AppenderSuite) TestWithCommitToWal() {
 			},
 		}),
 		state,
-		true)
+		true,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -547,7 +555,8 @@ func (s *AppenderSuite) TestWithCommitToWalByLimitExhausted() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -562,10 +571,11 @@ func (s *AppenderSuite) TestLimitExhaustedWalV1CommitsAllShards() {
 
 	// Act
 	_, err := appender.New(h, s.commitAndFlush).Append(
-		context.Background(),
+		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -581,10 +591,11 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsOnlyExhaustedShard() {
 
 	// Act
 	_, err := appender.New(h, s.commitAndFlush).Append(
-		context.Background(),
+		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -600,13 +611,14 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsEveryExhaustedShard() {
 
 	// Act
 	_, err := appender.New(h, s.commitAndFlush).Append(
-		context.Background(),
+		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, append(
 			seriesWithSamples(shard0Series, int64(maxSegmentSize)),
 			seriesWithSamples(shard1Series, int64(maxSegmentSize))...,
 		)),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -622,10 +634,11 @@ func (s *AppenderSuite) TestLimitNotExhaustedWalV2DoesNotCommit() {
 
 	// Act
 	_, err := appender.New(h, s.commitAndFlush).Append(
-		context.Background(),
+		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -641,10 +654,11 @@ func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
 
 	// Act
 	_, err := appender.New(h, s.commitAndFlush).Append(
-		context.Background(),
+		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, 1)),
 		state,
-		true)
+		true,
+	)
 
 	// Assert
 	s.Require().NoError(err)

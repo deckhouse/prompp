@@ -551,7 +551,9 @@ func (l *ShardDataLoader) loadSegmentsV2(
 		return nil
 	}); err != nil {
 		logger.Debugf(err.Error())
-		return 0, err
+		// the segments read before the error are already marked up and counted in maxSegmentID,
+		// so the number of segments must match them for the head-level segment IDs check
+		return numberOfSegments, err
 	}
 
 	return numberOfSegments, nil
@@ -633,8 +635,9 @@ func checkNumberOfSegmentsV1(shardLoadResults []ShardLoadResult) (optional.Optio
 }
 
 // checkSegmentIDsV2 checks that the through segment IDs of all shards of the wal format v2 form
-// exactly the range 0..maxSegmentID: there are no gaps in the markup and, since the number of segments
-// equals the size of the range, there are no duplicates. Shards may have different numbers of segments.
+// exactly the range 0..maxSegmentID: every ID of the range is marked (no gaps, including ID 0) and,
+// since the number of segments equals the size of the range, there are no duplicates.
+// Shards may have different numbers of segments.
 func checkSegmentIDsV2(headRecord *catalog.Record, shardLoadResults []ShardLoadResult) error {
 	var numberOfSegments uint64
 	var maxSegmentID uint32
