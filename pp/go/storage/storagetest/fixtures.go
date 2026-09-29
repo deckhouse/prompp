@@ -77,7 +77,7 @@ func (tsd *timeSeriesDataSlice) Destroy() {
 
 // MustAppendTimeSeries add time series to head.
 func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeSeries) {
-	headAppender := appender.New(head, services.CFViaRange)
+	headAppender := appender.New(head, services.CFViaRangeByMask)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
 	s.Require().NoError(err)
@@ -147,7 +147,7 @@ func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStora
 		*shard.Shard,
 		*shard.PerGoroutineShard,
 		*storage.TransactionHead,
-	](th, func(*storage.TransactionHead) error { return nil })
+	](th, func(*storage.TransactionHead, []bool) error { return nil })
 
 	if _, err = app.Append(
 		context.Background(),

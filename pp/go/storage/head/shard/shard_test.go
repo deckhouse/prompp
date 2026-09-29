@@ -50,6 +50,10 @@ func (m *fakeWal) Flush() error {
 	return m.flushErr
 }
 
+func (*fakeWal) IndependentCommit() bool {
+	return false
+}
+
 func (m *fakeWal) Sync() error {
 	m.syncCalls++
 	return m.syncErr
