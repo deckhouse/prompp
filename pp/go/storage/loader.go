@@ -371,7 +371,7 @@ func (l *ShardDataLoader) loadWalFile(
 	rd io.Reader,
 	queriedSeriesStorageIsEmpty bool,
 ) (*cppbridge.HeadWalDecoder, error) {
-	walVersion, encoderVersion, _, err := reader.ReadHeader(rd)
+	headWalVersion, encoderVersion, _, err := reader.ReadHeader(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
 	}
@@ -388,11 +388,11 @@ func (l *ShardDataLoader) loadWalFile(
 
 	decoder := cppbridge.NewHeadWalDecoder(l.shardData.lss.Target(), encoderVersion)
 
-	switch walVersion {
+	switch headWalVersion {
 	case wal.FileFormatVersion:
 		l.segmentMarkup = writer.NoopSegmentMarkup{}
 		l.shardData.writeSegment = writer.WriteSegment[*cppbridge.HeadEncodedSegment]
-		l.shardData.walVersion = walVersion
+		l.shardData.walVersion = headWalVersion
 		l.shardData.numberOfSegments, err = l.loadSegments(
 			rd,
 			decoder,
@@ -402,7 +402,7 @@ func (l *ShardDataLoader) loadWalFile(
 	case wal.FileFormatVersionV2:
 		l.notifier = NoopSegmentWriteNotifier{}
 		l.shardData.writeSegment = writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment]
-		l.shardData.walVersion = walVersion
+		l.shardData.walVersion = headWalVersion
 		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
 			rd,
 			decoder,
@@ -410,7 +410,7 @@ func (l *ShardDataLoader) loadWalFile(
 			unloader,
 		)
 	default:
-		return decoder, fmt.Errorf("unknown wal file format: %d", walVersion)
+		return decoder, fmt.Errorf("unknown wal file format: %d", headWalVersion)
 	}
 
 	return decoder, err
@@ -671,26 +671,26 @@ func checkSegmentIDsV2(headRecord *catalog.Record, shardLoadResults []ShardLoadR
 
 // checkWalVersion checks wal version of all shards.
 func checkWalVersion(shardLoadResults []ShardLoadResult) uint8 {
-	walVersion := uint8(0)
+	headWalVersion := uint8(0)
 
 	for i := range shardLoadResults {
 		// wal version is the same
-		if walVersion != 0 && walVersion == shardLoadResults[i].walVersion {
+		if headWalVersion != 0 && headWalVersion == shardLoadResults[i].walVersion {
 			continue
 		}
 
 		// wal version is not set
-		if walVersion == 0 {
-			walVersion = shardLoadResults[i].walVersion
+		if headWalVersion == 0 {
+			headWalVersion = shardLoadResults[i].walVersion
 			continue
 		}
 
 		// wal version is different, unlikely
-		logger.Warnf("wal version mismatch: %d != %d", walVersion, shardLoadResults[i].walVersion)
-		walVersion = shardLoadResults[i].walVersion
+		logger.Warnf("wal version mismatch: %d != %d", headWalVersion, shardLoadResults[i].walVersion)
+		headWalVersion = shardLoadResults[i].walVersion
 	}
 
-	return walVersion
+	return headWalVersion
 }
 
 // setLastAppendedSegmentID sets last appended segment id to record.
