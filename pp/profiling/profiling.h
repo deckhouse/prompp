@@ -10,4 +10,4 @@
 #endif
 #define TRACY_CALLSTACK PROMPP_PROFILING_CALLSTACK
 
-#include "tracy/Tracy.hpp"
+#include "tracy/Tracy.hpp"  // IWYU pragma: export

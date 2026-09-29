@@ -1,6 +1,5 @@
 #include "label_set.h"
 
-#include "bare_bones/algorithm.h"
 #include "bare_bones/iterator.h"
 #include "bare_bones/varint.h"
 #include "entrypoint/types/lss.h"
