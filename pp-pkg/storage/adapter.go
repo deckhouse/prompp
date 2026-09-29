@@ -247,9 +247,9 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 // Label limit fields follow the same 0 = no limit semantics as scrape config.
 func (ar *Adapter) ApplyConfig(cfg *config.Config) error {
 	limits := cppbridge.WALHashdexLimits{
-		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),
-		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),
-		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit),
+		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),            // #nosec G115 // no overflow
+		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),  // #nosec G115 // no overflow
+		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit), // #nosec G115 // no overflow
 	}
 	ar.hashdexLimits.Store(limits)
 	return nil

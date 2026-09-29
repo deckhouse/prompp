@@ -82,7 +82,7 @@ func (cs *CurrentState) unmarshal(data []byte) error {
 	var offset int
 
 	mb, n := binary.Uvarint(data[offset:])
-	if byte(mb) != magicByte {
+	if byte(mb) != magicByte { // #nosec G115 // no overflow
 		return fmt.Errorf("%w: file dont have magic byte: %d", ErrCorruptedFile, mb)
 	}
 	offset += n
@@ -92,11 +92,11 @@ func (cs *CurrentState) unmarshal(data []byte) error {
 	offset += n
 	length, n := binary.Uvarint(data[offset:])
 	offset += n
-	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) {
+	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) { // #nosec G115 // no overflow
 		return fmt.Errorf("%w: check sum not equal for shards number power", ErrCorruptedFile)
 	}
-	usnp, n := binary.Uvarint(data[offset : offset+int(length)])
-	snp := uint8(usnp)
+	usnp, n := binary.Uvarint(data[offset : offset+int(length)]) // #nosec G115 // no overflow
+	snp := uint8(usnp)                                           // #nosec G115 // no overflow
 	cs.shardsNumberPower = &snp
 	offset += n
 
@@ -109,43 +109,43 @@ func (cs *CurrentState) unmarshal(data []byte) error {
 	offset += n
 	length, n = binary.Uvarint(data[offset:])
 	offset += n
-	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) {
+	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) { // #nosec G115 // no overflow
 		return fmt.Errorf("%w: check sum not equal for open head limits", ErrCorruptedFile)
 	}
-	if err := cs.limits.OpenHead.UnmarshalBinary(data[offset : offset+int(length)]); err != nil {
+	if err := cs.limits.OpenHead.UnmarshalBinary(data[offset : offset+int(length)]); err != nil { // #nosec G115
 		return err
 	}
-	offset += int(length)
+	offset += int(length) // #nosec G115 // no overflow
 
 	// read block limits with checksum
 	chksm, n = binary.Uvarint(data[offset:])
 	offset += n
 	length, n = binary.Uvarint(data[offset:])
 	offset += n
-	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) {
+	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) { // #nosec G115 // no overflow
 		return fmt.Errorf("%w: check sum not equal for block limits", ErrCorruptedFile)
 	}
-	if err := cs.limits.Block.UnmarshalBinary(data[offset : offset+int(length)]); err != nil {
+	if err := cs.limits.Block.UnmarshalBinary(data[offset : offset+int(length)]); err != nil { // #nosec G115
 		return err
 	}
-	offset += int(length)
+	offset += int(length) // #nosec G115 // no overflow
 
 	// read hashdex limits with checksum
 	chksm, n = binary.Uvarint(data[offset:])
 	offset += n
 	length, n = binary.Uvarint(data[offset:])
 	offset += n
-	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) {
+	if uint32(chksm) != crc32.ChecksumIEEE(data[offset:offset+int(length)]) { // #nosec G115 // no overflow
 		return fmt.Errorf("%w: check sum not equal for hashdex limits", ErrCorruptedFile)
 	}
-	if err := cs.limits.Hashdex.UnmarshalBinary(data[offset : offset+int(length)]); err != nil {
+	if err := cs.limits.Hashdex.UnmarshalBinary(data[offset : offset+int(length)]); err != nil { // #nosec G115
 		return err
 	}
-	offset += int(length)
+	offset += int(length) // #nosec G115 // no overflow
 
 	// read checksum file
 	chksm, n = binary.Uvarint(data[offset:])
-	if uint32(chksm) != crc32.ChecksumIEEE(data[:len(data)-n]) {
+	if uint32(chksm) != crc32.ChecksumIEEE(data[:len(data)-n]) { // #nosec G115 // no overflow
 		return fmt.Errorf("%w: check sum not equal", ErrCorruptedFile)
 	}
 	return nil

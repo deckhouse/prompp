@@ -17,14 +17,14 @@ package histogram
 func GenerateBigTestHistograms(numHistograms, numBuckets int) []*Histogram {
 	numSpans := numBuckets / 10
 	bucketsPerSide := numBuckets / 2
-	spanLength := uint32(bucketsPerSide / numSpans)
+	spanLength := uint32(bucketsPerSide / numSpans) // #nosec G115 // no overflow
 	// Given all bucket deltas are 1, sum bucketsPerSide + 1.
 	observationCount := bucketsPerSide * (1 + bucketsPerSide)
 
 	var histograms []*Histogram
 	for i := 0; i < numHistograms; i++ {
 		h := &Histogram{
-			Count:           uint64(i + observationCount),
+			Count:           uint64(i + observationCount), // #nosec G115 // no overflow
 			ZeroCount:       uint64(i),
 			ZeroThreshold:   1e-128,
 			Sum:             18.4 * float64(i+1),

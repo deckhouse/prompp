@@ -73,7 +73,7 @@ func testChunk(t *testing.T, c Chunk) {
 	it1 := c.Iterator(nil)
 	var res1 []pair
 	for it1.Next() == ValFloat {
-		ts, v := it1.At()
+		ts, v = it1.At()
 		res1 = append(res1, pair{t: ts, v: v})
 	}
 	require.NoError(t, it1.Err())
@@ -83,7 +83,7 @@ func testChunk(t *testing.T, c Chunk) {
 	it2 := c.Iterator(it1)
 	var res2 []pair
 	for it2.Next() == ValFloat {
-		ts, v := it2.At()
+		ts, v = it2.At()
 		res2 = append(res2, pair{t: ts, v: v})
 	}
 	require.NoError(t, it2.Err())
@@ -237,7 +237,7 @@ func benchmarkIterator(b *testing.B, newChunk func() Chunk) {
 	var res float64
 	var it Iterator
 	for i := 0; i < b.N; {
-		it := chunk.Iterator(it)
+		it = chunk.Iterator(it)
 
 		for it.Next() == ValFloat {
 			_, v := it.At()

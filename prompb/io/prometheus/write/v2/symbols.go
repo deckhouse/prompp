@@ -36,7 +36,7 @@ func (t *SymbolsTable) Symbolize(str string) uint32 {
 	if ref, ok := t.symbolsMap[str]; ok {
 		return ref
 	}
-	ref := uint32(len(t.strings))
+	ref := uint32(len(t.strings)) // #nosec G115 // no overflow
 	t.strings = append(t.strings, str)
 	t.symbolsMap[str] = ref
 	return ref

@@ -258,7 +258,7 @@ func Open(l log.Logger, reg prometheus.Registerer, rs RemoteWrite, dir string, o
 		return nil, err
 	}
 	if !opts.NoLockfile {
-		if err := locker.Lock(); err != nil {
+		if err = locker.Lock(); err != nil {
 			return nil, err
 		}
 	}
@@ -306,7 +306,7 @@ func Open(l log.Logger, reg prometheus.Registerer, rs RemoteWrite, dir string, o
 
 	if err := db.replayWAL(); err != nil {
 		level.Warn(db.logger).Log("msg", "encountered WAL read error, attempting repair", "err", err)
-		if err := w.Repair(err); err != nil {
+		if err = w.Repair(err); err != nil {
 			return nil, fmt.Errorf("repair corrupted WAL: %w", err)
 		}
 		level.Info(db.logger).Log("msg", "successfully repaired WAL")
@@ -369,19 +369,19 @@ func (db *DB) replayWAL() error {
 	multiRef := map[chunks.HeadSeriesRef]chunks.HeadSeriesRef{}
 
 	if err == nil {
-		sr, err := wlog.NewSegmentsReader(dir)
-		if err != nil {
-			return fmt.Errorf("open checkpoint: %w", err)
+		sr, errReader := wlog.NewSegmentsReader(dir)
+		if errReader != nil {
+			return fmt.Errorf("open checkpoint: %w", errReader)
 		}
 		defer func() {
-			if err := sr.Close(); err != nil {
-				level.Warn(db.logger).Log("msg", "error while closing the wal segments reader", "err", err)
+			if errClose := sr.Close(); errClose != nil {
+				level.Warn(db.logger).Log("msg", "error while closing the wal segments reader", "err", errClose)
 			}
 		}()
 
 		// A corrupted checkpoint is a hard error for now and requires user
 		// intervention. There's likely little data that can be recovered anyway.
-		if err := db.loadWAL(wlog.NewReader(sr), multiRef); err != nil {
+		if err = db.loadWAL(wlog.NewReader(sr), multiRef); err != nil {
 			return fmt.Errorf("backfill checkpoint: %w", err)
 		}
 		startFrom++
@@ -403,8 +403,8 @@ func (db *DB) replayWAL() error {
 
 		sr := wlog.NewSegmentBufReader(seg)
 		err = db.loadWAL(wlog.NewReader(sr), multiRef)
-		if err := sr.Close(); err != nil {
-			level.Warn(db.logger).Log("msg", "error while closing the wal segments reader", "err", err)
+		if errClose := sr.Close(); errClose != nil {
+			level.Warn(db.logger).Log("msg", "error while closing the wal segments reader", "err", errClose)
 		}
 		if err != nil {
 			return err
@@ -639,7 +639,7 @@ func (db *DB) truncate(mint int64) error {
 
 	// Start a new segment so low ingestion volume instances don't have more WAL
 	// than needed.
-	if _, err := db.wal.NextSegment(); err != nil {
+	if _, err = db.wal.NextSegment(); err != nil {
 		return fmt.Errorf("next segment: %w", err)
 	}
 

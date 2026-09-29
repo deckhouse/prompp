@@ -405,7 +405,7 @@ func (g *Group) setLastEvalTimestamp(ts time.Time) {
 // EvalTimestamp returns the immediately preceding consistently slotted evaluation time.
 func (g *Group) EvalTimestamp(startTime int64) time.Time {
 	var (
-		offset = int64(g.hash() % uint64(g.interval))
+		offset = int64(g.hash() % uint64(g.interval)) // #nosec G115 // no overflow
 
 		// This group's evaluation times differ from the perfect time intervals by `offset` nanoseconds.
 		// But we can only use `% interval` to align with the interval. And `% interval` will always
@@ -767,7 +767,8 @@ func NewGroupMetrics(reg prometheus.Registerer) *Metrics {
 				Name:       "rule_evaluation_duration_seconds",
 				Help:       "The duration for a rule to execute.",
 				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-			}),
+			},
+		),
 		IterationDuration: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace:  namespace,
 			Name:       "rule_group_duration_seconds",
@@ -1001,7 +1002,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		}
 
 		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		spanCtx, sp := otel.Tracer("").Start(ctx, "rule")
 		sp.SetAttributes(attribute.String("name", rule.Name()))
 		defer func(t time.Time) {
 			sp.End()
@@ -1018,7 +1019,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 
 		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
+		vector, err := rule.Eval(spanCtx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
 		if err != nil {
 			rule.SetHealth(HealthBad)
 			rule.SetLastError(err)
@@ -1038,7 +1039,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		samplesTotal.Add(float64(len(vector)))
 
 		if ar, ok := rule.(*AlertingRule); ok {
-			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
+			ar.sendAlerts(spanCtx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
 		}
 
 		seriesInPreviousEval[i] = make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
@@ -1172,7 +1173,7 @@ func (g *Group) sequentiallyEval(
 		}
 
 		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		spanCtx, sp := otel.Tracer("").Start(ctx, "rule")
 		sp.SetAttributes(attribute.String("name", rule.Name()))
 		defer func(t time.Time) {
 			sp.End()
@@ -1189,7 +1190,7 @@ func (g *Group) sequentiallyEval(
 
 		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
+		vector, err := rule.Eval(spanCtx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
 		if err != nil {
 			rule.SetHealth(HealthBad)
 			rule.SetLastError(err)
@@ -1209,19 +1210,19 @@ func (g *Group) sequentiallyEval(
 		samplesTotal += float64(len(vector))
 
 		if ar, ok := rule.(*AlertingRule); ok {
-			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
+			ar.sendAlerts(spanCtx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
 		}
 
-		app := bs.Appender(ctx)
+		app := bs.Appender(spanCtx)
 		seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
 		defer func() {
-			if err := app.Commit(); err != nil {
+			if errCommit := app.Commit(); errCommit != nil {
 				rule.SetHealth(HealthBad)
-				rule.SetLastError(err)
-				sp.SetStatus(codes.Error, err.Error())
+				rule.SetLastError(errCommit)
+				sp.SetStatus(codes.Error, errCommit.Error())
 				g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
+				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", errCommit)
 				return
 			}
 

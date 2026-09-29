@@ -363,7 +363,7 @@ func (p *OpenMetricsParser) Next() (Entry, error) {
 
 	switch t := p.nextToken(); t {
 	case tEOFWord:
-		if t := p.nextToken(); t != tEOF {
+		if t = p.nextToken(); t != tEOF {
 			return EntryInvalid, errors.New("unexpected data after # EOF")
 		}
 		return EntryInvalid, io.EOF
@@ -447,7 +447,7 @@ func (p *OpenMetricsParser) Next() (Entry, error) {
 		}
 
 		p.series = p.l.b[p.start:p.l.i]
-		if err := p.parseSeriesEndOfLine(p.nextToken()); err != nil {
+		if err = p.parseSeriesEndOfLine(p.nextToken()); err != nil {
 			return EntryInvalid, err
 		}
 		if p.skipCTSeries && p.isCreatedSeries() {
@@ -468,7 +468,7 @@ func (p *OpenMetricsParser) Next() (Entry, error) {
 			t2 = p.nextToken()
 		}
 
-		if err := p.parseSeriesEndOfLine(t2); err != nil {
+		if err = p.parseSeriesEndOfLine(t2); err != nil {
 			return EntryInvalid, err
 		}
 		if p.skipCTSeries && p.isCreatedSeries() {
@@ -568,7 +568,7 @@ func (p *OpenMetricsParser) parseLVals(offsets []int, isExemplar bool) ([]int, e
 		if t != tEqual {
 			return nil, p.parseError("expected equal", t)
 		}
-		if t := p.nextToken(); t != tLValue {
+		if t = p.nextToken(); t != tLValue {
 			return nil, p.parseError("expected label value", t)
 		}
 		if !utf8.Valid(p.l.buf()) {
@@ -621,7 +621,7 @@ func (p *OpenMetricsParser) parseSeriesEndOfLine(t token) error {
 	case tLinebreak:
 		break
 	case tComment:
-		if err := p.parseComment(); err != nil {
+		if err = p.parseComment(); err != nil {
 			return err
 		}
 	case tTimestamp:

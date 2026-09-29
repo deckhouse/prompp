@@ -125,7 +125,7 @@ func (h *writeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := h.acceptedProtoMsgs[msgType]; !ok {
-		err := fmt.Errorf("%v protobuf message is not accepted by this server; accepted %v", msgType, func() (ret []string) {
+		err = fmt.Errorf("%v protobuf message is not accepted by this server; accepted %v", msgType, func() (ret []string) {
 			for k := range h.acceptedProtoMsgs {
 				ret = append(ret, string(k))
 			}
@@ -141,7 +141,7 @@ func (h *writeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// before 2.0: https://github.com/prometheus/prometheus/blob/d78253319daa62c8f28ed47e40bafcad2dd8b586/storage/remote/write_handler.go#L62
 		// We could give http.StatusUnsupportedMediaType, but let's assume snappy by default.
 	} else if enc != string(SnappyBlockCompression) {
-		err := fmt.Errorf("%v encoding (compression) is not accepted by this server; only %v is acceptable", enc, SnappyBlockCompression)
+		err = fmt.Errorf("%v encoding (compression) is not accepted by this server; only %v is acceptable", enc, SnappyBlockCompression)
 		level.Error(h.logger).Log("msg", "Error decoding remote write request", "err", err)
 		http.Error(w, err.Error(), http.StatusUnsupportedMediaType)
 	}
@@ -167,7 +167,7 @@ func (h *writeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if msgType == config.RemoteWriteProtoMsgV1 {
 		// PRW 1.0 flow has different proto message and no partial write handling.
 		var req prompb.WriteRequest
-		if err := proto.Unmarshal(decompressed, &req); err != nil {
+		if err = proto.Unmarshal(decompressed, &req); err != nil {
 			// TODO(bwplotka): Add more context to responded error?
 			level.Error(h.logger).Log("msg", "Error decoding v1 remote write request", "protobuf_message", msgType, "err", err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -191,7 +191,7 @@ func (h *writeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Remote Write 2.x proto message handling.
 	var req writev2.Request
-	if err := proto.Unmarshal(decompressed, &req); err != nil {
+	if err = proto.Unmarshal(decompressed, &req); err != nil {
 		// TODO(bwplotka): Add more context to responded error?
 		level.Error(h.logger).Log("msg", "Error decoding v2 remote write request", "protobuf_message", msgType, "err", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -250,14 +250,14 @@ func (h *writeHandler) write(ctx context.Context, req *prompb.WriteRequest) (err
 			continue
 		}
 
-		if err := h.appendV1Samples(app, ts.Samples, ls); err != nil {
+		if err = h.appendV1Samples(app, ts.Samples, ls); err != nil {
 			return err
 		}
 		samplesAppended += len(ts.Samples)
 
 		for _, ep := range ts.Exemplars {
 			e := ep.ToExemplar(&b, nil)
-			if _, err := app.AppendExemplar(0, ls, e); err != nil {
+			if _, err = app.AppendExemplar(0, ls, e); err != nil {
 				switch {
 				case errors.Is(err, storage.ErrOutOfOrderExemplar):
 					outOfOrderExemplarErrs++

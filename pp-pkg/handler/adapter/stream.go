@@ -56,7 +56,7 @@ func (s *Stream) decode() (*model.Segment, error) {
 	}
 
 	segment := &model.Segment{}
-	segment.Timestamp = int64(binary.LittleEndian.Uint64(header[:8]))
+	segment.Timestamp = int64(binary.LittleEndian.Uint64(header[:8])) // #nosec G115 // no overflow
 	segment.ID = binary.LittleEndian.Uint32(header[8:12])
 	segment.Size = binary.LittleEndian.Uint32(header[12:16])
 	segment.CRC = binary.LittleEndian.Uint32(header[16:20])
@@ -89,7 +89,7 @@ func (s *Stream) decode() (*model.Segment, error) {
 
 func EncodeToStream(stream io.Writer, segment model.Segment) error {
 	buf := make([]byte, headerStreamSize+len(segment.Body))
-	binary.LittleEndian.PutUint64(buf[:8], uint64(segment.Timestamp))
+	binary.LittleEndian.PutUint64(buf[:8], uint64(segment.Timestamp)) // #nosec G115 // no overflow
 	binary.LittleEndian.PutUint32(buf[8:12], segment.ID)
 	binary.LittleEndian.PutUint32(buf[12:16], segment.Size)
 	binary.LittleEndian.PutUint32(buf[16:20], segment.CRC)

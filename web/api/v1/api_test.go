@@ -3729,7 +3729,7 @@ func TestParseTimeParam(t *testing.T) {
 				asTime: time.Time{},
 				asError: func() error {
 					_, err := parseTime("baz")
-					return fmt.Errorf("Invalid time value for '%s': %w", "foo", err)
+					return fmt.Errorf("invalid time value for '%s': %w", "foo", err)
 				},
 			},
 		},

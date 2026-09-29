@@ -276,7 +276,7 @@ func compactBuckets[IBC InternalBucketCount](buckets []IBC, spans []Span, maxEmp
 				if deltaBuckets {
 					currentBucketAbsolute = 0
 				}
-				posInSpan += uint32(nEmpty)
+				posInSpan += uint32(nEmpty) // #nosec G115 // no overflow
 				continue
 			}
 			// In all other cases, we cut out the empty buckets.
@@ -292,19 +292,19 @@ func compactBuckets[IBC InternalBucketCount](buckets []IBC, spans []Span, maxEmp
 					offset := spans[iSpan].Offset
 					spans = append(spans[:iSpan], spans[iSpan+1:]...)
 					if len(spans) > iSpan {
-						spans[iSpan].Offset += offset + int32(nEmpty)
+						spans[iSpan].Offset += offset + int32(nEmpty) // #nosec G115 // no overflow
 					}
 					continue
 				}
-				spans[iSpan].Length -= uint32(nEmpty)
-				spans[iSpan].Offset += int32(nEmpty)
+				spans[iSpan].Length -= uint32(nEmpty) // #nosec G115 // no overflow
+				spans[iSpan].Offset += int32(nEmpty)  // #nosec G115 // no overflow
 				continue
 			}
 			// It's in the middle or in the end of the span.
 			// Split the current span.
 			newSpan := Span{
-				Offset: int32(nEmpty),
-				Length: spans[iSpan].Length - posInSpan - uint32(nEmpty),
+				Offset: int32(nEmpty),                                    // #nosec G115 // no overflow
+				Length: spans[iSpan].Length - posInSpan - uint32(nEmpty), // #nosec G115 // no overflow
 			}
 			spans[iSpan].Length = posInSpan
 			// In any case, we have to split to the next span.
@@ -315,7 +315,7 @@ func compactBuckets[IBC InternalBucketCount](buckets []IBC, spans []Span, maxEmp
 				// We don't have to insert the new span, just adjust the next
 				// span's offset, if there is one.
 				if iSpan < len(spans) {
-					spans[iSpan].Offset += int32(nEmpty)
+					spans[iSpan].Offset += int32(nEmpty) // #nosec G115 // no overflow
 				}
 				continue
 			}
@@ -362,7 +362,7 @@ func compactBuckets[IBC InternalBucketCount](buckets []IBC, spans []Span, maxEmp
 		}
 		// Merge span with previous one and insert empty buckets.
 		offset := int(spans[iSpan].Offset)
-		spans[iSpan-1].Length += uint32(offset) + spans[iSpan].Length
+		spans[iSpan-1].Length += uint32(offset) + spans[iSpan].Length // #nosec G115 // no overflow
 		spans = append(spans[:iSpan], spans[iSpan+1:]...)
 		newBuckets := make([]IBC, len(buckets)+offset)
 		copy(newBuckets, buckets[:iBucket])
@@ -452,7 +452,7 @@ func checkHistogramCustomBounds(bounds []float64, spans []Span, numBuckets int) 
 
 func getBound(idx, schema int32, customValues []float64) float64 {
 	if IsCustomBucketsSchema(schema) {
-		length := int32(len(customValues))
+		length := int32(len(customValues)) // #nosec G115 // no overflow
 		switch {
 		case idx > length || idx < -1:
 			panic(fmt.Errorf("index %d out of bounds for custom bounds of length %d", idx, length))

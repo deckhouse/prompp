@@ -1060,10 +1060,10 @@ func TestCompaction_populateBlock(t *testing.T) {
 				for _, chk := range s.chunks {
 					var (
 						samples       = make([]sample, 0, chk.Chunk.NumSamples())
-						iter          = chk.Chunk.Iterator(iter)
 						firstTs int64 = math.MaxInt64
 						s       sample
 					)
+					iter = chk.Chunk.Iterator(iter)
 					for vt := iter.Next(); vt != chunkenc.ValNone; vt = iter.Next() {
 						switch vt {
 						case chunkenc.ValFloat:
@@ -1402,7 +1402,7 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 				createBlock(t, db.Dir(), genSeries(1, 1, m.MinTime, m.MaxTime))
 			}
 			require.NoError(t, db.reload())
-			require.Equal(t, len(blocks), len(db.Blocks()), "unexpected block count after a reloadBlocks")
+			require.Len(t, db.Blocks(), len(blocks), "unexpected block count after a reloadBlocks")
 
 			return len(blocks) + 1, 2
 		},
@@ -1624,7 +1624,8 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 	timeStep := DefaultBlockDuration / int64(numHistograms)
 	for _, c := range cases {
 		t.Run(
-			fmt.Sprintf("series=%d,span=%d,gap=%d,buckets=%d",
+			fmt.Sprintf(
+				"series=%d,span=%d,gap=%d,buckets=%d",
 				len(allSchemas)*c.numSeriesPerSchema,
 				c.numSpans,
 				c.gapBetweenSpans,
@@ -1779,11 +1780,13 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 					numSpans:               c.numSpans,
 					gapBetweenSpans:        c.gapBetweenSpans,
 				})
-			})
+			},
+		)
 	}
 
 	for _, s := range summaries {
-		fmt.Printf(`
+		fmt.Printf(
+			`
 Meta: NumBuckets=%d, NumSpans=%d, GapBetweenSpans=%d
 Old Block: NumSeries=%d, IndexSize=%d, ChunksSize=%d, TotalSize=%d
 Sparse Block: NumSeries=%d, IndexSize=%d, ChunksSize=%d, TotalSize=%d

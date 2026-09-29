@@ -134,12 +134,12 @@ func createBlocks(input []byte, mint, maxt, maxBlockDuration int64, maxSamplesIn
 			p := textparse.NewOpenMetricsParser(input, symbolTable)
 			samplesCount := 0
 			for {
-				e, err := p.Next()
-				if errors.Is(err, io.EOF) {
+				e, errNext := p.Next()
+				if errors.Is(errNext, io.EOF) {
 					break
 				}
-				if err != nil {
-					return fmt.Errorf("parse: %w", err)
+				if errNext != nil {
+					return fmt.Errorf("parse: %w", errNext)
 				}
 				if e != textparse.EntrySeries {
 					continue
@@ -170,7 +170,7 @@ func createBlocks(input []byte, mint, maxt, maxBlockDuration int64, maxSamplesIn
 				}
 				lbls := lb.Labels()
 
-				if _, err := app.Append(0, lbls, *ts, v); err != nil {
+				if _, err = app.Append(0, lbls, *ts, v); err != nil {
 					return fmt.Errorf("add sample: %w", err)
 				}
 
@@ -182,7 +182,7 @@ func createBlocks(input []byte, mint, maxt, maxBlockDuration int64, maxSamplesIn
 				// If we arrive here, the samples count is greater than the maxSamplesInAppender.
 				// Therefore the old appender is committed and a new one is created.
 				// This prevents keeping too many samples lined up in an appender and thus in RAM.
-				if err := app.Commit(); err != nil {
+				if err = app.Commit(); err != nil {
 					return fmt.Errorf("commit: %w", err)
 				}
 
@@ -190,7 +190,7 @@ func createBlocks(input []byte, mint, maxt, maxBlockDuration int64, maxSamplesIn
 				samplesCount = 0
 			}
 
-			if err := app.Commit(); err != nil {
+			if err = app.Commit(); err != nil {
 				return fmt.Errorf("commit: %w", err)
 			}
 
@@ -204,9 +204,9 @@ func createBlocks(input []byte, mint, maxt, maxBlockDuration int64, maxSamplesIn
 				if block.Compare(ulid.ULID{}) == 0 {
 					break
 				}
-				blocks, err := db.Blocks()
-				if err != nil {
-					return fmt.Errorf("get blocks: %w", err)
+				blocks, errBlocks := db.Blocks()
+				if errBlocks != nil {
+					return fmt.Errorf("get blocks: %w", errBlocks)
 				}
 				for _, b := range blocks {
 					if b.Meta().ULID == block {

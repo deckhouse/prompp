@@ -91,7 +91,7 @@ func (h Histogram) ToIntHistogram() *histogram.Histogram {
 		return nil
 	}
 	return &histogram.Histogram{
-		CounterResetHint: histogram.CounterResetHint(h.ResetHint),
+		CounterResetHint: histogram.CounterResetHint(h.ResetHint), // #nosec G115 // no overflow
 		Schema:           h.Schema,
 		ZeroThreshold:    h.ZeroThreshold,
 		ZeroCount:        h.GetZeroCountInt(),
@@ -111,7 +111,7 @@ func (h Histogram) ToIntHistogram() *histogram.Histogram {
 func (h Histogram) ToFloatHistogram() *histogram.FloatHistogram {
 	if h.IsFloatHistogram() {
 		return &histogram.FloatHistogram{
-			CounterResetHint: histogram.CounterResetHint(h.ResetHint),
+			CounterResetHint: histogram.CounterResetHint(h.ResetHint), // #nosec G115 // no overflow
 			Schema:           h.Schema,
 			ZeroThreshold:    h.ZeroThreshold,
 			ZeroCount:        h.GetZeroCountFloat(),
@@ -126,7 +126,7 @@ func (h Histogram) ToFloatHistogram() *histogram.FloatHistogram {
 	}
 	// Conversion from integer histogram.
 	return &histogram.FloatHistogram{
-		CounterResetHint: histogram.CounterResetHint(h.ResetHint),
+		CounterResetHint: histogram.CounterResetHint(h.ResetHint), // #nosec G115 // no overflow
 		Schema:           h.Schema,
 		ZeroThreshold:    h.ZeroThreshold,
 		ZeroCount:        float64(h.GetZeroCountInt()),

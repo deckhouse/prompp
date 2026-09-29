@@ -185,7 +185,7 @@ func TestAlertingRule(t *testing.T) {
 		for i := range test.result {
 			test.result[i].T = timestamp.FromTime(evalTime)
 		}
-		require.Equal(t, len(test.result), len(filteredRes), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
+		require.Len(t, filteredRes, len(test.result), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
 
 		sort.Slice(filteredRes, func(i, j int) bool {
 			return labels.Compare(filteredRes[i].Metric, filteredRes[j].Metric) < 0
@@ -193,7 +193,7 @@ func TestAlertingRule(t *testing.T) {
 		prom_testutil.RequireEqual(t, test.result, filteredRes)
 
 		for _, aa := range rule.ActiveAlerts() {
-			require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+			require.Empty(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 		}
 	}
 }
@@ -338,7 +338,7 @@ func TestForStateAddSamples(t *testing.T) {
 						test.result[i].F = forState
 					}
 				}
-				require.Equal(t, len(test.result), len(filteredRes), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
+				require.Len(t, filteredRes, len(test.result), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
 
 				sort.Slice(filteredRes, func(i, j int) bool {
 					return labels.Compare(filteredRes[i].Metric, filteredRes[j].Metric) < 0
@@ -346,7 +346,7 @@ func TestForStateAddSamples(t *testing.T) {
 				prom_testutil.RequireEqual(t, test.result, filteredRes)
 
 				for _, aa := range rule.ActiveAlerts() {
-					require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+					require.Empty(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 				}
 			}
 		})
@@ -508,7 +508,7 @@ func TestForStateRestore(t *testing.T) {
 
 					got := newRule.ActiveAlerts()
 					for _, aa := range got {
-						require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+						require.Empty(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 					}
 					sort.Slice(got, func(i, j int) bool {
 						return labels.Compare(got[i].Labels, got[j].Labels) < 0
@@ -532,7 +532,7 @@ func TestForStateRestore(t *testing.T) {
 						}
 					default:
 						exp := tt.expectedAlerts
-						require.Equal(t, len(exp), len(got))
+						require.Len(t, got, len(exp))
 						sortAlerts(exp)
 						sortAlerts(got)
 						for i, e := range exp {
@@ -647,7 +647,7 @@ func readSeriesSet(ss storage.SeriesSet) (map[string][]promql.FPoint, error) {
 		series := ss.At()
 
 		points := []promql.FPoint{}
-		it := series.Iterator(it)
+		it = series.Iterator(it)
 		for it.Next() == chunkenc.ValFloat {
 			t, v := it.At()
 			points = append(points, promql.FPoint{T: t, F: v})
@@ -2316,7 +2316,7 @@ func TestBoundedRuleEvalConcurrency(t *testing.T) {
 	wg.Wait()
 
 	// Synchronous queries also count towards inflight, so at most we can have maxConcurrency+$groupCount inflight evaluations.
-	require.EqualValues(t, maxInflight.Load()+int32(groupCount), int32(maxConcurrency))
+	require.Equal(t, maxInflight.Load()+int32(groupCount), int32(maxConcurrency))
 }
 
 func TestUpdateWhenStopped(t *testing.T) {

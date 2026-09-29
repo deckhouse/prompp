@@ -155,11 +155,12 @@ func NewDiscovery(conf *DockerSwarmSDConfig, logger log.Logger, metrics discover
 	// unix, which are not supported by the HTTP client. Passing HTTP client
 	// options to the Docker client makes those non-HTTP requests fail.
 	if hostURL.Scheme == "http" || hostURL.Scheme == "https" {
-		rt, err := config.NewRoundTripperFromConfig(conf.HTTPClientConfig, "dockerswarm_sd")
-		if err != nil {
-			return nil, err
+		rt, errCfg := config.NewRoundTripperFromConfig(conf.HTTPClientConfig, "dockerswarm_sd")
+		if errCfg != nil {
+			return nil, errCfg
 		}
-		opts = append(opts,
+		opts = append(
+			opts,
 			client.WithHTTPClient(&http.Client{
 				Transport: rt,
 				Timeout:   time.Duration(conf.RefreshInterval),
