@@ -37,11 +37,20 @@ def march_escape(march):
     """Replaces every non-alphanumeric character with '_' (same as `escape` in entrypoint/Makefile)."""
     return "".join([c if c.isalnum() else "_" for c in march.elems()])
 
-def march_variants(name, target, marches):
-    """Declares `<name>_<escaped march>` march_variant targets producing `<name>_<escaped march>.a`."""
-    for march in marches:
-        march_variant(
-            name = "{}_{}".format(name, march_escape(march)),
-            march = march,
-            target = target,
-        )
+def march_variants(name, target, marches_by_cpu):
+    """Declares `<name>_<escaped march>` march_variant targets producing `<name>_<escaped march>.a`.
+
+    `marches_by_cpu` maps a cpu constraint (e.g. "@platforms//cpu:x86_64") to the marches valid for it.
+    Each variant is compatible only with its cpu, so requesting a foreign flavor fails with a clear
+    incompatibility error instead of a compiler one. Variants are also tagged "manual": every flavor
+    recompiles the whole target, so `//...` must not pull them in; build them explicitly.
+    """
+    for cpu, marches in marches_by_cpu.items():
+        for march in marches:
+            march_variant(
+                name = "{}_{}".format(name, march_escape(march)),
+                march = march,
+                target = target,
+                target_compatible_with = [cpu],
+                tags = ["manual"],
+            )

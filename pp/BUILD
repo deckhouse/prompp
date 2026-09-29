@@ -281,27 +281,28 @@ cc_static_library(
 )
 
 # Keep in sync with amd64_flavors/arm64_flavors in entrypoint/Makefile.
-ENTRYPOINT_FLAVORS = [
-    "k8",
-    "nehalem",
-    "haswell",
-    "armv8-a",
-    "armv8-a+crc",
-]
+ENTRYPOINT_FLAVORS = {
+    "@platforms//cpu:x86_64": [
+        "k8",
+        "nehalem",
+        "haswell",
+    ],
+    "@platforms//cpu:aarch64": [
+        "armv8-a",
+        "armv8-a+crc",
+    ],
+}
 
 march_variants(
     name = "entrypoint_aio",
-    marches = ENTRYPOINT_FLAVORS,
+    marches_by_cpu = ENTRYPOINT_FLAVORS,
     target = ":entrypoint_aio",
 )
 
 # The runtime init is built only for the generic (first) flavor of each platform.
 march_variants(
     name = "entrypoint_init_aio",
-    marches = [
-        "k8",
-        "armv8-a",
-    ],
+    marches_by_cpu = {cpu: marches[:1] for cpu, marches in ENTRYPOINT_FLAVORS.items()},
     target = ":entrypoint_init_aio",
 )
 
