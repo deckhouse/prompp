@@ -3265,17 +3265,24 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 // Unlike [headWalEncoderFinalize] it uses a regular CGO call instead of fastcgo, so a long-running
 // finalization (e.g. after copying all added series into a new head) does not block the Go scheduler and GC.
 func headWalEncoderLongFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
-	var res struct {
+	res := &struct {
 		segment   []byte
 		exception []byte
 		samples   uint32
-	}
+	}{}
+
+	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
+	// although they are nil at call time and C++ fills them with C-allocated memory only.
+	// An address hidden in an integer is not adjusted if the goroutine stack is moved before
+	// the call enters C (e.g. a stack shrink on preemption in the _Cfunc_ wrapper prologue),
+	// so res is pinned: this moves it to the heap and keeps its address stable.
+	var pinner runtime.Pinner
+	pinner.Pin(res)
+	defer pinner.Unpin()
 
 	start := time.Now()
 	testGC()
-	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
-	// although they are nil at call time and C++ fills them with C-allocated memory only.
-	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(&res))))
+	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(res))))
 	headWalEncoderLongFinalizeDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return res.samples, res.segment, handleException(res.exception)

@@ -3,7 +3,9 @@ package services
 import (
 	"errors"
 	"fmt"
-	"sync"
+	"runtime"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -41,8 +43,9 @@ func CFViaRange[
 
 // LongCFSViaRange same as [CFSViaRange], but finalize segment from encoder via long commit,
 // intended for a long-running finalization (e.g. after copying all added series into a new head).
-// Shards are independent, so they are processed concurrently. The sync is done here too,
-// so that it does not slow down the first commit of the new segment on the hot path.
+// Shards are independent, so they are processed concurrently, but at most GOMAXPROCS at a time:
+// every long commit is a blocking cgo call occupying an OS thread and competing with ingestion.
+// The sync is done here too, so that it does not slow down the first commit of the new segment on the hot path.
 func LongCFSViaRange[
 	TShard Shard,
 	THead RangeHead[TShard],
@@ -50,13 +53,16 @@ func LongCFSViaRange[
 	shards := h.Shards()
 	errs := make([]error, len(shards))
 
-	var wg sync.WaitGroup
+	var g errgroup.Group
+	g.SetLimit(runtime.GOMAXPROCS(0))
 	for i := range shards {
-		wg.Go(func() {
+		g.Go(func() error {
 			errs[i] = cfsShard(shards[i], func(s TShard) error { return s.WalLongCommit() })
+			// errors are collected per shard, so that one failed shard does not hide the others
+			return nil
 		})
 	}
-	wg.Wait()
+	_ = g.Wait()
 
 	return errors.Join(errs...)
 }

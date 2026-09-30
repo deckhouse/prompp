@@ -2,6 +2,8 @@ package services_test
 
 import (
 	"errors"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -135,6 +137,9 @@ func (s *FunctionsSuite) TestCFSViaRangeSkipsSyncOnFlushError() {
 }
 
 func (s *FunctionsSuite) TestLongCFSViaRangeProcessesShardsConcurrently() {
+	// concurrency is limited by GOMAXPROCS, so it must allow all shards at once
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(shardsCount))
+
 	entered := make(chan struct{}, shardsCount)
 	release := make(chan struct{})
 	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
@@ -164,6 +169,40 @@ func (s *FunctionsSuite) TestLongCFSViaRangeProcessesShardsConcurrently() {
 	close(release)
 
 	s.Require().NoError(<-done)
+}
+
+func (s *FunctionsSuite) TestLongCFSViaRangeLimitsConcurrencyByGOMAXPROCS() {
+	const limit = 1
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(limit))
+
+	var (
+		mtx         sync.Mutex
+		inFlight    int
+		maxInFlight int
+	)
+	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
+	for shardID := range shardsCount {
+		segmentWriters[shardID] = s.newCFSSegmentWriter(nil, nil)
+		segmentWriters[shardID].WriteFunc = func(*cppbridge.HeadEncodedSegment) error {
+			mtx.Lock()
+			inFlight++
+			maxInFlight = max(maxInFlight, inFlight)
+			mtx.Unlock()
+
+			// give the other shards a chance to enter write if the limit is not respected
+			time.Sleep(10 * time.Millisecond)
+
+			mtx.Lock()
+			inFlight--
+			mtx.Unlock()
+			return nil
+		}
+	}
+	h := s.newHead(segmentWriters)
+
+	s.Require().NoError(services.LongCFSViaRange(h))
+
+	s.Equal(limit, maxInFlight)
 }
 
 func (s *FunctionsSuite) TestCloseWalsClosesEveryShardWal() {
