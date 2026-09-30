@@ -6,7 +6,6 @@
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
