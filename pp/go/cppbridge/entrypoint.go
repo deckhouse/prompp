@@ -3261,6 +3261,26 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
+// headWalEncoderLongFinalize - finalize the encoded data in the C++ encoder to Segment.
+// Unlike [headWalEncoderFinalize] it uses a regular CGO call instead of fastcgo, so a long-running
+// finalization (e.g. after copying all added series into a new head) does not block the Go scheduler and GC.
+func headWalEncoderLongFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
+	var res struct {
+		segment   []byte
+		exception []byte
+		samples   uint32
+	}
+
+	start := time.Now()
+	testGC()
+	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
+	// although they are nil at call time and C++ fills them with C-allocated memory only.
+	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(&res))))
+	headWalEncoderLongFinalizeDurationMax.set(float64(time.Since(start).Nanoseconds()))
+
+	return res.samples, res.segment, handleException(res.exception)
+}
+
 // headWalEncoderWrittenSeriesIDSentinel returns max item index written to WAL.
 func headWalEncoderWrittenSeriesIDSentinel(encoder uintptr) uint32 {
 	args := struct {

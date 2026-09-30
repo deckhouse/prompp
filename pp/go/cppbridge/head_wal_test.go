@@ -34,46 +34,63 @@ func (s *HeadWalSuite) TestHeadWalEncoder_Encode() {
 	s.Empty(samples)
 }
 
+// headWalFinalizeVariants are the [cppbridge.HeadWalEncoder] finalize methods, which must behave identically.
+var headWalFinalizeVariants = []struct {
+	name     string
+	finalize func(*cppbridge.HeadWalEncoder) (*cppbridge.HeadEncodedSegment, error)
+}{
+	{name: "Finalize", finalize: (*cppbridge.HeadWalEncoder).Finalize},
+	{name: "LongFinalize", finalize: (*cppbridge.HeadWalEncoder).LongFinalize},
+}
+
 func (s *HeadWalSuite) TestHeadWalEncoder_Finalize() {
-	encoder := cppbridge.NewHeadWalEncoder(0, 1, cppbridge.NewQueryableLssStorage())
+	for _, variant := range headWalFinalizeVariants {
+		s.Run(variant.name, func() {
+			encoder := cppbridge.NewHeadWalEncoder(0, 1, cppbridge.NewQueryableLssStorage())
 
-	segmentData, err := encoder.Finalize()
-	s.Require().NoError(err)
+			segmentData, err := variant.finalize(encoder)
+			s.Require().NoError(err)
 
-	s.Equal(uint32(0), encoder.WrittenSeriesIDSentinel())
-	s.NotNil(segmentData)
-	s.Empty(segmentData.Samples())
+			s.Equal(uint32(0), encoder.WrittenSeriesIDSentinel())
+			s.NotNil(segmentData)
+			s.Empty(segmentData.Samples())
+		})
+	}
 }
 
 func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	const kTestBufferVersion = 3
 
-	segment, _ := hex.DecodeString(hexSegment)
-	lss := cppbridge.NewQueryableLssStorage()
-	decoder := cppbridge.NewHeadWalDecoder(lss, kTestBufferVersion)
-	encoder := cppbridge.NewHeadWalEncoder(0, 1, lss)
+	for _, variant := range headWalFinalizeVariants {
+		s.Run(variant.name, func() {
+			segment, _ := hex.DecodeString(hexSegment)
+			lss := cppbridge.NewQueryableLssStorage()
+			decoder := cppbridge.NewHeadWalDecoder(lss, kTestBufferVersion)
+			encoder := cppbridge.NewHeadWalEncoder(0, 1, lss)
 
-	shardedInnerSeries := cppbridge.NewShardedInnerSeries(1)
-	innerSeries := shardedInnerSeries.DataByShard(0)
+			shardedInnerSeries := cppbridge.NewShardedInnerSeries(1)
+			innerSeries := shardedInnerSeries.DataByShard(0)
 
-	err := decoder.Decode(segment, &innerSeries[0])
-	s.Require().NoError(err)
-	s.NotNil(innerSeries)
+			err := decoder.Decode(segment, &innerSeries[0])
+			s.Require().NoError(err)
+			s.NotNil(innerSeries)
 
-	expectedSamples := innerSeries[0].Size()
-	samples, err := encoder.Encode(innerSeries)
-	s.Require().NoError(err)
-	runtime.KeepAlive(shardedInnerSeries)
+			expectedSamples := innerSeries[0].Size()
+			samples, err := encoder.Encode(innerSeries)
+			s.Require().NoError(err)
+			runtime.KeepAlive(shardedInnerSeries)
 
-	s.NotNil(samples)
-	s.Equal(expectedSamples, uint64(samples))
+			s.NotNil(samples)
+			s.Equal(expectedSamples, uint64(samples))
 
-	segmentData, err := encoder.Finalize()
-	s.Require().NoError(err)
+			segmentData, err := variant.finalize(encoder)
+			s.Require().NoError(err)
 
-	s.Equal(uint32(1), encoder.WrittenSeriesIDSentinel())
-	s.NotNil(segmentData)
-	s.Equal(expectedSamples, uint64(segmentData.Samples()))
+			s.Equal(uint32(1), encoder.WrittenSeriesIDSentinel())
+			s.NotNil(segmentData)
+			s.Equal(expectedSamples, uint64(segmentData.Samples()))
+		})
+	}
 }
 
 func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
