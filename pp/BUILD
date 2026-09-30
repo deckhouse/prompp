@@ -125,7 +125,6 @@ cc_library(
         ":series_data",
         "//third_party:protozero",
         "//third_party:uuid",
-        "//third_party/fastfloat",
         "@roaring",
         "@scope_exit",
         "@simdutf",
