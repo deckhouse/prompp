@@ -200,3 +200,6 @@ type noopFlagConfig struct{}
 
 // DisableBlockManagerStorage implements FlagConfig.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
+
+// EnableBlockManagerStorage implements FlagConfig.
+func (noopFlagConfig) EnableBlockManagerStorage() {}
