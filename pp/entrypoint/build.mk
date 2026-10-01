@@ -15,8 +15,8 @@ prefixed_archives := $(patsubst $(build_dir)/%.a, $(result_dir)/%_prefixed_$(res
 $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a: init/entrypoint.cpp
 	@mkdir -p ${@D}
 	@$(bazel_in_root);\
-		$(call bazel_build_march,$(generic_flavor)) -- //:entrypoint_init_aio
-	@cp -f ../bazel-bin/entrypoint_init_aio.a $@
+		$(bazel_build) -- //:entrypoint_init_aio_$(call make_escape,$(generic_flavor))
+	@cp -f ../bazel-bin/entrypoint_init_aio_$(call make_escape,$(generic_flavor)).a $@
 
 # Build flavoured prefixed_archives with prefixed symbols
 .PRECIOUS: $(prefixed_archives)
@@ -33,13 +33,13 @@ $(build_dir)/%.symbols: $(build_dir)/%_entrypoint_aio.a
 	@nm --defined-only $< > $@
 
 
-# We build all archives in bash loop because files contains escaped flavor in name but --march flag shouldn't be escaped
+# All flavors are built in one bazel invocation (see bazel/rules/march_variant.bzl), so their
+# compile actions run in parallel instead of one flavor after another.
 .PRECIOUS: $(archives)
 $(archives):
 	@mkdir -p $(build_dir)
 	@$(bazel_in_root);\
-		for i in $(flavors); do\
-			$(call bazel_build_march,$$i) -- //:entrypoint_aio &&\
-			cp -f bazel-bin/entrypoint_aio.a $(build_dir_absolute_path)/$(platform)_$$($(call escape,$$i))_entrypoint_aio.a ||\
-			exit 1;\
+		$(bazel_build) -- $(patsubst %,//:entrypoint_aio_%,$(escaped_flavors)) &&\
+		for i in $(escaped_flavors); do\
+			cp -f bazel-bin/entrypoint_aio_$$i.a $(build_dir_absolute_path)/$(platform)_$${i}_entrypoint_aio.a || exit 1;\
 		done
