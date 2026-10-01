@@ -13,10 +13,8 @@ class ChunkFinalizer {
 
   template <class DataStorage>
   PROMPP_ALWAYS_INLINE static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
-    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      finalize(storage, ls_id, chunk, encoder::timestamp::kInvalidStateId);
-    } else {
-      finalize_timestamp_and_chunk_separately(storage, ls_id, chunk);
+    if (!finalize_if_timestamp_finalized(storage, ls_id, chunk)) [[likely]] {
+      finalize(storage, ls_id, chunk, finalize_timestamp(storage, chunk));
     }
   }
 
@@ -47,22 +45,11 @@ class ChunkFinalizer {
       finalize_variant_encoder(storage.variant_encoders[chunk.encoder.external_index].asc_integer_then_values_gorilla, chunk.encoding_state.encoding_type);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kValuesGorilla) {
       finalize_variant_encoder(storage.variant_encoders[chunk.encoder.external_index].values_gorilla, chunk.encoding_state.encoding_type);
-    } else if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
-      const auto& finalized_stream = storage.finalized_data_streams.emplace_back(storage.gorilla_encoders[chunk.encoder.external_index].finalize_stream());
-      storage.gorilla_encoders.erase(chunk.encoder.external_index);
-      chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     }
 
     chunk.timestamp_encoder_state_id = finalized_timestamp_stream_id;
     emplace_finalized_chunk(storage, ls_id, chunk);
     chunk.reset();
-  }
-
-  template <class DataStorage>
-  PROMPP_ALWAYS_INLINE static void finalize_timestamp_and_chunk_separately(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
-    if (!finalize_if_timestamp_finalized(storage, ls_id, chunk)) [[likely]] {
-      finalize(storage, ls_id, chunk, finalize_timestamp(storage, chunk));
-    }
   }
 
   template <class DataStorage>

@@ -11,7 +11,6 @@
 #include "decoder/asc_integer.h"
 #include "decoder/asc_integer_then_values_gorilla.h"
 #include "decoder/constant.h"
-#include "decoder/gorilla.h"
 #include "decoder/outdated.h"
 #include "decoder/two_double_constant.h"
 #include "decoder/values_gorilla.h"
@@ -47,10 +46,6 @@ struct SerializedCompactBitSequenceWithItemsCount {
   PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequenceWithItemsCount(const CompactBitSequenceWithItemsCount& bit_sequence)
       : ptr(bit_sequence.stream.shared_memory()), size_in_bits(bit_sequence.stream.size_in_bits()), items_count(bit_sequence.count()) {}
 
-  template <class CompactBitSequence>
-  PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequenceWithItemsCount(const CompactBitSequence& bit_sequence, uint8_t items_count)
-      : ptr(bit_sequence.shared_memory()), size_in_bits(bit_sequence.size_in_bits()), items_count(items_count) {}
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept {
     return encoder::BitSequenceWithItemsCount<Reallocator>::reader(buffer());
@@ -75,15 +70,9 @@ class Decoder {
   static uint8_t get_samples_count(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {
     using enum chunk::DataChunk::Type;
 
-    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      return DataStorage::BitSequenceWithItemsCount::count(chunk_type == kOpen
-                                                               ? storage.template get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
-                                                               : storage.template get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
-    } else {
-      return (chunk_type == kOpen ? storage.template get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
-                                  : storage.template get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
-          .count();
-    }
+    return (chunk_type == kOpen ? storage.template get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
+                                : storage.template get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
+        .count();
   }
 
   template <chunk::DataChunk::Type chunk_type, class DataStorage>
@@ -167,8 +156,6 @@ class Decoder {
     } else if constexpr (encoding_type == kValuesGorilla) {
       return decoder::ValuesGorillaDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
                                                   storage.template get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).reader());
-    } else if constexpr (encoding_type == kGorilla) {
-      return decoder::GorillaDecodeIterator(storage.template get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index));
     } else {
       static_assert(encoding_type == kUnknown);
     }
@@ -212,11 +199,6 @@ class Decoder {
 
       case kValuesGorilla: {
         std::forward<Callback>(callback)(create_decode_iterator<kValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
-        break;
-      }
-
-      case kGorilla: {
-        std::forward<Callback>(callback)(create_decode_iterator<kGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
         break;
       }
 
@@ -306,11 +288,6 @@ class Decoder {
             DecodeIteratorSentinel{});
       }
 
-      case kGorilla: {
-        const auto bit_sequence = reinterpret_cast<const SerializedBitSequenceWithItemsCount*>(buffer.data() + chunk.values_offset);
-        return std::forward<Callback>(callback)(decoder::GorillaDecodeIterator(bit_sequence->items_count, bit_sequence->reader()), DecodeIteratorSentinel{});
-      }
-
       default: {
         throw BareBones::Exception(0x152a003c6f8d23af, "invalid data storage encoder type");
       }
@@ -367,10 +344,6 @@ class Decoder {
 
   template <class DataStorage>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_open_chunk_last_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
-    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      return storage.gorilla_encoders[chunk.encoder.external_index].timestamp();
-    }
-
     assert(!chunk.is_empty());
     return storage.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id).timestamp();
   }
@@ -452,10 +425,6 @@ class Decoder {
         return storage.variant_encoders[chunk.encoder.external_index].values_gorilla.last_value(chunk.encoding_state);
       }
 
-      case kGorilla: {
-        return storage.gorilla_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
-      }
-
       default: {
         assert(chunk.encoding_state.encoding_type != kUint32Constant);
         return 0.0;
@@ -480,15 +449,7 @@ class Decoder {
  private:
   template <chunk::DataChunk::Type chunk_type, class DataStorage>
   [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const DataStorage& storage, const chunk::DataChunk& chunk) {
-    if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) [[likely]] {
-      return storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id).reader();
-    }
-
-    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return storage.gorilla_encoders[chunk.encoder.external_index].stream().reader();
-    } else {
-      return DataStorage::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.external_index]);
-    }
+    return storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id).reader();
   }
 };
 
