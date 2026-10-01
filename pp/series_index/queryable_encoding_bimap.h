@@ -252,6 +252,21 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     added_series_.reserve(count);
   }
 
+  // Releases the label set -> ls id lookup table: find() stops finding series and find_or_emplace() must not be called anymore.
+  void release_hash_set() {
+    ls_id_hash_set_.clear();
+    // clear() keeps small tables (capacity <= 127) allocated, reserve(0) on an empty table releases them
+    ls_id_hash_set_.reserve(0);
+  }
+
+  // Releases ls id set (and the hash set): ls_id_set() is empty afterwards.
+  // The sorting index is built beforehand because it can't be rebuilt without ls_id_set_.
+  void release_ls_id_set() {
+    release_hash_set();
+    sorting_index_.build();
+    ls_id_set_.clear();
+  }
+
  private:
   using LabelSet = typename Base::value_type;
   using Trie = trie::CedarTrie;
