@@ -263,7 +263,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   // The sorting index is built beforehand because it can't be rebuilt without ls_id_set_.
   void release_ls_id_set() {
     release_hash_set();
-    sorting_index_.build();
+    build_deferred_indexes();
     ls_id_set_.clear();
   }
 
