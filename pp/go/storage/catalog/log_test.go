@@ -90,6 +90,28 @@ func (s *FileLogTestSuite) TestMigrateV1ToV3() {
 	fileContentIsEqual(s, logFilePath, "testdata/headv3.log")
 }
 
+func (s *FileLogTestSuite) TestReadRecordsAfterMigration() {
+	// Arrange
+	tmpDir := filepath.Join(s.T().TempDir(), "logtest")
+	s.Require().NoError(os.CopyFS(tmpDir, os.DirFS("testdata")))
+	logFile, err := catalog.NewFileLogV2(filepath.Join(tmpDir, "headv1.log"))
+	s.Require().NoError(err)
+	defer func() { _ = logFile.Close() }()
+
+	// Act
+	c, err := catalog.New(
+		clockwork.NewFakeClock(),
+		logFile,
+		catalog.DefaultIDGenerator{},
+		catalog.DefaultMaxLogFileSize,
+		nil,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Len(c.List(nil, nil), len(s.records))
+}
+
 func (s *FileLogTestSuite) TestMigrateV2ToV3_UnknownTimeBounds() {
 	// Arrange
 	tmpDir := filepath.Join(s.T().TempDir(), "logtest")

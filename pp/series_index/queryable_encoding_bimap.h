@@ -139,7 +139,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const typename SortingIndexBuilder::Index& sorting_index() const noexcept { return sorting_index_.index(); }
 
-  PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(); }
+  PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(next_item_index_impl()); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return trie_index_.allocated_memory() + reverse_index_.allocated_memory() + ls_id_set_allocated_memory_ + ls_id_hash_set_allocated_memory_ +
@@ -366,7 +366,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       erase_before_fixed_state(boundary);
     }
 
-    sorting_index_.rebuild(next_item_index_impl() - 1);
+    sorting_index_.rebuild(next_item_index_impl());
   }
 
   [[nodiscard]] bool should_rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) const noexcept {

@@ -7,7 +7,7 @@
 +#include <ios>
 +#include <string>
 +
-+#include <scope_exit.h>
++#include <experimental/scope>
  
  #ifdef HAVE_CONFIG_H
  #include "config.h"
