@@ -214,11 +214,6 @@ class OutdatedChunkMerger {
         merge_outdated_samples<kValuesGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
         break;
       }
-
-      case kGorilla: {
-        merge_outdated_samples<kGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
-        break;
-      }
     }
 
     return chunk;
