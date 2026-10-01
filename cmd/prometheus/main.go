@@ -582,7 +582,7 @@ func main() {
 
 	logger := promlog.New(&cfg.promlogConfig)
 
-	featuresflags.ReadPromPPFeatures(logger, &cfg)
+	featuresflags.ReadPromPPFeatures(logger, &cfg, prometheus.DefaultRegisterer)
 
 	if err := cfg.setFeatureListOptions(logger); err != nil {
 		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing feature list: %w", err))
