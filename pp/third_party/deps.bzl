@@ -18,7 +18,7 @@ Two extensions are exposed:
 """
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
@@ -187,13 +187,6 @@ def _third_party_deps_impl(_ctx):
         build_file = Label("//third_party:simdutf.BUILD"),
         sha256 = "66c85f591133e3baa23cc441d6e2400dd2c94c4902820734ddbcd9e04dd3988b",
         url = "https://github.com/simdutf/simdutf/releases/download/v6.2.0/singleheader.zip",
-    )
-
-    http_file(
-        name = "fastfloat_header",
-        downloaded_file_path = "fastfloat/fast_float.h",
-        sha256 = "1335e82c61fda54476ecbd94b92356deebeb3f0122802c3f103ee528ac08624e",
-        url = "https://github.com/fastfloat/fast_float/releases/download/v8.0.0/fast_float.h",
     )
 
 third_party_deps = module_extension(implementation = _third_party_deps_impl)
