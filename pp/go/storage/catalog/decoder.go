@@ -78,6 +78,7 @@ func (DecoderV1) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) 
 	if err = binary.Read(reader, binary.LittleEndian, &sr.status); err != nil {
 		return fmt.Errorf("read status: %w", err)
 	}
+	sr.fields = fieldsSnapshotV2
 
 	return nil
 }
@@ -142,6 +143,7 @@ func (DecoderV2) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) 
 		return fmt.Errorf("read last written segment id: %w", err)
 	}
 	sr.numberOfSegments = numberOfSegmentsByLastAppendedSegmentID(sr.lastAppendedSegmentID.RawValue())
+	sr.fields = fieldsSnapshotV2
 
 	return nil
 }
@@ -266,6 +268,7 @@ func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err erro
 
 	sr.maxt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
 	d.offset += sizeOf64
+	sr.fields = fullFields(sr)
 
 	return nil
 }

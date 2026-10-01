@@ -185,7 +185,7 @@ func (c *Catalog) Delete(id string) error {
 		return fmt.Errorf(logWriteErr, err)
 	}
 
-	applyRecordChanges(r, changed)
+	applyRecordChanges(&r.SerializedRecord, changed, diffFields(&r.SerializedRecord, changed))
 	delete(c.records, r.id.String())
 
 	return nil
@@ -264,7 +264,7 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 		return r, fmt.Errorf(logWriteErr, err)
 	}
 
-	applyRecordChanges(r, changed)
+	applyRecordChanges(&r.SerializedRecord, changed, diffFields(&r.SerializedRecord, changed))
 	c.records[id] = r
 
 	c.corruptedHead.Inc()
@@ -343,7 +343,7 @@ func (c *Catalog) setStatusWithTimeBounds(r *Record, status Status, mint, maxt i
 		return r, fmt.Errorf(logWriteErr, err)
 	}
 
-	applyRecordChanges(r, changed)
+	applyRecordChanges(&r.SerializedRecord, changed, diffFields(&r.SerializedRecord, changed))
 	c.records[r.id.String()] = r
 
 	if status == StatusActive {

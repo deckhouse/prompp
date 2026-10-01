@@ -36,6 +36,37 @@ const (
 const defaultSegmentsCapacity = int(2 * time.Hour / (5 * time.Second))
 
 //
+// fieldMask
+//
+
+// fieldMask is a set of [SerializedRecord] fields present in a record of the [Log].
+type fieldMask uint16
+
+const (
+	fieldNumberOfShards fieldMask = 1 << iota
+	fieldCreatedAt
+	fieldUpdatedAt
+	fieldDeletedAt
+	fieldCorrupted
+	fieldStatus
+	fieldSegmentsCount
+	fieldMinT
+	fieldMaxT
+
+	// fieldsAll is the set of all fields.
+	fieldsAll = fieldNumberOfShards | fieldCreatedAt | fieldUpdatedAt | fieldDeletedAt | fieldCorrupted |
+		fieldStatus | fieldSegmentsCount | fieldMinT | fieldMaxT
+	// fieldsSnapshotV2 is the set of fields of a full snapshot of the log-file version 1 and 2,
+	// which do not contain the time bounds.
+	fieldsSnapshotV2 = fieldsAll &^ (fieldMinT | fieldMaxT)
+)
+
+// has returns true if all the fields of other are present in the mask.
+func (m fieldMask) has(other fieldMask) bool {
+	return m&other == other
+}
+
+//
 // SerializedRecord
 //
 
@@ -52,12 +83,73 @@ type SerializedRecord struct {
 	numberOfSegments      uint32
 	mint                  int64
 	maxt                  int64
+	// fields present in the record of the [Log], not used by the in-memory records.
+	fields fieldMask
+}
+
+// HasTimeBounds returns true if the time bounds of the [Head] data are known.
+func (sr *SerializedRecord) HasTimeBounds() bool {
+	return sr.mint <= sr.maxt
 }
 
 // createRecordCopy create a copy of the [Record].
 func createSerializedRecordCopy(r *SerializedRecord) *SerializedRecord {
 	c := *r
 	return &c
+}
+
+// fullFields returns all the known fields of the record: the deletion time is known if it is set,
+// the time bounds are known if they are valid.
+func fullFields(sr *SerializedRecord) fieldMask {
+	fields := fieldsAll
+	if sr.deletedAt == 0 {
+		fields &^= fieldDeletedAt
+	}
+
+	if !sr.HasTimeBounds() {
+		fields &^= fieldMinT | fieldMaxT
+	}
+
+	return fields
+}
+
+// diffFields returns the fields whose values differ between the records. The segments count is not compared:
+// it is changed in memory by the WAL writer concurrently with the catalog and is never a part of a change.
+func diffFields(old, changed *SerializedRecord) fieldMask {
+	var fields fieldMask
+	if old.numberOfShards != changed.numberOfShards {
+		fields |= fieldNumberOfShards
+	}
+
+	if old.createdAt != changed.createdAt {
+		fields |= fieldCreatedAt
+	}
+
+	if old.updatedAt != changed.updatedAt {
+		fields |= fieldUpdatedAt
+	}
+
+	if old.deletedAt != changed.deletedAt {
+		fields |= fieldDeletedAt
+	}
+
+	if old.corrupted != changed.corrupted {
+		fields |= fieldCorrupted
+	}
+
+	if old.status != changed.status {
+		fields |= fieldStatus
+	}
+
+	if old.mint != changed.mint {
+		fields |= fieldMinT
+	}
+
+	if old.maxt != changed.maxt {
+		fields |= fieldMaxT
+	}
+
+	return fields
 }
 
 //
@@ -206,11 +298,6 @@ func (r *Record) GetShardBySegmentID(sid uint32) uint16 {
 	return math.MaxUint16
 }
 
-// HasTimeBounds returns true if the time bounds of the [Head] data are known.
-func (r *Record) HasTimeBounds() bool {
-	return r.mint <= r.maxt
-}
-
 // ID returns id of [Head].
 func (r *Record) ID() string {
 	return r.id.String()
@@ -337,18 +424,48 @@ func (r *Record) UpdatedAt() int64 {
 	return r.updatedAt
 }
 
-// applyRecordChanges apply changes to current [Record].
+// applyRecordChanges applies the fields of changed to the record, keeps the last appended segment id
+// in sync with the segments count.
 //
 //go:norace
-func applyRecordChanges(r *Record, changed *SerializedRecord) {
-	r.createdAt = changed.createdAt
-	r.updatedAt = changed.updatedAt
-	r.deletedAt = changed.deletedAt
-	r.corrupted = changed.corrupted
-	r.status = changed.status
-	r.numberOfShards = changed.numberOfShards
-	r.mint = changed.mint
-	r.maxt = changed.maxt
+//revive:disable-next-line:cyclomatic // one branch per field.
+func applyRecordChanges(sr, changed *SerializedRecord, fields fieldMask) {
+	if fields.has(fieldNumberOfShards) {
+		sr.numberOfShards = changed.numberOfShards
+	}
+
+	if fields.has(fieldCreatedAt) {
+		sr.createdAt = changed.createdAt
+	}
+
+	if fields.has(fieldUpdatedAt) {
+		sr.updatedAt = changed.updatedAt
+	}
+
+	if fields.has(fieldDeletedAt) {
+		sr.deletedAt = changed.deletedAt
+	}
+
+	if fields.has(fieldCorrupted) {
+		sr.corrupted = changed.corrupted
+	}
+
+	if fields.has(fieldStatus) {
+		sr.status = changed.status
+	}
+
+	if fields.has(fieldSegmentsCount) {
+		sr.numberOfSegments = changed.numberOfSegments
+		sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(changed.numberOfSegments)
+	}
+
+	if fields.has(fieldMinT) {
+		sr.mint = changed.mint
+	}
+
+	if fields.has(fieldMaxT) {
+		sr.maxt = changed.maxt
+	}
 }
 
 // lastAppendedSegmentIDByNumberOfSegments converts the number of segments to the last appended segment id.
