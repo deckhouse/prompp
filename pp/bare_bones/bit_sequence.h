@@ -10,7 +10,7 @@
 #include <arm_acle.h>
 #endif
 
-#include <scope_exit.h>
+#include <experimental/scope>
 #include <span>
 
 #include "bit.h"

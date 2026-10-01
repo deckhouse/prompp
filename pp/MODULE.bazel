@@ -76,7 +76,6 @@ use_repo(
     "quasis_crypto",
     "re2",
     "roaring",
-    "scope_exit",
     "simdutf",
     "snappy",
     "xxHash",

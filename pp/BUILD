@@ -21,7 +21,6 @@ cc_library(
     deps = [
         "@lz4",
         "@parallel_hashmap",
-        "@scope_exit",
         "@xxHash",
     ],
 )
@@ -68,7 +67,6 @@ cc_library(
         ":bare_bones",
         "//third_party:protozero",
         "@parallel_hashmap",
-        "@scope_exit",
     ],
 )
 
@@ -126,7 +124,6 @@ cc_library(
         "//third_party:protozero",
         "//third_party:uuid",
         "@roaring",
-        "@scope_exit",
         "@simdutf",
         "@snappy",
     ],
