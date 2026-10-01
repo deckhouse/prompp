@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -60,6 +61,9 @@ type Shard interface {
 
 	// WalWrite append the incoming inner series to wal encoder.
 	WalWrite(innerSeriesSlice []cppbridge.InnerSeries) (bool, error)
+
+	// WalIndependentCommit reports whether the wal can be committed without committing the other shards.
+	WalIndependentCommit() bool
 
 	// DstSrcLsIDsMapping return ids mapping after lss copying
 	DstSrcLsIDsMapping() *cppbridge.IdsMapping
@@ -123,10 +127,11 @@ type Appender[
 ] struct {
 	head           THead
 	poolProvider   *poolprovider.HeadPool[TGShard]
-	commitAndFlush func(h THead) error
+	commitAndFlush func(h THead, mask []bool) error
 }
 
 // New init new [Appender].
+// commitAndFlush commits the WALs of the shards selected by mask indexed by shard ID, all shards if mask is nil.
 func New[
 	TTask Task,
 	TShard Shard,
@@ -134,7 +139,7 @@ func New[
 	THead Head[TTask, TShard, TGShard],
 ](
 	head THead,
-	commitAndFlush func(h THead) error,
+	commitAndFlush func(h THead, mask []bool) error,
 ) Appender[TTask, TShard, TGShard, THead] {
 	return Appender[TTask, TShard, TGShard, THead]{
 		head:           head,
@@ -200,18 +205,34 @@ func (a Appender[TTask, TShard, TGShard, THead]) Append(
 
 	a.trackStaleNans(shardedInnerSeries, state)
 
-	atomicLimitExhausted, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries)
+	shardsToCommit := a.poolProvider.GetShardsMask()
+	defer a.poolProvider.PutShardsMask(shardsToCommit)
+	commitAll, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries, shardsToCommit)
 	if err != nil {
 		logger.Errorf("failed to write wal: %v", err)
 	}
 
-	if commitToWal || atomicLimitExhausted > 0 {
-		if err := a.commitAndFlush(a.head); err != nil {
-			logger.Errorf("failed to commit wal: %v", err)
-		}
+	if err := a.commitWal(commitToWal || commitAll, shardsToCommit); err != nil {
+		logger.Errorf("failed to commit wal: %v", err)
 	}
 
 	return stats, nil
+}
+
+// commitWal commits the WALs of all shards if commitAll is set, otherwise only the WALs of the shards
+// whose segment limit is exhausted.
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
+func (a *Appender[TTask, TShard, TGShard, THead]) commitWal(commitAll bool, shardsToCommit []bool) error {
+	if commitAll {
+		return a.commitAndFlush(a.head, nil)
+	}
+
+	if slices.Contains(shardsToCommit, true) {
+		return a.commitAndFlush(a.head, shardsToCommit)
+	}
+
+	return nil
 }
 
 var errCannotBeRelabeledFromCache = errors.New("cannot be relabeled from cache")
@@ -389,9 +410,12 @@ func (a *Appender[TTask, TShard, TGShard, THead]) trackStaleNans(
 }
 
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
+// It marks in shardsToCommit the shards whose segment limit is exhausted and which can be committed independently,
+// and returns true if a shard exhausted the limit but requires all shards to be committed together.
 func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
-) (uint32, error) {
+	shardsToCommit []bool,
+) (bool, error) {
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
 		func(shard TGShard) error {
@@ -403,18 +427,26 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal
 	defer a.head.PutTask(tAppend)
 	a.head.Enqueue(tAppend)
 
-	var atomicLimitExhausted uint32
+	var commitAll atomic.Bool
 	tWalWrite := a.head.CreateTask(
 		walWrite,
 		func(shard TGShard) error {
-			limitExhausted, errWrite := shard.WalWrite(shardedInnerSeries.DataByShard(shard.ShardID()))
+			shardID := shard.ShardID()
+			exhausted, errWrite := shard.WalWrite(shardedInnerSeries.DataByShard(shardID))
 			if errWrite != nil {
-				return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
+				return fmt.Errorf("shard %d: %w", shardID, errWrite)
 			}
 
-			if limitExhausted {
-				atomic.AddUint32(&atomicLimitExhausted, 1)
+			if !exhausted {
+				return nil
 			}
+
+			if shard.WalIndependentCommit() {
+				shardsToCommit[shardID] = true
+				return nil
+			}
+
+			commitAll.Store(true)
 
 			return nil
 		},
@@ -425,7 +457,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal
 	err := tAppend.Wait()
 	err = errors.Join(err, tWalWrite.Wait())
 
-	return atomicLimitExhausted, err
+	return commitAll.Load(), err
 }
 
 func (a *Appender[TTask, TShard, TGShard, THead]) resolveState(state *cppbridge.StateV2) error {

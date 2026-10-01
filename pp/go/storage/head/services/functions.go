@@ -17,15 +17,20 @@ const (
 // Commit, Flush, Sync
 //
 
-// CFViaRange finalize segment from encoder and add to wal
-// and flush wal segment writer, write all buffered data to storage without sync, do via range.
-func CFViaRange[
+// CFViaRangeByMask finalize segment from encoder and add to wal and flush wal segment writer,
+// write all buffered data to storage without sync, do via range only for the shards selected by mask,
+// mask is indexed by shard ID, nil mask selects all shards.
+func CFViaRangeByMask[
 	TShard Shard,
 	THead RangeHead[TShard],
-](h THead) error {
+](h THead, mask []bool) error {
 	// we hope that there will be no mistakes, positive expectations
 	var errs []error
 	for _, shard := range h.Shards() {
+		if mask != nil && !mask[shard.ShardID()] {
+			continue
+		}
+
 		if err := shard.WalCommit(); err != nil {
 			errs = append(errs, fmt.Errorf("commit shard id %d: %w", shard.ShardID(), err))
 		}

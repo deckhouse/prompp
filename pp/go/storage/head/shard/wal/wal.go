@@ -71,6 +71,7 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 	encLocker      sync.Mutex
 	swLocker       sync.Mutex
 	maxSegmentSize uint32
+	fileVersion    uint8
 	corrupted      bool
 	limitExhausted bool
 	closed         bool
@@ -80,10 +81,12 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 }
 
 // NewWal init new [Wal].
-// lssLocker needs to be locked for reading from LSS for the commit.
+// fileVersion is the format version of the file segmentWriter writes to ([FileFormatVersion] or
+// [FileFormatVersionV2]). lssLocker needs to be locked for reading from LSS for the commit.
 func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	encoder Encoder[TSegment],
 	segmentWriter TWriter,
+	fileVersion uint8,
 	lssLocker locker.RLockable,
 	maxSegmentSize uint32,
 	shardID uint16,
@@ -99,6 +102,7 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 		encLocker:      sync.Mutex{},
 		swLocker:       sync.Mutex{},
 		maxSegmentSize: maxSegmentSize,
+		fileVersion:    fileVersion,
 		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
 			Name:        "prompp_shard_wal_samples_per_segment_sum",
 			Help:        "Number of samples per segment.",
@@ -190,6 +194,12 @@ func (w *Wal[TSegment, TWriter]) CurrentSize() int64 {
 	}
 
 	return w.segmentWriter.CurrentSize()
+}
+
+// IndependentCommit reports whether segments carry through IDs ([FileFormatVersionV2]),
+// so this [Wal] can be committed without committing the WALs of the other shards.
+func (w *Wal[TSegment, TWriter]) IndependentCommit() bool {
+	return !w.corrupted && w.fileVersion >= FileFormatVersionV2
 }
 
 // Flush wal [SegmentWriter], write all buffered data to storage.

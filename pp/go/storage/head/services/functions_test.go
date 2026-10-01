@@ -35,7 +35,7 @@ func (s *FunctionsSuite) newShard(
 		shard.NewDataStorage(false, false),
 		nil,
 		nil,
-		wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil),
+		wal.NewWal(shardWalEncoder, segmentWriter, wal.FileFormatVersion, lss, maxSegmentSize, shardID, nil),
 		shardID,
 	)
 }
@@ -107,4 +107,67 @@ func (s *FunctionsSuite) TestCloseWalsAggregatesErrorsFromAllShards() {
 	for shardID, sw := range segmentWriters {
 		s.Lenf(sw.CloseCalls(), 1, "shard %d", shardID)
 	}
+}
+
+func (*FunctionsSuite) newCommittableSegmentWriters() []*mock.SegmentWriterMock {
+	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
+	for shardID := range shardsCount {
+		segmentWriters[shardID] = &mock.SegmentWriterMock{
+			WriteFunc: func(*cppbridge.HeadEncodedSegment) error { return nil },
+			FlushFunc: func() error { return nil },
+		}
+	}
+
+	return segmentWriters
+}
+
+func (s *FunctionsSuite) TestCFViaRangeByMaskNilMaskCommitsEveryShard() {
+	// Arrange
+	segmentWriters := s.newCommittableSegmentWriters()
+	h := s.newHead(segmentWriters)
+
+	// Act
+	err := services.CFViaRangeByMask(h, nil)
+
+	// Assert
+	s.Require().NoError(err)
+	for shardID, sw := range segmentWriters {
+		s.Lenf(sw.WriteCalls(), 1, "shard %d", shardID)
+		s.Lenf(sw.FlushCalls(), 1, "shard %d", shardID)
+	}
+}
+
+func (s *FunctionsSuite) TestCFViaRangeByMaskCommitsOnlySelectedShards() {
+	// Arrange
+	segmentWriters := s.newCommittableSegmentWriters()
+	h := s.newHead(segmentWriters)
+	mask := make([]bool, shardsCount)
+	mask[1] = true
+
+	// Act
+	err := services.CFViaRangeByMask(h, mask)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Empty(segmentWriters[0].WriteCalls())
+	s.Empty(segmentWriters[0].FlushCalls())
+	s.Len(segmentWriters[1].WriteCalls(), 1)
+	s.Len(segmentWriters[1].FlushCalls(), 1)
+}
+
+func (s *FunctionsSuite) TestCFViaRangeByMaskAggregatesErrorsFromSelectedShards() {
+	// Arrange
+	flushErr := errors.New("shard 1 flush failed")
+	segmentWriters := s.newCommittableSegmentWriters()
+	segmentWriters[1].FlushFunc = func() error { return flushErr }
+	h := s.newHead(segmentWriters)
+	mask := []bool{true, true}
+
+	// Act
+	err := services.CFViaRangeByMask(h, mask)
+
+	// Assert
+	s.Require().ErrorIs(err, flushErr)
+	s.Len(segmentWriters[0].FlushCalls(), 1)
+	s.Len(segmentWriters[1].FlushCalls(), 1)
 }
