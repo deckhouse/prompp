@@ -197,13 +197,13 @@ func (s *RotatorSuite) TestRotate() {
 		s.Equal(uint32(2), actualNumSeries)
 
 		for _, segmentWriter := range segmentWriters {
-			if !s.Len(segmentWriter.WriteCalls(), 2) {
+			if !s.Len(segmentWriter.WriteCalls(), 3) {
 				return
 			}
-			if !s.Len(segmentWriter.FlushCalls(), 2) {
+			if !s.Len(segmentWriter.FlushCalls(), 3) {
 				return
 			}
-			if !s.Len(segmentWriter.SyncCalls(), 2) {
+			if !s.Len(segmentWriter.SyncCalls(), 3) {
 				return
 			}
 
@@ -313,13 +313,13 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 		s.Equal(expectedNumSeries, actualNumSeries)
 
 		for _, segmentWriter := range segmentWriters {
-			if !s.Len(segmentWriter.WriteCalls(), 2) {
+			if !s.Len(segmentWriter.WriteCalls(), 3) {
 				return
 			}
-			if !s.Len(segmentWriter.FlushCalls(), 2) {
+			if !s.Len(segmentWriter.FlushCalls(), 3) {
 				return
 			}
-			if !s.Len(segmentWriter.SyncCalls(), 2) {
+			if !s.Len(segmentWriter.SyncCalls(), 3) {
 				return
 			}
 

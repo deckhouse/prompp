@@ -3,6 +3,9 @@ package services
 import (
 	"errors"
 	"fmt"
+	"runtime"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
@@ -40,6 +43,32 @@ func CFViaRange[
 	return errors.Join(errs...)
 }
 
+// LongCFSViaRange same as [CFSViaRange], but finalize segment from encoder via long commit,
+// intended for a long-running finalization (e.g. after copying all added series into a new head).
+// Shards are independent, so they are processed concurrently, but at most GOMAXPROCS at a time:
+// every long commit is a blocking cgo call occupying an OS thread and competing with ingestion.
+// The sync is done here too, so that it does not slow down the first commit of the new segment on the hot path.
+func LongCFSViaRange[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) error {
+	shards := h.Shards()
+	errs := make([]error, len(shards))
+
+	var g errgroup.Group
+	g.SetLimit(runtime.GOMAXPROCS(0))
+	for i := range shards {
+		g.Go(func() error {
+			errs[i] = cfsShard(shards[i], func(s TShard) error { return s.WalLongCommit() })
+			// errors are collected per shard, so that one failed shard does not hide the others
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	return errors.Join(errs...)
+}
+
 // CFSViaRange finalize segment from encoder and add to wal
 // and flush wal segment writer, write all buffered data to storage and sync, do via range.
 func CFSViaRange[
@@ -49,20 +78,29 @@ func CFSViaRange[
 	// we hope that there will be no mistakes, positive expectations
 	var errs []error
 	for _, shard := range h.Shards() {
-		if err := shard.WalCommit(); err != nil {
-			errs = append(errs, fmt.Errorf("commit shard id %d: %w", shard.ShardID(), err))
-		}
+		errs = append(errs, cfsShard(shard, func(s TShard) error { return s.WalCommit() }))
+	}
 
-		if err := shard.WalFlush(); err != nil {
-			errs = append(errs, fmt.Errorf("flush shard id %d: %w", shard.ShardID(), err))
+	return errors.Join(errs...)
+}
 
-			// if the flush operation fails, skip the Sync
-			continue
-		}
+// cfsShard finalize segment from encoder via commit and add to wal
+// and flush wal segment writer, write all buffered data to storage and sync for one [Shard].
+func cfsShard[TShard Shard](shard TShard, commit func(TShard) error) error {
+	var errs []error
+	if err := commit(shard); err != nil {
+		errs = append(errs, fmt.Errorf("commit shard id %d: %w", shard.ShardID(), err))
+	}
 
-		if err := shard.WalSync(); err != nil {
-			errs = append(errs, fmt.Errorf("sync shard id %d: %w", shard.ShardID(), err))
-		}
+	if err := shard.WalFlush(); err != nil {
+		errs = append(errs, fmt.Errorf("flush shard id %d: %w", shard.ShardID(), err))
+
+		// if the flush operation fails, skip the Sync
+		return errors.Join(errs...)
+	}
+
+	if err := shard.WalSync(); err != nil {
+		errs = append(errs, fmt.Errorf("sync shard id %d: %w", shard.ShardID(), err))
 	}
 
 	return errors.Join(errs...)
