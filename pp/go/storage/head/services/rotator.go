@@ -138,6 +138,9 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 
 	if oldHead.NumberOfShards() == newHead.NumberOfShards() {
 		s.headAddedSeriesCopier(oldHead, newHead)
+		if errCFS := LongCFSViaRange(newHead); errCFS != nil {
+			logger.Warnf("failed CFS new head: %s : %v", newHead.ID(), errCFS)
+		}
 	}
 
 	if err = backoff.Retry(

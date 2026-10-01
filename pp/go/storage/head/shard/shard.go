@@ -19,6 +19,10 @@ type Wal interface {
 	// Commit finalize segment from encoder and write to wal.
 	Commit() error
 
+	// LongCommit finalize segment from encoder and write to wal,
+	// intended for a long-running finalization (e.g. after copying all added series into a new head).
+	LongCommit() error
+
 	// CurrentSize returns current wal size.
 	CurrentSize() int64
 
@@ -159,6 +163,12 @@ func (s *Shard) ShardID() uint16 {
 // WalCommit finalize segment from encoder and write to wal.
 func (s *Shard) WalCommit() error {
 	return s.wal.Commit()
+}
+
+// WalLongCommit finalize segment from encoder and write to wal,
+// intended for a long-running finalization (e.g. after copying all added series into a new head).
+func (s *Shard) WalLongCommit() error {
+	return s.wal.LongCommit()
 }
 
 // WalCurrentSize returns current [Wal] size.

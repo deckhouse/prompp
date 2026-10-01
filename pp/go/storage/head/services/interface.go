@@ -213,6 +213,10 @@ type Shard interface {
 	// WalCommit finalize segment from encoder and write to wal.
 	WalCommit() error
 
+	// WalLongCommit finalize segment from encoder and write to wal,
+	// intended for a long-running finalization (e.g. after copying all added series into a new head).
+	WalLongCommit() error
+
 	// WalCurrentSize returns current [Wal] size.
 	WalCurrentSize() int64
 

@@ -114,6 +114,26 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   }
 }
 
+extern "C" void prompp_head_wal_encoder_long_finalize(uint64_t encoder_ptr, uint64_t res) {
+  struct Result {
+    PromPP::Primitives::Go::Slice<char> segment;
+    PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
+  };
+
+  const auto encoder = std::bit_cast<Encoder*>(encoder_ptr);
+  const auto out = new (std::bit_cast<void*>(res)) Result();
+
+  auto out_stream = PromPP::Primitives::Go::BytesStream(&out->segment);
+
+  try {
+    encoder->finalize(out, out_stream);
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::types::handle_current_exception(err_stream);
+  }
+}
+
 extern "C" void prompp_head_wal_encoder_written_series_id_sentinel(void* args, void* res) {
   struct Arguments {
     EncoderPtr encoder;

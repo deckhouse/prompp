@@ -52,6 +52,10 @@ type Encoder[TSegment EncodedSegment] interface {
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
 
+	// LongFinalize finalizes the encoder and returns the encoded segment,
+	// intended for a long-running finalization (e.g. after copying all added series into a new head).
+	LongFinalize() (TSegment, error)
+
 	// WrittenSeriesIDSentinel returns written series id sentinel.
 	WrittenSeriesIDSentinel() uint32
 }
@@ -152,34 +156,13 @@ func (w *Wal[TSegment, TWriter]) Close() error {
 
 // Commit finalize segment from encoder and write to [SegmentWriter].
 // It is necessary to lock the LSS for reading for the commit.
-func (w *Wal[TSegment, TWriter]) Commit() error {
-	if w.corrupted {
-		return ErrWalIsCorrupted
-	}
+func (w *Wal[TSegment, TWriter]) Commit() error { return w.commit(Encoder[TSegment].Finalize) }
 
-	w.swLocker.Lock()
-	defer w.swLocker.Unlock()
-
-	w.encLocker.Lock()
-	w.lssLocker.RLock()
-	segment, err := w.encoder.Finalize()
-	w.lssLocker.RUnlock()
-	if err != nil {
-		w.encLocker.Unlock()
-		return fmt.Errorf("failed to finalize segment: %w", err)
-	}
-
-	w.limitExhausted = false
-	w.encLocker.Unlock()
-
-	w.samplesPerSegment.Add(float64(segment.Samples()))
-	w.segments.Inc()
-
-	if err = w.segmentWriter.Write(segment); err != nil {
-		return fmt.Errorf("failed to write segment: %w", err)
-	}
-
-	return nil
+// LongCommit finalize segment from encoder via [Encoder.LongFinalize] and write to wal.
+// Use it instead of [Wal.Commit] when the finalization is expected to be long
+// (e.g. after copying all added series into a new head).
+func (w *Wal[TSegment, TWriter]) LongCommit() error {
+	return w.commit(Encoder[TSegment].LongFinalize)
 }
 
 // CurrentSize returns current wal size.
@@ -252,4 +235,37 @@ func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []cppbridge.InnerSeries)
 	}
 
 	return false, nil
+}
+
+// commit finalize segment from encoder via finalize and write to [SegmentWriter],
+// shared implementation of [Wal.Commit] and [Wal.LongCommit].
+// It is necessary to lock the LSS for reading for the commit.
+func (w *Wal[TSegment, TWriter]) commit(finalize func(Encoder[TSegment]) (TSegment, error)) error {
+	if w.corrupted {
+		return ErrWalIsCorrupted
+	}
+
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
+
+	w.encLocker.Lock()
+	w.lssLocker.RLock()
+	segment, err := finalize(w.encoder)
+	w.lssLocker.RUnlock()
+	if err != nil {
+		w.encLocker.Unlock()
+		return fmt.Errorf("failed to finalize segment: %w", err)
+	}
+
+	w.limitExhausted = false
+	w.encLocker.Unlock()
+
+	w.samplesPerSegment.Add(float64(segment.Samples()))
+	w.segments.Inc()
+
+	if err = w.segmentWriter.Write(segment); err != nil {
+		return fmt.Errorf("failed to write segment: %w", err)
+	}
+
+	return nil
 }
