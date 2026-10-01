@@ -27,7 +27,7 @@
     "i18next": "24.2.3",
     "jquery": "^3.7.1",
     "jquery.flot.tooltip": "^0.9.0",
-    "moment": "^2.30.1",
+    "moment": "^2.31.0",
     "moment-timezone": "^0.5.45",
     "popper.js": "^1.14.3",
     "react": "^17.0.2",
