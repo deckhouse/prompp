@@ -187,8 +187,11 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	if err = s.headInformer.SetRotatedStatus(oldHead.ID(), HeadTimeInterval(oldHead)); err != nil {
 		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
 	}
+
 	oldHead.SetReadOnly()
-	s.events.With(prometheus.Labels{"type": "rotated"}).Inc()
+	ReleaseIngestionStructures(oldHead)
+
+	s.events.WithLabelValues("rotated").Inc()
 	s.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))
 	s.rotatedTrigger()
 

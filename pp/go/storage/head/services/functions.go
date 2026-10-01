@@ -121,6 +121,31 @@ func CloseWals[
 	return errors.Join(errs...)
 }
 
+// ReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss for all shards.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only head.
+func ReleaseIngestionStructures[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) {
+	for _, shard := range h.Shards() {
+		shard.LSSReleaseIngestionStructures()
+	}
+}
+
+// ReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss for all shards,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only head after chunk recoding and data loading are done.
+func ReleaseLSIDSet[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) {
+	for _, shard := range h.Shards() {
+		shard.LSSReleaseLSIDSet()
+	}
+}
+
 //
 // UnloadUnusedSeriesDataWithHead
 //

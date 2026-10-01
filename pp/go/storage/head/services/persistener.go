@@ -130,6 +130,8 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 			continue
 		}
 
+		ReleaseLSIDSet(head)
+
 		logger.Infof("[Persistener]: head %s persisted, duration: %v", head.ID(), p.clock.Since(start))
 		p.events.Inc()
 		p.headPersistenceDuration.Observe(float64(p.clock.Since(start).Milliseconds()))
