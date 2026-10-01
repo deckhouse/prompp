@@ -180,6 +180,7 @@ func (c *Catalog) Delete(id string) error {
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.deletedAt = c.clock.Now().UnixMilli()
 	changed.updatedAt = r.deletedAt
+	changed.fields = fullFields(changed)
 
 	if err := c.log.Write(changed); err != nil {
 		return fmt.Errorf(logWriteErr, err)
@@ -259,6 +260,7 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.corrupted = true
 	changed.updatedAt = c.clock.Now().UnixMilli()
+	changed.fields = fullFields(changed)
 
 	if err = c.log.Write(changed); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
@@ -338,6 +340,7 @@ func (c *Catalog) setStatusWithTimeBounds(r *Record, status Status, mint, maxt i
 	changed.mint = mint
 	changed.maxt = maxt
 	changed.updatedAt = c.clock.Now().UnixMilli()
+	changed.fields = fullFields(changed)
 
 	if err = c.log.Write(changed); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
@@ -366,6 +369,7 @@ func (c *Catalog) compactIfNeeded() error {
 func (c *Catalog) compactLog() error {
 	srecords := make([]*SerializedRecord, 0, len(c.records))
 	for _, record := range c.records {
+		record.fields = fullFields(&record.SerializedRecord)
 		srecords = append(srecords, &record.SerializedRecord)
 	}
 

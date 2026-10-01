@@ -180,7 +180,7 @@ func NewEmptyRecord() *Record {
 	}
 }
 
-// NewRecordWithData init new [Record] with parameters.
+// NewRecordWithData init new [Record] with parameters, all the known fields are present.
 func NewRecordWithData(
 	id uuid.UUID,
 	numberOfShards uint16,
@@ -192,7 +192,7 @@ func NewRecordWithData(
 	status Status,
 	lastAppendedSegmentID *uint32,
 ) *Record {
-	return &Record{
+	r := &Record{
 		SerializedRecord: SerializedRecord{
 			id:                    id,
 			numberOfShards:        numberOfShards,
@@ -212,9 +212,12 @@ func NewRecordWithData(
 		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
 		segmentsLock:    &sync.RWMutex{},
 	}
+	r.fields = fullFields(&r.SerializedRecord)
+
+	return r
 }
 
-// NewRecordWithDataV3 init new [Record] version 3 with parameters.
+// NewRecordWithDataV3 init new [Record] version 3 with parameters, all the known fields are present.
 func NewRecordWithDataV3(
 	id uuid.UUID,
 	numberOfShards uint16,
@@ -227,7 +230,7 @@ func NewRecordWithDataV3(
 	mint int64,
 	maxt int64,
 ) *Record {
-	return &Record{
+	r := &Record{
 		SerializedRecord: SerializedRecord{
 			id:                    id,
 			numberOfShards:        numberOfShards,
@@ -246,6 +249,9 @@ func NewRecordWithDataV3(
 		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
 		segmentsLock:    &sync.RWMutex{},
 	}
+	r.fields = fullFields(&r.SerializedRecord)
+
+	return r
 }
 
 // Acquire increase reference count to [Head]. Returns func decrease reference count.

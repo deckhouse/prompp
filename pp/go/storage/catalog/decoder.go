@@ -4,20 +4,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
-	"hash/crc32"
 	"io"
+	"math"
 
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protowire"
 
 	"github.com/prometheus/prometheus/pp/go/util/optional"
-)
-
-const (
-	// size of uint32.
-	sizeOfUint32 = 4
-	// size of int64 or uint64.
-	sizeOf64 = 8
 )
 
 //
@@ -197,124 +190,179 @@ func decodeOptionalValue[T any](
 // DecoderV3
 //
 
-// DecoderV3 decodes [SerializedRecord], version 3.
+// DecoderV3 decodes [SerializedRecord] from the frame of the record version 3, sets only the present fields
+// and their mask.
 type DecoderV3 struct {
-	offset int
-	size   uint8
-	buffer [RecordFrameSizeV3]byte
-	hasher hash.Hash32
+	buffer [maxRecordSizeV3]byte
 }
 
 // NewDecoderV3 init new [DecoderV3].
 func NewDecoderV3() *DecoderV3 {
-	return &DecoderV3{
-		hasher: crc32.NewIEEE(),
-	}
+	return &DecoderV3{}
 }
 
-// DecodeFrom decode [SerializedRecord] from [io.Reader].
-//
-//revive:disable-next-line:cyclomatic this is decode.
-//revive:disable-next-line:function-length long but this is decode.
-func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) (err error) {
-	d.reset()
-
-	if err = d.readSize(reader); err != nil {
+// DecodeFrom decode [SerializedRecord] from [io.Reader]. Returns [io.EOF] if the reader has no more records
+// and [io.ErrUnexpectedEOF] if the frame is incomplete.
+func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) error {
+	if _, err := io.ReadFull(reader, d.buffer[:1]); err != nil {
 		return err
 	}
 
-	defer func() {
-		if err != nil && errors.Is(err, io.EOF) {
-			err = fmt.Errorf("%s: %w", err.Error(), io.ErrUnexpectedEOF)
+	if d.buffer[0] != RecordVersionV3 {
+		return fmt.Errorf("%w: %d", ErrUnsupportedRecordVersion, d.buffer[0])
+	}
+
+	if _, err := io.ReadFull(reader, d.buffer[1:recordHeaderSizeV3]); err != nil {
+		return fmt.Errorf("v3: read record header: %w", unexpectedEOF(err))
+	}
+
+	size := recordHeaderSizeV3 + int(d.buffer[recordLengthOffsetV3])
+	if _, err := io.ReadFull(reader, d.buffer[recordHeaderSizeV3:size]); err != nil {
+		return fmt.Errorf("v3: read record payload: %w", unexpectedEOF(err))
+	}
+
+	_, err := decodeFrame(d.buffer[:size], sr)
+	return err
+}
+
+// decodeFrame decodes the record frame of any known version from the beginning of buf.
+// Returns the size of the frame, it is also returned with [ErrRecordChecksumMismatch] as the frame header states.
+func decodeFrame(buf []byte, sr *SerializedRecord) (int, error) {
+	if len(buf) == 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	switch buf[0] {
+	case RecordVersionV3:
+		return decodeFrameV3(buf, sr)
+	default:
+		return 0, fmt.Errorf("%w: %d", ErrUnsupportedRecordVersion, buf[0])
+	}
+}
+
+// decodeFrameV3 decodes the frame of the record version 3 from the beginning of buf.
+func decodeFrameV3(buf []byte, sr *SerializedRecord) (int, error) {
+	if len(buf) < recordHeaderSizeV3 {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	size := recordHeaderSizeV3 + int(buf[recordLengthOffsetV3])
+	if len(buf) < size {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	frame := buf[:size]
+	if binary.LittleEndian.Uint32(frame[recordChecksumOffsetV3:]) != checksumV3(frame) {
+		return size, ErrRecordChecksumMismatch
+	}
+
+	sr.id = uuid.UUID(frame[recordIDOffsetV3:recordLengthOffsetV3])
+	if err := decodePayloadV3(frame[recordHeaderSizeV3:], sr); err != nil {
+		return size, fmt.Errorf("v3: decode payload: %w", err)
+	}
+
+	return size, nil
+}
+
+// decodePayloadV3 decodes the protobuf payload of the record version 3, unknown fields are skipped.
+func decodePayloadV3(payload []byte, sr *SerializedRecord) error {
+	var fields fieldMask
+	for len(payload) > 0 {
+		number, wireType, n := protowire.ConsumeTag(payload)
+		if n < 0 {
+			return protowire.ParseError(n)
 		}
-	}()
+		payload = payload[n:]
 
-	if err = d.readRecord(reader); err != nil {
-		return err
+		field := fieldByProtoNumber(number)
+		if field == 0 {
+			if n = protowire.ConsumeFieldValue(number, wireType, payload); n < 0 {
+				return protowire.ParseError(n)
+			}
+			payload = payload[n:]
+			continue
+		}
+
+		if wireType != protowire.VarintType {
+			return fmt.Errorf("field %d: unexpected wire type %d", number, wireType)
+		}
+
+		value, n := protowire.ConsumeVarint(payload)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		payload = payload[n:]
+
+		if err := setFieldV3(sr, field, value); err != nil {
+			return fmt.Errorf("field %d: %w", number, err)
+		}
+		fields |= field
 	}
 
-	if err = d.validateCRC32(); err != nil {
-		return fmt.Errorf("read crc32: %w", err)
-	}
-
-	targetOffset := d.offset + 16 //revive:disable-line:add-constant it's size of UUID
-	sr.id = uuid.UUID(d.buffer[d.offset:targetOffset])
-	d.offset = targetOffset
-
-	sr.numberOfShards = binary.LittleEndian.Uint16(d.buffer[d.offset:])
-	d.offset += 2 //revive:disable-line:add-constant it's size of uint16
-
-	sr.createdAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
-	d.offset += sizeOf64
-
-	sr.updatedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
-	d.offset += sizeOf64
-
-	sr.deletedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
-	d.offset += sizeOf64
-
-	sr.corrupted = d.buffer[d.offset] > 0
-	d.offset++
-
-	sr.status = Status(d.buffer[d.offset])
-	d.offset++
-
-	sr.numberOfSegments = binary.LittleEndian.Uint32(d.buffer[d.offset:])
-	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
-	d.offset += sizeOfUint32
-
-	sr.mint = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
-	d.offset += sizeOf64
-
-	sr.maxt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:])) // #nosec G115 // no overflow
-	d.offset += sizeOf64
-	sr.fields = fullFields(sr)
-
-	return nil
-}
-
-// reset state of decoder.
-func (d *DecoderV3) reset() {
-	d.offset = 0
-	d.size = 0
-	d.hasher.Reset()
-}
-
-// readSize read size of buffer from [io.Reader].
-func (d *DecoderV3) readSize(reader io.Reader) error {
-	if _, err := reader.Read(d.buffer[:1]); err != nil {
-		return fmt.Errorf("read record size: %w", err)
-	}
-	d.size = d.buffer[0]
-
-	if int(d.size) != len(d.buffer) {
-		return fmt.Errorf("invalid size: %d", d.size)
+	sr.fields = fields
+	if fields.has(fieldSegmentsCount) {
+		sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
 	}
 
 	return nil
 }
 
-// readRecord read [SerializedRecord] from [io.Reader].
-func (d *DecoderV3) readRecord(reader io.Reader) error {
-	if _, err := reader.Read(d.buffer[:d.size]); err != nil {
-		return fmt.Errorf("read whole record: %w", err)
+// fieldByProtoNumber returns the field of the protobuf field number, 0 for an unknown number.
+func fieldByProtoNumber(number protowire.Number) fieldMask {
+	if number < protoNumberOfShards || number > protoMaxT {
+		return 0
 	}
+
+	return fieldNumberOfShards << (number - protoNumberOfShards)
+}
+
+// setFieldV3 sets the value of the field to the record.
+//
+//revive:disable-next-line:cyclomatic // one branch per field.
+func setFieldV3(sr *SerializedRecord, field fieldMask, value uint64) error {
+	switch field {
+	case fieldNumberOfShards:
+		if value > math.MaxUint16 {
+			return errValueOutOfRange(value)
+		}
+		sr.numberOfShards = uint16(value)
+	case fieldCreatedAt:
+		sr.createdAt = int64(value) // #nosec G115 // two's complement
+	case fieldUpdatedAt:
+		sr.updatedAt = int64(value) // #nosec G115 // two's complement
+	case fieldDeletedAt:
+		sr.deletedAt = int64(value) // #nosec G115 // two's complement
+	case fieldCorrupted:
+		sr.corrupted = protowire.DecodeBool(value)
+	case fieldStatus:
+		if value > math.MaxUint8 {
+			return errValueOutOfRange(value)
+		}
+		sr.status = Status(value)
+	case fieldSegmentsCount:
+		if value > math.MaxUint32 {
+			return errValueOutOfRange(value)
+		}
+		sr.numberOfSegments = uint32(value)
+	case fieldMinT:
+		sr.mint = int64(value) // #nosec G115 // two's complement
+	case fieldMaxT:
+		sr.maxt = int64(value) // #nosec G115 // two's complement
+	}
+
 	return nil
 }
 
-// validateCRC32 validate [SerializedRecord] on CRC32.
-func (d *DecoderV3) validateCRC32() (err error) {
-	expectedCRC32Hash := binary.LittleEndian.Uint32(d.buffer[d.offset:])
-	d.offset += sizeOfUint32
+// errValueOutOfRange returns the error for the value that does not fit into the field.
+func errValueOutOfRange(value uint64) error {
+	return fmt.Errorf("value out of range: %d", value)
+}
 
-	if _, err = d.hasher.Write(d.buffer[d.offset:]); err != nil {
-		return fmt.Errorf("write to crc32 hasher: %w", err)
+// unexpectedEOF converts [io.EOF] in the middle of the frame to [io.ErrUnexpectedEOF].
+func unexpectedEOF(err error) error {
+	if errors.Is(err, io.EOF) {
+		return io.ErrUnexpectedEOF
 	}
 
-	actualCRC32Hash := d.hasher.Sum32()
-	if expectedCRC32Hash != actualCRC32Hash {
-		return fmt.Errorf("invalid crc32: expected: %d, actual: %d", expectedCRC32Hash, actualCRC32Hash)
-	}
-
-	return nil
+	return err
 }
