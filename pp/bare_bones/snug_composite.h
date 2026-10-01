@@ -6,7 +6,7 @@
 #include <parallel_hashmap/phmap.h>
 #pragma GCC diagnostic pop
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include <concepts>
 #include <cstdint>
