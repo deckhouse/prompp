@@ -24,26 +24,6 @@ const (
 )
 
 //
-// Encoder
-//
-
-// Encoder encodes [SerializedRecord].
-type Encoder interface {
-	// EncodeTo encode [SerializedRecord] to [io.Writer].
-	EncodeTo(writer io.Writer, sr *SerializedRecord) error
-}
-
-//
-// Decoder
-//
-
-// Decoder decodes [SerializedRecord].
-type Decoder interface {
-	// DecodeFrom decode [SerializedRecord] from [io.Reader].
-	DecodeFrom(reader io.Reader, sr *SerializedRecord) error
-}
-
-//
 // FileLog
 //
 
