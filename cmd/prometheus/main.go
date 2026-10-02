@@ -765,7 +765,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fileLog, err := catalog.NewFileLogV3(filepath.Join(dataDir, "head.log"))
+	fileLog, err := catalog.NewFileLogV2(filepath.Join(dataDir, "head.log"))
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
