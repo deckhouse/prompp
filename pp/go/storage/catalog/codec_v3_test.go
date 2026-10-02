@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"io"
 	"math"
 	"testing"
@@ -230,6 +231,30 @@ func (s *CodecV3Suite) TestDecodeUnsupportedVersion() {
 	s.ErrorIs(err, ErrUnsupportedRecordVersion)
 }
 
+func (s *CodecV3Suite) TestDecodeFrameEmptyBuffer() {
+	_, err := decodeFrame(nil, &SerializedRecord{})
+
+	s.ErrorIs(err, io.ErrUnexpectedEOF)
+}
+
+func (s *CodecV3Suite) TestDecodeFrameUnsupportedVersion() {
+	frame := s.encode(newCodecRecord())
+	frame[0] = 0
+
+	n, err := decodeFrame(frame, &SerializedRecord{})
+
+	s.Require().ErrorIs(err, ErrUnsupportedRecordVersion)
+	s.Zero(n)
+}
+
+func (s *CodecV3Suite) TestEncodeWriterError() {
+	writeErr := errors.New("disk full")
+
+	err := NewEncoderV3().EncodeTo(failingWriter{err: writeErr}, newCodecRecord())
+
+	s.ErrorIs(err, writeErr)
+}
+
 func (s *CodecV3Suite) TestDecodeSkipsUnknownFields() {
 	payload := protowire.AppendTag(nil, protoStatus, protowire.VarintType)
 	payload = protowire.AppendVarint(payload, uint64(StatusRotated))
@@ -281,6 +306,15 @@ func (s *CodecV3Suite) TestEncodeDecodeWithoutAllocations() {
 	})
 
 	s.Zero(allocs)
+}
+
+// failingWriter is an [io.Writer] that always fails.
+type failingWriter struct {
+	err error
+}
+
+func (w failingWriter) Write([]byte) (int, error) {
+	return 0, w.err
 }
 
 func FuzzDecodeFrame(f *testing.F) {
