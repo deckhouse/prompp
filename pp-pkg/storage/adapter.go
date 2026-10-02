@@ -18,7 +18,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -107,7 +106,11 @@ func (ar *Adapter) AppendHashdex(
 	err = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		lap.Mark(appender.StageSemaphoreWait)
 		var appendError error
-		stats, appendError = appender.New(h, services.CFViaRange, ar.appendStats(lap)).Append(
+		stats, appendError = appender.New(
+			h,
+			services.CFViaRange,
+			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
+		).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
@@ -156,7 +159,11 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	lap := ar.appendRecorders.Stages.Start()
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		lap.Mark(appender.StageSemaphoreWait)
-		stats, err := appender.New(h, services.CFViaRange, ar.appendStats(lap)).Append(
+		stats, err := appender.New(
+			h,
+			services.CFViaRange,
+			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
+		).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
 			state,
@@ -194,7 +201,11 @@ func (ar *Adapter) AppendTimeSeries(
 	lap := ar.appendRecorders.Stages.Start()
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		lap.Mark(appender.StageSemaphoreWait)
-		stats, err = appender.New(h, services.CFViaRange, ar.appendStats(lap)).Append(
+		stats, err = appender.New(
+			h,
+			services.CFViaRange,
+			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
+		).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx, Data: data},
 			state,
@@ -205,11 +216,6 @@ func (ar *Adapter) AppendTimeSeries(
 	})
 
 	return stats, err
-}
-
-// appendStats returns the stage stats of an append into the active [Head] with the lap started by the caller.
-func (ar *Adapter) appendStats(lap stagestats.Lap) appender.Stats {
-	return appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards}
 }
 
 // Appender create a new [storage.Appender] for [Head].
