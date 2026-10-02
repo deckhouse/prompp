@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"bytes"
 	"math"
 	"testing"
 
@@ -126,26 +125,4 @@ func (s *RecordFieldsSuite) TestApplyRecordChangesZeroSegmentsCount() {
 
 	s.Equal(uint32(0), sr.numberOfSegments)
 	s.True(sr.lastAppendedSegmentID.IsNil())
-}
-
-func (s *RecordFieldsSuite) TestDecoderV1SetsSnapshotFields() {
-	buf := &bytes.Buffer{}
-	s.Require().NoError(EncoderV1{}.EncodeTo(buf, s.newRecord()))
-	sr := &SerializedRecord{}
-
-	err := DecoderV1{}.DecodeFrom(buf, sr)
-
-	s.Require().NoError(err)
-	s.Equal(fieldsSnapshotV2, sr.fields)
-}
-
-func (s *RecordFieldsSuite) TestDecoderV2SetsSnapshotFields() {
-	buf := &bytes.Buffer{}
-	s.Require().NoError(NewEncoderV2().EncodeTo(buf, s.newRecord()))
-	sr := &SerializedRecord{}
-
-	err := DecoderV2{}.DecodeFrom(buf, sr)
-
-	s.Require().NoError(err)
-	s.Equal(fieldsSnapshotV2, sr.fields)
 }

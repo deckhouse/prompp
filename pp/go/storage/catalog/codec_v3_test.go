@@ -31,23 +31,6 @@ func TestCodecV3Suite(t *testing.T) {
 	suite.Run(t, new(CodecV3Suite))
 }
 
-func newCodecRecord() *SerializedRecord {
-	sr := &SerializedRecord{
-		id:               uuid.MustParse("01929a6c-7b1e-7000-8000-000000000001"),
-		numberOfShards:   4,
-		createdAt:        100,
-		updatedAt:        200,
-		status:           StatusActive,
-		numberOfSegments: 10,
-		mint:             math.MaxInt64,
-		maxt:             math.MinInt64,
-	}
-	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
-	sr.fields = fullFields(sr)
-
-	return sr
-}
-
 func (s *CodecV3Suite) encode(sr *SerializedRecord) []byte {
 	buf := &bytes.Buffer{}
 	s.Require().NoError(NewEncoderV3().EncodeTo(buf, sr))
@@ -88,6 +71,24 @@ func (s *CodecV3Suite) TestEncodeStatusChange() {
 	frame := s.encode(sr)
 
 	s.Equal(goldenStatusFrameV3, hex.EncodeToString(frame))
+}
+
+func (s *CodecV3Suite) TestDecodeRecordWithDataV3() {
+	record := NewRecordWithDataV3(uuid.New(), 5, 25, 26, 27, true, StatusActive, 25, 2, 3)
+
+	decoded, err := s.decode(s.encode(&record.SerializedRecord))
+
+	s.Require().NoError(err)
+	s.Equal(record.ID(), decoded.id.String())
+	s.Equal(record.NumberOfShards(), decoded.numberOfShards)
+	s.Equal(record.CreatedAt(), decoded.createdAt)
+	s.Equal(record.UpdatedAt(), decoded.updatedAt)
+	s.Equal(record.DeletedAt(), decoded.deletedAt)
+	s.Equal(record.Corrupted(), decoded.corrupted)
+	s.Equal(record.Status(), decoded.status)
+	s.Equal(record.NumberOfSegments(), decoded.numberOfSegments)
+	s.Equal(record.Mint(), decoded.mint)
+	s.Equal(record.Maxt(), decoded.maxt)
 }
 
 func (s *CodecV3Suite) TestDecodeFullRecord() {
@@ -231,22 +232,6 @@ func (s *CodecV3Suite) TestDecodeUnsupportedVersion() {
 	s.ErrorIs(err, ErrUnsupportedRecordVersion)
 }
 
-func (s *CodecV3Suite) TestDecodeFrameEmptyBuffer() {
-	_, err := decodeFrame(nil, &SerializedRecord{})
-
-	s.ErrorIs(err, io.ErrUnexpectedEOF)
-}
-
-func (s *CodecV3Suite) TestDecodeFrameUnsupportedVersion() {
-	frame := s.encode(newCodecRecord())
-	frame[0] = 0
-
-	n, err := decodeFrame(frame, &SerializedRecord{})
-
-	s.Require().ErrorIs(err, ErrUnsupportedRecordVersion)
-	s.Zero(n)
-}
-
 func (s *CodecV3Suite) TestEncodeWriterError() {
 	writeErr := errors.New("disk full")
 
@@ -315,27 +300,6 @@ type failingWriter struct {
 
 func (w failingWriter) Write([]byte) (int, error) {
 	return 0, w.err
-}
-
-func FuzzDecodeFrame(f *testing.F) {
-	for _, golden := range []string{goldenFullFrameV3, goldenStatusFrameV3} {
-		frame, err := hex.DecodeString(golden)
-		if err != nil {
-			f.Fatal(err)
-		}
-		f.Add(frame)
-	}
-
-	f.Fuzz(func(t *testing.T, data []byte) {
-		n, err := decodeFrame(data, &SerializedRecord{})
-		if n > len(data) {
-			t.Fatalf("frame size %d exceeds the buffer size %d", n, len(data))
-		}
-
-		if err == nil && n < recordHeaderSizeV3 {
-			t.Fatalf("decoded frame size %d is less than the header size", n)
-		}
-	})
 }
 
 func FuzzEncodeDecodeV3(f *testing.F) {

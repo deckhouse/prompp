@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,13 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protowire"
-
-	"github.com/prometheus/prometheus/pp/go/util/optional"
-)
-
-const (
-	// RecordStructMaxSizeV2 max size of [SerializedRecord] for [EncoderV2].
-	RecordStructMaxSizeV2 = 50
 )
 
 // Frame of the record version 3: version | id | payload length | crc32 | payload.
@@ -57,147 +49,7 @@ var (
 	ErrRecordTooLarge = errors.New("record too large")
 	// ErrRecordChecksumMismatch the record checksum does not match the record content.
 	ErrRecordChecksumMismatch = errors.New("record checksum mismatch")
-	// ErrUnsupportedRecordVersion the record version is unknown.
-	ErrUnsupportedRecordVersion = errors.New("unsupported record version")
 )
-
-//
-// EncoderV1
-//
-
-// EncoderV1 encodes [SerializedRecord], version 1.
-//
-//	Deprecated.
-type EncoderV1 struct{}
-
-// EncodeTo encode [SerializedRecord] to [io.Writer].
-func (EncoderV1) EncodeTo(writer io.Writer, sr *SerializedRecord) (err error) {
-	if err = encodeString(writer, sr.id.String()); err != nil {
-		return fmt.Errorf("v1: encode id: %w", err)
-	}
-
-	if err = encodeString(writer, sr.id.String()); err != nil {
-		return fmt.Errorf("v1: encode dir: %w", err)
-	}
-
-	if err = binary.Write(writer, binary.LittleEndian, &sr.numberOfShards); err != nil {
-		return fmt.Errorf("v1: write number of shards: %w", err)
-	}
-
-	if err = binary.Write(writer, binary.LittleEndian, &sr.createdAt); err != nil {
-		return fmt.Errorf("v1: write created at: %w", err)
-	}
-
-	if err = binary.Write(writer, binary.LittleEndian, &sr.updatedAt); err != nil {
-		return fmt.Errorf("v1: write updated at: %w", err)
-	}
-
-	if err = binary.Write(writer, binary.LittleEndian, &sr.deletedAt); err != nil {
-		return fmt.Errorf("v1: write deleted at: %w", err)
-	}
-
-	if err = binary.Write(writer, binary.LittleEndian, &sr.status); err != nil {
-		return fmt.Errorf("v1: write status: %w", err)
-	}
-
-	return nil
-}
-
-// encodeString encode string to [io.Writer].
-func encodeString(writer io.Writer, value string) (err error) {
-	if err = binary.Write(writer, binary.LittleEndian, uint64(len(value))); err != nil {
-		return fmt.Errorf("write string length: %w", err)
-	}
-
-	if _, err = writer.Write([]byte(value)); err != nil {
-		return fmt.Errorf("write string: %w", err)
-	}
-
-	return nil
-}
-
-//
-// EncoderV2
-//
-
-// EncoderV2 encodes [SerializedRecord], version 2.
-type EncoderV2 struct {
-	buffer *bytes.Buffer
-}
-
-// NewEncoderV2 init new [EncoderV2].
-func NewEncoderV2() *EncoderV2 {
-	return &EncoderV2{
-		buffer: bytes.NewBuffer(make([]byte, 0, RecordStructMaxSizeV2)),
-	}
-}
-
-// EncodeTo encode [SerializedRecord] to [io.Writer].
-//
-//revive:disable-next-line:cyclomatic this is encode.
-//revive:disable-next-line:function-length long but this is encode.
-func (e *EncoderV2) EncodeTo(writer io.Writer, sr *SerializedRecord) (err error) {
-	e.buffer.Reset()
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, uint8(0)); err != nil {
-		return fmt.Errorf("v2: encode size filler: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, sr.id); err != nil {
-		return fmt.Errorf("v2: encode id: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, &sr.numberOfShards); err != nil {
-		return fmt.Errorf("v2: write number of shards: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, &sr.createdAt); err != nil {
-		return fmt.Errorf("v2: write created at: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, &sr.updatedAt); err != nil {
-		return fmt.Errorf("v2: write updated at: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, &sr.deletedAt); err != nil {
-		return fmt.Errorf("v2: write deleted at: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, &sr.corrupted); err != nil {
-		return fmt.Errorf("v2: write corrupted: %w", err)
-	}
-
-	if err = binary.Write(e.buffer, binary.LittleEndian, &sr.status); err != nil {
-		return fmt.Errorf("v2: write status: %w", err)
-	}
-
-	if err = encodeOptionalValue(e.buffer, binary.LittleEndian, sr.lastAppendedSegmentID); err != nil {
-		return fmt.Errorf("v2: write last written segment id: %w", err)
-	}
-
-	e.buffer.Bytes()[0] = uint8(len(e.buffer.Bytes()) - 1) // #nosec G115 // no overflow
-
-	if _, err = e.buffer.WriteTo(writer); err != nil {
-		return fmt.Errorf("v2: write record: %w", err)
-	}
-
-	return nil
-}
-
-// encodeOptionalValue encode [optional.Optional[T]] to [io.Writer].
-func encodeOptionalValue[T any](writer io.Writer, byteOrder binary.ByteOrder, value optional.Optional[T]) (err error) {
-	var nilIndicator uint8
-	if value.IsNil() {
-		return binary.Write(writer, byteOrder, nilIndicator)
-	}
-
-	nilIndicator = 1
-	if err = binary.Write(writer, byteOrder, nilIndicator); err != nil {
-		return err
-	}
-
-	return binary.Write(writer, byteOrder, value.Value())
-}
 
 //
 // EncoderV3
@@ -302,4 +154,170 @@ func appendVarintField(dst []byte, number protowire.Number, value uint64) []byte
 func checksumV3(frame []byte) uint32 {
 	checksum := crc32.Update(0, castagnoliTable, frame[:recordChecksumOffsetV3])
 	return crc32.Update(checksum, castagnoliTable, frame[recordHeaderSizeV3:])
+}
+
+//
+// DecoderV3
+//
+
+// DecoderV3 decodes [SerializedRecord] from the frame of the record version 3, sets only the present fields
+// and their mask.
+type DecoderV3 struct {
+	buffer [maxRecordSizeV3]byte
+}
+
+// NewDecoderV3 init new [DecoderV3].
+func NewDecoderV3() *DecoderV3 {
+	return &DecoderV3{}
+}
+
+// DecodeFrom decode [SerializedRecord] from [io.Reader]. Returns [io.EOF] if the reader has no more records
+// and [io.ErrUnexpectedEOF] if the frame is incomplete.
+func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) error {
+	if _, err := io.ReadFull(reader, d.buffer[:1]); err != nil {
+		return err
+	}
+
+	if d.buffer[0] != RecordVersionV3 {
+		return fmt.Errorf("%w: %d", ErrUnsupportedRecordVersion, d.buffer[0])
+	}
+
+	if _, err := io.ReadFull(reader, d.buffer[1:recordHeaderSizeV3]); err != nil {
+		return fmt.Errorf("v3: read record header: %w", unexpectedEOF(err))
+	}
+
+	size := recordHeaderSizeV3 + int(d.buffer[recordLengthOffsetV3])
+	if _, err := io.ReadFull(reader, d.buffer[recordHeaderSizeV3:size]); err != nil {
+		return fmt.Errorf("v3: read record payload: %w", unexpectedEOF(err))
+	}
+
+	_, err := decodeFrame(d.buffer[:size], sr)
+	return err
+}
+
+// decodeFrameV3 decodes the frame of the record version 3 from the beginning of buf.
+func decodeFrameV3(buf []byte, sr *SerializedRecord) (int, error) {
+	if len(buf) < recordHeaderSizeV3 {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	size := recordHeaderSizeV3 + int(buf[recordLengthOffsetV3])
+	if len(buf) < size {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	frame := buf[:size]
+	if binary.LittleEndian.Uint32(frame[recordChecksumOffsetV3:]) != checksumV3(frame) {
+		return size, ErrRecordChecksumMismatch
+	}
+
+	sr.id = uuid.UUID(frame[recordIDOffsetV3:recordLengthOffsetV3])
+	if err := decodePayloadV3(frame[recordHeaderSizeV3:], sr); err != nil {
+		return size, fmt.Errorf("v3: decode payload: %w", err)
+	}
+
+	return size, nil
+}
+
+// decodePayloadV3 decodes the protobuf payload of the record version 3, unknown fields are skipped.
+func decodePayloadV3(payload []byte, sr *SerializedRecord) error {
+	var fields fieldMask
+	for len(payload) > 0 {
+		number, wireType, n := protowire.ConsumeTag(payload)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		payload = payload[n:]
+
+		field := fieldByProtoNumber(number)
+		if field == 0 {
+			if n = protowire.ConsumeFieldValue(number, wireType, payload); n < 0 {
+				return protowire.ParseError(n)
+			}
+			payload = payload[n:]
+			continue
+		}
+
+		if wireType != protowire.VarintType {
+			return fmt.Errorf("field %d: unexpected wire type %d", number, wireType)
+		}
+
+		value, n := protowire.ConsumeVarint(payload)
+		if n < 0 {
+			return protowire.ParseError(n)
+		}
+		payload = payload[n:]
+
+		if err := setFieldV3(sr, field, value); err != nil {
+			return fmt.Errorf("field %d: %w", number, err)
+		}
+		fields |= field
+	}
+
+	sr.fields = fields
+	if fields.has(fieldSegmentsCount) {
+		sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
+	}
+
+	return nil
+}
+
+// fieldByProtoNumber returns the field of the protobuf field number, 0 for an unknown number.
+func fieldByProtoNumber(number protowire.Number) fieldMask {
+	if number < protoNumberOfShards || number > protoMaxT {
+		return 0
+	}
+
+	return fieldNumberOfShards << (number - protoNumberOfShards)
+}
+
+// setFieldV3 sets the value of the field to the record.
+//
+//revive:disable-next-line:cyclomatic // one branch per field.
+func setFieldV3(sr *SerializedRecord, field fieldMask, value uint64) error {
+	switch field {
+	case fieldNumberOfShards:
+		if value > math.MaxUint16 {
+			return errValueOutOfRange(value)
+		}
+		sr.numberOfShards = uint16(value)
+	case fieldCreatedAt:
+		sr.createdAt = int64(value) // #nosec G115 // two's complement
+	case fieldUpdatedAt:
+		sr.updatedAt = int64(value) // #nosec G115 // two's complement
+	case fieldDeletedAt:
+		sr.deletedAt = int64(value) // #nosec G115 // two's complement
+	case fieldCorrupted:
+		sr.corrupted = protowire.DecodeBool(value)
+	case fieldStatus:
+		if value > math.MaxUint8 {
+			return errValueOutOfRange(value)
+		}
+		sr.status = Status(value)
+	case fieldSegmentsCount:
+		if value > math.MaxUint32 {
+			return errValueOutOfRange(value)
+		}
+		sr.numberOfSegments = uint32(value)
+	case fieldMinT:
+		sr.mint = int64(value) // #nosec G115 // two's complement
+	case fieldMaxT:
+		sr.maxt = int64(value) // #nosec G115 // two's complement
+	}
+
+	return nil
+}
+
+// errValueOutOfRange returns the error for the value that does not fit into the field.
+func errValueOutOfRange(value uint64) error {
+	return fmt.Errorf("value out of range: %d", value)
+}
+
+// unexpectedEOF converts [io.EOF] in the middle of the frame to [io.ErrUnexpectedEOF].
+func unexpectedEOF(err error) error {
+	if errors.Is(err, io.EOF) {
+		return io.ErrUnexpectedEOF
+	}
+
+	return err
 }

@@ -146,20 +146,6 @@ func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, 
 	return fh, nil
 }
 
-// codecsByVersion select codec by version.
-func codecsByVersion(version uint64) (e Encoder, d Decoder, err error) {
-	switch version {
-	case LogFileVersionV1:
-		return EncoderV1{}, DecoderV1{}, nil
-	case LogFileVersionV2:
-		return NewEncoderV2(), DecoderV2{}, nil
-	case LogFileVersionV3:
-		return NewEncoderV3(), NewDecoderV3(), nil
-	default:
-		return nil, nil, ErrUnsupportedVersion
-	}
-}
-
 //
 // Migration
 //
