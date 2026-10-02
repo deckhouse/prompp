@@ -5,6 +5,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
+	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/zeropool"
 )
@@ -32,6 +33,7 @@ type HeadPool[TGShard Shard] struct {
 	shardedRelabeledSeriesPool sync.Pool
 	shardedInnerSeriesPool     sync.Pool
 	statsPool                  zeropool.Pool[[]cppbridge.RelabelerStats]
+	shardSlotsPool             zeropool.Pool[stagestats.ShardSlots]
 	// use in querier
 	snapshotsPool       zeropool.Pool[[]*cppbridge.LabelSetSnapshot]
 	lssQueryResultsPool zeropool.Pool[[]*cppbridge.LSSQueryResult]
@@ -69,6 +71,9 @@ func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 		},
 		statsPool: zeropool.New(func() []cppbridge.RelabelerStats {
 			return make([]cppbridge.RelabelerStats, numberOfShards)
+		}),
+		shardSlotsPool: zeropool.New(func() stagestats.ShardSlots {
+			return stagestats.NewShardSlots(numberOfShards)
 		}),
 		// use in querier
 		snapshotsPool: zeropool.New(func() []*cppbridge.LabelSetSnapshot {
@@ -147,6 +152,17 @@ func (hp *HeadPool[TGShard]) GetRelabelerStats() []cppbridge.RelabelerStats {
 func (hp *HeadPool[TGShard]) PutRelabelerStats(stats []cppbridge.RelabelerStats) {
 	clear(stats)
 	hp.statsPool.Put(stats)
+}
+
+// GetShardSlots gets a [stagestats.ShardSlots] from the pool.
+func (hp *HeadPool[TGShard]) GetShardSlots() stagestats.ShardSlots {
+	return hp.shardSlotsPool.Get()
+}
+
+// PutShardSlots adds [stagestats.ShardSlots] to the pool after resetting it.
+func (hp *HeadPool[TGShard]) PutShardSlots(slots stagestats.ShardSlots) {
+	slots.Reset()
+	hp.shardSlotsPool.Put(slots)
 }
 
 // GetSnapshots gets a slice of [cppbridge.LabelSetSnapshot] from the pool.

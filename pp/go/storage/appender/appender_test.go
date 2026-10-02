@@ -64,7 +64,7 @@ func (s *AppenderSuite) SetupTest() {
 	s.appender = appender.New(s.head, func(head *storage.Head) error {
 		s.walCommitCount++
 		return services.CFViaRange(head)
-	})
+	}, appender.Stats{})
 }
 
 func (s *AppenderSuite) createDataDirectory() string {
