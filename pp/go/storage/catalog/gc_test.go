@@ -39,16 +39,18 @@ func (s *GCSuite) SetupTest() {
 	s.gc = catalog.NewGC(dataDir, s.catalog, s.clock, nil, nil, gcTestRetentionPeriod)
 }
 
-func (s *GCSuite) createRotatedRecord(maxtOffset time.Duration) *catalog.Record {
+// createRotatedRecord creates the head that receives data for the duration and is rotated right after it.
+func (s *GCSuite) createRotatedRecord(duration time.Duration) *catalog.Record {
 	r, err := s.catalog.Create(1)
 	s.Require().NoError(err)
 
 	createdAt := s.clock.Now()
+	s.clock.Advance(duration)
 	_, err = s.catalog.SetStatusWithTimeBounds(
 		r.ID(),
 		catalog.StatusRotated,
 		createdAt.UnixMilli(),
-		createdAt.Add(maxtOffset).UnixMilli(),
+		s.clock.Now().UnixMilli(),
 	)
 	s.Require().NoError(err)
 
@@ -63,7 +65,7 @@ func (s *GCSuite) recordExists(id string) bool {
 func (s *GCSuite) TestKeepsHeadWithMaxtInRetentionPeriod() {
 	// Arrange
 	r := s.createRotatedRecord(2 * time.Hour)
-	s.clock.Advance(gcTestRetentionPeriod + time.Hour)
+	s.clock.Advance(gcTestRetentionPeriod - time.Hour)
 
 	// Act
 	s.gc.Iterate()
@@ -75,7 +77,7 @@ func (s *GCSuite) TestKeepsHeadWithMaxtInRetentionPeriod() {
 func (s *GCSuite) TestRemovesHeadWithMaxtOutOfRetentionPeriod() {
 	// Arrange
 	r := s.createRotatedRecord(2 * time.Hour)
-	s.clock.Advance(gcTestRetentionPeriod + 2*time.Hour)
+	s.clock.Advance(gcTestRetentionPeriod)
 
 	// Act
 	s.gc.Iterate()
@@ -106,7 +108,7 @@ func (s *GCSuite) TestKeepsNotOutdatedCorruptedHead() {
 	s.Require().NoError(err)
 	_, err = s.catalog.SetStatus(r.ID(), catalog.StatusPersisted)
 	s.Require().NoError(err)
-	s.clock.Advance(gcTestRetentionPeriod + time.Hour)
+	s.clock.Advance(gcTestRetentionPeriod - time.Hour)
 
 	// Act
 	s.gc.Iterate()

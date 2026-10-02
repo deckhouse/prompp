@@ -393,6 +393,30 @@ func (s *CatalogSuite) TestDelete_SuccessAndGetFails() {
 	s.Require().ErrorContains(err, "not found: "+r.ID())
 }
 
+func (s *CatalogSuite) TestDelete_SetsUpdatedAtToDeletionTime() {
+	// Arrange
+	l := &LogMock{
+		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:  func() int { return 42 },
+		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+	}
+
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+
+	r, err := c.Create(2)
+	s.Require().NoError(err)
+	s.clock.Advance(time.Second)
+
+	// Act
+	err = c.Delete(r.ID())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(s.clock.Now().UnixMilli(), r.DeletedAt())
+	s.Equal(r.DeletedAt(), r.UpdatedAt())
+}
+
 func (s *CatalogSuite) TestDelete_CompactError() {
 	size := 1000
 	l := &LogMock{
@@ -710,7 +734,6 @@ func (s *CatalogSuite) TestSetTimeBounds() {
 	s.True(r.HasTimeBounds())
 	s.Equal(int64(10), r.Mint())
 	s.Equal(int64(20), r.Maxt())
-	s.Equal(int64(20), r.RetentionTimestamp())
 }
 
 func (s *CatalogSuite) TestSetTimeBounds_SameBoundsNoSecondWrite() {

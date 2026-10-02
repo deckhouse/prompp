@@ -179,7 +179,7 @@ func (c *Catalog) Delete(id string) error {
 
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.deletedAt = c.clock.Now().UnixMilli()
-	changed.updatedAt = r.deletedAt
+	changed.updatedAt = changed.deletedAt
 	changed.fields = fullFields(changed)
 
 	if err := c.log.Write(changed); err != nil {

@@ -202,9 +202,26 @@ func HeadTimeInterval[
 	TShard Shard,
 	THead RangeHead[TShard],
 ](h THead) cppbridge.TimeInterval {
+	return headTimeInterval(h, false)
+}
+
+// RefreshHeadTimeInterval recomputes the cached time interval of the [Head] data on all shards and returns it,
+// the interval is invalid if the [Head] has no data.
+func RefreshHeadTimeInterval[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead) cppbridge.TimeInterval {
+	return headTimeInterval(h, true)
+}
+
+// headTimeInterval returns the time interval of the [Head] data across all shards.
+func headTimeInterval[
+	TShard Shard,
+	THead RangeHead[TShard],
+](h THead, invalidateCache bool) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for shard := range h.RangeShards() {
-		interval := shard.TimeInterval(false)
+		interval := shard.TimeInterval(invalidateCache)
 		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
 		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
 	}

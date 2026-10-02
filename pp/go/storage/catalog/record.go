@@ -363,12 +363,17 @@ func (r *Record) ReferenceCount() int64 {
 
 // RetentionTimestamp returns the timestamp from which the retention of the [Head] is counted:
 // the max timestamp of the data if the time bounds are known, otherwise the creation time.
+//
+// The max timestamp comes from the samples, not from the wall clock, so it is clamped:
+//   - to the update time from above: a sample from the future must not keep the head forever;
+//   - to the creation time from below: backfilled old data must not remove the head before
+//     the retention period since its creation has passed, e.g. before the remote writer has sent it.
 func (r *Record) RetentionTimestamp() int64 {
-	if r.HasTimeBounds() {
-		return r.maxt
+	if !r.HasTimeBounds() {
+		return r.createdAt
 	}
 
-	return r.createdAt
+	return max(r.createdAt, min(r.maxt, r.updatedAt))
 }
 
 // SetLastAppendedSegmentID set last appended segment id, keeps the number of segments in sync.

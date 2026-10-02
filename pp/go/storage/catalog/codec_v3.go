@@ -191,7 +191,8 @@ func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) error {
 		return fmt.Errorf("v3: read record payload: %w", unexpectedEOF(err))
 	}
 
-	_, err := decodeFrame(d.buffer[:size], sr)
+	_, err := decodeFrameV3(d.buffer[:size], sr)
+
 	return err
 }
 
