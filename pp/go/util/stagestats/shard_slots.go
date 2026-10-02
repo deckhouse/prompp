@@ -16,18 +16,24 @@ func NewShardSlots(numberOfShards uint16) ShardSlots {
 	return make(ShardSlots, numberOfShards)
 }
 
+// Max returns the maximum duration of the slot over the shards, 0 if no shard has set it.
+func (s ShardSlots) Max(slot int) int64 {
+	var maxDuration int64
+	for i := range s {
+		maxDuration = max(maxDuration, s[i][slot])
+	}
+
+	return maxDuration
+}
+
+// Reset zeroes all slots.
+func (s ShardSlots) Reset() {
+	clear(s)
+}
+
 // Set stores the duration d of the slot of the shard.
 func (s ShardSlots) Set(shardID uint16, slot int, d int64) {
 	s[shardID][slot] = d
-}
-
-// Start returns the current time from [Now] to measure a slot, or 0 without reading the clock for nil [ShardSlots].
-func (s ShardSlots) Start() int64 {
-	if s == nil {
-		return 0
-	}
-
-	return Now()
 }
 
 // Since stores the time since start, obtained from [ShardSlots.Start], to the slot of the shard and returns
@@ -43,17 +49,11 @@ func (s ShardSlots) Since(shardID uint16, slot int, start int64) int64 {
 	return now
 }
 
-// Max returns the maximum duration of the slot over the shards, 0 if no shard has set it.
-func (s ShardSlots) Max(slot int) int64 {
-	var maxDuration int64
-	for i := range s {
-		maxDuration = max(maxDuration, s[i][slot])
+// Start returns the current time from [Now] to measure a slot, or 0 without reading the clock for nil [ShardSlots].
+func (s ShardSlots) Start() int64 {
+	if s == nil {
+		return 0
 	}
 
-	return maxDuration
-}
-
-// Reset zeroes all slots.
-func (s ShardSlots) Reset() {
-	clear(s)
+	return Now()
 }

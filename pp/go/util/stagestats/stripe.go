@@ -28,15 +28,6 @@ func (s Stripe) Observe(stage Stage, d int64) {
 	c.count.Add(1)
 }
 
-// Since accounts one execution of the stage that started at start, obtained from [Now].
-func (s Stripe) Since(stage Stage, start int64) {
-	if s.counters == nil {
-		return
-	}
-
-	s.Observe(stage, Now()-start)
-}
-
 // ObserveMax accounts one execution of the stage with the maximum duration of the slot over the shards,
 // if any shard has set it.
 func (s Stripe) ObserveMax(stage Stage, slots ShardSlots, slot int) {
@@ -47,4 +38,13 @@ func (s Stripe) ObserveMax(stage Stage, slots ShardSlots, slot int) {
 	if d := slots.Max(slot); d > 0 {
 		s.Observe(stage, d)
 	}
+}
+
+// Since accounts one execution of the stage that started at start, obtained from [Now].
+func (s Stripe) Since(stage Stage, start int64) {
+	if s.counters == nil {
+		return
+	}
+
+	s.Observe(stage, Now()-start)
 }

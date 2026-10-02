@@ -97,14 +97,25 @@ func defaultStripes() int {
 	return min(runtime.GOMAXPROCS(0), maxStripes)
 }
 
-// Stripe returns the [Stripe] selected by the hint. A nil [Recorder] returns a no-op [Stripe].
-func (r *Recorder) Stripe(hint uint32) Stripe {
-	if r == nil {
-		return Stripe{}
-	}
+// Collect implements [prometheus.Collector].
+func (r *Recorder) Collect(ch chan<- prometheus.Metric) {
+	for stage, name := range r.stages {
+		var sum, count uint64
+		for base := 0; base < len(r.counters); base += r.stride {
+			c := &r.counters[base+stage]
+			sum += c.sum.Load()
+			count += c.count.Load()
+		}
 
-	base := int(hint&r.stripeMask) * r.stride
-	return Stripe{counters: r.counters[base : base+len(r.stages) : base+len(r.stages)]}
+		ch <- prometheus.MustNewConstMetric(r.durationDesc, prometheus.CounterValue, float64(sum), name)
+		ch <- prometheus.MustNewConstMetric(r.executionDesc, prometheus.CounterValue, float64(count), name)
+	}
+}
+
+// Describe implements [prometheus.Collector].
+func (r *Recorder) Describe(ch chan<- *prometheus.Desc) {
+	ch <- r.durationDesc
+	ch <- r.executionDesc
 }
 
 // RandomStripe returns a randomly selected [Stripe]. A nil [Recorder] returns a no-op [Stripe].
@@ -125,23 +136,12 @@ func (r *Recorder) Start() Lap {
 	return Lap{stripe: r.RandomStripe(), prev: Now()}
 }
 
-// Describe implements [prometheus.Collector].
-func (r *Recorder) Describe(ch chan<- *prometheus.Desc) {
-	ch <- r.durationDesc
-	ch <- r.executionDesc
-}
-
-// Collect implements [prometheus.Collector].
-func (r *Recorder) Collect(ch chan<- prometheus.Metric) {
-	for stage, name := range r.stages {
-		var sum, count uint64
-		for base := 0; base < len(r.counters); base += r.stride {
-			c := &r.counters[base+stage]
-			sum += c.sum.Load()
-			count += c.count.Load()
-		}
-
-		ch <- prometheus.MustNewConstMetric(r.durationDesc, prometheus.CounterValue, float64(sum), name)
-		ch <- prometheus.MustNewConstMetric(r.executionDesc, prometheus.CounterValue, float64(count), name)
+// Stripe returns the [Stripe] selected by the hint. A nil [Recorder] returns a no-op [Stripe].
+func (r *Recorder) Stripe(hint uint32) Stripe {
+	if r == nil {
+		return Stripe{}
 	}
+
+	base := int(hint&r.stripeMask) * r.stride
+	return Stripe{counters: r.counters[base : base+len(r.stages) : base+len(r.stages)]}
 }
