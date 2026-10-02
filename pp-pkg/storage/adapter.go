@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -42,6 +43,7 @@ type Adapter struct {
 	storageQuerierMetrics *querier.Metrics
 	appendDuration        prometheus.Histogram
 	samplesAppended       prometheus.Counter
+	appendRecorders       appender.Recorders
 }
 
 // NewAdapter init new [Adapter].
@@ -79,6 +81,7 @@ func NewAdapter(
 			Help:        "Total number of appended samples.",
 			ConstLabels: prometheus.Labels{"type": "float"},
 		}),
+		appendRecorders: appender.NewRecorders(registerer),
 	}
 	ar.hashdexLimits.Store(cppbridge.DefaultWALHashdexLimits())
 	return ar
@@ -100,9 +103,11 @@ func (ar *Adapter) AppendHashdex(
 		ar.samplesAppended.Add(float64(stats.SamplesAdded))
 	}(time.Now())
 
+	lap := ar.appendRecorders.Stages.Start()
 	err = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
+		lap.Mark(appender.StageSemaphoreWait)
 		var appendError error
-		stats, appendError = appender.New(h, services.CFViaRange).Append(
+		stats, appendError = appender.New(h, services.CFViaRange, ar.appendStats(lap)).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
@@ -148,8 +153,10 @@ func (ar *Adapter) AppendSnappyProtobuf(
 		ar.samplesAppended.Add(floatsAppended)
 	}(time.Now())
 
+	lap := ar.appendRecorders.Stages.Start()
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err := appender.New(h, services.CFViaRange).Append(
+		lap.Mark(appender.StageSemaphoreWait)
+		stats, err := appender.New(h, services.CFViaRange, ar.appendStats(lap)).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
 			state,
@@ -184,8 +191,10 @@ func (ar *Adapter) AppendTimeSeries(
 		ar.samplesAppended.Add(float64(stats.SamplesAdded))
 	}(time.Now())
 
+	lap := ar.appendRecorders.Stages.Start()
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err = appender.New(h, services.CFViaRange).Append(
+		lap.Mark(appender.StageSemaphoreWait)
+		stats, err = appender.New(h, services.CFViaRange, ar.appendStats(lap)).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx, Data: data},
 			state,
@@ -196,6 +205,11 @@ func (ar *Adapter) AppendTimeSeries(
 	})
 
 	return stats, err
+}
+
+// appendStats returns the stage stats of an append into the active [Head] with the lap started by the caller.
+func (ar *Adapter) appendStats(lap stagestats.Lap) appender.Stats {
+	return appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards}
 }
 
 // Appender create a new [storage.Appender] for [Head].

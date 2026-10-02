@@ -276,3 +276,67 @@ func collectLabelSets(ss storage.SeriesSet) []labels.Labels {
 	}
 	return out
 }
+
+func (s *BatchStorageSuite) TestStats_AppendTimeSeriesNotAccounted() {
+	// Arrange
+	bs := s.adapter.BatchStorage().(*BatchStorage)
+	before := s.appendStageExecutions()
+
+	// Act
+	_, err := bs.AppendTimeSeries(s.ctx, s.statsBatch(), s.state, false)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(before, s.appendStageExecutions())
+}
+
+func (s *BatchStorageSuite) TestStats_CommitAccountedAsAppend() {
+	// Arrange
+	bs := s.adapter.BatchStorage().(*BatchStorage)
+	_, err := bs.AppendTimeSeries(s.ctx, s.statsBatch(), s.state, false)
+	s.Require().NoError(err)
+	before := s.appendStageExecutions()
+
+	// Act
+	err = bs.Commit(s.ctx)
+
+	// Assert
+	s.Require().NoError(err)
+	after := s.appendStageExecutions()
+	s.InDelta(before["semaphore_wait"]+1, after["semaphore_wait"], 0)
+	s.InDelta(before["append_data_wal"]+1, after["append_data_wal"], 0)
+}
+
+// statsBatch returns a batch of one sample.
+func (*BatchStorageSuite) statsBatch() *testTimeSeriesBatch {
+	return &testTimeSeriesBatch{
+		timeSeries: []pp_model.TimeSeries{
+			{
+				LabelSet:  pp_model.NewLabelSetBuilder().Set("__name__", "stats_metric").Set("job", "stats").Build(),
+				Timestamp: 1000,
+				Value:     1.0,
+			},
+		},
+	}
+}
+
+// appendStageExecutions returns the number of executions by stage of the appends into the active head.
+func (s *BatchStorageSuite) appendStageExecutions() map[string]float64 {
+	registry := prometheus.NewRegistry()
+	s.Require().NoError(registry.Register(s.adapter.appendRecorders.Stages))
+	families, err := registry.Gather()
+	s.Require().NoError(err)
+
+	result := map[string]float64{}
+	for _, family := range families {
+		if family.GetName() != "prompp_head_append_stage_executions_total" {
+			continue
+		}
+
+		for _, metric := range family.GetMetric() {
+			result[metric.GetLabel()[0].GetValue()] = metric.GetCounter().GetValue()
+		}
+	}
+
+	return result
+}
