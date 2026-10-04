@@ -90,6 +90,7 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	return result
 }
 
+// SeriesGroups group series by label names.
 type SeriesGroups struct {
 	Groups [][]uint32
 }

@@ -86,13 +86,6 @@ func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	ds.locker.RUnlock()
 }
 
-// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-func (ds *DataStorage) QueryFirstTimestamps(ids []uint32, timestamps []int64) {
-	ds.locker.RLock()
-	ds.dataStorage.QueryFirstTimestamps(ids, timestamps)
-	ds.locker.RUnlock()
-}
-
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 // series in ids directly into the C-shared series slice (pointed to by series).
 func (ds *DataStorage) QueryStaleNaNSeries(ids []uint32, series uintptr) {
@@ -135,6 +128,15 @@ func (ds *DataStorage) WithRLock(fn func(ds *cppbridge.DataStorage) error) error
 func (ds *DataStorage) TimeInterval(invalidateCache bool) cppbridge.TimeInterval {
 	ds.locker.RLock()
 	result := ds.dataStorage.TimeInterval(invalidateCache)
+	ds.locker.RUnlock()
+
+	return result
+}
+
+// TimeIntervalWithValidateCache gets time interval from [DataStorage] with validate cache.
+func (ds *DataStorage) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) cppbridge.TimeInterval {
+	ds.locker.RLock()
+	result := ds.dataStorage.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
 	ds.locker.RUnlock()
 
 	return result
