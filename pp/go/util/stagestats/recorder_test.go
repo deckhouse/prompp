@@ -108,6 +108,7 @@ test_stage_executions_total{source="test",stage="third"} 1
 `), "test_stage_executions_total"))
 	s.Positive(s.durationSum())
 	s.LessOrEqual(s.durationSum(), float64(total))
+	s.LessOrEqual(lap.SinceMicroseconds(), float64(stagestats.Now()-start)/1e3)
 }
 
 func (s *RecorderSuite) TestNilRecorderAccountsNothing() {
