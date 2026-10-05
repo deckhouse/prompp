@@ -8,6 +8,7 @@ package stagestats
 // to the stage, so N stages take N+1 clock readings and their sum is the total time without gaps.
 type Lap struct {
 	stripe Stripe
+	start  int64
 	prev   int64
 }
 
@@ -25,4 +26,9 @@ func (l *Lap) Mark(stage Stage) {
 	now := Now()
 	l.stripe.Observe(stage, now-l.prev)
 	l.prev = now
+}
+
+// SinceMicroseconds returns the time elapsed since the start of the [Lap].
+func (l *Lap) SinceMicroseconds() float64 {
+	return float64(Now()-l.start) / 1e3
 }

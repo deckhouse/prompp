@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sync/atomic"
-	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
@@ -97,11 +96,6 @@ func (ar *Adapter) AppendHashdex(
 		return cppbridge.RelabelerStats{}, nil
 	}
 
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(float64(stats.SamplesAdded))
-	}(time.Now())
-
 	lap := ar.appendRecorders.Stages.Start()
 	err = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		lap.Mark(appender.StageSemaphoreWait)
@@ -119,6 +113,9 @@ func (ar *Adapter) AppendHashdex(
 
 		return appendError
 	})
+
+	ar.appendDuration.Observe(lap.SinceMicroseconds())
+	ar.samplesAppended.Add(float64(stats.SamplesAdded))
 
 	return stats, err
 }
@@ -151,13 +148,8 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	}
 
 	var floatsAppended float64
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(floatsAppended)
-	}(time.Now())
-
 	lap := ar.appendRecorders.Stages.Start()
-	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
+	errAppend := ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		lap.Mark(appender.StageSemaphoreWait)
 		stats, err := appender.New(
 			h,
@@ -173,6 +165,11 @@ func (ar *Adapter) AppendSnappyProtobuf(
 
 		return err
 	})
+
+	ar.appendDuration.Observe(lap.SinceMicroseconds())
+	ar.samplesAppended.Add(floatsAppended)
+
+	return errAppend
 }
 
 // AppendTimeSeries append TimeSeries data to [Head].
@@ -193,11 +190,6 @@ func (ar *Adapter) AppendTimeSeries(
 		return stats, nil
 	}
 
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(float64(stats.SamplesAdded))
-	}(time.Now())
-
 	lap := ar.appendRecorders.Stages.Start()
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		lap.Mark(appender.StageSemaphoreWait)
@@ -214,6 +206,9 @@ func (ar *Adapter) AppendTimeSeries(
 
 		return nil
 	})
+
+	ar.appendDuration.Observe(lap.SinceMicroseconds())
+	ar.samplesAppended.Add(float64(stats.SamplesAdded))
 
 	return stats, err
 }
