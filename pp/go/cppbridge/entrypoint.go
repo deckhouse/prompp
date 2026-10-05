@@ -1485,6 +1485,37 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
+// primitivesLSSReleaseHashSet releases label set -> ls id hash set of lss.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func primitivesLSSReleaseHashSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_hash_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// primitivesLSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func primitivesLSSReleaseLSIDSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_ls_id_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
@@ -3257,6 +3288,33 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	)
 	headWalEncoderFinalizeSum.Add(float64(time.Since(start).Nanoseconds()))
 	headWalEncoderFinalizeCount.Inc()
+
+	return res.samples, res.segment, handleException(res.exception)
+}
+
+// headWalEncoderLongFinalize - finalize the encoded data in the C++ encoder to Segment.
+// Unlike [headWalEncoderFinalize] it uses a regular CGO call instead of fastcgo, so a long-running
+// finalization (e.g. after copying all added series into a new head) does not block the Go scheduler and GC.
+func headWalEncoderLongFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
+	res := &struct {
+		segment   []byte
+		exception []byte
+		samples   uint32
+	}{}
+
+	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
+	// although they are nil at call time and C++ fills them with C-allocated memory only.
+	// An address hidden in an integer is not adjusted if the goroutine stack is moved before
+	// the call enters C (e.g. a stack shrink on preemption in the _Cfunc_ wrapper prologue),
+	// so res is pinned: this moves it to the heap and keeps its address stable.
+	var pinner runtime.Pinner
+	pinner.Pin(res)
+	defer pinner.Unpin()
+
+	start := time.Now()
+	testGC()
+	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(res))))
+	headWalEncoderLongFinalizeDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return res.samples, res.segment, handleException(res.exception)
 }

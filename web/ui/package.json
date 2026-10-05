@@ -50,6 +50,7 @@
   },
   "version": "0.55.1",
   "overrides": {
-    "nth-check": ">=2.0.1"
+    "nth-check": ">=2.0.1",
+    "moment": "^2.31.0"
   }
 }

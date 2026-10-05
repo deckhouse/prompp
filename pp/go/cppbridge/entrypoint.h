@@ -187,6 +187,8 @@ void prompp_get_head_status_data_storage(void* args, void* res);
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /**
  * @brief Construct a new Head WAL encoder
  *
@@ -249,6 +251,22 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
  * }
  */
 void prompp_head_wal_encoder_finalize(void* args, void* res);
+
+/**
+ * @brief Flush segment. Same as prompp_head_wal_encoder_finalize, but intended for long-running finalization
+ * (e.g. the first segment of a new head right after all added series were copied into its LSS).
+ *
+ * @param encoder_ptr pointer to constructed encoder;
+ * @param res pointer to result struct {
+ *     segment            []byte  // segment content
+ *     error              []byte  // error string if thrown
+ *     samples            uint32  // number of samples in segment
+ * }
+ *
+ * @attention This binding used as a CGO call!!!
+ *
+ */
+void prompp_head_wal_encoder_long_finalize(uint64_t encoder_ptr, uint64_t res);
 
 /**
  * @brief Series id sentinel written to WAL.
@@ -996,6 +1014,29 @@ void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
  *
  */
 void prompp_primitives_free_ls_ids_mapping(void* args);
+
+/**
+ * @brief Release the label set -> ls id hash set of queryable lss.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After release lss can't find or add label sets, so it's allowed only for read-only lss.
+ */
+void prompp_primitives_lss_release_hash_set(void* args);
+
+/**
+ * @brief Release the sorted ls id set and the label set -> ls id hash set of queryable lss, sorting index is built beforehand.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After release lss can't find or add label sets and ls id set is empty, so it's allowed only for read-only lss
+ * after chunk recoding and data loading are done.
+ */
+void prompp_primitives_lss_release_ls_id_set(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

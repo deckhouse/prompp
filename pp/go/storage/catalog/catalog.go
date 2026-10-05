@@ -65,7 +65,12 @@ type DefaultIDGenerator struct{}
 
 // Generate UUID.
 func (DefaultIDGenerator) Generate() uuid.UUID {
-	return uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.New()
+	}
+
+	return id
 }
 
 //
