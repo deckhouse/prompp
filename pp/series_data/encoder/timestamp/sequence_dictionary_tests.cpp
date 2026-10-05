@@ -72,7 +72,7 @@ class SequenceDictionaryFixture : public testing::Test {
   }
 
   [[nodiscard]] Timestamps decode_finalized(SequenceId stream_id) const {
-    const auto& stream = dictionary_.finalized_stream(stream_id);
+    const auto& stream = dictionary_.stream(stream_id);
     return TimestampDecoder::decode_all(stream.reader(), stream.count());
   }
 
@@ -344,7 +344,7 @@ TEST_F(SequenceDictionaryFixture, SequenceLeftToFinalizedChunksIsTrimmedWhenLast
 
   // Assert
   EXPECT_EQ(finalized, finalized_again);
-  EXPECT_TRUE(dictionary_.finalized_stream(finalized).stream.is_read_only());
+  EXPECT_TRUE(dictionary_.stream(finalized).stream.is_read_only());
   EXPECT_EQ((Timestamps{101, 102}), decode_finalized(finalized));
   EXPECT_EQ(0U, dictionary_.open_sequences_count());
 }

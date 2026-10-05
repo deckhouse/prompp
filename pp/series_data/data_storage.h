@@ -249,13 +249,8 @@ struct DataStorage {
     chunk.reset();
   }
 
-  template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(uint32_t timestamp_id) const noexcept {
-    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return timestamp_store.stream(timestamp_id);
-    } else {
-      return timestamp_store.finalized_stream(timestamp_id);
-    }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(encoder::timestamp::SequenceId timestamp_id) const noexcept {
+    return timestamp_store.stream(timestamp_id);
   }
 
   template <chunk::DataChunk::Type chunk_type>

@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -45,7 +46,10 @@ class SequenceDictionary {
   // Consumes one open reference to `sequence_id` and returns one for the extended sequence.
   // `kInvalidSequenceId` starts an empty sequence; the one-byte count limits sequences to 255 timestamps.
   [[nodiscard]] SequenceId append(SequenceId sequence_id, int64_t timestamp) {
-    assert(sequence_id == kInvalidSequenceId || (timestamp > last_timestamp(sequence_id) && count(sequence_id) < 255));
+    if (sequence_id != kInvalidSequenceId) {
+      assert(timestamp > last_timestamp(sequence_id));
+      assert(count(sequence_id) < std::numeric_limits<uint8_t>::max());
+    }
 
     if (const auto cached_id = append_cache_.result_id;
         sequence_id == append_cache_.parent_id && timestamp == append_cache_.timestamp && cached_id != kInvalidSequenceId) [[likely]] {
@@ -58,7 +62,7 @@ class SequenceDictionary {
 
     const auto& parent = sequences_[sequence_id];
     const Extension extension{.hash = extend_hash(parent.hash, timestamp), .parent = &parent, .timestamp = timestamp};
-    // Remove the old index entry before inserting the same id under a new hash; erase by id would otherwise be ambiguous.
+    // Remove the old entry before changing content so the index remains consistent with the sequence hash.
     const bool in_place = parent.open_references == 1 && parent.finalized_references == 0 && !parent.stream.stream.is_read_only();
     if (in_place) {
       index_.erase(sequence_id);
@@ -97,7 +101,7 @@ class SequenceDictionary {
 
   // Releases one open reference to `sequence_id`; `kInvalidSequenceId` has no reference to release.
   PROMPP_ALWAYS_INLINE void release(SequenceId sequence_id) noexcept {
-    if (sequence_id == kInvalidSequenceId) {
+    if (sequence_id == kInvalidSequenceId) [[unlikely]] {
       return;
     }
     auto& sequence = sequences_[sequence_id];
@@ -125,13 +129,10 @@ class SequenceDictionary {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& stream(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].stream; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& finalized_stream(SequenceId sequence_id) const noexcept {
-    return sequences_[sequence_id].stream;
-  }
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].encoder.timestamp(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].count; }
 
-  // Includes reusable holes left by erased sequences, but not spare vector capacity.
+  // Includes reusable holes left by erased sequences.
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t slot_count() const noexcept { return sequences_.size(); }
   // Sequences with both kinds of reference contribute to both counts.
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t open_sequences_count() const noexcept { return open_sequences_count_; }
@@ -150,16 +151,12 @@ class SequenceDictionary {
  private:
   static constexpr uint64_t kNoVersion = 0;
 
-  // Keep the stream pointer aligned so leak detection can follow it.
   struct Sequence {
     uint64_t hash;
-    TimestampEncoderState encoder;
-    // Unique for the dictionary's lifetime; changes with every change of content.
-    uint64_t version;
-    // Version of the prefix copied into this sequence; `kNoVersion` means no prefix identity was recorded.
-    uint64_t parent_version;
+    TimestampEncoderCodec encoder;
+    uint64_t version;         // Unique; changes with every change of content.
+    uint64_t parent_version;  // Version of the prefix copied into this sequence
     BitSequenceWithItemsCount stream;
-    // Cached from the stream header to avoid a buffer read during lookup.
     uint8_t count;
     uint32_t open_references;
     uint32_t finalized_references;
@@ -170,6 +167,8 @@ class SequenceDictionary {
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
   };
   static_assert(sizeof(Sequence) == 64);
+  // Keep the stream pointer aligned so leak detection can follow it.
+  static_assert(offsetof(Sequence, stream) % alignof(void*) == 0);
 
   // Lookup key for a sequence not yet encoded: a prefix followed by one timestamp.
   struct Extension {
@@ -178,7 +177,6 @@ class SequenceDictionary {
     int64_t timestamp;
   };
 
-  // Content changes require removing the old index entry and inserting one under the new hash.
   class SequenceHash {
    public:
     using is_transparent = void;
@@ -212,7 +210,7 @@ class SequenceDictionary {
   phmap::flat_hash_set<SequenceId, SequenceHash, SequenceEqual, BareBones::Allocator<SequenceId, Reallocator>> index_{
       0, SequenceHash{sequences_}, SequenceEqual{sequences_}, BareBones::Allocator<SequenceId, Reallocator>{index_allocated_memory_}};
 
-  // Repeating a parent and timestamp reuses the result. Clear before either id changes content or is recycled.
+  // Repeating a parent and timestamp reuses the result
   struct AppendCache {
     SequenceId parent_id{kInvalidSequenceId};
     SequenceId result_id{kInvalidSequenceId};

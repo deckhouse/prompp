@@ -9,12 +9,12 @@ namespace series_data::encoder::timestamp {
 class TimestampEncoder {
  public:
   template <class BitSequenceWithItemsCount>
-  static void encode_first(TimestampEncoderState& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
+  static void encode_first(TimestampEncoderCodec& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
     encoder.encode(timestamp, stream.stream);
   }
 
   template <class BitSequenceWithItemsCount>
-  static void encode(TimestampEncoderState& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
+  static void encode(TimestampEncoderCodec& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
     if (stream.inc_count() == 1) [[unlikely]] {
       encoder.encode_delta(timestamp, stream.stream);
     } else {
@@ -44,7 +44,7 @@ class TimestampDecoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool eof() const noexcept { return reader_.eof(); }
 
   [[nodiscard]] static int64_t decode_first(BareBones::BitSequenceReader reader) noexcept {
-    TimestampDecoderState decoder;
+    TimestampDecoderCodec decoder;
     decoder.decode(reader);
     return decoder.timestamp();
   }
@@ -66,7 +66,7 @@ class TimestampDecoder {
   using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
 
   BareBones::BitSequenceReader reader_;
-  TimestampDecoderState decoder_;
+  TimestampDecoderCodec decoder_;
   GorillaState gorilla_state_{GorillaState::kFirstPoint};
 };
 
