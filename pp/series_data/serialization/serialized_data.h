@@ -143,7 +143,7 @@ class DataSerializer {
 
     uint32_t& data_size = buffer.control_block().items_count;
 
-    fill_timestamp_stream_offset<chunk_type>(storage_, timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, buffer);
+    fill_timestamp_stream_offset<chunk_type>(storage_, timestamp_streams_data, chunk.timestamp_id, serialized_chunk, buffer);
 
     switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
@@ -217,24 +217,24 @@ class DataSerializer {
   template <chunk::DataChunk::Type chunk_type>
   static void fill_timestamp_stream_offset(const Storage& storage,
                                            TimestampStreamsData& timestamp_streams_data,
-                                           encoder::timestamp::StateId timestamp_stream_id,
+                                           uint32_t timestamp_id,
                                            chunk::SerializedChunk& serialized_chunk,
                                            SerializedData::Memory& buffer) noexcept {
     uint32_t data_size = buffer.control_block().items_count;
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      if (const auto it = timestamp_streams_data.stream_offsets.find(timestamp_stream_id); it == timestamp_streams_data.stream_offsets.end()) [[unlikely]] {
-        timestamp_streams_data.stream_offsets.emplace(timestamp_stream_id, data_size);
+      if (const auto it = timestamp_streams_data.stream_offsets.find(timestamp_id); it == timestamp_streams_data.stream_offsets.end()) [[unlikely]] {
+        timestamp_streams_data.stream_offsets.emplace(timestamp_id, data_size);
         serialized_chunk.timestamps_offset = data_size;
-        write_compact_bit_sequence<SerializedCompactBitSequenceWithItemsCount>(buffer, storage.template get_timestamp_stream<chunk_type>(timestamp_stream_id));
+        write_compact_bit_sequence<SerializedCompactBitSequenceWithItemsCount>(buffer, storage.template get_timestamp_stream<chunk_type>(timestamp_id));
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }
     } else {
-      if (const auto it = timestamp_streams_data.finalized_stream_offsets.find(timestamp_stream_id);
-          it == timestamp_streams_data.finalized_stream_offsets.end()) [[unlikely]] {
-        timestamp_streams_data.finalized_stream_offsets.emplace(timestamp_stream_id, data_size);
+      if (const auto it = timestamp_streams_data.finalized_stream_offsets.find(timestamp_id); it == timestamp_streams_data.finalized_stream_offsets.end())
+          [[unlikely]] {
+        timestamp_streams_data.finalized_stream_offsets.emplace(timestamp_id, data_size);
         serialized_chunk.timestamps_offset = data_size;
-        write_compact_bit_sequence<SerializedCompactBitSequenceWithItemsCount>(buffer, storage.template get_timestamp_stream<chunk_type>(timestamp_stream_id));
+        write_compact_bit_sequence<SerializedCompactBitSequenceWithItemsCount>(buffer, storage.template get_timestamp_stream<chunk_type>(timestamp_id));
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }

@@ -70,8 +70,8 @@ class Decoder {
   static uint8_t get_samples_count(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {
     using enum chunk::DataChunk::Type;
 
-    return (chunk_type == kOpen ? storage.template get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
-                                : storage.template get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
+    return (chunk_type == kOpen ? storage.template get_timestamp_stream<kOpen>(chunk.timestamp_id)
+                                : storage.template get_timestamp_stream<kFinalized>(chunk.timestamp_id))
         .count();
   }
 
@@ -133,28 +133,28 @@ class Decoder {
     using enum chunk::DataChunk::Type;
 
     if constexpr (encoding_type == kUint32Constant) {
-      return decoder::ConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                             chunk.encoder.uint32_constant.value(), chunk.encoding_state.has_last_stalenan);
+      return decoder::ConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id), chunk.encoder.uint32_constant.value(),
+                                             chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kFloat32Constant) {
-      return decoder::ConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                             chunk.encoder.float32_constant.value(), chunk.encoding_state.has_last_stalenan);
+      return decoder::ConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id), chunk.encoder.float32_constant.value(),
+                                             chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kDoubleConstant) {
-      return decoder::ConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+      return decoder::ConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id),
                                              storage.variant_encoders[chunk.encoder.external_index].double_constant.value(),
                                              chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kTwoDoubleConstant) {
-      return decoder::TwoDoubleConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+      return decoder::TwoDoubleConstantDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id),
                                                       storage.variant_encoders[chunk.encoder.external_index].two_double_constant,
                                                       chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kAscInteger) {
-      return decoder::AscIntegerDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+      return decoder::AscIntegerDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id),
                                                storage.template get_asc_integer_stream<chunk_type>(chunk.encoder.external_index).reader());
     } else if constexpr (encoding_type == kAscIntegerThenValuesGorilla) {
       return decoder::AscIntegerThenValuesGorillaDecodeIterator(
-          storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+          storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id),
           storage.template get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).reader());
     } else if constexpr (encoding_type == kValuesGorilla) {
-      return decoder::ValuesGorillaDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+      return decoder::ValuesGorillaDecodeIterator(storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id),
                                                   storage.template get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).reader());
     } else {
       static_assert(encoding_type == kUnknown);
@@ -345,7 +345,7 @@ class Decoder {
   template <class DataStorage>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_open_chunk_last_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     assert(!chunk.is_empty());
-    return storage.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id).timestamp();
+    return storage.timestamp_store.last_timestamp(chunk.timestamp_id);
   }
 
   template <class DataStorage>
@@ -449,7 +449,7 @@ class Decoder {
  private:
   template <chunk::DataChunk::Type chunk_type, class DataStorage>
   [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const DataStorage& storage, const chunk::DataChunk& chunk) {
-    return storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id).reader();
+    return storage.template get_timestamp_stream<chunk_type>(chunk.timestamp_id).reader();
   }
 };
 

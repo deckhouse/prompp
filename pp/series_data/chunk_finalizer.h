@@ -6,28 +6,9 @@ namespace series_data {
 
 class ChunkFinalizer {
  public:
-  enum class FinalizeTimestampStateMode : uint8_t {
-    kFinalize = 0,
-    kFinalizeOrCopy,
-  };
-
   template <class DataStorage>
   PROMPP_ALWAYS_INLINE static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
-    if (!finalize_if_timestamp_finalized(storage, ls_id, chunk)) [[likely]] {
-      finalize(storage, ls_id, chunk, finalize_timestamp(storage, chunk));
-    }
-  }
-
-  template <class DataStorage>
-  PROMPP_ALWAYS_INLINE static bool finalize_if_timestamp_finalized(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
-    if (const auto finalized_timestamp_stream_id = storage.timestamp_encoder.process_finalized(chunk.timestamp_encoder_state_id);
-        finalized_timestamp_stream_id != encoder::timestamp::kInvalidStateId) [[unlikely]] {
-      ++storage.finalized_timestamp_streams[finalized_timestamp_stream_id].reference_count;
-      finalize(storage, ls_id, chunk, finalized_timestamp_stream_id);
-      return true;
-    }
-
-    return false;
+    finalize(storage, ls_id, chunk, storage.timestamp_store.finalize(chunk.timestamp_id));
   }
 
  private:
@@ -47,7 +28,7 @@ class ChunkFinalizer {
       finalize_variant_encoder(storage.variant_encoders[chunk.encoder.external_index].values_gorilla, chunk.encoding_state.encoding_type);
     }
 
-    chunk.timestamp_encoder_state_id = finalized_timestamp_stream_id;
+    chunk.timestamp_id = finalized_timestamp_stream_id;
     emplace_finalized_chunk(storage, ls_id, chunk);
     chunk.reset();
   }
@@ -59,14 +40,6 @@ class ChunkFinalizer {
           return Decoder::get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
         });
     storage.metrics->finalized_chunks().inc();
-  }
-
-  template <class DataStorage>
-  PROMPP_ALWAYS_INLINE static encoder::timestamp::StateId finalize_timestamp(DataStorage& storage, chunk::DataChunk& chunk) {
-    auto& finalized_stream = storage.finalized_timestamp_streams.emplace_back();
-    const auto finalized_stream_id = storage.finalized_timestamp_streams.index_of(finalized_stream);
-    storage.timestamp_encoder.finalize(chunk.timestamp_encoder_state_id, finalized_stream.stream, finalized_stream_id);
-    return finalized_stream_id;
   }
 };
 

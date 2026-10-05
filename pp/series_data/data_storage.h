@@ -8,6 +8,7 @@
 #include "chunk/finalized_chunk.h"
 #include "chunk/outdated_chunk.h"
 #include "encoder/encoder_variant.h"
+#include "encoder/timestamp/sequence_dictionary.h"
 #include "metrics.h"
 #include "metrics/storage.h"
 
@@ -182,7 +183,7 @@ struct DataStorage {
   };
 
   union {
-    encoder::timestamp::Encoder<Reallocator> timestamp_encoder{};
+    encoder::timestamp::SequenceDictionary<Reallocator> timestamp_store{};
   };
 
   union {
@@ -199,9 +200,6 @@ struct DataStorage {
         outdated_chunks;
   };
 
-  union {
-    BareBones::VectorWithHoles<encoder::RefCountableBitSequenceWithItemsCount<Reallocator>, Reallocator> finalized_timestamp_streams{};
-  };
   union {
     BareBones::VectorWithHoles<encoder::CompactBitSequence<Reallocator>, Reallocator> finalized_data_streams{};
   };
@@ -252,15 +250,11 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(uint32_t timestamp_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      if (const auto& state = timestamp_encoder.get_state(stream_id); !state.is_finalized()) [[likely]] {
-        return timestamp_encoder.get_stream(stream_id);
-      } else {
-        return finalized_timestamp_streams[state.stream_data.finalized_stream_id].stream;
-      }
+      return timestamp_store.stream(timestamp_id);
     } else {
-      return finalized_timestamp_streams[stream_id].stream;
+      return timestamp_store.finalized_stream(timestamp_id);
     }
   }
 
@@ -356,9 +350,8 @@ struct DataStorage {
       metrics = &dummy_metrics_;
     }
 
-    // The timestamp states count is pushed into a metrics-owned gauge on state creation instead of being pulled from the
-    // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
-    timestamp_encoder.set_states_count_gauge(&metrics->timestamp_states());
+    // The metrics-owned gauge outlives the store; scraping must not access a destroyed store.
+    timestamp_store.set_slot_count_gauge(&metrics->timestamp_states());
   }
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
@@ -371,18 +364,16 @@ struct DataStorage {
  private:
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk_timestamp_and_encoder(const chunk::DataChunk& chunk) {
-    erase_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id);
+    erase_timestamp_stream<chunk_type>(chunk.timestamp_id);
     erase_encoder_data<chunk_type>(chunk);
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  void erase_timestamp_stream(uint32_t stream_id) {
+  void erase_timestamp_stream(uint32_t timestamp_id) {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      timestamp_encoder.erase(stream_id);
+      timestamp_store.release(timestamp_id);
     } else {
-      if (--finalized_timestamp_streams[stream_id].reference_count == 0) {
-        finalized_timestamp_streams.erase(stream_id);
-      }
+      timestamp_store.release_finalized(timestamp_id);
     }
   }
 
@@ -426,10 +417,9 @@ struct DataStorage {
       }
 
       std::destroy_at(&open_chunks);
-      std::destroy_at(&timestamp_encoder);
+      std::destroy_at(&timestamp_store);
       std::destroy_at(&variant_encoders);
       std::destroy_at(&outdated_chunks);
-      std::destroy_at(&finalized_timestamp_streams);
       std::destroy_at(&finalized_data_streams);
       std::destroy_at(&finalized_chunks);
       std::destroy_at(&unloaded_series_bitmap);
@@ -455,9 +445,9 @@ struct DataStorage {
         }
       }
 
-      return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
-             finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-             outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
+      return open_chunks.allocated_memory() + encoders_memory + timestamp_store.allocated_memory() + finalized_data_streams.allocated_memory() +
+             finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory + outdated_chunks_allocated_memory +
+             unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
     }
   }
 
