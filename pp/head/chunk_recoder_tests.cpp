@@ -340,12 +340,10 @@ TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
   auto recoder = create_recoder({0, 1}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 1}, 0);
 
   // Act
-  // Chunks are read only while recoding, so the ls ids of the batch are skipped as empty by the
-  // first recode and not by the constructor: until then has_more_data() answers about ls ids.
-  const auto info = recode(recoder);
+  const bool has_more_data = recoder.has_more_data();
 
   // Assert
-  EXPECT_EQ(RecodeInfo{}, info);
+  EXPECT_FALSE(has_more_data);
 }
 
 TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnSecondPoint) {

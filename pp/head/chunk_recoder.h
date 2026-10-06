@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-
 #include "bare_bones/gorilla.h"
 #include "bare_bones/iterator.h"
 #include "primitives/primitives.h"
@@ -45,43 +43,27 @@ class ChunkRecoderIterator {
         ls_id_end_iterator_(std::forward<LsIdSetIteratorSentinel>(ls_id_end_iterator)),
         chunk_iterator_(data_storage, PromPP::Primitives::kInvalidLabelSetID) {}
 
-  // Positions the iterator on the first chunk of the current batch, and does nothing once the batch
-  // is positioned. The chunks of a batch become readable only after the batch is loaded, and loading
-  // invalidates every pointer into the chunk structures of the storage: open_chunks is reallocated,
-  // and the outdated chunk merger replaces finalized chunks. So the position is taken by the
-  // consumer of the batch, instead of the constructor and next_batch() taking it one batch ahead of
-  // the load.
-  PROMPP_ALWAYS_INLINE void position_to_first_chunk() noexcept {
-    if (positioned_) [[likely]] {
-      return;
-    }
-
-    positioned_ = true;
-    if (*this != IteratorSentinel{}) {
-      chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
-      advance_to_non_empty_chunk();
-    }
-  }
-
-  // Returns whether the new batch holds any ls id. Whether those ls ids hold chunks to recode is
-  // known only once the batch is loaded, so that is left to position_to_first_chunk().
+  // Starts the next batch of ls ids and returns whether it holds any. It deliberately touches no
+  // chunk: the batch is positioned on its first chunk only when it is consumed, see
+  // position_to_first_chunk().
   bool next_batch() noexcept {
     ls_id_iterator_.next_batch();
     positioned_ = false;
-    return *this != IteratorSentinel{};
+    return ls_id_iterator_ != ls_id_end_iterator_;
   }
 
-  const value_type& operator*() const noexcept {
-    assert(positioned_);
+  const value_type& operator*() noexcept {
+    position_to_first_chunk();
     return *chunk_iterator_;
   }
 
-  const value_type* operator->() const noexcept {
-    assert(positioned_);
+  const value_type* operator->() noexcept {
+    position_to_first_chunk();
     return chunk_iterator_.operator->();
   }
 
   PROMPP_ALWAYS_INLINE ChunkRecoderIterator& operator++() noexcept {
+    position_to_first_chunk();
     advance_iterator();
     advance_to_non_empty_chunk();
     return *this;
@@ -93,7 +75,10 @@ class ChunkRecoderIterator {
     return it;
   }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return ls_id_iterator_ == ls_id_end_iterator_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) noexcept {
+    position_to_first_chunk();
+    return ls_id_iterator_ == ls_id_end_iterator_;
+  }
 
  private:
   const PromPP::Primitives::TimeInterval time_interval_;
@@ -101,6 +86,23 @@ class ChunkRecoderIterator {
   [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
   series_data::DataStorage<>::SeriesChunkIterator chunk_iterator_;
   bool positioned_{};
+
+  // Positions the iterator on the first chunk of the current batch, and does nothing once the batch
+  // is positioned. The chunks of a batch become readable only after the batch is loaded, and loading
+  // invalidates every pointer into the chunk structures of the storage: open_chunks is reallocated,
+  // and the outdated chunk merger replaces finalized chunks. So the position is taken when the batch
+  // is consumed, instead of the constructor and next_batch() taking it one batch ahead of the load.
+  PROMPP_ALWAYS_INLINE void position_to_first_chunk() noexcept {
+    if (positioned_) [[likely]] {
+      return;
+    }
+
+    positioned_ = true;
+    if (ls_id_iterator_ != ls_id_end_iterator_) {
+      chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      advance_to_non_empty_chunk();
+    }
+  }
 
   PROMPP_ALWAYS_INLINE void advance_iterator() noexcept {
     if (++chunk_iterator_ == IteratorSentinel{}) {
@@ -133,9 +135,6 @@ class ChunkRecoderIterator {
 };
 
 template <class ChunkIterator>
-concept BatchedChunkIterator = requires(ChunkIterator& iterator) { iterator.position_to_first_chunk(); };
-
-template <class ChunkIterator>
 class ChunkRecoder {
  public:
   explicit ChunkRecoder(ChunkIterator&& iterator, const PromPP::Primitives::TimeInterval& time_interval, PromPP::Primitives::Timestamp downsampling_ms)
@@ -146,10 +145,6 @@ class ChunkRecoder {
   void recode_next_chunk(ChunkInfoInterface auto& info) {
     reset_info(info);
     stream_.rewind();
-
-    if constexpr (BatchedChunkIterator<ChunkIterator>) {
-      iterator_.position_to_first_chunk();
-    }
 
     while (has_more_data()) {
       write_samples_count_placeholder();
@@ -167,7 +162,7 @@ class ChunkRecoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> bytes() const noexcept { return stream_.bytes(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return iterator_ != series_data::IteratorSentinel{}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() noexcept { return iterator_ != series_data::IteratorSentinel{}; }
 
  private:
   using Sample = series_data::encoder::Sample;
