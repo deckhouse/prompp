@@ -160,7 +160,7 @@ func (s *WalSuite) TestCommitWriteError() {
 			}
 			maxSegmentSize := uint32(100)
 
-			wl := wal.NewWal(enc, segmentWriter, s.locker, maxSegmentSize, 0, nil)
+			wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
 
 			s.Require().ErrorIs(variant.commit(wl), expectedError)
 			s.Equal(1, variant.finalizeCalls(enc))
