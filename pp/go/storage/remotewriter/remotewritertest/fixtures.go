@@ -104,7 +104,7 @@ func WriteToShardWalFileV1Single(
 		return fmt.Errorf("failed to create buffered writer: %w", err)
 	}
 
-	wl := wal.NewWal(shardWalEncoder, sw, lss, defaultMaxSegmentSize, shardID, nil)
+	wl := wal.NewWal(shardWalEncoder, sw, wal.FileFormatVersion, lss, defaultMaxSegmentSize, shardID, nil)
 	defer wl.Close()
 
 	return walWriteSingle(ctx, lss, wl, numberOfSegments, shardID)
@@ -142,7 +142,7 @@ func WriteToShardWalFileV2Single(
 		return fmt.Errorf("failed to create buffered writer: %w", err)
 	}
 
-	wl := wal.NewWal(shardWalEncoder, sw, lss, defaultMaxSegmentSize, shardID, nil)
+	wl := wal.NewWal(shardWalEncoder, sw, wal.FileFormatVersionV2, lss, defaultMaxSegmentSize, shardID, nil)
 	defer wl.Close()
 
 	return walWriteSingle(ctx, lss, wl, numberOfSegments, shardID)
@@ -247,7 +247,7 @@ func WriteToShardWalFileV1Multi(
 			return fmt.Errorf("failed to create buffered writer shard %d: %w", i, err)
 		}
 
-		wls[i] = wal.NewWal(shardWalEncoder, sw, lsses[i], defaultMaxSegmentSize, shardID, nil)
+		wls[i] = wal.NewWal(shardWalEncoder, sw, wal.FileFormatVersion, lsses[i], defaultMaxSegmentSize, shardID, nil)
 		defer wls[i].Close()
 	}
 
@@ -293,7 +293,7 @@ func WriteToShardWalFileV2Multi(
 			return fmt.Errorf("failed to create buffered writer shard %d: %w", i, err)
 		}
 
-		wls[i] = wal.NewWal(shardWalEncoder, sw, lsses[i], defaultMaxSegmentSize, shardID, nil)
+		wls[i] = wal.NewWal(shardWalEncoder, sw, wal.FileFormatVersionV2, lsses[i], defaultMaxSegmentSize, shardID, nil)
 		defer wls[i].Close()
 	}
 

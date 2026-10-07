@@ -29,6 +29,9 @@ type Wal interface {
 	// Flush flush all contetnt into wal.
 	Flush() error
 
+	// IndependentCommit reports whether the wal can be committed without committing the other shards.
+	IndependentCommit() bool
+
 	// WrittenSeriesIDSentinel returns written series id sentinel.
 	WrittenSeriesIDSentinel() uint32
 
@@ -194,6 +197,11 @@ func (s *Shard) WalCurrentSize() int64 {
 // WalFlush flush all contetnt into wal.
 func (s *Shard) WalFlush() error {
 	return s.wal.Flush()
+}
+
+// WalIndependentCommit reports whether the [Wal] can be committed without committing the other shards.
+func (s *Shard) WalIndependentCommit() bool {
+	return s.wal.IndependentCommit()
 }
 
 // WalSync commits the current contents of the [Wal].

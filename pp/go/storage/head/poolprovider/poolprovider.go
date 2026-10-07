@@ -32,6 +32,7 @@ type HeadPool[TGShard Shard] struct {
 	shardedRelabeledSeriesPool sync.Pool
 	shardedInnerSeriesPool     sync.Pool
 	statsPool                  zeropool.Pool[[]cppbridge.RelabelerStats]
+	shardsMaskPool             zeropool.Pool[[]bool]
 	// use in querier
 	snapshotsPool       zeropool.Pool[[]*cppbridge.LabelSetSnapshot]
 	lssQueryResultsPool zeropool.Pool[[]*cppbridge.LSSQueryResult]
@@ -69,6 +70,9 @@ func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 		},
 		statsPool: zeropool.New(func() []cppbridge.RelabelerStats {
 			return make([]cppbridge.RelabelerStats, numberOfShards)
+		}),
+		shardsMaskPool: zeropool.New(func() []bool {
+			return make([]bool, numberOfShards)
 		}),
 		// use in querier
 		snapshotsPool: zeropool.New(func() []*cppbridge.LabelSetSnapshot {
@@ -147,6 +151,17 @@ func (hp *HeadPool[TGShard]) GetRelabelerStats() []cppbridge.RelabelerStats {
 func (hp *HeadPool[TGShard]) PutRelabelerStats(stats []cppbridge.RelabelerStats) {
 	clear(stats)
 	hp.statsPool.Put(stats)
+}
+
+// GetShardsMask gets a slice of [bool] indexed by shard ID from the pool.
+func (hp *HeadPool[TGShard]) GetShardsMask() []bool {
+	return hp.shardsMaskPool.Get()
+}
+
+// PutShardsMask adds slice of [bool] to the pool after resetting it.
+func (hp *HeadPool[TGShard]) PutShardsMask(mask []bool) {
+	clear(mask)
+	hp.shardsMaskPool.Put(mask)
 }
 
 // GetSnapshots gets a slice of [cppbridge.LabelSetSnapshot] from the pool.

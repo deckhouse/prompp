@@ -84,36 +84,25 @@ func (l *Loader) loadHead(
 	wg.Wait()
 
 	shards := make([]*shard.Shard, numberOfShards)
-	numberOfSegmentsRead := optional.Optional[uint32]{}
 	errs := make([]error, numberOfShards)
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
 		errs[shardID] = res.err
-		headRecord.SetLastSegmentID(res.maxSegmentID)
 
-		if numberOfSegmentsRead.IsNil() {
-			numberOfSegmentsRead.Set(res.numberOfSegments)
-		} else if numberOfSegmentsRead.Value() != res.numberOfSegments {
-			errs = append(errs,
-				fmt.Errorf(
-					"corrupted shard %d: segment count mismatch, expected: %d, got: %d",
-					shardID,
-					numberOfSegmentsRead.Value(),
-					res.numberOfSegments,
-				))
-			// calculating maximum number of segments (critical for remote write).
-			if numberOfSegmentsRead.Value() < res.numberOfSegments {
-				numberOfSegmentsRead.Set(res.numberOfSegments)
-			}
+		// maxSegmentID of a shard without segments is not a segment ID
+		if res.numberOfSegments != 0 {
+			headRecord.SetLastSegmentID(res.maxSegmentID)
 		}
 	}
 
 	switch checkWalVersion(shardLoadResults) {
 	case wal.FileFormatVersion:
+		numberOfSegmentsRead, mismatchErrs := checkNumberOfSegmentsV1(shardLoadResults)
+		errs = append(errs, mismatchErrs...)
 		setLastAppendedSegmentID(headRecord, numberOfSegmentsRead)
 	case wal.FileFormatVersionV2:
-		if headRecord.IsMissingSegmentsByShard() {
-			errs = append(errs, fmt.Errorf("missing segments by shard"))
+		if err := checkSegmentIDsV2(headRecord, shardLoadResults); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
@@ -382,7 +371,7 @@ func (l *ShardDataLoader) loadWalFile(
 	rd io.Reader,
 	queriedSeriesStorageIsEmpty bool,
 ) (*cppbridge.HeadWalDecoder, error) {
-	walVersion, encoderVersion, _, err := reader.ReadHeader(rd)
+	headWalVersion, encoderVersion, _, err := reader.ReadHeader(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
 	}
@@ -399,11 +388,11 @@ func (l *ShardDataLoader) loadWalFile(
 
 	decoder := cppbridge.NewHeadWalDecoder(l.shardData.lss.Target(), encoderVersion)
 
-	switch walVersion {
+	switch headWalVersion {
 	case wal.FileFormatVersion:
 		l.segmentMarkup = writer.NoopSegmentMarkup{}
 		l.shardData.writeSegment = writer.WriteSegment[*cppbridge.HeadEncodedSegment]
-		l.shardData.walVersion = walVersion
+		l.shardData.walVersion = headWalVersion
 		l.shardData.numberOfSegments, err = l.loadSegments(
 			rd,
 			decoder,
@@ -413,7 +402,7 @@ func (l *ShardDataLoader) loadWalFile(
 	case wal.FileFormatVersionV2:
 		l.notifier = NoopSegmentWriteNotifier{}
 		l.shardData.writeSegment = writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment]
-		l.shardData.walVersion = walVersion
+		l.shardData.walVersion = headWalVersion
 		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
 			rd,
 			decoder,
@@ -421,7 +410,7 @@ func (l *ShardDataLoader) loadWalFile(
 			unloader,
 		)
 	default:
-		return decoder, fmt.Errorf("unknown wal file format: %d", walVersion)
+		return decoder, fmt.Errorf("unknown wal file format: %d", headWalVersion)
 	}
 
 	return decoder, err
@@ -451,7 +440,15 @@ func (l *ShardDataLoader) createShardWal(
 	}
 
 	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-	l.shardData.wal = wal.NewWal(walEncoder, sw, l.shardData.lss, l.maxSegmentSize, l.shardID, l.registerer)
+	l.shardData.wal = wal.NewWal(
+		walEncoder,
+		sw,
+		l.shardData.walVersion,
+		l.shardData.lss,
+		l.maxSegmentSize,
+		l.shardID,
+		l.registerer,
+	)
 
 	return nil
 }
@@ -528,6 +525,14 @@ func (l *ShardDataLoader) loadSegmentsV2(
 	numberOfSegments := uint32(0)
 
 	if err := wal.NewSegmentWalReader(rd, reader.NewSegmentV2).ForEachSegment(func(segment *reader.SegmentV2) error {
+		if numberOfSegments != 0 && segment.ID() <= l.shardData.maxSegmentID {
+			return fmt.Errorf(
+				"segment id %d is not greater than previous %d",
+				segment.ID(),
+				l.shardData.maxSegmentID,
+			)
+		}
+
 		createTs, encodeTs, decodeErr := dataStorage.DecodeSegment(walDecoder, segment.Bytes())
 		if decodeErr != nil {
 			return fmt.Errorf("failed to decode segment: %w", decodeErr)
@@ -546,7 +551,9 @@ func (l *ShardDataLoader) loadSegmentsV2(
 		return nil
 	}); err != nil {
 		logger.Debugf(err.Error())
-		return 0, err
+		// the segments read before the error are already marked up and counted in maxSegmentID,
+		// so the number of segments must match them for the head-level segment IDs check
+		return numberOfSegments, err
 	}
 
 	return numberOfSegments, nil
@@ -595,28 +602,95 @@ func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32)
 	return *record.LastAppendedSegmentID()+1 != loadedSegments
 }
 
+// checkNumberOfSegmentsV1 checks that all shards of the wal format v1 have the same number of segments,
+// since a segment of the head consists of the segments with the same index in all shards.
+// Returns the maximum number of segments read from a shard (critical for remote write).
+func checkNumberOfSegmentsV1(shardLoadResults []ShardLoadResult) (optional.Optional[uint32], []error) {
+	numberOfSegmentsRead := optional.Optional[uint32]{}
+	var errs []error
+	for shardID, res := range shardLoadResults {
+		if numberOfSegmentsRead.IsNil() {
+			numberOfSegmentsRead.Set(res.numberOfSegments)
+			continue
+		}
+
+		if numberOfSegmentsRead.Value() == res.numberOfSegments {
+			continue
+		}
+
+		errs = append(errs,
+			fmt.Errorf(
+				"corrupted shard %d: segment count mismatch, expected: %d, got: %d",
+				shardID,
+				numberOfSegmentsRead.Value(),
+				res.numberOfSegments,
+			))
+
+		if numberOfSegmentsRead.Value() < res.numberOfSegments {
+			numberOfSegmentsRead.Set(res.numberOfSegments)
+		}
+	}
+
+	return numberOfSegmentsRead, errs
+}
+
+// checkSegmentIDsV2 checks that the through segment IDs of all shards of the wal format v2 form
+// exactly the range 0..maxSegmentID: every ID of the range is marked (no gaps, including ID 0) and,
+// since the number of segments equals the size of the range, there are no duplicates.
+// Shards may have different numbers of segments.
+func checkSegmentIDsV2(headRecord *catalog.Record, shardLoadResults []ShardLoadResult) error {
+	var numberOfSegments uint64
+	var maxSegmentID uint32
+	for _, res := range shardLoadResults {
+		if res.numberOfSegments == 0 {
+			continue
+		}
+
+		numberOfSegments += uint64(res.numberOfSegments)
+		maxSegmentID = max(maxSegmentID, res.maxSegmentID)
+	}
+
+	if numberOfSegments == 0 {
+		return nil
+	}
+
+	if headRecord.IsMissingSegmentsByShard() {
+		return errors.New("missing segments by shard")
+	}
+
+	if numberOfSegments != uint64(maxSegmentID)+1 {
+		return fmt.Errorf(
+			"segment ids mismatch: number of segments %d, max segment id %d",
+			numberOfSegments,
+			maxSegmentID,
+		)
+	}
+
+	return nil
+}
+
 // checkWalVersion checks wal version of all shards.
 func checkWalVersion(shardLoadResults []ShardLoadResult) uint8 {
-	walVersion := uint8(0)
+	headWalVersion := uint8(0)
 
 	for i := range shardLoadResults {
 		// wal version is the same
-		if walVersion != 0 && walVersion == shardLoadResults[i].walVersion {
+		if headWalVersion != 0 && headWalVersion == shardLoadResults[i].walVersion {
 			continue
 		}
 
 		// wal version is not set
-		if walVersion == 0 {
-			walVersion = shardLoadResults[i].walVersion
+		if headWalVersion == 0 {
+			headWalVersion = shardLoadResults[i].walVersion
 			continue
 		}
 
 		// wal version is different, unlikely
-		logger.Warnf("wal version mismatch: %d != %d", walVersion, shardLoadResults[i].walVersion)
-		walVersion = shardLoadResults[i].walVersion
+		logger.Warnf("wal version mismatch: %d != %d", headWalVersion, shardLoadResults[i].walVersion)
+		headWalVersion = shardLoadResults[i].walVersion
 	}
 
-	return walVersion
+	return headWalVersion
 }
 
 // setLastAppendedSegmentID sets last appended segment id to record.

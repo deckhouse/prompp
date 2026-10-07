@@ -49,6 +49,11 @@ func (ClosedWal) WrittenSeriesIDSentinel() uint32 {
 	return 0
 }
 
+// IndependentCommit implementation of [ClosedWal], always returns false.
+func (ClosedWal) IndependentCommit() bool {
+	return false
+}
+
 // Flush implementation of [ClosedWal], returns [ErrWalClosed].
 func (ClosedWal) Flush() error {
 	return ErrWalClosed
