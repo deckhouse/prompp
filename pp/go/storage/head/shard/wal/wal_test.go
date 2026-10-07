@@ -118,7 +118,7 @@ func (s *WalSuite) TestCommit() {
 			}
 			maxSegmentSize := uint32(100)
 
-      wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+			wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
 
 			s.Require().NoError(variant.commit(wl))
 			s.Equal(1, variant.finalizeCalls(enc))
@@ -137,7 +137,7 @@ func (s *WalSuite) TestCommitEncodeError() {
 			}
 			maxSegmentSize := uint32(100)
 
-      wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+			wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
 
 			s.Require().ErrorIs(variant.commit(wl), expectedError)
 			s.Equal(1, variant.finalizeCalls(enc))
@@ -183,7 +183,7 @@ func (s *WalSuite) TestCommitResetsLimitExhausted() {
 				WriteFunc: func(*EncodedSegmentMock) error { return nil },
 			}
 
-      wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+			wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
 
 			limitExhausted, err := wl.Write([]cppbridge.InnerSeries{})
 			s.Require().NoError(err)
