@@ -203,15 +203,10 @@ func (r *Record) ID() string {
 	return r.id.String()
 }
 
-// IsMissingSegmentsByShard returns true if there are missing segments by shard.
+// IsMissingSegmentsByShard returns true if there are missing segments by shard,
+// i.e. some through segment ID is not marked while a greater one is.
 func (r *Record) IsMissingSegmentsByShard() bool {
-	//revive:disable-next-line:add-constant // for length 1 not missing segments
-	if len(r.segmentsByShard) < 2 {
-		return false
-	}
-
-	//revive:disable-next-line:add-constant // start checking from 2 not missing segments
-	for i := 2; i < len(r.segmentsByShard); i++ {
+	for i := 1; i < len(r.segmentsByShard); i++ {
 		if r.segmentsByShard[i] != 0 && r.segmentsByShard[i-1] == 0 {
 			return true
 		}

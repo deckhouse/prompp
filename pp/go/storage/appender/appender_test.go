@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -17,8 +18,11 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/head/services/mock"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	prom_storage "github.com/prometheus/prometheus/storage"
@@ -30,6 +34,10 @@ const (
 	maxSegmentSize uint32 = 3
 
 	unloadDataStorageInterval time.Duration = 0
+
+	// names of the series which are sharded to shard 0 and shard 1 of numberOfShards.
+	shard0Series = "metric1"
+	shard1Series = "metric2"
 )
 
 type AppenderSuite struct {
@@ -38,6 +46,7 @@ type AppenderSuite struct {
 	head           *storage.Head
 	appender       appender.Appender[*task.Generic[*shard.PerGoroutineShard], *shard.Shard, *shard.PerGoroutineShard, *storage.Head]
 	walCommitCount int
+	walCommitMasks [][]bool
 }
 
 func TestAppenderSuite(t *testing.T) {
@@ -61,10 +70,65 @@ func (s *AppenderSuite) SetupTest() {
 	s.head = h
 
 	s.walCommitCount = 0
-	s.appender = appender.New(s.head, func(head *storage.Head) error {
-		s.walCommitCount++
-		return services.CFViaRange(head)
-	})
+	s.walCommitMasks = nil
+	s.appender = appender.New(s.head, s.commitAndFlush)
+}
+
+func (s *AppenderSuite) commitAndFlush(h *storage.Head, mask []bool) error {
+	s.walCommitCount++
+	s.walCommitMasks = append(s.walCommitMasks, slices.Clone(mask))
+	return services.CFViaRangeByMask(h, mask)
+}
+
+// newHeadWithWalVersion creates a [storage.Head] whose shard WALs use walVersion
+// and write segments to the returned mocks, one per shard.
+func (s *AppenderSuite) newHeadWithWalVersion(walVersion uint8) (*storage.Head, []*mock.SegmentWriterMock) {
+	segmentWriters := make([]*mock.SegmentWriterMock, numberOfShards)
+	shards := make([]*shard.Shard, numberOfShards)
+	for shardID := range numberOfShards {
+		segmentWriters[shardID] = &mock.SegmentWriterMock{
+			WriteFunc: func(*cppbridge.HeadEncodedSegment) error { return nil },
+			FlushFunc: func() error { return nil },
+			CloseFunc: func() error { return nil },
+		}
+
+		lss := shard.NewLSS()
+		shards[shardID] = shard.NewShard(
+			lss,
+			shard.NewDataStorage(false, false),
+			nil,
+			nil,
+			wal.NewWal(
+				cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target()),
+				segmentWriters[shardID],
+				walVersion,
+				lss,
+				maxSegmentSize,
+				shardID,
+				nil,
+			),
+			shardID,
+		)
+	}
+
+	h := head.NewHead("appender-test-head", shards, shard.NewPerGoroutineShard[*storage.Wal], nil, 0, nil)
+	s.T().Cleanup(func() { s.Require().NoError(h.Close()) })
+
+	return h, segmentWriters
+}
+
+// seriesWithSamples returns numberOfSamples samples of the series with the given name.
+func seriesWithSamples(name string, numberOfSamples int64) []model.TimeSeries {
+	timeSeries := make([]model.TimeSeries, 0, numberOfSamples)
+	for ts := range numberOfSamples {
+		timeSeries = append(timeSeries, model.TimeSeries{
+			LabelSet:  model.LabelSetFromPairs("__name__", name),
+			Timestamp: uint64(ts + 1), // #nosec G115 // no overflow
+			Value:     1.1,
+		})
+	}
+
+	return timeSeries
 }
 
 func (s *AppenderSuite) createDataDirectory() string {
@@ -152,7 +216,8 @@ func (s *AppenderSuite) TestDropInvalidSeries() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -179,7 +244,8 @@ func (s *AppenderSuite) TestAppendMultipleSamplesInOneSeries() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -227,7 +293,8 @@ func (s *AppenderSuite) TestSeriesPerShardTransfer() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -285,7 +352,8 @@ func (s *AppenderSuite) TestShardedRelabeledSeriesFullNotEmpty() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -344,7 +412,8 @@ func (s *AppenderSuite) TestTrackStaleness() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -391,7 +460,8 @@ func (s *AppenderSuite) TestTrackStalenessWithoutHonorTimestamps() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -429,7 +499,8 @@ func (s *AppenderSuite) TestWithoutCommitToWal() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -451,7 +522,8 @@ func (s *AppenderSuite) TestWithCommitToWal() {
 			},
 		}),
 		state,
-		true)
+		true,
+	)
 
 	// Assert
 	s.Require().NoError(err)
@@ -483,11 +555,116 @@ func (s *AppenderSuite) TestWithCommitToWalByLimitExhausted() {
 			},
 		}),
 		state,
-		false)
+		false,
+	)
 
 	// Assert
 	s.Require().NoError(err)
 	s.Equal(1, s.walCommitCount)
+	s.Equal([][]bool{nil}, s.walCommitMasks)
+}
+
+func (s *AppenderSuite) TestLimitExhaustedWalV1CommitsAllShards() {
+	// Arrange
+	h, segmentWriters := s.newHeadWithWalVersion(wal.FileFormatVersion)
+	state := s.createState([]*cppbridge.RelabelConfig{})
+
+	// Act
+	_, err := appender.New(h, s.commitAndFlush).Append(
+		s.T().Context(),
+		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
+		state,
+		false,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal([][]bool{nil}, s.walCommitMasks)
+	s.Len(segmentWriters[0].WriteCalls(), 1)
+	s.Len(segmentWriters[1].WriteCalls(), 1)
+}
+
+func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsOnlyExhaustedShard() {
+	// Arrange
+	h, segmentWriters := s.newHeadWithWalVersion(wal.FileFormatVersionV2)
+	state := s.createState([]*cppbridge.RelabelConfig{})
+
+	// Act
+	_, err := appender.New(h, s.commitAndFlush).Append(
+		s.T().Context(),
+		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
+		state,
+		false,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal([][]bool{{true, false}}, s.walCommitMasks)
+	s.Len(segmentWriters[0].WriteCalls(), 1)
+	s.Empty(segmentWriters[1].WriteCalls())
+}
+
+func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsEveryExhaustedShard() {
+	// Arrange
+	h, segmentWriters := s.newHeadWithWalVersion(wal.FileFormatVersionV2)
+	state := s.createState([]*cppbridge.RelabelConfig{})
+
+	// Act
+	_, err := appender.New(h, s.commitAndFlush).Append(
+		s.T().Context(),
+		storagetest.NewIncomingData(&s.Suite, append(
+			seriesWithSamples(shard0Series, int64(maxSegmentSize)),
+			seriesWithSamples(shard1Series, int64(maxSegmentSize))...,
+		)),
+		state,
+		false,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal([][]bool{{true, true}}, s.walCommitMasks)
+	s.Len(segmentWriters[0].WriteCalls(), 1)
+	s.Len(segmentWriters[1].WriteCalls(), 1)
+}
+
+func (s *AppenderSuite) TestLimitNotExhaustedWalV2DoesNotCommit() {
+	// Arrange
+	h, segmentWriters := s.newHeadWithWalVersion(wal.FileFormatVersionV2)
+	state := s.createState([]*cppbridge.RelabelConfig{})
+
+	// Act
+	_, err := appender.New(h, s.commitAndFlush).Append(
+		s.T().Context(),
+		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
+		state,
+		false,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Empty(s.walCommitMasks)
+	s.Empty(segmentWriters[0].WriteCalls())
+	s.Empty(segmentWriters[1].WriteCalls())
+}
+
+func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
+	// Arrange
+	h, segmentWriters := s.newHeadWithWalVersion(wal.FileFormatVersionV2)
+	state := s.createState([]*cppbridge.RelabelConfig{})
+
+	// Act
+	_, err := appender.New(h, s.commitAndFlush).Append(
+		s.T().Context(),
+		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, 1)),
+		state,
+		true,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal([][]bool{nil}, s.walCommitMasks)
+	s.Len(segmentWriters[0].WriteCalls(), 1)
+	s.Len(segmentWriters[1].WriteCalls(), 1)
 }
 
 /* func (s *AppenderSuite) TestUseRelabelerCache() {
