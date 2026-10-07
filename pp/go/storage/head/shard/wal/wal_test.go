@@ -72,62 +72,134 @@ func (s *WalSuite) TestCloseError() {
 	s.Len(segmentWriter.CloseCalls(), 1)
 }
 
-func (s *WalSuite) TestCommit() {
-	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) {
-			return &EncodedSegmentMock{
-				SamplesFunc: func() uint32 { return 42 },
-			}, nil
+type testWal = wal.Wal[*EncodedSegmentMock, *SegmentWriterMock[*EncodedSegmentMock]]
+
+// commitVariant is one of the [wal.Wal] commit methods with the [wal.Encoder] finalize method it must use.
+type commitVariant struct {
+	name string
+	// commit calls the commit method under test.
+	commit func(*testWal) error
+	// newEncoder returns an encoder whose expected finalize method is mocked by finalize,
+	// and the other one is left nil, so a call to it panics.
+	newEncoder func(finalize func() (*EncodedSegmentMock, error)) *EncoderMock[*EncodedSegmentMock]
+	// finalizeCalls returns the number of calls of the expected finalize method.
+	finalizeCalls func(*EncoderMock[*EncodedSegmentMock]) int
+}
+
+var commitVariants = []commitVariant{
+	{
+		name:   "Commit",
+		commit: (*testWal).Commit,
+		newEncoder: func(finalize func() (*EncodedSegmentMock, error)) *EncoderMock[*EncodedSegmentMock] {
+			return &EncoderMock[*EncodedSegmentMock]{FinalizeFunc: finalize}
 		},
-	}
-	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
-		WriteFunc: func(*EncodedSegmentMock) error { return nil },
-	}
-	maxSegmentSize := uint32(100)
+		finalizeCalls: func(enc *EncoderMock[*EncodedSegmentMock]) int { return len(enc.FinalizeCalls()) },
+	},
+	{
+		name:   "LongCommit",
+		commit: (*testWal).LongCommit,
+		newEncoder: func(finalize func() (*EncodedSegmentMock, error)) *EncoderMock[*EncodedSegmentMock] {
+			return &EncoderMock[*EncodedSegmentMock]{LongFinalizeFunc: finalize}
+		},
+		finalizeCalls: func(enc *EncoderMock[*EncodedSegmentMock]) int { return len(enc.LongFinalizeCalls()) },
+	},
+}
 
-	wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+func (s *WalSuite) TestCommit() {
+	for _, variant := range commitVariants {
+		s.Run(variant.name, func() {
+			enc := variant.newEncoder(func() (*EncodedSegmentMock, error) {
+				return &EncodedSegmentMock{
+					SamplesFunc: func() uint32 { return 42 },
+				}, nil
+			})
+			segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
+				WriteFunc: func(*EncodedSegmentMock) error { return nil },
+			}
+			maxSegmentSize := uint32(100)
 
-	s.Require().NoError(wl.Commit())
-	s.Len(enc.FinalizeCalls(), 1)
-	s.Len(segmentWriter.WriteCalls(), 1)
+      wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+
+			s.Require().NoError(variant.commit(wl))
+			s.Equal(1, variant.finalizeCalls(enc))
+			s.Len(segmentWriter.WriteCalls(), 1)
+		})
+	}
 }
 
 func (s *WalSuite) TestCommitEncodeError() {
-	expectedError := errors.New("test error")
-	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) { return &EncodedSegmentMock{}, expectedError },
-	}
-	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
-		WriteFunc: func(*EncodedSegmentMock) error { return nil },
-	}
-	maxSegmentSize := uint32(100)
+	for _, variant := range commitVariants {
+		s.Run(variant.name, func() {
+			expectedError := errors.New("test error")
+			enc := variant.newEncoder(func() (*EncodedSegmentMock, error) { return &EncodedSegmentMock{}, expectedError })
+			segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
+				WriteFunc: func(*EncodedSegmentMock) error { return nil },
+			}
+			maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+      wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
 
-	s.Require().ErrorIs(wl.Commit(), expectedError)
-	s.Len(enc.FinalizeCalls(), 1)
-	s.Empty(segmentWriter.WriteCalls())
+			s.Require().ErrorIs(variant.commit(wl), expectedError)
+			s.Equal(1, variant.finalizeCalls(enc))
+			s.Empty(segmentWriter.WriteCalls())
+		})
+	}
 }
 
 func (s *WalSuite) TestCommitWriteError() {
-	expectedError := errors.New("test error")
-	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) {
-			return &EncodedSegmentMock{
-				SamplesFunc: func() uint32 { return 42 },
-			}, nil
-		},
-	}
-	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
-		WriteFunc: func(*EncodedSegmentMock) error { return expectedError },
-	}
-	maxSegmentSize := uint32(100)
+	for _, variant := range commitVariants {
+		s.Run(variant.name, func() {
+			expectedError := errors.New("test error")
+			enc := variant.newEncoder(func() (*EncodedSegmentMock, error) {
+				return &EncodedSegmentMock{
+					SamplesFunc: func() uint32 { return 42 },
+				}, nil
+			})
+			segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
+				WriteFunc: func(*EncodedSegmentMock) error { return expectedError },
+			}
+			maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+			wl := wal.NewWal(enc, segmentWriter, s.locker, maxSegmentSize, 0, nil)
 
-	s.Require().ErrorIs(wl.Commit(), expectedError)
-	s.Len(enc.FinalizeCalls(), 1)
-	s.Len(segmentWriter.WriteCalls(), 1)
+			s.Require().ErrorIs(variant.commit(wl), expectedError)
+			s.Equal(1, variant.finalizeCalls(enc))
+			s.Len(segmentWriter.WriteCalls(), 1)
+		})
+	}
+}
+
+func (s *WalSuite) TestCommitResetsLimitExhausted() {
+	for _, variant := range commitVariants {
+		s.Run(variant.name, func() {
+			maxSegmentSize := uint32(100)
+			enc := variant.newEncoder(func() (*EncodedSegmentMock, error) {
+				return &EncodedSegmentMock{
+					SamplesFunc: func() uint32 { return maxSegmentSize },
+				}, nil
+			})
+			enc.EncodeFunc = func([]cppbridge.InnerSeries) (uint32, error) { return maxSegmentSize, nil }
+			segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
+				WriteFunc: func(*EncodedSegmentMock) error { return nil },
+			}
+
+      wl := wal.NewWal(enc, segmentWriter, wal.FileFormatVersion, s.locker, maxSegmentSize, 0, nil)
+
+			limitExhausted, err := wl.Write([]cppbridge.InnerSeries{})
+			s.Require().NoError(err)
+			s.True(limitExhausted)
+
+			limitExhausted, err = wl.Write([]cppbridge.InnerSeries{})
+			s.Require().NoError(err)
+			s.False(limitExhausted, "limit exhaustion must be reported once per segment")
+
+			s.Require().NoError(variant.commit(wl))
+
+			limitExhausted, err = wl.Write([]cppbridge.InnerSeries{})
+			s.Require().NoError(err)
+			s.True(limitExhausted, "commit must reset limit exhaustion for the next segment")
+		})
+	}
 }
 
 func (s *WalSuite) TestFlush() {
@@ -303,6 +375,9 @@ func (s *WalSuite) TestCorrupted() {
 	s.False(limitExhausted)
 
 	err = wl.Commit()
+	s.Require().ErrorIs(err, wal.ErrWalIsCorrupted)
+
+	err = wl.LongCommit()
 	s.Require().ErrorIs(err, wal.ErrWalIsCorrupted)
 
 	err = wl.Flush()

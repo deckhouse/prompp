@@ -19,6 +19,10 @@ type Wal interface {
 	// Commit finalize segment from encoder and write to wal.
 	Commit() error
 
+	// LongCommit finalize segment from encoder and write to wal,
+	// intended for a long-running finalization (e.g. after copying all added series into a new head).
+	LongCommit() error
+
 	// CurrentSize returns current wal size.
 	CurrentSize() int64
 
@@ -144,6 +148,21 @@ func (s *Shard) LSSWithRLock(fn func(target, input *cppbridge.LabelSetStorage) e
 	return s.lss.WithRLock(fn)
 }
 
+// LSSReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func (s *Shard) LSSReleaseIngestionStructures() {
+	s.lss.ReleaseIngestionStructures()
+}
+
+// LSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func (s *Shard) LSSReleaseLSIDSet() {
+	s.lss.ReleaseLSIDSet()
+}
+
 // LSSResetSnapshot resets the current snapshot. Use only WithLock.
 func (s *Shard) LSSResetSnapshot() {
 	s.lss.ResetSnapshot()
@@ -162,6 +181,12 @@ func (s *Shard) ShardID() uint16 {
 // WalCommit finalize segment from encoder and write to wal.
 func (s *Shard) WalCommit() error {
 	return s.wal.Commit()
+}
+
+// WalLongCommit finalize segment from encoder and write to wal,
+// intended for a long-running finalization (e.g. after copying all added series into a new head).
+func (s *Shard) WalLongCommit() error {
+	return s.wal.LongCommit()
 }
 
 // WalCurrentSize returns current [Wal] size.

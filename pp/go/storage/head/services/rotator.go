@@ -138,6 +138,9 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 
 	if oldHead.NumberOfShards() == newHead.NumberOfShards() {
 		s.headAddedSeriesCopier(oldHead, newHead)
+		if errCFS := LongCFSViaRange(newHead); errCFS != nil {
+			logger.Warnf("failed CFS new head: %s : %v", newHead.ID(), errCFS)
+		}
 	}
 
 	if err = backoff.Retry(
@@ -184,8 +187,11 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	if err = s.headInformer.SetRotatedStatus(oldHead.ID()); err != nil {
 		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
 	}
+
 	oldHead.SetReadOnly()
-	s.events.With(prometheus.Labels{"type": "rotated"}).Inc()
+	ReleaseIngestionStructures(oldHead)
+
+	s.events.WithLabelValues("rotated").Inc()
 	s.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))
 	s.rotatedTrigger()
 

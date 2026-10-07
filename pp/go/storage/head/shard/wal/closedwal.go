@@ -34,6 +34,11 @@ func (ClosedWal) Commit() error {
 	return ErrWalClosed
 }
 
+// LongCommit implementation of [ClosedWal], returns [ErrWalClosed].
+func (ClosedWal) LongCommit() error {
+	return ErrWalClosed
+}
+
 // CurrentSize implementation of [ClosedWal], always returns 0.
 func (ClosedWal) CurrentSize() int64 {
 	return 0

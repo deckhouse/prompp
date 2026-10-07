@@ -25,7 +25,7 @@ struct DataStorageIteratorCase {
 };
 
 constexpr uint32_t kDefaultSeriesId = 0;
-const DataChunk kOpenChunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false});
+const DataChunk kOpenChunk = DataChunk(0, 1, EncodingState{EncodingType::kUint32Constant, false});
 
 class DataStorageIteratorTrait : public testing::TestWithParam<DataStorageIteratorCase> {
  protected:
@@ -107,25 +107,26 @@ INSTANTIATE_TEST_SUITE_P(
     OpenChunks,
     DataStorageChunkIterator,
     testing::Values(
-        DataStorageIteratorCase{.open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kGorilla, false}}},
-                                .expected_chunks = {DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false}),
+        DataStorageIteratorCase{.open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kUint32Constant, false}}},
+                                .expected_chunks = {DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kUint32Constant, false}),
                                                                   .series_id = 0,
                                                                   .type = ChunkType::kOpen}}},
         DataStorageIteratorCase{
-            .open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kGorilla, false}},
+            .open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kFloat32Constant, false}},
                             DataChunk{1, 2, EncodingState{EncodingType::kUint32Constant, false}}},
             .expected_chunks = {
-                DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false}), .series_id = 0, .type = ChunkType::kOpen},
+                DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kFloat32Constant, false}), .series_id = 0, .type = ChunkType::kOpen},
                 DataChunkInfo{.chunk = DataChunk(1, 2, EncodingState{EncodingType::kUint32Constant, false}), .series_id = 1, .type = ChunkType::kOpen}}}));
 
 INSTANTIATE_TEST_SUITE_P(
     FinalizedChunks,
     DataStorageChunkIterator,
     testing::Values(DataStorageIteratorCase{
-        .open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kGorilla, false}}, DataChunk{1, 2, EncodingState{EncodingType::kUint32Constant, false}}},
+        .open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kFloat32Constant, false}},
+                        DataChunk{1, 2, EncodingState{EncodingType::kUint32Constant, false}}},
         .finalized_chunks = {{}, {DataChunk{2, 3, EncodingState{EncodingType::kAscInteger, false}}}},
         .expected_chunks = {
-            DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false}), .series_id = 0, .type = ChunkType::kOpen},
+            DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kFloat32Constant, false}), .series_id = 0, .type = ChunkType::kOpen},
             DataChunkInfo{.chunk = DataChunk(2, 3, EncodingState{EncodingType::kAscInteger, false}), .series_id = 1, .type = ChunkType::kFinalized},
             DataChunkInfo{.chunk = DataChunk(1, 2, EncodingState{EncodingType::kUint32Constant, false}), .series_id = 1, .type = ChunkType::kOpen}}}));
 

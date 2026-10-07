@@ -16,6 +16,7 @@ import (
 type fakeWal struct {
 	closeCalls       int
 	commitCalls      int
+	longCommitCalls  int
 	flushCalls       int
 	syncCalls        int
 	writeCalls       int
@@ -37,6 +38,11 @@ func (m *fakeWal) Close() error {
 
 func (m *fakeWal) Commit() error {
 	m.commitCalls++
+	return m.commitErr
+}
+
+func (m *fakeWal) LongCommit() error {
+	m.longCommitCalls++
 	return m.commitErr
 }
 
@@ -119,6 +125,7 @@ func (s *ShardSuite) TestWalMethodsAfterCloseWalAreSafe() {
 	// Data-handling methods report ErrWalClosed so accidental use-after-close
 	// is noisy rather than silent.
 	s.Require().ErrorIs(sd.WalCommit(), wal.ErrWalClosed)
+	s.Require().ErrorIs(sd.WalLongCommit(), wal.ErrWalClosed)
 	s.Require().ErrorIs(sd.WalFlush(), wal.ErrWalClosed)
 	s.Require().ErrorIs(sd.WalSync(), wal.ErrWalClosed)
 
@@ -131,10 +138,21 @@ func (s *ShardSuite) TestWalMethodsAfterCloseWalAreSafe() {
 
 	// None of the Wal* calls should reach the original wal.
 	s.Equal(0, fw.commitCalls)
+	s.Equal(0, fw.longCommitCalls)
 	s.Equal(0, fw.flushCalls)
 	s.Equal(0, fw.syncCalls)
 	s.Equal(0, fw.currentSizeCalls)
 	s.Equal(0, fw.writeCalls)
+}
+
+func (s *ShardSuite) TestWalLongCommitDelegatesToWalLongCommit() {
+	want := errors.New("boom")
+	fw := &fakeWal{commitErr: want}
+	sd := s.newShard(fw)
+
+	s.Require().ErrorIs(sd.WalLongCommit(), want)
+	s.Equal(1, fw.longCommitCalls)
+	s.Equal(0, fw.commitCalls, "WalLongCommit must not fall back to the regular Commit")
 }
 
 func (s *ShardSuite) TestCloseAfterCloseWalDoesNotDoubleClose() {

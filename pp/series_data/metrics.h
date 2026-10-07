@@ -31,8 +31,7 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
         two_double_constants_count_{label_set(), "prompp_data_storage_two_double_constants_count"},
         asc_int_count_{label_set(), "prompp_data_storage_asc_int_count"},
         asc_int_then_values_gorilla_count_{label_set(), "prompp_data_storage_asc_int_then_values_gorilla_count"},
-        values_gorilla_count_{label_set(), "prompp_data_storage_values_gorilla_count"},
-        gorilla_count_{label_set(), "prompp_data_storage_gorilla_count"} {}
+        values_gorilla_count_{label_set(), "prompp_data_storage_values_gorilla_count"} {}
 
   PROMPP_ALWAYS_INLINE void inc_chunk_count(EncodingType encoding_type) noexcept {
     get_chunk_count(encoding_type, [](metrics::Gauge& gauge) PROMPP_LAMBDA_INLINE { gauge.inc(); });
@@ -69,7 +68,6 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
   metrics::Gauge asc_int_count_;
   metrics::Gauge asc_int_then_values_gorilla_count_;
   metrics::Gauge values_gorilla_count_;
-  metrics::Gauge gorilla_count_;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::LabelViewSet label_set() const {
     return PromPP::Primitives::LabelViewSet{{"address", address_label_}};
@@ -106,12 +104,9 @@ struct Metrics final : metrics::MetricsPage<Metrics<Reallocator>> {
       case EncodingType::kAscIntegerThenValuesGorilla:
         return std::forward<Handler>(handler)(metrics.asc_int_then_values_gorilla_count_);
 
-      case EncodingType::kValuesGorilla:
-        return std::forward<Handler>(handler)(metrics.values_gorilla_count_);
-
       default:
         assert(encoding_type != EncodingType::kUnknown);
-        return std::forward<Handler>(handler)(metrics.gorilla_count_);
+        return std::forward<Handler>(handler)(metrics.values_gorilla_count_);
     }
   }
 };

@@ -5,6 +5,7 @@ import (
 	"math"
 	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 	"unique"
 
@@ -333,6 +334,36 @@ func (s *QueryableLSSSuite) testQueryLabelNamesImpl(test_case queryLabelNameCase
 	// Assert
 	s.Equal(test_case.expectedStatus, result.Status())
 	s.Equal(test_case.expectedNames, result.Names())
+}
+
+func (s *QueryableLSSSuite) TestReleaseHashSet() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+	for i := range 1000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", "lol_"+strconv.Itoa(i)))
+	}
+	prevMem := lss.AllocatedMemory()
+
+	// Act
+	lss.ReleaseHashSet()
+
+	// Assert
+	s.Less(lss.AllocatedMemory(), prevMem)
+}
+
+func (s *QueryableLSSSuite) TestReleaseLSIDSet() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+	for i := range 1000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", "lol_"+strconv.Itoa(i)))
+	}
+	prevMem := lss.AllocatedMemory()
+
+	// Act
+	lss.ReleaseLSIDSet()
+
+	// Assert
+	s.Less(lss.AllocatedMemory(), prevMem)
 }
 
 type queryLabelValuesCase struct {
