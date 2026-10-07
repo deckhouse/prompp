@@ -2,7 +2,10 @@
 
 #include "chunk_recoder.h"
 #include "series_data/encoder.h"
+#include "series_data/outdated_chunk_merger.h"
 #include "series_data/serialization/serialized_data.h"
+#include "series_data/unloading/loader.h"
+#include "series_data/unloading/unloader.h"
 
 namespace {
 
@@ -15,6 +18,8 @@ using PromPP::Primitives::Timestamp;
 using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::serialization::DataSerializer;
+using series_data::unloading::Loader;
+using series_data::unloading::Unloader;
 using std::operator""s;
 
 class ChunkRecoderFixture : public ::testing::Test {
@@ -39,6 +44,18 @@ class ChunkRecoderFixture : public ::testing::Test {
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, uint32_t ls_id_batch_size, const TimeInterval& time_interval, const Timestamp downsampling_ms) {
     ls_id_set_ = ls_id_set;
     return ChunkRecoder{ChunkIterator{ls_id_set_.begin(), ls_id_set_.end(), ls_id_batch_size, &storage_, time_interval}, time_interval, downsampling_ms};
+  }
+
+  static void encode_asc_series(Encoder<>& encoder, LabelSetID ls_id, Timestamp first_timestamp) {
+    for (Timestamp i = 0; i < 5; ++i) {
+      encoder.encode(ls_id, first_timestamp + i, static_cast<double>(first_timestamp + i));
+    }
+  }
+
+  void load(const BareBones::ShrinkedToFitOStringStream& snapshot, const std::vector<uint32_t>& ls_ids) {
+    Loader loader{storage_, ls_ids, static_cast<uint32_t>(ls_ids.size())};
+    loader.load_next(snapshot.span<const uint8_t>());
+    loader.load_finalize();
   }
 
   template <class Recoder>
@@ -320,7 +337,7 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
 
 TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
   // Arrange
-  const auto recoder = create_recoder({0, 1}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 1}, 0);
+  auto recoder = create_recoder({0, 1}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 1}, 0);
 
   // Act
   const bool has_more_data = recoder.has_more_data();
@@ -447,12 +464,19 @@ TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
   auto recoder = create_recoder({0, 1, 2, 3}, 1, {.min = 0, .max = 4}, 0);
 
   // Act
+  // One batch per ls id, recoded then advanced, the way a block write drives the recoder. A batch is
+  // advanced by recoding it, so next_batch() only resets the batch and reports whether an ls id is
+  // left; ls id 1 holds no chunk at all and ls id 3 falls outside the time interval, and both are
+  // skipped while their own batch is recoded.
   // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   const auto info1 = recode(recoder);
   const auto next_batch_result1 = recoder.chunk_iterator().next_batch();
-  const auto next_batch_result2 = recoder.chunk_iterator().next_batch();
   const auto info2 = recode(recoder);
+  const auto next_batch_result2 = recoder.chunk_iterator().next_batch();
+  const auto info3 = recode(recoder);
   const auto next_batch_result3 = recoder.chunk_iterator().next_batch();
+  const auto info4 = recode(recoder);
+  const auto next_batch_result4 = recoder.chunk_iterator().next_batch();
 
   // Assert
   EXPECT_EQ((RecodeInfo{
@@ -463,7 +487,8 @@ TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
                 .has_more_data = false,
             }),
             info1);
-  EXPECT_FALSE(next_batch_result1);
+  EXPECT_TRUE(next_batch_result1);
+  EXPECT_EQ(RecodeInfo{}, info2);
   EXPECT_TRUE(next_batch_result2);
   EXPECT_EQ((RecodeInfo{
                 .interval = {.min = 3, .max = 4},
@@ -472,8 +497,10 @@ TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
                 .buffer = "\x00\x02\x06\x40\x00\x00\x00\x00\x00\x00\x00\x01\x00"s,
                 .has_more_data = false,
             }),
-            info2);
-  EXPECT_FALSE(next_batch_result3);
+            info3);
+  EXPECT_TRUE(next_batch_result3);
+  EXPECT_EQ(RecodeInfo{}, info4);
+  EXPECT_FALSE(next_batch_result4);
 }
 
 TEST_F(ChunkRecoderFixture, RecodeWithDownsampling) {
@@ -515,6 +542,76 @@ TEST_F(ChunkRecoderFixture, RecodeWithDownsampling) {
                 .has_more_data = false,
             }),
             info2);
+}
+
+TEST_F(ChunkRecoderFixture, RecodeFinalizedChunkReplacedBetweenBatches) {
+  // Arrange
+  // Series 1 keeps a finalized chunk plus an open one, and an out-of-order sample waiting in the
+  // outdated chunk. Merging that sample replaces the finalized chunk: the old one is erased and a
+  // new one takes its place in the list. This is what Loader::load_finalize does to every series it
+  // loads, i.e. between two recode batches of a block write.
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 1.0);
+  encoder.encode(0, 2, 2.0);
+
+  encoder.encode(1, 10, 1.0);
+  encoder.encode(1, 11, 2.0);
+  series_data::ChunkFinalizer::finalize(storage_, 1, storage_.open_chunks[1]);
+  encoder.encode(1, 20, 3.0);
+  encoder.encode(1, 21, 4.0);
+  encoder.encode(1, 12, 5.0);
+
+  auto recoder = create_recoder({0, 1}, 1, {.min = 0, .max = 100}, 0);
+
+  // Act
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
+  const auto info1 = recode(recoder);
+  recoder.chunk_iterator().next_batch();
+  series_data::OutdatedChunkMerger{encoder}.merge(1);
+  const auto info2 = recode(recoder);
+
+  // Assert
+  EXPECT_EQ(0U, info1.series_id);
+  EXPECT_EQ(1U, info2.series_id);
+  EXPECT_EQ((TimeInterval{.min = 10, .max = 12}), info2.interval);
+  EXPECT_EQ(3, info2.samples_count);
+}
+
+TEST_F(ChunkRecoderFixture, RecodeFinalizedChunkLoadedBetweenBatches) {
+  // Arrange
+  // The same defect on the production path. A block write alternates loading a batch of unloaded
+  // series (under the write lock) with recoding it (under the read lock), see
+  // Writer.recodeAndWriteChunks. An out-of-order sample of an unloaded series waits in the outdated
+  // chunk, because OutdatedChunkMerger::merge() skips series in unloaded_series_bitmap, and is
+  // merged only by Loader::load_finalize() when the series comes back - which replaces the
+  // finalized chunk the recoder has already cached an iterator to.
+  Encoder encoder{storage_};
+  encode_asc_series(encoder, 0, 1);
+  encode_asc_series(encoder, 1, 10);
+  series_data::ChunkFinalizer::finalize(storage_, 1, storage_.open_chunks[1]);
+  encode_asc_series(encoder, 1, 20);
+
+  BareBones::ShrinkedToFitOStringStream snapshot;
+  Unloader<> unloader{storage_};
+  unloader.create_snapshot(snapshot);
+  unloader.unload();
+  encoder.encode(1, 15, 100.0);
+
+  load(snapshot, {0});
+  auto recoder = create_recoder({0, 1}, 1, {.min = 0, .max = 100}, 0);
+
+  // Act
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
+  const auto info1 = recode(recoder);
+  recoder.chunk_iterator().next_batch();
+  load(snapshot, {1});
+  const auto info2 = recode(recoder);
+
+  // Assert
+  EXPECT_EQ(0U, info1.series_id);
+  EXPECT_EQ(1U, info2.series_id);
+  EXPECT_EQ((TimeInterval{.min = 10, .max = 15}), info2.interval);
+  EXPECT_EQ(6, info2.samples_count);
 }
 
 }  // namespace

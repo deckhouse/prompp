@@ -70,7 +70,10 @@ func (*RotatorSuite) createShardOnMemory(
 		shard.NewDataStorage(false, false),
 		nil,
 		nil,
-		&testWal{Wal: wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil), maxWrittenItemIndex: 1},
+		&testWal{
+			Wal:                 wal.NewWal(shardWalEncoder, segmentWriter, wal.FileFormatVersion, lss, maxSegmentSize, shardID, nil),
+			maxWrittenItemIndex: 1,
+		},
 		shardID,
 	)
 }
