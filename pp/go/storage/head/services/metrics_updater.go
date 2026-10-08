@@ -143,7 +143,12 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collectFro
 		ls["allocator"] = "data_storage"
 		s.memoryInUse.With(ls).Set(float64(shard.DSAllocatedMemory()))
 
+		targetLSSMemory, inputLSSMemory := shard.LSSAllocatedMemory()
+
 		ls["allocator"] = "main_lss"
-		s.memoryInUse.With(ls).Set(float64(shard.LSSAllocatedMemory()))
+		s.memoryInUse.With(ls).Set(float64(targetLSSMemory))
+
+		ls["allocator"] = "input_lss"
+		s.memoryInUse.With(ls).Set(float64(inputLSSMemory))
 	}
 }
