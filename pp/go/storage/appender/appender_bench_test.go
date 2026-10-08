@@ -148,7 +148,7 @@ func benchmarkAppenderAppend(b *testing.B, metrics []byte, newStats func() appen
 	}
 }
 
-// services.CFViaRange.
-func commitAndFlush(*benchHead) error {
+// services.CFViaRangeByMask.
+func commitAndFlush(*benchHead, []bool) error {
 	return nil
 }

@@ -102,7 +102,7 @@ func (ar *Adapter) AppendHashdex(
 		var appendError error
 		stats, appendError = appender.New(
 			h,
-			services.CFViaRange,
+			services.CFViaRangeByMask,
 			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
 		).Append(
 			ctx,
@@ -153,7 +153,7 @@ func (ar *Adapter) AppendSnappyProtobuf(
 		lap.Mark(appender.StageSemaphoreWait)
 		stats, err := appender.New(
 			h,
-			services.CFViaRange,
+			services.CFViaRangeByMask,
 			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
 		).Append(
 			ctx,
@@ -195,7 +195,7 @@ func (ar *Adapter) AppendTimeSeries(
 		lap.Mark(appender.StageSemaphoreWait)
 		stats, err = appender.New(
 			h,
-			services.CFViaRange,
+			services.CFViaRangeByMask,
 			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
 		).Append(
 			ctx,

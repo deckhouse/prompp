@@ -27,7 +27,7 @@ func (s *AppenderSuite) appendWithStats(
 ) error {
 	_, err := appender.New(
 		s.head,
-		services.CFViaRange[*shard.Shard, *storage.Head],
+		services.CFViaRangeByMask[*shard.Shard, *storage.Head],
 		appender.Stats{Lap: recorders.Stages.Start(), Shards: recorders.Shards},
 	).Append(ctx, storagetest.NewIncomingData(&s.Suite, timeSeries), state, commitToWal)
 

@@ -12,7 +12,7 @@ import (
 func (s *WalSuite) TestStatsEachOperationAccounted() {
 	// Arrange
 	registry := prometheus.NewRegistry()
-	wl := wal.NewWal(s.newStatsEncoder(nil), s.newStatsSegmentWriter(nil), s.locker, 100, 0, registry)
+	wl := wal.NewWal(s.newStatsEncoder(nil), s.newStatsSegmentWriter(nil), wal.FileFormatVersion, s.locker, 100, 0, registry)
 
 	// Act
 	_, writeErr := wl.Write(nil)
@@ -39,6 +39,7 @@ func (s *WalSuite) TestStatsFailedOperationsNotAccounted() {
 	wl := wal.NewWal(
 		s.newStatsEncoder(expectedError),
 		s.newStatsSegmentWriter(expectedError),
+		wal.FileFormatVersion,
 		s.locker,
 		100,
 		0,
@@ -70,8 +71,8 @@ func (s *WalSuite) TestStatsFailedOperationsNotAccounted() {
 func (s *WalSuite) TestStatsSharedByRegisterer() {
 	// Arrange
 	registry := prometheus.NewRegistry()
-	first := wal.NewWal(s.newStatsEncoder(nil), s.newStatsSegmentWriter(nil), s.locker, 100, 0, registry)
-	second := wal.NewWal(s.newStatsEncoder(nil), s.newStatsSegmentWriter(nil), s.locker, 100, 1, registry)
+	first := wal.NewWal(s.newStatsEncoder(nil), s.newStatsSegmentWriter(nil), wal.FileFormatVersion, s.locker, 100, 0, registry)
+	second := wal.NewWal(s.newStatsEncoder(nil), s.newStatsSegmentWriter(nil), wal.FileFormatVersion, s.locker, 100, 1, registry)
 
 	// Act
 	_, firstErr := first.Write(nil)

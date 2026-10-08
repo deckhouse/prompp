@@ -16,7 +16,9 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -443,6 +445,229 @@ func (s *HeadLoadSuite) TestLoadWalV2() {
 	s.Require().NoError(err)
 	s.Require().NoError(h.Close())
 	s.Require().Equal(uint16(math.MaxUint16), rec.GetShardBySegmentID(encodedSegment.ID()))
+}
+
+// createHeadWithSegmentIDs creates on disk a head in which the shard i contains
+// the segments with the through IDs segmentIDsByShard[i], written in the wal format walVersion.
+func (s *HeadLoadSuite) createHeadWithSegmentIDs(walVersion uint8, segmentIDsByShard [][]uint32) *catalog.Record {
+	rec, err := s.catalog.Create(uint16(len(segmentIDsByShard))) // #nosec G115 // no overflow
+	s.Require().NoError(err)
+	headDir := filepath.Join(s.dataDir, rec.Dir())
+	s.Require().NoError(os.Mkdir(headDir, 0o777))
+
+	for i, segmentIDs := range segmentIDsByShard {
+		shardID := uint16(i) // #nosec G115 // no overflow
+		shardFile, err := util.CreateFileAppender(storage.GetShardWalFilename(headDir, shardID), 0o666)
+		s.Require().NoError(err)
+
+		shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, cppbridge.NewQueryableLssStorage())
+		_, err = writer.WriteHeader(shardFile, walVersion, shardWalEncoder.Version())
+		s.Require().NoError(err)
+
+		for _, segmentID := range segmentIDs {
+			encodedSegment, err := shardWalEncoder.Finalize()
+			s.Require().NoError(err)
+
+			if walVersion == wal.FileFormatVersionV2 {
+				encodedSegment.SetSegmentID(segmentID)
+				_, err = writer.WriteSegmentV2(shardFile, encodedSegment)
+			} else {
+				_, err = writer.WriteSegment(shardFile, encodedSegment)
+			}
+			s.Require().NoError(err)
+		}
+
+		s.Require().NoError(shardFile.Close())
+	}
+
+	return rec
+}
+
+func (s *HeadLoadSuite) loadRecord(rec *catalog.Record) (*storage.Head, error) {
+	h, err := storage.NewLoader(
+		s.dataDir,
+		storagetest.MaxSegmentSize,
+		prometheus.DefaultRegisterer,
+		storagetest.UnloadDataStorageInterval,
+	).Load(rec, 0)
+	s.T().Cleanup(func() { s.Require().NoError(h.Close()) })
+
+	return h, err
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2DifferentNumberOfSegmentsInShards() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{0, 2, 3}, {1}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().NoError(err)
+	s.False(h.IsReadOnly())
+	s.Equal(uint16(0), rec.GetShardBySegmentID(0))
+	s.Equal(uint16(1), rec.GetShardBySegmentID(1))
+	s.Equal(uint16(0), rec.GetShardBySegmentID(2))
+	s.Equal(uint16(0), rec.GetShardBySegmentID(3))
+	s.Equal(uint32(4), rec.NextSegmentID())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2WithoutSegmentsStartsSegmentIDsFromZero() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{}, {}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().NoError(err)
+	s.False(h.IsReadOnly())
+	s.Equal(uint32(0), rec.NextSegmentID())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2DuplicateSegmentIDInShards() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{0, 1}, {1}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "segment ids mismatch")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2MissingFirstSegmentID() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{1, 2}, {3}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "missing segments by shard")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2MissingFirstSegmentIDAndDuplicateSegmentID() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{1, 2}, {2}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "missing segments by shard")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2MissingSegmentID() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{0, 1}, {3}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "missing segments by shard")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2NonIncreasingSegmentIDsInShard() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{1, 0}, {2}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "segment id 0 is not greater than previous 1")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2CorruptedShardTailReportsOnlyShardError() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersionV2, [][]uint32{{0, 2}, {1}})
+	shardFilePath := storage.GetShardWalFilename(filepath.Join(s.dataDir, rec.Dir()), 0)
+	shardFile, err := os.OpenFile(shardFilePath, os.O_APPEND|os.O_WRONLY, 0o666)
+	s.Require().NoError(err)
+	_, err = shardFile.Write([]byte{0xff, 0xff, 0xff})
+	s.Require().NoError(err)
+	s.Require().NoError(shardFile.Close())
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().Error(err)
+	s.NotContains(err.Error(), "segment ids mismatch")
+	s.NotContains(err.Error(), "missing segments by shard")
+	s.Require().ErrorContains(err, "failed to read segment")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV1DifferentNumberOfSegmentsInShards() {
+	// Arrange
+	rec := s.createHeadWithSegmentIDs(wal.FileFormatVersion, [][]uint32{{0, 1}, {0}})
+
+	// Act
+	h, err := s.loadRecord(rec)
+
+	// Assert
+	s.Require().ErrorContains(err, "segment count mismatch")
+	s.True(h.IsReadOnly())
+}
+
+func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
+	// Arrange
+	storage.EnableWalWriterV2()
+	s.T().Cleanup(storage.DisableWalWriterV2)
+	sourceHead := s.mustCreateHead(0)
+	headAppender := appender.New(sourceHead, services.CFViaRangeByMask, appender.Stats{})
+	state := cppbridge.NewStateV2WithoutLock()
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
+	s.Require().NoError(err)
+	state.SetStatelessRelabeler(statelessRelabeler)
+
+	const numberOfExhaustedSegments = 3
+	timeSeries := make([]model.TimeSeries, 0, numberOfExhaustedSegments*storagetest.MaxSegmentSize)
+	for ts := range uint64(numberOfExhaustedSegments * storagetest.MaxSegmentSize) {
+		timeSeries = append(timeSeries, model.TimeSeries{
+			LabelSet:  model.NewLabelSetBuilder().Set("__name__", "wal_metric").Build(),
+			Timestamp: ts,
+			Value:     1,
+		})
+	}
+
+	// every append exhausts the segment limit of shard 0 only
+	for i := range numberOfExhaustedSegments {
+		batch := timeSeries[i*int(storagetest.MaxSegmentSize) : (i+1)*int(storagetest.MaxSegmentSize)]
+		_, err = headAppender.Append(s.T().Context(), storagetest.NewIncomingData(&s.Suite, batch), state, false)
+		s.Require().NoError(err)
+	}
+	s.Require().NoError(services.CFSViaRange(sourceHead))
+	s.Require().NoError(sourceHead.Close())
+
+	// Act
+	loadedHead := s.mustLoadHead(0)
+	s.T().Cleanup(func() { s.Require().NoError(loadedHead.Close()) })
+	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
+		StartTimestampMs: 0,
+		EndTimestampMs:   math.MaxInt64,
+		LabelSetIDs:      []uint32{0},
+	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
+	record, err := s.catalog.Get(loadedHead.ID())
+	s.Require().NoError(err)
+	segmentsByShard := make([]uint16, 0, numberOfExhaustedSegments+storagetest.NumberOfShards)
+	for sid := uint32(0); record.GetShardBySegmentID(sid) != math.MaxUint16; sid++ {
+		segmentsByShard = append(segmentsByShard, record.GetShardBySegmentID(sid))
+	}
+
+	// Assert
+	s.False(loadedHead.IsReadOnly())
+	s.Equal([]uint16{0, 0, 0, 0, 1}, segmentsByShard)
+	s.Equal(cppbridge.DataStorageQueryStatusSuccess, queryResult.Status)
+	s.Len(storagetest.GetSamplesFromSerializedData(queryResult.SerializedData)[0], len(timeSeries))
 }
 
 type EnsureSameErrorTypesTestSuite struct {

@@ -34,15 +34,16 @@ import (
 var walVersion = uint8(wal.FileFormatVersion)
 
 // walWriterCtor builds the shard WAL segment writer used by Builder.createShardOnDisk.
-// It is a process-global switch between the V1 (default) and V2 ([walWriterCtorV2]) segment
-// writer constructors, toggled at startup by EnableWalWriterV2 via the "enable_wal_writer_v2"
+// It is a process-global switch between the V1 ([walWriterCtorV1], default) and V2 ([walWriterCtorV2])
+// segment writer constructors, toggled at startup by EnableWalWriterV2 via the "enable_wal_writer_v2"
 // PROMPP_FEATURES flag.
-//
-// The V1 constructor writes segments in the original format (writer.WriteSegment, no embedded
+var walWriterCtor = walWriterCtorV1
+
+// walWriterCtorV1 writes segments in the original format (writer.WriteSegment, no embedded
 // segment ID) and relies on the shared *writer.SegmentWriteNotifier passed in by the caller to
 // track, across all shards, the last segment durably synced to disk; it doesn't need a real
 // SegmentMarkup, since segment IDs aren't assigned or stored, so it passes writer.NoopSegmentMarkup{}.
-var walWriterCtor = func(
+var walWriterCtorV1 = func(
 	shardID uint16,
 	shardFile *util.FileAppender,
 	swn *writer.SegmentWriteNotifier,
@@ -258,7 +259,7 @@ func (b *Builder) createShardOnDisk(
 		shard.NewDataStorage(true, true),
 		unloadedDataStorage,
 		queriedSeriesStorage,
-		wal.NewWal(shardWalEncoder, sw, lss, b.maxSegmentSize, shardID, b.registerer),
+		wal.NewWal(shardWalEncoder, sw, walVersion, lss, b.maxSegmentSize, shardID, b.registerer),
 		shardID,
 	), nil
 }
