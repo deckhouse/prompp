@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
@@ -756,7 +757,13 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 //	cPointer   - pointer to C-Cache;
 type Cache struct {
 	cPointer uintptr
-	lock     sync.RWMutex
+	// allocatedMemory memoizes the last measured value of [Cache.AllocatedMemory], memoValid tells
+	// whether it still matches the C-Cache. The cache is measured per metrics scrape for every
+	// shard of every target state, while it only changes on a relabeling that missed the cache or
+	// on a state update, so without memoization the metric costs a cgo call per shard per scrape.
+	allocatedMemory atomic.Uint64
+	memoValid       atomic.Bool
+	lock            sync.RWMutex
 }
 
 // NewCache init new Cache.
@@ -770,12 +777,22 @@ func NewCache() *Cache {
 	return cache
 }
 
-// AllocatedMemory return size of allocated memory for caches.
+// AllocatedMemory return size of allocated memory for caches, measuring the C-Cache only if it has
+// changed since the previous call.
 func (c *Cache) AllocatedMemory() uint64 {
+	if c.memoValid.Load() {
+		return c.allocatedMemory.Load()
+	}
+
+	// the memo is filled under the read lock: a mutation, and so an invalidation, can only happen
+	// under the write lock, hence neither can interleave with the measurement
 	c.lock.RLock()
 	res := prometheusCacheAllocatedMemory(c.cPointer)
+	c.allocatedMemory.Store(res)
+	c.memoValid.Store(true)
 	c.lock.RUnlock()
 	runtime.KeepAlive(c)
+
 	return res
 }
 
@@ -787,10 +804,18 @@ func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []Relabel
 
 	c.lock.Lock()
 	exception := prometheusCacheUpdate(shardsRelabelerStateUpdate, c.cPointer)
+	c.invalidateAllocatedMemory()
 	c.lock.Unlock()
 	runtime.KeepAlive(c)
 
 	return handleException(exception)
+}
+
+// invalidateAllocatedMemory drops the memoized allocated memory. Must be called by every mutation
+// of the C-Cache and strictly under the write lock: [Cache.AllocatedMemory] relies on the read lock
+// to keep an invalidation from interleaving with the measurement it memoizes.
+func (c *Cache) invalidateAllocatedMemory() {
+	c.memoValid.Store(false)
 }
 
 //
@@ -960,6 +985,7 @@ func (pgr *PerGoroutineRelabeler) inputRelabeling(
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cache.invalidateAllocatedMemory()
 	cache.lock.Unlock()
 
 	runtime.KeepAlive(pgr)
@@ -1024,6 +1050,7 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenans(
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cache.invalidateAllocatedMemory()
 	cache.lock.Unlock()
 
 	runtime.KeepAlive(pgr)
