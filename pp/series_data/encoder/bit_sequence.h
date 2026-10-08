@@ -52,14 +52,6 @@ struct PROMPP_ATTRIBUTE_PACKED BitSequenceWithItemsCount {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
 };
 
-template <BareBones::ReallocatorInterface Reallocator>
-struct PROMPP_ATTRIBUTE_PACKED RefCountableBitSequenceWithItemsCount {
-  BitSequenceWithItemsCount<Reallocator> stream;
-  uint32_t reference_count{1};
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
-};
-
 }  // namespace series_data::encoder
 
 template <BareBones::ReallocatorInterface Reallocator>
@@ -67,6 +59,3 @@ struct BareBones::IsTriviallyReallocatable<series_data::encoder::BitSequenceWith
 
 template <BareBones::ReallocatorInterface Reallocator>
 struct BareBones::IsTriviallyReallocatable<series_data::encoder::CompactBitSequence<Reallocator>> : std::true_type {};
-
-template <BareBones::ReallocatorInterface Reallocator>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::RefCountableBitSequenceWithItemsCount<Reallocator>> : std::true_type {};

@@ -5,7 +5,6 @@
 
 #include "common.h"
 #include "metrics/storage.h"
-#include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
 
