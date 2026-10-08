@@ -81,8 +81,10 @@ type Manager struct {
 	adapter   Adapter
 	graceShut chan struct{}
 
-	offsetSeed     uint64     // Global offsetSeed seed is used to spread scrape workload across HA setup.
-	mtxScrape      sync.Mutex // Guards the fields below.
+	offsetSeed uint64 // Global offsetSeed seed is used to spread scrape workload across HA setup.
+	// mtxScrape guards the fields below. It is an RWMutex so that the read-only readers — the
+	// /metrics collectors among them — do not serialize with each other.
+	mtxScrape      sync.RWMutex
 	scrapeConfigs  map[string]*config.ScrapeConfig
 	scrapePools    map[string]*scrapePool
 	targetSets     map[string][]*targetgroup.Group
@@ -361,13 +363,21 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 
 // RangeRelabelingCachesAllocatedMemory calls fn for every scrape job with the size of memory
 // allocated by the relabeling mapping caches of its scrape and report states.
+//
+// mtxScrape is only held for the snapshot of the pools, not for the measurement itself: the
+// per-pool walk is proportional to the number of targets and must not block a reload of the
+// configuration or a target group update for its whole duration.
 func (m *Manager) RangeRelabelingCachesAllocatedMemory(
 	fn func(scrapeJob string, scrapeState, reportState uint64),
 ) {
-	m.mtxScrape.Lock()
-	defer m.mtxScrape.Unlock()
-
+	m.mtxScrape.RLock()
+	pools := make(map[string]*scrapePool, len(m.scrapePools))
 	for tset, sp := range m.scrapePools {
+		pools[tset] = sp
+	}
+	m.mtxScrape.RUnlock()
+
+	for tset, sp := range pools {
 		scrapeState, reportState := sp.relabelingCachesAllocatedMemory()
 		fn(tset, scrapeState, reportState)
 	}
@@ -375,8 +385,8 @@ func (m *Manager) RangeRelabelingCachesAllocatedMemory(
 
 // TargetsAll returns active and dropped targets grouped by job_name.
 func (m *Manager) TargetsAll() map[string][]*Target {
-	m.mtxScrape.Lock()
-	defer m.mtxScrape.Unlock()
+	m.mtxScrape.RLock()
+	defer m.mtxScrape.RUnlock()
 
 	targets := make(map[string][]*Target, len(m.scrapePools))
 	for tset, sp := range m.scrapePools {
@@ -387,8 +397,8 @@ func (m *Manager) TargetsAll() map[string][]*Target {
 
 // ScrapePools returns the list of all scrape pool names.
 func (m *Manager) ScrapePools() []string {
-	m.mtxScrape.Lock()
-	defer m.mtxScrape.Unlock()
+	m.mtxScrape.RLock()
+	defer m.mtxScrape.RUnlock()
 
 	names := make([]string, 0, len(m.scrapePools))
 	for name := range m.scrapePools {
@@ -399,8 +409,8 @@ func (m *Manager) ScrapePools() []string {
 
 // TargetsActive returns the active targets currently being scraped.
 func (m *Manager) TargetsActive() map[string][]*Target {
-	m.mtxScrape.Lock()
-	defer m.mtxScrape.Unlock()
+	m.mtxScrape.RLock()
+	defer m.mtxScrape.RUnlock()
 
 	targets := make(map[string][]*Target, len(m.scrapePools))
 	for tset, sp := range m.scrapePools {
@@ -411,8 +421,8 @@ func (m *Manager) TargetsActive() map[string][]*Target {
 
 // TargetsDropped returns the dropped targets during relabelling, subject to KeepDroppedTargets limit.
 func (m *Manager) TargetsDropped() map[string][]*Target {
-	m.mtxScrape.Lock()
-	defer m.mtxScrape.Unlock()
+	m.mtxScrape.RLock()
+	defer m.mtxScrape.RUnlock()
 
 	targets := make(map[string][]*Target, len(m.scrapePools))
 	for tset, sp := range m.scrapePools {
@@ -423,8 +433,8 @@ func (m *Manager) TargetsDropped() map[string][]*Target {
 
 // TargetsDroppedCounts returns the count of dropped targets from all scrape pools.
 func (m *Manager) TargetsDroppedCounts() map[string]int {
-	m.mtxScrape.Lock()
-	defer m.mtxScrape.Unlock()
+	m.mtxScrape.RLock()
+	defer m.mtxScrape.RUnlock()
 
 	counts := make(map[string]int, len(m.scrapePools))
 	for tset, sp := range m.scrapePools {

@@ -141,7 +141,10 @@ type scrapePool struct {
 
 	symbolTable *labels.SymbolTable
 
-	targetMtx sync.Mutex
+	// targetMtx is an RWMutex so that the read-only off-path readers — such as
+	// [scrapePool.relabelingCachesAllocatedMemory], called on every /metrics scrape — do not
+	// serialize with each other.
+	targetMtx sync.RWMutex
 	// activeTargets and loops must always be synchronized to have the same
 	// set of hashes.
 	activeTargets       map[uint64]*Target
@@ -282,8 +285,8 @@ func newScrapePool(
 }
 
 func (sp *scrapePool) ActiveTargets() []*Target {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
+	sp.targetMtx.RLock()
+	defer sp.targetMtx.RUnlock()
 
 	var tActive []*Target
 	for _, t := range sp.activeTargets {
@@ -294,14 +297,14 @@ func (sp *scrapePool) ActiveTargets() []*Target {
 
 // Return dropped targets, subject to KeepDroppedTargets limit.
 func (sp *scrapePool) DroppedTargets() []*Target {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
+	sp.targetMtx.RLock()
+	defer sp.targetMtx.RUnlock()
 	return sp.droppedTargets
 }
 
 func (sp *scrapePool) DroppedTargetsCount() int {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
+	sp.targetMtx.RLock()
+	defer sp.targetMtx.RUnlock()
 	return sp.droppedTargetsCount
 }
 
@@ -330,11 +333,21 @@ func (sp *scrapePool) getScrapeFailureLogger() log.Logger {
 
 // relabelingCachesAllocatedMemory return size of allocated memory for the relabeling mapping
 // caches of all the pool's scrape loops, separately for the scrape and the report states.
+//
+// With many targets the measurement itself is the long part, so targetMtx is only held for the
+// snapshot of the loops: it must not block a sync or a reload of the pool for the whole walk.
+// A loop stopped in the meantime is still safe to measure — the snapshot keeps it alive and its
+// states are never reassigned, so the worst case is a slightly stale number for a target that is
+// already gone.
 func (sp *scrapePool) relabelingCachesAllocatedMemory() (scrapeState, reportState uint64) {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
-
+	sp.targetMtx.RLock()
+	loops := make([]loop, 0, len(sp.loops))
 	for _, l := range sp.loops {
+		loops = append(loops, l)
+	}
+	sp.targetMtx.RUnlock()
+
+	for _, l := range loops {
 		scrape, report := l.relabelingCachesAllocatedMemory()
 		scrapeState += scrape
 		reportState += report
