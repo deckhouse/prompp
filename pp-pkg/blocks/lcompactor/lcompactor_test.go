@@ -1169,6 +1169,51 @@ func TestCompact_SingleCorruptedBlockDoesNotPanic(t *testing.T) {
 	require.True(t, meta.Compaction.IsCorrupted())
 }
 
+func TestCompactEmptyDirs(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+
+	c, err := NewLeveledCompactor(ctx, nil, log.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	require.Nil(t, CompactBlockMetas(ulid.MustNew(1000, nil)))
+}
+
+func TestCompactAllBlocksCorrupted(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+
+	blockDir1 := testutils.CreateBlock(t, tmpdir, testutils.GenSeries(1, 1, 0, 10))
+	blockDir2 := testutils.CreateBlock(t, tmpdir, testutils.GenSeries(1, 1, 10, 20))
+	// Corrupt the blocks so that the meta file stays readable
+	// but OpenBlock fails.
+	require.NoError(t, os.RemoveAll(filepath.Join(blockDir1, block.IndexFilename)))
+	require.NoError(t, os.RemoveAll(filepath.Join(blockDir2, block.IndexFilename)))
+
+	c, err := NewLeveledCompactor(ctx, nil, log.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, []string{blockDir1, blockDir2}, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	for _, dir := range []string{blockDir1, blockDir2} {
+		meta, _, errRead := block.ReadFromDir(dir)
+		require.NoError(t, errRead)
+		require.True(t, meta.Compaction.IsCorrupted(), "block %s should be marked as corrupted", dir)
+	}
+
+	// Corrupted blocks are excluded from the plan, so the compactBlocks
+	// loop observes an empty plan and terminates instead of retrying forever.
+	plan, err := c.Plan(tmpdir)
+	require.NoError(t, err)
+	require.Empty(t, plan)
+}
+
 func TestCompactBlockMetas(t *testing.T) {
 	parent1 := ulid.MustNew(100, nil)
 	parent2 := ulid.MustNew(200, nil)
