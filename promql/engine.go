@@ -299,6 +299,10 @@ type EngineOpts struct {
 	// series is considered stale.
 	LookbackDelta time.Duration
 
+	// LabelReplaceCacheSize is the capacity of the label_replace result cache.
+	// 0 selects DefaultLabelReplaceCacheSize; a negative value disables the cache.
+	LabelReplaceCacheSize int
+
 	// NoStepSubqueryIntervalFn is the default evaluation interval of
 	// a subquery in milliseconds if no step in range vector was specified `[30m:<step>]`.
 	NoStepSubqueryIntervalFn func(rangeMillis int64) int64
@@ -341,6 +345,7 @@ type Engine struct {
 	enableNegativeOffset     bool
 	enablePerStepStats       bool
 	enableDelayedNameRemoval bool
+	labelReplaceCache        *labelReplaceCache
 }
 
 // NewEngine returns a new engine.
@@ -409,6 +414,8 @@ func NewEngine(opts EngineOpts) *Engine {
 		}
 	}
 
+	cache := newLabelReplaceCache(opts.LabelReplaceCacheSize)
+
 	if opts.Reg != nil {
 		opts.Reg.MustRegister(
 			metrics.currentQueries,
@@ -418,9 +425,10 @@ func NewEngine(opts EngineOpts) *Engine {
 			metrics.querySamples,
 			queryResultSummary,
 		)
+		cache.register(opts.Reg)
 	}
 
-	return &Engine{
+	ng := &Engine{
 		timeout:                  opts.Timeout,
 		logger:                   opts.Logger,
 		metrics:                  metrics,
@@ -433,6 +441,9 @@ func NewEngine(opts EngineOpts) *Engine {
 		enablePerStepStats:       opts.EnablePerStepStats,
 		enableDelayedNameRemoval: opts.EnableDelayedNameRemoval,
 	}
+	ng.labelReplaceCache = cache
+
+	return ng
 }
 
 // Close closes ng.
@@ -743,6 +754,7 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 			samplesStats:             query.sampleStats,
 			noStepSubqueryIntervalFn: ng.noStepSubqueryIntervalFn,
 			enableDelayedNameRemoval: ng.enableDelayedNameRemoval,
+			labelReplaceCache:        ng.labelReplaceCache,
 			querier:                  querier,
 		}
 		query.sampleStats.InitStepTracking(start, start, 1)
@@ -808,6 +820,7 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 		samplesStats:             query.sampleStats,
 		noStepSubqueryIntervalFn: ng.noStepSubqueryIntervalFn,
 		enableDelayedNameRemoval: ng.enableDelayedNameRemoval,
+		labelReplaceCache:        ng.labelReplaceCache,
 		querier:                  querier,
 	}
 	query.sampleStats.InitStepTracking(evaluator.startTimestamp, evaluator.endTimestamp, evaluator.interval)
@@ -1101,6 +1114,7 @@ type evaluator struct {
 	noStepSubqueryIntervalFn func(rangeMillis int64) int64
 	enableDelayedNameRemoval bool
 	querier                  storage.Querier
+	labelReplaceCache        *labelReplaceCache
 }
 
 // errorf causes a panic with the input formatted into an error.
@@ -2007,6 +2021,7 @@ func (ev *evaluator) eval(ctx context.Context, expr parser.Expr) (parser.Value, 
 			samplesStats:             ev.samplesStats.NewChild(),
 			noStepSubqueryIntervalFn: ev.noStepSubqueryIntervalFn,
 			enableDelayedNameRemoval: ev.enableDelayedNameRemoval,
+			labelReplaceCache:        ev.labelReplaceCache,
 			querier:                  ev.querier,
 		}
 
@@ -2052,6 +2067,7 @@ func (ev *evaluator) eval(ctx context.Context, expr parser.Expr) (parser.Value, 
 			samplesStats:             ev.samplesStats.NewChild(),
 			noStepSubqueryIntervalFn: ev.noStepSubqueryIntervalFn,
 			enableDelayedNameRemoval: ev.enableDelayedNameRemoval,
+			labelReplaceCache:        ev.labelReplaceCache,
 			querier:                  ev.querier,
 		}
 		res, ws := newEv.eval(ctx, e.Expr)
