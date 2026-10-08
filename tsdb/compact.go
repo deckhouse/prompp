@@ -415,6 +415,7 @@ func splitByRange(ds []dirMeta, tr int64) [][]dirMeta {
 
 // CompactBlockMetas merges many block metas into one, combining its source blocks together
 // and adjusting compaction level. Min/Max time of result block meta covers all input blocks.
+// Returns nil if no block metas are given.
 func CompactBlockMetas(uid ulid.ULID, blocks ...*BlockMeta) *BlockMeta {
 	if len(blocks) == 0 {
 		return nil
@@ -523,15 +524,11 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 		uids = append(uids, meta.ULID.String())
 	}
 
-	// All input blocks may have been skipped as corrupted above (or no dirs
-	// were given at all), leaving metas empty. There is nothing to compact.
-	if len(metas) == 0 {
-		return nil, nil
-	}
-
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)
+	// All input blocks may have been skipped as corrupted above (or no dirs were given at all),
+	// leaving metas empty. There is nothing to compact.
 	if meta == nil {
 		return nil, nil
 	}
