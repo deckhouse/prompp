@@ -9,7 +9,6 @@
 #include "concepts.h"
 #include "data_storage.h"
 #include "encoder/encoder_variant.h"
-#include "series_data/encoder/timestamp/encoder.h"
 #include "series_data/encoder/timestamp/state.h"
 
 namespace series_data {
@@ -51,7 +50,7 @@ class Encoder {
     }
 
     encode_value(ls_id, chunk, value);
-    update_encoder_timestamp(chunk, timestamp);
+    append_timestamp(chunk, timestamp);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static bool should_skip_stalenan(double value, const chunk::DataChunk& chunk) {
@@ -59,7 +58,7 @@ class Encoder {
   }
 
   bool handle_timestamp_update(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
-    if (chunk.timestamp_encoder_state_id != encoder::timestamp::kInvalidStateId) {
+    if (chunk.timestamp_id != encoder::timestamp::kInvalidSequenceId) {
       return process_value_timestamp_encoding(ls_id, timestamp, value, chunk);
     }
 
@@ -67,18 +66,17 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE bool process_value_timestamp_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
-    const auto& state = storage_.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id);
+    const auto& timestamp_store = storage_.timestamp_store;
+    const auto last_timestamp = timestamp_store.last_timestamp(chunk.timestamp_id);
 
-    if (timestamp > state.timestamp()) [[likely]] {
-      if (!ChunkFinalizer::finalize_if_timestamp_finalized(storage_, ls_id, chunk)) [[likely]] {
-        if (state.stream_data.stream.count() >= kSamplesPerChunk) [[unlikely]] {
-          ChunkFinalizer::finalize(storage_, ls_id, chunk);
-        }
+    if (timestamp > last_timestamp) [[likely]] {
+      if (timestamp_store.count(chunk.timestamp_id) >= kSamplesPerChunk) [[unlikely]] {
+        ChunkFinalizer::finalize(storage_, ls_id, chunk);
       }
       return true;
     }
 
-    handle_outdated_sample(ls_id, timestamp, value, state.timestamp());
+    handle_outdated_sample(ls_id, timestamp, value, last_timestamp);
     return false;
   }
 
@@ -97,8 +95,8 @@ class Encoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void update_encoder_timestamp(chunk::DataChunk& chunk, int64_t timestamp) const {
-    chunk.timestamp_encoder_state_id = storage_.timestamp_encoder.encode(chunk.timestamp_encoder_state_id, timestamp);
+  PROMPP_ALWAYS_INLINE void append_timestamp(chunk::DataChunk& chunk, int64_t timestamp) const {
+    chunk.timestamp_id = storage_.timestamp_store.append(chunk.timestamp_id, timestamp);
   }
 
   void encode_value(uint32_t ls_id, chunk::DataChunk& chunk, double value) const {
@@ -198,7 +196,7 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void switch_from_constant(chunk::DataChunk& chunk, double const_value, double value) const {
-    const uint8_t const_value_count = storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id).count() - chunk.encoding_state.has_last_stalenan;
+    const uint8_t const_value_count = storage_.timestamp_store.count(chunk.timestamp_id) - chunk.encoding_state.has_last_stalenan;
 
     encoder::value::ConstantValue v1{.value = const_value, .count = const_value_count};
     encoder::value::ConstantValue v2{.value = value, .count = 1};
@@ -214,8 +212,7 @@ class Encoder {
   }
 
   void switch_from_two_double_constant(chunk::DataChunk& chunk, double value1, uint8_t value1_count, double value2, double value) const {
-    const uint8_t value2_count =
-        storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id).count() - value1_count - chunk.encoding_state.has_last_stalenan;
+    const uint8_t value2_count = storage_.timestamp_store.count(chunk.timestamp_id) - value1_count - chunk.encoding_state.has_last_stalenan;
 
     const encoder::value::ConstantValue v1{.value = value1, .count = value1_count};
     const encoder::value::ConstantValue v2{.value = value2, .count = value2_count};

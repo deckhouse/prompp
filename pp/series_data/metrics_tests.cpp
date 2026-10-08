@@ -162,7 +162,7 @@ TEST_F(DataStorageMetricsTestFixture, OutdatedSamplesAndChunksCounters) {
   EXPECT_EQ(2, outdated_chunks_count());
 }
 
-TEST_F(DataStorageMetricsTestFixture, TimestampStatesCountReflectsEncoderState) {
+TEST_F(DataStorageMetricsTestFixture, TimestampStatesCountReflectsDictionarySlots) {
   // Arrange
 
   // Act
@@ -170,7 +170,7 @@ TEST_F(DataStorageMetricsTestFixture, TimestampStatesCountReflectsEncoderState) 
   encoder_.encode(1, 1, 1.0);
 
   // Assert
-  EXPECT_EQ(storage_.timestamp_encoder.states_count(), timestamp_states_count());
+  EXPECT_EQ(storage_.timestamp_store.slot_count(), timestamp_states_count());
 }
 
 class DataStorageMetricsFinalizeTestFixture : public DataStorageMetricsTestTrait<3>, public testing::Test {};
@@ -189,32 +189,30 @@ TEST_F(DataStorageMetricsFinalizeTestFixture, FinalizeIncrementsFinalizedChunksC
   EXPECT_EQ(2, chunk_count(EncodingType::kUint32Constant));
 }
 
-// The timestamp_states gauge is pushed on state creation only (states_.size() grows there; erase merely marks a hole and
-// does not change states_.size()). It must therefore stay equal to encoder.states_count() both while states are created
-// and after a finalize erases states, without any scrape-time pull from the encoder.
-TEST_F(DataStorageMetricsFinalizeTestFixture, TimestampStatesCountMatchesEncoderWhileCreatingStates) {
-  // Arrange & Act: create timestamp states for two series.
+// The gauge counts allocated slots, including freed ones. Finalization and release must not reduce it.
+TEST_F(DataStorageMetricsFinalizeTestFixture, TimestampStatesCountMatchesDictionaryWhileCreatingSequences) {
+  // Arrange & Act
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(1, 2, 2.0);
 
-  // Assert: states were created and the pushed gauge matches the encoder.
-  ASSERT_GT(storage_.timestamp_encoder.states_count(), 0u);
-  EXPECT_EQ(storage_.timestamp_encoder.states_count(), timestamp_states_count());
+  // Assert
+  ASSERT_GT(storage_.timestamp_store.slot_count(), 0u);
+  EXPECT_EQ(storage_.timestamp_store.slot_count(), timestamp_states_count());
 }
 
-TEST_F(DataStorageMetricsFinalizeTestFixture, TimestampStatesCountMatchesEncoderAfterFinalize) {
+TEST_F(DataStorageMetricsFinalizeTestFixture, TimestampStatesCountMatchesDictionaryAfterFinalize) {
   // Arrange: fill the first chunk (kSamplesPerChunk == 3) for series 0.
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  // Act: the 4th sample finalizes the first chunk, erasing its timestamp states.
+  // Act: the fourth sample finalizes the first chunk.
   encoder_.encode(0, 4, 4.0);
 
-  // Assert: erase does not change states_.size(), so the create-only push still matches the encoder.
-  EXPECT_EQ(storage_.timestamp_encoder.states_count(), timestamp_states_count());
+  // Assert
+  EXPECT_EQ(storage_.timestamp_store.slot_count(), timestamp_states_count());
 }
 
 template <uint8_t kSamplesPerChunk = series_data::kSamplesPerChunkDefault>

@@ -23,19 +23,20 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
   };
 
   EncoderData encoder{.external_index = 0};
-  encoder::timestamp::StateId timestamp_encoder_state_id{encoder::timestamp::kInvalidStateId};
+  // Copying or resetting a chunk does not acquire or release its timestamp sequence reference.
+  encoder::timestamp::SequenceId timestamp_id{encoder::timestamp::kInvalidSequenceId};
   EncodingState encoding_state{.encoding_type = EncodingType::kUnknown, .has_last_stalenan = false};
 
   DataChunk() = default;
   DataChunk(const DataChunk&) noexcept = default;
 
-  DataChunk(uint32_t encoder_id, encoder::timestamp::StateId _timestamp_encoder_state_id, EncodingState _encoding_state)
-      : encoder{.external_index = encoder_id}, timestamp_encoder_state_id(_timestamp_encoder_state_id), encoding_state(_encoding_state) {}
+  DataChunk(uint32_t encoder_id, encoder::timestamp::SequenceId _timestamp_id, EncodingState _encoding_state)
+      : encoder{.external_index = encoder_id}, timestamp_id(_timestamp_id), encoding_state(_encoding_state) {}
 
   DataChunk& operator=(const DataChunk& other) noexcept {
     if (this != &other) {
       encoder.external_index = other.encoder.external_index;
-      timestamp_encoder_state_id = other.timestamp_encoder_state_id;
+      timestamp_id = other.timestamp_id;
       encoding_state = other.encoding_state;
     }
 
@@ -48,7 +49,7 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
 
   PROMPP_ALWAYS_INLINE void reset() noexcept {
     encoder.external_index = 0;
-    timestamp_encoder_state_id = encoder::timestamp::kInvalidStateId;
+    timestamp_id = encoder::timestamp::kInvalidSequenceId;
     encoding_state = EncodingState{.encoding_type = EncodingType::kUnknown, .has_last_stalenan = false};
   }
 

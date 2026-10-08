@@ -156,6 +156,27 @@ TEST_F(SerializerDeserializerFixture, TwoUint32ConstantFinalizedChunkWithCommonT
       decode_current_chunk(serialized_view, 1)));
 }
 
+TEST_F(SerializerDeserializerFixture, OpenAndFinalizedChunksShareTimestampDescriptor) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(1, 1, 2.0);
+  encoder_.encode(1, 2, 2.0);
+
+  // Act
+  const auto serialized = serialize();
+  SerializedDataView serialized_view(serialized);
+
+  // Assert
+  ASSERT_EQ(2U, serialized.chunks.size());
+  EXPECT_EQ(0U, serialized.chunks[0].timestamps_offset);
+  EXPECT_EQ(0U, serialized.chunks[1].timestamps_offset);
+  EXPECT_EQ(sizeof(series_data::SerializedCompactBitSequenceWithItemsCount<DataStorage::Reallocator>), serialized.bytes_buffer.control_block().items_count);
+  EXPECT_TRUE(std::ranges::equal(SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 2, .value = 1.0}}, decode_current_chunk(serialized_view, 0)));
+  EXPECT_TRUE(std::ranges::equal(SampleList{{.timestamp = 1, .value = 2.0}, {.timestamp = 2, .value = 2.0}}, decode_current_chunk(serialized_view, 1)));
+}
+
 TEST_F(SerializerDeserializerFixture, ThreeUint32ConstantChunkWithCommonAndUniqueTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
