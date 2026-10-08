@@ -1185,11 +1185,15 @@ type StateV2 struct {
 	staleNansStates    []*StaleNansState
 	statelessRelabeler *StatelessRelabeler
 	locker             TransitionLocker
-	defTimestamp       int64
-	generationHead     uint64
-	options            RelabelerOptions
-	status             uint8
-	trackStaleness     bool
+	// cachesLocker guards the caches slice itself against [StateV2.resetCaches] racing with
+	// off-path readers such as [StateV2.CachesAllocatedMemory]. The hot path ([StateV2.CacheByShard])
+	// is called from the owning goroutine and does not take it.
+	cachesLocker   sync.RWMutex
+	defTimestamp   int64
+	generationHead uint64
+	options        RelabelerOptions
+	status         uint8
+	trackStaleness bool
 }
 
 // NewTransitionStateV2 init empty [StateV2], with locks.
@@ -1239,6 +1243,20 @@ func (s *StateV2) CacheByShard(shardID uint16) *Cache {
 	}
 
 	return s.caches[shardID]
+}
+
+// CachesAllocatedMemory return size of allocated memory for the relabeling mapping caches
+// of all shards of the state. A transition state holds no caches, so its memory is 0.
+func (s *StateV2) CachesAllocatedMemory() uint64 {
+	s.cachesLocker.RLock()
+	defer s.cachesLocker.RUnlock()
+
+	var am uint64
+	for _, cache := range s.caches {
+		am += cache.AllocatedMemory()
+	}
+
+	return am
 }
 
 // DefTimestamp return timestamp for scrape time and stalenan.
@@ -1359,6 +1377,9 @@ func (s *StateV2) TrackStaleness() bool {
 
 // resetCaches recreate Caches.
 func (s *StateV2) resetCaches(numberOfShards uint16) {
+	s.cachesLocker.Lock()
+	defer s.cachesLocker.Unlock()
+
 	switch {
 	case len(s.caches) > int(numberOfShards):
 		for shardID := range s.caches[numberOfShards:] {

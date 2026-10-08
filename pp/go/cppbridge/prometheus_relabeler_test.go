@@ -1575,6 +1575,25 @@ func (s *StateV2Suite) stateReconfigureTrackStaleness(state *cppbridge.StateV2) 
 	s.NotNil(state.StaleNansStateByShard(0))
 }
 
+func (s *StateV2Suite) TestStateCachesAllocatedMemory() {
+	s.stateCachesAllocatedMemory(cppbridge.NewStateV2())
+	s.stateCachesAllocatedMemory(cppbridge.NewStateV2WithoutLock())
+}
+
+func (s *StateV2Suite) stateCachesAllocatedMemory(state *cppbridge.StateV2) {
+	const numberOfShards = 3
+	// an empty cache takes 16 bytes, see RelabelerSuite.TestCacheAllocatedMemory
+	const emptyCacheMemory = 16
+
+	s.Zero(state.CachesAllocatedMemory())
+
+	state.Reconfigure(0, numberOfShards, nil)
+	s.Equal(uint64(numberOfShards*emptyCacheMemory), state.CachesAllocatedMemory())
+
+	state.Reconfigure(1, 1, nil)
+	s.Equal(uint64(emptyCacheMemory), state.CachesAllocatedMemory())
+}
+
 func (s *StateV2Suite) TestStatelessRelabeler() {
 	s.statelessRelabeler(cppbridge.NewStateV2())
 	s.statelessRelabeler(cppbridge.NewStateV2WithoutLock())
@@ -1611,6 +1630,7 @@ func (s *StateV2Suite) TestStateTransitionReconfigure() {
 func (s *StateV2Suite) stateTransitionReconfigure(state *cppbridge.StateV2) {
 	state.Reconfigure(0, 1, nil)
 
+	s.Zero(state.CachesAllocatedMemory())
 	s.False(state.TrackStaleness())
 	s.Panics(func() { state.CacheByShard(0) })
 	s.Panics(func() { state.StaleNansStateByShard(0) })

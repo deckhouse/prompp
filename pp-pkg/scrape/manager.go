@@ -142,6 +142,7 @@ func NewManager(
 	}
 
 	m.metrics.setTargetMetadataCacheGatherer(m)
+	m.metrics.setRelabelingCachesGatherer(m)
 
 	return m, nil
 }
@@ -356,6 +357,20 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 		return errors.New("failed to apply the new configuration")
 	}
 	return nil
+}
+
+// RangeRelabelingCachesAllocatedMemory calls fn for every scrape job with the size of memory
+// allocated by the relabeling mapping caches of its scrape and report states.
+func (m *Manager) RangeRelabelingCachesAllocatedMemory(
+	fn func(scrapeJob string, scrapeState, reportState uint64),
+) {
+	m.mtxScrape.Lock()
+	defer m.mtxScrape.Unlock()
+
+	for tset, sp := range m.scrapePools {
+		scrapeState, reportState := sp.relabelingCachesAllocatedMemory()
+		fn(tset, scrapeState, reportState)
+	}
 }
 
 // TargetsAll returns active and dropped targets grouped by job_name.

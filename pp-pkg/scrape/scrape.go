@@ -328,6 +328,21 @@ func (sp *scrapePool) getScrapeFailureLogger() log.Logger {
 	return sp.scrapeFailureLogger
 }
 
+// relabelingCachesAllocatedMemory return size of allocated memory for the relabeling mapping
+// caches of all the pool's scrape loops, separately for the scrape and the report states.
+func (sp *scrapePool) relabelingCachesAllocatedMemory() (scrapeState, reportState uint64) {
+	sp.targetMtx.Lock()
+	defer sp.targetMtx.Unlock()
+
+	for _, l := range sp.loops {
+		scrape, report := l.relabelingCachesAllocatedMemory()
+		scrapeState += scrape
+		reportState += report
+	}
+
+	return scrapeState, reportState
+}
+
 // stop terminates all scrape loops and returns after they all terminated.
 func (sp *scrapePool) stop() {
 	sp.mtx.Lock()
@@ -811,6 +826,7 @@ type loop interface {
 	stop()
 	getCache() *scrapeCache
 	disableEndOfRunStalenessMarkers()
+	relabelingCachesAllocatedMemory() (scrapeState, reportState uint64)
 }
 
 type scrapeLoop struct {
@@ -1200,6 +1216,12 @@ func (sl *scrapeLoop) stop() {
 
 func (sl *scrapeLoop) disableEndOfRunStalenessMarkers() {
 	sl.disabledEndOfRunStalenessMarkers = true
+}
+
+// relabelingCachesAllocatedMemory return size of allocated memory for the relabeling mapping
+// caches of the loop's scrape and report states.
+func (sl *scrapeLoop) relabelingCachesAllocatedMemory() (scrapeState, reportState uint64) {
+	return sl.state.CachesAllocatedMemory(), sl.reportState.CachesAllocatedMemory()
 }
 
 func (sl *scrapeLoop) getCache() *scrapeCache {
