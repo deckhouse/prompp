@@ -14,6 +14,23 @@
 import { Completion, snippet } from '@codemirror/autocomplete';
 
 export const durationTerms = [{ label: 'y' }, { label: 'w' }, { label: 'd' }, { label: 'h' }, { label: 'm' }, { label: 's' }, { label: 'ms' }];
+export const durationExprTerms: Completion[] = [
+  { label: 'step()', info: 'Resolves to the current query step duration', type: 'keyword' },
+  { label: 'range()', info: 'Resolves to the total query range duration', type: 'keyword' },
+  {
+    label: 'min_of(, )',
+    info: 'Returns the minimum of two durations',
+    type: 'keyword',
+    apply: snippet('min_of(${duration_a}, ${duration_b})'),
+  },
+  {
+    label: 'max_of(, )',
+    info: 'Returns the maximum of two durations',
+    type: 'keyword',
+    apply: snippet('max_of(${duration_a}, ${duration_b})'),
+  },
+];
+export const durationExprOperatorTerms = [{ label: '^' }, { label: '*' }, { label: '/' }, { label: '%' }, { label: '+' }, { label: '-' }];
 export const matchOpTerms = [{ label: '=' }, { label: '!=' }, { label: '=~' }, { label: '!~' }];
 export const binOpTerms = [
   { label: '^' },
@@ -26,6 +43,8 @@ export const binOpTerms = [
   { label: '>=' },
   { label: '>' },
   { label: '<' },
+  { label: '</' },
+  { label: '>/' },
   { label: '<=' },
   { label: '!=' },
   { label: 'atan2' },
@@ -39,6 +58,10 @@ export const binOpModifierTerms = [
   { label: 'ignoring', info: 'Ignore specified labels for matching', type: 'keyword' },
   { label: 'group_left', info: 'Allow many-to-one matching', type: 'keyword' },
   { label: 'group_right', info: 'Allow one-to-many matching', type: 'keyword' },
+  { label: 'bool', info: 'Return boolean result (0 or 1) instead of filtering', type: 'keyword' },
+  { label: 'fill', info: 'Fill in missing series on both sides', type: 'keyword' },
+  { label: 'fill_left', info: 'Fill in missing series on the left side', type: 'keyword' },
+  { label: 'fill_right', info: 'Fill in missing series on the right side', type: 'keyword' },
 ];
 
 export const atModifierTerms = [
@@ -218,49 +241,61 @@ export const functionIdentifierTerms = [
   {
     label: 'histogram_avg',
     detail: 'function',
-    info: 'Return the average of observations from a native histogram (experimental feature)',
+    info: 'Return the average of observations from a native histogram',
     type: 'function',
   },
   {
     label: 'histogram_count',
     detail: 'function',
-    info: 'Return the count of observations from a native histogram (experimental feature)',
+    info: 'Return the count of observations from a native histogram',
     type: 'function',
   },
   {
     label: 'histogram_fraction',
     detail: 'function',
-    info: 'Calculate fractions of observations within an interval from a native histogram (experimental feature)',
+    info: 'Calculate fractions of observations within an interval from a native histogram',
     type: 'function',
   },
   {
     label: 'histogram_quantile',
     detail: 'function',
-    info: 'Calculate quantiles from native histograms (experimental) and from conventional histogram buckets',
+    info: 'Calculate quantiles from native histograms and from conventional histogram buckets',
+    type: 'function',
+  },
+  {
+    label: 'histogram_quantiles',
+    detail: 'function',
+    info: 'Calculate multiple quantiles from native histograms and from conventional histogram buckets',
     type: 'function',
   },
   {
     label: 'histogram_sum',
     detail: 'function',
-    info: 'Return the sum of observations from a native histogram (experimental feature)',
+    info: 'Return the sum of observations from a native histogram',
     type: 'function',
   },
   {
     label: 'histogram_stddev',
     detail: 'function',
-    info: 'Estimate the standard deviation of observations from a native histogram (experimental feature)',
+    info: 'Estimate the standard deviation of observations from a native histogram',
     type: 'function',
   },
   {
     label: 'histogram_stdvar',
     detail: 'function',
-    info: 'Estimate the standard variance of observations from a native histogram (experimental feature)',
+    info: 'Estimate the standard variance of observations from a native histogram',
     type: 'function',
   },
   {
-    label: 'holt_winters',
+    label: 'double_exponential_smoothing',
     detail: 'function',
     info: 'Calculate smoothed value of input series',
+    type: 'function',
+  },
+  {
+    label: 'end',
+    detail: 'function',
+    info: 'Return the query end timestamp in seconds',
     type: 'function',
   },
   {
@@ -306,9 +341,15 @@ export const functionIdentifierTerms = [
     type: 'function',
   },
   {
+    label: 'first_over_time',
+    detail: 'function',
+    info: 'Return the value of the oldest sample in the specified interval',
+    type: 'function',
+  },
+  {
     label: 'last_over_time',
     detail: 'function',
-    info: 'The most recent point value in specified interval.',
+    info: 'Return the value of the most recent sample in the specified interval',
     type: 'function',
   },
   {
@@ -345,6 +386,30 @@ export const functionIdentifierTerms = [
     label: 'min_over_time',
     detail: 'function',
     info: 'Return the minimum value over time for input series',
+    type: 'function',
+  },
+  {
+    label: 'ts_of_max_over_time',
+    detail: 'function',
+    info: 'Return the timestamp of the maximum value over time for input series',
+    type: 'function',
+  },
+  {
+    label: 'ts_of_min_over_time',
+    detail: 'function',
+    info: 'Return the timestamp of the minimum value over time for input series',
+    type: 'function',
+  },
+  {
+    label: 'ts_of_first_over_time',
+    detail: 'function',
+    info: 'Return the timestamp of the first value over time for input series',
+    type: 'function',
+  },
+  {
+    label: 'ts_of_last_over_time',
+    detail: 'function',
+    info: 'Return the timestamp of the last value over time for input series',
     type: 'function',
   },
   {
@@ -390,6 +455,12 @@ export const functionIdentifierTerms = [
     type: 'function',
     // Avoid ranking higher than `rate`.
     boost: -1,
+  },
+  {
+    label: 'range',
+    detail: 'function',
+    info: 'Return the query range in seconds',
+    type: 'function',
   },
   {
     label: 'rate',
@@ -461,6 +532,24 @@ export const functionIdentifierTerms = [
     label: 'sqrt',
     detail: 'function',
     info: 'Return the square root for input series',
+    type: 'function',
+  },
+  {
+    label: 'start',
+    detail: 'function',
+    info: 'Return the query start timestamp in seconds',
+    type: 'function',
+  },
+  {
+    label: 'start_timestamp',
+    detail: 'function',
+    info: 'Return the start timestamp for the samples in the input vector',
+    type: 'function',
+  },
+  {
+    label: 'step',
+    detail: 'function',
+    info: 'Return the query step in seconds',
     type: 'function',
   },
   {

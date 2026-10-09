@@ -100,14 +100,15 @@ import:
 shell:
   beforeInstall:
     - apt update && apt install -y git bash gcc g++ curl ca-certificates
-    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
     - apt install -y nodejs
+    - npm install -g pnpm@11.28.5
   install:
     - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" }}
     - cd /src/web/ui
-    - mkdir static
-    - npm install --legacy-peer-deps
-    - npm run build
+    - pnpm install --frozen-lockfile
+    - (cd react-app && pnpm install --frozen-lockfile)
+    - GENERATE_SOURCEMAP=false pnpm run build
     - cd /src
     - scripts/compress_assets.sh
   beforeSetup:

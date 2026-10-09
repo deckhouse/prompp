@@ -23,7 +23,9 @@ benchmark.txt
 /documentation/examples/remote_storage/example_write_adapter/example_write_adapter
 
 npm_licenses.tar.bz2
-/web/ui/static/react
+/web/ui/static
+# pnpm puts its content store at the root of the mount when run in the devcontainer.
+/.pnpm-store
 
 /vendor
 /.build

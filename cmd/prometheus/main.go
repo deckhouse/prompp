@@ -293,6 +293,11 @@ func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
 }
 
+// EnableNewUI serves the Mantine-based web UI instead of the old React app.
+func (c *flagConfig) EnableNewUI() {
+	c.web.UseOldUI = false
+}
+
 func main() {
 	if os.Getenv("DEBUG") != "" {
 		runtime.SetBlockProfileRate(20)
@@ -327,6 +332,7 @@ func main() {
 		web: web.Options{
 			Registerer: prometheus.DefaultRegisterer,
 			Gatherer:   prometheus.DefaultGatherer,
+			UseOldUI:   true, // PP_CHANGES.md: the new UI is opt-in until it covers what the old one does
 		},
 		promlogConfig:          promlog.Config{},
 		UseBlockManagerStorage: true,

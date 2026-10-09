@@ -15,7 +15,9 @@
 DOCKER_ARCHS ?= amd64 armv7 arm64 ppc64le s390x
 
 UI_PATH = web/ui
+BUILD_UI ?= all
 UI_NODE_MODULES_PATH = $(UI_PATH)/node_modules
+REACT_APP_NODE_MODULES_PATH = $(UI_PATH)/react-app/node_modules
 REACT_APP_NPM_LICENSES_TARBALL = "npm_licenses.tar.bz2"
 
 PROMTOOL = ./promtool
@@ -45,31 +47,53 @@ upgrade-npm-deps:
 	@echo ">> upgrading npm dependencies"
 	./scripts/npm-deps.sh "latest"
 
-.PHONY: ui-bump-version
-ui-bump-version:
-	version=$$(sed s/2/0/ < VERSION) && ./scripts/ui_release.sh --bump-version "$${version}"
-	cd web/ui && npm install
-	git add "./web/ui/package-lock.json" "./**/package.json"
+.PHONY: check-node-version
+check-node-version:
+	@./scripts/check-node-version.sh
 
+# The legacy React app lives outside the web/ui pnpm workspace (see
+# web/ui/react-app/pnpm-workspace.yaml), so every target handles it separately.
 .PHONY: ui-install
-ui-install:
-	cd $(UI_PATH) && npm install
+ui-install: check-node-version
+	cd $(UI_PATH) && pnpm install
+	cd $(UI_PATH)/react-app && pnpm install
 
 .PHONY: ui-build
 ui-build:
-	cd $(UI_PATH) && CI="" npm run build
+ifeq ($(BUILD_UI),mantine)
+	cd $(UI_PATH) && CI="" pnpm run build:mantine-ui
+else
+	cd $(UI_PATH) && CI="" GENERATE_SOURCEMAP=false pnpm run build
+endif
 
 .PHONY: ui-build-module
 ui-build-module:
-	cd $(UI_PATH) && npm run build:module
+	cd $(UI_PATH) && pnpm run build:module
 
+# The legacy React app's Jest suites are not run: they have been broken since
+# before the move to pnpm and the app is going away.
 .PHONY: ui-test
-ui-test:
-	cd $(UI_PATH) && CI=true npm run test
+ui-test: ui-build-module
+	cd $(UI_PATH) && CI=true pnpm run test
 
 .PHONY: ui-lint
 ui-lint:
-	cd $(UI_PATH) && npm run lint
+	cd $(UI_PATH) && pnpm run lint
+	cd $(UI_PATH)/react-app && pnpm run lint
+
+.PHONY: generate-promql-functions
+generate-promql-functions: ui-install
+	@echo ">> generating PromQL function signatures"
+	@cd $(UI_PATH)/mantine-ui/src/promql/tools && $(GO) run ./gen_functions_list > ../functionSignatures.ts
+	@echo ">> generating PromQL function documentation"
+	@cd $(UI_PATH)/mantine-ui/src/promql/tools && $(GO) run ./gen_functions_docs $(CURDIR)/docs/querying/functions.md > ../functionDocs.tsx
+	@echo ">> formatting generated files"
+	@cd $(UI_PATH)/mantine-ui && pnpm exec prettier --write --print-width 120 src/promql/functionSignatures.ts src/promql/functionDocs.tsx
+
+.PHONY: check-generated-promql-functions
+check-generated-promql-functions: generate-promql-functions
+	@echo ">> checking generated PromQL functions"
+	@git diff --exit-code -- $(UI_PATH)/mantine-ui/src/promql/functionSignatures.ts $(UI_PATH)/mantine-ui/src/promql/functionDocs.tsx || (echo "Generated PromQL function files are out of date. Please run 'make generate-promql-functions' and commit the changes." && false)
 
 .PHONY: assets
 assets: ui-install ui-build
@@ -127,7 +151,7 @@ npm_licenses: ui-install
 	@echo ">> bundling npm licenses"
 	rm -f $(REACT_APP_NPM_LICENSES_TARBALL) npm_licenses
 	ln -s . npm_licenses
-	find npm_licenses/$(UI_NODE_MODULES_PATH) -iname "license*" | tar cfj $(REACT_APP_NPM_LICENSES_TARBALL) --files-from=-
+	find npm_licenses/$(UI_NODE_MODULES_PATH) npm_licenses/$(REACT_APP_NODE_MODULES_PATH) -iname "license*" | tar cfj $(REACT_APP_NPM_LICENSES_TARBALL) --files-from=-
 	rm -f npm_licenses
 
 .PHONY: tarball

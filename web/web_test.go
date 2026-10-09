@@ -321,6 +321,40 @@ func TestDebugHandler(t *testing.T) {
 	}
 }
 
+func TestUIRedirects(t *testing.T) {
+	for _, tc := range []struct {
+		useOldUI      bool
+		url, location string
+	}{
+		{true, "/", "/graph"},
+		{false, "/", "/query"},
+		{false, "/graph?g0.expr=up", "/query?g0.expr=up"},
+	} {
+		opts := &Options{
+			RoutePrefix:     "/",
+			ListenAddresses: []string{"somehost:9090"},
+			ExternalURL: &url.URL{
+				Host:   "localhost.localdomain:9090",
+				Scheme: "http",
+			},
+			UseOldUI: tc.useOldUI,
+		}
+		handler := New(nil, opts, nil)
+		handler.SetReady(true)
+
+		w := httptest.NewRecorder()
+
+		req, err := http.NewRequest(http.MethodGet, tc.url, nil)
+
+		require.NoError(t, err)
+
+		handler.router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusFound, w.Code)
+		require.Equal(t, tc.location, w.Header().Get("Location"))
+	}
+}
+
 func TestHTTPMetrics(t *testing.T) {
 	t.Parallel()
 	handler := New(nil, &Options{

@@ -49,6 +49,9 @@ const (
 type FlagConfig interface {
 	// DisableBlockManagerStorage disables the storage of blocks in the block manager.
 	DisableBlockManagerStorage()
+
+	// EnableNewUI serves the Mantine-based web UI instead of the old React app.
+	EnableNewUI()
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -152,6 +155,10 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 		_ = level.Info(logger).Log(
 			msgStr, "Skipping series with no samples instead of throwing an error is enabled.",
 		)
+
+	case "enable_new_ui":
+		cfg.EnableNewUI()
+		_ = level.Info(logger).Log(msgStr, "New web UI is enabled.")
 
 	case "enable_wal_writer_v2":
 		storage.EnableWalWriterV2()
