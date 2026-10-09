@@ -11,7 +11,7 @@ import (
 const (
 	// DefaultLabelReplaceCacheSize is the default capacity of the labelset
 	// cache used to memoize label_replace results.
-	DefaultLabelReplaceCacheSize = 1000
+	DefaultLabelReplaceCacheSize = 65536
 
 	// labelReplaceRegexCacheSize is the fixed capacity of the compiled-regex
 	// cache: regex texts in queries are few and static, so it is not configurable.

@@ -1,5 +1,10 @@
 package promql
 
+// Wiring tests: NewEngine creates the label_replace cache from
+// EngineOpts.LabelReplaceCacheSize, leaves it nil when disabled, and
+// registers its metrics only when a registry is provided. Wrapper behavior
+// is covered in label_replace_cache_test.go.
+
 import (
 	"testing"
 

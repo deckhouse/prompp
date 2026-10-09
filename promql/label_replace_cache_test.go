@@ -1,5 +1,11 @@
 package promql
 
+// Unit tests for the label_replace cache wrapper itself: hit/miss
+// accounting, eviction, gauges, regex compilation and nil-safety. No Engine
+// or query evaluation is involved; Engine wiring lives in
+// label_replace_cache_engine_test.go, query behavior in
+// label_replace_cache_query_test.go.
+
 import (
 	"strconv"
 	"testing"

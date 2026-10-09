@@ -1,5 +1,11 @@
 package promql_test
 
+// Query-level tests for the label_replace cache: key correctness across
+// series, reuse between queries (including subqueries sharing the Engine
+// cache), semantic contracts (DropName, invalid regex, non-matching regex,
+// argument warnings) and the disabled mode. Metric families are covered in
+// label_replace_cache_metrics_test.go.
+
 import (
 	"strings"
 	"testing"
