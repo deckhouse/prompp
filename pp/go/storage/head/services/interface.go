@@ -111,8 +111,8 @@ type HeadInformer interface {
 	// SetActiveStatus sets the [catalog.StatusActive] status by headID.
 	SetActiveStatus(headID string) error
 
-	// SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
-	SetRotatedStatus(headID string) error
+	// SetRotatedStatus sets the [catalog.StatusRotated] status and the time bounds of the [Head] data by headID.
+	SetRotatedStatus(headID string, timeInterval cppbridge.TimeInterval) error
 }
 
 //
@@ -201,8 +201,9 @@ type Shard interface {
 	// DSAllocatedMemory return size of allocated memory for [DataStorage].
 	DSAllocatedMemory() uint64
 
-	// LSSAllocatedMemory return size of allocated memory for labelset storages.
-	LSSAllocatedMemory() uint64
+	// LSSAllocatedMemory return size of allocated memory for the target and the input labelset
+	// storages separately.
+	LSSAllocatedMemory() (target, input uint64)
 
 	// LSSReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss.
 	// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,

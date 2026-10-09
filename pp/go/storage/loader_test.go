@@ -623,7 +623,7 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 	storage.EnableWalWriterV2()
 	s.T().Cleanup(storage.DisableWalWriterV2)
 	sourceHead := s.mustCreateHead(0)
-	headAppender := appender.New(sourceHead, services.CFViaRangeByMask)
+	headAppender := appender.New(sourceHead, services.CFViaRangeByMask, appender.Stats{})
 	state := cppbridge.NewStateV2WithoutLock()
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
 	s.Require().NoError(err)
