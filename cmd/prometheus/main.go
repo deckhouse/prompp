@@ -183,6 +183,9 @@ type flagConfig struct {
 	HeadRetentionTimeout    model.Duration
 	UseBlockManagerStorage  bool
 
+	labelReplaceCacheSize      int
+	labelReplaceRegexCacheSize int
+
 	featureList   []string
 	memlimitRatio float64
 	// These options are extracted from featureList
@@ -291,6 +294,16 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 // DisableBlockManagerStorage disables the storage of blocks in the block manager.
 func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
+}
+
+// SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
+func (c *flagConfig) SetLabelReplaceCacheSize(size int) {
+	c.labelReplaceCacheSize = size
+}
+
+// SetLabelReplaceRegexCacheSize sets the capacity of the label_replace compiled-regex cache.
+func (c *flagConfig) SetLabelReplaceRegexCacheSize(size int) {
+	c.labelReplaceRegexCacheSize = size
 }
 
 func main() {
@@ -1124,10 +1137,12 @@ func main() {
 			NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 			// EnableAtModifier and EnableNegativeOffset have to be
 			// always on for regular PromQL as of Prometheus v2.33.
-			EnableAtModifier:         true,
-			EnableNegativeOffset:     true,
-			EnablePerStepStats:       cfg.enablePerStepStats,
-			EnableDelayedNameRemoval: cfg.promqlEnableDelayedNameRemoval,
+			EnableAtModifier:           true,
+			EnableNegativeOffset:       true,
+			EnablePerStepStats:         cfg.enablePerStepStats,
+			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
+			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
+			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
 		}
 
 		queryEngine = promql.NewEngine(opts)

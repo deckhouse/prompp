@@ -13,9 +13,10 @@ const (
 	// cache used to memoize label_replace results.
 	DefaultLabelReplaceCacheSize = 65536
 
-	// labelReplaceRegexCacheSize is the fixed capacity of the compiled-regex
-	// cache: regex texts in queries are few and static, so it is not configurable.
-	labelReplaceRegexCacheSize = 128
+	// DefaultLabelReplaceRegexCacheSize is the default capacity of the
+	// compiled-regex cache: regex texts in queries are few and static, so the
+	// default is small.
+	DefaultLabelReplaceRegexCacheSize = 128
 
 	// Values of the "cache" metric label distinguishing the two caches.
 	labelReplaceCacheLabelsID = "labels"
@@ -46,16 +47,19 @@ type labelReplaceCache struct {
 	entries   *prometheus.GaugeVec
 }
 
-// newLabelReplaceCache builds the wrapper: size 0 selects
-// DefaultLabelReplaceCacheSize, a negative size disables the cache (nil), and
-// any LRU construction error fails open (nil) instead of panicking.
-func newLabelReplaceCache(size int) *labelReplaceCache {
-	if size < 0 {
+// newLabelReplaceCache builds the wrapper for the two caches. labelSize 0
+// selects DefaultLabelReplaceCacheSize and a negative labelSize disables
+// everything (nil wrapper). regexSize 0 selects DefaultLabelReplaceRegexCacheSize
+// and a negative regexSize disables only the regex cache (compile on every
+// call without storing). LRU construction errors fail open (nil) instead of
+// panicking.
+func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
+	if labelSize < 0 {
 		return nil
 	}
 
-	if size == 0 {
-		size = DefaultLabelReplaceCacheSize
+	if labelSize == 0 {
+		labelSize = DefaultLabelReplaceCacheSize
 	}
 
 	c := &labelReplaceCache{
@@ -88,7 +92,7 @@ func newLabelReplaceCache(size int) *labelReplaceCache {
 	// The eviction callback runs outside the LRU lock, so synchronously
 	// touching metrics and reading Len() is safe. The cache field is read
 	// at callback time, after both constructors below have returned.
-	labelsCache, err := lru.NewWithEvict(size, func(labelReplaceCacheKey, labels.Labels) {
+	labelsCache, err := lru.NewWithEvict(labelSize, func(labelReplaceCacheKey, labels.Labels) {
 		c.evictions.WithLabelValues(labelReplaceCacheLabelsID).Inc()
 		c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
 	})
@@ -98,18 +102,26 @@ func newLabelReplaceCache(size int) *labelReplaceCache {
 
 	c.labelsCache = labelsCache
 
-	regexCache, err := lru.NewWithEvict(labelReplaceRegexCacheSize, func(string, *regexp.Regexp) {
-		c.evictions.WithLabelValues(labelReplaceCacheRegexID).Inc()
-		c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(float64(c.regexCache.Len()))
-	})
-	if err != nil {
-		return nil
+	if regexSize >= 0 {
+		if regexSize == 0 {
+			regexSize = DefaultLabelReplaceRegexCacheSize
+		}
+
+		regexCache, err := lru.NewWithEvict(regexSize, func(string, *regexp.Regexp) {
+			c.evictions.WithLabelValues(labelReplaceCacheRegexID).Inc()
+			c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(float64(c.regexCache.Len()))
+		})
+		if err != nil {
+			return nil
+		}
+
+		c.regexCache = regexCache
 	}
 
-	c.regexCache = regexCache
-
 	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(0)
-	c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(0)
+	if c.regexCache != nil {
+		c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(0)
+	}
 
 	return c
 }
@@ -142,9 +154,11 @@ func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (labels.Labels, 
 
 // getOrCompileRegex returns the compiled and fully anchored regex for
 // regexStr. Compilation errors are returned without caching, so an invalid
-// regex never poisons the cache and always fails the same way.
+// regex never poisons the cache and always fails the same way. When the regex
+// cache is disabled but the wrapper is alive, every call compiles without
+// storing or accounting, preserving eager validation.
 func (c *labelReplaceCache) getOrCompileRegex(regexStr string) (*regexp.Regexp, error) {
-	if c == nil {
+	if c == nil || c.regexCache == nil {
 		return regexp.Compile("^(?:" + regexStr + ")$")
 	}
 

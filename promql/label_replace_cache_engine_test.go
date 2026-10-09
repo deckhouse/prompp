@@ -46,6 +46,19 @@ func (s *NewEngineLabelReplaceCacheSuite) TestNegativeSizeLeavesCacheDisabled() 
 	s.Nil(ng.labelReplaceCache)
 }
 
+func (s *NewEngineLabelReplaceCacheSuite) TestNegativeRegexSizeKeepsCacheWithoutRegexLRU() {
+	// Arrange: labels cache defaults on, regex cache is off.
+	opts := EngineOpts{LabelReplaceCacheSize: 0, LabelReplaceRegexCacheSize: -1}
+
+	// Act.
+	ng := NewEngine(opts)
+
+	// Assert.
+	s.Require().NotNil(ng.labelReplaceCache)
+	s.Equal(0, ng.labelReplaceCache.len())
+	s.Nil(ng.labelReplaceCache.regexCache)
+}
+
 func (s *NewEngineLabelReplaceCacheSuite) TestCacheMetricsRegisteredWithRegistry() {
 	// Arrange.
 	reg := prometheus.NewRegistry()

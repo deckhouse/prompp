@@ -303,6 +303,12 @@ type EngineOpts struct {
 	// 0 selects DefaultLabelReplaceCacheSize; a negative value disables the cache.
 	LabelReplaceCacheSize int
 
+	// LabelReplaceRegexCacheSize is the capacity of the compiled-regex cache
+	// backing label_replace. 0 selects DefaultLabelReplaceRegexCacheSize; a
+	// negative value disables the regex cache (regexes are then compiled on
+	// every call without being stored).
+	LabelReplaceRegexCacheSize int
+
 	// NoStepSubqueryIntervalFn is the default evaluation interval of
 	// a subquery in milliseconds if no step in range vector was specified `[30m:<step>]`.
 	NoStepSubqueryIntervalFn func(rangeMillis int64) int64
@@ -414,7 +420,7 @@ func NewEngine(opts EngineOpts) *Engine {
 		}
 	}
 
-	cache := newLabelReplaceCache(opts.LabelReplaceCacheSize)
+	cache := newLabelReplaceCache(opts.LabelReplaceCacheSize, opts.LabelReplaceRegexCacheSize)
 
 	if opts.Reg != nil {
 		opts.Reg.MustRegister(
