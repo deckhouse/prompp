@@ -47,19 +47,18 @@ type labelReplaceCache struct {
 	entries   *prometheus.GaugeVec
 }
 
-// newLabelReplaceCache builds the wrapper for the two caches. labelSize 0
-// selects DefaultLabelReplaceCacheSize and a negative labelSize disables
-// everything (nil wrapper). regexSize 0 selects DefaultLabelReplaceRegexCacheSize
-// and a negative regexSize disables only the regex cache (compile on every
-// call without storing). LRU construction errors fail open (nil) instead of
-// panicking.
+// newLabelReplaceCache builds the wrapper for the two caches. The sizes
+// combine independently: labelSize 0 selects DefaultLabelReplaceCacheSize
+// and a negative labelSize disables only the labels cache; regexSize 0
+// selects DefaultLabelReplaceRegexCacheSize and a negative regexSize
+// disables only the regex cache (compile on every call without storing).
+// Both sizes negative returns a nil wrapper (everything off); a negative
+// labelSize with a non-negative regexSize still yields a live wrapper so a
+// regex-only configuration stays representable. LRU construction errors fail
+// open (nil) instead of panicking.
 func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
-	if labelSize < 0 {
+	if labelSize < 0 && regexSize < 0 {
 		return nil
-	}
-
-	if labelSize == 0 {
-		labelSize = DefaultLabelReplaceCacheSize
 	}
 
 	c := &labelReplaceCache{
@@ -91,16 +90,23 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 
 	// The eviction callback runs outside the LRU lock, so synchronously
 	// touching metrics and reading Len() is safe. The cache field is read
-	// at callback time, after both constructors below have returned.
-	labelsCache, err := lru.NewWithEvict(labelSize, func(labelReplaceCacheKey, labels.Labels) {
-		c.evictions.WithLabelValues(labelReplaceCacheLabelsID).Inc()
-		c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
-	})
-	if err != nil {
-		return nil
-	}
+	// at callback time, after its constructor has returned.
+	if labelSize >= 0 {
+		if labelSize == 0 {
+			labelSize = DefaultLabelReplaceCacheSize
+		}
 
-	c.labelsCache = labelsCache
+		labelsCache, err := lru.NewWithEvict(labelSize, func(labelReplaceCacheKey, labels.Labels) {
+			c.evictions.WithLabelValues(labelReplaceCacheLabelsID).Inc()
+			c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
+		})
+		if err != nil {
+			return nil
+		}
+
+		c.labelsCache = labelsCache
+		c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(0)
+	}
 
 	if regexSize >= 0 {
 		if regexSize == 0 {
@@ -116,19 +122,16 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 		}
 
 		c.regexCache = regexCache
-	}
-
-	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(0)
-	if c.regexCache != nil {
 		c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(0)
 	}
 
 	return c
 }
 
-// addLabels stores a resulting labelset and refreshes the entries gauge.
+// addLabels stores a resulting labelset and refreshes the entries gauge; it
+// is a noop when the labels cache is disabled but the wrapper is alive.
 func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Labels) {
-	if c == nil {
+	if c == nil || c.labelsCache == nil {
 		return
 	}
 
@@ -136,9 +139,11 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
 }
 
-// getLabels looks up a resulting labelset, accounting a hit or a miss.
+// getLabels looks up a resulting labelset, accounting a hit or a miss. When
+// the labels cache is disabled but the wrapper is alive, every lookup misses
+// without accounting, mirroring the disabled regex cache.
 func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (labels.Labels, bool) {
-	if c == nil {
+	if c == nil || c.labelsCache == nil {
 		return labels.EmptyLabels(), false
 	}
 
@@ -179,9 +184,10 @@ func (c *labelReplaceCache) getOrCompileRegex(regexStr string) (*regexp.Regexp, 
 	return re, nil
 }
 
-// len returns the current number of labelset entries; it is nil-safe.
+// len returns the current number of labelset entries; it reports 0 when the
+// labels cache is disabled and is nil-safe.
 func (c *labelReplaceCache) len() int {
-	if c == nil {
+	if c == nil || c.labelsCache == nil {
 		return 0
 	}
 

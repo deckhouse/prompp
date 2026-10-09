@@ -14,6 +14,13 @@ import (
 	"github.com/prometheus/prometheus/util/teststorage"
 )
 
+// labelReplaceCacheConfig is one labels/regex cache size pair under test.
+type labelReplaceCacheConfig struct {
+	name  string
+	size  int
+	regex int
+}
+
 // BenchmarkLabelReplace measures label_replace over the generated target_info
 // series with a cold (empty) and a warm (prefilled) labelset cache.
 func BenchmarkLabelReplace(b *testing.B) {
@@ -31,56 +38,70 @@ func BenchmarkLabelReplace(b *testing.B) {
 	ts := time.Unix(3600, 0)
 	ctx := context.Background()
 
-	opts := promql.EngineOpts{
+	baseOpts := promql.EngineOpts{
 		Logger:               nil,
 		Reg:                  nil,
 		MaxSamples:           50000000,
 		Timeout:              100 * time.Second,
 		EnableAtModifier:     true,
 		EnableNegativeOffset: true,
-		// The labelset cache must hold the whole query working set so that
-		// the warm variant hits on every series.
-		LabelReplaceCacheSize: 65536,
 	}
 
-	// Cold: every iteration runs on a fresh engine with an empty cache.
-	b.Run("cold", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
+	// Both caches sized to hold the whole query working set so that the warm
+	// variant hits on every series; -1 disables a cache entirely.
+	configs := []labelReplaceCacheConfig{
+		{name: "both_on", size: 65536, regex: 128},
+		{name: "both_off", size: -1, regex: -1},
+		{name: "labels_only", size: 65536, regex: -1},
+		{name: "regex_only", size: -1, regex: 128},
+	}
 
-		for i := 0; i < b.N; i++ {
-			b.StopTimer() // Stop the timer to exclude engine and query setup.
+	for _, cfg := range configs {
+		opts := baseOpts
+		opts.LabelReplaceCacheSize = cfg.size
+		opts.LabelReplaceRegexCacheSize = cfg.regex
+
+		// Cold: every iteration runs on a fresh engine with an empty cache.
+		b.Run(cfg.name+"/cold", func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				b.StopTimer() // Stop the timer to exclude engine and query setup.
+				engine := promql.NewEngine(opts)
+				qry, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
+				require.NoError(b, err)
+
+				b.StartTimer()
+				result := qry.Exec(ctx)
+				require.NoError(b, result.Err)
+				qry.Close()
+			}
+		})
+
+		// Warm: one full pre-run populates the cache before timing starts.
+		// For both_off and regex_only this prefill is a no-op by construction:
+		// nothing is stored or only the compiled regex is cached.
+		b.Run(cfg.name+"/warm", func(b *testing.B) {
 			engine := promql.NewEngine(opts)
-			qry, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
+			prefill, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
 			require.NoError(b, err)
+			require.NoError(b, prefill.Exec(ctx).Err)
+			prefill.Close()
 
-			b.StartTimer()
-			result := qry.Exec(ctx)
-			require.NoError(b, result.Err)
-			qry.Close()
-		}
-	})
+			b.ReportAllocs()
+			b.ResetTimer()
 
-	// Warm: one full pre-run populates the cache before timing starts.
-	b.Run("warm", func(b *testing.B) {
-		engine := promql.NewEngine(opts)
-		prefill, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
-		require.NoError(b, err)
-		require.NoError(b, prefill.Exec(ctx).Err)
-		prefill.Close()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer() // Stop the timer to exclude query setup.
+				qry, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
+				require.NoError(b, err)
 
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			b.StopTimer() // Stop the timer to exclude query setup.
-			qry, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
-			require.NoError(b, err)
-
-			b.StartTimer()
-			result := qry.Exec(ctx)
-			require.NoError(b, result.Err)
-			qry.Close()
-		}
-	})
+				b.StartTimer()
+				result := qry.Exec(ctx)
+				require.NoError(b, result.Err)
+				qry.Close()
+			}
+		})
+	}
 }

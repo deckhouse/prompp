@@ -36,8 +36,8 @@ func (s *NewEngineLabelReplaceCacheSuite) TestZeroSizeCreatesCacheWithDefaultCap
 }
 
 func (s *NewEngineLabelReplaceCacheSuite) TestNegativeSizeLeavesCacheDisabled() {
-	// Arrange.
-	opts := EngineOpts{LabelReplaceCacheSize: -1}
+	// Arrange: both sizes negative disables the whole wrapper.
+	opts := EngineOpts{LabelReplaceCacheSize: -1, LabelReplaceRegexCacheSize: -1}
 
 	// Act.
 	ng := NewEngine(opts)

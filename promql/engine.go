@@ -300,7 +300,10 @@ type EngineOpts struct {
 	LookbackDelta time.Duration
 
 	// LabelReplaceCacheSize is the capacity of the label_replace result cache.
-	// 0 selects DefaultLabelReplaceCacheSize; a negative value disables the cache.
+	// 0 selects DefaultLabelReplaceCacheSize; a negative value disables the
+	// labels cache (with a non-negative LabelReplaceRegexCacheSize the regex
+	// cache keeps working; everything is off only when both sizes are
+	// negative).
 	LabelReplaceCacheSize int
 
 	// LabelReplaceRegexCacheSize is the capacity of the compiled-regex cache

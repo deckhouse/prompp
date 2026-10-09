@@ -90,6 +90,39 @@ func (s *LabelReplaceCacheSuite) TestHitMiss() {
 	s.Equal(1.0, testutil.ToFloat64(s.cache.misses.WithLabelValues(labelReplaceCacheLabelsID)))
 }
 
+func (s *LabelReplaceCacheSuite) TestLabelsCacheDisabledRegexEnabled() {
+	// Arrange: the labels cache is off, only the regex cache is on.
+	c := newLabelReplaceCache(-1, 10)
+	s.Require().NotNil(c)
+	s.Require().Nil(c.labelsCache)
+	key := labelReplaceTestKey(1)
+
+	// Act: a lookup always misses and storing is a noop.
+	_, hitFirst := c.getLabels(key)
+	c.addLabels(key, labels.FromStrings("k", "v"))
+	_, hitAfterAdd := c.getLabels(key)
+
+	// Assert: nothing is stored and no labels metric is ever accounted.
+	s.False(hitFirst, "disabled labels cache must always miss")
+	s.False(hitAfterAdd, "addLabels must be a noop when the labels cache is off")
+	s.Equal(0, c.len())
+	s.Equal(0.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(0.0, testutil.ToFloat64(c.misses.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(0.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(0.0, testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheLabelsID)))
+
+	// Act: the regex cache stays live, the second identical call hits.
+	re1, err := c.getOrCompileRegex("(.+)")
+	s.Require().NoError(err)
+	re2, err := c.getOrCompileRegex("(.+)")
+
+	// Assert: same text yields the identical compiled regex.
+	s.Require().NoError(err)
+	s.Same(re1, re2)
+	s.Equal(1.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheRegexID)))
+	s.Equal(1.0, testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheRegexID)))
+}
+
 func (s *LabelReplaceCacheSuite) TestNil() {
 	// Arrange: a nil wrapper means the cache is disabled.
 	var c *labelReplaceCache
