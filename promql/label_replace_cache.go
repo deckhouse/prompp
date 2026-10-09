@@ -45,6 +45,7 @@ type labelReplaceCache struct {
 	misses    *prometheus.CounterVec
 	evictions *prometheus.CounterVec
 	entries   *prometheus.GaugeVec
+	capacity  *prometheus.GaugeVec
 }
 
 // newLabelReplaceCache builds the wrapper for the two caches. The sizes
@@ -86,6 +87,12 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 			Name:      "label_replace_cache_entries",
 			Help:      "Current number of entries in the label_replace cache.",
 		}, []string{"cache"}),
+		capacity: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "label_replace_cache_capacity",
+			Help:      "Configured capacity of the label_replace cache.",
+		}, []string{"cache"}),
 	}
 
 	// The eviction callback runs outside the LRU lock, so synchronously
@@ -106,6 +113,7 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 
 		c.labelsCache = labelsCache
 		c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(0)
+		c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(labelSize))
 	}
 
 	if regexSize >= 0 {
@@ -123,6 +131,7 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 
 		c.regexCache = regexCache
 		c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(0)
+		c.capacity.WithLabelValues(labelReplaceCacheRegexID).Set(float64(regexSize))
 	}
 
 	return c
@@ -201,5 +210,5 @@ func (c *labelReplaceCache) register(reg prometheus.Registerer) {
 		return
 	}
 
-	reg.MustRegister(c.hits, c.misses, c.evictions, c.entries)
+	reg.MustRegister(c.hits, c.misses, c.evictions, c.entries, c.capacity)
 }

@@ -31,6 +31,18 @@ func (s *LabelReplaceCacheSuite) SetupTest() {
 	s.cache = newLabelReplaceCache(10, 0)
 }
 
+func (s *LabelReplaceCacheSuite) TestCapacityGauge() {
+	// Arrange: explicit labels size, default regex size.
+	c := newLabelReplaceCache(10, 0)
+
+	// Assert: the gauge exposes the configured capacity of each live cache.
+	s.Equal(10.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(
+		float64(DefaultLabelReplaceRegexCacheSize),
+		testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheRegexID)),
+	)
+}
+
 func (s *LabelReplaceCacheSuite) TestEntriesGauge() {
 	// Arrange.
 	entries := s.cache.entries.WithLabelValues(labelReplaceCacheLabelsID)
