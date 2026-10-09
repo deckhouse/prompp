@@ -249,7 +249,7 @@ Outer:
 					multiRef[walSeries.Ref] = mSeries.ref
 				}
 
-				idx := uint64(mSeries.ref) % uint64(concurrency)
+				idx := uint64(mSeries.ref) % uint64(concurrency) // #nosec G115 // no overflow
 				processors[idx].input <- walSubsetProcessorInputItem{walSeriesRef: walSeries.Ref, existingSeries: mSeries}
 			}
 			seriesPool.Put(v)
@@ -277,7 +277,7 @@ Outer:
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					shards[mod] = append(shards[mod], sam)
 				}
 				for i := 0; i < concurrency; i++ {
@@ -332,7 +332,7 @@ Outer:
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					histogramShards[mod] = append(histogramShards[mod], histogramRecord{ref: sam.Ref, t: sam.T, h: sam.H})
 				}
 				for i := 0; i < concurrency; i++ {
@@ -368,7 +368,7 @@ Outer:
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					histogramShards[mod] = append(histogramShards[mod], histogramRecord{ref: sam.Ref, t: sam.T, fh: sam.FH})
 				}
 				for i := 0; i < concurrency; i++ {
@@ -756,7 +756,7 @@ func (h *Head) loadWBL(r *wlog.Reader, syms *labels.SymbolTable, multiRef map[ch
 					if r, ok := multiRef[sam.Ref]; ok {
 						sam.Ref = r
 					}
-					mod := uint64(sam.Ref) % uint64(concurrency)
+					mod := uint64(sam.Ref) % uint64(concurrency) // #nosec G115 // no overflow
 					shards[mod] = append(shards[mod], sam)
 				}
 				for i := 0; i < concurrency; i++ {
@@ -788,7 +788,7 @@ func (h *Head) loadWBL(r *wlog.Reader, syms *labels.SymbolTable, multiRef map[ch
 					mmapMarkerUnknownRefs.Inc()
 					continue
 				}
-				idx := uint64(ms.ref) % uint64(concurrency)
+				idx := uint64(ms.ref) % uint64(concurrency) // #nosec G115 // no overflow
 				processors[idx].input <- wblSubsetProcessorInputItem{mmappedSeries: ms}
 			}
 		default:
@@ -1095,7 +1095,7 @@ func (h *Head) ChunkSnapshot() (*ChunkSnapshotStats, error) {
 	cpdirtmp := cpdir + ".tmp"
 	stats.Dir = cpdir
 
-	if err := os.MkdirAll(cpdirtmp, 0o777); err != nil {
+	if err = os.MkdirAll(cpdirtmp, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return stats, fmt.Errorf("create chunk snapshot dir: %w", err)
 	}
 	cp, err := wlog.New(nil, nil, cpdirtmp, h.wal.CompressionType())
@@ -1127,7 +1127,7 @@ func (h *Head) ChunkSnapshot() (*ChunkSnapshotStats, error) {
 			recs = append(recs, buf[start:])
 			// Flush records in 10 MB increments.
 			if len(buf) > 10*1024*1024 {
-				if err := cp.Log(recs...); err != nil {
+				if err = cp.Log(recs...); err != nil {
 					h.series.locks[i].RUnlock()
 					return stats, fmt.Errorf("flush records: %w", err)
 				}
@@ -1150,7 +1150,7 @@ func (h *Head) ChunkSnapshot() (*ChunkSnapshotStats, error) {
 	}
 	recs = append(recs, rec)
 	// Flush remaining series records and tombstones.
-	if err := cp.Log(recs...); err != nil {
+	if err = cp.Log(recs...); err != nil {
 		return stats, fmt.Errorf("flush records: %w", err)
 	}
 	buf = buf[:0]
@@ -1169,7 +1169,7 @@ func (h *Head) ChunkSnapshot() (*ChunkSnapshotStats, error) {
 		encbuf := encoding.Encbuf{B: buf}
 		encbuf.PutByte(chunkSnapshotRecordTypeExemplars)
 		enc.EncodeExemplarsIntoBuffer(batch, &encbuf)
-		if err := cp.Log(encbuf.Get()); err != nil {
+		if err = cp.Log(encbuf.Get()); err != nil {
 			return fmt.Errorf("log exemplars: %w", err)
 		}
 		buf, batch = buf[:0], batch[:0]
@@ -1177,7 +1177,7 @@ func (h *Head) ChunkSnapshot() (*ChunkSnapshotStats, error) {
 	}
 	err = h.exemplars.IterateExemplars(func(seriesLabels labels.Labels, e exemplar.Exemplar) error {
 		if len(batch) >= maxExemplarsPerRecord {
-			if err := flushExemplars(); err != nil {
+			if err = flushExemplars(); err != nil {
 				return fmt.Errorf("flush exemplars: %w", err)
 			}
 		}
@@ -1344,8 +1344,8 @@ func (h *Head) loadChunkSnapshot() (int, int, map[chunks.HeadSeriesRef]*memSerie
 		return snapIdx, snapOffset, nil, fmt.Errorf("open chunk snapshot: %w", err)
 	}
 	defer func() {
-		if err := sr.Close(); err != nil {
-			level.Warn(h.logger).Log("msg", "error while closing the wal segments reader", "err", err)
+		if errClose := sr.Close(); errClose != nil {
+			level.Warn(h.logger).Log("msg", "error while closing the wal segments reader", "err", errClose)
 		}
 	}()
 
@@ -1378,9 +1378,9 @@ func (h *Head) loadChunkSnapshot() (int, int, map[chunks.HeadSeriesRef]*memSerie
 			localRefSeries := shardedRefSeries[idx]
 
 			for csr := range rc {
-				series, _, err := h.getOrCreateWithID(csr.ref, csr.lset.Hash(), csr.lset)
-				if err != nil {
-					errChan <- err
+				series, _, errCreate := h.getOrCreateWithID(csr.ref, csr.lset.Hash(), csr.lset)
+				if errCreate != nil {
+					errChan <- errCreate
 					return
 				}
 				localRefSeries[csr.ref] = series
@@ -1401,9 +1401,9 @@ func (h *Head) loadChunkSnapshot() (int, int, map[chunks.HeadSeriesRef]*memSerie
 				series.lastHistogramValue = csr.lastHistogramValue
 				series.lastFloatHistogramValue = csr.lastFloatHistogramValue
 
-				app, err := series.headChunks.chunk.Appender()
-				if err != nil {
-					errChan <- err
+				app, errCreate := series.headChunks.chunk.Appender()
+				if errCreate != nil {
+					errChan <- errCreate
 					return
 				}
 				series.app = app
@@ -1418,8 +1418,8 @@ func (h *Head) loadChunkSnapshot() (int, int, map[chunks.HeadSeriesRef]*memSerie
 Outer:
 	for r.Next() {
 		select {
-		case err := <-errChan:
-			errChan <- err
+		case errCh := <-errChan:
+			errChan <- errCh
 			break Outer
 		default:
 		}
@@ -1428,25 +1428,25 @@ Outer:
 		switch rec[0] {
 		case chunkSnapshotRecordTypeSeries:
 			numSeries++
-			csr, err := decodeSeriesFromChunkSnapshot(&dec, rec)
-			if err != nil {
-				loopErr = fmt.Errorf("decode series record: %w", err)
+			csr, errDecode := decodeSeriesFromChunkSnapshot(&dec, rec)
+			if errDecode != nil {
+				loopErr = fmt.Errorf("decode series record: %w", errDecode)
 				break Outer
 			}
 			recordChan <- csr
 
 		case chunkSnapshotRecordTypeTombstones:
-			tr, err := decodeTombstonesSnapshotRecord(rec)
-			if err != nil {
-				loopErr = fmt.Errorf("decode tombstones: %w", err)
+			tr, errDecode := decodeTombstonesSnapshotRecord(rec)
+			if errDecode != nil {
+				loopErr = fmt.Errorf("decode tombstones: %w", errDecode)
 				break Outer
 			}
 
-			if err = tr.Iter(func(ref storage.SeriesRef, ivs tombstones.Intervals) error {
+			if errDecode = tr.Iter(func(ref storage.SeriesRef, ivs tombstones.Intervals) error {
 				h.tombstones.AddInterval(ref, ivs...)
 				return nil
-			}); err != nil {
-				loopErr = fmt.Errorf("iterate tombstones: %w", err)
+			}); errDecode != nil {
+				loopErr = fmt.Errorf("iterate tombstones: %w", errDecode)
 				break Outer
 			}
 

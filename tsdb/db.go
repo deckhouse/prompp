@@ -486,7 +486,7 @@ func (db *DBReadOnly) FlushWAL(dir string) (returnErr error) {
 	}
 	var wbl *wlog.WL
 	wblDir := filepath.Join(db.dir, wlog.WblDirName)
-	if _, err := os.Stat(wblDir); !os.IsNotExist(err) {
+	if _, err = os.Stat(wblDir); !os.IsNotExist(err) {
 		wbl, err = wlog.Open(db.logger, wblDir)
 		if err != nil {
 			return err
@@ -500,14 +500,14 @@ func (db *DBReadOnly) FlushWAL(dir string) (returnErr error) {
 	}
 	defer func() {
 		errs := tsdb_errors.NewMulti(returnErr)
-		if err := head.Close(); err != nil {
-			errs.Add(fmt.Errorf("closing Head: %w", err))
+		if errClose := head.Close(); errClose != nil {
+			errs.Add(fmt.Errorf("closing Head: %w", errClose))
 		}
 		returnErr = errs.Err()
 	}()
 	// Set the min valid time for the ingested wal samples
 	// to be no lower than the maxt of the last block.
-	if err := head.Init(maxBlockTime); err != nil {
+	if err = head.Init(maxBlockTime); err != nil {
 		return fmt.Errorf("read WAL: %w", err)
 	}
 	mint := head.MinTime()
@@ -580,7 +580,7 @@ func (db *DBReadOnly) loadDataAsQueryable(maxt int64) (storage.SampleAndChunkQue
 		}
 		var wbl *wlog.WL
 		wblDir := filepath.Join(db.dir, wlog.WblDirName)
-		if _, err := os.Stat(wblDir); !os.IsNotExist(err) {
+		if _, err = os.Stat(wblDir); !os.IsNotExist(err) {
 			wbl, err = wlog.Open(db.logger, wblDir)
 			if err != nil {
 				return nil, err
@@ -830,7 +830,7 @@ func validateOpts(opts *Options, rngs []int64) (*Options, []int64) {
 // It initializes the lockfile, WAL, compactor, and Head (by replaying the WAL), and runs the database.
 // It is not safe to open more than one DB in the same directory.
 func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs []int64, stats *DBStats) (_ *DB, returnedErr error) {
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
 		return nil, err
 	}
 	if l == nil {
@@ -907,7 +907,7 @@ func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs
 		return nil, err
 	}
 	if !opts.NoLockfile {
-		if err := db.locker.Lock(); err != nil {
+		if err = db.locker.Lock(); err != nil {
 			return nil, err
 		}
 	}
@@ -952,14 +952,14 @@ func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs
 			return nil, err
 		}
 		// Check if there is a WBL on disk, in which case we should replay that data.
-		wblSize, err := fileutil.DirSize(wblDir)
-		if err != nil && !os.IsNotExist(err) {
-			return nil, err
+		wblSize, errDirSize := fileutil.DirSize(wblDir)
+		if errDirSize != nil && !os.IsNotExist(errDirSize) {
+			return nil, errDirSize
 		}
 		if opts.OutOfOrderTimeWindow > 0 || wblSize > 0 {
-			wbl, err = wlog.NewSize(l, r, wblDir, segmentSize, opts.WALCompression)
-			if err != nil {
-				return nil, err
+			wbl, errDirSize = wlog.NewSize(l, r, wblDir, segmentSize, opts.WALCompression)
+			if errDirSize != nil {
+				return nil, errDirSize
 			}
 		}
 	}
@@ -1486,7 +1486,7 @@ func (db *DB) compactHead(head *RangeHead) error {
 		return fmt.Errorf("persist head block: %w", err)
 	}
 
-	if err := db.reloadBlocks(); err != nil {
+	if err = db.reloadBlocks(); err != nil {
 		multiErr := tsdb_errors.NewMulti(fmt.Errorf("reloadBlocks blocks: %w", err))
 		for _, uid := range uids {
 			if errRemoveAll := os.RemoveAll(filepath.Join(db.dir, uid.String())); errRemoveAll != nil {
@@ -1900,12 +1900,14 @@ func (o Overlaps) String() string {
 				(time.Duration((m.MaxTime-m.MinTime)/1000)*time.Second).String(),
 			))
 		}
-		res = append(res, fmt.Sprintf(
-			"[mint: %d, maxt: %d, range: %s, blocks: %d]: %s",
-			r.Min, r.Max,
-			(time.Duration((r.Max-r.Min)/1000)*time.Second).String(),
-			len(overlaps),
-			strings.Join(groups, ", ")),
+		res = append(
+			res, fmt.Sprintf(
+				"[mint: %d, maxt: %d, range: %s, blocks: %d]: %s",
+				r.Min, r.Max,
+				(time.Duration((r.Max-r.Min)/1000)*time.Second).String(),
+				len(overlaps),
+				strings.Join(groups, ", "),
+			),
 		)
 	}
 	return strings.Join(res, "\n")
@@ -2054,7 +2056,7 @@ func (db *DB) EnableCompactions() {
 
 func (db *DB) generateCompactionDelay() time.Duration {
 	// Up to 10% of the head's chunkRange.
-	return time.Duration(rand.Int63n(db.head.chunkRange.Load()/10)) * time.Millisecond
+	return time.Duration(rand.Int63n(db.head.chunkRange.Load()/10)) * time.Millisecond //nolint:gosec // G404: no need for cryptographic strength here
 }
 
 // ForceHeadMMap is intended for use only in tests and benchmarks.
@@ -2141,7 +2143,7 @@ func (db *DB) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		// won't run into a race later since any truncation that comes after will wait on this querier if it overlaps.
 		shouldClose, getNew, newMint := db.head.IsQuerierCollidingWithTruncation(mint, maxt)
 		if shouldClose {
-			if err := headQuerier.Close(); err != nil {
+			if err = headQuerier.Close(); err != nil {
 				return nil, fmt.Errorf("closing head block querier %s: %w", rh, err)
 			}
 			headQuerier = nil
@@ -2218,7 +2220,7 @@ func (db *DB) blockChunkQuerierForRange(mint, maxt int64) (_ []storage.ChunkQuer
 		// won't run into a race later since any truncation that comes after will wait on this querier if it overlaps.
 		shouldClose, getNew, newMint := db.head.IsQuerierCollidingWithTruncation(mint, maxt)
 		if shouldClose {
-			if err := headQuerier.Close(); err != nil {
+			if err = headQuerier.Close(); err != nil {
 				return nil, fmt.Errorf("closing head querier %s: %w", rh, err)
 			}
 			headQuerier = nil
@@ -2339,7 +2341,7 @@ func (db *DB) CleanTombstones() (err error) {
 			// Delete new block if it was created.
 			for _, uid := range uids {
 				dir := filepath.Join(db.Dir(), uid.String())
-				if err := os.RemoveAll(dir); err != nil {
+				if err = os.RemoveAll(dir); err != nil {
 					level.Error(db.logger).Log("msg", "failed to delete block after failed `CleanTombstones`", "dir", dir, "err", err)
 				}
 			}

@@ -139,9 +139,9 @@ func NewHeaderEmpty() *Header {
 // FrameSize - size of Header + size body.
 func (h Header) FrameSize() uint32 {
 	if h.VersionedHeader == nil {
-		return uint32(h.SizeOf())
+		return uint32(h.SizeOf()) // #nosec G115 // no overflow
 	}
-	return uint32(h.SizeOf()) + h.GetSize()
+	return uint32(h.SizeOf()) + h.GetSize() // #nosec G115 // no overflow
 }
 
 // DecodeBinary - decoding from byte with Reader.
@@ -302,7 +302,7 @@ func (h *HeaderV3) DecodeBuffer(buf []byte) {
 	h.chksum = binary.LittleEndian.Uint32(buf[pos : pos+sizeOfUint32])
 	pos += sizeOfUint32
 	// read createdAt
-	h.createdAt = int64(binary.LittleEndian.Uint64(buf[pos : pos+sizeOfUint64]))
+	h.createdAt = int64(binary.LittleEndian.Uint64(buf[pos : pos+sizeOfUint64])) // #nosec G115 // no overflow
 }
 
 // EncodeBinary - encoding to byte.
@@ -334,7 +334,7 @@ func (h HeaderV3) EncodeToBuffer(buf []byte) {
 	offset += sizeOfUint32
 
 	// write createdAt and move offset
-	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(h.createdAt))
+	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(h.createdAt)) // #nosec G115 // no overflow
 }
 
 // GetChksum - return checksum.
@@ -453,7 +453,7 @@ func (h *HeaderV4) DecodeBuffer(buf []byte) {
 	h.chksum = binary.LittleEndian.Uint32(buf[pos : pos+sizeOfUint32])
 	pos += sizeOfUint32
 	// read createdAt
-	h.createdAt = int64(binary.LittleEndian.Uint64(buf[pos : pos+sizeOfUint64]))
+	h.createdAt = int64(binary.LittleEndian.Uint64(buf[pos : pos+sizeOfUint64])) // #nosec G115 // no overflow
 }
 
 // EncodeBinary - encoding to byte.
@@ -479,7 +479,7 @@ func (h HeaderV4) EncodeToBuffer(buf []byte) {
 	offset += sizeOfUint32
 
 	// write createdAt and move offset
-	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(h.createdAt))
+	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(h.createdAt)) // #nosec G115 // no overflow
 }
 
 // GetChksum - return checksum.

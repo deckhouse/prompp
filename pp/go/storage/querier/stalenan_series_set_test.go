@@ -80,11 +80,11 @@ func (s *StaleNaNSeriesSetTestSuite) TestSuccess() {
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, false)
 
 	// Assert
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	for i := range expected {
 		s.Require().Equal(expected[i].Labels, actual[i].Labels)
 
-		s.Require().Equal(len(expected[i].Samples), len(actual[i].Samples))
+		s.Require().Len(actual[i].Samples, len(expected[i].Samples))
 		for j := range expected[i].Samples {
 			s.Require().Equal(expected[i].Samples[j].Timestamp, actual[i].Samples[j].Timestamp)
 			s.Require().True(value.IsStaleNaN(actual[i].Samples[j].Value))

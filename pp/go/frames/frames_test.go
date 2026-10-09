@@ -135,9 +135,9 @@ func (s *FrameSuite) TearDownTest() {
 
 func (s *FrameSuite) TestFrame() {
 	var (
-		version   uint8            = 4
-		typeFrame frames.TypeFrame = frames.AuthType
-		shardID   uint16           = 1
+		version   uint8  = 4
+		typeFrame        = frames.AuthType
+		shardID   uint16 = 1
 	)
 	body, err := frames.NewAuthMsg(
 		uuid.NewString(),
@@ -613,7 +613,7 @@ func (s *FrameSuite) TestRefillMsg() {
 	err := rm.UnmarshalBinary(b)
 	s.Require().NoError(err)
 
-	s.Require().Equal(len(wm.Messages), len(rm.Messages))
+	s.Require().Len(rm.Messages, len(wm.Messages))
 
 	for i := range wm.Messages {
 		s.Require().Equal(wm.Messages[i], rm.Messages[i])
@@ -633,7 +633,7 @@ func (s *FrameSuite) TestRefillMsgQuick() {
 		err := rm.UnmarshalBinary(b)
 		s.Require().NoError(err)
 
-		if !s.Equal(len(wm.Messages), len(rm.Messages)) {
+		if !s.Len(rm.Messages, len(wm.Messages)) {
 			return false
 		}
 

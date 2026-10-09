@@ -114,7 +114,7 @@ func (d *robotDiscovery) refresh(context.Context) ([]*targetgroup.Group, error) 
 			hetznerLabelRobotProduct:   model.LabelValue(server.Server.Product),
 			hetznerLabelRobotCancelled: model.LabelValue(strconv.FormatBool(server.Server.Canceled)),
 
-			model.AddressLabel: model.LabelValue(net.JoinHostPort(server.Server.ServerIP, strconv.FormatUint(uint64(d.port), 10))),
+			model.AddressLabel: model.LabelValue(net.JoinHostPort(server.Server.ServerIP, strconv.FormatUint(uint64(d.port), 10))), // #nosec G115 // no overflow
 		}
 		for _, subnet := range server.Server.Subnet {
 			ip := net.ParseIP(subnet.IP)

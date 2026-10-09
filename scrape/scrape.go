@@ -343,6 +343,7 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 	sp.targetMtx.Lock()
 
 	forcedErr := sp.refreshTargetLimitErr()
+	var err error
 	for fp, oldLoop := range sp.loops {
 		var cache *scrapeCache
 		if oc := oldLoop.getCache(); reuseCache && oc != nil {
@@ -353,7 +354,7 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 		}
 
 		t := sp.activeTargets[fp]
-		interval, timeout, err := t.intervalAndTimeout(interval, timeout)
+		interval, timeout, err = t.intervalAndTimeout(interval, timeout)
 		var (
 			s = &targetScraper{
 				Target:               t,
@@ -431,11 +432,12 @@ func (sp *scrapePool) Sync(tgs []*targetgroup.Group) {
 	sp.targetMtx.Lock()
 	var all []*Target
 	var targets []*Target
+	var failures []error
 	lb := labels.NewBuilderWithSymbolTable(sp.symbolTable)
 	sp.droppedTargets = []*Target{}
 	sp.droppedTargetsCount = 0
 	for _, tg := range tgs {
-		targets, failures := TargetsFromGroup(tg, sp.config, sp.noDefaultPort, targets, lb)
+		targets, failures = TargetsFromGroup(tg, sp.config, sp.noDefaultPort, targets, lb)
 		for _, err := range failures {
 			level.Error(sp.logger).Log("msg", "Creating target failed", "err", err)
 		}

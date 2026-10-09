@@ -66,7 +66,7 @@ func writeHeader(writer io.Writer, header storage.BlockHeader) error {
 		return fmt.Errorf("failed to write file version: %w", err)
 	}
 
-	tenantIDLen := uint8(len(header.TenantID))
+	tenantIDLen := uint8(len(header.TenantID)) // #nosec G115 // no overflow
 	if err = binary.Write(writer, binary.LittleEndian, tenantIDLen); err != nil {
 		return fmt.Errorf("failed to write tenant id length: %w", err)
 	}

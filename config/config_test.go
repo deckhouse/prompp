@@ -1612,8 +1612,6 @@ func TestElideSecrets(t *testing.T) {
 	require.NoError(t, err)
 	yamlConfig := string(config)
 
-	fmt.Println(yamlConfig)
-
 	matches := secretRe.FindAllStringIndex(yamlConfig, -1)
 	require.Len(t, matches, 25, "wrong number of secret matches found")
 	require.NotContains(t, yamlConfig, "mysecret",
@@ -2092,7 +2090,7 @@ var expectedErrors = []struct {
 	},
 	{
 		filename: "uyuni_no_server.bad.yml",
-		errMsg:   "Uyuni SD configuration requires server host",
+		errMsg:   "uyuni SD configuration requires server host",
 	},
 	{
 		filename: "uyuni_token_file.bad.yml",

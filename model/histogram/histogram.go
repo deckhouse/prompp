@@ -550,8 +550,8 @@ func (c *cumulativeBucketIterator) Next() bool {
 		}
 
 		c.currUpper = c.h.ZeroThreshold
-		c.currCount = int64(c.h.ZeroCount)
-		c.currCumulativeCount = uint64(c.currCount)
+		c.currCount = int64(c.h.ZeroCount)          // #nosec G115 // no overflow
+		c.currCumulativeCount = uint64(c.currCount) // #nosec G115 // no overflow
 		return true
 	}
 
@@ -577,7 +577,7 @@ func (c *cumulativeBucketIterator) Next() bool {
 	}
 
 	c.currCount += c.h.PositiveBuckets[c.posBucketsIdx]
-	c.currCumulativeCount += uint64(c.currCount)
+	c.currCumulativeCount += uint64(c.currCount) // #nosec G115 // no overflow
 	c.currUpper = getBound(c.currIdx, c.h.Schema, c.h.CustomValues)
 
 	c.posBucketsIdx++

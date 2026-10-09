@@ -26,7 +26,7 @@ func NewWriteFrame(
 	typeFrame TypeFrame,
 	payload WritePayload,
 ) (*WriteFrame, error) {
-	h, err := NewHeader(version, contentVersion, typeFrame, uint32(payload.Size()))
+	h, err := NewHeader(version, contentVersion, typeFrame, uint32(payload.Size())) // #nosec G115 // no overflow
 	if err != nil {
 		return nil, err
 	}
