@@ -133,8 +133,9 @@ func (s *Shard) LSS() *LSS {
 	return s.lss
 }
 
-// LSSAllocatedMemory return size of allocated memory for labelset storages.
-func (s *Shard) LSSAllocatedMemory() uint64 {
+// LSSAllocatedMemory return size of allocated memory for the target and the input labelset
+// storages separately.
+func (s *Shard) LSSAllocatedMemory() (target, input uint64) {
 	return s.lss.AllocatedMemory()
 }
 

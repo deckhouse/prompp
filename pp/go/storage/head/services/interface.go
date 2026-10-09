@@ -201,8 +201,9 @@ type Shard interface {
 	// DSAllocatedMemory return size of allocated memory for [DataStorage].
 	DSAllocatedMemory() uint64
 
-	// LSSAllocatedMemory return size of allocated memory for labelset storages.
-	LSSAllocatedMemory() uint64
+	// LSSAllocatedMemory return size of allocated memory for the target and the input labelset
+	// storages separately.
+	LSSAllocatedMemory() (target, input uint64)
 
 	// LSSReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss.
 	// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
