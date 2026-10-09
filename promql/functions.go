@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/facette/natsort"
-	"github.com/grafana/regexp"
 	"github.com/prometheus/common/model"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -1465,7 +1464,9 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 		regexStr = stringFromArg(args[4])
 	)
 
-	regex, err := regexp.Compile("^(?:" + regexStr + ")$")
+	// Resolve the regex before evaluating args[0] so that an invalid
+	// regexStr fails even when every series would hit the labelset cache.
+	regex, err := ev.labelReplaceCache.getOrCompileRegex(regexStr)
 	if err != nil {
 		panic(fmt.Errorf("invalid regular expression in label_replace(): %s", regexStr))
 	}
@@ -1479,6 +1480,21 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 
 	for i, el := range matrix {
 		srcVal := el.Metric.Get(src)
+		key := labelReplaceCacheKey{
+			dst: dst, repl: repl, src: src, regexStr: regexStr, srcVal: srcVal, baseHash: el.Metric.Hash(),
+		}
+
+		if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
+			matrix[i].Metric = cached
+			if dst == model.MetricNameLabel {
+				matrix[i].DropName = false
+			} else {
+				matrix[i].DropName = el.DropName
+			}
+
+			continue
+		}
+
 		indexes := regex.FindStringSubmatchIndex(srcVal)
 		if indexes != nil { // Only replace when regexp matches.
 			res := regex.ExpandString([]byte{}, repl, srcVal, indexes)
@@ -1490,6 +1506,8 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 			} else {
 				matrix[i].DropName = el.DropName
 			}
+
+			ev.labelReplaceCache.addLabels(key, matrix[i].Metric)
 		}
 	}
 	if matrix.ContainsSameLabelset() {
@@ -1764,7 +1782,7 @@ func (s vectorByValueHeap) Swap(i, j int) {
 }
 
 func (s *vectorByValueHeap) Push(x interface{}) {
-	*s = append(*s, *(x.(*Sample)))
+	*s = append(*s, *x.(*Sample))
 }
 
 func (s *vectorByValueHeap) Pop() interface{} {
@@ -1803,7 +1821,7 @@ func (s vectorByReverseValueHeap) Swap(i, j int) {
 }
 
 func (s *vectorByReverseValueHeap) Push(x interface{}) {
-	*s = append(*s, *(x.(*Sample)))
+	*s = append(*s, *x.(*Sample))
 }
 
 func (s *vectorByReverseValueHeap) Pop() interface{} {
