@@ -1480,7 +1480,9 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 
 	for i, el := range matrix {
 		srcVal := el.Metric.Get(src)
-		key := labelReplaceCacheKey{dst: dst, repl: repl, src: src, regexStr: regexStr, srcVal: srcVal, baseHash: el.Metric.Hash()}
+		key := labelReplaceCacheKey{
+			dst: dst, repl: repl, src: src, regexStr: regexStr, srcVal: srcVal, baseHash: el.Metric.Hash(),
+		}
 
 		if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
 			matrix[i].Metric = cached
@@ -1780,7 +1782,7 @@ func (s vectorByValueHeap) Swap(i, j int) {
 }
 
 func (s *vectorByValueHeap) Push(x interface{}) {
-	*s = append(*s, *(x.(*Sample)))
+	*s = append(*s, *x.(*Sample))
 }
 
 func (s *vectorByValueHeap) Pop() interface{} {
@@ -1819,7 +1821,7 @@ func (s vectorByReverseValueHeap) Swap(i, j int) {
 }
 
 func (s *vectorByReverseValueHeap) Push(x interface{}) {
-	*s = append(*s, *(x.(*Sample)))
+	*s = append(*s, *x.(*Sample))
 }
 
 func (s *vectorByReverseValueHeap) Pop() interface{} {
