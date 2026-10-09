@@ -652,7 +652,7 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   math.MaxInt64,
 		LabelSetIDs:      []uint32{0},
-	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
+	})
 	record, err := s.catalog.Get(loadedHead.ID())
 	s.Require().NoError(err)
 	segmentsByShard := make([]uint16, 0, numberOfExhaustedSegments+storagetest.NumberOfShards)

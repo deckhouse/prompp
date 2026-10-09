@@ -14,6 +14,7 @@ using head::kUnlimitedLsIdBatchSize;
 using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
+using PromPP::Primitives::Timestamp;
 using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::serialization::DataSerializer;
