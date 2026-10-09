@@ -41,11 +41,14 @@ RUN set -eux; \
     ln -sf /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format; \
     rm -rf /var/lib/apt/lists/*
 
-# Node.js 22 from NodeSource. Debian's own npm on trixie/sid is broken
+# Node.js 24 (web/ui/.nvmrc) from NodeSource. Debian's own npm on trixie/sid is broken
 # ("LRU is not a constructor": npm's semver uses the system node-lru-cache v11).
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
+# The web UI is installed with pnpm.
+ARG PNPM_VERSION=11.28.5
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -; \
     apt-get install -y --no-install-recommends nodejs; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*; \
+    npm install -g pnpm@${PNPM_VERSION}
 
 # Bazel
 ARG BAZEL_VERSION=7.4.1

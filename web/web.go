@@ -413,7 +413,7 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 	router.Get("/consoles/*filepath", readyf(h.consoles))
 
 	serveReactApp := func(w http.ResponseWriter, r *http.Request) {
-		f, err := ui.Assets.Open("/static/react/index.html")
+		f, err := ui.Assets.Open("/static/react-app/index.html")
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Error opening React index.html: %v", err)
@@ -451,7 +451,7 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 	// The favicon and manifest are bundled as part of the React app, but we want to serve
 	// them on the root.
 	for _, p := range []string{"/favicon.ico", "/manifest.json"} {
-		assetPath := "/static/react" + p
+		assetPath := "/static/react-app" + p
 		router.Get(p, func(w http.ResponseWriter, r *http.Request) {
 			r.URL.Path = assetPath
 			fs := server.StaticFileServer(ui.Assets)
@@ -461,7 +461,7 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 
 	// Static files required by the React app.
 	router.Get("/static/*filepath", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = path.Join("/static/react/static", route.Param(r.Context(), "filepath"))
+		r.URL.Path = path.Join("/static/react-app/static", route.Param(r.Context(), "filepath"))
 		fs := server.StaticFileServer(ui.Assets)
 		fs.ServeHTTP(w, r)
 	})

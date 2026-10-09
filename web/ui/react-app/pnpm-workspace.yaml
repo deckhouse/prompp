@@ -1,0 +1,21 @@
+# The legacy React app is kept out of the web/ui pnpm workspace: it still runs on
+# Create React App and consumes @prometheus-io/codemirror-promql from the registry.
+# It goes away once the Mantine UI covers everything it does.
+packages: []
+# Create React App expects the flat node_modules layout npm produces.
+nodeLinker: hoisted
+strictDepBuilds: true
+allowBuilds:
+  core-js: true
+  core-js-pure: true
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+blockExoticSubdeps: true
+# Create React App is frozen on vulnerable transitive versions; force patched ones.
+overrides:
+  "@tootallnate/once": ^2.0.1
+  nth-check: ^2.1.1
+  postcss: ^8.5.23
+  serialize-javascript: ^7.0.5
+  svgo: ^2.8.4
+  underscore: ^1.13.8
