@@ -126,11 +126,21 @@ func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {
 		return nil, 0, errors.Join(fmt.Errorf("read log file version: %w", err), fh.Close())
 	}
 
+	if version == LogFileVersionV3 && fh.Size() == fileSizeV3 {
+		if err = openV3FileHandler(fh); err != nil {
+			return nil, 0, errors.Join(err, fh.Close())
+		}
+	}
+
 	return fh, version, nil
 }
 
 // createFileHandlerByVersion create [FileHandler] by version.
 func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, error) {
+	if version == LogFileVersionV3 {
+		return createV3FileHandler(filePath)
+	}
+
 	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, err

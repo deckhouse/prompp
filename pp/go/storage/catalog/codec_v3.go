@@ -16,6 +16,9 @@ import (
 const (
 	// RecordVersionV3 version 3 of the record.
 	RecordVersionV3 uint8 = 3
+	// recordVersionEndV3 zero byte marking the end of the journal of the log file version 3,
+	// not a record version.
+	recordVersionEndV3 uint8 = 0
 
 	recordIDOffsetV3       = 1
 	recordLengthOffsetV3   = recordIDOffsetV3 + len(uuid.UUID{})
@@ -171,11 +174,15 @@ func NewDecoderV3() *DecoderV3 {
 	return &DecoderV3{}
 }
 
-// DecodeFrom decode [SerializedRecord] from [io.Reader]. Returns [io.EOF] if the reader has no more records
-// and [io.ErrUnexpectedEOF] if the frame is incomplete.
+// DecodeFrom decode [SerializedRecord] from [io.Reader]. Returns [io.EOF] if the reader has no more records,
+// if the journal terminator is reached and [io.ErrUnexpectedEOF] if the frame is incomplete.
 func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) error {
 	if _, err := io.ReadFull(reader, d.buffer[:1]); err != nil {
 		return err
+	}
+
+	if d.buffer[0] == recordVersionEndV3 {
+		return io.EOF
 	}
 
 	if d.buffer[0] != RecordVersionV3 {

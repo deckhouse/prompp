@@ -153,6 +153,10 @@ func newFileLogByVersion(filePath string, version uint64) (*FileLog, error) {
 
 // Close closes the [FileHandler], rendering it unusable for I/O.
 func (fl *FileLog) Close() error {
+	if fl.isFixedV3() {
+		return errors.Join(updateV3ActiveUsed(fl.file), fl.file.Close())
+	}
+
 	return fl.file.Close()
 }
 
@@ -185,7 +189,45 @@ func (fl *FileLog) Size() int {
 
 // Write [SerializedRecord] to [FileLog].
 func (fl *FileLog) Write(sr *SerializedRecord) error {
+	if fl.isFixedV3() {
+		return fl.appendV3(sr)
+	}
+
 	return fl.encoder.EncodeTo(fl.file, sr)
+}
+
+// appendV3 appends the frame of the record version 3 with the journal terminator in a single
+// fixed-size write: the frame overwrites the terminator at the write offset, the new terminator
+// is written in the same call, and the write offset stops at the new terminator, so the next
+// append overwrites it. The file size does not change.
+func (fl *FileLog) appendV3(sr *SerializedRecord) error {
+	encoder, ok := fl.encoder.(*EncoderV3)
+	if !ok {
+		return fmt.Errorf("v3: unexpected encoder %T", fl.encoder)
+	}
+
+	frame, err := appendFrameV3(encoder.buffer[:0], sr)
+	if err != nil {
+		return fmt.Errorf("v3: encode record: %w", err)
+	}
+
+	frameLen := len(frame)
+	writeBuf := append(frame, recordVersionEndV3)
+
+	if err = fl.file.WriteFixed(writeBuf); err != nil {
+		return fmt.Errorf("v3: write record: %w", err)
+	}
+
+	encoder.buffer = writeBuf[:frameLen]
+	fl.file.SetWriteOffset(fl.file.writeOffset + int64(frameLen))
+
+	return nil
+}
+
+// isFixedV3 reports whether the log is the fixed-size layout of the version 3: migrated and
+// rewritten version 3 files keep the growing legacy layout and the v1/v2 write path.
+func (fl *FileLog) isFixedV3() bool {
+	return fl.version == LogFileVersionV3 && fl.file.fixedSize
 }
 
 func writeSwapAndSwitchAtFilePath(

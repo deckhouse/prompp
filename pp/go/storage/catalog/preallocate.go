@@ -1,0 +1,32 @@
+package catalog
+
+import (
+	"errors"
+	"fmt"
+	"os"
+)
+
+// errPreallocUnsupported is returned when the platform or filesystem cannot preallocate a file;
+// the caller falls back to writing zeros.
+var errPreallocUnsupported = errors.New("fallocate unsupported")
+
+// writeZeros extends the file up to size bytes by writing zero chunks of at most 1 MiB.
+func writeZeros(f *os.File, size int64) error {
+	const chunkSize = 1 << 20
+
+	buf := make([]byte, chunkSize)
+	for offset := int64(0); offset < size; {
+		n := int64(chunkSize)
+		if size-offset < n {
+			n = size - offset
+		}
+
+		if _, err := f.WriteAt(buf[:n], offset); err != nil {
+			return fmt.Errorf("write zeros: %w", err)
+		}
+
+		offset += n
+	}
+
+	return nil
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 )
 
 //
@@ -17,6 +18,13 @@ type FileHandler struct {
 	size        int
 	readOffset  int64
 	writeOffset int64
+	// fixedSize marks a preallocated fixed-size file (the log file version 3): writes only
+	// overwrite already allocated bytes and never change the accounted size.
+	fixedSize bool
+	// refuseGrowth makes a positioned write whose end offset exceeds the accounted size fail
+	// with ENOSPC instead of touching the file; a test seam for proving that fixed-size v3
+	// writes never need disk space, false in production.
+	refuseGrowth bool
 }
 
 // NewFileHandler init new [FileHandler].
@@ -75,6 +83,11 @@ func (fh *FileHandler) SetReadOffset(offset int64) {
 	fh.readOffset = offset
 }
 
+// SetWriteOffset set offset for write file.
+func (fh *FileHandler) SetWriteOffset(offset int64) {
+	fh.writeOffset = offset
+}
+
 // Size returns current size of file.
 func (fh *FileHandler) Size() int {
 	return fh.size
@@ -99,4 +112,34 @@ func (fh *FileHandler) Write(p []byte) (n int, err error) {
 	fh.size += n
 	fh.writeOffset += int64(n)
 	return n, nil
+}
+
+// WriteFixed writes len(b) bytes at the current write offset of a fixed-size file: the write only
+// overwrites already allocated bytes, so neither the accounted size nor the write offset change.
+// The file is synced before returning.
+func (fh *FileHandler) WriteFixed(p []byte) error {
+	if !fh.fixedSize {
+		return fmt.Errorf("write fixed: %s is not a fixed-size file", fh.file.Name())
+	}
+
+	if _, err := fh.writeAt(p, fh.writeOffset); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+
+	if err := fh.Sync(); err != nil {
+		return fmt.Errorf("sync file: %w", err)
+	}
+
+	return nil
+}
+
+// writeAt writes p at off through the growth-refusal seam: with [FileHandler.refuseGrowth]
+// armed, a write whose end offset exceeds the accounted size fails with ENOSPC without
+// touching the file, while an overwrite inside [0, size) goes through to the file.
+func (fh *FileHandler) writeAt(p []byte, off int64) (int, error) {
+	if fh.refuseGrowth && off+int64(len(p)) > int64(fh.size) {
+		return 0, fmt.Errorf("write %d bytes at %d exceeds size %d: %w", len(p), off, fh.size, syscall.ENOSPC)
+	}
+
+	return fh.file.WriteAt(p, off)
 }
