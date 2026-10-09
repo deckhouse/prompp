@@ -103,7 +103,7 @@ func (s *LabelReplaceCacheSuite) TestNil() {
 	s.Equal(0, c.len())
 
 	re, err := c.getOrCompileRegex("a+")
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.True(re.MatchString("aaa"))
 	s.False(re.MatchString("b"))
 
@@ -111,7 +111,7 @@ func (s *LabelReplaceCacheSuite) TestNil() {
 	reg := prometheus.NewRegistry()
 	c.register(reg)
 	mfs, err := reg.Gather()
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Empty(mfs, "nil cache must not register any metrics")
 }
 
@@ -123,11 +123,11 @@ func (s *LabelReplaceCacheSuite) TestRegex() {
 
 	// Act: first call compiles, the second one is served from the cache.
 	re1, err := s.cache.getOrCompileRegex("(.+)")
-	s.NoError(err)
+	s.Require().NoError(err)
 	re2, err := s.cache.getOrCompileRegex("(.+)")
 
 	// Assert: same text yields the identical compiled regex.
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Same(re1, re2)
 	s.Equal(1.0, testutil.ToFloat64(misses))
 	s.Equal(1.0, testutil.ToFloat64(hits))
@@ -135,9 +135,9 @@ func (s *LabelReplaceCacheSuite) TestRegex() {
 
 	// Act: an invalid regex fails twice and never grows the cache.
 	_, err = s.cache.getOrCompileRegex("a(")
-	s.Error(err)
+	s.Require().Error(err)
 	_, err = s.cache.getOrCompileRegex("a(")
-	s.Error(err)
+	s.Require().Error(err)
 
 	// Assert.
 	s.Equal(3.0, testutil.ToFloat64(misses))
@@ -154,11 +154,11 @@ func (s *LabelReplaceCacheSuite) TestRegexCacheDisabled() {
 
 	// Act: a valid regex still compiles and matches, an invalid one still errors.
 	re, err := c.getOrCompileRegex("a+")
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.True(re.MatchString("aaa"))
 	s.False(re.MatchString("b"))
 	_, err = c.getOrCompileRegex("a(")
-	s.Error(err)
+	s.Require().Error(err)
 
 	// Assert: nothing is stored and no regex metric is ever accounted.
 	s.Equal(0.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheRegexID)))
@@ -174,9 +174,9 @@ func (s *LabelReplaceCacheSuite) TestRegexCacheEviction() {
 
 	// Act: two distinct regexes exceed the configured capacity.
 	_, err := c.getOrCompileRegex("a+")
-	s.NoError(err)
+	s.Require().NoError(err)
 	_, err = c.getOrCompileRegex("b+")
-	s.NoError(err)
+	s.Require().NoError(err)
 
 	// Assert.
 	s.Equal(1.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheRegexID)))
