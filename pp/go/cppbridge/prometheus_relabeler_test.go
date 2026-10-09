@@ -338,6 +338,66 @@ func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 	runtime.KeepAlive(shardsRelabeledSeries)
 }
 
+func (s *PerGoroutineRelabelerSuite) TestRelabelingInvalidatesCachesAllocatedMemory() {
+	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
+	s.Require().NoError(err)
+
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetRelabelerOptions(&s.options)
+	state.SetStatelessRelabeler(statelessRelabeler)
+	state.Reconfigure(0, s.numberOfShards, nil)
+
+	// memoize the allocated memory of the empty caches
+	emptyCachesMemory := state.CachesAllocatedMemory()
+	s.Equal(emptyCachesMemory, state.CachesAllocatedMemory())
+
+	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
+	_, _, err = pgr.Relabeling(
+		s.baseCtx,
+		s.inputLss,
+		s.targetLss,
+		state,
+		h,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
+	)
+	s.Require().NoError(err)
+
+	// the relabeling has dropped a series, so the cache has grown and the memo is invalidated
+	s.Greater(state.CachesAllocatedMemory(), emptyCachesMemory)
+
+	runtime.KeepAlive(shardsInnerSeries)
+	runtime.KeepAlive(shardsRelabeledSeries)
+}
+
 func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
 	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
 		Timeseries: []prompb.TimeSeries{
@@ -1575,6 +1635,25 @@ func (s *StateV2Suite) stateReconfigureTrackStaleness(state *cppbridge.StateV2) 
 	s.NotNil(state.StaleNansStateByShard(0))
 }
 
+func (s *StateV2Suite) TestStateCachesAllocatedMemory() {
+	s.stateCachesAllocatedMemory(cppbridge.NewStateV2())
+	s.stateCachesAllocatedMemory(cppbridge.NewStateV2WithoutLock())
+}
+
+func (s *StateV2Suite) stateCachesAllocatedMemory(state *cppbridge.StateV2) {
+	const numberOfShards = 3
+	// an empty cache takes 16 bytes, see RelabelerSuite.TestCacheAllocatedMemory
+	const emptyCacheMemory = 16
+
+	s.Zero(state.CachesAllocatedMemory())
+
+	state.Reconfigure(0, numberOfShards, nil)
+	s.Equal(uint64(numberOfShards*emptyCacheMemory), state.CachesAllocatedMemory())
+
+	state.Reconfigure(1, 1, nil)
+	s.Equal(uint64(emptyCacheMemory), state.CachesAllocatedMemory())
+}
+
 func (s *StateV2Suite) TestStatelessRelabeler() {
 	s.statelessRelabeler(cppbridge.NewStateV2())
 	s.statelessRelabeler(cppbridge.NewStateV2WithoutLock())
@@ -1611,6 +1690,7 @@ func (s *StateV2Suite) TestStateTransitionReconfigure() {
 func (s *StateV2Suite) stateTransitionReconfigure(state *cppbridge.StateV2) {
 	state.Reconfigure(0, 1, nil)
 
+	s.Zero(state.CachesAllocatedMemory())
 	s.False(state.TrackStaleness())
 	s.Panics(func() { state.CacheByShard(0) })
 	s.Panics(func() { state.StaleNansStateByShard(0) })

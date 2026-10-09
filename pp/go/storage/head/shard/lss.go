@@ -30,16 +30,17 @@ func NewLSS() *LSS {
 	}
 }
 
-// AllocatedMemory return size of allocated memory for labelset storages.
-func (l *LSS) AllocatedMemory() uint64 {
+// AllocatedMemory return size of allocated memory for the target and the input labelset storages
+// separately. The input lss is dropped by [LSS.ReleaseIngestionStructures], its memory is 0 then.
+func (l *LSS) AllocatedMemory() (target, input uint64) {
 	l.locker.RLock()
-	am := l.target.AllocatedMemory()
+	target = l.target.AllocatedMemory()
 	if l.input != nil {
-		am += l.input.AllocatedMemory()
+		input = l.input.AllocatedMemory()
 	}
 	l.locker.RUnlock()
 
-	return am
+	return target, input
 }
 
 // CopyAddedSeriesTo copy the label sets from the source lss to the destination lss that were added source lss.

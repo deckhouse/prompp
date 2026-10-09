@@ -10,6 +10,7 @@ type scrapeMetrics struct {
 	reg prometheus.Registerer
 	// Used by Manager.
 	targetMetadataCache     *MetadataMetricsCollector
+	relabelingCaches        *RelabelingCachesMetricsCollector
 	targetScrapePools       prometheus.Counter
 	targetScrapePoolsFailed prometheus.Counter
 
@@ -64,6 +65,18 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		),
 		// TargetsGatherer should be set later, because it's a circular dependency.
 		// newScrapeMetrics() is called by NewManager(), while also TargetsGatherer is the new Manager.
+	}
+
+	sm.relabelingCaches = &RelabelingCachesMetricsCollector{
+		CacheBytes: prometheus.NewDesc(
+			"prompp_scrape_relabeling_caches_bytes",
+			"The number of bytes that are currently used by the relabeling mapping caches "+
+				"of the target states",
+			[]string{"scrape_job", "state"},
+			nil,
+		),
+		// Gatherer should be set later, because it's a circular dependency.
+		// newScrapeMetrics() is called by NewManager(), while also Gatherer is the new Manager.
 	}
 
 	sm.targetScrapePools = prometheus.NewCounter(
@@ -228,6 +241,7 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 	for _, collector := range []prometheus.Collector{
 		// Used by Manager.
 		sm.targetMetadataCache,
+		sm.relabelingCaches,
 		sm.targetScrapePools,
 		sm.targetScrapePoolsFailed,
 		// Used by scrapePool.
@@ -269,9 +283,14 @@ func (sm *scrapeMetrics) setTargetMetadataCacheGatherer(gatherer TargetsGatherer
 	sm.targetMetadataCache.TargetsGatherer = gatherer
 }
 
+func (sm *scrapeMetrics) setRelabelingCachesGatherer(gatherer RelabelingCachesGatherer) {
+	sm.relabelingCaches.Gatherer = gatherer
+}
+
 // Unregister unregisters all metrics.
 func (sm *scrapeMetrics) Unregister() {
 	sm.reg.Unregister(sm.targetMetadataCache)
+	sm.reg.Unregister(sm.relabelingCaches)
 	sm.reg.Unregister(sm.targetScrapePools)
 	sm.reg.Unregister(sm.targetScrapePoolsFailed)
 	sm.reg.Unregister(sm.targetReloadIntervalLength)
@@ -341,4 +360,48 @@ func (mc *MetadataMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 			tset,
 		)
 	}
+}
+
+// RelabelingCachesGatherer gathers the memory allocated by the relabeling mapping caches
+// of the target states.
+type RelabelingCachesGatherer interface {
+	// RangeRelabelingCachesAllocatedMemory calls fn for every scrape job with the size of memory
+	// allocated by the relabeling mapping caches of its scrape and report states.
+	RangeRelabelingCachesAllocatedMemory(fn func(scrapeJob string, scrapeState, reportState uint64))
+}
+
+// RelabelingCachesMetricsCollector is a custom collector for the relabeling mapping caches metrics.
+type RelabelingCachesMetricsCollector struct {
+	CacheBytes *prometheus.Desc
+	Gatherer   RelabelingCachesGatherer
+}
+
+// Describe sends the metrics descriptions to the channel.
+func (mc *RelabelingCachesMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- mc.CacheBytes
+}
+
+// Collect creates and sends the metrics for the relabeling mapping caches.
+func (mc *RelabelingCachesMetricsCollector) Collect(ch chan<- prometheus.Metric) {
+	if mc.Gatherer == nil {
+		return
+	}
+
+	mc.Gatherer.RangeRelabelingCachesAllocatedMemory(func(scrapeJob string, scrapeState, reportState uint64) {
+		ch <- prometheus.MustNewConstMetric(
+			mc.CacheBytes,
+			prometheus.GaugeValue,
+			float64(scrapeState),
+			scrapeJob,
+			"scrape",
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			mc.CacheBytes,
+			prometheus.GaugeValue,
+			float64(reportState),
+			scrapeJob,
+			"report",
+		)
+	})
 }
