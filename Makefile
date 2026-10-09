@@ -47,13 +47,6 @@ upgrade-npm-deps:
 	@echo ">> upgrading npm dependencies"
 	./scripts/npm-deps.sh "latest"
 
-.PHONY: ui-bump-version
-ui-bump-version:
-	version=$$(sed s/2/0/ < VERSION) && ./scripts/ui_release.sh --bump-version "$${version}"
-	cd $(UI_PATH) && pnpm install
-	cd $(UI_PATH)/react-app && pnpm install
-	git add "./web/ui/pnpm-lock.yaml" "./web/ui/react-app/pnpm-lock.yaml" "./**/package.json"
-
 .PHONY: check-node-version
 check-node-version:
 	@./scripts/check-node-version.sh
@@ -87,6 +80,20 @@ ui-test: ui-build-module
 ui-lint:
 	cd $(UI_PATH) && pnpm run lint
 	cd $(UI_PATH)/react-app && pnpm run lint
+
+.PHONY: generate-promql-functions
+generate-promql-functions: ui-install
+	@echo ">> generating PromQL function signatures"
+	@cd $(UI_PATH)/mantine-ui/src/promql/tools && $(GO) run ./gen_functions_list > ../functionSignatures.ts
+	@echo ">> generating PromQL function documentation"
+	@cd $(UI_PATH)/mantine-ui/src/promql/tools && $(GO) run ./gen_functions_docs $(CURDIR)/docs/querying/functions.md > ../functionDocs.tsx
+	@echo ">> formatting generated files"
+	@cd $(UI_PATH)/mantine-ui && pnpm exec prettier --write --print-width 120 src/promql/functionSignatures.ts src/promql/functionDocs.tsx
+
+.PHONY: check-generated-promql-functions
+check-generated-promql-functions: generate-promql-functions
+	@echo ">> checking generated PromQL functions"
+	@git diff --exit-code -- $(UI_PATH)/mantine-ui/src/promql/functionSignatures.ts $(UI_PATH)/mantine-ui/src/promql/functionDocs.tsx || (echo "Generated PromQL function files are out of date. Please run 'make generate-promql-functions' and commit the changes." && false)
 
 .PHONY: assets
 assets: ui-install ui-build

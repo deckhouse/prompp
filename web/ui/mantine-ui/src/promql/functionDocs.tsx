@@ -4,16 +4,16 @@ const funcDocs: Record<string, React.ReactNode> = {
   abs: (
     <>
       <p>
-        <code>abs(v instant-vector)</code> returns a vector containing all float samples in the input vector converted
-        to their absolute value. Histogram samples in the input vector are ignored silently.
+        <code>abs(v instant-vector)</code> returns the input vector with all sample values converted to their absolute
+        value.
       </p>
     </>
   ),
   absent: (
     <>
       <p>
-        <code>absent(v instant-vector)</code> returns an empty vector if the vector passed to it has any elements (float
-        samples or histogram samples) and a 1-element vector with the value 1 if the vector passed to it has no
+        <code>absent(v instant-vector)</code> returns an empty vector if the vector passed to it has any elements
+        (floats or native histograms) and a 1-element vector with the value 1 if the vector passed to it has no
         elements.
       </p>
 
@@ -39,8 +39,8 @@ const funcDocs: Record<string, React.ReactNode> = {
     <>
       <p>
         <code>absent_over_time(v range-vector)</code> returns an empty vector if the range vector passed to it has any
-        elements (float samples or histogram samples) and a 1-element vector with the value 1 if the range vector passed
-        to it has no elements.
+        elements (floats or native histograms) and a 1-element vector with the value 1 if the range vector passed to it
+        has no elements.
       </p>
 
       <p>
@@ -66,56 +66,56 @@ const funcDocs: Record<string, React.ReactNode> = {
   ),
   acos: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -123,69 +123,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   acosh: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -193,69 +193,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   asin: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -263,69 +263,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   asinh: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -333,69 +333,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   atan: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -403,69 +403,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   atanh: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -473,13 +473,13 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
@@ -493,39 +493,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -540,22 +535,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -564,41 +545,19 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   ceil: (
     <>
       <p>
-        <code>ceil(v instant-vector)</code> returns a vector containing all float samples in the input vector rounded up
-        to the nearest integer value greater than or equal to their original value. Histogram samples in the input
-        vector are ignored silently.
+        <code>ceil(v instant-vector)</code> rounds the sample values of all elements in <code>v</code> up to the nearest
+        integer value greater than or equal to v.
       </p>
 
       <ul>
@@ -621,18 +580,16 @@ const funcDocs: Record<string, React.ReactNode> = {
     <>
       <p>
         For each input time series, <code>changes(v range-vector)</code> returns the number of times its value has
-        changed within the provided time range as an instant vector. A float sample followed by a histogram sample, or
-        vice versa, counts as a change. A counter histogram sample followed by a gauge histogram sample with otherwise
-        exactly the same values, or vice versa, does not count as a change.
+        changed within the provided time range as an instant vector.
       </p>
     </>
   ),
   clamp: (
     <>
       <p>
-        <code>clamp(v instant-vector, min scalar, max scalar)</code> clamps the values of all float samples in{" "}
-        <code>v</code> to have a lower limit of <code>min</code> and an upper limit of
-        <code>max</code>. Histogram samples in the input vector are ignored silently.
+        <code>clamp(v instant-vector, min scalar, max scalar)</code>
+        clamps the sample values of all elements in <code>v</code> to have a lower limit of <code>min</code> and an
+        upper limit of <code>max</code>.
       </p>
 
       <p>Special cases:</p>
@@ -642,10 +599,7 @@ const funcDocs: Record<string, React.ReactNode> = {
           Return an empty vector if <code>min &gt; max</code>
         </li>
         <li>
-          The function returns <code>NaN</code> if <code>min</code> or <code>max</code> is <code>NaN</code>
-        </li>
-        <li>
-          Float samples are unchanged if <code>min</code> is <code>-Inf</code> and <code>max</code> is <code>+Inf</code>
+          Return <code>NaN</code> if <code>min</code> or <code>max</code> is <code>NaN</code>
         </li>
       </ul>
     </>
@@ -653,99 +607,71 @@ const funcDocs: Record<string, React.ReactNode> = {
   clamp_max: (
     <>
       <p>
-        <code>clamp_max(v instant-vector, max scalar)</code> clamps the values of all float samples in <code>v</code> to
-        have an upper limit of <code>max</code>. Histogram samples in the input vector are ignored silently.
+        <code>clamp_max(v instant-vector, max scalar)</code> clamps the sample values of all elements in <code>v</code>{" "}
+        to have an upper limit of <code>max</code>.
       </p>
-
-      <p>Special cases:</p>
-
-      <ul>
-        <li>
-          The function returns <code>NaN</code> if the <code>max</code> argument is <code>NaN</code>
-        </li>
-        <li>
-          Float samples are unchanged if <code>max</code> is <code>+Inf</code>
-        </li>
-        <li>
-          All float samples are set to <code>-Inf</code> if <code>max</code> is <code>-Inf</code>
-        </li>
-      </ul>
     </>
   ),
   clamp_min: (
     <>
       <p>
-        <code>clamp_min(v instant-vector, min scalar)</code> clamps the values of all float samples in <code>v</code> to
-        have a lower limit of <code>min</code>. Histogram samples in the input vector are ignored silently.
+        <code>clamp_min(v instant-vector, min scalar)</code> clamps the sample values of all elements in <code>v</code>{" "}
+        to have a lower limit of <code>min</code>.
       </p>
-
-      <p>Special cases:</p>
-
-      <ul>
-        <li>
-          The function returns <code>NaN</code> if the <code>min</code> argument is <code>NaN</code>
-        </li>
-        <li>
-          Float samples are unchanged if <code>min</code> is <code>-Inf</code>
-        </li>
-        <li>
-          All float samples are set to <code>+Inf</code> if <code>min</code> is <code>+Inf</code>
-        </li>
-      </ul>
     </>
   ),
   cos: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -753,69 +679,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   cosh: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -823,13 +749,13 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
@@ -843,39 +769,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -890,22 +811,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -914,127 +821,98 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   day_of_month: (
     <>
       <p>
-        <code>day_of_month(v=vector(time()) instant-vector)</code> interprets float samples in
-        <code>v</code> as timestamps (number of seconds since January 1, 1970 UTC) and returns the day of the month (in
-        UTC) for each of those timestamps. Returned values are from 1 to 31. Histogram samples in the input vector are
-        ignored silently.
+        <code>day_of_month(v=vector(time()) instant-vector)</code> returns the day of the month for each of the given
+        times in UTC. Returned values are from 1 to 31.
       </p>
     </>
   ),
   day_of_week: (
     <>
       <p>
-        <code>day_of_week(v=vector(time()) instant-vector)</code> interprets float samples in <code>v</code>
-        as timestamps (number of seconds since January 1, 1970 UTC) and returns the day of the week (in UTC) for each of
-        those timestamps. Returned values are from 0 to 6, where 0 means Sunday etc. Histogram samples in the input
-        vector are ignored silently.
+        <code>day_of_week(v=vector(time()) instant-vector)</code> returns the day of the week for each of the given
+        times in UTC. Returned values are from 0 to 6, where 0 means Sunday etc.
       </p>
     </>
   ),
   day_of_year: (
     <>
       <p>
-        <code>day_of_year(v=vector(time()) instant-vector)</code> interprets float samples in <code>v</code>
-        as timestamps (number of seconds since January 1, 1970 UTC) and returns the day of the year (in UTC) for each of
-        those timestamps. Returned values are from 1 to 365 for non-leap years, and 1 to 366 in leap years. Histogram
-        samples in the input vector are ignored silently.
+        <code>day_of_year(v=vector(time()) instant-vector)</code> returns the day of the year for each of the given
+        times in UTC. Returned values are from 1 to 365 for non-leap years, and 1 to 366 in leap years.
       </p>
     </>
   ),
   days_in_month: (
     <>
       <p>
-        <code>days_in_month(v=vector(time()) instant-vector)</code> interprets float samples in
-        <code>v</code> as timestamps (number of seconds since January 1, 1970 UTC) and returns the number of days in the
-        month of each of those timestamps (in UTC). Returned values are from 28 to 31. Histogram samples in the input
-        vector are ignored silently.
+        <code>days_in_month(v=vector(time()) instant-vector)</code> returns number of days in the month for each of the
+        given times in UTC. Returned values are from 28 to 31.
       </p>
     </>
   ),
   deg: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -1042,13 +920,13 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
@@ -1071,87 +949,39 @@ const funcDocs: Record<string, React.ReactNode> = {
       </pre>
 
       <p>
-        <code>delta</code> acts on histogram samples by calculating a new histogram where each component (sum and count
+        <code>delta</code> acts on native histograms by calculating a new histogram where each component (sum and count
         of observations, buckets) is the difference between the respective component in the first and last native
-        histogram in <code>v</code>. However, each element in <code>v</code> that contains a mix of float samples and
-        histogram samples within the range will be omitted from the result vector, flagged by a warn-level annotation.
+        histogram in
+        <code>v</code>. However, each element in <code>v</code> that contains a mix of float and native histogram
+        samples within the range, will be missing from the result vector.
       </p>
 
       <p>
-        <code>delta</code> should only be used with gauges (for both floats and histograms).
+        <code>delta</code> should only be used with gauges and native histograms where the components behave like gauges
+        (so-called gauge histograms).
       </p>
     </>
   ),
   deriv: (
     <>
       <p>
-        <code>deriv(v range-vector)</code> calculates the per-second derivative of each float time series in the range
-        vector <code>v</code>, using{" "}
+        <code>deriv(v range-vector)</code> calculates the per-second derivative of the time series in a range vector{" "}
+        <code>v</code>, using{" "}
         <a href="https://en.wikipedia.org/wiki/Simple_linear_regression">simple linear regression</a>. The range vector
-        must have at least two float samples in order to perform the calculation. When <code>+Inf</code> or{" "}
+        must have at least two samples in order to perform the calculation. When <code>+Inf</code> or
         <code>-Inf</code> are found in the range vector, the slope and offset value calculated will be <code>NaN</code>.
       </p>
 
       <p>
-        <code>deriv</code> should only be used with gauges and only works for float samples. Elements in the range
-        vector that contain only histogram samples are ignored entirely. For elements that contain a mix of float and
-        histogram samples, only the float samples are used as input, which is flagged by an info-level annotation.
-      </p>
-    </>
-  ),
-  double_exponential_smoothing: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>double_exponential_smoothing(v range-vector, sf scalar, tf scalar)</code> produces a smoothed value for
-        each float time series in the range in <code>v</code>. The lower the smoothing factor <code>sf</code>, the more
-        importance is given to old data. The higher the trend factor <code>tf</code>, the more trends in the data is
-        considered. Both <code>sf</code> and
-        <code>tf</code> must be between 0 and 1. For additional details, refer to{" "}
-        <a href="https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc433.htm">
-          NIST Engineering Statistics Handbook
-        </a>
-        . In Prometheus V2 this function was called <code>holt_winters</code>. This caused confusion since the
-        Holt-Winters method usually refers to triple exponential smoothing. Double exponential smoothing as implemented
-        here is also referred to as &ldquo;Holt Linear&rdquo;.
-      </p>
-
-      <p>
-        <code>double_exponential_smoothing</code> should only be used with gauges and only works for float samples.
-        Elements in the range vector that contain only histogram samples are ignored entirely. For elements that contain
-        a mix of float and histogram samples, only the float samples are used as input, which is flagged by an
-        info-level annotation.
-      </p>
-    </>
-  ),
-  end: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>end()</code> returns the end timestamp of the current query range evaluation as the number of seconds
-        since January 1, 1970 UTC. For instant queries, this is equal to the evaluation timestamp.
+        <code>deriv</code> should only be used with gauges.
       </p>
     </>
   ),
   exp: (
     <>
       <p>
-        <code>exp(v instant-vector)</code> calculates the exponential function for all float samples in <code>v</code>.
-        Histogram samples are ignored silently. Special cases are:
+        <code>exp(v instant-vector)</code> calculates the exponential function for all elements in <code>v</code>.
+        Special cases are:
       </p>
 
       <ul>
@@ -1173,39 +1003,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -1220,22 +1045,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -1244,41 +1055,19 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   floor: (
     <>
       <p>
-        <code>floor(v instant-vector)</code> returns a vector containing all float samples in the input vector rounded
-        down to the nearest integer value smaller than or equal to their original value. Histogram samples in the input
-        vector are ignored silently.
+        <code>floor(v instant-vector)</code> rounds the sample values of all elements in <code>v</code> down to the
+        nearest integer value smaller than or equal to v.
       </p>
 
       <ul>
@@ -1300,8 +1089,15 @@ const funcDocs: Record<string, React.ReactNode> = {
   histogram_avg: (
     <>
       <p>
-        <code>histogram_avg(v instant-vector)</code> returns the arithmetic average of observed values stored in each
-        native histogram sample in <code>v</code>. Float samples are ignored and do not show up in the returned vector.
+        <em>
+          This function only acts on native histograms, which are an experimental feature. The behavior of this function
+          may change in future versions of Prometheus, including its removal from PromQL.
+        </em>
+      </p>
+
+      <p>
+        <code>histogram_avg(v instant-vector)</code> returns the arithmetic average of observed values stored in a
+        native histogram. Samples that are not native histograms are ignored and do not show up in the returned vector.
       </p>
 
       <p>
@@ -1327,18 +1123,25 @@ const funcDocs: Record<string, React.ReactNode> = {
   histogram_count: (
     <>
       <p>
-        <code>histogram_count(v instant-vector)</code> returns the count of observations stored in each native histogram
-        sample in <code>v</code>. Float samples are ignored and do not show up in the returned vector.
+        <em>
+          Both functions only act on native histograms, which are an experimental feature. The behavior of these
+          functions may change in future versions of Prometheus, including their removal from PromQL.
+        </em>
       </p>
 
       <p>
-        Similarly, <code>histogram_sum(v instant-vector)</code> returns the sum of observations stored in each native
-        histogram sample.
+        <code>histogram_count(v instant-vector)</code> returns the count of observations stored in a native histogram.
+        Samples that are not native histograms are ignored and do not show up in the returned vector.
+      </p>
+
+      <p>
+        Similarly, <code>histogram_sum(v instant-vector)</code> returns the sum of observations stored in a native
+        histogram.
       </p>
 
       <p>
         Use <code>histogram_count</code> in the following way to calculate a rate of observations (in this case
-        corresponding to “requests per second”) from a series of histogram samples:
+        corresponding to “requests per second”) from a native histogram:
       </p>
 
       <pre>
@@ -1349,23 +1152,16 @@ const funcDocs: Record<string, React.ReactNode> = {
   histogram_fraction: (
     <>
       <p>
-        <code>histogram_fraction(lower scalar, upper scalar, b instant-vector)</code> returns the estimated fraction of
-        observations between the provided lower and upper values for each classic or native histogram contained in{" "}
-        <code>b</code>. Float samples in <code>b</code> are considered the counts of observations in each bucket of one
-        or more classic histograms, while native histogram samples in <code>b</code> are treated each individually as a
-        separate histogram. This works in the same way as for <code>histogram_quantile()</code>. (See there for more
-        details.)
+        <em>
+          This function only acts on native histograms, which are an experimental feature. The behavior of this function
+          may change in future versions of Prometheus, including its removal from PromQL.
+        </em>
       </p>
 
       <p>
-        If the provided lower and upper values do not coincide with bucket boundaries, the calculated fraction is an
-        estimate, using the same interpolation method as for
-        <code>histogram_quantile()</code>. (See there for more details.) Especially with classic histograms, it is easy
-        to accidentally pick lower or upper values that are very far away from any bucket boundary, leading to large
-        margins of error. Rather than using <code>histogram_fraction()</code> with classic histograms, it is often a
-        more robust approach to directly act on the bucket series when calculating fractions. See the
-        <a href="https://prometheus.io/docs/practices/histograms/#apdex-score">calculation of the Apdex score</a>
-        as a typical example.
+        For a native histogram, <code>histogram_fraction(lower scalar, upper scalar, v instant-vector)</code> returns
+        the estimated fraction of observations between the provided lower and upper values. Samples that are not native
+        histograms are ignored and do not show up in the returned vector.
       </p>
 
       <p>
@@ -1392,17 +1188,10 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         Whether the provided boundaries are inclusive or exclusive is only relevant if the provided boundaries are
         precisely aligned with bucket boundaries in the underlying native histogram. In this case, the behavior depends
-        on the schema definition of the histogram. (The usual standard exponential schemas all feature inclusive upper
-        boundaries and exclusive lower boundaries for positive values, and vice versa for negative values.) Without a
-        precise alignment of boundaries, the function uses interpolation to estimate the fraction. With the resulting
-        uncertainty, it becomes irrelevant if the boundaries are inclusive or exclusive.
-      </p>
-
-      <p>
-        Special case for native histograms with standard exponential buckets:
-        <code>NaN</code> observations are considered outside of any buckets in this case.
-        <code>histogram_fraction(-Inf, +Inf, b)</code> effectively returns the fraction of non-<code>NaN</code>{" "}
-        observations and may therefore be less than 1.
+        on the schema definition of the histogram. The currently supported schemas all feature inclusive upper
+        boundaries and exclusive lower boundaries for positive values (and vice versa for negative values). Without a
+        precise alignment of boundaries, the function uses linear interpolation to estimate the fraction. With the
+        resulting uncertainty, it becomes irrelevant if the boundaries are inclusive or exclusive.
       </p>
     </>
   ),
@@ -1416,6 +1205,13 @@ const funcDocs: Record<string, React.ReactNode> = {
       </p>
 
       <p>
+        <em>
+          Note that native histograms are an experimental feature. The behavior of this function when dealing with
+          native histograms may change in future versions of Prometheus.
+        </em>
+      </p>
+
+      <p>
         The float samples in <code>b</code> are considered the counts of observations in each bucket of one or more
         classic histograms. Each float sample must have a label
         <code>le</code> where the label value denotes the inclusive upper bound of the bucket. (Float samples without
@@ -1426,7 +1222,7 @@ const funcDocs: Record<string, React.ReactNode> = {
       </p>
 
       <p>
-        The (native) histogram samples in <code>b</code> are treated each individually as a separate histogram to
+        The native histogram samples in <code>b</code> are treated each individually as a separate histogram to
         calculate the quantile from.
       </p>
 
@@ -1491,18 +1287,8 @@ const funcDocs: Record<string, React.ReactNode> = {
       </pre>
 
       <p>
-        In the (common) case that a quantile value does not coincide with a bucket boundary, the{" "}
-        <code>histogram_quantile()</code> function interpolates the quantile value within the bucket the quantile value
-        falls into. For classic histograms, for native histograms with custom bucket boundaries, and for the zero bucket
-        of other native histograms, it assumes a uniform distribution of observations within the bucket (also called{" "}
-        <em>linear interpolation</em>). For the non-zero-buckets of native histograms with a standard exponential
-        bucketing schema, the interpolation is done under the assumption that the samples within the bucket are
-        distributed in a way that they would uniformly populate the buckets in a hypothetical histogram with higher
-        resolution. (This is also called <em>exponential interpolation</em>. See the{" "}
-        <a href="https://prometheus.io/docs/specs/native_histograms/#interpolation-within-a-bucket">
-          native histogram specification
-        </a>
-        for more details.)
+        The <code>histogram_quantile()</code> function interpolates quantile values by assuming a linear distribution
+        within a bucket.
       </p>
 
       <p>
@@ -1510,48 +1296,14 @@ const funcDocs: Record<string, React.ReactNode> = {
         For φ &gt; 1, <code>+Inf</code> is returned. For φ = <code>NaN</code>, <code>NaN</code> is returned.
       </p>
 
-      <p>Special cases for classic histograms:</p>
-
-      <ul>
-        <li>
-          If <code>b</code> contains fewer than two buckets, <code>NaN</code> is returned.
-        </li>
-        <li>
-          The highest bucket must have an upper bound of <code>+Inf</code>. (Otherwise, <code>NaN</code> is returned.)
-        </li>
-        <li>
-          If a quantile is located in the highest bucket, the upper bound of the second highest bucket is returned.
-        </li>
-        <li>
-          The lower limit of the lowest bucket is assumed to be 0 if the upper bound of that bucket is greater than 0.
-          In that case, the usual linear interpolation is applied within that bucket. Otherwise, the upper bound of the
-          lowest bucket is returned for quantiles located in the lowest bucket.
-        </li>
-      </ul>
-
-      <p>Special cases for native histograms:</p>
-
-      <ul>
-        <li>
-          If a native histogram with standard exponential buckets has <code>NaN</code>
-          observations and the quantile falls into one of the existing exponential buckets, the result is skewed towards
-          higher values due to <code>NaN</code>
-          observations treated as <code>+Inf</code>. This is flagged with an info level annotation.
-        </li>
-        <li>
-          If a native histogram with standard exponential buckets has <code>NaN</code>
-          observations and the quantile falls above all of the existing exponential buckets, <code>NaN</code> is
-          returned. This is flagged with an info level annotation.
-        </li>
-        <li>
-          A zero bucket with finite width is assumed to contain no negative observations if the histogram has
-          observations in positive buckets, but none in negative buckets.
-        </li>
-        <li>
-          A zero bucket with finite width is assumed to contain no positive observations if the histogram has
-          observations in negative buckets, but none in positive buckets.
-        </li>
-      </ul>
+      <p>
+        The following is only relevant for classic histograms: If <code>b</code> contains fewer than two buckets,{" "}
+        <code>NaN</code> is returned. The highest bucket must have an upper bound of <code>+Inf</code>. (Otherwise,{" "}
+        <code>NaN</code> is returned.) If a quantile is located in the highest bucket, the upper bound of the second
+        highest bucket is returned. A lower limit of the lowest bucket is assumed to be 0 if the upper bound of that
+        bucket is greater than 0. In that case, the usual linear interpolation is applied within that bucket. Otherwise,
+        the upper bound of the lowest bucket is returned for quantiles located in the lowest bucket.
+      </p>
 
       <p>
         You can use <code>histogram_quantile(0, v instant-vector)</code> to get the estimated minimum value stored in a
@@ -1575,92 +1327,82 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <p>
         However, floating point precision issues (e.g. small discrepancies introduced by computing of buckets with{" "}
-        <code>sum(rate(...))</code>) or invalid data might violate these assumptions. In that case,{" "}
-        <code>histogram_quantile</code> would be unable to return meaningful results. To mitigate the issue,{" "}
+        <code>sum(rate(...))</code>) or invalid data might violate these assumptions. In that case,
+        <code>histogram_quantile</code> would be unable to return meaningful results. To mitigate the issue,
         <code>histogram_quantile</code> assumes that tiny relative differences between consecutive buckets are happening
         because of floating point precision errors and ignores them. (The threshold to ignore a difference between two
         buckets is a trillionth (1e-12) of the sum of both buckets.) Furthermore, if there are non-monotonic bucket
         counts even after this adjustment, they are increased to the value of the previous buckets to enforce
-        monotonicity. The latter is evidence for an actual issue with the input data and is therefore flagged by an
-        info-level annotation reading <code>input to histogram_quantile needed to be fixed for monotonicity</code>. If
-        you encounter this annotation, you should find and remove the source of the invalid data.
+        monotonicity. The latter is evidence for an actual issue with the input data and is therefore flagged with an
+        informational annotation reading <code>input to histogram_quantile needed to be fixed for monotonicity</code>.
+        If you encounter this annotation, you should find and remove the source of the invalid data.
       </p>
-    </>
-  ),
-  histogram_quantiles: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>histogram_quantiles(v instant-vector, quantile_label string, φ_1 scalar, φ_2 scalar, ...)</code>{" "}
-        calculates multiple (between 1 and 10) φ-quantiles (0 ≤ φ ≤ 1) from a{" "}
-        <a href="https://prometheus.io/docs/concepts/metric_types/#histogram">classic histogram</a> or from a native
-        histogram. Quantile calculation works the same way as in <code>histogram_quantile()</code>. The second argument
-        (a string) specifies the label name that is used to identify different quantiles in the query result.
-      </p>
-
-      <pre>
-        <code>
-          histogram_quantiles(sum(rate(foo[1m])), &quot;quantile&quot;, 0.9, 0.99) # =&gt; {"{"}quantile=&quot;0.9&quot;
-          {"}"} 123
-          {"{"}quantile=&quot;0.99&quot;{"}"} 128
-        </code>
-      </pre>
     </>
   ),
   histogram_stddev: (
     <>
       <p>
-        <code>histogram_stddev(v instant-vector)</code> returns the estimated standard deviation of observations for
-        each native histogram sample in <code>v</code>. For this estimation, all observations in a bucket are assumed to
-        have the value of the mean of the bucket boundaries. For the zero bucket and for buckets with custom boundaries,
-        the arithmetic mean is used. For the usual exponential buckets, the geometric mean is used. Float samples are
-        ignored and do not show up in the returned vector.
+        <em>
+          Both functions only act on native histograms, which are an experimental feature. The behavior of these
+          functions may change in future versions of Prometheus, including their removal from PromQL.
+        </em>
       </p>
 
       <p>
-        Similarly, <code>histogram_stdvar(v instant-vector)</code> returns the estimated variance of observations for
-        each native histogram sample in <code>v</code>.
+        <code>histogram_stddev(v instant-vector)</code> returns the estimated standard deviation of observations in a
+        native histogram, based on the geometric mean of the buckets where the observations lie. Samples that are not
+        native histograms are ignored and do not show up in the returned vector.
+      </p>
+
+      <p>
+        Similarly, <code>histogram_stdvar(v instant-vector)</code> returns the estimated standard variance of
+        observations in a native histogram.
       </p>
     </>
   ),
   histogram_stdvar: (
     <>
       <p>
-        <code>histogram_stddev(v instant-vector)</code> returns the estimated standard deviation of observations for
-        each native histogram sample in <code>v</code>. For this estimation, all observations in a bucket are assumed to
-        have the value of the mean of the bucket boundaries. For the zero bucket and for buckets with custom boundaries,
-        the arithmetic mean is used. For the usual exponential buckets, the geometric mean is used. Float samples are
-        ignored and do not show up in the returned vector.
+        <em>
+          Both functions only act on native histograms, which are an experimental feature. The behavior of these
+          functions may change in future versions of Prometheus, including their removal from PromQL.
+        </em>
       </p>
 
       <p>
-        Similarly, <code>histogram_stdvar(v instant-vector)</code> returns the estimated variance of observations for
-        each native histogram sample in <code>v</code>.
+        <code>histogram_stddev(v instant-vector)</code> returns the estimated standard deviation of observations in a
+        native histogram, based on the geometric mean of the buckets where the observations lie. Samples that are not
+        native histograms are ignored and do not show up in the returned vector.
+      </p>
+
+      <p>
+        Similarly, <code>histogram_stdvar(v instant-vector)</code> returns the estimated standard variance of
+        observations in a native histogram.
       </p>
     </>
   ),
   histogram_sum: (
     <>
       <p>
-        <code>histogram_count(v instant-vector)</code> returns the count of observations stored in each native histogram
-        sample in <code>v</code>. Float samples are ignored and do not show up in the returned vector.
+        <em>
+          Both functions only act on native histograms, which are an experimental feature. The behavior of these
+          functions may change in future versions of Prometheus, including their removal from PromQL.
+        </em>
       </p>
 
       <p>
-        Similarly, <code>histogram_sum(v instant-vector)</code> returns the sum of observations stored in each native
-        histogram sample.
+        <code>histogram_count(v instant-vector)</code> returns the count of observations stored in a native histogram.
+        Samples that are not native histograms are ignored and do not show up in the returned vector.
+      </p>
+
+      <p>
+        Similarly, <code>histogram_sum(v instant-vector)</code> returns the sum of observations stored in a native
+        histogram.
       </p>
 
       <p>
         Use <code>histogram_count</code> in the following way to calculate a rate of observations (in this case
-        corresponding to “requests per second”) from a series of histogram samples:
+        corresponding to “requests per second”) from a native histogram:
       </p>
 
       <pre>
@@ -1668,12 +1410,25 @@ const funcDocs: Record<string, React.ReactNode> = {
       </pre>
     </>
   ),
+  holt_winters: (
+    <>
+      <p>
+        <code>holt_winters(v range-vector, sf scalar, tf scalar)</code> produces a smoothed value for time series based
+        on the range in <code>v</code>. The lower the smoothing factor <code>sf</code>, the more importance is given to
+        old data. The higher the trend factor <code>tf</code>, the more trends in the data is considered. Both{" "}
+        <code>sf</code> and <code>tf</code> must be between 0 and 1.
+      </p>
+
+      <p>
+        <code>holt_winters</code> should only be used with gauges.
+      </p>
+    </>
+  ),
   hour: (
     <>
       <p>
-        <code>hour(v=vector(time()) instant-vector)</code> interprets float samples in <code>v</code> as timestamps
-        (number of seconds since January 1, 1970 UTC) and returns the hour of the day (in UTC) for each of those
-        timestamps. Returned values are from 0 to 23. Histogram samples in the input vector are ignored silently.
+        <code>hour(v=vector(time()) instant-vector)</code> returns the hour of the day for each of the given times in
+        UTC. Returned values are from 0 to 23.
       </p>
     </>
   ),
@@ -1681,14 +1436,11 @@ const funcDocs: Record<string, React.ReactNode> = {
     <>
       <p>
         <code>idelta(v range-vector)</code> calculates the difference between the last two samples in the range vector{" "}
-        <code>v</code>, returning an instant vector with the given deltas and equivalent labels. Both samples must be
-        either float samples or histogram samples. Elements in <code>v</code> where one of the last two samples is a
-        float sample and the other is a histogram sample will be omitted from the result vector, flagged by a warn-level
-        annotation.
+        <code>v</code>, returning an instant vector with the given deltas and equivalent labels.
       </p>
 
       <p>
-        <code>idelta</code> should only be used with gauges (for both floats and histograms).
+        <code>idelta</code> should only be used with gauges.
       </p>
     </>
   ),
@@ -1713,22 +1465,24 @@ const funcDocs: Record<string, React.ReactNode> = {
       </pre>
 
       <p>
-        <code>increase</code> acts on histogram samples by calculating a new histogram where each component (sum and
+        <code>increase</code> acts on native histograms by calculating a new histogram where each component (sum and
         count of observations, buckets) is the increase between the respective component in the first and last native
-        histogram in <code>v</code>. However, each element in <code>v</code> that contains a mix of float samples and
-        histogram samples within the range, will be omitted from the result vector, flagged by a warn-level annotation.
+        histogram in
+        <code>v</code>. However, each element in <code>v</code> that contains a mix of float and native histogram
+        samples within the range, will be missing from the result vector.
       </p>
 
       <p>
-        <code>increase</code> should only be used with counters (for both floats and histograms). It is syntactic sugar
-        for <code>rate(v)</code> multiplied by the number of seconds under the specified time range window, and should
-        be used primarily for human readability. Use <code>rate</code> in recording rules so that increases are tracked
-        consistently on a per-second basis.
+        <code>increase</code> should only be used with counters and native histograms where the components behave like
+        counters. It is syntactic sugar for <code>rate(v)</code> multiplied by the number of seconds under the specified
+        time range window, and should be used primarily for human readability. Use <code>rate</code> in recording rules
+        so that increases are tracked consistently on a per-second basis.
       </p>
-    </>
-  ),
-  info: (
-    <>
+
+      <h2>
+        <code>info()</code> (experimental)
+      </h2>
+
       <p>
         _The <code>info</code> function is an experiment to improve UX around including labels from{" "}
         <a href="https://grafana.com/blog/2021/08/04/how-to-use-promql-joins-for-more-effective-queries-of-prometheus-metrics-at-scale/#info-metrics">
@@ -1751,23 +1505,6 @@ const funcDocs: Record<string, React.ReactNode> = {
         </code>
         ) and may only contain label matchers. The label matchers are used to constrain which info series to consider
         and which data labels to add to <code>v</code>.
-      </p>
-
-      <p>
-        If there is no matching info series for a given time series in <code>v</code> at a particular timestamp (e.g.
-        because the info series has gone stale), the behavior depends on the data label matchers: If the{" "}
-        <code>data-label-selector</code>
-        contains any matcher that does not match the empty string (e.g.
-        <code>
-          {"{"}data=~&quot;.+&quot;{"}"}
-        </code>
-        ), then that time series is dropped from the result at that timestamp, because the required enrichment is
-        unavailable. If all matchers match the empty string (e.g.{" "}
-        <code>
-          {"{"}data=~&quot;.*&quot;{"}"}
-        </code>
-        ), or if no <code>data-label-selector</code>
-        is provided, the time series is returned without enrichment.
       </p>
 
       <p>
@@ -1844,12 +1581,6 @@ const funcDocs: Record<string, React.ReactNode> = {
         .
       </p>
 
-      <p>
-        Note that if there are any time series in <code>v</code> that match the <code>data-label-selector</code> (or the
-        default <code>target_info</code> if that argument is not specified), they will be treated as info series and
-        will be returned unchanged.
-      </p>
-
       <h3>Limitations</h3>
 
       <p>
@@ -1866,22 +1597,6 @@ const funcDocs: Record<string, React.ReactNode> = {
       </p>
 
       <p>
-        When only negated <code>__name__</code> matchers are provided (e.g.
-        <code>
-          {"{"}__name__!=&quot;target_info&quot;{"}"}
-        </code>
-        ), <code>info</code> considers all metrics matching
-        <code>.+_info</code> and then applies the negated matchers as filters. This is because negated matchers alone
-        cannot positively identify which info metrics to consider.
-      </p>
-
-      <p>
-        Identifying-label presence is evaluated per input series. Inputs containing only <code>job</code>, only{" "}
-        <code>instance</code>, or both can therefore gain data labels from the corresponding info-series group; a
-        missing identifying label is not treated as a wildcard.
-      </p>
-
-      <p>
         These limitations are partially defeating the purpose of the <code>info</code> function. At the current stage,
         this is an experiment to find out how useful the approach turns out to be in practice. A final version of the{" "}
         <code>info</code> function will indeed consider all matching info series and with their appropriate identifying
@@ -1894,13 +1609,7 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         <code>irate(v range-vector)</code> calculates the per-second instant rate of increase of the time series in the
         range vector. This is based on the last two data points. Breaks in monotonicity (such as counter resets due to
-        target restarts) are automatically adjusted for. Both samples must be either float samples or histogram samples.
-        Elements in <code>v</code> where one of the last two samples is a float sample and the other is a histogram
-        sample will be omitted from the result vector, flagged by a warn-level annotation.
-      </p>
-
-      <p>
-        <code>irate</code> should only be used with counters (for both floats and histograms).
+        target restarts) are automatically adjusted for.
       </p>
 
       <p>
@@ -1923,7 +1632,7 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         Note that when combining <code>irate()</code> with an
         <a href="operators.md#aggregation-operators">aggregation operator</a> (e.g. <code>sum()</code>) or a function
-        aggregating over time (any function ending in <code>_over_time</code>), always take an <code>irate()</code>{" "}
+        aggregating over time (any function ending in <code>_over_time</code>), always take a <code>irate()</code>{" "}
         first, then aggregate. Otherwise <code>irate()</code> cannot detect counter resets when your target restarts.
       </p>
     </>
@@ -1964,13 +1673,13 @@ const funcDocs: Record<string, React.ReactNode> = {
         <code>
           label_replace(v instant-vector, dst_label string, replacement string, src_label string, regex string)
         </code>
-        matches the <a href="./basics.md#regular-expressions">regular expression</a> <code>regex</code> against the
-        value of the label <code>src_label</code>. If it matches, the value of the label <code>dst_label</code> in the
-        returned timeseries will be the expansion of <code>replacement</code>, together with the original labels in the
-        input. Capturing groups in the regular expression can be referenced with <code>$1</code>, <code>$2</code>, etc.
-        Named capturing groups in the regular expression can be referenced with <code>$name</code> (where{" "}
-        <code>name</code> is the capturing group name). If the regular expression doesn&rsquo;t match then the
-        timeseries is returned unchanged.
+        matches the <a href="https://github.com/google/re2/wiki/Syntax">regular expression</a> <code>regex</code>{" "}
+        against the value of the label <code>src_label</code>. If it matches, the value of the label{" "}
+        <code>dst_label</code> in the returned timeseries will be the expansion of <code>replacement</code>, together
+        with the original labels in the input. Capturing groups in the regular expression can be referenced with{" "}
+        <code>$1</code>, <code>$2</code>, etc. Named capturing groups in the regular expression can be referenced with{" "}
+        <code>$name</code> (where <code>name</code> is the capturing group name). If the regular expression
+        doesn&rsquo;t match then the timeseries is returned unchanged.
       </p>
 
       <p>
@@ -2010,39 +1719,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -2057,22 +1761,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -2081,40 +1771,19 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   ln: (
     <>
       <p>
-        <code>ln(v instant-vector)</code> calculates the natural logarithm for all float samples in <code>v</code>.
-        Histogram samples in the input vector are ignored silently. Special cases are:
+        <code>ln(v instant-vector)</code> calculates the natural logarithm for all elements in <code>v</code>. Special
+        cases are:
       </p>
 
       <ul>
@@ -2136,18 +1805,16 @@ const funcDocs: Record<string, React.ReactNode> = {
   log10: (
     <>
       <p>
-        <code>log10(v instant-vector)</code> calculates the decimal logarithm for all float samples in <code>v</code>.
-        Histogram samples in the input vector are ignored silently. The special cases are equivalent to those in{" "}
-        <code>ln</code>.
+        <code>log10(v instant-vector)</code> calculates the decimal logarithm for all elements in <code>v</code>. The
+        special cases are equivalent to those in <code>ln</code>.
       </p>
     </>
   ),
   log2: (
     <>
       <p>
-        <code>log2(v instant-vector)</code> calculates the binary logarithm for all float samples in <code>v</code>.
-        Histogram samples in the input vector are ignored silently. The special cases are equivalent to those in{" "}
-        <code>ln</code>.
+        <code>log2(v instant-vector)</code> calculates the binary logarithm for all elements in <code>v</code>. The
+        special cases are equivalent to those in <code>ln</code>.
       </p>
     </>
   ),
@@ -2160,39 +1827,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -2207,22 +1869,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -2231,48 +1879,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
-      </p>
-    </>
-  ),
-  max_of: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>max_of(a scalar, b scalar)</code> returns the larger of the two scalar values <code>a</code>
-        and <code>b</code>.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -2285,39 +1896,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -2332,22 +1938,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -2356,48 +1948,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
-      </p>
-    </>
-  ),
-  min_of: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>min_of(a scalar, b scalar)</code> returns the smaller of the two scalar values <code>a</code>
-        and <code>b</code>.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -2410,39 +1965,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -2457,22 +2007,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -2481,106 +2017,82 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   minute: (
     <>
       <p>
-        <code>minute(v=vector(time()) instant-vector)</code> interprets float samples in <code>v</code> as timestamps
-        (number of seconds since January 1, 1970 UTC) and returns the minute of the hour (in UTC) for each of those
-        timestamps. Returned values are from 0 to 59. Histogram samples in the input vector are ignored silently.
+        <code>minute(v=vector(time()) instant-vector)</code> returns the minute of the hour for each of the given times
+        in UTC. Returned values are from 0 to 59.
       </p>
     </>
   ),
   month: (
     <>
       <p>
-        <code>month(v=vector(time()) instant-vector)</code> interprets float samples in <code>v</code> as timestamps
-        (number of seconds since January 1, 1970 UTC) and returns the month of the year (in UTC) for each of those
-        timestamps. Returned values are from 1 to 12, where 1 means January etc. Histogram samples in the input vector
-        are ignored silently.
+        <code>month(v=vector(time()) instant-vector)</code> returns the month of the year for each of the given times in
+        UTC. Returned values are from 1 to 12, where 1 means January etc.
       </p>
     </>
   ),
   pi: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -2588,13 +2100,13 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
@@ -2605,14 +2117,12 @@ const funcDocs: Record<string, React.ReactNode> = {
         <code>predict_linear(v range-vector, t scalar)</code> predicts the value of time series
         <code>t</code> seconds from now, based on the range vector <code>v</code>, using{" "}
         <a href="https://en.wikipedia.org/wiki/Simple_linear_regression">simple linear regression</a>. The range vector
-        must have at least two float samples in order to perform the calculation. When <code>+Inf</code> or{" "}
-        <code>-Inf</code> are found in the range vector, the predicted value will be <code>NaN</code>.
+        must have at least two samples in order to perform the calculation. When <code>+Inf</code> or <code>-Inf</code>{" "}
+        are found in the range vector, the slope and offset value calculated will be <code>NaN</code>.
       </p>
 
       <p>
-        <code>predict_linear</code> should only be used with gauges and only works for float samples. Elements in the
-        range vector that contain only histogram samples are ignored entirely. For elements that contain a mix of float
-        and histogram samples, only the float samples are used as input, which is flagged by an info-level annotation.
+        <code>predict_linear</code> should only be used with gauges.
       </p>
     </>
   ),
@@ -2625,39 +2135,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -2672,22 +2177,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -2696,32 +2187,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -2734,39 +2204,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -2781,22 +2246,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -2805,87 +2256,66 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   rad: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -2893,31 +2323,15 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
-    </>
-  ),
-  range: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>range()</code> returns the range duration of the current query range evaluation in seconds and is
-        equivalent to <code>end() - start()</code>. For instant queries, this returns <code>0</code>.
-      </p>
     </>
   ),
   rate: (
@@ -2930,8 +2344,8 @@ const funcDocs: Record<string, React.ReactNode> = {
       </p>
 
       <p>
-        The following example expression returns the per-second average rate of HTTP requests over the last 5 minutes,
-        per time series in the range vector:
+        The following example expression returns the per-second rate of HTTP requests as measured over the last 5
+        minutes, per time series in the range vector:
       </p>
 
       <pre>
@@ -2943,13 +2357,14 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         <code>rate</code> acts on native histograms by calculating a new histogram where each component (sum and count
         of observations, buckets) is the rate of increase between the respective component in the first and last native
-        histogram in <code>v</code>. However, each element in <code>v</code> that contains a mix of float and native
-        histogram samples within the range, will be omitted from the result vector, flagged by a warn-level annotation.
+        histogram in
+        <code>v</code>. However, each element in <code>v</code> that contains a mix of float and native histogram
+        samples within the range, will be missing from the result vector.
       </p>
 
       <p>
-        <code>rate</code> should only be used with counters (for both floats and histograms). It is best suited for
-        alerting, and for graphing of slow-moving counters.
+        <code>rate</code> should only be used with counters and native histograms where the components behave like
+        counters. It is best suited for alerting, and for graphing of slow-moving counters.
       </p>
 
       <p>
@@ -2967,18 +2382,19 @@ const funcDocs: Record<string, React.ReactNode> = {
         provided time range as an instant vector. Any decrease in the value between two consecutive float samples is
         interpreted as a counter reset. A reset in a native histogram is detected in a more complex way: Any decrease in
         any bucket, including the zero bucket, or in the count of observation constitutes a counter reset, but also the
-        disappearance of any previously populated bucket, a decrease of the zero-bucket width, or any schema change that
-        is not a compatible decrease of resolution.
+        disappearance of any previously populated bucket, an increase in bucket resolution, or a decrease of the
+        zero-bucket width.
       </p>
 
       <p>
-        <code>resets</code> should only be used with counters (for both floats and histograms).
+        <code>resets</code> should only be used with counters and counter-like native histograms.
       </p>
 
       <p>
-        A float sample followed by a histogram sample, or vice versa, counts as a reset. A counter histogram sample
-        followed by a gauge histogram sample, or vice versa, also counts as a reset (but note that <code>resets</code>{" "}
-        should not be used on gauges in the first place, see above).
+        If the range vector contains a mix of float and histogram samples for the same series, counter resets are
+        detected separately and their numbers added up. The change from a float to a histogram sample is <em>not</em>{" "}
+        considered a counter reset. Each float sample is compared to the next float sample, and each histogram is
+        comprared to the next histogram.
       </p>
     </>
   ),
@@ -2988,81 +2404,79 @@ const funcDocs: Record<string, React.ReactNode> = {
         <code>round(v instant-vector, to_nearest=1 scalar)</code> rounds the sample values of all elements in{" "}
         <code>v</code> to the nearest integer. Ties are resolved by rounding up. The optional <code>to_nearest</code>{" "}
         argument allows specifying the nearest multiple to which the sample values should be rounded. This multiple may
-        also be a fraction. Histogram samples in the input vector are ignored silently.
+        also be a fraction.
       </p>
     </>
   ),
   scalar: (
     <>
       <p>
-        Given an input vector that contains only one element with a float sample,
-        <code>scalar(v instant-vector)</code> returns the sample value of that float sample as a scalar. If the input
-        vector does not have exactly one element with a float sample, <code>scalar</code> will return <code>NaN</code>.
-        Histogram samples in the input vector are ignored silently.
+        Given a single-element input vector, <code>scalar(v instant-vector)</code> returns the sample value of that
+        single element as a scalar. If the input vector does not have exactly one element, <code>scalar</code> will
+        return <code>NaN</code>.
       </p>
     </>
   ),
   sgn: (
     <>
       <p>
-        <code>sgn(v instant-vector)</code> returns a vector with all float sample values converted to their sign,
-        defined as this: 1 if v is positive, -1 if v is negative and 0 if v is equal to zero. Histogram samples in the
-        input vector are ignored silently.
+        <code>sgn(v instant-vector)</code> returns a vector with all sample values converted to their sign, defined as
+        this: 1 if v is positive, -1 if v is negative and 0 if v is equal to zero.
       </p>
     </>
   ),
   sin: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -3070,69 +2484,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   sinh: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -3140,13 +2554,13 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
@@ -3154,8 +2568,8 @@ const funcDocs: Record<string, React.ReactNode> = {
   sort: (
     <>
       <p>
-        <code>sort(v instant-vector)</code> returns vector elements sorted by their float sample values, in ascending
-        order. Histogram samples in the input vector are ignored silently.
+        <code>sort(v instant-vector)</code> returns vector elements sorted by their sample values, in ascending order.
+        Native histograms are sorted by their sum of observations.
       </p>
 
       <p>
@@ -3169,7 +2583,7 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         <strong>
           This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
+          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>{" "}
           <code>--enable-feature=promql-experimental-functions</code>.
         </strong>
       </p>
@@ -3178,17 +2592,15 @@ const funcDocs: Record<string, React.ReactNode> = {
         <code>sort_by_label(v instant-vector, label string, ...)</code> returns vector elements sorted by the values of
         the given labels in ascending order. In case these label values are equal, elements are sorted by their full
         label sets.
-        <code>sort_by_label</code> acts on float and histogram samples in the same way.
       </p>
 
       <p>
-        Please note that <code>sort_by_label</code> only affects the results of instant queries, as range query results
+        Please note that the sort by label functions only affect the results of instant queries, as range query results
         always have a fixed output ordering.
       </p>
 
       <p>
-        <code>sort_by_label</code> uses{" "}
-        <a href="https://en.wikipedia.org/wiki/Natural_sort_order">natural sort order</a>.
+        This function uses <a href="https://en.wikipedia.org/wiki/Natural_sort_order">natural sort order</a>.
       </p>
     </>
   ),
@@ -3197,13 +2609,22 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         <strong>
           This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
+          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>{" "}
           <code>--enable-feature=promql-experimental-functions</code>.
         </strong>
       </p>
 
       <p>
         Same as <code>sort_by_label</code>, but sorts in descending order.
+      </p>
+
+      <p>
+        Please note that the sort by label functions only affect the results of instant queries, as range query results
+        always have a fixed output ordering.
+      </p>
+
+      <p>
+        This function uses <a href="https://en.wikipedia.org/wiki/Natural_sort_order">natural sort order</a>.
       </p>
     </>
   ),
@@ -3212,44 +2633,17 @@ const funcDocs: Record<string, React.ReactNode> = {
       <p>
         Same as <code>sort</code>, but sorts in descending order.
       </p>
+
+      <p>
+        Like <code>sort</code>, <code>sort_desc</code> only affects the results of instant queries, as range query
+        results always have a fixed output ordering.
+      </p>
     </>
   ),
   sqrt: (
     <>
       <p>
-        <code>sqrt(v instant-vector)</code> calculates the square root of all float samples in
-        <code>v</code>. Histogram samples in the input vector are ignored silently.
-      </p>
-    </>
-  ),
-  start: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>start()</code> returns the start timestamp of the current query range evaluation as the number of seconds
-        since January 1, 1970 UTC. For instant queries, this is equal to the evaluation timestamp.
-      </p>
-    </>
-  ),
-  start_timestamp: (
-    <>
-      <p>
-        <code>start_timestamp(v instant-vector)</code> returns the start timestamp of each of the samples of the given
-        vector as the number of seconds since January 1, 1970 UTC. It acts on float and histogram samples in the same
-        way.
-      </p>
-
-      <p>
-        This function only works when used directly on an instant vector and when <code>use-start-timestamps</code>{" "}
-        feature flag is enabled. Otherwise, if it&rsquo;s used on an expression or if <code>use-start-timestamps</code>{" "}
-        is disabled, it returns empty results.
+        <code>sqrt(v instant-vector)</code> calculates the square root of all elements in <code>v</code>.
       </p>
     </>
   ),
@@ -3262,39 +2656,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -3309,22 +2698,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -3333,32 +2708,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -3371,39 +2725,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -3418,22 +2767,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -3442,48 +2777,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
-      </p>
-    </>
-  ),
-  step: (
-    <>
-      <p>
-        <strong>
-          This function has to be enabled via the{" "}
-          <a href="../feature_flags.md#experimental-promql-functions">feature flag</a>
-          <code>--enable-feature=promql-experimental-functions</code>.
-        </strong>
-      </p>
-
-      <p>
-        <code>step()</code> returns the query resolution step as the number of seconds. For instant queries, this
-        returns <code>0</code>.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -3496,39 +2794,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -3543,22 +2836,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -3567,87 +2846,66 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   tan: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -3655,69 +2913,69 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
   ),
   tanh: (
     <>
-      <p>The trigonometric functions work in radians. They ignore histogram samples in the input vector.</p>
+      <p>The trigonometric functions work in radians:</p>
 
       <ul>
         <li>
-          <code>acos(v instant-vector)</code>: calculates the arccosine of all float samples in <code>v</code> (
+          <code>acos(v instant-vector)</code>: calculates the arccosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Acos">special cases</a>).
         </li>
         <li>
-          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all float samples in{" "}
+          <code>acosh(v instant-vector)</code>: calculates the inverse hyperbolic cosine of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Acosh">special cases</a>).
         </li>
         <li>
-          <code>asin(v instant-vector)</code>: calculates the arcsine of all float samples in <code>v</code> (
+          <code>asin(v instant-vector)</code>: calculates the arcsine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Asin">special cases</a>).
         </li>
         <li>
-          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all float samples in{" "}
-          <code>v</code> (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
+          <code>asinh(v instant-vector)</code>: calculates the inverse hyperbolic sine of all elements in <code>v</code>{" "}
+          (<a href="https://pkg.go.dev/math#Asinh">special cases</a>).
         </li>
         <li>
-          <code>atan(v instant-vector)</code>: calculates the arctangent of all float samples in <code>v</code> (
+          <code>atan(v instant-vector)</code>: calculates the arctangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Atan">special cases</a>).
         </li>
         <li>
-          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all float samples in{" "}
+          <code>atanh(v instant-vector)</code>: calculates the inverse hyperbolic tangent of all elements in{" "}
           <code>v</code> (<a href="https://pkg.go.dev/math#Atanh">special cases</a>).
         </li>
         <li>
-          <code>cos(v instant-vector)</code>: calculates the cosine of all float samples in <code>v</code> (
+          <code>cos(v instant-vector)</code>: calculates the cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cos">special cases</a>).
         </li>
         <li>
-          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all float samples in <code>v</code> (
+          <code>cosh(v instant-vector)</code>: calculates the hyperbolic cosine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Cosh">special cases</a>).
         </li>
         <li>
-          <code>sin(v instant-vector)</code>: calculates the sine of all float samples in <code>v</code> (
+          <code>sin(v instant-vector)</code>: calculates the sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sin">special cases</a>).
         </li>
         <li>
-          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all float samples in <code>v</code> (
+          <code>sinh(v instant-vector)</code>: calculates the hyperbolic sine of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Sinh">special cases</a>).
         </li>
         <li>
-          <code>tan(v instant-vector)</code>: calculates the tangent of all float samples in <code>v</code> (
+          <code>tan(v instant-vector)</code>: calculates the tangent of all elements in <code>v</code> (
           <a href="https://pkg.go.dev/math#Tan">special cases</a>).
         </li>
         <li>
-          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all float samples in <code>v</code>{" "}
-          (<a href="https://pkg.go.dev/math#Tanh">special cases</a>).
+          <code>tanh(v instant-vector)</code>: calculates the hyperbolic tangent of all elements in <code>v</code> (
+          <a href="https://pkg.go.dev/math#Tanh">special cases</a>).
         </li>
       </ul>
 
@@ -3725,13 +2983,13 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>deg(v instant-vector)</code>: converts radians to degrees for all float samples in <code>v</code>.
+          <code>deg(v instant-vector)</code>: converts radians to degrees for all elements in <code>v</code>.
         </li>
         <li>
           <code>pi()</code>: returns pi.
         </li>
         <li>
-          <code>rad(v instant-vector)</code>: converts degrees to radians for all float samples in <code>v</code>.
+          <code>rad(v instant-vector)</code>: converts degrees to radians for all elements in <code>v</code>.
         </li>
       </ul>
     </>
@@ -3748,7 +3006,7 @@ const funcDocs: Record<string, React.ReactNode> = {
     <>
       <p>
         <code>timestamp(v instant-vector)</code> returns the timestamp of each of the samples of the given vector as the
-        number of seconds since January 1, 1970 UTC. It acts on float and histogram samples in the same way.
+        number of seconds since January 1, 1970 UTC. It also works with histogram samples.
       </p>
     </>
   ),
@@ -3761,39 +3019,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -3808,22 +3061,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -3832,32 +3071,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -3870,39 +3088,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -3917,22 +3130,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -3941,32 +3140,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -3979,39 +3157,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -4026,22 +3199,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -4050,32 +3209,11 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
@@ -4088,39 +3226,34 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>avg_over_time(range-vector)</code>: the average value of all float or histogram samples in the specified
-          interval (see details below).
+          <code>avg_over_time(range-vector)</code>: the average value of all points in the specified interval.
         </li>
         <li>
-          <code>min_over_time(range-vector)</code>: the minimum value of all float samples in the specified interval.
+          <code>min_over_time(range-vector)</code>: the minimum value of all points in the specified interval.
         </li>
         <li>
-          <code>max_over_time(range-vector)</code>: the maximum value of all float samples in the specified interval.
+          <code>max_over_time(range-vector)</code>: the maximum value of all points in the specified interval.
         </li>
         <li>
-          <code>sum_over_time(range-vector)</code>: the sum of all float or histogram samples in the specified interval
-          (see details below).
+          <code>sum_over_time(range-vector)</code>: the sum of all values in the specified interval.
         </li>
         <li>
-          <code>count_over_time(range-vector)</code>: the count of all samples in the specified interval.
+          <code>count_over_time(range-vector)</code>: the count of all values in the specified interval.
         </li>
         <li>
-          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of all float samples in the
+          <code>quantile_over_time(scalar, range-vector)</code>: the φ-quantile (0 ≤ φ ≤ 1) of the values in the
           specified interval.
         </li>
         <li>
-          <code>stddev_over_time(range-vector)</code>: the population standard deviation of all float samples in the
-          specified interval.
-        </li>
-        <li>
-          <code>stdvar_over_time(range-vector)</code>: the population variance of all float samples in the specified
+          <code>stddev_over_time(range-vector)</code>: the population standard deviation of the values in the specified
           interval.
         </li>
         <li>
-          <code>last_over_time(range-vector)</code>: the most recent sample in the specified interval.
+          <code>stdvar_over_time(range-vector)</code>: the population standard variance of the values in the specified
+          interval.
         </li>
         <li>
-          <code>first_over_time(range-vector)</code>: the oldest sample in the specified interval.
+          <code>last_over_time(range-vector)</code>: the most recent point value in the specified interval.
         </li>
         <li>
           <code>present_over_time(range-vector)</code>: the value 1 for any series in the specified interval.
@@ -4135,22 +3268,8 @@ const funcDocs: Record<string, React.ReactNode> = {
 
       <ul>
         <li>
-          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all float samples in the specified
+          <code>mad_over_time(range-vector)</code>: the median absolute deviation of all points in the specified
           interval.
-        </li>
-        <li>
-          <code>ts_of_min_over_time(range-vector)</code>: the timestamp of the last float sample that has the minimum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_max_over_time(range-vector)</code>: the timestamp of the last float sample that has the maximum
-          value of all float samples in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_last_over_time(range-vector)</code>: the timestamp of last sample in the specified interval.
-        </li>
-        <li>
-          <code>ts_of_first_over_time(range-vector)</code>: the timestamp of earliest sample in the specified interval.
         </li>
       </ul>
 
@@ -4159,40 +3278,18 @@ const funcDocs: Record<string, React.ReactNode> = {
         not equally spaced throughout the interval.
       </p>
 
-      <p>These functions act on histograms in the following way:</p>
-
-      <ul>
-        <li>
-          <code>count_over_time</code>, <code>first_over_time</code>, <code>last_over_time</code>, and
-          <code>present_over_time()</code> act on float and histogram samples in the same way.
-        </li>
-        <li>
-          <code>avg_over_time()</code> and <code>sum_over_time()</code> act on histogram samples in a way that
-          corresponds to the respective aggregation operators. If a series contains a mix of float samples and histogram
-          samples within the range, the corresponding result is removed entirely from the output vector. Such a removal
-          is flagged by a warn-level annotation.
-        </li>
-        <li>
-          All other functions ignore histogram samples in the following way: Input ranges containing only histogram
-          samples are silently removed from the output. For ranges with a mix of histogram and float samples, only the
-          float samples are processed and the omission of the histogram samples is flagged by an info-level annotation.
-        </li>
-      </ul>
-
       <p>
-        <code>first_over_time(m[1m])</code> differs from <code>m offset 1m</code> in that the former will select the
-        first sample of <code>m</code> <em>within</em> the 1m range, where <code>m offset 1m</code> will select the most
-        recent sample within the lookback interval <em>outside and prior to</em> the 1m offset. This is particularly
-        useful with <code>first_over_time(m[step()])</code>
-        in range queries to ensure that the sample selected is within the range step.
+        <code>avg_over_time</code>, <code>sum_over_time</code>, <code>count_over_time</code>,{" "}
+        <code>last_over_time</code>, and
+        <code>present_over_time</code> handle native histograms as expected. All other functions ignore histogram
+        samples.
       </p>
     </>
   ),
   vector: (
     <>
       <p>
-        <code>vector(s scalar)</code> converts the scalar <code>s</code> to a float sample and returns it as a
-        single-element instant vector with no labels.
+        <code>vector(s scalar)</code> returns the scalar <code>s</code> as a vector with no labels.
       </p>
     </>
   ),
@@ -4200,7 +3297,6 @@ const funcDocs: Record<string, React.ReactNode> = {
     <>
       <p>
         <code>year(v=vector(time()) instant-vector)</code> returns the year for each of the given times in UTC.
-        Histogram samples in the input vector are ignored silently.
       </p>
     </>
   ),
