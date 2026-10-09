@@ -22,7 +22,7 @@ func (cr UnconflictRegisterer) NewCounter(opts prometheus.CounterOpts) prometheu
 	opts.ConstLabels = nil
 	labelNames := cr.extractConstLabelNames(constLabels, nil)
 	c := prometheus.NewCounterVec(opts, labelNames)
-	c = mustRegisterOrGet(cr.Registerer, c)
+	c = MustRegisterOrGet(cr.Registerer, c)
 	return c.With(constLabels)
 }
 
@@ -32,7 +32,7 @@ func (cr UnconflictRegisterer) NewCounterVec(opts prometheus.CounterOpts, labelN
 	opts.ConstLabels = nil
 	labelNames = cr.extractConstLabelNames(constLabels, labelNames)
 	c := prometheus.NewCounterVec(opts, labelNames)
-	c = mustRegisterOrGet(cr.Registerer, c)
+	c = MustRegisterOrGet(cr.Registerer, c)
 	return c.MustCurryWith(constLabels)
 }
 
@@ -42,7 +42,7 @@ func (cr UnconflictRegisterer) NewGauge(opts prometheus.GaugeOpts) prometheus.Ga
 	opts.ConstLabels = nil
 	labelNames := cr.extractConstLabelNames(constLabels, nil)
 	c := prometheus.NewGaugeVec(opts, labelNames)
-	c = mustRegisterOrGet(cr.Registerer, c)
+	c = MustRegisterOrGet(cr.Registerer, c)
 	return c.With(constLabels)
 }
 
@@ -52,13 +52,13 @@ func (cr UnconflictRegisterer) NewGaugeVec(opts prometheus.GaugeOpts, labelNames
 	opts.ConstLabels = nil
 	labelNames = cr.extractConstLabelNames(constLabels, labelNames)
 	g := prometheus.NewGaugeVec(opts, labelNames)
-	g = mustRegisterOrGet(cr.Registerer, g)
+	g = MustRegisterOrGet(cr.Registerer, g)
 	return g.MustCurryWith(constLabels)
 }
 
 // NewGaugeFunc create new prometheus.GaugeFunc and register it in wrapped registerer.
 func (cr UnconflictRegisterer) NewGaugeFunc(opts prometheus.GaugeOpts, fn func() float64) prometheus.GaugeFunc {
-	return mustRegisterOrGet(cr.Registerer, prometheus.NewGaugeFunc(opts, fn))
+	return MustRegisterOrGet(cr.Registerer, prometheus.NewGaugeFunc(opts, fn))
 }
 
 // NewHistogramVec create new prometheus.HistogramVec and register it in wrapped registerer.
@@ -69,7 +69,7 @@ func (cr UnconflictRegisterer) NewHistogramVec(
 	opts.ConstLabels = nil
 	labelNames = cr.extractConstLabelNames(constLabels, labelNames)
 	h := prometheus.NewHistogramVec(opts, labelNames)
-	h = mustRegisterOrGet(cr.Registerer, h)
+	h = MustRegisterOrGet(cr.Registerer, h)
 	return h.MustCurryWith(constLabels).(*prometheus.HistogramVec)
 }
 
@@ -81,7 +81,7 @@ func (cr UnconflictRegisterer) NewHistogram(
 	opts.ConstLabels = nil
 	labelNames := cr.extractConstLabelNames(constLabels, nil)
 	h := prometheus.NewHistogramVec(opts, labelNames)
-	h = mustRegisterOrGet(cr.Registerer, h)
+	h = MustRegisterOrGet(cr.Registerer, h)
 	return h.With(constLabels).(prometheus.Histogram)
 }
 
@@ -98,7 +98,9 @@ func (UnconflictRegisterer) extractConstLabelNames(constLabels prometheus.Labels
 	return labelNames
 }
 
-func mustRegisterOrGet[Collector prometheus.Collector](r prometheus.Registerer, c Collector) Collector {
+// MustRegisterOrGet registers c in r and returns it, or returns the already registered collector with the same
+// descriptors. A nil r returns c unregistered. Panics on any other registration error.
+func MustRegisterOrGet[Collector prometheus.Collector](r prometheus.Registerer, c Collector) Collector {
 	if r == nil {
 		return c
 	}

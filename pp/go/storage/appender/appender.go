@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
+	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 )
 
 const (
@@ -128,6 +129,7 @@ type Appender[
 	head           THead
 	poolProvider   *poolprovider.HeadPool[TGShard]
 	commitAndFlush func(h THead, mask []bool) error
+	stats          Stats
 }
 
 // New init new [Appender].
@@ -140,11 +142,13 @@ func New[
 ](
 	head THead,
 	commitAndFlush func(h THead, mask []bool) error,
+	stats Stats,
 ) Appender[TTask, TShard, TGShard, THead] {
 	return Appender[TTask, TShard, TGShard, THead]{
 		head:           head,
 		poolProvider:   head.PoolProvider(),
 		commitAndFlush: commitAndFlush,
+		stats:          stats,
 	}
 }
 
@@ -166,16 +170,26 @@ func (a Appender[TTask, TShard, TGShard, THead]) Append(
 	shardedRelabeledSeries := a.poolProvider.GetShardedRelabeledSeries()
 	defer a.poolProvider.PutShardedRelabeledSeries(shardedRelabeledSeries)
 
+	var slots stagestats.ShardSlots
+	shardStripe := a.stats.Shards.RandomStripe()
+	if shardStripe.Enabled() {
+		slots = a.poolProvider.GetShardSlots()
+		defer a.poolProvider.PutShardSlots(slots)
+	}
+
 	stats, err := a.inputRelabelingStage(
 		ctx,
 		state,
 		incomingData,
 		shardedInnerSeries,
 		shardedRelabeledSeries,
+		slots,
 	)
 	if err != nil {
 		return stats, fmt.Errorf("failed input relabeling stage: %w", err)
 	}
+	a.stats.Lap.Mark(StageInputRelabeling)
+	observeInputRelabeling(shardStripe, slots)
 
 	shardedInnerSeries.Transpose()
 
@@ -189,9 +203,12 @@ func (a Appender[TTask, TShard, TGShard, THead]) Append(
 			shardedInnerSeries,
 			shardedRelabeledSeries,
 			shardedStateUpdates,
+			slots,
 		); err != nil {
 			return stats, fmt.Errorf("failed append relabeler series stage: %w", err)
 		}
+		a.stats.Lap.Mark(StageAppendRelabeled)
+		shardStripe.ObserveMax(shardStageAppendRelabeled, slots, slotAppendRelabeled)
 
 		shardedStateUpdates.Transpose()
 		if err = a.updateRelabelerStateStage(
@@ -201,22 +218,47 @@ func (a Appender[TTask, TShard, TGShard, THead]) Append(
 		); err != nil {
 			return stats, fmt.Errorf("failed update relabeler stage: %w", err)
 		}
+		a.stats.Lap.Mark(StageUpdateCache)
 	}
 
-	a.trackStaleNans(shardedInnerSeries, state)
+	if state.TrackStaleness() {
+		a.trackStaleNans(shardedInnerSeries, state)
+		a.stats.Lap.Mark(StageStaleNan)
+	}
 
 	shardsToCommit := a.poolProvider.GetShardsMask()
 	defer a.poolProvider.PutShardsMask(shardsToCommit)
-	commitAll, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries, shardsToCommit)
+	commitAll, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries, slots, shardsToCommit)
 	if err != nil {
 		logger.Errorf("failed to write wal: %v", err)
 	}
+	a.stats.Lap.Mark(StageAppendDataWal)
+	shardStripe.ObserveMax(shardStageDataStorageAppend, slots, slotDataStorageAppend)
+	shardStripe.ObserveMax(shardStageWalWrite, slots, slotWalWrite)
 
+	willCommit := commitToWal || commitAll || slices.Contains(shardsToCommit, true)
 	if err := a.commitWal(commitToWal || commitAll, shardsToCommit); err != nil {
 		logger.Errorf("failed to commit wal: %v", err)
+	} else if willCommit {
+		a.stats.Lap.Mark(StageWalCommitFlush)
 	}
 
 	return stats, nil
+}
+
+// observeInputRelabeling accounts the read-only relabeling as hit or miss and the relabeling on the shards.
+func observeInputRelabeling(stripe stagestats.Stripe, slots stagestats.ShardSlots) {
+	if !stripe.Enabled() {
+		return
+	}
+
+	if slots.Max(slotRelabeling) == 0 {
+		stripe.ObserveMax(shardStageRORelabelingHit, slots, slotRORelabeling)
+		return
+	}
+
+	stripe.ObserveMax(shardStageRORelabelingMiss, slots, slotRORelabeling)
+	stripe.ObserveMax(shardStageRelabeling, slots, slotRelabeling)
 }
 
 // commitWal commits the WALs of all shards if commitAll is set, otherwise only the WALs of the shards
@@ -246,6 +288,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) inputRelabelingStage(
 	incomingData *IncomingData,
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
+	slots stagestats.ShardSlots,
 ) (cppbridge.RelabelerStats, error) {
 	stats := a.poolProvider.GetRelabelerStats()
 	defer a.poolProvider.PutRelabelerStats(stats)
@@ -259,6 +302,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) inputRelabelingStage(
 				shardID     = shard.ShardID()
 				shardedData = incomingData.ShardedData()
 				innerSeries = shardedInnerSeries.DataByShard(shardID)
+				start       = slots.Start()
 			)
 
 			err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
@@ -280,6 +324,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) inputRelabelingStage(
 
 				return nil
 			})
+			start = slots.Since(shardID, slotRORelabeling, start)
 			switch {
 			case err == nil:
 				return nil
@@ -311,6 +356,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) inputRelabelingStage(
 			if err != nil {
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
+			slots.Since(shardID, slotRelabeling, start)
 
 			stats[shardID].Add(rstats)
 
@@ -336,6 +382,7 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendRelabelerSeriesStage(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
 	shardedStateUpdates *cppbridge.ShardedStateUpdates,
+	slots stagestats.ShardSlots,
 ) error {
 	t := a.head.CreateTask(
 		lssAppendRelabelerSeries,
@@ -347,7 +394,8 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendRelabelerSeriesStage(
 				return nil
 			}
 
-			return shard.LSSWithLock(func(target, _ *cppbridge.LabelSetStorage) error {
+			start := slots.Start()
+			err := shard.LSSWithLock(func(target, _ *cppbridge.LabelSetStorage) error {
 				hasReallocations, err := shard.Relabeler().AppendRelabelerSeries(
 					ctx,
 					target,
@@ -366,6 +414,12 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendRelabelerSeriesStage(
 
 				return nil
 			})
+			if err != nil {
+				return err
+			}
+			slots.Since(shardID, slotAppendRelabeled, start)
+
+			return nil
 		},
 	)
 	defer a.head.PutTask(t)
@@ -395,15 +449,11 @@ func (a *Appender[TTask, TShard, TGShard, THead]) updateRelabelerStateStage(
 	return nil
 }
 
-// trackStaleNans add stale nans samples if needed.
+// trackStaleNans add stale nans samples, the state must track staleness.
 func (a *Appender[TTask, TShard, TGShard, THead]) trackStaleNans(
 	shardInnerSeries *cppbridge.ShardedInnerSeries,
 	state *cppbridge.StateV2,
 ) {
-	if !state.TrackStaleness() {
-		return
-	}
-
 	for i := range a.head.NumberOfShards() {
 		cppbridge.PerGoroutineRelabelerTrackStaleNans(shardInnerSeries.DataByShard(i), state, i)
 	}
@@ -414,12 +464,16 @@ func (a *Appender[TTask, TShard, TGShard, THead]) trackStaleNans(
 // and returns true if a shard exhausted the limit but requires all shards to be committed together.
 func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
+	slots stagestats.ShardSlots,
 	shardsToCommit []bool,
 ) (bool, error) {
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
 		func(shard TGShard) error {
-			shard.AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
+			shardID := shard.ShardID()
+			start := slots.Start()
+			shard.AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shardID))
+			slots.Since(shardID, slotDataStorageAppend, start)
 
 			return nil
 		},
@@ -432,10 +486,12 @@ func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal
 		walWrite,
 		func(shard TGShard) error {
 			shardID := shard.ShardID()
+			start := slots.Start()
 			exhausted, errWrite := shard.WalWrite(shardedInnerSeries.DataByShard(shardID))
 			if errWrite != nil {
 				return fmt.Errorf("shard %d: %w", shardID, errWrite)
 			}
+			slots.Since(shardID, slotWalWrite, start)
 
 			if !exhausted {
 				return nil

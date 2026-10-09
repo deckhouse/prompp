@@ -1,7 +1,9 @@
 package appender_test
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -43,6 +45,38 @@ some:aggregate:rate5m{a_b="c"}	1
 `)
 
 func BenchmarkAppenderAppend(b *testing.B) {
+	for _, metrics := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "metrics=small", data: benchMetrics},
+		{name: "metrics=1000", data: generateBenchMetrics(1000)},
+	} {
+		b.Run(metrics.name+"/stats=off", func(b *testing.B) {
+			benchmarkAppenderAppend(b, metrics.data, func() appender.Stats { return appender.Stats{} })
+		})
+
+		b.Run(metrics.name+"/stats=on", func(b *testing.B) {
+			recorders := appender.NewRecorders(nil)
+			benchmarkAppenderAppend(b, metrics.data, func() appender.Stats {
+				return appender.Stats{Lap: recorders.Stages.Start(), Shards: recorders.Shards}
+			})
+		})
+	}
+}
+
+// generateBenchMetrics returns the scrape text of n series.
+func generateBenchMetrics(n int) []byte {
+	var buf bytes.Buffer
+	for i := range n {
+		fmt.Fprintf(&buf, "bench_metric{instance=\"host:9100\",job=\"node\",series=\"%d\"} %d\n", i, i)
+	}
+
+	return buf.Bytes()
+}
+
+// benchmarkAppenderAppend appends the same hashdex of the metrics in a loop with the stats from newStats.
+func benchmarkAppenderAppend(b *testing.B, metrics []byte, newStats func() appender.Stats) {
 	// 1. Create Head based on NoopWal
 	shards := make([]*shard.Shard, benchNumberOfShards)
 	for i := range benchNumberOfShards {
@@ -71,7 +105,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 
 	// 2. Create Hashdex from text metrics
 	hashdex := cppbridge.NewPrometheusScraperHashdex()
-	_, err := hashdex.Parse(benchMetrics, -1)
+	_, err := hashdex.Parse(metrics, -1)
 	if err != nil {
 		b.Fatalf("failed to parse metrics: %v", err)
 	}
@@ -95,7 +129,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 	// 3. Create Appender and perform initial Append
 	ts := time.Now().UnixMilli()
 	state.SetDefTimestamp(ts)
-	_, err = appender.New(h, commitAndFlush).Append(ctx, incomingData, state, false)
+	_, err = appender.New(h, commitAndFlush, newStats()).Append(ctx, incomingData, state, false)
 	if err != nil {
 		b.Fatalf("initial append failed: %v", err)
 	}
@@ -107,7 +141,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		incomingData.Hashdex = hashdex
 		state.SetDefTimestamp(ts + int64(i+15000))
-		_, err = appender.New(h, commitAndFlush).Append(ctx, incomingData, state, false)
+		_, err = appender.New(h, commitAndFlush, newStats()).Append(ctx, incomingData, state, false)
 		if err != nil {
 			b.Fatalf("append failed: %v", err)
 		}

@@ -71,7 +71,7 @@ func (s *AppenderSuite) SetupTest() {
 
 	s.walCommitCount = 0
 	s.walCommitMasks = nil
-	s.appender = appender.New(s.head, s.commitAndFlush)
+	s.appender = appender.New(s.head, s.commitAndFlush, appender.Stats{})
 }
 
 func (s *AppenderSuite) commitAndFlush(h *storage.Head, mask []bool) error {
@@ -570,7 +570,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV1CommitsAllShards() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, err := appender.New(h, s.commitAndFlush).Append(
+	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
@@ -590,7 +590,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsOnlyExhaustedShard() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, err := appender.New(h, s.commitAndFlush).Append(
+	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
@@ -610,7 +610,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsEveryExhaustedShard() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, err := appender.New(h, s.commitAndFlush).Append(
+	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, append(
 			seriesWithSamples(shard0Series, int64(maxSegmentSize)),
@@ -633,7 +633,7 @@ func (s *AppenderSuite) TestLimitNotExhaustedWalV2DoesNotCommit() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, err := appender.New(h, s.commitAndFlush).Append(
+	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
 		state,
@@ -653,7 +653,7 @@ func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, err := appender.New(h, s.commitAndFlush).Append(
+	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
 		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, 1)),
 		state,
