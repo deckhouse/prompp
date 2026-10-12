@@ -9,6 +9,7 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        unzip \
         wget \
         gnupg \
         libunwind-dev \
@@ -59,7 +60,20 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
 # Go + go-tools (GOPATH under /opt so FIRST_GOPATH/bin/goyacc is found when /root is volume-mounted)
 ARG GO_VERSION=1.26.8
 ARG GO_ARCH
-RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+# dl.google.com (where go.dev/dl redirects) answers 404 to some egress IPs, e.g. VPN and WARP
+# exits; proxy.golang.org serves the same toolchain as the golang.org/toolchain module.
+RUN set -eu; \
+    cd /tmp; \
+    if curl -fsSLo go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"; then \
+        tar -C /usr/local -xzf go.tar.gz; \
+    else \
+        toolchain="v0.0.1-go${GO_VERSION}.linux-${GO_ARCH}"; \
+        curl -fsSLo go.zip "https://proxy.golang.org/golang.org/toolchain/@v/${toolchain}.zip"; \
+        unzip -q go.zip; \
+        mv "golang.org/toolchain@${toolchain}" /usr/local/go; \
+    fi; \
+    rm -rf go.tar.gz go.zip golang.org; \
+    /usr/local/go/bin/go version
 ENV GOPATH="/opt/go"
 ENV PATH="$PATH:/usr/local/go/bin:/opt/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
