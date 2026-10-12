@@ -1478,6 +1478,10 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 	matrix := val.(Matrix)
 	lb := labels.NewBuilder(labels.EmptyLabels())
 
+	// Opportunistic sweep: at most one labels-cache sweep per interval across
+	// all concurrent queries, driven by query traffic instead of a ticker.
+	ev.labelReplaceCache.maybeSweep()
+
 	for i, el := range matrix {
 		srcVal := el.Metric.Get(src)
 		key := labelReplaceCacheKey{
@@ -1485,7 +1489,7 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 		}
 
 		if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
-			matrix[i].Metric = cached
+			matrix[i].Metric = cached.result
 			if dst == model.MetricNameLabel {
 				matrix[i].DropName = false
 			} else {
