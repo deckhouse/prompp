@@ -1,6 +1,7 @@
 package promql
 
 import (
+	"hash/maphash"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -67,15 +68,25 @@ var labelReplaceCacheGrowSteps = [...][2]int{
 	{0, 8},
 }
 
-// labelReplaceCacheKey fully determines the resulting labelset of a
-// label_replace call for one series. baseHash is the hash of the source
-// labelset (el.Metric.Hash()) because the result is built from the whole
-// source labelset, not only from the string fields. labels.Labels itself
-// must not be a key field: it is not comparable under the slicelabels and
-// dedupelabels build tags.
+type labelReplaceOperationKey struct {
+	dst, repl, src, regexStr string
+}
+
+// labelReplaceOperation keeps immutable call parameters. Bucket links and
+// references to active evaluations and cached keys are guarded by labelsMu.
+type labelReplaceOperation struct {
+	key        labelReplaceOperationKey
+	hash       uint64
+	next       *labelReplaceOperation
+	references int
+}
+
+// labelReplaceCacheKey includes operation identity and the whole source labelset
+// hash because the result depends on every source label, not just srcVal.
 type labelReplaceCacheKey struct {
-	dst, repl, src, regexStr, srcVal string
-	baseHash                         uint64
+	operation *labelReplaceOperation
+	srcVal    string
+	baseHash  uint64
 }
 
 // labelReplaceCacheEntry is the value stored in the labels cache: the
@@ -102,8 +113,10 @@ type labelReplaceCacheMetrics struct {
 // LRU may independently be nil when its mode is disabled. labelsMu serializes
 // label lookups, timestamp updates and sweeps; sweepMu prevents overlapping sweeps.
 type labelReplaceCache struct {
-	labelsCache *simplelru.LRU[labelReplaceCacheKey, *labelReplaceCacheEntry]
-	regexCache  *lru.Cache[string, *regexp.Regexp]
+	labelsCache   *simplelru.LRU[labelReplaceCacheKey, *labelReplaceCacheEntry]
+	regexCache    *lru.Cache[string, *regexp.Regexp]
+	operations    map[uint64]*labelReplaceOperation
+	operationSeed maphash.Seed
 
 	// spareEntry holds one cleared entry for reuse on the next insertion.
 	spareEntry *labelReplaceCacheEntry
@@ -205,6 +218,8 @@ func newLabelReplaceCache(labelSize, regexSize int, reg prometheus.Registerer) *
 		c.growResizes = resizes.WithLabelValues(labelReplaceCacheGrowDirection)
 		c.shrinkResizes = resizes.WithLabelValues(labelReplaceCacheShrinkDirection)
 		c.labelsMax = labelSize
+		c.operations = make(map[uint64]*labelReplaceOperation)
+		c.operationSeed = maphash.MakeSeed()
 		// Start at the floor: below it the cache cannot shrink anyway, so a
 		// higher start would only hold garbage longer. A tiny maximum still
 		// starts at itself.
@@ -246,6 +261,35 @@ func newLabelReplaceCache(labelSize, regexSize int, reg prometheus.Registerer) *
 	return c
 }
 
+// acquireOperation holds one evaluation reference until releaseOperation.
+func (c *labelReplaceCache) acquireOperation(key labelReplaceOperationKey) *labelReplaceOperation {
+	if c == nil || c.labelsCache == nil {
+		return nil
+	}
+
+	return c.acquireOperationWithHash(key, maphash.Comparable(c.operationSeed, key))
+}
+
+// acquireOperationWithHash verifies the full parameters so hash collisions never
+// alias operations. All bucket links and reference counts are guarded by labelsMu.
+func (c *labelReplaceCache) acquireOperationWithHash(key labelReplaceOperationKey, hash uint64) *labelReplaceOperation {
+	c.labelsMu.Lock()
+	for operation := c.operations[hash]; operation != nil; operation = operation.next {
+		if operation.key == key {
+			operation.references++
+			c.labelsMu.Unlock()
+
+			return operation
+		}
+	}
+
+	operation := &labelReplaceOperation{key: key, hash: hash, next: c.operations[hash], references: 1}
+	c.operations[hash] = operation
+	c.labelsMu.Unlock()
+
+	return operation
+}
+
 // addLabels stores a resulting labelset stamped with the cached timestamp
 // and refreshes the entries gauge; it is a noop when the labels cache is
 // disabled but the wrapper is alive.
@@ -264,6 +308,10 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 	c.spareEntry = nil
 	entry.result = val
 	entry.idleTs = c.nowMs.Load()
+	if !c.labelsCache.Contains(key) {
+		key.operation.references++
+	}
+
 	c.labelsCache.Add(key, entry)
 	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 
@@ -380,11 +428,50 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 }
 
 // onLabelsEvict clears the evicted entry for reuse and updates metrics under labelsMu.
-func (c *labelReplaceCache) onLabelsEvict(_ labelReplaceCacheKey, entry *labelReplaceCacheEntry) {
+func (c *labelReplaceCache) onLabelsEvict(key labelReplaceCacheKey, entry *labelReplaceCacheEntry) {
 	entry.result = labels.EmptyLabels()
 	c.spareEntry = entry
+	c.releaseOperationLocked(key.operation)
 	c.labelsMetrics.evictions.Inc()
 	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
+}
+
+func (c *labelReplaceCache) releaseOperation(operation *labelReplaceOperation) {
+	if c == nil || operation == nil {
+		return
+	}
+
+	c.labelsMu.Lock()
+	c.releaseOperationLocked(operation)
+	c.labelsMu.Unlock()
+}
+
+// releaseOperationLocked drops a reference while labelsMu is held. An operation
+// leaves the canonical table only when neither evaluations nor cache keys use it.
+func (c *labelReplaceCache) releaseOperationLocked(operation *labelReplaceOperation) {
+	operation.references--
+	if operation.references != 0 {
+		return
+	}
+
+	head := c.operations[operation.hash]
+	if head == operation {
+		if operation.next == nil {
+			delete(c.operations, operation.hash)
+		} else {
+			c.operations[operation.hash] = operation.next
+		}
+	} else {
+		for previous := head; previous != nil; previous = previous.next {
+			if previous.next == operation {
+				previous.next = operation.next
+
+				break
+			}
+		}
+	}
+
+	operation.next = nil
 }
 
 // resize applies a labels-cache capacity change and updates the capacity

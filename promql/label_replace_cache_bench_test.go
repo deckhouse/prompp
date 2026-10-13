@@ -5,6 +5,7 @@ package promql_test
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -102,6 +103,72 @@ func BenchmarkLabelReplace(b *testing.B) {
 				result := qry.Exec(ctx)
 				require.NoError(b, result.Err)
 				qry.Close()
+			}
+		})
+	}
+}
+
+// BenchmarkLabelReplaceParallel measures concurrent warm queries sharing one
+// engine. Query construction and Close are timed because RunParallel cannot
+// safely stop the shared benchmark timer independently in each worker.
+func BenchmarkLabelReplaceParallel(b *testing.B) {
+	const seriesCount = 2000
+	const queryExpr = `label_replace(target_info, 'dst', '$1', 'instance', '(.*)')`
+	testStorage := teststorage.New(b)
+	defer testStorage.Close()
+	generateInfoFunctionTestSeries(b, testStorage, seriesCount, 2000, 3600)
+
+	ctx := context.Background()
+	ts := time.Unix(3600, 0)
+	configs := []labelReplaceCacheConfig{
+		{name: "both_on", size: 65536, regex: 128},
+		{name: "both_off", size: -1, regex: -1},
+	}
+
+	for _, cfg := range configs {
+		b.Run(cfg.name, func(b *testing.B) {
+			engine := promql.NewEngine(promql.EngineOpts{
+				MaxSamples:                 50000000,
+				Timeout:                    100 * time.Second,
+				EnableAtModifier:           true,
+				EnableNegativeOffset:       true,
+				LabelReplaceCacheSize:      cfg.size,
+				LabelReplaceRegexCacheSize: cfg.regex,
+			})
+			defer engine.Close()
+
+			promql.PrepareLabelReplaceCacheBenchmark(b, engine, seriesCount, func() {
+				query, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
+				require.NoError(b, err)
+				require.NoError(b, query.Exec(ctx).Err)
+				query.Close()
+			})
+
+			failures := make(chan error, runtime.GOMAXPROCS(0))
+			b.ReportAllocs()
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					query, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
+					if err != nil {
+						failures <- err
+
+						return
+					}
+
+					result := query.Exec(ctx)
+					query.Close()
+					if result.Err != nil {
+						failures <- result.Err
+
+						return
+					}
+				}
+			})
+			b.StopTimer()
+			close(failures)
+			for err := range failures {
+				require.NoError(b, err)
 			}
 		})
 	}

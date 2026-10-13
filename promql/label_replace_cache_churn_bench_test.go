@@ -13,7 +13,11 @@ func BenchmarkLabelReplaceCacheChurn(b *testing.B) {
 	const workingSet = 1024
 	cache := newLabelReplaceCache(capacity, -1, nil)
 	result := labels.FromStrings("instance", "value", "dst", "value")
-	key := labelReplaceCacheKey{dst: "dst", repl: "$1", src: "instance", regexStr: "(.*)", srcVal: "value"}
+	operation := cache.acquireOperation(labelReplaceOperationKey{
+		dst: "dst", repl: "$1", src: "instance", regexStr: "(.*)",
+	})
+	defer cache.releaseOperation(operation)
+	key := labelReplaceCacheKey{operation: operation, srcVal: "value"}
 	for i := range capacity {
 		key.baseHash = uint64(i)
 		cache.addLabels(key, result)

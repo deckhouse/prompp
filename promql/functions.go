@@ -1484,12 +1484,20 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 	// all concurrent queries, driven by query traffic instead of a ticker.
 	ev.labelReplaceCache.maybeSweep()
 
+	var operation *labelReplaceOperation
+	if cacheLabels {
+		operation = ev.labelReplaceCache.acquireOperation(labelReplaceOperationKey{
+			dst: dst, repl: repl, src: src, regexStr: regexStr,
+		})
+		defer ev.labelReplaceCache.releaseOperation(operation)
+	}
+
 	for i, el := range matrix {
 		srcVal := el.Metric.Get(src)
 		var key labelReplaceCacheKey
 		if cacheLabels {
 			key = labelReplaceCacheKey{
-				dst: dst, repl: repl, src: src, regexStr: regexStr, srcVal: srcVal, baseHash: el.Metric.Hash(),
+				operation: operation, srcVal: srcVal, baseHash: el.Metric.Hash(),
 			}
 
 			if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
