@@ -29,7 +29,7 @@ func (s *AppenderSuite) appendWithStats(
 		s.head,
 		services.CFViaRangeByMask[*shard.Shard, *storage.Head],
 		appender.Stats{Lap: recorders.Stages.Start(), Shards: recorders.Shards},
-	).Append(ctx, storagetest.NewIncomingData(&s.Suite, timeSeries), state, commitToWal)
+	).Append(ctx, storagetest.NewIncomingData(s.Require().NoError, timeSeries), state, commitToWal)
 
 	return err
 }
@@ -61,7 +61,7 @@ func (s *AppenderSuite) TestStatsAppendFromCacheWithoutCommit() {
 	registry := prometheus.NewRegistry()
 	recorders := appender.NewRecorders(registry)
 	state := s.createState([]*cppbridge.RelabelConfig{})
-	_, err := s.appender.Append(context.Background(), storagetest.NewIncomingData(&s.Suite, s.metric1(1)), state, false)
+	_, err := s.appender.Append(context.Background(), storagetest.NewIncomingData(s.Require().NoError, s.metric1(1)), state, false)
 	s.Require().NoError(err)
 
 	// Act

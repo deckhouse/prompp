@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sync/atomic"
+	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"

@@ -572,7 +572,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV1CommitsAllShards() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
 		false,
 	)
@@ -592,7 +592,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsOnlyExhaustedShard() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
 		false,
 	)
@@ -612,7 +612,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsEveryExhaustedShard() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, append(
+		storagetest.NewIncomingData(s.Require().NoError, append(
 			seriesWithSamples(shard0Series, int64(maxSegmentSize)),
 			seriesWithSamples(shard1Series, int64(maxSegmentSize))...,
 		)),
@@ -635,7 +635,7 @@ func (s *AppenderSuite) TestLimitNotExhaustedWalV2DoesNotCommit() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
 		state,
 		false,
 	)
@@ -655,7 +655,7 @@ func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, 1)),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, 1)),
 		state,
 		true,
 	)
