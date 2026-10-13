@@ -263,7 +263,7 @@ entrypoint_fact_checking(
         ],
     ),
     tags = ["manual"],
-    target = ":entrypoint",
+    target = ":entrypoint_bridge",
 )
 
 cc_static_library(
