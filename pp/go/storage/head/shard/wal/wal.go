@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
@@ -53,8 +54,12 @@ type Encoder[TSegment EncodedSegment] interface {
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
 
-	// MaxWrittenItemIndex returns max item index written to WAL.
-	MaxWrittenItemIndex() uint32
+	// LongFinalize finalizes the encoder and returns the encoded segment,
+	// intended for a long-running finalization (e.g. after copying all added series into a new head).
+	LongFinalize() (TSegment, error)
+
+	// WrittenSeriesIDSentinel returns written series id sentinel.
+	WrittenSeriesIDSentinel() uint32
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
@@ -71,19 +76,23 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 	encLocker      sync.Mutex
 	swLocker       sync.Mutex
 	maxSegmentSize uint32
+	fileVersion    uint8
 	corrupted      bool
 	limitExhausted bool
 	closed         bool
 	// stat
 	samplesPerSegment prometheus.Counter
 	segments          prometheus.Gauge
+	stats             stagestats.Stripe
 }
 
 // NewWal init new [Wal].
-// lssLocker needs to be locked for reading from LSS for the commit.
+// fileVersion is the format version of the file segmentWriter writes to ([FileFormatVersion] or
+// [FileFormatVersionV2]). lssLocker needs to be locked for reading from LSS for the commit.
 func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	encoder Encoder[TSegment],
 	segmentWriter TWriter,
+	fileVersion uint8,
 	lssLocker locker.RLockable,
 	maxSegmentSize uint32,
 	shardID uint16,
@@ -99,6 +108,7 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 		encLocker:      sync.Mutex{},
 		swLocker:       sync.Mutex{},
 		maxSegmentSize: maxSegmentSize,
+		fileVersion:    fileVersion,
 		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
 			Name:        "prompp_shard_wal_samples_per_segment_sum",
 			Help:        "Number of samples per segment.",
@@ -109,6 +119,7 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 			Help:        "Number of segments.",
 			ConstLabels: ls,
 		}),
+		stats: newStageRecorder(registerer).Stripe(uint32(shardID)),
 	}
 
 	w.segments.Set(0)
@@ -154,16 +165,126 @@ func (w *Wal[TSegment, TWriter]) Close() error {
 // Commit finalize segment from encoder and write to [SegmentWriter].
 // It is necessary to lock the LSS for reading for the commit.
 func (w *Wal[TSegment, TWriter]) Commit() error {
+	return w.commit(Encoder[TSegment].Finalize, stageCommit)
+}
+
+// LongCommit finalize segment from encoder via [Encoder.LongFinalize] and write to wal.
+// Use it instead of [Wal.Commit] when the finalization is expected to be long
+// (e.g. after copying all added series into a new head).
+func (w *Wal[TSegment, TWriter]) LongCommit() error {
+	return w.commit(Encoder[TSegment].LongFinalize, stageLongCommit)
+}
+
+// CurrentSize returns current wal size.
+func (w *Wal[TSegment, TWriter]) CurrentSize() int64 {
+	if w.corrupted {
+		return 0
+	}
+
+	return w.segmentWriter.CurrentSize()
+}
+
+// IndependentCommit reports whether segments carry through IDs ([FileFormatVersionV2]),
+// so this [Wal] can be committed without committing the WALs of the other shards.
+func (w *Wal[TSegment, TWriter]) IndependentCommit() bool {
+	return !w.corrupted && w.fileVersion >= FileFormatVersionV2
+}
+
+// Flush wal [SegmentWriter], write all buffered data to storage.
+func (w *Wal[TSegment, TWriter]) Flush() error {
+	if w.corrupted {
+		return nil
+	}
+
+	start := stagestats.Now()
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
+
+	if err := w.segmentWriter.Flush(); err != nil {
+		return err
+	}
+	w.stats.Since(stageFlush, start)
+
+	return nil
+}
+
+// WrittenSeriesIDSentinel returns written series id sentinel.
+func (w *Wal[TSegment, TWriter]) WrittenSeriesIDSentinel() uint32 {
+	if w.corrupted {
+		return 0
+	}
+
+	w.encLocker.Lock()
+	defer w.encLocker.Unlock()
+
+	return w.encoder.WrittenSeriesIDSentinel()
+}
+
+// Sync commits the current contents of the [SegmentWriter].
+func (w *Wal[TSegment, TWriter]) Sync() error {
 	if w.corrupted {
 		return ErrWalIsCorrupted
 	}
 
+	start := stagestats.Now()
+	w.swLocker.Lock()
+	defer w.swLocker.Unlock()
+
+	if err := w.segmentWriter.Sync(); err != nil {
+		return err
+	}
+	w.stats.Since(stageSync, start)
+
+	return nil
+}
+
+// Write the incoming inner series to wal encoder.
+func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []cppbridge.InnerSeries) (bool, error) {
+	if w.corrupted {
+		return false, ErrWalIsCorrupted
+	}
+
+	start := stagestats.Now()
+	w.encLocker.Lock()
+	defer w.encLocker.Unlock()
+
+	samples, err := w.encoder.Encode(innerSeriesSlice)
+	if err != nil {
+		return false, fmt.Errorf("failed to encode inner series: %w", err)
+	}
+	w.stats.Since(stageWrite, start)
+
+	if w.maxSegmentSize == 0 {
+		return false, nil
+	}
+
+	// memoize reaching of limits to deduplicate triggers
+	if !w.limitExhausted && samples >= w.maxSegmentSize {
+		w.limitExhausted = true
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// commit finalize segment from encoder via finalize and write to [SegmentWriter],
+// shared implementation of [Wal.Commit] and [Wal.LongCommit] accounted as the stage.
+// It is necessary to lock the LSS for reading for the commit.
+func (w *Wal[TSegment, TWriter]) commit(
+	finalize func(Encoder[TSegment]) (TSegment, error),
+	stage stagestats.Stage,
+) error {
+	if w.corrupted {
+		return ErrWalIsCorrupted
+	}
+
+	start := stagestats.Now()
 	w.swLocker.Lock()
 	defer w.swLocker.Unlock()
 
 	w.encLocker.Lock()
 	w.lssLocker.RLock()
-	segment, err := w.encoder.Finalize()
+	segment, err := finalize(w.encoder)
 	w.lssLocker.RUnlock()
 	if err != nil {
 		w.encLocker.Unlock()
@@ -179,78 +300,7 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 	if err = w.segmentWriter.Write(segment); err != nil {
 		return fmt.Errorf("failed to write segment: %w", err)
 	}
+	w.stats.Since(stage, start)
 
 	return nil
-}
-
-// CurrentSize returns current wal size.
-func (w *Wal[TSegment, TWriter]) CurrentSize() int64 {
-	if w.corrupted {
-		return 0
-	}
-
-	return w.segmentWriter.CurrentSize()
-}
-
-// Flush wal [SegmentWriter], write all buffered data to storage.
-func (w *Wal[TSegment, TWriter]) Flush() error {
-	if w.corrupted {
-		return nil
-	}
-
-	w.swLocker.Lock()
-	defer w.swLocker.Unlock()
-
-	return w.segmentWriter.Flush()
-}
-
-// MaxWrittenItemIndex returns max item index written to WAL.
-func (w *Wal[TSegment, TWriter]) MaxWrittenItemIndex() uint32 {
-	if w.corrupted {
-		return 0
-	}
-
-	w.encLocker.Lock()
-	defer w.encLocker.Unlock()
-
-	return w.encoder.MaxWrittenItemIndex()
-}
-
-// Sync commits the current contents of the [SegmentWriter].
-func (w *Wal[TSegment, TWriter]) Sync() error {
-	if w.corrupted {
-		return ErrWalIsCorrupted
-	}
-
-	w.swLocker.Lock()
-	defer w.swLocker.Unlock()
-
-	return w.segmentWriter.Sync()
-}
-
-// Write the incoming inner series to wal encoder.
-func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []cppbridge.InnerSeries) (bool, error) {
-	if w.corrupted {
-		return false, ErrWalIsCorrupted
-	}
-
-	w.encLocker.Lock()
-	defer w.encLocker.Unlock()
-
-	samples, err := w.encoder.Encode(innerSeriesSlice)
-	if err != nil {
-		return false, fmt.Errorf("failed to encode inner series: %w", err)
-	}
-
-	if w.maxSegmentSize == 0 {
-		return false, nil
-	}
-
-	// memoize reaching of limits to deduplicate triggers
-	if !w.limitExhausted && samples >= w.maxSegmentSize {
-		w.limitExhausted = true
-		return true, nil
-	}
-
-	return false, nil
 }

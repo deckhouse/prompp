@@ -5,4 +5,12 @@ CompileFlags:
   Add:
     - "-std=c++2b"
     - "-ferror-limit=0"
-    - "-frelaxed-template-template-args"
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: None
+  Includes:
+    IgnoreHeader:
+      - "gtest/.*"
+      - "gmock/.*"
+      - "benchmark/.*"
+      - "parallel_hashmap/.*"

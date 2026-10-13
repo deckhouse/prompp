@@ -383,3 +383,21 @@ void prompp_primitives_free_ls_ids_mapping(void* args) {
 
   static_cast<Arguments*>(args)->~Arguments();
 }
+
+extern "C" void prompp_primitives_lss_release_hash_set(void* args) {
+  struct Arguments {
+    LssVariantPtr lss;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  lss.release_hash_set();
+}
+
+extern "C" void prompp_primitives_lss_release_ls_id_set(void* args) {
+  struct Arguments {
+    LssVariantPtr lss;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  lss.release_ls_id_set();
+}

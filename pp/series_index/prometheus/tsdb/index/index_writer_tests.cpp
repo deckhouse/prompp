@@ -8,7 +8,6 @@
 #include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 

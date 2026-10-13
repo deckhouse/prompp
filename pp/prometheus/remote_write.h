@@ -26,12 +26,12 @@ struct TimeseriesProtobufHashdexRecord {
   size_t labelset_hashval;
   std::string_view timeseries_protobuf_message;
 
-  inline __attribute__((always_inline)) explicit TimeseriesProtobufHashdexRecord(size_t lshv, std::string_view& tpm) noexcept
+  PROMPP_ALWAYS_INLINE explicit TimeseriesProtobufHashdexRecord(size_t lshv, std::string_view& tpm) noexcept
       : labelset_hashval(lshv), timeseries_protobuf_message(tpm) {}
 };
 
 template <class Output, class Sample>
-inline __attribute__((always_inline)) void write_sample(protozero::basic_pbf_writer<Output>& pb, const Sample& sample) {
+PROMPP_ALWAYS_INLINE void write_sample(protozero::basic_pbf_writer<Output>& pb, const Sample& sample) {
   protozero::basic_pbf_writer<Output> pb_sample(pb, 2);
 
   if (__builtin_expect(sample.value() != 0.0, true)) {
@@ -44,23 +44,21 @@ inline __attribute__((always_inline)) void write_sample(protozero::basic_pbf_wri
 }
 
 template <class Output>
-inline __attribute__((always_inline)) void write_label(protozero::basic_pbf_writer<Output>& pb,
-                                                       const std::string_view& label_name,
-                                                       const std::string_view& label_value) {
+PROMPP_ALWAYS_INLINE void write_label(protozero::basic_pbf_writer<Output>& pb, const std::string_view& label_name, const std::string_view& label_value) {
   protozero::basic_pbf_writer<Output> pb_label(pb, 1);
   pb_label.add_string(1, label_name);
   pb_label.add_string(2, label_value);
 }
 
 template <class Output, class LabelSet>
-inline __attribute__((always_inline)) void write_label_set(protozero::basic_pbf_writer<Output>& pb, const LabelSet& label_set) {
+PROMPP_ALWAYS_INLINE void write_label_set(protozero::basic_pbf_writer<Output>& pb, const LabelSet& label_set) {
   for (const auto& [label_name, label_value] : label_set) {
     write_label(pb, label_name, label_value);
   }
 }
 
 template <class Output, class Timeseries>
-inline __attribute__((always_inline)) void write_timeseries(protozero::basic_pbf_writer<Output>& pb, const Timeseries& timeseries) {
+PROMPP_ALWAYS_INLINE void write_timeseries(protozero::basic_pbf_writer<Output>& pb, const Timeseries& timeseries) {
   protozero::basic_pbf_writer<Output> pb_timeseries(pb, 1);
 
   write_label_set(pb_timeseries, timeseries.label_set());
@@ -71,7 +69,7 @@ inline __attribute__((always_inline)) void write_timeseries(protozero::basic_pbf
 }
 
 template <class ProtobufReader, class Sample>
-inline __attribute__((always_inline)) void read_sample(ProtobufReader& pb_sample, Sample& sample) {
+PROMPP_ALWAYS_INLINE void read_sample(ProtobufReader& pb_sample, Sample& sample) {
   uint8_t parsed = 0;
 
   while (pb_sample.next()) {
@@ -99,7 +97,7 @@ inline __attribute__((always_inline)) void read_sample(ProtobufReader& pb_sample
 }
 
 template <class ProtobufReader, class Label>
-inline __attribute__((always_inline)) void read_label(ProtobufReader& pb_label, Label& label) {
+PROMPP_ALWAYS_INLINE void read_label(ProtobufReader& pb_label, Label& label) {
   uint8_t parsed = 0;
 
   while (pb_label.next()) {
@@ -123,7 +121,7 @@ inline __attribute__((always_inline)) void read_label(ProtobufReader& pb_label, 
 }
 
 template <class ProtobufReader, class LabelSet>
-inline __attribute__((always_inline)) void read_only_label_set(ProtobufReader& pb_timeseries, LabelSet& label_set) {
+PROMPP_ALWAYS_INLINE void read_only_label_set(ProtobufReader& pb_timeseries, LabelSet& label_set) {
   while (pb_timeseries.next(1)) {
     auto pb_label = pb_timeseries.get_message();
     typename LabelSet::label_type label;
@@ -137,7 +135,7 @@ inline __attribute__((always_inline)) void read_only_label_set(ProtobufReader& p
 }
 
 template <class ProtobufReader, class Timeseries>
-inline __attribute__((always_inline)) void read_timeseries(ProtobufReader&& pb_timeseries, Timeseries& timeseries) {
+PROMPP_ALWAYS_INLINE void read_timeseries(ProtobufReader&& pb_timeseries, Timeseries& timeseries) {
   while (pb_timeseries.next()) {
     switch (pb_timeseries.tag()) {
       case 1: {  // label
@@ -188,9 +186,7 @@ void read_many_timeseries(ProtobufReader& pb, Callback func) {
 
 // TODO: maybe delete it?
 template <class ProtobufReader, class Timeseries>
-inline __attribute__((always_inline)) void read_timeseries_without_samples(ProtobufReader&& pb_timeseries,
-                                                                           Timeseries& timeseries,
-                                                                           const PbLabelSetMemoryLimits& limits) {
+PROMPP_ALWAYS_INLINE void read_timeseries_without_samples(ProtobufReader&& pb_timeseries, Timeseries& timeseries, const PbLabelSetMemoryLimits& limits) {
   size_t current_message_n = 0;
   while (pb_timeseries.next(1)) {
     if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
@@ -217,32 +213,45 @@ inline __attribute__((always_inline)) void read_timeseries_without_samples(Proto
 }
 
 template <class ProtobufReader, class LabelSet>
-inline __attribute__((always_inline)) void read_timeseries_label_set(ProtobufReader&& pb_timeseries,
-                                                                     LabelSet& label_set,
-                                                                     const PbLabelSetMemoryLimits& limits) {
+PROMPP_ALWAYS_INLINE bool read_timeseries_label_set(ProtobufReader&& pb_timeseries, LabelSet& label_set, const PbLabelSetMemoryLimits& limits) {
   size_t current_message_n = 0;
-  while (pb_timeseries.next(1)) {
-    if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
-      throw BareBones::Exception(0xf666cea4f74038c7, "Max Label Names count per Timeseries limit exceeded");
-    }
+  bool has_samples = false;
+  while (pb_timeseries.next()) {
+    switch (pb_timeseries.tag()) {
+      case 1: {  // label
+        if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
+          throw BareBones::Exception(0xf666cea4f74038c7, "Max Label Names count per Timeseries limit exceeded");
+        }
 
-    auto pb_label = pb_timeseries.get_message();
-    typename LabelSet::label_type label;
-    read_label(pb_label, label);
-    if (size_t label_name_sz = std::size(std::get<0>(label)); limits.max_label_name_length && label_name_sz > limits.max_label_name_length) {
-      throw BareBones::Exception(0x01102a3321345745, "Label name size (%zd) exceeds the maximum name size limit", label_name_sz);
-    }
-    if (size_t label_value_sz = std::size(std::get<1>(label)); limits.max_label_value_length && label_value_sz > limits.max_label_value_length) {
-      throw BareBones::Exception(0x32b5ff9563758da8, "Label value size (%zd) exceeds the maximum value size limit", label_value_sz);
-    }
-    label_set.add(label);
+        auto pb_label = pb_timeseries.get_message();
+        typename LabelSet::label_type label;
+        read_label(pb_label, label);
+        if (size_t label_name_sz = std::size(std::get<0>(label)); limits.max_label_name_length && label_name_sz > limits.max_label_name_length) {
+          throw BareBones::Exception(0x01102a3321345745, "Label name size (%zd) exceeds the maximum name size limit", label_name_sz);
+        }
+        if (size_t label_value_sz = std::size(std::get<1>(label)); limits.max_label_value_length && label_value_sz > limits.max_label_value_length) {
+          throw BareBones::Exception(0x32b5ff9563758da8, "Label value size (%zd) exceeds the maximum value size limit", label_value_sz);
+        }
+        label_set.add(label);
 
-    current_message_n++;
+        current_message_n++;
+      } break;
+
+      case 2:  // sample
+        has_samples = true;
+        pb_timeseries.skip();
+        break;
+
+      default:
+        pb_timeseries.skip();
+    }
   }
 
   if (__builtin_expect(!label_set.size(), false)) {
     throw BareBones::Exception(0x68997b7d2e49de1e, "Protobuf message has an empty label set, can't read timeseries");
   }
+
+  return has_samples;
 }
 
 template <class Timeseries, class Hashdex, class ProtobufReader>

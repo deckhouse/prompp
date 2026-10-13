@@ -1,4 +1,5 @@
 load("//:bazel/rules/cc_static_library.bzl", "cc_static_library")
+load("//:bazel/rules/march_variant.bzl", "march_variants")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -19,12 +20,9 @@ cc_library(
     name = "bare_bones_headers",
     hdrs = glob(["bare_bones/*.h"]),
     deps = [
-        "//third_party",
         "@lz4",
         "@parallel_hashmap",
-        "@scope_exit",
         "@xxHash",
-        "@roaring",
     ],
 )
 
@@ -68,6 +66,8 @@ cc_library(
     hdrs = glob(["primitives/**/*.h"]),
     deps = [
         ":bare_bones",
+        "//third_party:protozero",
+        "@parallel_hashmap",
     ],
 )
 
@@ -93,9 +93,12 @@ cc_library(
     deps = [
         ":bare_bones",
         ":primitives",
+        "//third_party:protozero",
         "@com_google_absl//absl/crc:crc32c",
+        "@parallel_hashmap",
         "@quasis_crypto",
         "@re2",
+        "@roaring",
         "@simdutf",
     ],
 )
@@ -105,6 +108,7 @@ cc_test(
     srcs = glob(["prometheus/**/*_tests.cpp"]),
     deps = [
         ":prometheus",
+        ":series_index",
         "@gtest//:gtest_main",
         "@roaring",
     ],
@@ -118,7 +122,8 @@ cc_library(
         ":primitives",
         ":prometheus",
         ":series_data",
-        "//third_party/fastfloat",
+        "//third_party:protozero",
+        "//third_party:uuid",
         "@roaring",
         "@simdutf",
         "@snappy",
@@ -149,6 +154,9 @@ cc_library(
     hdrs = glob(["head/**/*.h"]),
     linkstatic = True,
     deps = [
+        ":bare_bones",
+        ":primitives",
+        ":prometheus",
         ":series_data",
         ":series_index",
     ],
@@ -168,6 +176,7 @@ cc_library(
     hdrs = glob(["metrics/**/*.h"]),
     linkstatic = True,
     deps = [
+        ":bare_bones",
         ":prometheus",
         ":primitives",
     ],
@@ -194,8 +203,8 @@ cc_library(
     linkstatic = True,
     deps = [
         ":bare_bones",
-        ":head",
         ":primitives",
+        ":prometheus",
         ":series_data",
         ":series_index",
         ":wal",
@@ -233,6 +242,9 @@ cc_library(
         ":head",
         ":metrics",
         ":primitives",
+        ":prometheus",
+        ":series_data",
+        ":series_index",
         ":wal",
     ] + select({
         "//bazel/toolchain:with_asan": [],
@@ -264,17 +276,40 @@ cc_static_library(
     ],
 )
 
+# Keep in sync with amd64_flavors/arm64_flavors in entrypoint/Makefile.
+ENTRYPOINT_FLAVORS = {
+    "@platforms//cpu:x86_64": [
+        "k8",
+        "nehalem",
+        "haswell",
+    ],
+    "@platforms//cpu:aarch64": [
+        "armv8-a",
+        "armv8-a+crc",
+    ],
+}
+
+march_variants(
+    name = "entrypoint_aio",
+    marches_by_cpu = ENTRYPOINT_FLAVORS,
+    target = ":entrypoint_aio",
+)
+
+# The runtime init is built only for the generic (first) flavor of each platform.
+march_variants(
+    name = "entrypoint_init_aio",
+    marches_by_cpu = {cpu: marches[:1] for cpu, marches in ENTRYPOINT_FLAVORS.items()},
+    target = ":entrypoint_init_aio",
+)
+
 cc_library(
     name = "performance_tests_headers",
     hdrs = glob(["performance_tests/**/*.h"]),
     deps = [
-        ":head",
+        ":bare_bones",
         ":primitives",
-        ":prometheus",
-        ":series_data",
-        ":series_index",
         ":wal",
-        "//third_party",
+        "@parallel_hashmap",
     ],
 )
 
@@ -284,7 +319,14 @@ cc_binary(
     malloc = "@jemalloc",
     deps = [
         ":performance_tests_headers",
-        "@gtest//:gtest_main",
+        ":bare_bones",
+        ":primitives",
+        ":prometheus",
+        ":series_data",
+        ":series_index",
+        ":wal",
+        "//third_party:protozero",
+        "@cedar",
     ],
 )
 
@@ -308,44 +350,33 @@ cc_library(
     deps = [
         "@google_benchmark//:benchmark_main",
         ":bare_bones",
+        ":primitives",
         ":profiling",
     ],
 )
 
 cc_library(
-    name = "integration_tests_headers",
-    hdrs = glob(["integration_tests/*.h"]),
-    deps = [
-        ":primitives",
-        "@gtest//:gtest_main",
-    ],
-)
-
-cc_binary(
-    name = "integration_tests",
-    srcs = glob(["integration_tests/*.cpp"]),
-    malloc = "@jemalloc",
-    deps = [
-        ":integration_tests_headers",
-    ],
-)
-
-cc_library(
     name = "series_index",
-    hdrs = glob(["series_index/**/*.h"]),
+    hdrs = glob(
+        include = ["series_index/**/*.h"],
+        exclude = ["series_index/tests/**/*.h"],
+    ),
     deps = [
         ":bare_bones_headers",
         ":primitives",
         ":prometheus",
-        ":wal",
         "@cedar",
+        "@parallel_hashmap",
         "@re2",
     ],
 )
 
 cc_test(
     name = "series_index_test",
-    srcs = glob(["series_index/**/*_tests.cpp"]),
+    srcs = glob([
+        "series_index/**/*_tests.cpp",
+        "series_index/tests/**/*.h",
+    ]),
     deps = [
         ":series_index",
         "@gtest//:gtest_main",
@@ -359,6 +390,8 @@ cc_library(
         ":bare_bones_headers",
         ":metrics",
         ":primitives",
+        "//third_party:protozero",
+        "@parallel_hashmap",
     ],
 )
 
