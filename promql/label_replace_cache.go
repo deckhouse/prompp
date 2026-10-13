@@ -207,12 +207,6 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 	return c
 }
 
-// labelReplaceCacheShrinkFloor returns the capacity floor: an absolute 64
-// entries or a twentieth of the configured maximum, whichever is larger.
-func labelReplaceCacheShrinkFloor(maximum int) int {
-	return max(labelReplaceCacheShrinkFloorMin, maximum/labelReplaceCacheShrinkFloorDivisor)
-}
-
 // addLabels stores a resulting labelset stamped with the cached timestamp
 // and refreshes the entries gauge; it is a noop when the labels cache is
 // disabled but the wrapper is alive.
@@ -369,10 +363,10 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 
 	length, capacity := c.labelsCache.Len(), c.labelsCap
 	switch {
-	// Still full after the sweep: the live set does not fit, grow doubled
-	// toward the configured maximum.
+	// Still full after the sweep: the live set does not fit, grow along the
+	// progressive schedule toward the configured maximum.
 	case length == capacity && capacity < c.labelsMax:
-		c.resize(min(capacity*2, c.labelsMax), labelReplaceCacheGrowDirection)
+		c.resize(min(labelReplaceCacheGrowTarget(capacity), c.labelsMax), labelReplaceCacheGrowDirection)
 	// Freed a quarter or more, or drifted below two thirds with progress:
 	// shrink toward the survivors plus headroom, never below the floor.
 	case freed >= capacity/labelReplaceCacheShrinkFreedDivisor ||
@@ -382,4 +376,33 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 			c.resize(target, labelReplaceCacheShrinkDirection)
 		}
 	}
+}
+
+// labelReplaceCacheShrinkFloor returns the capacity floor: an absolute 64
+// entries or a twentieth of the configured maximum, whichever is larger.
+func labelReplaceCacheShrinkFloor(maximum int) int {
+	return max(labelReplaceCacheShrinkFloorMin, maximum/labelReplaceCacheShrinkFloorDivisor)
+}
+
+// labelReplaceCacheGrowSteps maps a current capacity to its growth
+// multiplier, checked from the largest threshold down: small capacities
+// jump aggressively since unused capacity costs nothing (the LRU never
+// preallocates), which shortens the ramp to a large working set.
+var labelReplaceCacheGrowSteps = [...][2]int{
+	{2048, 2},
+	{512, 4},
+	{0, 8},
+}
+
+// labelReplaceCacheGrowTarget returns the next capacity after the current
+// one: the current capacity times the first multiplier whose threshold it
+// exceeds.
+func labelReplaceCacheGrowTarget(capacity int) int {
+	for _, step := range labelReplaceCacheGrowSteps {
+		if capacity > step[0] {
+			return capacity * step[1]
+		}
+	}
+
+	return capacity * 2
 }

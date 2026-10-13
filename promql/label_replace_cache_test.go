@@ -132,6 +132,44 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 	// Assert: no panic, nothing to assert beyond survival.
 }
 
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() {
+	// Arrange: a full cache at a scheduled step.
+	c := newLabelReplaceCache(10000, 0)
+	s.Require().NotNil(c)
+	c.labelsCap = 512
+	c.labelsCache.Resize(512)
+	c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(512)
+	for i := range 512 {
+		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+	}
+
+	// Act: a sweep over an all-fresh full cache.
+	c.sweepOnce(0)
+
+	// Assert: the scheduled multiplier applies instead of doubling.
+	s.Equal(4096, c.labelsCap)
+	s.Equal(4096.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+
+	// Arrange: an off-schedule capacity takes the catch-all multiplier.
+	d := newLabelReplaceCache(10000, 0)
+	s.Require().NotNil(d)
+	d.labelsCap = 300
+	d.labelsCache.Resize(300)
+	d.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(300)
+	for i := range 300 {
+		d.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+	}
+
+	// Act.
+	d.sweepOnce(0)
+
+	// Assert.
+	s.Equal(2400, d.labelsCap)
+	s.Equal(2400.0, testutil.ToFloat64(d.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(1.0, testutil.ToFloat64(d.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+}
+
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsWhenFull() {
 	// Arrange: a full cache of fresh entries below its maximum.
 	c := newLabelReplaceCache(100, 0)
