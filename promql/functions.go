@@ -1477,6 +1477,7 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 	val, ws := ev.eval(ctx, args[0])
 	matrix := val.(Matrix)
 	lb := labels.NewBuilder(labels.EmptyLabels())
+	cacheLabels := ev.labelReplaceCache != nil && ev.labelReplaceCache.labelsCache != nil
 
 	// Opportunistic sweep: at most one labels-cache sweep per interval across
 	// all concurrent queries, driven by query traffic instead of a ticker.
@@ -1484,19 +1485,22 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 
 	for i, el := range matrix {
 		srcVal := el.Metric.Get(src)
-		key := labelReplaceCacheKey{
-			dst: dst, repl: repl, src: src, regexStr: regexStr, srcVal: srcVal, baseHash: el.Metric.Hash(),
-		}
-
-		if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
-			matrix[i].Metric = cached.result
-			if dst == model.MetricNameLabel {
-				matrix[i].DropName = false
-			} else {
-				matrix[i].DropName = el.DropName
+		var key labelReplaceCacheKey
+		if cacheLabels {
+			key = labelReplaceCacheKey{
+				dst: dst, repl: repl, src: src, regexStr: regexStr, srcVal: srcVal, baseHash: el.Metric.Hash(),
 			}
 
-			continue
+			if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
+				matrix[i].Metric = cached.result
+				if dst == model.MetricNameLabel {
+					matrix[i].DropName = false
+				} else {
+					matrix[i].DropName = el.DropName
+				}
+
+				continue
+			}
 		}
 
 		indexes := regex.FindStringSubmatchIndex(srcVal)
@@ -1511,7 +1515,9 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 				matrix[i].DropName = el.DropName
 			}
 
-			ev.labelReplaceCache.addLabels(key, matrix[i].Metric)
+			if cacheLabels {
+				ev.labelReplaceCache.addLabels(key, matrix[i].Metric)
+			}
 		}
 	}
 	if matrix.ContainsSameLabelset() {

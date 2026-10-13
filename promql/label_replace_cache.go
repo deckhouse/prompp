@@ -1,11 +1,13 @@
 package promql
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/grafana/regexp"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -29,13 +31,14 @@ const (
 	labelReplaceCacheGrowDirection   = "grow"
 	labelReplaceCacheShrinkDirection = "shrink"
 
-	// labelReplaceCacheSweepInterval is the period of the labels-cache sweep
-	// ticker run by the engine.
-	labelReplaceCacheSweepInterval = 60 * time.Second
+	// labelReplaceCacheSweepIntervalMs is the minimum interval between query-driven sweeps in milliseconds.
+	labelReplaceCacheSweepIntervalMs int64 = 60_000
 
 	// labelReplaceCacheStaleTicks is the number of sweep intervals without a
 	// hit after which an entry counts as stale and is swept.
 	labelReplaceCacheStaleTicks = 2
+
+	labelReplaceCacheStaleAfterMs = labelReplaceCacheStaleTicks * labelReplaceCacheSweepIntervalMs
 
 	// labelReplaceCacheShrinkFreedDivisor sets the shrink trigger to a freed
 	// quarter of the current capacity.
@@ -54,6 +57,16 @@ const (
 	labelReplaceCacheShrinkFloorDivisor = 100
 )
 
+// labelReplaceCacheGrowSteps maps a current capacity to its growth
+// multiplier, checked from the largest threshold down: small capacities
+// jump aggressively since unused capacity costs nothing (the LRU never
+// preallocates), which shortens the ramp to a large working set.
+var labelReplaceCacheGrowSteps = [...][2]int{
+	{2048, 2},
+	{512, 4},
+	{0, 8},
+}
+
 // labelReplaceCacheKey fully determines the resulting labelset of a
 // label_replace call for one series. baseHash is the hash of the source
 // labelset (el.Metric.Hash()) because the result is built from the whole
@@ -68,9 +81,8 @@ type labelReplaceCacheKey struct {
 // labelReplaceCacheEntry is the value stored in the labels cache: the
 // memoized labelset plus the idle timestamp. idleTs counts monotonic
 // milliseconds from wrapper creation and is refreshed on every hit, so it
-// measures idleness rather than age. It is atomic because concurrent query
-// hits refresh it without holding any lock; the entry itself is shared by
-// pointer so every holder observes the refresh.
+// measures idleness rather than age. Updates are serialized with LRU operations;
+// atomic reads allow inspection after a lookup releases the cache lock.
 type labelReplaceCacheEntry struct {
 	result labels.Labels
 	idleTs atomic.Int64
@@ -79,12 +91,14 @@ type labelReplaceCacheEntry struct {
 // labelReplaceCache memoizes label_replace results between queries. It owns
 // two LRUs: one for resulting labelsets and one for compiled regexes. A nil
 // *labelReplaceCache means "disabled" and every method is nil-safe. Either
-// LRU may independently be nil when its mode is disabled. The sweep
-// controller runs in a single engine goroutine; concurrent query callbacks
-// only touch lock-free or library-guarded state.
+// LRU may independently be nil when its mode is disabled. labelsMu serializes
+// label lookups, timestamp updates and sweeps; sweepMu prevents overlapping sweeps.
 type labelReplaceCache struct {
-	labelsCache *lru.Cache[labelReplaceCacheKey, *labelReplaceCacheEntry]
+	labelsCache *simplelru.LRU[labelReplaceCacheKey, *labelReplaceCacheEntry]
 	regexCache  *lru.Cache[string, *regexp.Regexp]
+
+	labelsMu sync.Mutex
+	sweepMu  sync.Mutex
 
 	hits      *prometheus.CounterVec
 	misses    *prometheus.CounterVec
@@ -94,13 +108,12 @@ type labelReplaceCache struct {
 	capacity  *prometheus.GaugeVec
 
 	// labelsMax is the configured maximum and labelsCap the current capacity
-	// of the labels cache. Both are written only by construction and by the
-	// sweep goroutine, and read by it as well as by tests.
+	// of the labels cache. labelsMax is immutable; labelsMu guards labelsCap.
 	labelsMax int
 	labelsCap int
 
 	// nowMs is the cached monotonic clock (milliseconds since wrapper
-	// creation) refreshed by the sweep ticker and read by the hit path, so
+	// creation) refreshed by query-driven sweeps and read by the hit path, so
 	// hits never call the wall clock. Tests inject it directly.
 	nowMs atomic.Int64
 
@@ -163,9 +176,8 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 		startedAt: time.Now(),
 	}
 
-	// The eviction callbacks run outside the LRU lock, so synchronously
-	// touching metrics and reading Len() is safe. Each cache field is read
-	// at callback time, after its constructor has returned.
+	// Labels eviction callbacks run under labelsMu; regex callbacks run outside
+	// the library lock. Each callback can safely read its cache length.
 	if labelSize >= 0 {
 		if labelSize == 0 {
 			labelSize = DefaultLabelReplaceCacheSize
@@ -176,7 +188,7 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 		// starts at itself.
 		c.labelsCap = min(labelReplaceCacheShrinkFloor(labelSize), labelSize)
 
-		labelsCache, err := lru.NewWithEvict(c.labelsCap, c.onLabelsEvict)
+		labelsCache, err := simplelru.NewLRU(c.labelsCap, c.onLabelsEvict)
 		if err != nil {
 			return nil
 		}
@@ -215,10 +227,14 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 		return
 	}
 
+	c.labelsMu.Lock()
+
 	entry := &labelReplaceCacheEntry{result: val}
 	entry.idleTs.Store(c.nowMs.Load())
 	c.labelsCache.Add(key, entry)
 	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
+
+	c.labelsMu.Unlock()
 }
 
 // getLabels looks up a memoized labelset, accounting a hit or a miss. Entry
@@ -232,15 +248,20 @@ func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (*labelReplaceCa
 		return nil, false
 	}
 
+	c.labelsMu.Lock()
+
 	val, ok := c.labelsCache.Get(key)
 	if !ok {
+		c.labelsMu.Unlock()
 		c.misses.WithLabelValues(labelReplaceCacheLabelsID).Inc()
 
 		return nil, false
 	}
 
-	c.hits.WithLabelValues(labelReplaceCacheLabelsID).Inc()
 	val.idleTs.Store(c.nowMs.Load())
+	c.labelsMu.Unlock()
+
+	c.hits.WithLabelValues(labelReplaceCacheLabelsID).Inc()
 
 	return val, true
 }
@@ -279,20 +300,14 @@ func (c *labelReplaceCache) len() int {
 		return 0
 	}
 
+	c.labelsMu.Lock()
+	defer c.labelsMu.Unlock()
+
 	return c.labelsCache.Len()
 }
 
-// onLabelsEvict is the labels LRU eviction callback: it accounts the
-// eviction and refreshes the entries gauge. Capacity decisions belong to the
-// sweep, which runs in a single goroutine.
-func (c *labelReplaceCache) onLabelsEvict(_ labelReplaceCacheKey, _ *labelReplaceCacheEntry) {
-	c.evictions.WithLabelValues(labelReplaceCacheLabelsID).Inc()
-	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
-}
-
 // maybeSweep runs a labels-cache sweep when a sweep interval elapsed since
-// the previous one. The winner is elected by a compare-and-swap on the
-// cached clock, so concurrent queries never sweep twice; losers return
+// the previous one. An in-progress sweep causes concurrent callers to return
 // without waiting. Nil-safe: a nil or disabled cache never sweeps.
 func (c *labelReplaceCache) maybeSweep() {
 	if c == nil || c.labelsCache == nil {
@@ -302,7 +317,7 @@ func (c *labelReplaceCache) maybeSweep() {
 	c.maybeSweepAt(time.Since(c.startedAt).Milliseconds())
 }
 
-// maybeSweepAt is maybeSweep with an injected wall clock, so tests stay
+// maybeSweepAt is maybeSweep with an injected monotonic clock, so tests stay
 // deterministic without sleeping.
 func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 	if c == nil || c.labelsCache == nil {
@@ -310,14 +325,30 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 	}
 
 	current := c.nowMs.Load()
-	if wallMs-current < int64(labelReplaceCacheSweepInterval.Milliseconds()) {
-		return
-	}
-	if !c.nowMs.CompareAndSwap(current, wallMs) {
+	if wallMs-current < labelReplaceCacheSweepIntervalMs {
 		return
 	}
 
+	if !c.sweepMu.TryLock() {
+		return
+	}
+
+	current = c.nowMs.Load()
+	if wallMs-current < labelReplaceCacheSweepIntervalMs {
+		c.sweepMu.Unlock()
+		return
+	}
+
+	c.nowMs.Store(wallMs)
 	c.sweepOnce(wallMs)
+
+	c.sweepMu.Unlock()
+}
+
+// onLabelsEvict accounts evictions and refreshes the entries gauge under labelsMu.
+func (c *labelReplaceCache) onLabelsEvict(_ labelReplaceCacheKey, _ *labelReplaceCacheEntry) {
+	c.evictions.WithLabelValues(labelReplaceCacheLabelsID).Inc()
+	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
 }
 
 // register registers the cache metrics; call it only with a non-nil
@@ -331,7 +362,7 @@ func (c *labelReplaceCache) register(reg prometheus.Registerer) {
 }
 
 // resize applies a labels-cache capacity change and updates the capacity
-// gauge and the direction counter. Only the sweep calls it.
+// gauge and the direction counter. The caller must hold labelsMu.
 func (c *labelReplaceCache) resize(target int, direction string) {
 	c.labelsCap = target
 	c.labelsCache.Resize(target)
@@ -341,7 +372,7 @@ func (c *labelReplaceCache) resize(target int, direction string) {
 
 // sweepOnce walks the labels cache from the oldest entry, removing entries
 // idle for longer than two sweep intervals, and stops at the first fresh
-// entry. Afterwards a still-full cache grows doubled toward its maximum and
+// entry. Afterwards a still-full cache grows toward its maximum and
 // a sweep that freed a quarter or more shrinks toward the surviving count
 // plus headroom. No-op decisions change nothing.
 func (c *labelReplaceCache) sweepOnce(nowMs int64) {
@@ -349,11 +380,13 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 		return
 	}
 
-	staleAfterMs := int64(labelReplaceCacheStaleTicks) * labelReplaceCacheSweepInterval.Milliseconds()
 	freed := 0
+
+	c.labelsMu.Lock()
+
 	for {
 		_, val, ok := c.labelsCache.GetOldest()
-		if !ok || nowMs-val.idleTs.Load() <= staleAfterMs {
+		if !ok || nowMs-val.idleTs.Load() <= labelReplaceCacheStaleAfterMs {
 			break
 		}
 
@@ -361,37 +394,24 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 		freed++
 	}
 
-	length, capacity := c.labelsCache.Len(), c.labelsCap
+	length := c.labelsCache.Len()
 	switch {
 	// Still full after the sweep: the live set does not fit, grow along the
 	// progressive schedule toward the configured maximum.
-	case length == capacity && capacity < c.labelsMax:
-		c.resize(min(labelReplaceCacheGrowTarget(capacity), c.labelsMax), labelReplaceCacheGrowDirection)
+	case length == c.labelsCap && c.labelsCap < c.labelsMax:
+		c.resize(min(labelReplaceCacheGrowTarget(c.labelsCap), c.labelsMax), labelReplaceCacheGrowDirection)
+
 	// Freed a quarter or more, or drifted below two thirds with progress:
 	// shrink toward the survivors plus headroom, never below the floor.
-	case freed >= capacity/labelReplaceCacheShrinkFreedDivisor ||
-		(freed > 0 && length*3 < capacity*2):
+	case freed >= c.labelsCap/labelReplaceCacheShrinkFreedDivisor ||
+		(freed > 0 && length*3 < c.labelsCap*2):
 		floor := max(labelReplaceCacheShrinkFloorMin, c.labelsMax/labelReplaceCacheShrinkFloorDivisor)
-		if target := max(length+length/labelReplaceCacheShrinkTargetDivisor, floor); target < capacity {
+		if target := max(length+length/labelReplaceCacheShrinkTargetDivisor, floor); target < c.labelsCap {
 			c.resize(target, labelReplaceCacheShrinkDirection)
 		}
 	}
-}
 
-// labelReplaceCacheShrinkFloor returns the capacity floor: an absolute 64
-// entries or a twentieth of the configured maximum, whichever is larger.
-func labelReplaceCacheShrinkFloor(maximum int) int {
-	return max(labelReplaceCacheShrinkFloorMin, maximum/labelReplaceCacheShrinkFloorDivisor)
-}
-
-// labelReplaceCacheGrowSteps maps a current capacity to its growth
-// multiplier, checked from the largest threshold down: small capacities
-// jump aggressively since unused capacity costs nothing (the LRU never
-// preallocates), which shortens the ramp to a large working set.
-var labelReplaceCacheGrowSteps = [...][2]int{
-	{2048, 2},
-	{512, 4},
-	{0, 8},
+	c.labelsMu.Unlock()
 }
 
 // labelReplaceCacheGrowTarget returns the next capacity after the current
@@ -405,4 +425,10 @@ func labelReplaceCacheGrowTarget(capacity int) int {
 	}
 
 	return capacity * 2
+}
+
+// labelReplaceCacheShrinkFloor returns the capacity floor: an absolute 64
+// entries or a hundredth of the configured maximum, whichever is larger.
+func labelReplaceCacheShrinkFloor(maximum int) int {
+	return max(labelReplaceCacheShrinkFloorMin, maximum/labelReplaceCacheShrinkFloorDivisor)
 }

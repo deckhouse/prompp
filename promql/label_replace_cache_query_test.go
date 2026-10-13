@@ -7,7 +7,9 @@ package promql_test
 // label_replace_cache_metrics_test.go.
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +49,61 @@ func TestLabelReplaceCache(t *testing.T) {
 
 func (s *LabelReplaceCacheSuite) SetupTest() {
 	s.env = newLabelReplaceTestEnv(s.T(), 0)
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheConcurrentQueries() {
+	// Arrange: queries share source series but use two different replacements.
+	t := s.T()
+	s.env.appendSamples(t,
+		labels.FromStrings(labels.MetricName, "concurrent_metric", "instance", "a", "src", "value"),
+		labels.FromStrings(labels.MetricName, "concurrent_metric", "instance", "b", "src", "value"),
+	)
+	queries := []string{
+		`label_replace(concurrent_metric, "dst", "first-$1", "src", "(.*)")`,
+		`label_replace(concurrent_metric, "dst", "second-$1", "src", "(.*)")`,
+	}
+	expected := []string{s.env.mustRun(t, queries[0]).String(), s.env.mustRun(t, queries[1]).String()}
+	pending := make([]promql.Query, 64)
+	for i := range pending {
+		query, err := s.env.engine.NewInstantQuery(
+			t.Context(), s.env.storage, nil, queries[i%len(queries)], time.UnixMilli(labelReplaceEvalMillis),
+		)
+		s.Require().NoError(err)
+		pending[i] = query
+	}
+
+	var workers sync.WaitGroup
+	failures := make(chan error, len(pending))
+	start := make(chan struct{})
+
+	// Act.
+	for i, query := range pending {
+		workers.Go(func() {
+			defer query.Close()
+			<-start
+			result := query.Exec(t.Context())
+			if result.Err != nil {
+				failures <- result.Err
+
+				return
+			}
+
+			if result.String() != expected[i%len(expected)] {
+				failures <- fmt.Errorf("unexpected result for query %d: %s", i, result.String())
+			}
+		})
+	}
+
+	close(start)
+	workers.Wait()
+	close(failures)
+
+	// Assert.
+	for err := range failures {
+		s.NoError(err)
+	}
+
+	s.Equal(128.0, s.env.cacheSum(t, labelReplaceCacheHitsFamily, labelReplaceCacheLabelsID))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheDisabled() {

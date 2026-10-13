@@ -47,8 +47,8 @@ func BenchmarkLabelReplace(b *testing.B) {
 		EnableNegativeOffset: true,
 	}
 
-	// Both caches sized to hold the whole query working set so that the warm
-	// variant hits on every series; -1 disables a cache entirely.
+	// Labels-cache maxima cover the working set; warm setup grows the adaptive
+	// capacity before filling it. -1 disables a cache entirely.
 	configs := []labelReplaceCacheConfig{
 		{name: "both_on", size: 65536, regex: 128},
 		{name: "both_off", size: -1, regex: -1},
@@ -79,15 +79,16 @@ func BenchmarkLabelReplace(b *testing.B) {
 			}
 		})
 
-		// Warm: one full pre-run populates the cache before timing starts.
-		// For both_off and regex_only this prefill is a no-op by construction:
-		// nothing is stored or only the compiled regex is cached.
+		// Warm: grow and populate the labels cache, then verify hits before timing.
+		// Disabled labels caches still get one pre-run to warm other query state.
 		b.Run(cfg.name+"/warm", func(b *testing.B) {
 			engine := promql.NewEngine(opts)
-			prefill, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
-			require.NoError(b, err)
-			require.NoError(b, prefill.Exec(ctx).Err)
-			prefill.Close()
+			promql.PrepareLabelReplaceCacheBenchmark(b, engine, 2000, func() {
+				prefill, err := engine.NewInstantQuery(ctx, testStorage, nil, queryExpr, ts)
+				require.NoError(b, err)
+				require.NoError(b, prefill.Exec(ctx).Err)
+				prefill.Close()
+			})
 
 			b.ReportAllocs()
 			b.ResetTimer()

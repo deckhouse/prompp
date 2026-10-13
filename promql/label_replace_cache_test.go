@@ -7,9 +7,14 @@ package promql
 // label_replace_cache_query_test.go.
 
 import (
+	"fmt"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
@@ -41,6 +46,55 @@ func (s *LabelReplaceCacheSuite) TestCapacityGauge() {
 		float64(DefaultLabelReplaceRegexCacheSize),
 		testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheRegexID)),
 	)
+}
+
+func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
+	// Arrange.
+	c := newLabelReplaceCache(1000, 8)
+	var clock atomic.Int64
+	var workers sync.WaitGroup
+	failures := make(chan error, 16)
+	start := make(chan struct{})
+
+	// Act.
+	for worker := range 16 {
+		workers.Go(func() {
+			<-start
+			for iteration := range 200 {
+				id := uint64(worker*16 + iteration%16)
+				key := labelReplaceTestKey(id)
+				want := labels.FromStrings("k", strconv.FormatUint(id, 10))
+				c.addLabels(key, want)
+				if got, hit := c.getLabels(key); hit && !labels.Equal(want, got.result) {
+					failures <- fmt.Errorf("wrong labels for key %d", id)
+
+					return
+				}
+
+				if _, err := c.getOrCompileRegex("(.*)"); err != nil {
+					failures <- err
+
+					return
+				}
+
+				c.maybeSweepAt(clock.Add(60_000))
+			}
+		})
+	}
+
+	close(start)
+	workers.Wait()
+	close(failures)
+
+	// Assert.
+	for err := range failures {
+		s.NoError(err)
+	}
+
+	s.LessOrEqual(c.len(), c.labelsCap)
+	s.LessOrEqual(c.labelsCap, c.labelsMax)
+	s.Equal(float64(c.len()), testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(float64(c.labelsCap), testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
 }
 
 func (s *LabelReplaceCacheSuite) TestEntriesGauge() {
@@ -130,6 +184,37 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 	nilCache.maybeSweepAt(70_000)
 
 	// Assert: no panic, nothing to assert beyond survival.
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepDoesNotOverlapIntervals() {
+	// Arrange: block the first sweep after it has acquired the sweep guard.
+	c := newLabelReplaceCache(100, 0)
+	for i := range 64 {
+		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+	}
+
+	c.labelsMu.Lock()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.maybeSweepAt(60_000)
+	}()
+
+	func() {
+		defer c.labelsMu.Unlock()
+		s.Require().Eventually(func() bool { return c.nowMs.Load() == 60_000 }, time.Second, time.Millisecond)
+
+		// Act: another interval elapses while the first sweep is still running.
+		c.maybeSweepAt(120_000)
+
+		// Assert: the second caller leaves the clock and capacity unchanged.
+		s.Equal(int64(60_000), c.nowMs.Load())
+		s.Equal(64, c.labelsCap)
+	}()
+	<-done
+
+	s.Equal(100, c.labelsCap)
+	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() {
@@ -253,6 +338,66 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldes
 	s.Equal(64, c.labelsCap)
 	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
 	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheShrinkDirection)))
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepSerializesRefreshWithRemoval() {
+	// Arrange: the first eviction pauses the sweep while another query wants
+	// to refresh the next stale entry. The fresh tail must survive both operations.
+	c := newLabelReplaceCache(100, 0)
+	oldest := labelReplaceTestKey(1)
+	next := labelReplaceTestKey(2)
+	fresh := labelReplaceTestKey(3)
+	c.addLabels(oldest, labels.FromStrings("k", "oldest"))
+	c.addLabels(next, labels.FromStrings("k", "next"))
+	c.nowMs.Store(200_000)
+	c.addLabels(fresh, labels.FromStrings("k", "fresh"))
+
+	// The callback executes under labelsMu and gives a deterministic point
+	// inside the sweep at which the competing lookup starts.
+	evicted := make(chan struct{})
+	resume := make(chan struct{})
+	cache, err := simplelru.NewLRU(c.labelsCap, func(key labelReplaceCacheKey, entry *labelReplaceCacheEntry) {
+		c.onLabelsEvict(key, entry)
+		if key == oldest {
+			close(evicted)
+			<-resume
+		}
+	})
+	s.Require().NoError(err)
+	for _, key := range []labelReplaceCacheKey{oldest, next, fresh} {
+		entry, _ := c.labelsCache.Peek(key)
+		cache.Add(key, entry)
+	}
+
+	c.labelsCache = cache
+	sweepDone := make(chan struct{})
+	go func() {
+		defer close(sweepDone)
+		c.sweepOnce(200_000)
+	}()
+	<-evicted
+
+	// Act.
+	lookupDone := make(chan bool, 1)
+	lookupStarted := make(chan struct{})
+	go func() {
+		close(lookupStarted)
+		_, hit := c.getLabels(next)
+		lookupDone <- hit
+	}()
+	<-lookupStarted
+	s.Never(func() bool { return len(lookupDone) != 0 }, 20*time.Millisecond, time.Millisecond)
+	close(resume)
+	<-sweepDone
+	hit := <-lookupDone
+
+	// Assert: the sweep finishes before the lookup, which misses the removed
+	// entry; it never evicts the fresh tail in place of a refreshed stale entry.
+	s.False(hit)
+	_, freshHit := c.getLabels(fresh)
+	s.True(freshHit)
+	s.Equal(1, c.len())
+	s.Equal(2.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksOnDrift() {
