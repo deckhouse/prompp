@@ -50,8 +50,8 @@ const (
 	labelReplaceCacheShrinkFloorMin = 64
 
 	// labelReplaceCacheShrinkFloorDivisor makes the relative floor of the
-	// labels cache capacity a twentieth of the configured maximum.
-	labelReplaceCacheShrinkFloorDivisor = 20
+	// labels cache capacity a hundredth of the configured maximum.
+	labelReplaceCacheShrinkFloorDivisor = 100
 )
 
 // labelReplaceCacheKey fully determines the resulting labelset of a
