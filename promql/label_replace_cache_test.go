@@ -33,24 +33,24 @@ func TestLabelReplaceCache(t *testing.T) {
 }
 
 func (s *LabelReplaceCacheSuite) SetupTest() {
-	s.cache = newLabelReplaceCache(10, 0)
+	s.cache = newLabelReplaceCache(10, 0, nil)
 }
 
 func (s *LabelReplaceCacheSuite) TestCapacityGauge() {
 	// Arrange: explicit labels size, default regex size.
-	c := newLabelReplaceCache(10, 0)
+	c := newLabelReplaceCache(10, 0, nil)
 
 	// Assert: the gauge exposes the configured capacity of each live cache.
-	s.Equal(10.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(10.0, testutil.ToFloat64(c.labelsMetrics.capacity))
 	s.Equal(
 		float64(DefaultLabelReplaceRegexCacheSize),
-		testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheRegexID)),
+		testutil.ToFloat64(c.regexMetrics.capacity),
 	)
 }
 
 func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
 	// Arrange.
-	c := newLabelReplaceCache(1000, 8)
+	c := newLabelReplaceCache(1000, 8, nil)
 	var clock atomic.Int64
 	var workers sync.WaitGroup
 	failures := make(chan error, 16)
@@ -93,13 +93,27 @@ func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
 
 	s.LessOrEqual(c.len(), c.labelsCap)
 	s.LessOrEqual(c.labelsCap, c.labelsMax)
-	s.Equal(float64(c.len()), testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(float64(c.labelsCap), testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(float64(c.len()), testutil.ToFloat64(c.labelsMetrics.entries))
+	s.Equal(float64(c.labelsCap), testutil.ToFloat64(c.labelsMetrics.capacity))
+}
+
+func (s *LabelReplaceCacheSuite) TestDisabledCacheDoesNotRegisterMetrics() {
+	// Arrange.
+	reg := prometheus.NewRegistry()
+
+	// Act.
+	c := newLabelReplaceCache(-1, -1, reg)
+	metrics, err := reg.Gather()
+
+	// Assert.
+	s.Nil(c)
+	s.Require().NoError(err)
+	s.Empty(metrics)
 }
 
 func (s *LabelReplaceCacheSuite) TestEntriesGauge() {
 	// Arrange.
-	entries := s.cache.entries.WithLabelValues(labelReplaceCacheLabelsID)
+	entries := s.cache.labelsMetrics.entries
 	s.Equal(0.0, testutil.ToFloat64(entries))
 
 	// Act.
@@ -114,7 +128,7 @@ func (s *LabelReplaceCacheSuite) TestEntriesGauge() {
 
 func (s *LabelReplaceCacheSuite) TestEviction() {
 	// Arrange: capacity 1 forces the oldest entry out.
-	s.cache = newLabelReplaceCache(1, 0)
+	s.cache = newLabelReplaceCache(1, 0, nil)
 	keyOldest := labelReplaceTestKey(1)
 	keyNewest := labelReplaceTestKey(2)
 	oldest := labels.FromStrings("k", "1")
@@ -128,8 +142,8 @@ func (s *LabelReplaceCacheSuite) TestEviction() {
 	s.Equal(1, s.cache.len())
 	_, ok := s.cache.getLabels(keyOldest)
 	s.False(ok, "oldest entry must be evicted")
-	s.Equal(1.0, testutil.ToFloat64(s.cache.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.LessOrEqual(testutil.ToFloat64(s.cache.entries.WithLabelValues(labelReplaceCacheLabelsID)), 1.0)
+	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.evictions))
+	s.LessOrEqual(testutil.ToFloat64(s.cache.labelsMetrics.entries), 1.0)
 
 	got, ok := s.cache.getLabels(keyNewest)
 	s.True(ok, "newest entry must survive")
@@ -152,13 +166,13 @@ func (s *LabelReplaceCacheSuite) TestHitMiss() {
 	s.True(labels.Equal(got.result, want))
 	s.Equal(want.Hash(), got.result.Hash())
 	s.Equal(1, s.cache.len())
-	s.Equal(1.0, testutil.ToFloat64(s.cache.hits.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(1.0, testutil.ToFloat64(s.cache.misses.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.hits))
+	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.misses))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval() {
 	// Arrange: a full cache of fresh entries below its maximum.
-	c := newLabelReplaceCache(100, 0)
+	c := newLabelReplaceCache(100, 0, nil)
 	s.Require().NotNil(c)
 	for i := range 64 {
 		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
@@ -170,14 +184,14 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 
 	// Assert: exactly one sweep ran and grew the capacity.
 	s.Equal(100, c.labelsCap)
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(1.0, testutil.ToFloat64(c.growResizes))
 
 	// Act: a throttled attempt changes nothing.
 	c.maybeSweepAt(70_001)
 
 	// Assert.
 	s.Equal(100, c.labelsCap)
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(1.0, testutil.ToFloat64(c.growResizes))
 
 	// Act: a nil wrapper never sweeps.
 	var nilCache *labelReplaceCache
@@ -188,7 +202,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepDoesNotOverlapIntervals() {
 	// Arrange: block the first sweep after it has acquired the sweep guard.
-	c := newLabelReplaceCache(100, 0)
+	c := newLabelReplaceCache(100, 0, nil)
 	for i := range 64 {
 		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
 	}
@@ -214,16 +228,16 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepDoesNotOverlapInterva
 	<-done
 
 	s.Equal(100, c.labelsCap)
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(1.0, testutil.ToFloat64(c.growResizes))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() {
 	// Arrange: a full cache at a scheduled step.
-	c := newLabelReplaceCache(10000, 0)
+	c := newLabelReplaceCache(10000, 0, nil)
 	s.Require().NotNil(c)
 	c.labelsCap = 512
 	c.labelsCache.Resize(512)
-	c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(512)
+	c.labelsMetrics.capacity.Set(512)
 	for i := range 512 {
 		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
 	}
@@ -233,15 +247,15 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() 
 
 	// Assert: the scheduled multiplier applies instead of doubling.
 	s.Equal(4096, c.labelsCap)
-	s.Equal(4096.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(4096.0, testutil.ToFloat64(c.labelsMetrics.capacity))
+	s.Equal(1.0, testutil.ToFloat64(c.growResizes))
 
 	// Arrange: an off-schedule capacity takes the catch-all multiplier.
-	d := newLabelReplaceCache(10000, 0)
+	d := newLabelReplaceCache(10000, 0, nil)
 	s.Require().NotNil(d)
 	d.labelsCap = 300
 	d.labelsCache.Resize(300)
-	d.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(300)
+	d.labelsMetrics.capacity.Set(300)
 	for i := range 300 {
 		d.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
 	}
@@ -251,13 +265,13 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() 
 
 	// Assert.
 	s.Equal(2400, d.labelsCap)
-	s.Equal(2400.0, testutil.ToFloat64(d.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(1.0, testutil.ToFloat64(d.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(2400.0, testutil.ToFloat64(d.labelsMetrics.capacity))
+	s.Equal(1.0, testutil.ToFloat64(d.growResizes))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsWhenFull() {
 	// Arrange: a full cache of fresh entries below its maximum.
-	c := newLabelReplaceCache(100, 0)
+	c := newLabelReplaceCache(100, 0, nil)
 	s.Require().NotNil(c)
 	c.nowMs.Store(0)
 	for i := range 64 {
@@ -269,21 +283,21 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsWhenFull() {
 
 	// Assert: the capacity doubles toward the maximum.
 	s.Equal(100, c.labelsCap)
-	s.Equal(100.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
-	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheShrinkDirection)))
+	s.Equal(100.0, testutil.ToFloat64(c.labelsMetrics.capacity))
+	s.Equal(1.0, testutil.ToFloat64(c.growResizes))
+	s.Equal(0.0, testutil.ToFloat64(c.shrinkResizes))
 	s.Equal(64, c.len())
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepInitialCapacity() {
 	// Arrange: a configured maximum starts at the shrink floor.
-	c := newLabelReplaceCache(1000, 0)
+	c := newLabelReplaceCache(1000, 0, nil)
 	s.Require().NotNil(c)
 
 	// Assert: the wrapper records the floor while keeping the maximum.
 	s.Equal(1000, c.labelsMax)
 	s.Equal(64, c.labelsCap)
-	s.Equal(64.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(64.0, testutil.ToFloat64(c.labelsMetrics.capacity))
 
 	// Act: the LRU is built at the floor capacity — the 65th entry evicts.
 	for i := range 65 {
@@ -292,12 +306,12 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepInitialCapacity() {
 
 	// Assert.
 	s.Equal(64, c.len())
-	s.Equal(1.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(1.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRefreshesIdleTsOnHit() {
 	// Arrange: a wrapper whose clock sits at 0 with one stored entry.
-	c := newLabelReplaceCache(1000, 0)
+	c := newLabelReplaceCache(1000, 0, nil)
 	s.Require().NotNil(c)
 	key := labelReplaceTestKey(1)
 	c.addLabels(key, labels.FromStrings("k", "v"))
@@ -313,7 +327,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRefreshesIdleTsOnHit(
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldest() {
 	// Arrange: a full cache whose oldest quarter went stale; the rest was re-hit.
-	c := newLabelReplaceCache(100, 0)
+	c := newLabelReplaceCache(100, 0, nil)
 	s.Require().NotNil(c)
 	for i := range 64 {
 		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
@@ -330,20 +344,20 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldes
 	// Assert: only the stale prefix is gone; the freed quarter is not enough
 	// to shrink below the floor, so the capacity is untouched.
 	s.Equal(48, c.len())
-	s.Equal(16.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(16.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 	for i := 16; i < 64; i++ {
 		_, ok := c.getLabels(labelReplaceTestKey(uint64(i)))
 		s.True(ok, "fresh entries must survive the sweep")
 	}
 	s.Equal(64, c.labelsCap)
-	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
-	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheShrinkDirection)))
+	s.Equal(0.0, testutil.ToFloat64(c.growResizes))
+	s.Equal(0.0, testutil.ToFloat64(c.shrinkResizes))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepSerializesRefreshWithRemoval() {
 	// Arrange: the first eviction pauses the sweep while another query wants
 	// to refresh the next stale entry. The fresh tail must survive both operations.
-	c := newLabelReplaceCache(100, 0)
+	c := newLabelReplaceCache(100, 0, nil)
 	oldest := labelReplaceTestKey(1)
 	next := labelReplaceTestKey(2)
 	fresh := labelReplaceTestKey(3)
@@ -397,16 +411,16 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepSerializesRefreshWith
 	_, freshHit := c.getLabels(fresh)
 	s.True(freshHit)
 	s.Equal(1, c.len())
-	s.Equal(2.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(2.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksOnDrift() {
 	// Arrange: capacity arranged at 200, draining ten entries per sweep.
-	c := newLabelReplaceCache(1000, 0)
+	c := newLabelReplaceCache(1000, 0, nil)
 	s.Require().NotNil(c)
 	c.labelsCap = 200
 	c.labelsCache.Resize(200)
-	c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(200)
+	c.labelsMetrics.capacity.Set(200)
 	for i := range 200 {
 		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
 	}
@@ -426,18 +440,18 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksOnDrift() {
 	// thirds of the capacity.
 	s.Equal(130, c.len())
 	s.Equal(143, c.labelsCap)
-	s.Equal(143.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheShrinkDirection)))
-	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(143.0, testutil.ToFloat64(c.labelsMetrics.capacity))
+	s.Equal(1.0, testutil.ToFloat64(c.shrinkResizes))
+	s.Equal(0.0, testutil.ToFloat64(c.growResizes))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksWhenQuarterFreed() {
 	// Arrange: capacity arranged at 200, its oldest half went stale.
-	c := newLabelReplaceCache(1000, 0)
+	c := newLabelReplaceCache(1000, 0, nil)
 	s.Require().NotNil(c)
 	c.labelsCap = 200
 	c.labelsCache.Resize(200)
-	c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(200)
+	c.labelsMetrics.capacity.Set(200)
 	for i := range 200 {
 		c.addLabels(labelReplaceTestKey(uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
 	}
@@ -453,14 +467,14 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksWhenQuarterFre
 	// Assert: the capacity shrinks toward the surviving count plus headroom.
 	s.Equal(100, c.len())
 	s.Equal(110, c.labelsCap)
-	s.Equal(110.0, testutil.ToFloat64(c.capacity.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(1.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheShrinkDirection)))
-	s.Equal(0.0, testutil.ToFloat64(c.resizes.WithLabelValues(labelReplaceCacheGrowDirection)))
+	s.Equal(110.0, testutil.ToFloat64(c.labelsMetrics.capacity))
+	s.Equal(1.0, testutil.ToFloat64(c.shrinkResizes))
+	s.Equal(0.0, testutil.ToFloat64(c.growResizes))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepStaleEntryStillServed() {
 	// Arrange: one stored entry, the clock far past the stale threshold.
-	c := newLabelReplaceCache(10, 0)
+	c := newLabelReplaceCache(10, 0, nil)
 	s.Require().NotNil(c)
 	key := labelReplaceTestKey(1)
 	want := labels.FromStrings("k", "v")
@@ -476,14 +490,14 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepStaleEntryStillServed
 	s.True(labels.Equal(want, got.result))
 	s.Equal(int64(200_000), got.idleTs.Load())
 	s.Equal(1, c.len())
-	s.Equal(1.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(0.0, testutil.ToFloat64(c.misses.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(0.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Equal(1.0, testutil.ToFloat64(c.labelsMetrics.hits))
+	s.Equal(0.0, testutil.ToFloat64(c.labelsMetrics.misses))
+	s.Equal(0.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelsCacheDisabledRegexEnabled() {
 	// Arrange: the labels cache is off, only the regex cache is on.
-	c := newLabelReplaceCache(-1, 10)
+	c := newLabelReplaceCache(-1, 10, nil)
 	s.Require().NotNil(c)
 	s.Require().Nil(c.labelsCache)
 	key := labelReplaceTestKey(1)
@@ -497,10 +511,10 @@ func (s *LabelReplaceCacheSuite) TestLabelsCacheDisabledRegexEnabled() {
 	s.False(hitFirst, "disabled labels cache must always miss")
 	s.False(hitAfterAdd, "addLabels must be a noop when the labels cache is off")
 	s.Equal(0, c.len())
-	s.Equal(0.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(0.0, testutil.ToFloat64(c.misses.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(0.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheLabelsID)))
-	s.Equal(0.0, testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheLabelsID)))
+	s.Nil(c.labelsMetrics.hits)
+	s.Nil(c.labelsMetrics.misses)
+	s.Nil(c.labelsMetrics.evictions)
+	s.Nil(c.labelsMetrics.entries)
 
 	// Act: the regex cache stays live, the second identical call hits.
 	re1, err := c.getOrCompileRegex("(.+)")
@@ -510,8 +524,8 @@ func (s *LabelReplaceCacheSuite) TestLabelsCacheDisabledRegexEnabled() {
 	// Assert: same text yields the identical compiled regex.
 	s.Require().NoError(err)
 	s.Same(re1, re2)
-	s.Equal(1.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheRegexID)))
-	s.Equal(1.0, testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheRegexID)))
+	s.Equal(1.0, testutil.ToFloat64(c.regexMetrics.hits))
+	s.Equal(1.0, testutil.ToFloat64(c.regexMetrics.entries))
 }
 
 func (s *LabelReplaceCacheSuite) TestNil() {
@@ -530,20 +544,13 @@ func (s *LabelReplaceCacheSuite) TestNil() {
 	s.Require().NoError(err)
 	s.True(re.MatchString("aaa"))
 	s.False(re.MatchString("b"))
-
-	c.register(nil)
-	reg := prometheus.NewRegistry()
-	c.register(reg)
-	mfs, err := reg.Gather()
-	s.Require().NoError(err)
-	s.Empty(mfs, "nil cache must not register any metrics")
 }
 
 func (s *LabelReplaceCacheSuite) TestRegex() {
 	// Arrange.
-	hits := s.cache.hits.WithLabelValues(labelReplaceCacheRegexID)
-	misses := s.cache.misses.WithLabelValues(labelReplaceCacheRegexID)
-	entries := s.cache.entries.WithLabelValues(labelReplaceCacheRegexID)
+	hits := s.cache.regexMetrics.hits
+	misses := s.cache.regexMetrics.misses
+	entries := s.cache.regexMetrics.entries
 
 	// Act: first call compiles, the second one is served from the cache.
 	re1, err := s.cache.getOrCompileRegex("(.+)")
@@ -567,12 +574,12 @@ func (s *LabelReplaceCacheSuite) TestRegex() {
 	s.Equal(3.0, testutil.ToFloat64(misses))
 	s.Equal(1.0, testutil.ToFloat64(hits))
 	s.Equal(1.0, testutil.ToFloat64(entries))
-	s.Equal(0.0, testutil.ToFloat64(s.cache.evictions.WithLabelValues(labelReplaceCacheRegexID)))
+	s.Equal(0.0, testutil.ToFloat64(s.cache.regexMetrics.evictions))
 }
 
 func (s *LabelReplaceCacheSuite) TestRegexCacheDisabled() {
 	// Arrange: the labels cache is on, only the regex cache is off.
-	c := newLabelReplaceCache(10, -1)
+	c := newLabelReplaceCache(10, -1, nil)
 	s.Require().NotNil(c)
 	s.Require().Nil(c.regexCache)
 
@@ -585,15 +592,15 @@ func (s *LabelReplaceCacheSuite) TestRegexCacheDisabled() {
 	s.Require().Error(err)
 
 	// Assert: nothing is stored and no regex metric is ever accounted.
-	s.Equal(0.0, testutil.ToFloat64(c.hits.WithLabelValues(labelReplaceCacheRegexID)))
-	s.Equal(0.0, testutil.ToFloat64(c.misses.WithLabelValues(labelReplaceCacheRegexID)))
-	s.Equal(0.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheRegexID)))
-	s.Equal(0.0, testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheRegexID)))
+	s.Nil(c.regexMetrics.hits)
+	s.Nil(c.regexMetrics.misses)
+	s.Nil(c.regexMetrics.evictions)
+	s.Nil(c.regexMetrics.entries)
 }
 
 func (s *LabelReplaceCacheSuite) TestRegexCacheEviction() {
 	// Arrange: regex capacity 1 forces the oldest compiled regex out.
-	c := newLabelReplaceCache(10, 1)
+	c := newLabelReplaceCache(10, 1, nil)
 	s.Require().NotNil(c)
 
 	// Act: two distinct regexes exceed the configured capacity.
@@ -603,8 +610,8 @@ func (s *LabelReplaceCacheSuite) TestRegexCacheEviction() {
 	s.Require().NoError(err)
 
 	// Assert.
-	s.Equal(1.0, testutil.ToFloat64(c.evictions.WithLabelValues(labelReplaceCacheRegexID)))
-	s.Equal(1.0, testutil.ToFloat64(c.entries.WithLabelValues(labelReplaceCacheRegexID)))
+	s.Equal(1.0, testutil.ToFloat64(c.regexMetrics.evictions))
+	s.Equal(1.0, testutil.ToFloat64(c.regexMetrics.entries))
 }
 
 // labelReplaceTestKey builds a distinct cache key per baseHash so tests never

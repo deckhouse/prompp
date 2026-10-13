@@ -424,7 +424,7 @@ func NewEngine(opts EngineOpts) *Engine {
 		}
 	}
 
-	cache := newLabelReplaceCache(opts.LabelReplaceCacheSize, opts.LabelReplaceRegexCacheSize)
+	cache := newLabelReplaceCache(opts.LabelReplaceCacheSize, opts.LabelReplaceRegexCacheSize, opts.Reg)
 
 	if opts.Reg != nil {
 		opts.Reg.MustRegister(
@@ -435,7 +435,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			metrics.querySamples,
 			queryResultSummary,
 		)
-		cache.register(opts.Reg)
 	}
 
 	ng := &Engine{

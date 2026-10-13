@@ -88,6 +88,14 @@ type labelReplaceCacheEntry struct {
 	idleTs atomic.Int64
 }
 
+type labelReplaceCacheMetrics struct {
+	hits      prometheus.Counter
+	misses    prometheus.Counter
+	evictions prometheus.Counter
+	entries   prometheus.Gauge
+	capacity  prometheus.Gauge
+}
+
 // labelReplaceCache memoizes label_replace results between queries. It owns
 // two LRUs: one for resulting labelsets and one for compiled regexes. A nil
 // *labelReplaceCache means "disabled" and every method is nil-safe. Either
@@ -100,12 +108,10 @@ type labelReplaceCache struct {
 	labelsMu sync.Mutex
 	sweepMu  sync.Mutex
 
-	hits      *prometheus.CounterVec
-	misses    *prometheus.CounterVec
-	evictions *prometheus.CounterVec
-	resizes   *prometheus.CounterVec
-	entries   *prometheus.GaugeVec
-	capacity  *prometheus.GaugeVec
+	labelsMetrics labelReplaceCacheMetrics
+	regexMetrics  labelReplaceCacheMetrics
+	growResizes   prometheus.Counter
+	shrinkResizes prometheus.Counter
 
 	// labelsMax is the configured maximum and labelsCap the current capacity
 	// of the labels cache. labelsMax is immutable; labelsMu guards labelsCap.
@@ -130,51 +136,61 @@ type labelReplaceCache struct {
 // labelSize with a non-negative regexSize still yields a live wrapper so a
 // regex-only configuration stays representable. The labels LRU starts at
 // the shrink floor and the sweep grows or shrinks it from there. LRU
-// construction errors fail open (nil) instead of panicking.
-func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
+// construction errors fail open (nil) instead of panicking. Metrics are
+// registered during construction when reg is non-nil.
+func newLabelReplaceCache(labelSize, regexSize int, reg prometheus.Registerer) *labelReplaceCache {
 	if labelSize < 0 && regexSize < 0 {
 		return nil
 	}
 
-	c := &labelReplaceCache{
-		hits: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "label_replace_cache_hits_total",
-			Help:      "Total number of label_replace cache hits.",
-		}, []string{"cache"}),
-		misses: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "label_replace_cache_misses_total",
-			Help:      "Total number of label_replace cache misses.",
-		}, []string{"cache"}),
-		evictions: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "label_replace_cache_evictions_total",
-			Help:      "Total number of label_replace cache evictions.",
-		}, []string{"cache"}),
-		resizes: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "label_replace_cache_resizes_total",
-			Help:      "Total number of label_replace cache capacity resizes.",
-		}, []string{"direction"}),
-		entries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "label_replace_cache_entries",
-			Help:      "Current number of entries in the label_replace cache.",
-		}, []string{"cache"}),
-		capacity: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "label_replace_cache_capacity",
-			Help:      "Configured capacity of the label_replace cache.",
-		}, []string{"cache"}),
-		startedAt: time.Now(),
+	hits := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "label_replace_cache_hits_total",
+		Help:      "Total number of label_replace cache hits.",
+	}, []string{"cache"})
+	misses := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "label_replace_cache_misses_total",
+		Help:      "Total number of label_replace cache misses.",
+	}, []string{"cache"})
+	evictions := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "label_replace_cache_evictions_total",
+		Help:      "Total number of label_replace cache evictions.",
+	}, []string{"cache"})
+	resizes := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "label_replace_cache_resizes_total",
+		Help:      "Total number of label_replace cache capacity resizes.",
+	}, []string{"direction"})
+	entries := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "label_replace_cache_entries",
+		Help:      "Current number of entries in the label_replace cache.",
+	}, []string{"cache"})
+	capacity := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "label_replace_cache_capacity",
+		Help:      "Configured capacity of the label_replace cache.",
+	}, []string{"cache"})
+
+	metricsFor := func(cacheID string) labelReplaceCacheMetrics {
+		return labelReplaceCacheMetrics{
+			hits:      hits.WithLabelValues(cacheID),
+			misses:    misses.WithLabelValues(cacheID),
+			evictions: evictions.WithLabelValues(cacheID),
+			entries:   entries.WithLabelValues(cacheID),
+			capacity:  capacity.WithLabelValues(cacheID),
+		}
 	}
+
+	c := &labelReplaceCache{startedAt: time.Now()}
 
 	// Labels eviction callbacks run under labelsMu; regex callbacks run outside
 	// the library lock. Each callback can safely read its cache length.
@@ -182,6 +198,9 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 		if labelSize == 0 {
 			labelSize = DefaultLabelReplaceCacheSize
 		}
+		c.labelsMetrics = metricsFor(labelReplaceCacheLabelsID)
+		c.growResizes = resizes.WithLabelValues(labelReplaceCacheGrowDirection)
+		c.shrinkResizes = resizes.WithLabelValues(labelReplaceCacheShrinkDirection)
 		c.labelsMax = labelSize
 		// Start at the floor: below it the cache cannot shrink anyway, so a
 		// higher start would only hold garbage longer. A tiny maximum still
@@ -194,8 +213,8 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 		}
 
 		c.labelsCache = labelsCache
-		c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(0)
-		c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCap))
+		c.labelsMetrics.entries.Set(0)
+		c.labelsMetrics.capacity.Set(float64(c.labelsCap))
 	}
 
 	if regexSize >= 0 {
@@ -203,17 +222,22 @@ func newLabelReplaceCache(labelSize, regexSize int) *labelReplaceCache {
 			regexSize = DefaultLabelReplaceRegexCacheSize
 		}
 
+		c.regexMetrics = metricsFor(labelReplaceCacheRegexID)
 		regexCache, err := lru.NewWithEvict(regexSize, func(string, *regexp.Regexp) {
-			c.evictions.WithLabelValues(labelReplaceCacheRegexID).Inc()
-			c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(float64(c.regexCache.Len()))
+			c.regexMetrics.evictions.Inc()
+			c.regexMetrics.entries.Set(float64(c.regexCache.Len()))
 		})
 		if err != nil {
 			return nil
 		}
 
 		c.regexCache = regexCache
-		c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(0)
-		c.capacity.WithLabelValues(labelReplaceCacheRegexID).Set(float64(regexSize))
+		c.regexMetrics.entries.Set(0)
+		c.regexMetrics.capacity.Set(float64(regexSize))
+	}
+
+	if reg != nil {
+		reg.MustRegister(hits, misses, evictions, resizes, entries, capacity)
 	}
 
 	return c
@@ -232,7 +256,7 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 	entry := &labelReplaceCacheEntry{result: val}
 	entry.idleTs.Store(c.nowMs.Load())
 	c.labelsCache.Add(key, entry)
-	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
+	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 
 	c.labelsMu.Unlock()
 }
@@ -253,7 +277,7 @@ func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (*labelReplaceCa
 	val, ok := c.labelsCache.Get(key)
 	if !ok {
 		c.labelsMu.Unlock()
-		c.misses.WithLabelValues(labelReplaceCacheLabelsID).Inc()
+		c.labelsMetrics.misses.Inc()
 
 		return nil, false
 	}
@@ -261,7 +285,7 @@ func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (*labelReplaceCa
 	val.idleTs.Store(c.nowMs.Load())
 	c.labelsMu.Unlock()
 
-	c.hits.WithLabelValues(labelReplaceCacheLabelsID).Inc()
+	c.labelsMetrics.hits.Inc()
 
 	return val, true
 }
@@ -277,18 +301,18 @@ func (c *labelReplaceCache) getOrCompileRegex(regexStr string) (*regexp.Regexp, 
 	}
 
 	if re, ok := c.regexCache.Get(regexStr); ok {
-		c.hits.WithLabelValues(labelReplaceCacheRegexID).Inc()
+		c.regexMetrics.hits.Inc()
 		return re, nil
 	}
 
-	c.misses.WithLabelValues(labelReplaceCacheRegexID).Inc()
+	c.regexMetrics.misses.Inc()
 	re, err := regexp.Compile("^(?:" + regexStr + ")$")
 	if err != nil {
 		return nil, err
 	}
 
 	c.regexCache.Add(regexStr, re)
-	c.entries.WithLabelValues(labelReplaceCacheRegexID).Set(float64(c.regexCache.Len()))
+	c.regexMetrics.entries.Set(float64(c.regexCache.Len()))
 
 	return re, nil
 }
@@ -347,27 +371,17 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 
 // onLabelsEvict accounts evictions and refreshes the entries gauge under labelsMu.
 func (c *labelReplaceCache) onLabelsEvict(_ labelReplaceCacheKey, _ *labelReplaceCacheEntry) {
-	c.evictions.WithLabelValues(labelReplaceCacheLabelsID).Inc()
-	c.entries.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(c.labelsCache.Len()))
-}
-
-// register registers the cache metrics; call it only with a non-nil
-// Registerer (mirrors the opts.Reg != nil pattern in NewEngine).
-func (c *labelReplaceCache) register(reg prometheus.Registerer) {
-	if c == nil || reg == nil {
-		return
-	}
-
-	reg.MustRegister(c.hits, c.misses, c.evictions, c.resizes, c.entries, c.capacity)
+	c.labelsMetrics.evictions.Inc()
+	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 }
 
 // resize applies a labels-cache capacity change and updates the capacity
 // gauge and the direction counter. The caller must hold labelsMu.
-func (c *labelReplaceCache) resize(target int, direction string) {
+func (c *labelReplaceCache) resize(target int, resizes prometheus.Counter) {
 	c.labelsCap = target
 	c.labelsCache.Resize(target)
-	c.capacity.WithLabelValues(labelReplaceCacheLabelsID).Set(float64(target))
-	c.resizes.WithLabelValues(direction).Inc()
+	c.labelsMetrics.capacity.Set(float64(target))
+	resizes.Inc()
 }
 
 // sweepOnce walks the labels cache from the oldest entry, removing entries
@@ -399,7 +413,7 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 	// Still full after the sweep: the live set does not fit, grow along the
 	// progressive schedule toward the configured maximum.
 	case length == c.labelsCap && c.labelsCap < c.labelsMax:
-		c.resize(min(labelReplaceCacheGrowTarget(c.labelsCap), c.labelsMax), labelReplaceCacheGrowDirection)
+		c.resize(min(labelReplaceCacheGrowTarget(c.labelsCap), c.labelsMax), c.growResizes)
 
 	// Freed a quarter or more, or drifted below two thirds with progress:
 	// shrink toward the survivors plus headroom, never below the floor.
@@ -407,7 +421,7 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 		(freed > 0 && length*3 < c.labelsCap*2):
 		floor := max(labelReplaceCacheShrinkFloorMin, c.labelsMax/labelReplaceCacheShrinkFloorDivisor)
 		if target := max(length+length/labelReplaceCacheShrinkTargetDivisor, floor); target < c.labelsCap {
-			c.resize(target, labelReplaceCacheShrinkDirection)
+			c.resize(target, c.shrinkResizes)
 		}
 	}
 

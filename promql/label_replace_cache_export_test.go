@@ -21,12 +21,12 @@ func PrepareLabelReplaceCacheBenchmark(b *testing.B, engine *Engine, seriesCount
 
 	require.LessOrEqual(b, seriesCount, c.labelsMax)
 	c.labelsMu.Lock()
-	c.resize(seriesCount, labelReplaceCacheGrowDirection)
+	c.resize(seriesCount, c.growResizes)
 	c.labelsMu.Unlock()
 	run()
 
-	hits := c.hits.WithLabelValues(labelReplaceCacheLabelsID)
-	misses := c.misses.WithLabelValues(labelReplaceCacheLabelsID)
+	hits := c.labelsMetrics.hits
+	misses := c.labelsMetrics.misses
 	hitsBefore := testutil.ToFloat64(hits)
 	missesBefore := testutil.ToFloat64(misses)
 	run()
