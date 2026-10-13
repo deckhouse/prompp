@@ -174,6 +174,14 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheKey() {
 	s.Require().Greater(hitsSecond, hitsFirst, "the second run must be served from the cache")
 }
 
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheReplacementBufferReuse() {
+	s.assertReplacementBufferReuse(s.env)
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheReplacementBufferReuseDisabled() {
+	s.assertReplacementBufferReuse(newLabelReplaceTestEnv(s.T(), -1))
+}
+
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheReuseSecondRunHitsAndIdenticalResult() {
 	t := s.T()
 	// Arrange.
@@ -319,6 +327,41 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSemanticsWarningsOnCacheHi
 
 	hitsSecond := s.env.cacheSum(t, labelReplaceCacheHitsFamily, labelReplaceCacheLabelsID)
 	s.Greater(hitsSecond, hitsFirst, "the second run must be served from the cache")
+}
+
+func (s *LabelReplaceCacheSuite) assertReplacementBufferReuse(env *labelReplaceTestEnv) {
+	// Arrange: changing lengths and an empty expansion exercise buffer reset;
+	// a non-matching series must keep its original destination label.
+	t := s.T()
+	long := strings.Repeat("a", 128)
+	env.appendSamples(t,
+		labels.FromStrings(labels.MetricName, "buffer_metric", "instance", "a", "src", "v:"+long, "dst", "old"),
+		labels.FromStrings(labels.MetricName, "buffer_metric", "instance", "b", "src", "v:x", "dst", "old"),
+		labels.FromStrings(labels.MetricName, "buffer_metric", "instance", "c", "src", "v:", "dst", "old"),
+		labels.FromStrings(labels.MetricName, "buffer_metric", "instance", "d", "src", "skip", "dst", "old"),
+	)
+	query := `label_replace(buffer_metric, "dst", "${part}", "src", "v:(?P<part>.*)")`
+
+	// Act: cached and uncached evaluations must both preserve the expansions.
+	first := env.mustRun(t, query)
+	second := env.mustRun(t, query)
+
+	// Assert.
+	s.Equal(first.String(), second.String())
+	for _, result := range []*promql.Result{first, second} {
+		vector, err := result.Vector()
+		s.Require().NoError(err)
+		s.Require().Len(vector, 4)
+		byInstance := make(map[string]labels.Labels, len(vector))
+		for _, sample := range vector {
+			byInstance[sample.Metric.Get("instance")] = sample.Metric
+		}
+
+		s.Equal(long, byInstance["a"].Get("dst"))
+		s.Equal("x", byInstance["b"].Get("dst"))
+		s.False(byInstance["c"].Has("dst"), "an empty expansion must remove the destination label")
+		s.Equal("old", byInstance["d"].Get("dst"))
+	}
 }
 
 // labelReplaceTestEnv bundles the engine, its metrics registry and the

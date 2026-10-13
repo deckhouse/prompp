@@ -1477,6 +1477,7 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 	val, ws := ev.eval(ctx, args[0])
 	matrix := val.(Matrix)
 	lb := labels.NewBuilder(labels.EmptyLabels())
+	var replacementBuf []byte
 	cacheLabels := ev.labelReplaceCache != nil && ev.labelReplaceCache.labelsCache != nil
 
 	// Opportunistic sweep: at most one labels-cache sweep per interval across
@@ -1505,9 +1506,9 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 
 		indexes := regex.FindStringSubmatchIndex(srcVal)
 		if indexes != nil { // Only replace when regexp matches.
-			res := regex.ExpandString([]byte{}, repl, srcVal, indexes)
+			replacementBuf = regex.ExpandString(replacementBuf[:0], repl, srcVal, indexes)
 			lb.Reset(el.Metric)
-			lb.Set(dst, string(res))
+			lb.Set(dst, string(replacementBuf))
 			matrix[i].Metric = lb.Labels()
 			if dst == model.MetricNameLabel {
 				matrix[i].DropName = false
