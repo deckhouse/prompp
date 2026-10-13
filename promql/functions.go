@@ -1480,8 +1480,8 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 	var replacementBuf []byte
 	cacheLabels := ev.labelReplaceCache != nil && ev.labelReplaceCache.labelsCache != nil
 
-	// Opportunistic sweep: at most one labels-cache sweep per interval across
-	// all concurrent queries, driven by query traffic instead of a ticker.
+	// Schedule at most one background sweep per interval across concurrent
+	// queries. The sweep releases labelsMu between eviction batches.
 	ev.labelReplaceCache.maybeSweep()
 
 	var operation *labelReplaceOperation

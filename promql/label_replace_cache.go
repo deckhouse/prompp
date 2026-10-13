@@ -2,6 +2,7 @@ package promql
 
 import (
 	"hash/maphash"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,6 +41,9 @@ const (
 	labelReplaceCacheStaleTicks = 2
 
 	labelReplaceCacheStaleAfterMs = labelReplaceCacheStaleTicks * labelReplaceCacheSweepIntervalMs
+
+	// labelReplaceCacheSweepBatchSize bounds removals while labelsMu is held.
+	labelReplaceCacheSweepBatchSize = 128
 
 	// labelReplaceCacheShrinkFreedDivisor sets the shrink trigger to a freed
 	// quarter of the current capacity.
@@ -123,6 +127,9 @@ type labelReplaceCache struct {
 
 	labelsMu sync.Mutex
 	sweepMu  sync.Mutex
+
+	// sweepClosed is guarded by sweepMu and prevents scheduling after close.
+	sweepClosed bool
 
 	labelsMetrics labelReplaceCacheMetrics
 	regexMetrics  labelReplaceCacheMetrics
@@ -318,6 +325,17 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 	c.labelsMu.Unlock()
 }
 
+// close waits for an admitted sweep and prevents future background sweeps.
+func (c *labelReplaceCache) close() {
+	if c == nil {
+		return
+	}
+
+	c.sweepMu.Lock()
+	c.sweepClosed = true
+	c.sweepMu.Unlock()
+}
+
 // getLabels looks up a memoized labelset, accounting a hit or a miss. Entry
 // age is irrelevant here — a memoized result stays valid forever, so even a
 // stale entry is served; age matters only to the sweep. A hit refreshes the
@@ -388,7 +406,7 @@ func (c *labelReplaceCache) len() int {
 	return c.labelsCache.Len()
 }
 
-// maybeSweep runs a labels-cache sweep when a sweep interval elapsed since
+// maybeSweep schedules a background sweep when a sweep interval elapsed since
 // the previous one. An in-progress sweep causes concurrent callers to return
 // without waiting. Nil-safe: a nil or disabled cache never sweeps.
 func (c *labelReplaceCache) maybeSweep() {
@@ -416,15 +434,16 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 	}
 
 	current = c.nowMs.Load()
-	if wallMs-current < labelReplaceCacheSweepIntervalMs {
+	if c.sweepClosed || wallMs-current < labelReplaceCacheSweepIntervalMs {
 		c.sweepMu.Unlock()
 		return
 	}
 
 	c.nowMs.Store(wallMs)
-	c.sweepOnce(wallMs)
-
-	c.sweepMu.Unlock()
+	go func() {
+		c.sweepOnce(wallMs)
+		c.sweepMu.Unlock()
+	}()
 }
 
 // onLabelsEvict clears the entry and counts an eviction under labelsMu.
@@ -483,11 +502,32 @@ func (c *labelReplaceCache) resize(target int, resizes prometheus.Counter) {
 	resizes.Inc()
 }
 
-// sweepOnce walks the labels cache from the oldest entry, removing entries
-// idle for longer than two sweep intervals, and stops at the first fresh
-// entry. Afterwards a still-full cache grows toward its maximum and
-// a sweep that freed a quarter or more shrinks toward the surviving count
-// plus headroom. No-op decisions change nothing.
+// sweepBatchLocked removes at most limit stale entries while labelsMu is held.
+// The caller rechecks the oldest entry after every unlocked batch boundary.
+func (c *labelReplaceCache) sweepBatchLocked(nowMs int64, limit int) int {
+	freed := 0
+
+	for range limit {
+		_, val, ok := c.labelsCache.GetOldest()
+		if !ok || nowMs-val.idleTs <= labelReplaceCacheStaleAfterMs {
+			break
+		}
+
+		c.labelsCache.RemoveOldest()
+		freed++
+	}
+
+	if freed > 0 {
+		c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
+	}
+
+	return freed
+}
+
+// sweepOnce removes stale entries in batches, yielding between batches so
+// waiting lookups can refresh entries before the next oldest-entry check.
+// Its removal budget is the initial length; resize uses the final live length.
+// maybeSweepAt serializes complete passes with sweepMu.
 func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 	if c == nil || c.labelsCache == nil {
 		return
@@ -496,15 +536,21 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 	freed := 0
 
 	c.labelsMu.Lock()
+	remaining := c.labelsCache.Len()
 
-	for {
-		_, val, ok := c.labelsCache.GetOldest()
-		if !ok || nowMs-val.idleTs <= labelReplaceCacheStaleAfterMs {
+	for remaining > 0 {
+		limit := min(remaining, labelReplaceCacheSweepBatchSize)
+		removed := c.sweepBatchLocked(nowMs, limit)
+		freed += removed
+		remaining -= removed
+
+		if removed < limit || remaining == 0 {
 			break
 		}
 
-		c.labelsCache.RemoveOldest()
-		freed++
+		c.labelsMu.Unlock()
+		runtime.Gosched()
+		c.labelsMu.Lock()
 	}
 
 	length := c.labelsCache.Len()
@@ -522,10 +568,6 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 		if target := max(length+length/labelReplaceCacheShrinkTargetDivisor, floor); target < c.labelsCap {
 			c.resize(target, c.shrinkResizes)
 		}
-	}
-
-	if freed > 0 {
-		c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 	}
 
 	c.labelsMu.Unlock()

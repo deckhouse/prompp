@@ -7,10 +7,13 @@ package promql
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 // NewEngineLabelReplaceCacheSuite covers the label_replace cache wiring done
@@ -21,6 +24,42 @@ type NewEngineLabelReplaceCacheSuite struct {
 
 func TestNewEngineLabelReplaceCache(t *testing.T) {
 	suite.Run(t, new(NewEngineLabelReplaceCacheSuite))
+}
+
+func (s *NewEngineLabelReplaceCacheSuite) TestCloseWaitsForSweepAndPreventsScheduling() {
+	// Arrange: an admitted sweep is blocked by the labels mutex.
+	engine := NewEngine(EngineOpts{LabelReplaceCacheSize: 10, LabelReplaceRegexCacheSize: -1})
+	c := engine.labelReplaceCache
+	s.T().Cleanup(c.close)
+	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "value"))
+	c.labelsMu.Lock()
+
+	func() {
+		defer c.labelsMu.Unlock()
+		c.maybeSweepAt(200_000)
+		closeStarted := make(chan struct{})
+		closeResult := make(chan error, 1)
+		go func() {
+			close(closeStarted)
+			closeResult <- engine.Close()
+		}()
+
+		<-closeStarted
+
+		// Act: Close cannot finish until the background sweep releases sweepMu.
+		s.Never(func() bool { return len(closeResult) != 0 }, 20*time.Millisecond, time.Millisecond)
+		c.labelsMu.Unlock()
+		s.NoError(<-closeResult)
+		c.labelsMu.Lock()
+	}()
+
+	// Assert: the sweep completed before Close, and later admission is disabled.
+	s.Equal(0, c.len())
+	s.Equal(0.0, testutil.ToFloat64(c.labelsMetrics.entries))
+	s.Equal(1.0, testutil.ToFloat64(c.labelsMetrics.evictions))
+	c.maybeSweepAt(400_000)
+	s.Equal(int64(200_000), c.nowMs.Load())
+	s.NoError(engine.Close())
 }
 
 func (s *NewEngineLabelReplaceCacheSuite) TestZeroSizeCreatesCacheWithDefaultCapacity() {
@@ -44,6 +83,7 @@ func (s *NewEngineLabelReplaceCacheSuite) TestNegativeSizeLeavesCacheDisabled() 
 
 	// Assert.
 	s.Nil(ng.labelReplaceCache)
+	s.NoError(ng.Close())
 }
 
 func (s *NewEngineLabelReplaceCacheSuite) TestNegativeRegexSizeKeepsCacheWithoutRegexLRU() {

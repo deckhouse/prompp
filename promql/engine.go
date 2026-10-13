@@ -461,6 +461,8 @@ func (ng *Engine) Close() error {
 		return nil
 	}
 
+	ng.labelReplaceCache.close()
+
 	if ng.activeQueryTracker != nil {
 		return ng.activeQueryTracker.Close()
 	}

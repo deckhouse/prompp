@@ -34,6 +34,7 @@ func TestLabelReplaceCache(t *testing.T) {
 
 func (s *LabelReplaceCacheSuite) SetupTest() {
 	s.cache = newLabelReplaceCache(10, 0, nil)
+	s.T().Cleanup(s.cache.close)
 }
 
 func (s *LabelReplaceCacheSuite) TestCapacityGauge() {
@@ -46,6 +47,58 @@ func (s *LabelReplaceCacheSuite) TestCapacityGauge() {
 		float64(DefaultLabelReplaceRegexCacheSize),
 		testutil.ToFloat64(c.regexMetrics.capacity),
 	)
+}
+
+func (s *LabelReplaceCacheSuite) TestCloseIsIdempotentAndPreventsSweep() {
+	// Arrange.
+	c := s.cache
+	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "value"))
+
+	// Act.
+	c.close()
+	c.close()
+	c.maybeSweepAt(200_000)
+	var nilCache *labelReplaceCache
+	nilCache.close()
+
+	// Assert: no new sweep was admitted and the clock did not advance.
+	s.Equal(int64(0), c.nowMs.Load())
+	s.Equal(1, c.len())
+	s.Equal(0.0, testutil.ToFloat64(c.labelsMetrics.evictions))
+}
+
+func (s *LabelReplaceCacheSuite) TestConcurrentCloseAndSweepScheduling() {
+	// Arrange.
+	c := s.cache
+	var workers sync.WaitGroup
+	var clock atomic.Int64
+	start := make(chan struct{})
+
+	// Act.
+	for range 8 {
+		workers.Go(func() {
+			<-start
+			for range 100 {
+				c.maybeSweepAt(clock.Add(labelReplaceCacheSweepIntervalMs))
+			}
+		})
+	}
+
+	for range 4 {
+		workers.Go(func() {
+			<-start
+			c.close()
+		})
+	}
+
+	close(start)
+	workers.Wait()
+	closedAt := c.nowMs.Load()
+	c.maybeSweepAt(closedAt + labelReplaceCacheSweepIntervalMs)
+
+	// Assert: completed close calls prevent any further background work.
+	s.Equal(closedAt, c.nowMs.Load())
+	s.True(c.sweepClosed)
 }
 
 func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
@@ -84,6 +137,7 @@ func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
 
 	close(start)
 	workers.Wait()
+	c.close()
 	close(failures)
 
 	// Assert.
@@ -193,9 +247,37 @@ func (s *LabelReplaceCacheSuite) TestHitMiss() {
 	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.misses))
 }
 
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAdmissionDoesNotWaitForLabelsLock() {
+	// Arrange: the admitted background sweep cannot acquire labelsMu.
+	c := s.cache
+	c.labelsMu.Lock()
+	admitted := make(chan struct{})
+
+	// Act.
+	go func() {
+		c.maybeSweepAt(60_000)
+		close(admitted)
+	}()
+
+	func() {
+		defer c.labelsMu.Unlock()
+		select {
+		case <-admitted:
+		case <-time.After(time.Second):
+			s.FailNow("sweep admission waited for labelsMu")
+		}
+
+		// Assert: scheduling returned while the background pass is blocked.
+		s.Equal(int64(60_000), c.nowMs.Load())
+		s.Equal(0.0, testutil.ToFloat64(c.growResizes))
+	}()
+	waitLabelReplaceSweep(c)
+}
+
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval() {
 	// Arrange: a full cache of fresh entries below its maximum.
 	c := newLabelReplaceCache(100, 0, nil)
+	s.T().Cleanup(c.close)
 	s.Require().NotNil(c)
 	for i := range 64 {
 		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
@@ -204,6 +286,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 	// Act: two sweep attempts within one interval.
 	c.maybeSweepAt(70_000)
 	c.maybeSweepAt(70_000)
+	waitLabelReplaceSweep(c)
 
 	// Assert: exactly one sweep ran and grew the capacity.
 	s.Equal(100, c.labelsCap)
@@ -226,6 +309,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepDoesNotOverlapIntervals() {
 	// Arrange: block the first sweep after it has acquired the sweep guard.
 	c := newLabelReplaceCache(100, 0, nil)
+	s.T().Cleanup(c.close)
 	for i := range 64 {
 		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
 	}
@@ -249,9 +333,70 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepDoesNotOverlapInterva
 		s.Equal(64, c.labelsCap)
 	}()
 	<-done
+	waitLabelReplaceSweep(c)
 
 	s.Equal(100, c.labelsCap)
 	s.Equal(1.0, testutil.ToFloat64(c.growResizes))
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepBatchPreservesRefreshAndInsertion() {
+	// Arrange: one full stale batch followed by two stale entries.
+	capacity := labelReplaceCacheSweepBatchSize + 2
+	c := newLabelReplaceCache(capacity, -1, nil)
+	c.resize(capacity, c.growResizes)
+	operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: "$1", src: "src", regexStr: "(.*)"})
+	defer c.releaseOperation(operation)
+	result := labels.FromStrings("dst", "value")
+	key := labelReplaceCacheKey{operation: operation, srcVal: "value"}
+	for i := range capacity {
+		key.baseHash = uint64(i)
+		c.addLabels(key, result)
+	}
+
+	c.nowMs.Store(200_000)
+
+	// Act: execute one batch, then refresh and insert during the unlocked gap.
+	c.labelsMu.Lock()
+	removed := c.sweepBatchLocked(200_000, labelReplaceCacheSweepBatchSize)
+	c.labelsMu.Unlock()
+	key.baseHash = uint64(labelReplaceCacheSweepBatchSize)
+	_, hit := c.getLabels(key)
+	refreshed := key
+	key.baseHash = uint64(capacity)
+	c.addLabels(key, result)
+	inserted := key
+	c.sweepOnce(200_000)
+
+	// Assert: rechecking the LRU removes only the remaining stale entry.
+	s.Equal(labelReplaceCacheSweepBatchSize, removed)
+	s.True(hit)
+	_, refreshedHit := c.getLabels(refreshed)
+	s.True(refreshedHit)
+	_, insertedHit := c.getLabels(inserted)
+	s.True(insertedHit)
+	s.Equal(2, c.len())
+	s.Equal(2.0, testutil.ToFloat64(c.labelsMetrics.entries))
+	s.Equal(float64(capacity-1), testutil.ToFloat64(c.labelsMetrics.evictions))
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepBatchStopsAtFreshEntry() {
+	// Arrange: the oldest entry is stale, the next two are fresh.
+	c := newLabelReplaceCache(10, -1, nil)
+	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "old"))
+	c.nowMs.Store(200_000)
+	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "fresh"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 3), labels.FromStrings("k", "freshest"))
+
+	// Act.
+	c.labelsMu.Lock()
+	removed := c.sweepBatchLocked(200_000, labelReplaceCacheSweepBatchSize)
+	c.labelsMu.Unlock()
+
+	// Assert.
+	s.Equal(1, removed)
+	s.Equal(2, c.len())
+	s.Equal(2.0, testutil.ToFloat64(c.labelsMetrics.entries))
+	s.Equal(1.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() {
@@ -830,4 +975,10 @@ func labelReplaceTestKey(t testing.TB, cache *labelReplaceCache, baseHash uint64
 	t.Cleanup(func() { cache.releaseOperation(operation) })
 
 	return labelReplaceCacheKey{operation: operation, srcVal: "job", baseHash: baseHash}
+}
+
+// waitLabelReplaceSweep joins the admitted pass without closing the cache.
+func waitLabelReplaceSweep(cache *labelReplaceCache) {
+	cache.sweepMu.Lock()
+	cache.sweepMu.Unlock()
 }
