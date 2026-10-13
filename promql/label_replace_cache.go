@@ -81,11 +81,11 @@ type labelReplaceCacheKey struct {
 // labelReplaceCacheEntry is the value stored in the labels cache: the
 // memoized labelset plus the idle timestamp. idleTs counts monotonic
 // milliseconds from wrapper creation and is refreshed on every hit, so it
-// measures idleness rather than age. Updates are serialized with LRU operations;
-// atomic reads allow inspection after a lookup releases the cache lock.
+// measures idleness rather than age. labelsMu guards the entry; lookups return
+// a labelset snapshot so an evicted entry can be reused safely.
 type labelReplaceCacheEntry struct {
 	result labels.Labels
-	idleTs atomic.Int64
+	idleTs int64
 }
 
 type labelReplaceCacheMetrics struct {
@@ -104,6 +104,9 @@ type labelReplaceCacheMetrics struct {
 type labelReplaceCache struct {
 	labelsCache *simplelru.LRU[labelReplaceCacheKey, *labelReplaceCacheEntry]
 	regexCache  *lru.Cache[string, *regexp.Regexp]
+
+	// spareEntry holds one cleared entry for reuse on the next insertion.
+	spareEntry *labelReplaceCacheEntry
 
 	labelsMu sync.Mutex
 	sweepMu  sync.Mutex
@@ -253,8 +256,14 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 
 	c.labelsMu.Lock()
 
-	entry := &labelReplaceCacheEntry{result: val}
-	entry.idleTs.Store(c.nowMs.Load())
+	entry := c.spareEntry
+	if entry == nil {
+		entry = &labelReplaceCacheEntry{}
+	}
+
+	c.spareEntry = nil
+	entry.result = val
+	entry.idleTs = c.nowMs.Load()
 	c.labelsCache.Add(key, entry)
 	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 
@@ -267,9 +276,9 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 // entry idle timestamp. When the labels cache is disabled but the wrapper
 // is alive, every lookup misses without accounting, mirroring the disabled
 // regex cache.
-func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (*labelReplaceCacheEntry, bool) {
+func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (labels.Labels, bool) {
 	if c == nil || c.labelsCache == nil {
-		return nil, false
+		return labels.EmptyLabels(), false
 	}
 
 	c.labelsMu.Lock()
@@ -279,15 +288,16 @@ func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (*labelReplaceCa
 		c.labelsMu.Unlock()
 		c.labelsMetrics.misses.Inc()
 
-		return nil, false
+		return labels.EmptyLabels(), false
 	}
 
-	val.idleTs.Store(c.nowMs.Load())
+	val.idleTs = c.nowMs.Load()
+	result := val.result
 	c.labelsMu.Unlock()
 
 	c.labelsMetrics.hits.Inc()
 
-	return val, true
+	return result, true
 }
 
 // getOrCompileRegex returns the compiled and fully anchored regex for
@@ -369,8 +379,10 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 	c.sweepMu.Unlock()
 }
 
-// onLabelsEvict accounts evictions and refreshes the entries gauge under labelsMu.
-func (c *labelReplaceCache) onLabelsEvict(_ labelReplaceCacheKey, _ *labelReplaceCacheEntry) {
+// onLabelsEvict clears the evicted entry for reuse and updates metrics under labelsMu.
+func (c *labelReplaceCache) onLabelsEvict(_ labelReplaceCacheKey, entry *labelReplaceCacheEntry) {
+	entry.result = labels.EmptyLabels()
+	c.spareEntry = entry
 	c.labelsMetrics.evictions.Inc()
 	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 }
@@ -400,7 +412,7 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 
 	for {
 		_, val, ok := c.labelsCache.GetOldest()
-		if !ok || nowMs-val.idleTs.Load() <= labelReplaceCacheStaleAfterMs {
+		if !ok || nowMs-val.idleTs <= labelReplaceCacheStaleAfterMs {
 			break
 		}
 

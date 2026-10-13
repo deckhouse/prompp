@@ -65,7 +65,7 @@ func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
 				key := labelReplaceTestKey(id)
 				want := labels.FromStrings("k", strconv.FormatUint(id, 10))
 				c.addLabels(key, want)
-				if got, hit := c.getLabels(key); hit && !labels.Equal(want, got.result) {
+				if got, hit := c.getLabels(key); hit && !labels.Equal(want, got) {
 					failures <- fmt.Errorf("wrong labels for key %d", id)
 
 					return
@@ -147,7 +147,30 @@ func (s *LabelReplaceCacheSuite) TestEviction() {
 
 	got, ok := s.cache.getLabels(keyNewest)
 	s.True(ok, "newest entry must survive")
-	s.True(labels.Equal(got.result, newest))
+	s.True(labels.Equal(got, newest))
+}
+
+func (s *LabelReplaceCacheSuite) TestEvictionPreservesReturnedLabels() {
+	// Arrange: capacity one forces the first entry to be reused by the third insert.
+	c := newLabelReplaceCache(1, 0, nil)
+	firstKey := labelReplaceTestKey(1)
+	firstLabels := labels.FromStrings("k", "first")
+	c.addLabels(firstKey, firstLabels)
+	got, hit := c.getLabels(firstKey)
+	s.Require().True(hit)
+
+	// Act.
+	c.addLabels(labelReplaceTestKey(2), labels.FromStrings("k", "second"))
+	c.addLabels(labelReplaceTestKey(3), labels.FromStrings("k", "third"))
+	third, thirdHit := c.getLabels(labelReplaceTestKey(3))
+
+	// Assert: a previously returned labelset stays immutable after entry reuse.
+	s.True(labels.Equal(firstLabels, got))
+	s.Require().True(thirdHit)
+	s.Equal("third", third.Get("k"))
+	s.Equal(2.0, testutil.ToFloat64(c.labelsMetrics.evictions))
+	s.Require().NotNil(c.spareEntry)
+	s.True(c.spareEntry.result.IsEmpty(), "the spare entry must not retain an evicted labelset")
 }
 
 func (s *LabelReplaceCacheSuite) TestHitMiss() {
@@ -163,8 +186,8 @@ func (s *LabelReplaceCacheSuite) TestHitMiss() {
 	// Assert.
 	s.False(ok, "empty cache must miss")
 	s.True(hit, "stored key must hit")
-	s.True(labels.Equal(got.result, want))
-	s.Equal(want.Hash(), got.result.Hash())
+	s.True(labels.Equal(got, want))
+	s.Equal(want.Hash(), got.Hash())
 	s.Equal(1, s.cache.len())
 	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.hits))
 	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.misses))
@@ -318,11 +341,12 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRefreshesIdleTsOnHit(
 
 	// Act: a hit at a later cached timestamp refreshes the idle time.
 	c.nowMs.Store(100_000)
-	got, hit := c.getLabels(key)
+	_, hit := c.getLabels(key)
 
 	// Assert.
 	s.Require().True(hit)
-	s.Equal(int64(100_000), got.idleTs.Load())
+	entry, _ := c.labelsCache.Peek(key)
+	s.Equal(int64(100_000), entry.idleTs)
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldest() {
@@ -352,6 +376,27 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldes
 	s.Equal(64, c.labelsCap)
 	s.Equal(0.0, testutil.ToFloat64(c.growResizes))
 	s.Equal(0.0, testutil.ToFloat64(c.shrinkResizes))
+}
+
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepPreservesReturnedLabels() {
+	// Arrange.
+	c := newLabelReplaceCache(10, 0, nil)
+	key := labelReplaceTestKey(1)
+	want := labels.FromStrings("k", "original")
+	c.addLabels(key, want)
+	got, hit := c.getLabels(key)
+	s.Require().True(hit)
+
+	// Act: sweep the entry, then reuse it for a different series.
+	c.nowMs.Store(200_000)
+	c.sweepOnce(200_000)
+	c.addLabels(labelReplaceTestKey(2), labels.FromStrings("k", "replacement"))
+
+	// Assert.
+	s.True(labels.Equal(want, got))
+	_, oldHit := c.getLabels(key)
+	s.False(oldHit)
+	s.Equal(1, c.len())
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepSerializesRefreshWithRemoval() {
@@ -487,8 +532,9 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepStaleEntryStillServed
 	// Assert: a stale entry is still a valid hit — age matters only to the
 	// sweep, never to serving.
 	s.True(hit, "a stale entry must still be served")
-	s.True(labels.Equal(want, got.result))
-	s.Equal(int64(200_000), got.idleTs.Load())
+	s.True(labels.Equal(want, got))
+	entry, _ := c.labelsCache.Peek(key)
+	s.Equal(int64(200_000), entry.idleTs)
 	s.Equal(1, c.len())
 	s.Equal(1.0, testutil.ToFloat64(c.labelsMetrics.hits))
 	s.Equal(0.0, testutil.ToFloat64(c.labelsMetrics.misses))
