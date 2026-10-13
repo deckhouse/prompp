@@ -8,7 +8,7 @@
 #include "chunk/finalized_chunk.h"
 #include "chunk/outdated_chunk.h"
 #include "encoder/encoder_variant.h"
-#include "encoder/gorilla.h"
+#include "encoder/timestamp/sequence_dictionary.h"
 #include "metrics.h"
 #include "metrics/storage.h"
 
@@ -25,6 +25,7 @@ struct DataStorage {
   using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
   using CompactBitSequence = encoder::CompactBitSequence<Reallocator>;
   using OutdatedChunk = chunk::OutdatedChunk<Reallocator>;
+  using FinalizedChunkList = chunk::FinalizedChunkList<Reallocator>;
 
   class SeriesChunkIterator {
    public:
@@ -50,10 +51,10 @@ struct DataStorage {
       [[nodiscard]] PROMPP_ALWAYS_INLINE const chunk::DataChunk& chunk() const noexcept {
         return chunk_type() == chunk::DataChunk::Type::kOpen ? *open_chunk_ : *finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
         return finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
         return finalized_chunk_end_iterator_;
       }
 
@@ -61,8 +62,8 @@ struct DataStorage {
       friend class SeriesChunkIterator;
 
       const DataStorage* storage_;
-      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
-      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
+      FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
+      FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
       const chunk::DataChunk* open_chunk_{};
 
       PROMPP_ALWAYS_INLINE void next_value() noexcept {
@@ -182,14 +183,11 @@ struct DataStorage {
   };
 
   union {
-    encoder::timestamp::Encoder<Reallocator> timestamp_encoder{};
+    encoder::timestamp::SequenceDictionary<Reallocator> timestamp_store{};
   };
 
   union {
     BareBones::VectorWithHoles<encoder::EncoderVariant<Reallocator>, Reallocator> variant_encoders{};
-  };
-  union {
-    BareBones::VectorWithHoles<encoder::GorillaEncoder<Reallocator>, Reallocator> gorilla_encoders{};
   };
 
   size_t outdated_chunks_map_allocated_memory{};
@@ -203,18 +201,15 @@ struct DataStorage {
   };
 
   union {
-    BareBones::VectorWithHoles<encoder::RefCountableBitSequenceWithItemsCount<Reallocator>, Reallocator> finalized_timestamp_streams{};
-  };
-  union {
     BareBones::VectorWithHoles<encoder::CompactBitSequence<Reallocator>, Reallocator> finalized_data_streams{};
   };
   size_t finalized_chunks_map_allocated_memory{};
   union {
     phmap::flat_hash_map<uint32_t,
-                         chunk::FinalizedChunkList,
+                         FinalizedChunkList,
                          std::hash<uint32_t>,
                          std::equal_to<>,
-                         BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
+                         BareBones::Allocator<std::pair<const uint32_t, FinalizedChunkList>, Reallocator>>
         finalized_chunks;
   };
 
@@ -254,17 +249,8 @@ struct DataStorage {
     chunk.reset();
   }
 
-  template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(uint32_t stream_id) const noexcept {
-    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      if (const auto& state = timestamp_encoder.get_state(stream_id); !state.is_finalized()) [[likely]] {
-        return timestamp_encoder.get_stream(stream_id);
-      } else {
-        return finalized_timestamp_streams[state.stream_data.finalized_stream_id].stream;
-      }
-    } else {
-      return finalized_timestamp_streams[stream_id].stream;
-    }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(encoder::timestamp::SequenceId timestamp_id) const noexcept {
+    return timestamp_store.stream(timestamp_id);
   }
 
   template <chunk::DataChunk::Type chunk_type>
@@ -321,15 +307,6 @@ struct DataStorage {
     }
   }
 
-  template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_gorilla_encoder_stream(uint32_t stream_id) const noexcept {
-    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return gorilla_encoders[stream_id].stream().stream;
-    } else {
-      return finalized_data_streams[stream_id];
-    }
-  }
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return allocated_memory_impl<Reallocator>(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {
@@ -341,9 +318,6 @@ struct DataStorage {
 
         return allocated_memory;
       });
-    }
-    if (encoding_type == EncodingType::kGorilla) {
-      return gorilla_encoders.allocated_memory();
     }
     return 0;
   }
@@ -358,10 +332,7 @@ struct DataStorage {
 
   explicit DataStorage(bool collect_metrics = false) noexcept
       : outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}},
-        finalized_chunks{
-            {},
-            {},
-            BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}} {
+        finalized_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, FinalizedChunkList>, Reallocator>{finalized_chunks_map_allocated_memory}} {
     constructor_impl<Reallocator>();
 
     // metrics should be constructed after constructor_impl because this affects the encoding speed of the samples. (see SeriesDataEncoder benchmark)
@@ -374,9 +345,8 @@ struct DataStorage {
       metrics = &dummy_metrics_;
     }
 
-    // The timestamp states count is pushed into a metrics-owned gauge on state creation instead of being pulled from the
-    // encoder at scrape time, so the metric never dereferences this (potentially destroyed) encoder during a scrape.
-    timestamp_encoder.set_states_count_gauge(&metrics->timestamp_states());
+    // The metrics-owned gauge outlives the store; scraping must not access a destroyed store.
+    timestamp_store.set_slot_count_gauge(&metrics->timestamp_states());
   }
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
@@ -389,21 +359,16 @@ struct DataStorage {
  private:
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk_timestamp_and_encoder(const chunk::DataChunk& chunk) {
-    if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {
-      erase_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id);
-    }
-
+    erase_timestamp_stream<chunk_type>(chunk.timestamp_id);
     erase_encoder_data<chunk_type>(chunk);
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  void erase_timestamp_stream(uint32_t stream_id) {
+  void erase_timestamp_stream(uint32_t timestamp_id) {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      timestamp_encoder.erase(stream_id);
+      timestamp_store.release(timestamp_id);
     } else {
-      if (--finalized_timestamp_streams[stream_id].reference_count == 0) {
-        finalized_timestamp_streams.erase(stream_id);
-      }
+      timestamp_store.release_finalized(timestamp_id);
     }
   }
 
@@ -417,9 +382,7 @@ struct DataStorage {
         return;
       }
     }
-    if (chunk.encoding_state.encoding_type == kGorilla) {
-      gorilla_encoders.erase(chunk.encoder.external_index, kGorilla);
-    } else if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
+    if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
       variant_encoders.erase(chunk.encoder.external_index, chunk.encoding_state.encoding_type);
     }
   }
@@ -449,11 +412,9 @@ struct DataStorage {
       }
 
       std::destroy_at(&open_chunks);
-      std::destroy_at(&timestamp_encoder);
+      std::destroy_at(&timestamp_store);
       std::destroy_at(&variant_encoders);
-      std::destroy_at(&gorilla_encoders);
       std::destroy_at(&outdated_chunks);
-      std::destroy_at(&finalized_timestamp_streams);
       std::destroy_at(&finalized_data_streams);
       std::destroy_at(&finalized_chunks);
       std::destroy_at(&unloaded_series_bitmap);
@@ -471,7 +432,7 @@ struct DataStorage {
       const size_t outdated_chunks_allocated_memory =
           BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
 
-      size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
+      size_t encoders_memory = variant_encoders.allocated_memory();
 
       for (const auto& chunk : open_chunks) {
         if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
@@ -479,9 +440,9 @@ struct DataStorage {
         }
       }
 
-      return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
-             finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-             outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
+      return open_chunks.allocated_memory() + encoders_memory + timestamp_store.allocated_memory() + finalized_data_streams.allocated_memory() +
+             finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory + outdated_chunks_allocated_memory +
+             unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
     }
   }
 

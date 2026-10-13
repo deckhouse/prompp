@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -52,40 +53,28 @@ class SortingIndexBuilder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return index_.index.empty(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return index_.index.allocated_memory(); }
 
-  PROMPP_ALWAYS_INLINE void build() {
+  PROMPP_ALWAYS_INLINE void build(uint32_t ls_id_bound) {
     if (empty()) {
-      rebuild();
+      rebuild(ls_id_bound);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void rebuild(uint32_t max_ls_id) {
+  PROMPP_ALWAYS_INLINE void rebuild(uint32_t ls_id_bound) {
     if (ls_id_set_.empty()) {
       index_.index.clear();
       return;
     }
 
-    index_.index.resize(max_ls_id + 1);
+    index_.index.resize(ls_id_bound);
     std::memset(index_.index.data(), 0, index_.index.size() * sizeof(uint32_t));
 
     const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
     uint32_t index_value = 0;
     for (auto ls_id : ls_id_set_) {
+      assert(static_cast<uint32_t>(ls_id) < ls_id_bound);
       index_value += step;
       index_.index[static_cast<uint32_t>(ls_id)] = index_value;
     }
-  }
-
-  PROMPP_ALWAYS_INLINE void rebuild() {
-    if (ls_id_set_.empty()) {
-      index_.index.clear();
-      return;
-    }
-
-    uint32_t max_ls_id = 0;
-    for (auto ls_id : ls_id_set_) {
-      max_ls_id = std::max(max_ls_id, static_cast<uint32_t>(ls_id));
-    }
-    rebuild(max_ls_id);
   }
 
   PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
@@ -93,6 +82,7 @@ class SortingIndexBuilder {
       return;
     }
 
+    assert(index_.index.size() == static_cast<uint32_t>(*ls_id_iterator));
     const uint64_t previous = get_previous(ls_id_iterator);
     const uint64_t next = get_next(ls_id_iterator);
     if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
@@ -105,8 +95,8 @@ class SortingIndexBuilder {
   }
 
   template <class Iterator>
-  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) noexcept {
-    build();
+  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end, uint32_t ls_id_bound) noexcept {
+    build(ls_id_bound);
     index_.sort(begin, end);
   }
 

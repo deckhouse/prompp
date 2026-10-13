@@ -6,7 +6,7 @@
 #include <fstream>
 #include <numeric>
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include "allocated_memory.h"
 #include "exception.h"

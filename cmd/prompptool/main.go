@@ -51,7 +51,7 @@ func main() {
 	logger := initLogger(*verbose)
 	logger = log.With(logger, "cmd", cmd)
 
-	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{})
+	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{}, nil)
 
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 	switch cmd {

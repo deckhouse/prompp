@@ -4,11 +4,9 @@
 #include <string_view>
 
 #include "primitives/label_set.h"
-#include "primitives/snug_composites.h"
 #include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 

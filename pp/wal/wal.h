@@ -1,7 +1,7 @@
 #pragma once
 
-#include <scope_exit.h>
 #include <chrono>
+#include <experimental/scope>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -158,7 +158,9 @@ class BasicEncoder {
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
-    bool ts_delta_rle_is_worth_trying = segment_samples_.series_count() * 0.1 > (segment_samples_.samples_count() - segment_samples_.series_count());
+    const uint64_t samples = segment_samples_.samples_count();
+    const uint64_t series = segment_samples_.series_count();
+    bool ts_delta_rle_is_worth_trying = samples >= series && 10 * (samples - series) < series;
 
     ts_base_ = std::min(ts_base_, segment_samples_.earliest_sample());
 
@@ -299,9 +301,6 @@ class BasicEncoder {
   PROMPP_ALWAYS_INLINE const LabelSetsTable& label_sets() const { return label_sets_; }
 
   PROMPP_ALWAYS_INLINE const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
-
-  // Exclusive upper bound for label set ids written to WAL.
-  PROMPP_ALWAYS_INLINE uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
 
   PROMPP_ALWAYS_INLINE const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
