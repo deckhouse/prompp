@@ -368,6 +368,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldes
 	// Assert: only the stale prefix is gone; the freed quarter is not enough
 	// to shrink below the floor, so the capacity is untouched.
 	s.Equal(48, c.len())
+	s.Equal(48.0, testutil.ToFloat64(c.labelsMetrics.entries))
 	s.Equal(16.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 	for i := 16; i < 64; i++ {
 		_, ok := c.getLabels(labelReplaceTestKey(s.T(), c, uint64(i)))
@@ -456,6 +457,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepSerializesRefreshWith
 	_, freshHit := c.getLabels(fresh)
 	s.True(freshHit)
 	s.Equal(1, c.len())
+	s.Equal(1.0, testutil.ToFloat64(c.labelsMetrics.entries))
 	s.Equal(2.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 }
 
@@ -484,6 +486,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksOnDrift() {
 	// Assert: the slow drain shrinks once the survivors drop below two
 	// thirds of the capacity.
 	s.Equal(130, c.len())
+	s.Equal(130.0, testutil.ToFloat64(c.labelsMetrics.entries))
 	s.Equal(143, c.labelsCap)
 	s.Equal(143.0, testutil.ToFloat64(c.labelsMetrics.capacity))
 	s.Equal(1.0, testutil.ToFloat64(c.shrinkResizes))
@@ -511,6 +514,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksWhenQuarterFre
 
 	// Assert: the capacity shrinks toward the surviving count plus headroom.
 	s.Equal(100, c.len())
+	s.Equal(100.0, testutil.ToFloat64(c.labelsMetrics.entries))
 	s.Equal(110, c.labelsCap)
 	s.Equal(110.0, testutil.ToFloat64(c.labelsMetrics.capacity))
 	s.Equal(1.0, testutil.ToFloat64(c.shrinkResizes))

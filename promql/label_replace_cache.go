@@ -427,13 +427,13 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 	c.sweepMu.Unlock()
 }
 
-// onLabelsEvict clears the evicted entry for reuse and updates metrics under labelsMu.
+// onLabelsEvict clears the entry and counts an eviction under labelsMu.
+// The caller updates the entries gauge after the complete cache mutation.
 func (c *labelReplaceCache) onLabelsEvict(key labelReplaceCacheKey, entry *labelReplaceCacheEntry) {
 	entry.result = labels.EmptyLabels()
 	c.spareEntry = entry
 	c.releaseOperationLocked(key.operation)
 	c.labelsMetrics.evictions.Inc()
-	c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 }
 
 func (c *labelReplaceCache) releaseOperation(operation *labelReplaceOperation) {
@@ -522,6 +522,10 @@ func (c *labelReplaceCache) sweepOnce(nowMs int64) {
 		if target := max(length+length/labelReplaceCacheShrinkTargetDivisor, floor); target < c.labelsCap {
 			c.resize(target, c.shrinkResizes)
 		}
+	}
+
+	if freed > 0 {
+		c.labelsMetrics.entries.Set(float64(c.labelsCache.Len()))
 	}
 
 	c.labelsMu.Unlock()
