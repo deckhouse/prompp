@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/prometheus/client_golang/prometheus"
@@ -52,7 +53,7 @@ func (s *LabelReplaceCacheSuite) TestCapacityGauge() {
 func (s *LabelReplaceCacheSuite) TestCloseIsIdempotentAndPreventsSweep() {
 	// Arrange.
 	c := s.cache
-	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "value"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "value"), true)
 
 	// Act.
 	c.close()
@@ -117,8 +118,8 @@ func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
 				id := uint64(worker*16 + iteration%16)
 				key := labelReplaceTestKey(s.T(), c, id)
 				want := labels.FromStrings("k", strconv.FormatUint(id, 10))
-				c.addLabels(key, want)
-				if got, hit := c.getLabels(key); hit && !labels.Equal(want, got) {
+				c.addLabels(key, want, true)
+				if got, hit := c.getLabels(key); hit && !labels.Equal(want, got.result) {
 					failures <- fmt.Errorf("wrong labels for key %d", id)
 
 					return
@@ -172,7 +173,7 @@ func (s *LabelReplaceCacheSuite) TestEntriesGauge() {
 
 	// Act.
 	for i := range 3 {
-		s.cache.addLabels(labelReplaceTestKey(s.T(), s.cache, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		s.cache.addLabels(labelReplaceTestKey(s.T(), s.cache, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Assert.
@@ -189,8 +190,8 @@ func (s *LabelReplaceCacheSuite) TestEviction() {
 	newest := labels.FromStrings("k", "2")
 
 	// Act: adding the second key evicts the first one.
-	s.cache.addLabels(keyOldest, oldest)
-	s.cache.addLabels(keyNewest, newest)
+	s.cache.addLabels(keyOldest, oldest, true)
+	s.cache.addLabels(keyNewest, newest, true)
 
 	// Assert.
 	s.Equal(1, s.cache.len())
@@ -201,7 +202,7 @@ func (s *LabelReplaceCacheSuite) TestEviction() {
 
 	got, ok := s.cache.getLabels(keyNewest)
 	s.True(ok, "newest entry must survive")
-	s.True(labels.Equal(got, newest))
+	s.True(labels.Equal(got.result, newest))
 }
 
 func (s *LabelReplaceCacheSuite) TestEvictionPreservesReturnedLabels() {
@@ -209,19 +210,21 @@ func (s *LabelReplaceCacheSuite) TestEvictionPreservesReturnedLabels() {
 	c := newLabelReplaceCache(1, 0, nil)
 	firstKey := labelReplaceTestKey(s.T(), c, 1)
 	firstLabels := labels.FromStrings("k", "first")
-	c.addLabels(firstKey, firstLabels)
+	c.addLabels(firstKey, firstLabels, true)
 	got, hit := c.getLabels(firstKey)
 	s.Require().True(hit)
 
 	// Act.
-	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "second"))
-	c.addLabels(labelReplaceTestKey(s.T(), c, 3), labels.FromStrings("k", "third"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "second"), true)
+	c.addLabels(labelReplaceTestKey(s.T(), c, 3), labels.FromStrings("k", "third"), false)
 	third, thirdHit := c.getLabels(labelReplaceTestKey(s.T(), c, 3))
 
 	// Assert: a previously returned labelset stays immutable after entry reuse.
-	s.True(labels.Equal(firstLabels, got))
+	s.True(labels.Equal(firstLabels, got.result))
+	s.True(got.matched)
 	s.Require().True(thirdHit)
-	s.Equal("third", third.Get("k"))
+	s.False(third.matched)
+	s.Equal("third", third.result.Get("k"))
 	s.Equal(2.0, testutil.ToFloat64(c.labelsMetrics.evictions))
 	s.Require().NotNil(c.spareEntry)
 	s.True(c.spareEntry.result.IsEmpty(), "the spare entry must not retain an evicted labelset")
@@ -234,14 +237,14 @@ func (s *LabelReplaceCacheSuite) TestHitMiss() {
 
 	// Act: first lookup misses on the empty cache, then the entry is stored.
 	_, ok := s.cache.getLabels(key)
-	s.cache.addLabels(key, want)
+	s.cache.addLabels(key, want, true)
 	got, hit := s.cache.getLabels(key)
 
 	// Assert.
 	s.False(ok, "empty cache must miss")
 	s.True(hit, "stored key must hit")
-	s.True(labels.Equal(got, want))
-	s.Equal(want.Hash(), got.Hash())
+	s.True(labels.Equal(got.result, want))
+	s.Equal(want.Hash(), got.result.Hash())
 	s.Equal(1, s.cache.len())
 	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.hits))
 	s.Equal(1.0, testutil.ToFloat64(s.cache.labelsMetrics.misses))
@@ -280,7 +283,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepAtMostOncePerInterval
 	s.T().Cleanup(c.close)
 	s.Require().NotNil(c)
 	for i := range 64 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Act: two sweep attempts within one interval.
@@ -311,7 +314,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepDoesNotOverlapInterva
 	c := newLabelReplaceCache(100, 0, nil)
 	s.T().Cleanup(c.close)
 	for i := range 64 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	c.labelsMu.Lock()
@@ -347,10 +350,10 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepBatchPreservesRefresh
 	operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: "$1", src: "src", regexStr: "(.*)"})
 	defer c.releaseOperation(operation)
 	result := labels.FromStrings("dst", "value")
-	key := labelReplaceCacheKey{operation: operation, srcVal: "value"}
+	key := labelReplaceCacheKey{operation: operation}
 	for i := range capacity {
-		key.baseHash = uint64(i)
-		c.addLabels(key, result)
+		key.base = strconv.Itoa(i)
+		c.addLabels(key, result, true)
 	}
 
 	c.nowMs.Store(200_000)
@@ -359,11 +362,11 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepBatchPreservesRefresh
 	c.labelsMu.Lock()
 	removed := c.sweepBatchLocked(200_000, labelReplaceCacheSweepBatchSize)
 	c.labelsMu.Unlock()
-	key.baseHash = uint64(labelReplaceCacheSweepBatchSize)
+	key.base = strconv.Itoa(labelReplaceCacheSweepBatchSize)
 	_, hit := c.getLabels(key)
 	refreshed := key
-	key.baseHash = uint64(capacity)
-	c.addLabels(key, result)
+	key.base = strconv.Itoa(capacity)
+	c.addLabels(key, result, true)
 	inserted := key
 	c.sweepOnce(200_000)
 
@@ -382,10 +385,10 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepBatchPreservesRefresh
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepBatchStopsAtFreshEntry() {
 	// Arrange: the oldest entry is stale, the next two are fresh.
 	c := newLabelReplaceCache(10, -1, nil)
-	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "old"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "old"), true)
 	c.nowMs.Store(200_000)
-	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "fresh"))
-	c.addLabels(labelReplaceTestKey(s.T(), c, 3), labels.FromStrings("k", "freshest"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "fresh"), true)
+	c.addLabels(labelReplaceTestKey(s.T(), c, 3), labels.FromStrings("k", "freshest"), true)
 
 	// Act.
 	c.labelsMu.Lock()
@@ -407,7 +410,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() 
 	c.labelsCache.Resize(512)
 	c.labelsMetrics.capacity.Set(512)
 	for i := range 512 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Act: a sweep over an all-fresh full cache.
@@ -425,7 +428,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsProgressively() 
 	d.labelsCache.Resize(300)
 	d.labelsMetrics.capacity.Set(300)
 	for i := range 300 {
-		d.addLabels(labelReplaceTestKey(s.T(), d, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		d.addLabels(labelReplaceTestKey(s.T(), d, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Act.
@@ -443,7 +446,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepGrowsWhenFull() {
 	s.Require().NotNil(c)
 	c.nowMs.Store(0)
 	for i := range 64 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Act: a sweep over an all-fresh full cache.
@@ -469,7 +472,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepInitialCapacity() {
 
 	// Act: the LRU is built at the floor capacity — the 65th entry evicts.
 	for i := range 65 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Assert.
@@ -482,7 +485,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRefreshesIdleTsOnHit(
 	c := newLabelReplaceCache(1000, 0, nil)
 	s.Require().NotNil(c)
 	key := labelReplaceTestKey(s.T(), c, 1)
-	c.addLabels(key, labels.FromStrings("k", "v"))
+	c.addLabels(key, labels.FromStrings("k", "v"), true)
 
 	// Act: a hit at a later cached timestamp refreshes the idle time.
 	c.nowMs.Store(100_000)
@@ -499,7 +502,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepRemovesStaleFromOldes
 	c := newLabelReplaceCache(100, 0, nil)
 	s.Require().NotNil(c)
 	for i := range 64 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 	c.nowMs.Store(200_000)
 	for i := 16; i < 64; i++ {
@@ -529,17 +532,17 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepPreservesReturnedLabe
 	c := newLabelReplaceCache(10, 0, nil)
 	key := labelReplaceTestKey(s.T(), c, 1)
 	want := labels.FromStrings("k", "original")
-	c.addLabels(key, want)
+	c.addLabels(key, want, true)
 	got, hit := c.getLabels(key)
 	s.Require().True(hit)
 
 	// Act: sweep the entry, then reuse it for a different series.
 	c.nowMs.Store(200_000)
 	c.sweepOnce(200_000)
-	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "replacement"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 2), labels.FromStrings("k", "replacement"), true)
 
 	// Assert.
-	s.True(labels.Equal(want, got))
+	s.True(labels.Equal(want, got.result))
 	_, oldHit := c.getLabels(key)
 	s.False(oldHit)
 	s.Equal(1, c.len())
@@ -552,10 +555,10 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepSerializesRefreshWith
 	oldest := labelReplaceTestKey(s.T(), c, 1)
 	next := labelReplaceTestKey(s.T(), c, 2)
 	fresh := labelReplaceTestKey(s.T(), c, 3)
-	c.addLabels(oldest, labels.FromStrings("k", "oldest"))
-	c.addLabels(next, labels.FromStrings("k", "next"))
+	c.addLabels(oldest, labels.FromStrings("k", "oldest"), true)
+	c.addLabels(next, labels.FromStrings("k", "next"), true)
 	c.nowMs.Store(200_000)
-	c.addLabels(fresh, labels.FromStrings("k", "fresh"))
+	c.addLabels(fresh, labels.FromStrings("k", "fresh"), true)
 
 	// The callback executes under labelsMu and gives a deterministic point
 	// inside the sweep at which the competing lookup starts.
@@ -614,7 +617,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksOnDrift() {
 	c.labelsCache.Resize(200)
 	c.labelsMetrics.capacity.Set(200)
 	for i := range 200 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 
 	// Act: seven sweeps two ticks apart, survivors re-hit each time so no
@@ -646,7 +649,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepShrinksWhenQuarterFre
 	c.labelsCache.Resize(200)
 	c.labelsMetrics.capacity.Set(200)
 	for i := range 200 {
-		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)))
+		c.addLabels(labelReplaceTestKey(s.T(), c, uint64(i)), labels.FromStrings("k", strconv.Itoa(i)), true)
 	}
 	c.nowMs.Store(200_000)
 	for i := 100; i < 200; i++ {
@@ -672,7 +675,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepStaleEntryStillServed
 	s.Require().NotNil(c)
 	key := labelReplaceTestKey(s.T(), c, 1)
 	want := labels.FromStrings("k", "v")
-	c.addLabels(key, want)
+	c.addLabels(key, want, true)
 	c.nowMs.Store(200_000)
 
 	// Act: a lookup of the stale entry.
@@ -681,7 +684,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSweepStaleEntryStillServed
 	// Assert: a stale entry is still a valid hit — age matters only to the
 	// sweep, never to serving.
 	s.True(hit, "a stale entry must still be served")
-	s.True(labels.Equal(want, got))
+	s.True(labels.Equal(want, got.result))
 	entry, _ := c.labelsCache.Peek(key)
 	s.Equal(int64(200_000), entry.idleTs)
 	s.Equal(1, c.len())
@@ -699,7 +702,7 @@ func (s *LabelReplaceCacheSuite) TestLabelsCacheDisabledRegexEnabled() {
 
 	// Act: a lookup always misses and storing is a noop.
 	_, hitFirst := c.getLabels(key)
-	c.addLabels(key, labels.FromStrings("k", "v"))
+	c.addLabels(key, labels.FromStrings("k", "v"), true)
 	_, hitAfterAdd := c.getLabels(key)
 
 	// Assert: nothing is stored and no labels metric is ever accounted.
@@ -732,7 +735,7 @@ func (s *LabelReplaceCacheSuite) TestNil() {
 	_, ok := c.getLabels(key)
 	s.False(ok, "nil cache must always miss")
 
-	c.addLabels(key, labels.FromStrings("k", "v"))
+	c.addLabels(key, labels.FromStrings("k", "v"), true)
 	s.Equal(0, c.len())
 
 	re, err := c.getOrCompileRegex("a+")
@@ -741,25 +744,57 @@ func (s *LabelReplaceCacheSuite) TestNil() {
 	s.False(re.MatchString("b"))
 }
 
+func (s *LabelReplaceCacheSuite) TestLabelsKeyOwnsSerializationBuffer() {
+	// Arrange: equal-length serializations reuse the same backing buffer.
+	c := s.cache
+	operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: "$1", src: "src", regexStr: "(.*)"})
+	defer c.releaseOperation(operation)
+	first := labels.FromStrings("instance", "first", "src", "same")
+	second := labels.FromStrings("instance", "other", "src", "same")
+	buffer := first.Bytes(make([]byte, 0, 128))
+	key := labelReplaceCacheKey{operation: operation, base: unsafe.String(unsafe.SliceData(buffer), len(buffer))}
+	c.addLabels(key, first, true)
+
+	// Act: overwrite the temporary key bytes and store a different result.
+	buffer = second.Bytes(buffer)
+	key.base = unsafe.String(unsafe.SliceData(buffer), len(buffer))
+	c.addLabels(key, second, false)
+	buffer = first.Bytes(buffer)
+	key.base = unsafe.String(unsafe.SliceData(buffer), len(buffer))
+	gotFirst, firstHit := c.getLabels(key)
+	buffer = second.Bytes(buffer)
+	key.base = unsafe.String(unsafe.SliceData(buffer), len(buffer))
+	gotSecond, secondHit := c.getLabels(key)
+
+	// Assert: neither stored key nor the returned snapshot aliases the scratch buffer.
+	s.True(firstHit)
+	s.True(secondHit)
+	s.True(labels.Equal(first, gotFirst.result))
+	s.True(labels.Equal(second, gotSecond.result))
+	s.True(gotFirst.matched)
+	s.False(gotSecond.matched)
+	s.Equal(2, c.len())
+}
+
 func (s *LabelReplaceCacheSuite) TestOperationHashCollisionPreservesCachedLabels() {
 	// Arrange: distinct parameter sets deliberately share a hash bucket.
 	c := newLabelReplaceCache(10, -1, nil)
 	first := c.acquireOperationWithHash(labelReplaceOperationKey{dst: "first", repl: "$1"}, 42)
 	second := c.acquireOperationWithHash(labelReplaceOperationKey{dst: "second", repl: "$1"}, 42)
-	c.addLabels(labelReplaceCacheKey{operation: first, baseHash: 1}, labels.FromStrings("first", "value"))
-	c.addLabels(labelReplaceCacheKey{operation: second, baseHash: 1}, labels.FromStrings("second", "value"))
+	c.addLabels(labelReplaceCacheKey{operation: first, base: "source"}, labels.FromStrings("first", "value"), true)
+	c.addLabels(labelReplaceCacheKey{operation: second, base: "source"}, labels.FromStrings("second", "value"), true)
 
 	// Act: a colliding lookup must resolve its own identity and labelset.
 	again := c.acquireOperationWithHash(first.key, 42)
-	got, hit := c.getLabels(labelReplaceCacheKey{operation: again, baseHash: 1})
+	got, hit := c.getLabels(labelReplaceCacheKey{operation: again, base: "source"})
 	c.releaseOperation(first)
 	c.releaseOperation(second)
 	c.releaseOperation(again)
 
 	// Assert.
 	s.Require().True(hit)
-	s.Equal("value", got.Get("first"))
-	s.False(got.Has("second"))
+	s.Equal("value", got.result.Get("first"))
+	s.False(got.result.Has("second"))
 
 	// Act: sweeping both entries releases the whole collision chain.
 	c.sweepOnce(200_000)
@@ -820,7 +855,7 @@ func (s *LabelReplaceCacheSuite) TestOperationReleasedWithoutCachedLabels() {
 	c := newLabelReplaceCache(10, -1, nil)
 	operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: "$1", src: "src", regexStr: "(.*)"})
 
-	// Act: an empty or non-matching evaluation stores no labels.
+	// Act: an empty evaluation stores no labels.
 	c.releaseOperation(operation)
 
 	// Assert.
@@ -831,12 +866,12 @@ func (s *LabelReplaceCacheSuite) TestOperationReplacementDoesNotLeakReferences()
 	// Arrange.
 	c := newLabelReplaceCache(10, -1, nil)
 	operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: "$1", src: "src", regexStr: "(.*)"})
-	key := labelReplaceCacheKey{operation: operation, srcVal: "value", baseHash: 1}
+	key := labelReplaceCacheKey{operation: operation, base: "source"}
 	result := labels.FromStrings("dst", "value")
 
 	// Act: two concurrent misses may eventually store the same key twice.
-	c.addLabels(key, result)
-	c.addLabels(key, result)
+	c.addLabels(key, result, true)
+	c.addLabels(key, result, true)
 	c.releaseOperation(operation)
 	c.sweepOnce(200_000)
 
@@ -851,18 +886,18 @@ func (s *LabelReplaceCacheSuite) TestOperationsPreserveHitsAcrossManyDistinctCal
 	c.resize(200, c.growResizes)
 	for i := range 200 {
 		operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: strconv.Itoa(i), src: "src"})
-		key := labelReplaceCacheKey{operation: operation, srcVal: "value", baseHash: 1}
-		c.addLabels(key, labels.FromStrings("dst", strconv.Itoa(i)))
+		key := labelReplaceCacheKey{operation: operation, base: "source"}
+		c.addLabels(key, labels.FromStrings("dst", strconv.Itoa(i)), true)
 		c.releaseOperation(operation)
 	}
 
 	// Act and assert: resolving the parameters again must reach the cached labels.
 	for i := range 200 {
 		operation := c.acquireOperation(labelReplaceOperationKey{dst: "dst", repl: strconv.Itoa(i), src: "src"})
-		got, hit := c.getLabels(labelReplaceCacheKey{operation: operation, srcVal: "value", baseHash: 1})
+		got, hit := c.getLabels(labelReplaceCacheKey{operation: operation, base: "source"})
 		c.releaseOperation(operation)
 		s.Require().True(hit)
-		s.Equal(strconv.Itoa(i), got.Get("dst"))
+		s.Equal(strconv.Itoa(i), got.result.Get("dst"))
 	}
 
 	// Act: removing the final cached keys releases their operation identities.
@@ -877,10 +912,10 @@ func (s *LabelReplaceCacheSuite) TestOperationSurvivesEvictionDuringEvaluation()
 	c := newLabelReplaceCache(1, -1, nil)
 	operation := c.acquireOperation(labelReplaceOperationKey{dst: "first", repl: "$1"})
 	other := c.acquireOperation(labelReplaceOperationKey{dst: "second", repl: "$1"})
-	c.addLabels(labelReplaceCacheKey{operation: operation, baseHash: 1}, labels.FromStrings("first", "value"))
+	c.addLabels(labelReplaceCacheKey{operation: operation, base: "source"}, labels.FromStrings("first", "value"), true)
 
 	// Act.
-	c.addLabels(labelReplaceCacheKey{operation: other, baseHash: 1}, labels.FromStrings("second", "value"))
+	c.addLabels(labelReplaceCacheKey{operation: other, base: "source"}, labels.FromStrings("second", "value"), true)
 	again := c.acquireOperation(operation.key)
 
 	// Assert: the ongoing evaluation and a new one still use the same identity.
@@ -966,7 +1001,7 @@ func (s *LabelReplaceCacheSuite) TestRegexCacheEviction() {
 
 // labelReplaceTestKey holds an evaluation lease until test cleanup so fixture
 // keys keep their operation identity even when all cached labels are evicted.
-func labelReplaceTestKey(t testing.TB, cache *labelReplaceCache, baseHash uint64) labelReplaceCacheKey {
+func labelReplaceTestKey(t testing.TB, cache *labelReplaceCache, identity uint64) labelReplaceCacheKey {
 	t.Helper()
 
 	operation := cache.acquireOperation(labelReplaceOperationKey{
@@ -974,7 +1009,7 @@ func labelReplaceTestKey(t testing.TB, cache *labelReplaceCache, baseHash uint64
 	})
 	t.Cleanup(func() { cache.releaseOperation(operation) })
 
-	return labelReplaceCacheKey{operation: operation, srcVal: "job", baseHash: baseHash}
+	return labelReplaceCacheKey{operation: operation, base: strconv.FormatUint(identity, 10)}
 }
 
 // waitLabelReplaceSweep joins the admitted pass without closing the cache.

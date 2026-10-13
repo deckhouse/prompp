@@ -261,6 +261,39 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSemanticsDropNameOnCacheHi
 	s.Greater(hitsSecond, hitsFirst, "the second run must be served from the cache")
 }
 
+func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSemanticsDropNameUsesCurrentInput() {
+	for _, tc := range []struct {
+		name, dst, regex string
+	}{
+		{name: "non_match_name", dst: "__name__", regex: "absent"},
+		{name: "match_name", dst: "__name__", regex: "(.*)"},
+		{name: "match_other_label", dst: "dst", regex: "(.*)"},
+	} {
+		s.Run(tc.name, func() {
+			t := s.T()
+			enabled := newLabelReplaceTestEnvWithNameRemoval(t, 0, true)
+			disabled := newLabelReplaceTestEnvWithNameRemoval(t, -1, true)
+			series := labels.FromStrings(labels.MetricName, "sem_shared", "job", "sem")
+			enabled.appendSamples(t, series)
+			disabled.appendSamples(t, series)
+
+			// Act: the inputs share labels, but unary minus changes DropName.
+			for _, input := range []string{"-sem_shared", "sem_shared", "-sem_shared"} {
+				query := fmt.Sprintf(`label_replace(%s, %q, "renamed", "job", %q)`, input, tc.dst, tc.regex)
+				got, err := enabled.mustRun(t, query).Vector()
+				s.Require().NoError(err)
+				want, err := disabled.mustRun(t, query).Vector()
+				s.Require().NoError(err)
+				s.Equal(want, got)
+			}
+
+			// Assert: different input flags reuse exactly the same cached labels.
+			s.Equal(1.0, enabled.cacheSum(t, labelReplaceCacheMissesFamily, labelReplaceCacheLabelsID))
+			s.Equal(2.0, enabled.cacheSum(t, labelReplaceCacheHitsFamily, labelReplaceCacheLabelsID))
+		})
+	}
+}
+
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSemanticsInvalidRegexWithWarmCache() {
 	t := s.T()
 	// Arrange: fill the labelset cache and force full-hit runs first.
@@ -303,6 +336,8 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSemanticsNonMatchingRegex(
 	s.Require().NoError(err)
 	s.Equal(plainVec, firstVec)
 	s.Equal(plainVec, secondVec)
+	s.Equal(1.0, s.env.cacheSum(t, labelReplaceCacheMissesFamily, labelReplaceCacheLabelsID))
+	s.Equal(1.0, s.env.cacheSum(t, labelReplaceCacheHitsFamily, labelReplaceCacheLabelsID))
 }
 
 func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheSemanticsWarningsOnCacheHit() {
@@ -379,6 +414,12 @@ type labelReplaceTestEnv struct {
 func newLabelReplaceTestEnv(t testing.TB, cacheSize int) *labelReplaceTestEnv {
 	t.Helper()
 
+	return newLabelReplaceTestEnvWithNameRemoval(t, cacheSize, false)
+}
+
+func newLabelReplaceTestEnvWithNameRemoval(t testing.TB, cacheSize int, delayed bool) *labelReplaceTestEnv {
+	t.Helper()
+
 	registry := prometheus.NewRegistry()
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   nil,
@@ -388,9 +429,11 @@ func newLabelReplaceTestEnv(t testing.TB, cacheSize int) *labelReplaceTestEnv {
 		LookbackDelta:            5 * time.Minute,
 		NoStepSubqueryIntervalFn: func(int64) int64 { return int64(time.Minute / time.Millisecond) },
 		LabelReplaceCacheSize:    cacheSize,
+		EnableDelayedNameRemoval: delayed,
 	})
 	storage := teststorage.New(t)
 	t.Cleanup(func() { _ = storage.Close() })
+	t.Cleanup(func() { _ = engine.Close() })
 
 	return &labelReplaceTestEnv{engine: engine, registry: registry, storage: storage}
 }

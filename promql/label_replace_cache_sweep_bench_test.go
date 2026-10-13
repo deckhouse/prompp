@@ -2,6 +2,7 @@ package promql
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -19,7 +20,11 @@ func BenchmarkLabelReplaceCacheSweep(b *testing.B) {
 				})
 				defer cache.releaseOperation(operation)
 				result := labels.FromStrings("instance", "value", "dst", "value")
-				key := labelReplaceCacheKey{operation: operation, srcVal: "value"}
+				key := labelReplaceCacheKey{operation: operation}
+				bases := make([]string, capacity)
+				for i := range bases {
+					bases[i] = string(labels.FromStrings("instance", strconv.Itoa(i)).Bytes(nil))
+				}
 				staleCount := capacity * stalePercent / 100
 				const nowMs = labelReplaceCacheStaleAfterMs + labelReplaceCacheSweepIntervalMs
 
@@ -36,8 +41,8 @@ func BenchmarkLabelReplaceCacheSweep(b *testing.B) {
 							cache.nowMs.Store(nowMs)
 						}
 
-						key.baseHash = uint64(i)
-						cache.addLabels(key, result)
+						key.base = bases[i]
+						cache.addLabels(key, result, true)
 					}
 
 					cache.nowMs.Store(nowMs)

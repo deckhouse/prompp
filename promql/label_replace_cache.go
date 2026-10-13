@@ -3,6 +3,7 @@ package promql
 import (
 	"hash/maphash"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -85,21 +86,24 @@ type labelReplaceOperation struct {
 	references int
 }
 
-// labelReplaceCacheKey includes operation identity and the whole source labelset
-// hash because the result depends on every source label, not just srcVal.
+// labelReplaceCacheKey includes operation identity and the complete serialized
+// source labelset. Full equality prevents source-label hash collisions.
 type labelReplaceCacheKey struct {
 	operation *labelReplaceOperation
-	srcVal    string
-	baseHash  uint64
+	base      string
 }
 
-// labelReplaceCacheEntry is the value stored in the labels cache: the
-// memoized labelset plus the idle timestamp. idleTs counts monotonic
-// milliseconds from wrapper creation and is refreshed on every hit, so it
-// measures idleness rather than age. labelsMu guards the entry; lookups return
-// a labelset snapshot so an evicted entry can be reused safely.
+// labelReplaceCacheValue is an immutable lookup snapshot. matched determines
+// whether replacing __name__ resets DropName; DropName itself belongs to the input.
+type labelReplaceCacheValue struct {
+	result  labels.Labels
+	matched bool
+}
+
+// labelReplaceCacheEntry holds the result and cached monotonic idle timestamp.
+// labelsMu guards both fields; lookups return a snapshot before entry reuse.
 type labelReplaceCacheEntry struct {
-	result labels.Labels
+	labelReplaceCacheValue
 	idleTs int64
 }
 
@@ -300,7 +304,7 @@ func (c *labelReplaceCache) acquireOperationWithHash(key labelReplaceOperationKe
 // addLabels stores a resulting labelset stamped with the cached timestamp
 // and refreshes the entries gauge; it is a noop when the labels cache is
 // disabled but the wrapper is alive.
-func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Labels) {
+func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Labels, matched bool) {
 	if c == nil || c.labelsCache == nil {
 		return
 	}
@@ -314,8 +318,11 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 
 	c.spareEntry = nil
 	entry.result = val
+	entry.matched = matched
 	entry.idleTs = c.nowMs.Load()
 	if !c.labelsCache.Contains(key) {
+		// The caller may provide a temporary view of its serialization buffer.
+		key.base = strings.Clone(key.base)
 		key.operation.references++
 	}
 
@@ -342,9 +349,9 @@ func (c *labelReplaceCache) close() {
 // entry idle timestamp. When the labels cache is disabled but the wrapper
 // is alive, every lookup misses without accounting, mirroring the disabled
 // regex cache.
-func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (labels.Labels, bool) {
+func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (labelReplaceCacheValue, bool) {
 	if c == nil || c.labelsCache == nil {
-		return labels.EmptyLabels(), false
+		return labelReplaceCacheValue{}, false
 	}
 
 	c.labelsMu.Lock()
@@ -354,11 +361,11 @@ func (c *labelReplaceCache) getLabels(key labelReplaceCacheKey) (labels.Labels, 
 		c.labelsMu.Unlock()
 		c.labelsMetrics.misses.Inc()
 
-		return labels.EmptyLabels(), false
+		return labelReplaceCacheValue{}, false
 	}
 
 	val.idleTs = c.nowMs.Load()
-	result := val.result
+	result := val.labelReplaceCacheValue
 	c.labelsMu.Unlock()
 
 	c.labelsMetrics.hits.Inc()
@@ -449,7 +456,7 @@ func (c *labelReplaceCache) maybeSweepAt(wallMs int64) {
 // onLabelsEvict clears the entry and counts an eviction under labelsMu.
 // The caller updates the entries gauge after the complete cache mutation.
 func (c *labelReplaceCache) onLabelsEvict(key labelReplaceCacheKey, entry *labelReplaceCacheEntry) {
-	entry.result = labels.EmptyLabels()
+	entry.labelReplaceCacheValue = labelReplaceCacheValue{result: labels.EmptyLabels()}
 	c.spareEntry = entry
 	c.releaseOperationLocked(key.operation)
 	c.labelsMetrics.evictions.Inc()

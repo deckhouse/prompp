@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/facette/natsort"
 	"github.com/prometheus/common/model"
@@ -1492,41 +1493,45 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 		defer ev.labelReplaceCache.releaseOperation(operation)
 	}
 
+	var baseBuf []byte
+	if cacheLabels {
+		baseBuf = make([]byte, 0, 1024)
+	}
+
 	for i, el := range matrix {
-		srcVal := el.Metric.Get(src)
 		var key labelReplaceCacheKey
 		if cacheLabels {
+			baseBuf = el.Metric.Bytes(baseBuf)
+			// Get does not retain this view; addLabels owns a copy before storing it.
 			key = labelReplaceCacheKey{
-				operation: operation, srcVal: srcVal, baseHash: el.Metric.Hash(),
+				operation: operation, base: unsafe.String(unsafe.SliceData(baseBuf), len(baseBuf)),
 			}
 
 			if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
-				matrix[i].Metric = cached
-				if dst == model.MetricNameLabel {
+				matrix[i].Metric = cached.result
+				if cached.matched && dst == model.MetricNameLabel {
 					matrix[i].DropName = false
-				} else {
-					matrix[i].DropName = el.DropName
 				}
 
 				continue
 			}
 		}
 
+		srcVal := el.Metric.Get(src)
 		indexes := regex.FindStringSubmatchIndex(srcVal)
-		if indexes != nil { // Only replace when regexp matches.
+		matched := indexes != nil
+		if matched {
 			replacementBuf = regex.ExpandString(replacementBuf[:0], repl, srcVal, indexes)
 			lb.Reset(el.Metric)
 			lb.Set(dst, string(replacementBuf))
 			matrix[i].Metric = lb.Labels()
 			if dst == model.MetricNameLabel {
 				matrix[i].DropName = false
-			} else {
-				matrix[i].DropName = el.DropName
 			}
+		}
 
-			if cacheLabels {
-				ev.labelReplaceCache.addLabels(key, matrix[i].Metric)
-			}
+		if cacheLabels {
+			ev.labelReplaceCache.addLabels(key, matrix[i].Metric, matched)
 		}
 	}
 	if matrix.ContainsSameLabelset() {

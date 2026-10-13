@@ -31,7 +31,7 @@ func (s *NewEngineLabelReplaceCacheSuite) TestCloseWaitsForSweepAndPreventsSched
 	engine := NewEngine(EngineOpts{LabelReplaceCacheSize: 10, LabelReplaceRegexCacheSize: -1})
 	c := engine.labelReplaceCache
 	s.T().Cleanup(c.close)
-	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "value"))
+	c.addLabels(labelReplaceTestKey(s.T(), c, 1), labels.FromStrings("k", "value"), true)
 	c.labelsMu.Lock()
 
 	func() {
