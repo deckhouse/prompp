@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <optional>
+
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
 #include "wal/hashdex/test_fixture.h"
@@ -25,6 +27,7 @@ using std::operator""s;
 struct ScraperCase {
   std::string_view buffer;
   Error result;
+  std::optional<Error> legacy_result{};
   std::vector<Metadata> metadata{};
   std::vector<FloatMetric> floats{};
 };
@@ -57,6 +60,22 @@ TEST_P(PrometheusScraperFixture, Test) {
 
   // Assert
   EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().floats, floats);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+TEST_P(PrometheusScraperFixture, LegacyPerTokenUtf8Validation) {
+  // Arrange
+  std::string buffer(GetParam().buffer.data(), GetParam().buffer.size());
+  buffer.shrink_to_fit();
+
+  // Act
+  const auto result = scraper_.parse_validate_utf_per_token(buffer, kDefaultTimestamp);
+  const auto floats = get_floats();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().legacy_result.value_or(GetParam().result), result);
   EXPECT_EQ(GetParam().floats, floats);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
@@ -136,8 +155,11 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(ScraperCase{.buffer = "a\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b='c'} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b=\n", .result = Error::kUnexpectedToken, .floats = {}},
-                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b=\"\xff\"} 1\n", .result = Error::kInvalidUtf8, .floats = {}},
+                    ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "# comment \xff\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
+                    ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
                     ScraperCase{.buffer = "{\"a\", \"b = \"c\"}\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
@@ -553,8 +575,11 @@ INSTANTIATE_TEST_SUITE_P(
         ScraperCase{.buffer = "a{b=\"c\"d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\"c\",,d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
-        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\"\xff\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# comment \xff\n# EOF\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
+        ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
         ScraperCase{.buffer = "{\"a\",\"b = \"c\"}\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
@@ -881,5 +906,44 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                                {"mount_point", "D:\\"},
                                                                                            },
                                                                                            BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
+
+// Builds a scrape buffer whose real `# TYPE`/metric lines sit past the 4 GiB mark, preceded by
+// filler comment lines that the scraper skips.
+std::string make_scrape_buffer_past_4gib() {
+  constexpr size_t kFourGiB = 4ULL * 1024 * 1024 * 1024;
+  constexpr std::string_view kFiller = "# padding comment used only to push the real metric past the four gib mark\n"sv;
+
+  std::string buffer;
+  buffer.reserve(kFourGiB + 4096);
+  while (buffer.size() < kFourGiB + 1024) {
+    buffer.append(kFiller);
+  }
+  buffer.append("# TYPE demo_metric untyped\ndemo_metric{label=\"value\"} 1\n"sv);
+  return buffer;
+}
+
+// Regression for the 64-bit offset widening (MarkedString::offset / MarkedMetric::base_offset):
+// an entry beyond 4 GiB used to have its offset truncated mod 2^32, so view() read the correct
+// length from a wrapped position and returned a garbage symbol. Disabled by default because it
+// allocates a > 4 GiB buffer; run explicitly by passing these test args to //:wal_test:
+//   --gtest_also_run_disabled_tests --gtest_filter='*ResolvesEntriesBeyond4GiBOffset*'
+TEST(PrometheusScraperOverflowTest, DISABLED_ResolvesEntriesBeyond4GiBOffset) {
+  // Arrange
+  std::string buffer = make_scrape_buffer_past_4gib();
+  PrometheusScraper scraper;
+
+  // Act
+  const auto result = scraper.parse(buffer, kDefaultTimestamp);
+  const auto metadata = PromPP::WAL::hashdex::get_metadata(scraper);
+  const auto floats = PromPP::WAL::hashdex::get_floats(scraper);
+
+  // Assert
+  EXPECT_EQ(Error::kNoError, result);
+  ASSERT_EQ(1U, metadata.size());
+  EXPECT_EQ("demo_metric"sv, metadata[0].metric_name);
+  EXPECT_EQ("untyped"sv, metadata[0].text);
+  EXPECT_EQ(MetadataType::kType, metadata[0].type);
+  EXPECT_EQ(1U, floats.size());
+}
 
 }  // namespace

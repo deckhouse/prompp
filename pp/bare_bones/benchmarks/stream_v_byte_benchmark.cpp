@@ -1,6 +1,5 @@
 #include <benchmark/benchmark.h>
 
-#include <numeric>
 #include <ranges>
 
 #include "bare_bones/stream_v_byte.h"

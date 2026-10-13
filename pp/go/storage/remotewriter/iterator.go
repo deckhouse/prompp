@@ -130,6 +130,9 @@ type Iterator struct {
 	metrics                  *DestinationMetrics
 	targetSegmentID          uint32
 
+	// target is the destination the messages are delivered to.
+	target deliveryTarget
+
 	outputSharder *sharder
 
 	scrapeInterval    time.Duration
@@ -146,6 +149,7 @@ func newIterator(
 	readTimeout time.Duration,
 	protobufWriter ProtobufWriter,
 	metrics *DestinationMetrics,
+	target deliveryTarget,
 ) (*Iterator, error) {
 	outputSharder, err := newSharder(queueConfig.MinShards, queueConfig.MaxShards)
 	if err != nil {
@@ -160,6 +164,7 @@ func newIterator(
 		targetSegmentIDSetCloser: targetSegmentIDSetCloser,
 		metrics:                  metrics,
 		targetSegmentID:          targetSegmentID,
+		target:                   target,
 		scrapeInterval:           readTimeout,
 		outputSharder:            outputSharder,
 	}, nil
@@ -356,17 +361,24 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 				break
 			}
 
-			go func(msg *cppbridge.RWMessage) {
+			// the key is derived from the message position, so a retry of this message repeats it,
+			// while sendIteration tells the receiver which attempt this delivery is
+			idempotencyKey := i.target.messageIdempotencyKey(msg.TargetSegmentID, index)
+			sendCtx := withDeliveryMarks(ctx, idempotencyKey, sendIteration)
+
+			go func(message *cppbridge.RWMessage, idempotencyKey string, attempt int) {
 				defer sendSemaphore.Release(1)
 				sendStartTime := i.clock.Now()
-				writeErr := i.protobufWriter.Write(ctx, msg.Buffer)
-				if writeErr != nil {
-					logger.Errorf("failed to send protobuf: %v", writeErr)
-				}
-				i.metrics.sentMessageDuration.Observe(time.Since(sendStartTime).Seconds())
+				writeErr := i.protobufWriter.Write(sendCtx, message.Buffer)
+				sendDuration := i.clock.Since(sendStartTime)
+				i.metrics.sentMessageDuration.Observe(sendDuration.Seconds())
 
-				msg.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
-			}(&msg.Messages[index])
+				if writeErr != nil {
+					i.logSendError(writeErr, message, sendDuration, idempotencyKey, attempt)
+				}
+
+				message.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
+			}(&msg.Messages[index], idempotencyKey, sendIteration)
 		}
 		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
 		i.metrics.sentBatchDuration.Observe(i.clock.Since(startTime).Seconds())
@@ -427,6 +439,27 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 	}
 
 	return nil
+}
+
+// logSendError reports a failed delivery of a single message with everything needed to locate it:
+// where it was sent, which attempt it was, how long the request took and how big the message is.
+func (i *Iterator) logSendError(
+	sendErr error,
+	msg *cppbridge.RWMessage,
+	sendDuration time.Duration,
+	idempotencyKey string,
+	attempt int,
+) {
+	logger.Errorf(
+		"failed to send message: %v; url=%s idempotency_key=%s attempt=%d duration=%s bytes=%d samples=%d",
+		sendErr,
+		i.target.endpoint,
+		idempotencyKey,
+		attempt,
+		sendDuration,
+		len(msg.Buffer),
+		msg.SampleCount,
+	)
 }
 
 // setTargetSegmentID sets the target segment id.

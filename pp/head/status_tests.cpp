@@ -1,11 +1,9 @@
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
-#include "primitives/snug_composites.h"
 #include "series_data/encoder.h"
 #include "series_index/queried_series.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 #include "status.h"
 
 namespace {
@@ -13,7 +11,7 @@ namespace {
 using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 using head::StatusGetterLSS;
 using PromPP::Primitives::LabelViewSet;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using QuerySource = series_index::QueriedSeries::Source;
 
@@ -47,7 +45,7 @@ TEST_F(StatusFixture, EmptyLssAndStorage) {
 
 TEST_F(StatusFixture, FinalizedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 3, 1.0);
@@ -61,7 +59,7 @@ TEST_F(StatusFixture, FinalizedChunk) {
 
 TEST_F(StatusFixture, FinalizedTimestreamChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -77,7 +75,7 @@ TEST_F(StatusFixture, FinalizedTimestreamChunk) {
 
 TEST_F(StatusFixture, OpenedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 2, 1.0);
   encoder.encode(2, 3, 1.0);
@@ -91,7 +89,7 @@ TEST_F(StatusFixture, OpenedChunk) {
 
 TEST_F(StatusFixture, EmptyChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(5, 1, 1.0);
 
   // Act

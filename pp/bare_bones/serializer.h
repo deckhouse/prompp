@@ -3,7 +3,7 @@
 #include <fstream>
 #include <span>
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include "exception.h"
 

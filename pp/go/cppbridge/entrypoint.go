@@ -16,6 +16,7 @@ package cppbridge
 // #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
+
 import (
 	"runtime"
 	"time"
@@ -411,6 +412,41 @@ func freeBytes(b []byte) {
 		uintptr(unsafe.Pointer(&b)),
 	)
 	runtime.KeepAlive(b)
+}
+
+// FeatureFlags configures C++ entrypoint behavior.
+type FeatureFlags struct {
+	features C.PromppFeatures
+}
+
+// DisableScraperFullUTF8 selects legacy per-token UTF-8 validation.
+func (f *FeatureFlags) DisableScraperFullUTF8() {
+	f.features.scraper_validate_utf_per_token = true
+}
+
+// SkipNoSamplesSeries hashdex skip no samples series.
+func (f *FeatureFlags) SkipNoSamplesSeries() {
+	f.features.skip_no_samples_series = true
+}
+
+// InitializeFeatureFlags configures C++ features once at startup.
+// Passing zero FeatureFlags freezes the default configuration.
+func InitializeFeatureFlags(features FeatureFlags) {
+	initializeFeatureFlags(features)
+}
+
+func initializeFeatureFlags(features FeatureFlags) {
+	args := struct {
+		features C.PromppFeatures
+	}{
+		features: features.features,
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_feature_flags_initialize,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 // GetFlavor returns recognized architecture flavor
@@ -1449,6 +1485,37 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
+// primitivesLSSReleaseHashSet releases label set -> ls id hash set of lss.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func primitivesLSSReleaseHashSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_hash_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// primitivesLSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func primitivesLSSReleaseLSIDSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_ls_id_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
@@ -2066,10 +2133,11 @@ func prometheusPerShardRelabelerResetTo(
 	)
 }
 
-func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
+func seriesDataDataStorageCtor(collectMetrics, useArenas bool) uintptr {
 	args := struct {
 		collectMetrics bool
-	}{collectMetrics}
+		useArenas      bool
+	}{collectMetrics, useArenas}
 	var res struct {
 		dataStorage uintptr
 	}
@@ -2082,18 +2150,6 @@ func seriesDataDataStorageCtor(collectMetrics bool) uintptr {
 	)
 
 	return res.dataStorage
-}
-
-func seriesDataDataStorageReset(dataStorage uintptr) {
-	args := struct {
-		dataStorage uintptr
-	}{dataStorage}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_data_storage_reset,
-		uintptr(unsafe.Pointer(&args)),
-	)
 }
 
 func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
@@ -2211,6 +2267,20 @@ func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []
 		C.prompp_series_data_data_storage_query_first_timestamps,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
+	)
+}
+
+func seriesDataDataStorageQueryStaleNaNSeries(dataStorage uintptr, seriesIDs []uint32, series uintptr) {
+	args := struct {
+		dataStorage uintptr
+		seriesIDs   []uint32
+		series      uintptr
+	}{dataStorage, seriesIDs, series}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_query_stalenan_series,
+		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
@@ -2503,31 +2573,13 @@ func seriesDataDataStorageDtor(dataStorage uintptr) {
 	)
 }
 
-func seriesDataEncoderCtor(dataStorage uintptr) uintptr {
+func seriesDataEncoderEncode(dataStorage uintptr, seriesID uint32, timestamp int64, value float64) {
 	args := struct {
 		dataStorage uintptr
-	}{dataStorage}
-	var res struct {
-		encoder uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_encoder_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.encoder
-}
-
-func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, value float64) {
-	args := struct {
-		encoder   uintptr
-		seriesID  uint32
-		timestamp int64
-		value     float64
-	}{encoder, seriesID, timestamp, value}
+		seriesID    uint32
+		timestamp   int64
+		value       float64
+	}{dataStorage, seriesID, timestamp, value}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2536,11 +2588,11 @@ func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, 
 	)
 }
 
-func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice []InnerSeries) {
+func seriesDataEncoderEncodeInnerSeriesSlice(dataStorage uintptr, innerSeriesSlice []InnerSeries) {
 	args := struct {
-		encoder          uintptr
+		dataStorage      uintptr
 		innerSeriesSlice []InnerSeries
-	}{encoder, innerSeriesSlice}
+	}{dataStorage, innerSeriesSlice}
 	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2551,10 +2603,10 @@ func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice [
 	headDataStorageEncodeInnerSeriesSliceCount.Inc()
 }
 
-func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
+func seriesDataEncoderMergeOutOfOrderChunks(dataStorage uintptr) {
 	args := struct {
-		encoder uintptr
-	}{encoder}
+		dataStorage uintptr
+	}{dataStorage}
 	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2563,18 +2615,6 @@ func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
 	)
 	headDataStorageMergeOutOfOrderChunksSum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageMergeOutOfOrderChunksCount.Inc()
-}
-
-func seriesDataEncoderDtor(encoder uintptr) {
-	args := struct {
-		encoder uintptr
-	}{encoder}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_encoder_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
 }
 
 func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval, downsamplingMs int64) uintptr {
@@ -3252,8 +3292,35 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
-// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
-func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+// headWalEncoderLongFinalize - finalize the encoded data in the C++ encoder to Segment.
+// Unlike [headWalEncoderFinalize] it uses a regular CGO call instead of fastcgo, so a long-running
+// finalization (e.g. after copying all added series into a new head) does not block the Go scheduler and GC.
+func headWalEncoderLongFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
+	res := &struct {
+		segment   []byte
+		exception []byte
+		samples   uint32
+	}{}
+
+	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
+	// although they are nil at call time and C++ fills them with C-allocated memory only.
+	// An address hidden in an integer is not adjusted if the goroutine stack is moved before
+	// the call enters C (e.g. a stack shrink on preemption in the _Cfunc_ wrapper prologue),
+	// so res is pinned: this moves it to the heap and keeps its address stable.
+	var pinner runtime.Pinner
+	pinner.Pin(res)
+	defer pinner.Unpin()
+
+	start := time.Now()
+	testGC()
+	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(res))))
+	headWalEncoderLongFinalizeDurationMax.set(float64(time.Since(start).Nanoseconds()))
+
+	return res.samples, res.segment, handleException(res.exception)
+}
+
+// headWalEncoderWrittenSeriesIDSentinel returns max item index written to WAL.
+func headWalEncoderWrittenSeriesIDSentinel(encoder uintptr) uint32 {
 	args := struct {
 		encoder uintptr
 	}{encoder}
@@ -3263,7 +3330,7 @@ func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_head_wal_encoder_max_written_item_index,
+		C.prompp_head_wal_encoder_written_series_id_sentinel,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -3324,12 +3391,12 @@ func headWalDecoderDecode(decoder uintptr, segment []byte, innerSeries *InnerSer
 	return handleException(res.exception)
 }
 
-func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder uintptr) (int64, int64, error) {
+func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, dataStorage uintptr) (int64, int64, error) {
 	args := struct {
-		decoder uintptr
-		segment []byte
-		encoder uintptr
-	}{decoder, segment, encoder}
+		decoder     uintptr
+		segment     []byte
+		dataStorage uintptr
+	}{decoder, segment, dataStorage}
 	var res struct {
 		createTimestamp int64
 		encodeTimestamp int64

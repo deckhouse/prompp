@@ -415,7 +415,12 @@ func splitByRange(ds []dirMeta, tr int64) [][]dirMeta {
 
 // CompactBlockMetas merges many block metas into one, combining its source blocks together
 // and adjusting compaction level. Min/Max time of result block meta covers all input blocks.
+// Returns nil if no block metas are given.
 func CompactBlockMetas(uid ulid.ULID, blocks ...*BlockMeta) *BlockMeta {
+	if len(blocks) == 0 {
+		return nil
+	}
+
 	res := &BlockMeta{
 		ULID: uid,
 	}
@@ -501,13 +506,13 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 				)
 
 				// mark as corrupted for skipping
-				meta.Compaction.addHint(CompactionHintCorrupted)
-				if _, err := writeMetaFile(c.logger, d, meta); err != nil {
-					return nil, fmt.Errorf("write meta file: %w", err)
+				if meta.Compaction.SetCorrupted() {
+					if _, err := writeMetaFile(c.logger, d, meta); err != nil {
+						return nil, fmt.Errorf("write meta file: %w", err)
+					}
 				}
 
 				continue
-				// return nil, err
 				// PP_CHANGES.md: rebuild on cpp end
 			}
 			defer b.Close()
@@ -522,6 +527,11 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)
+	// All input blocks may have been skipped as corrupted above (or no dirs were given at all),
+	// leaving metas empty. There is nothing to compact.
+	if meta == nil {
+		return nil, nil
+	}
 	err := c.write(dest, meta, blockPopulator, blocks...)
 	if err == nil {
 		if meta.Stats.NumSamples == 0 {

@@ -1,11 +1,9 @@
 #include <benchmark/benchmark.h>
 
 #include "benchmark/statistic.h"
-#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
@@ -48,6 +46,10 @@ const std::array kBenchmarkCases{
     },
     LabelMatchers{
         {.name = "__name__", .value = "container_cpu_usage_seconds_total", .type = PromPP::Prometheus::MatcherType::kExactMatch},
+    },
+    LabelMatchers{
+        {.name = "__name__", .value = "container_cpu_usage_seconds_total", .type = PromPP::Prometheus::MatcherType::kExactMatch},
+        {.name = "container", .value = "|POD", .type = PromPP::Prometheus::MatcherType::kRegexpMatch},
     },
 };
 

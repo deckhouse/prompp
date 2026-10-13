@@ -189,6 +189,7 @@ TEST_P(CedarTrieSerializeDeserializeFixture, Test) {
   auto& sorted_items = const_cast<SerializeDeserializeCase&>(GetParam()).items;
   std::sort(sorted_items.begin(), sorted_items.end());
   EXPECT_EQ(GetParam().items, items(trie2));
+  EXPECT_EQ(GetParam().items.size(), trie2.count());
 }
 
 INSTANTIATE_TEST_SUITE_P(EmptyTrie, CedarTrieSerializeDeserializeFixture, testing::Values(SerializeDeserializeCase{}));

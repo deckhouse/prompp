@@ -27,7 +27,7 @@ func TestInstantSeriesTestSuite(t *testing.T) {
 
 func (s *InstantSeriesTestSuite) SetupTest() {
 	s.lss = shard.NewLSS()
-	s.ds = shard.NewDataStorage(false)
+	s.ds = shard.NewDataStorage(false, false)
 	s.data = []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),

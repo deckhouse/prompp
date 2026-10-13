@@ -103,7 +103,7 @@ class MultiSeriesDecodeIterator {
 
   PROMPP_ALWAYS_INLINE static void create_series_iterators(const SelectHints& select_hints,
                                                            std::span<const uint32_t> series_ids,
-                                                           ::series_data::serialization::SerializedDataView data_view,
+                                                           const ::series_data::serialization::SerializedDataView& data_view,
                                                            BareBones::Vector<Iterator>& iterators) {
     const auto initial_interval = WindowBoundaryCalculator::initial_window(select_hints.function_parameters);
 
@@ -133,7 +133,7 @@ class MultiSeriesDecodeIterator {
 PROMPP_ALWAYS_INLINE void construct_multi_series_decode_iterator(MultiSeriesDecodeIterator* iterator,
                                                                  const SelectHints& select_hints,
                                                                  std::span<const uint32_t> series_ids,
-                                                                 ::series_data::serialization::SerializedDataView data_view) {
+                                                                 const ::series_data::serialization::SerializedDataView& data_view) {
   const auto create_series_iterators = [&] {
     BareBones::Vector<MultiSeriesDecodeIterator::Iterator> iterators;
     MultiSeriesDecodeIterator::create_series_iterators(select_hints, series_ids, data_view, iterators);

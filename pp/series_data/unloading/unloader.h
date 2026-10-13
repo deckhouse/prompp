@@ -11,9 +11,10 @@
 
 namespace series_data::unloading {
 
+template <class Storage = DataStorage<>>
 class Unloader {
  public:
-  explicit Unloader(DataStorage& storage) : storage_(storage) {}
+  explicit Unloader(Storage& storage) : storage_(storage) {}
 
   template <class Stream>
   void create_snapshot(Stream& stream) {
@@ -35,7 +36,7 @@ class Unloader {
     unloaded_chunks_.clear();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& storage() noexcept { return storage_; }
 
  private:
   struct ChunkSize {
@@ -53,7 +54,7 @@ class Unloader {
     uint32_t ls_id_count{};
   };
 
-  DataStorage& storage_;
+  Storage& storage_;
   BareBones::Vector<ChunkSize> unloaded_chunks_;
 
   [[nodiscard]] PreparedSequences prepare_sequences() const noexcept {
@@ -110,7 +111,7 @@ class Unloader {
     }
 
     if (sequences.total_bitseqs_size) {
-      const auto& reserved_bytes = DataStorage::CompactBitSequence::reserved_bytes_for_reader();
+      const auto& reserved_bytes = Storage::CompactBitSequence::reserved_bytes_for_reader();
       stream.write(reserved_bytes.data(), reserved_bytes.size());
     }
   }
@@ -138,7 +139,7 @@ class Unloader {
     reserved_stream_size += chunk_id_sequence.data().get_write_size();
     reserved_stream_size += chunk_length_sequence.data().get_write_size();
     if (total_bitseqs_size) {
-      reserved_stream_size += total_bitseqs_size + DataStorage::CompactBitSequence::reserved_bytes_for_reader().size();
+      reserved_stream_size += total_bitseqs_size + Storage::CompactBitSequence::reserved_bytes_for_reader().size();
     }
     return reserved_stream_size;
   }

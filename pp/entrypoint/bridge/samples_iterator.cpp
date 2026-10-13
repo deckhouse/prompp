@@ -10,7 +10,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   };
 
   const auto in = static_cast<Arguments*>(args);
-  std::construct_at(in->iterator, in->serialized_data->samples_iterator(in->chunk_ref));
+  std::visit([in](auto& serialized_data) { std::construct_at(in->iterator, serialized_data.samples_iterator(in->chunk_ref)); }, *in->serialized_data);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* iterator) {
@@ -39,5 +39,5 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   };
 
   const Arguments* in = static_cast<Arguments*>(args);
-  *in->iterator = in->serialized_data->samples_iterator(in->chunk_ref);
+  std::visit([in](auto& serialized_data) { *in->iterator = serialized_data.samples_iterator(in->chunk_ref); }, *in->serialized_data);
 }

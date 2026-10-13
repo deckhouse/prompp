@@ -1,0 +1,150 @@
+#include <gtest/gtest.h>
+
+#include <string>
+#include <string_view>
+
+#include "primitives/label_set.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
+#include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
+#include "series_index/queryable_encoding_bimap.h"
+
+namespace {
+
+using PromPP::Primitives::LabelViewSet;
+using series_index::SeriesReverseIndex;
+using series_index::prometheus::tsdb::index::ChunkMetadata;
+using series_index::prometheus::tsdb::index::kUnwrittenSeriesReference;
+using series_index::prometheus::tsdb::index::SeriesReferences;
+using std::operator""sv;
+
+using ChunkMetadataList = std::vector<ChunkMetadata>;
+using LabelViewSetList = std::vector<LabelViewSet>;
+
+class SeriesWriterFixture : public testing::Test {
+ protected:
+  using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
+  using Stream = std::ostringstream;
+  using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
+  using SeriesWriter = series_index::prometheus::tsdb::index::section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
+
+  // In a real index the series section is always preceded by the symbols table, so a written
+  // series never starts at offset 0. Offset 0 maps to section_ref == 0 == kUnwrittenSeriesReference,
+  // which PostingsWriter treats as the "not written" sentinel and SeriesWriter asserts against.
+  // Seed the stream with a stub standing in for the preceding sections so the first series lands
+  // at a non-zero, aligned offset, matching production.
+  static constexpr uint32_t kPrecedingSectionsStubSize = PromPP::Prometheus::tsdb::index::kSeriesAlignment;
+
+  Stream stream_;
+  StreamWriter stream_writer_{&stream_};
+  QueryableEncodingBimap lss_;
+  SeriesReferences series_references_;
+  series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap> index_write_context_{lss_};
+
+  void fill_lss_and_symbols(const LabelViewSetList& label_sets) {
+    for (auto& label_set : label_sets) {
+      lss_.find_or_emplace(label_set);
+    }
+
+    lss_.build_deferred_indexes();
+    index_write_context_.rebuild();
+
+    series_references_.resize(lss_.next_item_index(), kUnwrittenSeriesReference);
+
+    stream_writer_.write(std::string(kPrecedingSectionsStubSize, '\0'));
+  }
+
+  [[nodiscard]] std::string_view written_series() const { return stream_.view().substr(kPrecedingSectionsStubSize); }
+};
+
+TEST_F(SeriesWriterFixture, OneChunk) {
+  // Arrange
+  fill_lss_and_symbols({{{"job", "cron"}, {"server", "localhost"}}});
+  SeriesWriter series_writer{lss_, index_write_context_, series_references_};
+
+  // Act
+  series_writer.write(0, ChunkMetadataList{{.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0}}, stream_writer_);
+
+  // Assert
+  EXPECT_EQ(
+      "\x0B"
+      "\x02"
+      "\x02\x01"
+      "\x04\x03"
+
+      "\x01"
+
+      "\xD0\x0F"
+      "\xE9\x07"
+      "\x00"
+
+      "\xE3\x66\x88\x29"sv,
+      written_series());
+}
+
+TEST_F(SeriesWriterFixture, MultiplySeriesMultiplyChunks) {
+  // Arrange
+  fill_lss_and_symbols({
+      {{"job", "cron"}, {"server", "127.0.0.1"}},
+      {{"job", "cron"}, {"server", "remote"}},
+      {{"job", "cron"}, {"server", "localhost"}},
+  });
+  SeriesWriter series_writer{lss_, index_write_context_, series_references_};
+  const ChunkMetadataList chunks = {{
+      {.min_timestamp = 1000, .max_timestamp = 2001, .reference = 0},
+      {.min_timestamp = 2002, .max_timestamp = 4004, .reference = 100},
+      {.min_timestamp = 4005, .max_timestamp = 5005, .reference = 125},
+  }};
+
+  // Act
+  series_writer.write(0, chunks, stream_writer_);
+  series_writer.write(2, chunks, stream_writer_);
+
+  // Assert
+  EXPECT_EQ(
+      "\x14"
+      "\x02"
+      "\x03\x02"
+      "\x06\x01"
+
+      "\x03"
+
+      "\xD0\x0F"
+      "\xE9\x07"
+      "\x00"
+
+      "\x01"
+      "\xD2\x0F"
+      "\xC8\x01"
+
+      "\x01"
+      "\xE8\x07"
+      "\x32"
+
+      "\xF5\x2E\x73\xFB"
+      "\x00\x00\x00\x00\x00\x00\x00"
+
+      "\x14"
+      "\x02"
+      "\x03\x02"
+      "\x06\x04"
+
+      "\x03"
+
+      "\xD0\x0F"
+      "\xE9\x07"
+      "\x00"
+
+      "\x01"
+      "\xD2\x0F"
+      "\xC8\x01"
+
+      "\x01"
+      "\xE8\x07"
+      "\x32"
+
+      "\xC1\x26\xD2\xEE"
+      "\x00\x00\x00\x00\x00\x00\x00"sv,
+      written_series());
+}
+
+}  // namespace

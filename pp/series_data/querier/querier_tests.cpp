@@ -1,0 +1,159 @@
+#include <gtest/gtest.h>
+
+#include "series_data/chunk_finalizer.h"
+#include "series_data/encoder.h"
+#include "series_data/querier/querier.h"
+
+namespace {
+
+using series_data::ChunkFinalizer;
+using DataStorage = series_data::DataStorage<>;
+using series_data::Encoder;
+using series_data::chunk::DataChunk;
+using series_data::querier::QueriedChunk;
+using series_data::querier::QueriedChunkList;
+using series_data::querier::Querier;
+using Query = series_data::querier::Query<BareBones::Vector<PromPP::Primitives::LabelSetID>>;
+
+struct QuerierCase {
+  Query query;
+  QueriedChunkList expected;
+};
+
+class QuerierFixture : public testing::TestWithParam<QuerierCase> {
+ protected:
+  DataStorage storage_;
+  Encoder<> encoder_{storage_};
+  Querier<> querier_{storage_};
+
+  void fill_storage() {
+    for (uint32_t ls_id = 0; ls_id < 2; ++ls_id) {
+      encoder_.encode(ls_id, 1, 1.0);
+      encoder_.encode(ls_id, 2, 1.0);
+      encoder_.encode(ls_id, 3, 1.0);
+      encoder_.encode(ls_id, 4, 1.0);
+      encoder_.encode(ls_id, 5, 1.0);
+      ChunkFinalizer::finalize(storage_, ls_id, storage_.open_chunks[ls_id]);
+
+      encoder_.encode(ls_id, 6, 1.0);
+      encoder_.encode(ls_id, 7, 1.0);
+      encoder_.encode(ls_id, 8, 1.0);
+      encoder_.encode(ls_id, 9, 1.0);
+      encoder_.encode(ls_id, 10, 1.0);
+      ChunkFinalizer::finalize(storage_, ls_id, storage_.open_chunks[ls_id]);
+
+      encoder_.encode(ls_id, 12, 1.0);
+      encoder_.encode(ls_id, 13, 1.0);
+      encoder_.encode(ls_id, 14, 1.0);
+    }
+  }
+};
+
+TEST_F(QuerierFixture, QueryEmptyChunk) {
+  // Arrange
+  encoder_.encode(2, 1, 1.0);
+
+  // Act
+  auto& result = querier_.query(Query{.time_interval{.min = 1, .max = 1}, .label_set_ids = {0, 1, 2}});
+
+  // Assert
+  EXPECT_EQ(QueriedChunkList{QueriedChunk(2)}, result);
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(2));
+}
+
+TEST_F(QuerierFixture, QueryChunkWithFinalizedTimestampStream) {
+  // Arrange
+  encoder_.encode(0, 100, 1.0);
+  encoder_.encode(1, 100, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+
+  // Act
+  auto& result = querier_.query(Query{.time_interval{.min = 1, .max = 101}, .label_set_ids = {1}});
+
+  // Assert
+  EXPECT_EQ(QueriedChunkList{QueriedChunk(1)}, result);
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(1));
+}
+
+TEST_P(QuerierFixture, QueryFilledChunks) {
+  // Arrange
+  fill_storage();
+
+  // Act
+  auto& result = querier_.query(GetParam().query);
+
+  // Assert
+  EXPECT_EQ(GetParam().expected, result);
+  EXPECT_TRUE(std::ranges::all_of(result, [&](auto qchunk) { return storage_.queried_series_bitmap.is_set(qchunk.ls_id); }));
+}
+
+INSTANTIATE_TEST_SUITE_P(NoChunks,
+                         QuerierFixture,
+                         testing::Values(QuerierCase{.query = {.time_interval{.min = 0, .max = 0}, .label_set_ids = {0}}, .expected = {}},
+                                         QuerierCase{.query = {.time_interval{.min = 15, .max = 16}, .label_set_ids = {0}}, .expected = {}}));
+
+INSTANTIATE_TEST_SUITE_P(QueryFinalizedChunk,
+                         QuerierFixture,
+                         testing::Values(QuerierCase{.query = {.time_interval{.min = 0, .max = 1}, .label_set_ids = {0}}, .expected = {QueriedChunk(0, 0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 1, .max = 1}, .label_set_ids = {0}}, .expected = {QueriedChunk(0, 0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 5, .max = 5}, .label_set_ids = {0}}, .expected = {QueriedChunk(0, 0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 6, .max = 6}, .label_set_ids = {0}}, .expected = {QueriedChunk(0, 1)}},
+                                         QuerierCase{.query = {.time_interval{.min = 10, .max = 11}, .label_set_ids = {0}}, .expected = {QueriedChunk(0, 1)}},
+                                         QuerierCase{.query = {.time_interval{.min = 7, .max = 10}, .label_set_ids = {0}}, .expected = {QueriedChunk(0, 1)}}));
+
+INSTANTIATE_TEST_SUITE_P(QueryOpenChunk,
+                         QuerierFixture,
+                         testing::Values(QuerierCase{.query = {.time_interval{.min = 12, .max = 12}, .label_set_ids = {0}}, .expected = {QueriedChunk(0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 12, .max = 14}, .label_set_ids = {0}}, .expected = {QueriedChunk(0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 13, .max = 13}, .label_set_ids = {0}}, .expected = {QueriedChunk(0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 14, .max = 14}, .label_set_ids = {0}}, .expected = {QueriedChunk(0)}},
+                                         QuerierCase{.query = {.time_interval{.min = 12, .max = 15}, .label_set_ids = {0}}, .expected = {QueriedChunk(0)}}));
+
+INSTANTIATE_TEST_SUITE_P(MultipleChunks,
+                         QuerierFixture,
+                         testing::Values(QuerierCase{.query = {.time_interval{.min = 0, .max = 7}, .label_set_ids = {0}},
+                                                     .expected = {QueriedChunk(0, 0), QueriedChunk(0, 1)}}));
+
+INSTANTIATE_TEST_SUITE_P(MultipleChunksMultipleLsIds,
+                         QuerierFixture,
+                         testing::Values(QuerierCase{.query = {.time_interval{.min = 0, .max = 7}, .label_set_ids = {0, 1}},
+                                                     .expected = {QueriedChunk(0, 0), QueriedChunk(0, 1), QueriedChunk(1, 0), QueriedChunk(1, 1)}}));
+
+INSTANTIATE_TEST_SUITE_P(NonExistingChunk,
+                         QuerierFixture,
+                         testing::Values(QuerierCase{.query = {.time_interval{.min = 0, .max = 7}, .label_set_ids = {2}}, .expected = {}}));
+
+class QuerierLoaderUnloaderTestFixture : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    for (uint32_t ls_id = 0; ls_id < 5; ++ls_id) {
+      encoder_.encode(ls_id, 1, get_value(ls_id, 1));
+      encoder_.encode(ls_id, 2, get_value(ls_id, 2));
+      encoder_.encode(ls_id, 3, get_value(ls_id, 3));
+      encoder_.encode(ls_id, 4, get_value(ls_id, 4));
+      encoder_.encode(ls_id, 5, get_value(ls_id, 5));
+    }
+  }
+
+  static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return static_cast<double>(10ll * ls_id + timestamp); }
+
+  DataStorage storage_;
+  Encoder<> encoder_{storage_};
+  Querier<> querier_{storage_};
+};
+
+TEST_F(QuerierLoaderUnloaderTestFixture, QuerierNeedLoading) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 1, 2});
+  storage_.unloaded_series_bitmap.set({3, 4});
+
+  // Act
+  std::ignore = querier_.query(Query{.time_interval = {.min = 1, .max = 3}, .label_set_ids = {2, 3, 4}});
+
+  // Assert
+  EXPECT_TRUE(querier_.need_loading());
+
+  EXPECT_TRUE(std::ranges::equal(querier_.get_series_to_load(), std::initializer_list{3, 4}));
+}
+
+}  // namespace

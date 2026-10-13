@@ -77,7 +77,7 @@ func (tsd *timeSeriesDataSlice) Destroy() {
 
 // MustAppendTimeSeries add time series to head.
 func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeSeries) {
-	headAppender := appender.New(head, services.CFViaRange)
+	headAppender := appender.New(head, services.CFViaRangeByMask, appender.Stats{})
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
 	s.Require().NoError(err)
@@ -147,7 +147,7 @@ func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStora
 		*shard.Shard,
 		*shard.PerGoroutineShard,
 		*storage.TransactionHead,
-	](th, func(*storage.TransactionHead) error { return nil })
+	](th, func(*storage.TransactionHead, []bool) error { return nil }, appender.Stats{})
 
 	if _, err = app.Append(
 		context.Background(),
@@ -286,7 +286,8 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}
 
-	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, instantSeries), nil
+	runtime.KeepAlive(lssQueryResult)
+	return querier.NewInstantSeriesSet(snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
 
 const (
@@ -342,13 +343,12 @@ func StaleNaNQuery(
 		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
-	timestamps := querier.MakeTimestampsSliceWithDefault(lssQueryResult.Len(), valueNotFoundTimestampValue)
-	ds.QueryFirstTimestamps(lssQueryResult.IDs(), timestamps)
+	series := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
-	return querier.NewStaleNaNSeriesSet(
-		querier.NewStaleNaNSeriesSliceFromTimestamps(timestamps),
-		lssQueryResult,
-		snapshot,
-		valueNotFoundTimestampValue,
-	), nil
+	ds.QueryStaleNaNSeries(
+		lssQueryResult.IDs(),
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	return querier.NewStaleNaNSeriesSet(series, snapshot, valueNotFoundTimestampValue), nil
 }
