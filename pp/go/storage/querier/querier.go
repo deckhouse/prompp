@@ -131,13 +131,6 @@ var emptySelectHints = &storage.SelectHints{}
 // emptySeriesSet is an empty series set.
 var emptySeriesSet = &SeriesSet{}
 
-// IsPossibleToOptimize is the function to check if the query possible to optimization.
-var IsPossibleToOptimize func(
-	lssQueryResults []*cppbridge.LSSQueryResult,
-	hints *storage.SelectHints,
-	scrapeIntervalMS, shiftMS int64,
-) func() bool = DefaultIsPossibleToOptimize
-
 //
 // Querier
 //
@@ -150,6 +143,14 @@ type Querier[
 	TShard Shard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
+	// IsPossibleToOptimize defaults to DefaultIsPossibleToOptimize.
+	// Set it before querying to override the optimization gate for this querier.
+	IsPossibleToOptimize func(
+		lssQueryResults []*cppbridge.LSSQueryResult,
+		hints *storage.SelectHints,
+		scrapeIntervalMS, headMinTSMS int64,
+	) func() bool
+
 	mint             int64
 	maxt             int64
 	scrapeIntervalMS int64
@@ -225,14 +226,15 @@ func newQuerierWithSelectFuncOptimize[
 	queryOptimize queryOptimizeType,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
-		mint:             mint,
-		maxt:             maxt,
-		scrapeIntervalMS: scrapeIntervalMS,
-		headMinTSMS:      headMinTSMS,
-		head:             head,
-		deduplicatorCtor: deduplicatorCtor,
-		metrics:          metrics,
-		queryOptimize:    queryOptimize,
+		IsPossibleToOptimize: DefaultIsPossibleToOptimize,
+		mint:                 mint,
+		maxt:                 maxt,
+		scrapeIntervalMS:     scrapeIntervalMS,
+		headMinTSMS:          headMinTSMS,
+		head:                 head,
+		deduplicatorCtor:     deduplicatorCtor,
+		metrics:              metrics,
+		queryOptimize:        queryOptimize,
 	}
 }
 
@@ -445,7 +447,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 	hints = SwitchFuncOptimize(
 		hints,
-		IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
+		q.IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
 		q.queryOptimize,
 	)
 	shardedSerializedData := poolProvider.GetSerializedData()

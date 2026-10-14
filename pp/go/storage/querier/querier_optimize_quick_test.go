@@ -14,10 +14,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/promql"
-	prom_storage "github.com/prometheus/prometheus/storage"
 )
 
 //
@@ -243,15 +240,6 @@ func (s *QuickQuerierOptimizeSuite) SetupSuite() {
 		defaultStep,
 		defaultCountOfSteps,
 	)
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	s.quickQE = promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
