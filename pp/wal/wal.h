@@ -158,7 +158,9 @@ class BasicEncoder {
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
-    bool ts_delta_rle_is_worth_trying = segment_samples_.series_count() * 0.1 > (segment_samples_.samples_count() - segment_samples_.series_count());
+    const uint64_t samples = segment_samples_.samples_count();
+    const uint64_t series = segment_samples_.series_count();
+    bool ts_delta_rle_is_worth_trying = samples >= series && 10 * (samples - series) < series;
 
     ts_base_ = std::min(ts_base_, segment_samples_.earliest_sample());
 
