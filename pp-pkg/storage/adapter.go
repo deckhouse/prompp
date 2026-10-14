@@ -235,13 +235,15 @@ func (ar *Adapter) BatchStorage() storage.BatchStorage {
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(
-		queriers,
-		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
-	)
+	if !headIsOutOfQueryRange(ahead, mint, maxt) {
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() {
+		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
 			continue
 		}
 
@@ -309,18 +311,15 @@ func (ar *Adapter) MergeOutOfOrderChunks() {
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(
-		queriers,
-		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
-	)
+	if !headIsOutOfQueryRange(ahead, mint, maxt) {
+		queriers = append(
+			queriers,
+			querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() {
-			continue
-		}
-
-		timeInterval := headTimeInterval(head)
-		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
+		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
 			continue
 		}
 
@@ -344,6 +343,19 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
+}
+
+// headIsOutOfQueryRange reports whether the [pp_storage.Head] certainly holds no data for the
+// [mint, maxt] query range.
+//
+// A head with an unknown (invalid) time interval is never out of range: it has to be queried.
+func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
+	timeInterval := headTimeInterval(head)
+	if timeInterval.IsInvalid() {
+		return false
+	}
+
+	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
 }
 
 // headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
