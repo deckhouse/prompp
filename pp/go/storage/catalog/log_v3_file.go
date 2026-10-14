@@ -134,7 +134,7 @@ func decodeFileHeaderSlotsV3(buf []byte) (fileHeaderV3, uint8, error) {
 	case err1 == nil:
 		return header1, 1, nil
 	default:
-		return fileHeaderV3{}, 0, fmt.Errorf("%w: slot 0: %v; slot 1: %v", ErrInvalidV3Header, err0, err1)
+		return fileHeaderV3{}, 0, fmt.Errorf("%w: slot 0: %w; slot 1: %w", ErrInvalidV3Header, err0, err1)
 	}
 }
 
