@@ -88,7 +88,7 @@ func (s *V3FileTestSuite) TestV3Append_TerminatorAfterEachWrite() {
 		terminator := make([]byte, 1)
 		_, err = s.readFileBytesAt(filePath, terminator, fl.file.writeOffset)
 		s.Require().NoError(err)
-		s.Require().Equal(byte(recordVersionEndV3), terminator[0], "write %d", i)
+		s.Require().Equal(recordVersionEndV3, terminator[0], "write %d", i)
 
 		s.Require().Equal(fileSizeV3, fl.Size())
 
@@ -201,7 +201,7 @@ func (s *V3FileTestSuite) TestV3Close_PersistsActiveUsedAndTerminator() {
 	terminator := make([]byte, 1)
 	_, err = s.readFileBytesAt(filePath, terminator, journalOffsetV3(0)+used)
 	s.Require().NoError(err)
-	s.Require().Equal(byte(recordVersionEndV3), terminator[0])
+	s.Require().Equal(recordVersionEndV3, terminator[0])
 
 	for i, want := range expected {
 		var got SerializedRecord

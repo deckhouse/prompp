@@ -142,7 +142,7 @@ func (s *V3FileTestSuite) corruptV3HeaderSlot(filePath string, offset int) {
 func (s *V3FileTestSuite) readFileBytesAt(filePath string, p []byte, offset int64) (int, error) {
 	s.T().Helper()
 
-	f, err := os.Open(filePath) //nolint:gosec // test reads the file it created
+	f, err := os.Open(filePath) // #nosec G304 // it's meant to be that way
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(f.Close()) }()
 
