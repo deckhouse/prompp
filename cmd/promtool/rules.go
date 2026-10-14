@@ -110,8 +110,10 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 		for startWithAlignment.Unix() < currStart {
 			startWithAlignment = startWithAlignment.Add(grp.Interval())
 		}
-		end = time.Unix(min(endOfBlock/int64(time.Second/time.Millisecond), end.Unix()), 0).UTC()
-		if end.Before(startWithAlignment) {
+		// Clamped to this block; must not narrow the overall end time of the import,
+		// which the next iteration still computes its own bound from.
+		blockEnd := time.Unix(min(endOfBlock/int64(time.Second/time.Millisecond), end.Unix()), 0).UTC()
+		if blockEnd.Before(startWithAlignment) {
 			break
 		}
 		val, warnings, errQuery := importer.apiClient.QueryRange(
@@ -119,7 +121,7 @@ func (importer *ruleImporter) importRule(ctx context.Context, ruleExpr, ruleName
 			ruleExpr,
 			v1.Range{
 				Start: startWithAlignment,
-				End:   end,
+				End:   blockEnd,
 				Step:  grp.Interval(),
 			},
 		)

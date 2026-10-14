@@ -339,8 +339,10 @@ func (p *PromParser) Next() (Entry, error) {
 				return EntryInvalid, fmt.Errorf("help text %q is not a valid utf8 string", p.text)
 			}
 		}
-		if t = p.nextToken(); t != tLinebreak {
-			return EntryInvalid, p.parseError("linebreak expected after metadata", t)
+		// Deliberately a separate variable: t still carries tHelp/tType and the
+		// switch below dispatches on it.
+		if tBreak := p.nextToken(); tBreak != tLinebreak {
+			return EntryInvalid, p.parseError("linebreak expected after metadata", tBreak)
 		}
 		switch t {
 		case tHelp:
