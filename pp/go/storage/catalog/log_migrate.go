@@ -121,15 +121,18 @@ func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {
 		return nil, 0, err
 	}
 
+	fixed, err := tryOpenV3FileHandler(fh)
+	if err != nil {
+		return nil, 0, errors.Join(err, fh.Close())
+	}
+
+	if fixed {
+		return fh, LogFileVersionV3, nil
+	}
+
 	version, err := readLogFileVersion(fh)
 	if err != nil {
 		return nil, 0, errors.Join(fmt.Errorf("read log file version: %w", err), fh.Close())
-	}
-
-	if version == LogFileVersionV3 && fh.Size() == fileSizeV3 {
-		if err = openV3FileHandler(fh); err != nil {
-			return nil, 0, errors.Join(err, fh.Close())
-		}
 	}
 
 	return fh, version, nil

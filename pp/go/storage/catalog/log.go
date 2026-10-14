@@ -214,12 +214,22 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 	frameLen := len(frame)
 	writeBuf := append(frame, recordVersionEndV3)
 
+	if fl.file.appendErr != nil {
+		return fl.file.appendErr
+	}
+
+	offset := fl.file.writeOffset
+	if offset < fl.file.journalStart || offset >= fl.file.journalEnd ||
+		int64(len(writeBuf)) > fl.file.journalEnd-offset {
+		return ErrJournalFull
+	}
+
 	if err = fl.file.WriteFixed(writeBuf); err != nil {
 		return fmt.Errorf("v3: write record: %w", err)
 	}
 
 	encoder.buffer = writeBuf[:frameLen]
-	fl.file.SetWriteOffset(fl.file.writeOffset + int64(frameLen))
+	fl.file.writeOffset += int64(frameLen)
 
 	return nil
 }
@@ -228,6 +238,16 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 // rewritten version 3 files keep the growing legacy layout and the v1/v2 write path.
 func (fl *FileLog) isFixedV3() bool {
 	return fl.version == LogFileVersionV3 && fl.file.fixedSize
+}
+
+// needsCompaction counts used bytes for fixed-size journals instead of their allocated file size.
+func (fl *FileLog) needsCompaction(maxSize int) bool {
+	if fl.isFixedV3() {
+		return fl.file.writeOffset-fl.file.journalStart >= int64(maxSize) ||
+			fl.file.journalEnd-fl.file.writeOffset <= int64(maxRecordSizeV3)
+	}
+
+	return fl.Size() >= maxSize
 }
 
 func writeSwapAndSwitchAtFilePath(

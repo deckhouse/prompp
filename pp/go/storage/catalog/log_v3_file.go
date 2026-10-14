@@ -1,10 +1,12 @@
 package catalog
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -43,6 +45,8 @@ const fileMagicV3 = "HLG"
 var (
 	// ErrInvalidV3Header the header slots of the log file version 3 are invalid.
 	ErrInvalidV3Header = errors.New("invalid v3 file header")
+	// ErrJournalFull means the next frame and its terminator do not fit in the active journal.
+	ErrJournalFull = errors.New("catalog journal full")
 )
 
 // fileHeaderV3 is the decoded header slot of the log file version 3.
@@ -105,10 +109,33 @@ func createV3FileHandler(filePath string) (_ *FileHandler, err error) {
 
 	fh.size = fileSizeV3
 	fh.fixedSize = true
-	fh.readOffset = journalOffsetV3(header.active)
+	fh.journalStart = journalOffsetV3(header.active)
+	fh.journalEnd = fh.journalStart + journalSizeV3
+	fh.readOffset = fh.journalStart
 	fh.writeOffset = fh.readOffset + int64(header.activeUsed)
 
 	return fh, nil
+}
+
+// decodeFileHeaderSlotsV3 selects the valid header with the greatest generation and its slot index.
+func decodeFileHeaderSlotsV3(buf []byte) (fileHeaderV3, uint8, error) {
+	header0, err0 := decodeFileHeaderV3(buf[:fileHeaderSlotSizeV3])
+	header1, err1 := decodeFileHeaderV3(buf[fileHeaderSlotSizeV3:])
+
+	switch {
+	case err0 == nil && err1 == nil:
+		if header1.generation > header0.generation {
+			return header1, 1, nil
+		}
+
+		return header0, 0, nil
+	case err0 == nil:
+		return header0, 0, nil
+	case err1 == nil:
+		return header1, 1, nil
+	default:
+		return fileHeaderV3{}, 0, fmt.Errorf("%w: slot 0: %v; slot 1: %v", ErrInvalidV3Header, err0, err1)
+	}
 }
 
 // decodeFileHeaderV3 decodes and validates one header slot of the log file version 3.
@@ -147,7 +174,7 @@ func decodeFileHeaderV3(src []byte) (fileHeaderV3, error) {
 		return fileHeaderV3{}, fmt.Errorf("%w: journal size %d", ErrInvalidV3Header, header.journalSize)
 	}
 
-	if header.activeUsed > journalSizeV3 {
+	if header.activeUsed >= journalSizeV3 {
 		return fileHeaderV3{}, fmt.Errorf("%w: active used %d", ErrInvalidV3Header, header.activeUsed)
 	}
 
@@ -177,52 +204,51 @@ func journalOffsetV3(index uint8) int64 {
 	return fileHeaderAreaSizeV3 + int64(index)*journalSizeV3
 }
 
-// openV3FileHandler positions the [FileHandler] of an existing log file version 3 at the active
-// journal. The read offset points at the beginning of the journal, the write offset is the
-// activeUsed lower bound persisted on the last journal switch or clean Close.
-//
-// TODO(catalog-v3 group 5): activeUsed is not updated on every append (it costs a second WriteAt
-// and fsync per mutation), so after a crash without Close it stays stale until the next switch;
-// opening tolerates stale activeUsed, scanning for the terminator is a group 6 concern.
-func openV3FileHandler(fh *FileHandler) error {
-	header, err := readFileHeaderV3(fh.file)
-	if err != nil {
+// openV3FileHandler restores the append position by validating the active journal up to its terminator.
+// A corrupt journal remains readable for Catalog.sync to rewrite, but cannot be appended to.
+func openV3FileHandler(fh *FileHandler, header fileHeaderV3) error {
+	if err := verifyPreallocatedSize(fh.file); err != nil {
 		return err
 	}
 
 	fh.fixedSize = true
-	fh.readOffset = journalOffsetV3(header.active)
-	fh.writeOffset = fh.readOffset + int64(header.activeUsed)
+	fh.journalStart = journalOffsetV3(header.active)
+	fh.journalEnd = fh.journalStart + journalSizeV3
+	fh.readOffset = fh.journalStart
+	fh.writeOffset = fh.journalStart
 
-	return nil
+	reader := bufio.NewReader(io.NewSectionReader(fh.file, fh.journalStart, journalSizeV3))
+	decoder := NewDecoderV3()
+	for {
+		var record SerializedRecord
+		if err := decoder.DecodeFrom(reader, &record); err != nil {
+			if errors.Is(err, io.EOF) {
+				if fh.writeOffset < fh.journalEnd &&
+					fh.writeOffset-fh.journalStart >= int64(header.activeUsed) {
+					return nil
+				}
+
+				return fmt.Errorf("v3: premature journal end at %d: %w", fh.writeOffset, io.ErrUnexpectedEOF)
+			}
+
+			fh.appendErr = fmt.Errorf("v3: journal requires rewrite at %d: %w", fh.writeOffset, err)
+			return nil
+		}
+
+		fh.writeOffset += int64(recordHeaderSizeV3) + int64(decoder.buffer[recordLengthOffsetV3])
+	}
 }
 
 // readFileHeaderV3 reads both header slots of the log file version 3 and returns the valid slot
-// with the maximum generation: one corrupt slot loses to the other one, two corrupt slots fail
+// with the maximum generation and its slot index: one corrupt slot loses to the other one, two corrupt slots fail
 // with [ErrInvalidV3Header].
-func readFileHeaderV3(f *os.File) (fileHeaderV3, error) {
+func readFileHeaderV3(f *os.File) (fileHeaderV3, uint8, error) {
 	buf := make([]byte, fileHeaderSlotsCount*fileHeaderSlotSizeV3)
 	if _, err := f.ReadAt(buf, 0); err != nil {
-		return fileHeaderV3{}, fmt.Errorf("read v3 file header: %w", err)
+		return fileHeaderV3{}, 0, fmt.Errorf("read v3 file header: %w", err)
 	}
 
-	header0, err0 := decodeFileHeaderV3(buf[:fileHeaderSlotSizeV3])
-	header1, err1 := decodeFileHeaderV3(buf[fileHeaderSlotSizeV3:])
-
-	switch {
-	case err0 == nil && err1 == nil:
-		if header1.generation > header0.generation {
-			return header1, nil
-		}
-
-		return header0, nil
-	case err0 == nil:
-		return header0, nil
-	case err1 == nil:
-		return header1, nil
-	default:
-		return fileHeaderV3{}, fmt.Errorf("%w: slot 0: %v; slot 1: %v", ErrInvalidV3Header, err0, err1)
-	}
+	return decodeFileHeaderSlotsV3(buf)
 }
 
 // syncDir fsyncs the directory to make file creation durable.
@@ -239,11 +265,40 @@ func syncDir(dirPath string) error {
 	return dir.Close()
 }
 
+// tryOpenV3FileHandler recognizes fixed v3 before falling back to a legacy version header.
+// Legacy v3 files are still produced by migration and compaction until journal switching is implemented.
+func tryOpenV3FileHandler(fh *FileHandler) (bool, error) {
+	var slots [fileHeaderSlotsCount * fileHeaderSlotSizeV3]byte
+	if _, err := fh.file.ReadAt(slots[:], 0); err != nil && !errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("read file header: %w", err)
+	}
+
+	header, _, err := decodeFileHeaderSlotsV3(slots[:])
+	if err == nil {
+		return true, openV3FileHandler(fh, header)
+	}
+
+	slot0 := slots[:fileHeaderSlotSizeV3]
+	slot1 := slots[fileHeaderSlotSizeV3:]
+	magic0 := string(slot0[fileHeaderMagicOffsetV3 : fileHeaderMagicOffsetV3+len(fileMagicV3)])
+	magic1 := string(slot1[fileHeaderMagicOffsetV3 : fileHeaderMagicOffsetV3+len(fileMagicV3)])
+	if magic0 == fileMagicV3 || magic1 == fileMagicV3 ||
+		(slots[0] == byte(LogFileVersionV3) && fh.Size() == fileSizeV3) {
+		return true, err
+	}
+
+	return false, nil
+}
+
 // updateV3ActiveUsed persists the used length of the active journal of a fixed-size log file
-// version 3 into the active header slot: the same active journal, generation + 1, a fresh CRC,
+// version 3 into the other header slot: the same active journal, generation + 1, a fresh CRC,
 // one WriteAt + fsync. A close without new records leaves the header untouched.
 func updateV3ActiveUsed(fh *FileHandler) error {
-	header, err := readFileHeaderV3(fh.file)
+	if fh.appendErr != nil {
+		return nil
+	}
+
+	header, headerSlot, err := readFileHeaderV3(fh.file)
 	if err != nil {
 		return err
 	}
@@ -253,7 +308,7 @@ func updateV3ActiveUsed(fh *FileHandler) error {
 		return nil
 	}
 
-	if used < 0 || used > journalSizeV3 {
+	if used < 0 || used >= journalSizeV3 {
 		return fmt.Errorf("%w: active used %d", ErrInvalidV3Header, used)
 	}
 
@@ -261,7 +316,7 @@ func updateV3ActiveUsed(fh *FileHandler) error {
 	header.activeUsed = uint32(used) // #nosec G115 // bounded above by journalSizeV3
 
 	slot := encodeFileHeaderV3(header)
-	if _, err = fh.writeAt(slot[:], int64(header.active)*fileHeaderSlotSizeV3); err != nil {
+	if _, err = fh.writeAt(slot[:], int64(headerSlot^1)*fileHeaderSlotSizeV3); err != nil {
 		return fmt.Errorf("write v3 file header: %w", err)
 	}
 

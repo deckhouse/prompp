@@ -2,126 +2,149 @@ package catalog
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestCreateV3File_PreallocatedSize(t *testing.T) {
-	// Arrange
-	filePath := filepath.Join(t.TempDir(), "head.log")
-
-	// Act
-	fl, err := NewFileLogV3(filePath)
-
-	// Assert
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, fl.Close()) })
-
-	require.Equal(t, fileSizeV3, fl.Size())
-
-	info, err := os.Stat(filePath)
-	require.NoError(t, err)
-	require.Equal(t, int64(fileSizeV3), info.Size())
-
-	firstByte := make([]byte, 1)
-	_, err = readFileBytesAt(t, filePath, firstByte, 0)
-	require.NoError(t, err)
-	require.Equal(t, byte(LogFileVersionV3), firstByte[0])
+type V3FileTestSuite struct {
+	suite.Suite
+	filePath string
+	fl       *FileLog
 }
 
-func TestReopenV3File_EmptyJournal(t *testing.T) {
+func TestV3File(t *testing.T) {
+	suite.Run(t, new(V3FileTestSuite))
+}
+
+func (s *V3FileTestSuite) SetupTest() {
+	s.filePath = filepath.Join(s.T().TempDir(), "head.log")
+	var err error
+	s.fl, err = NewFileLogV3(s.filePath)
+	s.Require().NoError(err)
+}
+
+func (s *V3FileTestSuite) TearDownTest() {
+	if s.fl != nil {
+		if _, err := s.fl.file.file.Stat(); !errors.Is(err, os.ErrClosed) {
+			s.Require().NoError(s.fl.Close())
+		}
+	}
+}
+
+func (s *V3FileTestSuite) TestCreateV3File_PreallocatedSize() {
 	// Arrange
-	filePath := filepath.Join(t.TempDir(), "head.log")
-	fl, err := NewFileLogV3(filePath)
-	require.NoError(t, err)
-	require.NoError(t, fl.Close())
+	filePath := s.filePath
+
+	// Assert
+	fl := s.fl
+	var err error
+
+	s.Require().Equal(fileSizeV3, fl.Size())
+
+	info, err := os.Stat(filePath)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(fileSizeV3), info.Size())
+
+	firstByte := make([]byte, 1)
+	_, err = s.readFileBytesAt(filePath, firstByte, 0)
+	s.Require().NoError(err)
+	s.Require().Equal(byte(LogFileVersionV3), firstByte[0])
+}
+
+func (s *V3FileTestSuite) TestReopenV3File_EmptyJournal() {
+	// Arrange
+	filePath := s.filePath
+	fl := s.fl
+	var err error
+	s.Require().NoError(fl.Close())
 
 	// Act
 	reopened, err := NewFileLogV3(filePath)
 
 	// Assert
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, reopened.Close()) })
+	s.Require().NoError(err)
+	s.T().Cleanup(func() { s.Require().NoError(reopened.Close()) })
 
-	require.Equal(t, fileSizeV3, reopened.Size())
+	s.Require().Equal(fileSizeV3, reopened.Size())
 
 	info, err := os.Stat(filePath)
-	require.NoError(t, err)
-	require.Equal(t, int64(fileSizeV3), info.Size())
+	s.Require().NoError(err)
+	s.Require().Equal(int64(fileSizeV3), info.Size())
 
-	header, err := readFileHeaderV3(reopened.file.file)
-	require.NoError(t, err)
-	require.Zero(t, header.active)
-	require.Equal(t, uint64(1), header.generation)
-	require.Zero(t, header.activeUsed)
+	header, _, err := readFileHeaderV3(reopened.file.file)
+	s.Require().NoError(err)
+	s.Require().Zero(header.active)
+	s.Require().Equal(uint64(1), header.generation)
+	s.Require().Zero(header.activeUsed)
 
-	require.Equal(t, journalOffsetV3(0), reopened.file.readOffset)
-	require.Equal(t, journalOffsetV3(0), reopened.file.writeOffset)
+	s.Require().Equal(journalOffsetV3(0), reopened.file.readOffset)
+	s.Require().Equal(journalOffsetV3(0), reopened.file.writeOffset)
 
 	emptyJournal := make([]byte, journalSizeV3)
 	for index := uint8(0); index < fileHeaderSlotsCount; index++ {
 		journal := make([]byte, journalSizeV3)
 		_, err = reopened.file.file.ReadAt(journal, journalOffsetV3(index))
-		require.NoError(t, err)
-		require.True(t, bytes.Equal(emptyJournal, journal), "journal %d is not empty", index)
+		s.Require().NoError(err)
+		s.Require().True(bytes.Equal(emptyJournal, journal), "journal %d is not empty", index)
 	}
 
 	sr := NewEmptyRecord()
-	require.ErrorIs(t, reopened.Read(&sr.SerializedRecord), io.EOF)
-	require.Equal(t, fileSizeV3, reopened.Size())
+	s.Require().ErrorIs(reopened.Read(&sr.SerializedRecord), io.EOF)
+	s.Require().Equal(fileSizeV3, reopened.Size())
 }
 
-func TestV3Header_CorruptedSlot(t *testing.T) {
+func (s *V3FileTestSuite) TestV3Header_CorruptedSlot() {
 	// Arrange
-	filePath := filepath.Join(t.TempDir(), "head.log")
-	fl, err := NewFileLogV3(filePath)
-	require.NoError(t, err)
-	require.NoError(t, fl.Close())
+	filePath := s.filePath
+	fl := s.fl
+	var err error
+	s.Require().NoError(fl.Close())
 
 	// Act: corrupt the generation field of slot 0, keeping the first byte intact.
-	corruptV3HeaderSlot(t, filePath, fileHeaderGenerationOffsetV3)
+	s.corruptV3HeaderSlot(filePath, fileHeaderGenerationOffsetV3)
 
 	// Assert: the valid slot 1 wins.
 	reopened, err := NewFileLogV3(filePath)
-	require.NoError(t, err)
+	s.Require().NoError(err)
 
-	header, err := readFileHeaderV3(reopened.file.file)
-	require.NoError(t, err)
-	require.Zero(t, header.active)
-	require.Equal(t, uint64(1), header.generation)
-	require.NoError(t, reopened.Close())
+	header, _, err := readFileHeaderV3(reopened.file.file)
+	s.Require().NoError(err)
+	s.Require().Zero(header.active)
+	s.Require().Equal(uint64(1), header.generation)
+	s.Require().NoError(reopened.Close())
 
 	// Act: corrupt the same field of slot 1, so both slots fail the CRC check.
-	corruptV3HeaderSlot(t, filePath, fileHeaderSlotSizeV3+fileHeaderGenerationOffsetV3)
+	s.corruptV3HeaderSlot(filePath, fileHeaderSlotSizeV3+fileHeaderGenerationOffsetV3)
 
 	// Assert: opening fails with an explicit error.
 	_, err = NewFileLogV3(filePath)
-	require.ErrorIs(t, err, ErrInvalidV3Header)
+	s.Require().ErrorIs(err, ErrInvalidV3Header)
 }
 
 // corruptV3HeaderSlot overwrites one byte of the header slot at the given offset inside the slot.
-func corruptV3HeaderSlot(t *testing.T, filePath string, offset int) {
-	t.Helper()
+func (s *V3FileTestSuite) corruptV3HeaderSlot(filePath string, offset int) {
+	s.T().Helper()
 
 	f, err := os.OpenFile(filePath, os.O_RDWR, logFilePerm)
-	require.NoError(t, err)
-	defer func() { require.NoError(t, f.Close()) }()
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(f.Close()) }()
 
 	_, err = f.WriteAt([]byte{0xFF}, int64(offset))
-	require.NoError(t, err)
-	require.NoError(t, f.Sync())
+	s.Require().NoError(err)
+	s.Require().NoError(f.Sync())
 }
 
-func readFileBytesAt(t *testing.T, filePath string, p []byte, offset int64) (int, error) {
-	t.Helper()
+func (s *V3FileTestSuite) readFileBytesAt(filePath string, p []byte, offset int64) (int, error) {
+	s.T().Helper()
 
 	f, err := os.Open(filePath) //nolint:gosec // test reads the file it created
-	require.NoError(t, err)
-	defer func() { require.NoError(t, f.Close()) }()
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(f.Close()) }()
 
 	return f.ReadAt(p, offset)
 }

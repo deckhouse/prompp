@@ -20,11 +20,10 @@ type FileHandler struct {
 	writeOffset int64
 	// fixedSize marks a preallocated fixed-size file (the log file version 3): writes only
 	// overwrite already allocated bytes and never change the accounted size.
-	fixedSize bool
-	// refuseGrowth makes a positioned write whose end offset exceeds the accounted size fail
-	// with ENOSPC instead of touching the file; a test seam for proving that fixed-size v3
-	// writes never need disk space, false in production.
-	refuseGrowth bool
+	fixedSize    bool
+	journalStart int64
+	journalEnd   int64
+	appendErr    error
 }
 
 // NewFileHandler init new [FileHandler].
@@ -68,6 +67,14 @@ func (fh *FileHandler) FileName() string {
 
 // Read reads len(b) bytes from the [os.File].
 func (fh *FileHandler) Read(p []byte) (n int, err error) {
+	if fh.fixedSize {
+		if fh.readOffset >= fh.journalEnd {
+			return 0, io.EOF
+		}
+
+		p = p[:min(int64(len(p)), fh.journalEnd-fh.readOffset)]
+	}
+
 	n, err = fh.file.ReadAt(p, fh.readOffset)
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
@@ -78,14 +85,9 @@ func (fh *FileHandler) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-// SetReadOffset set offset for read file.
+// SetReadOffset sets the read offset.
 func (fh *FileHandler) SetReadOffset(offset int64) {
 	fh.readOffset = offset
-}
-
-// SetWriteOffset set offset for write file.
-func (fh *FileHandler) SetWriteOffset(offset int64) {
-	fh.writeOffset = offset
 }
 
 // Size returns current size of file.
@@ -100,7 +102,7 @@ func (fh *FileHandler) Sync() error {
 
 // Write writes len(b) bytes to the [os.File].
 func (fh *FileHandler) Write(p []byte) (n int, err error) {
-	n, err = fh.file.WriteAt(p, fh.writeOffset)
+	n, err = fh.writeAt(p, fh.writeOffset)
 	if err != nil {
 		return 0, fmt.Errorf("write file: %w", err)
 	}
@@ -114,9 +116,8 @@ func (fh *FileHandler) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// WriteFixed writes len(b) bytes at the current write offset of a fixed-size file: the write only
-// overwrites already allocated bytes, so neither the accounted size nor the write offset change.
-// The file is synced before returning.
+// WriteFixed overwrites allocated bytes and syncs the file without advancing the write offset.
+// The caller advances the offset after a successful write.
 func (fh *FileHandler) WriteFixed(p []byte) error {
 	if !fh.fixedSize {
 		return fmt.Errorf("write fixed: %s is not a fixed-size file", fh.file.Name())
@@ -133,11 +134,9 @@ func (fh *FileHandler) WriteFixed(p []byte) error {
 	return nil
 }
 
-// writeAt writes p at off through the growth-refusal seam: with [FileHandler.refuseGrowth]
-// armed, a write whose end offset exceeds the accounted size fails with ENOSPC without
-// touching the file, while an overwrite inside [0, size) goes through to the file.
+// writeAt refuses writes outside the allocated area of a fixed-size file.
 func (fh *FileHandler) writeAt(p []byte, off int64) (int, error) {
-	if fh.refuseGrowth && off+int64(len(p)) > int64(fh.size) {
+	if fh.fixedSize && (off < 0 || off > int64(fh.size) || int64(len(p)) > int64(fh.size)-off) {
 		return 0, fmt.Errorf("write %d bytes at %d exceeds size %d: %w", len(p), off, fh.size, syscall.ENOSPC)
 	}
 

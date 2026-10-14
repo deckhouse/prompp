@@ -6,8 +6,7 @@ import (
 	"os"
 )
 
-// errPreallocUnsupported is returned when the platform or filesystem cannot preallocate a file;
-// the caller falls back to writing zeros.
+// errPreallocUnsupported allows the caller to try writing zeros after a preallocation failure.
 var errPreallocUnsupported = errors.New("fallocate unsupported")
 
 // writeZeros extends the file up to size bytes by writing zero chunks of at most 1 MiB.
