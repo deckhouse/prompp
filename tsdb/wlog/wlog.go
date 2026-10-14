@@ -319,7 +319,7 @@ func NewSize(logger log.Logger, reg prometheus.Registerer, dir string, segmentSi
 	if segmentSize%pageSize != 0 {
 		return nil, errors.New("invalid segment size")
 	}
-	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 G703 // this is meant to be that way
+	if err := os.MkdirAll(dir, 0o777); err != nil { //nolint:gosec // this is meant to be that way
 		return nil, fmt.Errorf("create dir: %w", err)
 	}
 	if logger == nil {

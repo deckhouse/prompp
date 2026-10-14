@@ -1967,8 +1967,8 @@ func TestCompactAllBlocksCorrupted(t *testing.T) {
 	require.Nil(t, ulids)
 
 	for _, dir := range []string{blockDir1, blockDir2} {
-		meta, _, err := readMetaFile(dir)
-		require.NoError(t, err)
+		meta, _, metaErr := readMetaFile(dir)
+		require.NoError(t, metaErr)
 		require.True(t, meta.Compaction.IsCorrupted(), "block %s should be marked as corrupted", dir)
 	}
 

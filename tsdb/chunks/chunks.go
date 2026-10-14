@@ -310,7 +310,7 @@ func newWriter(dir string, segmentSize int64) (*Writer, error) {
 		segmentSize = DefaultChunkSegmentSize
 	}
 
-	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
+	if err := os.MkdirAll(dir, 0o777); err != nil { //nolint:gosec // this is meant to be that way
 		return nil, err
 	}
 	dirFile, err := fileutil.OpenDir(dir)

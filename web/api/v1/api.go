@@ -1749,7 +1749,7 @@ func (api *API) snapshot(r *http.Request) apiFuncResult {
 			rand.Int63()) //nolint:gosec // G404: no need for cryptographic strength here
 		dir = filepath.Join(snapdir, name)
 	)
-	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 // this is meant to be that way
+	if err := os.MkdirAll(dir, 0o777); err != nil { //nolint:gosec // this is meant to be that way
 		return apiFuncResult{nil, &apiError{errorInternal, fmt.Errorf("create snapshot directory: %w", err)}, nil, nil}
 	}
 	if err := api.db.Snapshot(dir, !skipHead); err != nil {
