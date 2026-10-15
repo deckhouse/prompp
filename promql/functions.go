@@ -1508,9 +1508,11 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 			}
 
 			if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
-				matrix[i].Metric = cached.result
-				if cached.matched && dst == model.MetricNameLabel {
-					matrix[i].DropName = false
+				if cached.matched {
+					matrix[i].Metric = cached.result
+					if dst == model.MetricNameLabel {
+						matrix[i].DropName = false
+					}
 				}
 
 				continue

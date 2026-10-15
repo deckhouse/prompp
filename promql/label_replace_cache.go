@@ -95,6 +95,7 @@ type labelReplaceCacheKey struct {
 
 // labelReplaceCacheValue is an immutable lookup snapshot. matched determines
 // whether replacing __name__ resets DropName; DropName itself belongs to the input.
+// Non-matches have an empty result and preserve the current series on lookup.
 type labelReplaceCacheValue struct {
 	result  labels.Labels
 	matched bool
@@ -302,8 +303,8 @@ func (c *labelReplaceCache) acquireOperationWithHash(key labelReplaceOperationKe
 }
 
 // addLabels stores a resulting labelset stamped with the cached timestamp
-// and refreshes the entries gauge; it is a noop when the labels cache is
-// disabled but the wrapper is alive.
+// and refreshes the entries gauge. Non-matches retain only the key and flag.
+// It is a noop when the labels cache is disabled but the wrapper is alive.
 func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Labels, matched bool) {
 	if c == nil || c.labelsCache == nil {
 		return
@@ -317,7 +318,11 @@ func (c *labelReplaceCache) addLabels(key labelReplaceCacheKey, val labels.Label
 	}
 
 	c.spareEntry = nil
-	entry.result = val
+	entry.result = labels.EmptyLabels()
+	if matched {
+		entry.result = val
+	}
+
 	entry.matched = matched
 	entry.idleTs = c.nowMs.Load()
 	if !c.labelsCache.Contains(key) {
