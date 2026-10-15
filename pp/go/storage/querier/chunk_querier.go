@@ -5,12 +5,11 @@ import (
 	"errors"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/util/annotations"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 const (
@@ -38,6 +37,7 @@ type ChunkQuerier[
 	mint             int64
 	maxt             int64
 	closer           func() error
+	metrics          *Metrics
 }
 
 // NewChunkQuerier init new [ChunkQuerier].
@@ -52,6 +52,7 @@ func NewChunkQuerier[
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
 	closer func() error,
+	metrics *Metrics,
 ) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
 		head:             head,
@@ -59,6 +60,7 @@ func NewChunkQuerier[
 		mint:             mint,
 		maxt:             maxt,
 		closer:           closer,
+		metrics:          metrics,
 	}
 }
 
@@ -87,7 +89,8 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 		ctx,
 		q.head,
 		q.deduplicatorCtor,
-		nil,
+		q.metrics,
+		operationChunkLabelNames,
 		lssLabelNamesChunkQuerier,
 		hints,
 		matchers...,
@@ -110,7 +113,8 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 		name,
 		q.head,
 		q.deduplicatorCtor,
-		nil,
+		q.metrics,
+		operationChunkLabelValues,
 		lssLabelValuesChunkQuerier,
 		hints,
 		matchers...,
@@ -126,7 +130,10 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
+	stats := q.metrics.startQuery(operationSelectChunks)
 	release, err := q.head.AcquireQuery(ctx)
+	stats.lap.Mark(stageSemaphoreWait)
+
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
 			return &EmptyChunkSeriesSet{}
@@ -135,29 +142,44 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		logger.Warnf("[ChunkQuerier]: Select failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
-	defer release()
 
 	poolProvider := q.head.PoolProvider()
-	snapshots := poolProvider.GetSnapshots()
-	defer poolProvider.PutSnapshots(snapshots)
-	lssQueryResults := poolProvider.GetLSSQueryResults()
-	defer poolProvider.PutLSSQueryResults(lssQueryResults)
-	// The chunk series sets take the series id from the recoded chunks and do not
-	// reference the query result buffers, so they can be released on return.
-	defer closeLSSQueryResults(lssQueryResults)
+	resources := newSelectResources[TTask](poolProvider)
+	defer func() {
+		resources.release(q.head.PutTask)
 
-	if err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
+		release()
+		stats.lap.Mark(stageCleanup)
+	}()
+
+	if stats.shards.Enabled() {
+		resources.slots = poolProvider.GetShardSlots()
+		stats.slots = resources.slots
+	}
+
+	snapshots := poolProvider.GetSnapshots()
+	resources.snapshots = snapshots
+	lssQueryResults := poolProvider.GetLSSQueryResults()
+	resources.lssQueryResults = lssQueryResults
+
+	resources.lss, err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, snapshots, lssQueryResults, &stats)
+	resources.addTask(resources.lss.task)
+
+	if err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
 
 	shardedSerializedData := poolProvider.GetSerializedData()
-	defer poolProvider.PutSerializedData(shardedSerializedData)
+	resources.serializedData = shardedSerializedData
 
-	queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
+	t := queryDataStorage(
+		dsQueryChunkQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints, &stats,
+	)
+	resources.addTask(t)
 
 	chunkSeriesSets := poolProvider.GetChunkSeriesSet()
-	defer poolProvider.PutChunkSeriesSet(chunkSeriesSets)
+	resources.chunkSeriesSets = chunkSeriesSets
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData == nil {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
@@ -170,5 +192,8 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		)
 	}
 
-	return NewMergeShardChunkSeriesSet(chunkSeriesSets)
+	result := NewMergeShardChunkSeriesSet(chunkSeriesSets)
+	stats.lap.Mark(stageBuildResult)
+
+	return result
 }

@@ -17,13 +17,31 @@ const (
 type Metrics struct {
 	LabelNamesDuration  prometheus.Histogram
 	LabelValuesDuration prometheus.Histogram
-	SelectDuration      *prometheus.HistogramVec
+
+	queries         [operationCount]queryRecorders
+	instantDuration prometheus.Observer
+	rangeDuration   prometheus.Observer
 }
 
 // NewMetrics init new [Metrics].
 func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	factory := util.NewUnconflictRegisterer(registerer)
-	return &Metrics{
+	selectDuration := factory.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "prompp_querier_query_select_duration",
+			Help: "Select query from head duration in microseconds",
+			Buckets: []float64{
+				50, 100, 250, 500, 750,
+				1000, 2500, 5000, 7500,
+				10000, 25000, 50000, 75000,
+				100000, 500000,
+			},
+			ConstLabels: prometheus.Labels{"source": source},
+		},
+		[]string{"query_type"},
+	)
+
+	m := &Metrics{
 		LabelNamesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
 				Name: "prompp_querier_query_label_names_duration",
@@ -50,19 +68,26 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 				ConstLabels: prometheus.Labels{"source": source},
 			},
 		),
-		SelectDuration: factory.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name: "prompp_querier_query_select_duration",
-				Help: "Select query from head duration in microseconds",
-				Buckets: []float64{
-					50, 100, 250, 500, 750,
-					1000, 2500, 5000, 7500,
-					10000, 25000, 50000, 75000,
-					100000, 500000,
-				},
-				ConstLabels: prometheus.Labels{"source": source},
-			},
-			[]string{"query_type"},
-		),
 	}
+
+	for operation := range operationCount {
+		m.queries[operation] = newQueryRecorders(registerer, source, operation)
+	}
+
+	m.instantDuration = selectDuration.WithLabelValues("instant")
+	m.rangeDuration = selectDuration.WithLabelValues("range")
+
+	return m
+}
+
+// startQuery starts the caller's lap timer and selects a shard counter stripe for one operation invocation.
+// A nil Metrics returns disabled stats without reading the clock.
+func (m *Metrics) startQuery(operation queryOperation) queryStats {
+	if m == nil {
+		return queryStats{}
+	}
+
+	recorders := m.queries[operation]
+
+	return queryStats{lap: recorders.stages.Start(), shards: recorders.shards.RandomStripe()}
 }
