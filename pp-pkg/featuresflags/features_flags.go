@@ -49,6 +49,9 @@ const (
 type FlagConfig interface {
 	// DisableBlockManagerStorage disables the storage of blocks in the block manager.
 	DisableBlockManagerStorage()
+
+	// SetDownsampling sets the downsampling duration for the flagConfig.
+	SetDownsampling(downsampling model.Duration)
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -138,6 +141,9 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 	case "enable_block_shard_labels":
 		block.EnableBlockShardLabels = true
 		_ = level.Info(logger).Log(msgStr, "Block shard labels are enabled.")
+
+	case "downsampling":
+		setDownsampling(logger, cfg, fvalue)
 
 	case "enable_madvise_random":
 		fileutil.EnabledMADVRANDOM = true
@@ -245,6 +251,33 @@ func setDisableCommitsOnRemoteWrite(logger log.Logger) {
 	processor.AlwaysCommit = false
 	handler.OTLPAlwaysCommit = false
 	_ = level.Info(logger).Log(msgStr, "Disabled commits on remote write.")
+}
+
+// setDownsampling sets the downsampling value in the configuration.
+func setDownsampling(logger log.Logger, cfg FlagConfig, fvalue string) {
+	fvalue = strings.TrimSpace(fvalue)
+
+	if fvalue == "" {
+		_ = level.Error(logger).Log(msgStr, "The downsampling should be setted with duration.")
+
+		return
+	}
+
+	downsampling, err := model.ParseDuration(fvalue)
+	if err != nil {
+		_ = level.Error(logger).Log(msgStr, "Error parsing downsampling value", errStr, err)
+
+		return
+	}
+
+	if downsampling <= 0 {
+		_ = level.Error(logger).Log(msgStr, "The downsampling value must be greater than 0")
+
+		return
+	}
+
+	cfg.SetDownsampling(downsampling)
+	_ = level.Info(logger).Log(msgStr, "Downsampling is set.", "downsampling", downsampling)
 }
 
 // setFederationSplitFamilies sets the federation split families page size based on the provided feature value.
@@ -416,7 +449,7 @@ func normalizeFeatureValue(fname, fvalue string) string {
 	case "head_default_number_of_shards", "federation_split_families":
 		return normalizeIntValue(fvalue)
 
-	case "default_sample_age_limit":
+	case "default_sample_age_limit", "downsampling":
 		d, err := model.ParseDuration(fvalue)
 		if err != nil {
 			return fvalue

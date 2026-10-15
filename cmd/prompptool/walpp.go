@@ -86,6 +86,7 @@ func (cmd *cmdWALPPToBlock) Do(
 	bw := block.NewWriter[*shard.Shard](
 		workingDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
 		clock,

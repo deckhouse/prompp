@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"path/filepath"
 
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"
 
@@ -47,6 +48,10 @@ func main() {
 	var persistHeadCmd cmdPersistHead
 	registerCmdPersistHead(&persistHeadCmd, persistHeadClause)
 
+	blocksClause := app.Command("blocks", "Converting prometheus wal to tsdb-blocks.")
+	var blocksCmd cmdBlocks
+	registerCmdBlocks(&blocksCmd, blocksClause)
+
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	logger := initLogger(*verbose)
 	logger = log.With(logger, "cmd", cmd)
@@ -68,6 +73,11 @@ func main() {
 	case persistHeadClause.FullCommand():
 		if err := persistHeadCmd.Do(ctx, logger, nil); err != nil {
 			level.Error(logger).Log("msg", "fail to persist head", "error", err)
+			os.Exit(1)
+		}
+	case blocksClause.FullCommand():
+		if err := blocksCmd.Do(ctx, workingDir, logger, nil); err != nil {
+			level.Error(logger).Log("msg", "fail to list blocks", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -103,3 +113,6 @@ type noopFlagConfig struct{}
 
 // DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
+
+// SetDownsampling sets the downsampling duration for the flagConfig.
+func (noopFlagConfig) SetDownsampling(model.Duration) {}

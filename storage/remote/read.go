@@ -20,6 +20,7 @@ import (
 	"slices"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/fanout"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
@@ -71,7 +72,7 @@ func (c *sampleAndChunkQueryableClient) Querier(mint, maxt int64) (storage.Queri
 		return nil, err
 	}
 	if noop {
-		return storage.NoopQuerier(), nil
+		return fanout.NoopQuerier(), nil
 	}
 	return q, nil
 }
@@ -156,7 +157,7 @@ func (q *querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 			}
 		}
 		if len(requiredMatchers) > 0 {
-			return storage.NoopSeriesSet()
+			return fanout.NoopSeriesSet()
 		}
 	}
 

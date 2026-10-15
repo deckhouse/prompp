@@ -250,6 +250,9 @@ type Options struct {
 	Version               *PrometheusVersion
 	Flags                 map[string]string
 
+	DownsamplingLookbackDelta time.Duration        // PP_CHANGES.md: rebuild on cpp
+	MinTimeBlocks             api_v1.MinTimeBlocks // PP_CHANGES.md: rebuild on cpp
+
 	ListenAddresses            []string
 	CORSOrigin                 *regexp.Regexp
 	ReadTimeout                time.Duration
@@ -278,7 +281,8 @@ type Options struct {
 }
 
 // New initializes a new web Handler.
-func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // PP_CHANGES.md: rebuild on cpp
+// PP_CHANGES.md: rebuild on cpp
+func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
@@ -341,6 +345,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		app,
 		h.exemplarStorage,
 		adapter,
+		o.MinTimeBlocks,
+		o.DownsamplingLookbackDelta,
 		factorySPr,
 		factoryTr,
 		factoryAr,

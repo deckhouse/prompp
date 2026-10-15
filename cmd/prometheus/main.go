@@ -60,10 +60,12 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/fanout"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
-	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manager" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor"
 	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
+	v1 "github.com/prometheus/prometheus/web/api/v1"
 
 	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
@@ -75,10 +77,8 @@ import (
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
 
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
-	// PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/catalog" // PP_CHANGES.md: rebuild on cpp
-	// PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
@@ -182,6 +182,8 @@ type flagConfig struct {
 	WalMaxSamplesPerSegment uint32
 	HeadRetentionTimeout    model.Duration
 	UseBlockManagerStorage  bool
+
+	Downsampling model.Duration
 
 	featureList   []string
 	memlimitRatio float64
@@ -291,6 +293,11 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 // DisableBlockManagerStorage disables the storage of blocks in the block manager.
 func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
+}
+
+// SetDownsampling sets the downsampling duration for the flagConfig.
+func (c *flagConfig) SetDownsampling(downsampling model.Duration) {
+	c.Downsampling = downsampling
 }
 
 func main() {
@@ -657,6 +664,17 @@ func main() {
 		cfg.tsdb.OutOfOrderTimeWindow = cfgFile.StorageConfig.TSDBConfig.OutOfOrderTimeWindow
 	}
 
+	// check if the downsampling value is greater than the scrape interval
+	if cfg.Downsampling != 0 && cfg.Downsampling < cfgFile.GlobalConfig.ScrapeInterval {
+		_ = level.Error(logger).Log(
+			"msg", "The downsampling value must be greater than the scrape interval",
+			"scrape_interval", cfgFile.GlobalConfig.ScrapeInterval,
+			"downsampling", cfg.Downsampling,
+		)
+
+		os.Exit(2)
+	}
+
 	// Now that the validity of the config is established, set the config
 	// success metrics accordingly, although the config isn't really loaded
 	// yet. This will happen later (including setting these metrics again),
@@ -803,6 +821,7 @@ func main() {
 		&pp_storage.Options{
 			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
 			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			Downsampling:        time.Duration(cfg.Downsampling),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  ppRetentionPeriod,
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
@@ -832,10 +851,16 @@ func main() {
 		prometheus.DefaultRegisterer,
 	)
 
+	retentionMS := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
+	downsamplingMS := int64(time.Duration(cfg.Downsampling) / time.Millisecond)
 	adapter := pp_pkg_storage.NewAdapter(
 		clock,
 		hManager.Proxy(),
 		hManager.Builder(),
+		&pp_pkg_storage.AdapterOptions{
+			RetentionMS:    retentionMS,
+			DownsamplingMS: downsamplingMS,
+		},
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
@@ -861,6 +886,7 @@ func main() {
 		tsdbHistorical   *tsdbHistoricalStorage
 		persistedStorage storage.Storage = localStorage
 		startTimeFn                      = localStorage.StartTime
+		minTimeBlocks    v1.MinTimeBlocks
 	)
 	if !agentMode {
 		// Storage is constructed eagerly here for both schemes. The historical
@@ -892,7 +918,6 @@ func main() {
 				"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
-			retentionMS := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
 
 			chunkPool := chunkenc.NewPool()
 			compactCtx, compactCancel := context.WithCancel(context.Background())
@@ -928,6 +953,7 @@ func main() {
 				localStoragePath,
 				&manager.Options{
 					RetentionDuration:           retentionMS,
+					DownsamplingMS:              downsamplingMS,
 					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 				},
@@ -947,6 +973,8 @@ func main() {
 				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
 				os.Exit(1)
 			}
+
+			minTimeBlocks = blockManager.MinTimeBlocks
 
 			bs := &blockStorage{m: blockManager, onClose: func() error {
 				// Cancel any in-flight leveled compaction first so the manager
@@ -984,7 +1012,7 @@ func main() {
 		log.With(logger, "component", "remote"),
 		startTimeFn,
 	)
-	fanoutStorage := storage.NewFanout(
+	fanoutStorage := fanout.New(
 		logger,
 		adapter,
 		persistedStorage,
@@ -1174,6 +1202,9 @@ func main() {
 	cfg.web.RuleManager = ruleManager
 	cfg.web.Notifier = notifierManager
 	cfg.web.LookbackDelta = time.Duration(cfg.lookbackDelta)
+	// x2 because the needed minimum lookback delta is 2*downsampling
+	cfg.web.DownsamplingLookbackDelta = time.Duration(cfg.Downsampling * 2)
+	cfg.web.MinTimeBlocks = minTimeBlocks
 	cfg.web.IsAgent = agentMode
 	cfg.web.AppName = modeAppName
 

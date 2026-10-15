@@ -3,11 +3,13 @@ package manager
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kit/log"
@@ -16,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -45,6 +48,8 @@ type BlocksToDeleteFunc func(blocks []*block.Block) map[ulid.ULID]struct{}
 type Options struct {
 	// RetentionDuration is the time retention in milliseconds, used for the corrupted-block outdated check.
 	RetentionDuration int64
+	// DownsamplingMS is the downsampling duration in milliseconds, used for the downsampling block check.
+	DownsamplingMS int64
 	// CorruptedRetentionDuration is the duration of the retention for corrupted blocks.
 	CorruptedRetentionDuration time.Duration
 	// EnableOverlappingCompaction enables warning about overlapping blocks on reload.
@@ -69,6 +74,8 @@ type Manager struct {
 	stoppedc       chan struct{}
 	stopOnce       sync.Once
 	deleteBlocksWG sync.WaitGroup
+
+	mintBlocks int64
 }
 
 // compactionRunner runs a single compaction pass over the on-disk blocks,
@@ -123,6 +130,7 @@ func NewManager(
 		lsObserver:     lsObserver,
 		stopc:          make(chan struct{}),
 		stoppedc:       make(chan struct{}),
+		mintBlocks:     math.MaxInt64,
 	}
 	m.metrics = newMetrics(m, r)
 
@@ -226,8 +234,15 @@ func (m *Manager) Close() {
 	m.blocks = nil
 }
 
+// MinTimeBlocks returns the minimum time of all blocks managed by the manager.
+func (m *Manager) MinTimeBlocks() int64 {
+	return atomic.LoadInt64(&m.mintBlocks)
+}
+
 // Querier returns a new querier over the persisted blocks overlapping the time
 // range [mint, maxt]. It implements [storage.Queryable].
+//
+//revive:disable-next-line:cyclomatic // complex logic is necessary for this function
 func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
@@ -242,8 +257,14 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		}
 	}()
 
+	needDownsampling := m.needDownsampling(mint)
+	resolutionMS := m.opts.DownsamplingMS
+	if needDownsampling {
+		// If we need downsampling, we need to reduce the mint for the resolution query for each block for upsampler.
+		mint -= resolutionMS
+	}
 	for _, b := range m.blocks {
-		if !b.OverlapsClosedInterval(mint, maxt) || b.IsDownsamplingBlock() {
+		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue
 		}
 
@@ -252,10 +273,16 @@ func (m *Manager) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 			return nil, fmt.Errorf("open querier for block %s: %w", b, err)
 		}
 
+		resolutionMS = max(resolutionMS, b.Metadata().Thanos.Downsample.Resolution)
 		blockQueriers = append(blockQueriers, q)
 	}
 
-	return storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge), nil
+	q := storage.NewMergeQuerier(blockQueriers, nil, storage.ChainedSeriesMerge)
+	if needDownsampling {
+		return upsampler.NewResolutionQuerier(q, resolutionMS), nil
+	}
+
+	return q, nil
 }
 
 // ChunkQuerier returns a new chunk querier over the persisted blocks overlapping
@@ -274,8 +301,9 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 		}
 	}()
 
+	needDownsampling := m.needDownsampling(maxt - mint)
 	for _, b := range m.blocks {
-		if !b.OverlapsClosedInterval(mint, maxt) || b.IsDownsamplingBlock() {
+		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue
 		}
 
@@ -309,13 +337,14 @@ func (m *Manager) logLoadedBlocks() {
 	defer m.mtx.RUnlock()
 
 	for _, b := range m.blocks {
-		meta := b.Meta()
+		meta := b.Metadata()
 		_ = level.Info(m.logger).Log(
 			"msg", "Found healthy block",
 			"mint", meta.MinTime,
 			"maxt", meta.MaxTime,
 			"ulid", meta.ULID,
 			"duration_minutes", normalizeBlockDurationMinutes(meta.MaxTime-meta.MinTime),
+			"resolution", meta.Thanos.Downsample.Resolution,
 		)
 	}
 }
@@ -393,9 +422,10 @@ func (m *Manager) reloadBlocks() (err error) {
 	}
 
 	var (
-		toLoad               = make([]*block.Block, 0, len(loadable))
-		blocksSize           int64
-		blocksByDurationMins = map[int64]int{}
+		toLoad                          = make([]*block.Block, 0, len(loadable))
+		blocksSize                      int64
+		blocksByDurationMins            = map[int64]int{}
+		downsampledBlocksByDurationMins = map[int64]int{}
 	)
 	// All deletable blocks should be unloaded.
 	// NOTE: We need to loop through loadable one more time
@@ -409,13 +439,16 @@ func (m *Manager) reloadBlocks() (err error) {
 		toLoad = append(toLoad, blk)
 		blocksSize += blk.Size()
 		durationMinutes := normalizeBlockDurationMinutes(blk.Meta().MaxTime - blk.Meta().MinTime)
+		if blk.IsDownsamplingBlock() {
+			downsampledBlocksByDurationMins[durationMinutes]++
+			continue
+		}
+
 		blocksByDurationMins[durationMinutes]++
 	}
 	m.metrics.blocksBytes.Set(float64(blocksSize))
-	m.metrics.loadedBlocksByDuration.Reset()
-	for durationMinutes, count := range blocksByDurationMins {
-		m.metrics.loadedBlocksByDuration.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
-	}
+	setBlocksByDuration(m.metrics.loadedBlocksByDuration, blocksByDurationMins)
+	setBlocksByDuration(m.metrics.loadedDownsampledBlocksByDuration, downsampledBlocksByDurationMins)
 
 	slices.SortFunc(toLoad, func(a, b *block.Block) int {
 		switch {
@@ -431,6 +464,7 @@ func (m *Manager) reloadBlocks() (err error) {
 	// Swap new blocks first for subsequently created readers to be seen.
 	oldBlocks := m.blocks
 	m.blocks = toLoad
+	m.updateMinTime()
 
 	// Only check overlapping blocks when overlapping compaction is enabled.
 	if m.opts.EnableOverlappingCompaction {
@@ -538,6 +572,34 @@ func (*Manager) isOutdatedBlock(id ulid.ULID, retentionDuration time.Duration) b
 	return id.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli()) // #nosec G115 // no overflow
 }
 
+// needDownsampling checks if the minimum time of the block is greater than the minimum time of query.
+func (m *Manager) needDownsampling(mint int64) bool {
+	return m.opts.DownsamplingMS > 0 && mint < m.mintBlocks
+}
+
+func (*Manager) skipBlock(b *block.Block, mint, maxt int64, needDownsampling bool) bool {
+	return !b.OverlapsClosedInterval(mint, maxt) ||
+		(needDownsampling && !b.IsDownsamplingBlock()) ||
+		(!needDownsampling && b.IsDownsamplingBlock())
+}
+
+// updateMinTime updates the minimum time in blocks of the manager.
+func (m *Manager) updateMinTime() {
+	mintBlocks := int64(math.MaxInt64)
+
+	for _, blk := range m.blocks {
+		if blk.IsDownsamplingBlock() {
+			continue
+		}
+
+		if mint := blk.MinTime(); mint < mintBlocks {
+			mintBlocks = mint
+		}
+	}
+
+	atomic.StoreInt64(&m.mintBlocks, mintBlocks)
+}
+
 // normalizeBlockDurationMinutes normalizes a block duration in milliseconds to minutes.
 func normalizeBlockDurationMinutes(durationMS int64) int64 {
 	if durationMS <= 0 {
@@ -548,19 +610,28 @@ func normalizeBlockDurationMinutes(durationMS int64) int64 {
 	return (durationMS + blockDurationMinuteMS/2) / blockDurationMinuteMS
 }
 
+// setBlocksByDuration replaces the content of a by-duration gauge with the given counts.
+func setBlocksByDuration(gauge *prometheus.GaugeVec, blocksByDurationMins map[int64]int) {
+	gauge.Reset()
+	for durationMinutes, count := range blocksByDurationMins {
+		gauge.WithLabelValues(strconv.FormatInt(durationMinutes, 10)).Set(float64(count))
+	}
+}
+
 //
 // metrics
 //
 
 // metrics collects metrics for the block manager.
 type metrics struct {
-	loadedBlocks           prometheus.GaugeFunc
-	loadedBlocksByDuration *prometheus.GaugeVec
-	symbolTableSize        prometheus.GaugeFunc
-	reloads                prometheus.Counter
-	reloadsFailed          prometheus.Counter
-	corruptedBlocks        prometheus.Gauge
-	blocksBytes            prometheus.Gauge
+	loadedBlocks                      prometheus.GaugeFunc
+	loadedBlocksByDuration            *prometheus.GaugeVec
+	loadedDownsampledBlocksByDuration *prometheus.GaugeVec
+	symbolTableSize                   prometheus.GaugeFunc
+	reloads                           prometheus.Counter
+	reloadsFailed                     prometheus.Counter
+	corruptedBlocks                   prometheus.Gauge
+	blocksBytes                       prometheus.Gauge
 }
 
 // newMetrics creates new [metrics] for the block manager.
@@ -578,7 +649,11 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 		}),
 		loadedBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prometheus_tsdb_blocks_loaded_by_duration",
-			Help: "Number of currently loaded blocks grouped by block duration in minutes.",
+			Help: "Number of currently loaded raw blocks grouped by block duration in minutes.",
+		}, []string{"duration_minutes"}),
+		loadedDownsampledBlocksByDuration: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "prometheus_tsdb_downsampled_blocks_loaded_by_duration",
+			Help: "Number of currently loaded downsampled blocks grouped by block duration in minutes.",
 		}, []string{"duration_minutes"}),
 		symbolTableSize: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "prometheus_tsdb_symbol_table_size_bytes",
@@ -614,6 +689,7 @@ func newMetrics(manager *Manager, r prometheus.Registerer) *metrics {
 		r.MustRegister(
 			m.loadedBlocks,
 			m.loadedBlocksByDuration,
+			m.loadedDownsampledBlocksByDuration,
 			m.symbolTableSize,
 			m.reloads,
 			m.reloadsFailed,

@@ -270,6 +270,13 @@ func (pb *Block) Metadata() metadata.Meta {
 	return pb.meta
 }
 
+// MinTime returns the minimum time of the block.
+func (pb *Block) MinTime() int64 {
+	pb.mtxMeta.RLock()
+	defer pb.mtxMeta.RUnlock()
+	return pb.meta.MinTime
+}
+
 // OverlapsClosedInterval returns true if the block overlaps [mint, maxt].
 func (pb *Block) OverlapsClosedInterval(mint, maxt int64) bool {
 	// The block itself is a half-open interval
@@ -558,14 +565,16 @@ func (o Overlaps) String() string {
 			))
 		}
 
-		res = append(res, fmt.Sprintf(
-			"[key: %s, mint: %d, maxt: %d, range: %s, blocks: %d]: %s",
-			r.Key,
-			r.Min, r.Max,
-			(time.Duration((r.Max-r.Min)/1000)*time.Second).String(),
-			len(overlaps),
-			strings.Join(groups, ", "),
-		))
+		res = append(
+			res, fmt.Sprintf(
+				"[key: %s, mint: %d, maxt: %d, range: %s, blocks: %d]: %s",
+				r.Key,
+				r.Min, r.Max,
+				(time.Duration((r.Max-r.Min)/1000)*time.Second).String(),
+				len(overlaps),
+				strings.Join(groups, ", "),
+			),
+		)
 	}
 
 	return strings.Join(res, "\n")

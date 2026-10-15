@@ -229,6 +229,7 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		2*time.Hour,
 		0,
 		s.clock,
@@ -269,6 +270,7 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		2*time.Hour,
 		0,
 		s.clock,

@@ -111,6 +111,8 @@ func (bs *BatchStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 		maxt,
 		bs.adapter.scrapeInterval.Load(),
 		aTimeInterval.MinT,
+		bs.adapter.opts.RetentionMS,
+		bs.adapter.opts.DownsamplingMS,
 		nil,
 	), nil
 }
