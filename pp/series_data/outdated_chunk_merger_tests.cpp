@@ -13,7 +13,7 @@ using series_data::Decoder;
 using series_data::Encoder;
 using series_data::OutdatedChunkMerger;
 using series_data::chunk::DataChunk;
-using series_data::chunk::FinalizedChunkList;
+using FinalizedChunkList = DataStorage::FinalizedChunkList;
 using series_data::encoder::BitSequenceWithItemsCount;
 using series_data::encoder::Sample;
 using series_data::encoder::SampleList;

@@ -21,7 +21,7 @@ TEST(FeatureFlags, InitializesEnabledFeatures) {
   FeatureFlags flags;
 
   // Act
-  flags.initialize(PromppFeatures{.scraper_validate_utf_per_token = true});
+  flags.initialize(PromppFeatures{.scraper_validate_utf_per_token = true, .skip_no_samples_series = false});
 
   // Assert
   EXPECT_TRUE(flags.features().scraper_validate_utf_per_token);
@@ -41,7 +41,7 @@ TEST(FeatureFlags, EmptyInitializationKeepsFeaturesDisabled) {
 TEST(FeatureFlags, RepeatedInitializationIsIgnored) {
   // Arrange
   FeatureFlags flags;
-  flags.initialize(PromppFeatures{.scraper_validate_utf_per_token = true});
+  flags.initialize(PromppFeatures{.scraper_validate_utf_per_token = true, .skip_no_samples_series = false});
 
   // Act
   flags.initialize({});

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
 var (
@@ -146,20 +146,6 @@ func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, 
 	return fh, nil
 }
 
-// codecsByVersion select codec by version.
-func codecsByVersion(version uint64) (e Encoder, d Decoder, err error) {
-	switch version {
-	case LogFileVersionV1:
-		return EncoderV1{}, DecoderV1{}, nil
-	case LogFileVersionV2:
-		return NewEncoderV2(), DecoderV2{}, nil
-	case LogFileVersionV3:
-		return NewEncoderV3(), NewDecoderV3(), nil
-	default:
-		return nil, nil, ErrUnsupportedVersion
-	}
-}
-
 //
 // Migration
 //
@@ -208,22 +194,17 @@ func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
 // MigrationV3 migrates record from v2 to v3 and vice versa.
 type MigrationV3 struct{}
 
-// Up migrates from v2 to v3.
+// Up migrates from v2 to v3. The time bounds are unknown in v2, so they are marked as unknown.
 func (MigrationV3) Up(sr *SerializedRecord) *SerializedRecord {
-	sr.numberOfSegments = 0
-	if !sr.lastAppendedSegmentID.IsNil() {
-		sr.numberOfSegments = sr.lastAppendedSegmentID.Value() + 1
-	}
+	sr.numberOfSegments = numberOfSegmentsByLastAppendedSegmentID(sr.lastAppendedSegmentID.RawValue())
+	sr.mint = math.MaxInt64
+	sr.maxt = math.MinInt64
 	return sr
 }
 
 // Down migrates from v3 to v2.
 func (MigrationV3) Down(sr *SerializedRecord) *SerializedRecord {
-	if sr.numberOfSegments > 0 {
-		sr.lastAppendedSegmentID.Set(sr.numberOfSegments - 1)
-	} else {
-		sr.lastAppendedSegmentID = optional.WithRawValue[uint32](nil)
-	}
+	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
 	return sr
 }
 

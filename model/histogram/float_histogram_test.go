@@ -1632,6 +1632,22 @@ func TestFloatHistogramCompact(t *testing.T) {
 				CustomValues:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 			},
 		},
+		{
+			"leave untouched if spans don't match buckets",
+			&FloatHistogram{
+				PositiveSpans:   []Span{{0, 0}, {0, 0}},
+				PositiveBuckets: []float64{1, 0, 2},
+				NegativeSpans:   []Span{{0, 1}},
+				NegativeBuckets: []float64{0, 0},
+			},
+			0,
+			&FloatHistogram{
+				PositiveSpans:   []Span{{0, 0}, {0, 0}},
+				PositiveBuckets: []float64{1, 0, 2},
+				NegativeSpans:   []Span{{0, 1}},
+				NegativeBuckets: []float64{0, 0},
+			},
+		},
 	}
 
 	for _, c := range cases {

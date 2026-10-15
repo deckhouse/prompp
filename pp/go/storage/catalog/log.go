@@ -24,26 +24,6 @@ const (
 )
 
 //
-// Encoder
-//
-
-// Encoder encodes [SerializedRecord].
-type Encoder interface {
-	// EncodeTo encode [SerializedRecord] to [io.Writer].
-	EncodeTo(writer io.Writer, sr *SerializedRecord) error
-}
-
-//
-// Decoder
-//
-
-// Decoder decodes [SerializedRecord].
-type Decoder interface {
-	// DecodeFrom decode [SerializedRecord] from [io.Reader].
-	DecodeFrom(reader io.Reader, sr *SerializedRecord) error
-}
-
-//
 // FileLog
 //
 
@@ -234,7 +214,7 @@ func writeSwapAndSwitchAtFilePath(
 
 // creates swap file, writes records & sets read offset at first record.
 func createSwapFile(fileName string, version uint64, encoder Encoder, srs ...*SerializedRecord) (*FileHandler, error) {
-	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFilePerm)
+	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, fmt.Errorf("new file handler: %w", err)
 	}

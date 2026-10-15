@@ -1931,6 +1931,51 @@ func TestCompactEmptyResultBlockWithTombstone(t *testing.T) {
 	require.NoError(t, block.Close())
 }
 
+func TestCompactEmptyDirs(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+
+	c, err := NewLeveledCompactor(ctx, nil, log.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	require.Nil(t, CompactBlockMetas(ulid.MustNew(1000, nil)))
+}
+
+func TestCompactAllBlocksCorrupted(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+
+	blockDir1 := createBlock(t, tmpdir, genSeries(1, 1, 0, 10))
+	blockDir2 := createBlock(t, tmpdir, genSeries(1, 1, 10, 20))
+	// Corrupt the blocks so that the meta file stays readable
+	// but OpenBlock fails.
+	require.NoError(t, os.RemoveAll(path.Join(blockDir1, indexFilename)))
+	require.NoError(t, os.RemoveAll(path.Join(blockDir2, indexFilename)))
+
+	c, err := NewLeveledCompactor(ctx, nil, log.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, []string{blockDir1, blockDir2}, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	for _, dir := range []string{blockDir1, blockDir2} {
+		meta, _, err := readMetaFile(dir)
+		require.NoError(t, err)
+		require.True(t, meta.Compaction.IsCorrupted(), "block %s should be marked as corrupted", dir)
+	}
+
+	// Corrupted blocks are excluded from the plan, so the compactBlocks
+	// loop observes an empty plan and terminates instead of retrying forever.
+	plan, err := c.Plan(tmpdir)
+	require.NoError(t, err)
+	require.Empty(t, plan)
+}
+
 func TestDelayedCompaction(t *testing.T) {
 	// The delay is chosen in such a way as to not slow down the tests, but also to make
 	// the effective compaction duration negligible compared to it, so that the duration comparisons make sense.

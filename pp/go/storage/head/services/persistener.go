@@ -108,9 +108,10 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 			continue
 		}
 
-		if p.HeadIsOutdated(head) {
+		timeInterval := HeadTimeInterval(head)
+		if p.headIsOutdated(timeInterval) {
 			logger.Debugf("[Persistener]: head %s is outdated", head.ID())
-			if _, err := p.catalog.SetStatus(head.ID(), catalog.StatusPersisted); err != nil {
+			if _, err := p.setPersistedStatus(head.ID(), timeInterval); err != nil {
 				logger.Errorf("[Persistener]: set head status in catalog %s: %v", head.ID(), err)
 				continue
 			}
@@ -124,10 +125,12 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 			continue
 		}
 
-		if _, err := p.catalog.SetStatus(head.ID(), catalog.StatusPersisted); err != nil {
+		if _, err := p.setPersistedStatus(head.ID(), timeInterval); err != nil {
 			logger.Errorf("[Persistener]: set head status in catalog %s: %v", head.ID(), err)
 			continue
 		}
+
+		ReleaseLSIDSet(head)
 
 		logger.Infof("[Persistener]: head %s persisted, duration: %v", head.ID(), p.clock.Since(start))
 		p.events.Inc()
@@ -142,21 +145,24 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 	return outdatedHeads
 }
 
-func (*Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) headTimeInterval(
-	head THead,
-) cppbridge.TimeInterval {
-	timeInterval := cppbridge.NewInvalidTimeInterval()
-	for shard := range head.RangeShards() {
-		interval := shard.TimeInterval(true)
-		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
-		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
-	}
-	return timeInterval
-}
-
 // HeadIsOutdated check [Head] is outdated.
 func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) HeadIsOutdated(head THead) bool {
-	return p.clock.Since(time.UnixMilli(p.headTimeInterval(head).MaxT)) >= p.tsdbRetentionPeriod
+	return p.headIsOutdated(HeadTimeInterval(head))
+}
+
+// headIsOutdated check [Head] with time interval is outdated.
+func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) headIsOutdated(
+	timeInterval cppbridge.TimeInterval,
+) bool {
+	return p.clock.Since(time.UnixMilli(timeInterval.MaxT)) >= p.tsdbRetentionPeriod
+}
+
+// setPersistedStatus sets the [catalog.StatusPersisted] status with the time bounds of the [Head] data.
+func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) setPersistedStatus(
+	headID string,
+	timeInterval cppbridge.TimeInterval,
+) (*catalog.Record, error) {
+	return p.catalog.SetStatusWithTimeBounds(headID, catalog.StatusPersisted, timeInterval.MinT, timeInterval.MaxT)
 }
 
 func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persistedHeadIsOutdated(
@@ -289,7 +295,7 @@ func (pg *PersistenerService[
 			record.Status() == catalog.StatusRotated ||
 			record.Status() == catalog.StatusActive
 
-		isOutdated := pg.clock.Since(time.UnixMilli(record.CreatedAt())) >= pg.tsdbRetentionPeriod
+		isOutdated := pg.clock.Since(time.UnixMilli(record.RetentionTimestamp())) >= pg.tsdbRetentionPeriod
 
 		return statusIsAppropriate && !headExists(record.ID()) && record.DeletedAt() == 0 && !isOutdated
 	}, catalog.LessByUpdateAt)

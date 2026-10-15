@@ -1,5 +1,9 @@
 #pragma once
 
+// Provides only the protozero::buffer_customization specialization required by basic_pbf_writer<Go::Slice<char>>,
+// which include-cleaner cannot see as a usage.
+// IWYU pragma: always_keep
+
 #include "go_slice.h"
 
 #include "third_party/protozero/buffer_tmpl.hpp"

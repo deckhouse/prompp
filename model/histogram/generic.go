@@ -206,6 +206,17 @@ func compactBuckets[IBC InternalBucketCount](buckets []IBC, spans []Span, maxEmp
 		}
 	}
 
+	// PP_CHANGES.md: spans not covering exactly all buckets (e.g. malformed scraped protobuf)
+	// would make the loops below index out of range. Leave such a histogram untouched,
+	// Validate rejects it with ErrHistogramSpansBucketsMismatch.
+	var spanBuckets int
+	for _, span := range spans {
+		spanBuckets += int(span.Length)
+	}
+	if spanBuckets != len(buckets) {
+		return buckets, spans
+	}
+
 	var iBucket, iSpan int
 	var posInSpan uint32
 	currentBucketAbsolute = 0

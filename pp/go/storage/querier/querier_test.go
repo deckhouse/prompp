@@ -9,6 +9,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -102,6 +103,59 @@ func (s *QuerierSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *
 
 func (s *QuerierSuite) appendTimeSeries(timeSeries []storagetest.TimeSeries) {
 	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, timeSeries)
+}
+
+func (s *QuerierSuite) TestOptimizationPredicateIsPerQuerier() {
+	s.Require().NoError(querier.SetSelectFuncOptimize("all"))
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{{Timestamp: 0, Value: 1}},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	metrics := querier.NewMetrics(prometheus.NewRegistry(), querier.QueryableStorageSource)
+	newQuerier := func() *Querier {
+		q := querier.NewQuerier(
+			s.head,
+			querier.NewNoOpShardedDeduplicator,
+			0, 2, s.scrapeInterval, 0, s.retentionMS, s.downsamplingMS,
+			metrics,
+		)
+		s.T().Cleanup(func() { s.Require().NoError(q.Close()) })
+
+		return q
+	}
+	defaultQuerier := newQuerier()
+	forcedQuerier := newQuerier()
+	forcedQuerier.IsPossibleToOptimize = func(
+		[]*cppbridge.LSSQueryResult,
+		*prom_storage.SelectHints,
+		int64, int64,
+	) func() bool {
+		return func() bool { return true }
+	}
+	freshQuerier := newQuerier()
+
+	hints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1, Func: "sum"}
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric")
+	forcedSeries := forcedQuerier.Select(s.context, false, hints, matcher)
+	s.NotEmpty(storagetest.TimeSeriesFromSeriesSet(forcedSeries, true))
+	s.Require().NoError(forcedSeries.Err())
+
+	defaultSeries := defaultQuerier.Select(s.context, false, hints, matcher)
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(defaultSeries, true))
+	s.Require().NoError(defaultSeries.Err())
+
+	freshSeries := freshQuerier.Select(s.context, false, hints, matcher)
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(freshSeries, true))
+	s.Require().NoError(freshSeries.Err())
+
+	s.Equal(float64(1), testutil.ToFloat64(metrics.OptimizationType.WithLabelValues("cross_series")))
+	s.Equal(float64(2), testutil.ToFloat64(metrics.OptimizationType.WithLabelValues("none")))
 }
 
 func (s *QuerierSuite) TestRangeQuery() {

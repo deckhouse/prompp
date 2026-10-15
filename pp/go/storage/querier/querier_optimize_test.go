@@ -701,7 +701,7 @@ func (s *querierOptimize) fillHeadWithCounter(ctx context.Context, start, counte
 
 // Querier implements the [prom_storage.Queryable] interface.
 func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error) {
-	return querier.NewQuerier(
+	q := querier.NewQuerier(
 		s.head,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
@@ -711,7 +711,16 @@ func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error
 		s.retentionMS,
 		s.downsamplingMS,
 		nil,
-	), nil
+	)
+	q.IsPossibleToOptimize = func(
+		[]*cppbridge.LSSQueryResult,
+		*prom_storage.SelectHints,
+		int64, int64,
+	) func() bool {
+		return func() bool { return true }
+	}
+
+	return q, nil
 }
 
 //
@@ -742,16 +751,6 @@ func (s *MatrixQuerierOptimizeSuiteSuite) SetupSuite() {
 		defaultStep,
 		defaultCountOfSteps,
 	)
-
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	s.queryEngine = promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -1172,15 +1171,6 @@ func BenchmarkRangeQuerySum(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -1240,15 +1230,6 @@ func BenchmarkRangeQuerySumBy(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -1309,15 +1290,6 @@ func BenchmarkRangeQueryOverTime(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -1433,15 +1405,6 @@ func BenchmarkInstantQuerySum(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -1500,15 +1463,6 @@ func BenchmarkInstantQuerySumBy(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
@@ -1569,15 +1523,6 @@ func BenchmarkInstantQueryOverTime(b *testing.B) {
 		defaultCountOfSteps,
 	)
 	defer qo.close()
-	querier.IsPossibleToOptimize = func(
-		[]*cppbridge.LSSQueryResult,
-		*prom_storage.SelectHints,
-		int64, int64,
-	) func() bool {
-		return func() bool {
-			return true
-		}
-	}
 
 	queryEngine := promql.NewEngine(promql.EngineOpts{
 		Logger:                   log.NewNopLogger(),
