@@ -336,7 +336,12 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
+		if ahead.ID() == head.ID() {
+			continue
+		}
+
+		timeInterval := headTimeInterval(head)
+		if mint > timeInterval.MaxT || maxt < timeInterval.MinT {
 			continue
 		}
 
@@ -348,7 +353,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				mint,
 				maxt,
 				ar.scrapeInterval.Load(),
-				aTimeInterval.MinT,
+				timeInterval.MinT,
 				ar.storageQuerierMetrics,
 			),
 		)
