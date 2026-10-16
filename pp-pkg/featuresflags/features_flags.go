@@ -52,6 +52,14 @@ type FlagConfig interface {
 
 	// EnableBlockManagerStorage enables the storage of blocks in the block manager.
 	EnableBlockManagerStorage()
+
+	// SetLabelReplaceCacheSize sets the capacity of the label_replace result cache
+	// (0 keeps the engine default, a negative value disables the cache).
+	SetLabelReplaceCacheSize(size int)
+
+	// SetLabelReplaceRegexCacheSize sets the capacity of the label_replace compiled-regex cache
+	// (0 keeps the engine default, a negative value disables the cache).
+	SetLabelReplaceRegexCacheSize(size int)
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -162,6 +170,12 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 		_ = level.Info(logger).Log(
 			msgStr, "Wal Writer V2 is enabled.",
 		)
+
+	case "label_replace_cache_size":
+		setLabelReplaceCacheSize(logger, cfg, fvalue)
+
+	case "label_replace_regex_cache_size":
+		setLabelReplaceRegexCacheSize(logger, cfg, fvalue)
 
 	default:
 		_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", fname)
@@ -308,6 +322,43 @@ func setDisableCoredumps(logger log.Logger) {
 	_ = level.Info(logger).Log(msgStr, "Core dumps are disabled (RLIMIT_CORE=0).")
 }
 
+// setLabelReplaceCacheSize sets the label_replace result cache capacity based on the provided feature value.
+func setLabelReplaceCacheSize(logger log.Logger, cfg FlagConfig, fvalue string) {
+	v, err := strconv.Atoi(strings.TrimSpace(fvalue))
+	if err != nil {
+		_ = level.Error(logger).Log(
+			msgStr, "Error parsing label_replace_cache_size value",
+			errStr, err,
+		)
+		return
+	}
+
+	cfg.SetLabelReplaceCacheSize(v)
+	_ = level.Info(logger).Log(
+		msgStr, "Label replace cache size is set.",
+		"size", v,
+	)
+}
+
+// setLabelReplaceRegexCacheSize sets the label_replace compiled-regex cache capacity
+// based on the provided feature value.
+func setLabelReplaceRegexCacheSize(logger log.Logger, cfg FlagConfig, fvalue string) {
+	v, err := strconv.Atoi(strings.TrimSpace(fvalue))
+	if err != nil {
+		_ = level.Error(logger).Log(
+			msgStr, "Error parsing label_replace_regex_cache_size value",
+			errStr, err,
+		)
+		return
+	}
+
+	cfg.SetLabelReplaceRegexCacheSize(v)
+	_ = level.Info(logger).Log(
+		msgStr, "Label replace regex cache size is set.",
+		"size", v,
+	)
+}
+
 //
 // featuresDiff
 //
@@ -390,7 +441,8 @@ func normalizeFeatureValue(fname, fvalue string) string {
 
 		return normalizeIntValue(fvalue)
 
-	case "head_default_number_of_shards", "federation_split_families":
+	case "head_default_number_of_shards", "federation_split_families",
+		"label_replace_cache_size", "label_replace_regex_cache_size":
 		return normalizeIntValue(fvalue)
 
 	case "default_sample_age_limit":

@@ -106,3 +106,9 @@ func (noopFlagConfig) DisableBlockManagerStorage() {}
 
 // EnableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
 func (noopFlagConfig) EnableBlockManagerStorage() {}
+
+// SetLabelReplaceCacheSize is a no-op FlagConfig method.
+func (noopFlagConfig) SetLabelReplaceCacheSize(int) {}
+
+// SetLabelReplaceRegexCacheSize is a no-op FlagConfig method.
+func (noopFlagConfig) SetLabelReplaceRegexCacheSize(int) {}
