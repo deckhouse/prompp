@@ -23,9 +23,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/facette/natsort"
-	"github.com/grafana/regexp"
 	"github.com/prometheus/common/model"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -1465,7 +1465,9 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 		regexStr = stringFromArg(args[4])
 	)
 
-	regex, err := regexp.Compile("^(?:" + regexStr + ")$")
+	// Resolve the regex before evaluating args[0] so that an invalid
+	// regexStr fails even when every series would hit the labelset cache.
+	regex, err := ev.labelReplaceCache.getOrCompileRegex(regexStr)
 	if err != nil {
 		panic(fmt.Errorf("invalid regular expression in label_replace(): %s", regexStr))
 	}
@@ -1476,20 +1478,62 @@ func (ev *evaluator) evalLabelReplace(ctx context.Context, args parser.Expressio
 	val, ws := ev.eval(ctx, args[0])
 	matrix := val.(Matrix)
 	lb := labels.NewBuilder(labels.EmptyLabels())
+	var replacementBuf []byte
+	cacheLabels := ev.labelReplaceCache != nil && ev.labelReplaceCache.labelsCache != nil
+
+	// Schedule at most one background sweep per interval across concurrent
+	// queries. The sweep releases labelsMu between eviction batches.
+	ev.labelReplaceCache.maybeSweep()
+
+	var operation *labelReplaceOperation
+	if cacheLabels {
+		operation = ev.labelReplaceCache.acquireOperation(labelReplaceOperationKey{
+			dst: dst, repl: repl, src: src, regexStr: regexStr,
+		})
+		defer ev.labelReplaceCache.releaseOperation(operation)
+	}
+
+	var baseBuf []byte
+	if cacheLabels {
+		baseBuf = make([]byte, 0, 1024)
+	}
 
 	for i, el := range matrix {
+		var key labelReplaceCacheKey
+		if cacheLabels {
+			baseBuf = el.Metric.Bytes(baseBuf)
+			// Get does not retain this view; addLabels owns a copy before storing it.
+			key = labelReplaceCacheKey{
+				operation: operation, base: unsafe.String(unsafe.SliceData(baseBuf), len(baseBuf)),
+			}
+
+			if cached, ok := ev.labelReplaceCache.getLabels(key); ok {
+				if cached.matched {
+					matrix[i].Metric = cached.result
+					if dst == model.MetricNameLabel {
+						matrix[i].DropName = false
+					}
+				}
+
+				continue
+			}
+		}
+
 		srcVal := el.Metric.Get(src)
 		indexes := regex.FindStringSubmatchIndex(srcVal)
-		if indexes != nil { // Only replace when regexp matches.
-			res := regex.ExpandString([]byte{}, repl, srcVal, indexes)
+		matched := indexes != nil
+		if matched {
+			replacementBuf = regex.ExpandString(replacementBuf[:0], repl, srcVal, indexes)
 			lb.Reset(el.Metric)
-			lb.Set(dst, string(res))
+			lb.Set(dst, string(replacementBuf))
 			matrix[i].Metric = lb.Labels()
 			if dst == model.MetricNameLabel {
 				matrix[i].DropName = false
-			} else {
-				matrix[i].DropName = el.DropName
 			}
+		}
+
+		if cacheLabels {
+			ev.labelReplaceCache.addLabels(key, matrix[i].Metric, matched)
 		}
 	}
 	if matrix.ContainsSameLabelset() {
@@ -1764,7 +1808,7 @@ func (s vectorByValueHeap) Swap(i, j int) {
 }
 
 func (s *vectorByValueHeap) Push(x interface{}) {
-	*s = append(*s, *(x.(*Sample)))
+	*s = append(*s, *x.(*Sample))
 }
 
 func (s *vectorByValueHeap) Pop() interface{} {
@@ -1803,7 +1847,7 @@ func (s vectorByReverseValueHeap) Swap(i, j int) {
 }
 
 func (s *vectorByReverseValueHeap) Push(x interface{}) {
-	*s = append(*s, *(x.(*Sample)))
+	*s = append(*s, *x.(*Sample))
 }
 
 func (s *vectorByReverseValueHeap) Pop() interface{} {
