@@ -110,8 +110,8 @@ func (s *SelectFuncOptimizationSuite) selectWithHints(hints *storage.SelectHints
 		[]*cppbridge.LSSQueryResult,
 		*storage.SelectHints,
 		int64, int64,
-	) func() bool {
-		return func() bool { return true }
+	) bool {
+		return true
 	}
 	seriesSet := q.Select(s.T().Context(), false, hints, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
 	s.NotEmpty(storagetest.TimeSeriesFromSeriesSet(seriesSet, true))

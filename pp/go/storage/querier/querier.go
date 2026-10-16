@@ -152,13 +152,14 @@ type Querier[
 	TShard Shard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
-	// IsPossibleToOptimize defaults to DefaultIsPossibleToOptimize.
+	// IsPossibleToOptimize defaults to [DefaultIsPossibleToOptimize].
+	// It is called only when the optimization mode and query shape permit optimization.
 	// Set it before querying to override the optimization gate for this querier.
 	IsPossibleToOptimize func(
 		lssQueryResults []*cppbridge.LSSQueryResult,
 		hints *storage.SelectHints,
 		scrapeIntervalMS, headMinTSMS int64,
-	) func() bool
+	) bool
 
 	mint             int64
 	maxt             int64
@@ -454,11 +455,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	hints = SwitchFuncOptimize(
-		hints,
-		q.IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS),
-		q.queryOptimize,
-	)
+	hints = SwitchFuncOptimize(hints, q.queryOptimize)
+	if hints != emptySelectHints &&
+		!q.IsPossibleToOptimize(lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS) {
+		hints = emptySelectHints
+	}
+
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
@@ -636,10 +638,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	return resultSeriesSets
 }
 
-// SwitchFuncOptimize switch the function optimization hints.
+// SwitchFuncOptimize returns hints when the optimization mode and query shape permit optimization.
+// The per-querier cost gate is evaluated separately by [Querier.Select].
 func SwitchFuncOptimize(
 	hints *storage.SelectHints,
-	possibleToOptimize func() bool,
 	queryOptimize queryOptimizeType,
 ) *storage.SelectHints {
 	if hints == nil {
@@ -652,21 +654,20 @@ func SwitchFuncOptimize(
 
 	if funcOptimizeMap[hints.Func]&queryOptimize != 0 &&
 		isNotWithout(hints) &&
-		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) &&
-		possibleToOptimize() {
+		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) {
 		return hints
 	}
 
 	return emptySelectHints
 }
 
-// DefaultIsPossibleToOptimize checks if the query possible to optimization.
+// DefaultIsPossibleToOptimize reports whether the series count and sampling bounds justify optimization.
 func DefaultIsPossibleToOptimize(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	hints *storage.SelectHints,
 	scrapeIntervalMS, headMinTSMS int64,
-) func() bool {
-	return func() bool {
+) bool {
+	if isCrossSeriesFunc(hints) {
 		countOfSeries := 0
 		for _, lssQueryResult := range lssQueryResults {
 			if lssQueryResult == nil {
@@ -676,16 +677,14 @@ func DefaultIsPossibleToOptimize(
 			countOfSeries += lssQueryResult.Len()
 		}
 
-		if isCrossSeriesFunc(hints) {
-			return isPossibleToOptimizeCrossSeriesFunc(hints, scrapeIntervalMS, countOfSeries)
-		}
-
-		if isAggregationSeriesFunc(hints) {
-			return isPossibleToOptimizeAggregationFunc(hints, scrapeIntervalMS, headMinTSMS)
-		}
-
-		return false
+		return isPossibleToOptimizeCrossSeriesFunc(hints, scrapeIntervalMS, countOfSeries)
 	}
+
+	if isAggregationSeriesFunc(hints) {
+		return isPossibleToOptimizeAggregationFunc(hints, scrapeIntervalMS, headMinTSMS)
+	}
+
+	return false
 }
 
 // isPossibleToOptimizeCrossSeriesFunc checks if the cross series function is possible to optimize.

@@ -26,8 +26,8 @@ type labelSetsForGroup struct {
 	groupID int
 }
 
-// builderPool builders pool for reuse in SeriesSet.
-var builderPool = sync.Pool{
+// crossBuilderPool builders pool for reuse in SeriesSet.
+var crossBuilderPool = sync.Pool{
 	New: func() any {
 		b := labels.NewScratchBuilder(5)
 		return &b
@@ -63,7 +63,7 @@ func NewCrossSeriesSet(
 	shardID uint16,
 ) *CrossSeriesSet {
 	labelsGroups := make([]labelSetsForGroup, 0, len(seriesGroups.Groups))
-	builder := builderPool.Get().(*labels.ScratchBuilder)
+	builder := crossBuilderPool.Get().(*labels.ScratchBuilder)
 	lvalue := fmt.Sprintf("%s__%d", headID, shardID)
 
 	// grouping must be sorted
@@ -84,7 +84,7 @@ func NewCrossSeriesSet(
 			groupID: i,
 		})
 	}
-	builderPool.Put(builder)
+	crossBuilderPool.Put(builder)
 	slices.SortFunc(labelsGroups, func(a, b labelSetsForGroup) int { return labels.Compare(a.ls, b.ls) })
 
 	return &CrossSeriesSet{

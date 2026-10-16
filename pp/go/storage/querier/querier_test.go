@@ -127,8 +127,8 @@ func (s *QuerierSuite) TestOptimizationPredicateIsPerQuerier() {
 		[]*cppbridge.LSSQueryResult,
 		*prom_storage.SelectHints,
 		int64, int64,
-	) func() bool {
-		return func() bool { return true }
+	) bool {
+		return true
 	}
 	freshQuerier := newQuerier()
 
@@ -148,6 +148,72 @@ func (s *QuerierSuite) TestOptimizationPredicateIsPerQuerier() {
 
 	s.Equal(float64(1), testutil.ToFloat64(metrics.OptimizationType.WithLabelValues("cross_series")))
 	s.Equal(float64(2), testutil.ToFloat64(metrics.OptimizationType.WithLabelValues("none")))
+}
+
+func (s *QuerierSuite) TestOptimizationPredicateSkippedForIneligibleQueries() {
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+	s.appendTimeSeries([]storagetest.TimeSeries{{
+		Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+		Samples: []cppbridge.Sample{{Timestamp: 0, Value: 1}},
+	}})
+
+	cases := []struct {
+		name         string
+		optimization string
+		hints        *prom_storage.SelectHints
+	}{
+		{
+			name:         "disabled",
+			optimization: "none",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "sum"},
+		},
+		{name: "nil_hints", optimization: "all"},
+		{
+			name:         "unsupported_function",
+			optimization: "all",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "avg_over_time", Range: 1},
+		},
+		{
+			name:         "subquery",
+			optimization: "all",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "max_over_time", Range: 1, IsSubquery: true},
+		},
+		{
+			name:         "without_grouping",
+			optimization: "all",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "sum", Grouping: []string{"job"}},
+		},
+		{
+			name:         "reserved_grouping_label",
+			optimization: "all",
+			hints: &prom_storage.SelectHints{
+				Step: 1, Func: "sum", By: true, Grouping: []string{"__head__shard_id"},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			s.Require().NoError(querier.SetSelectFuncOptimize(c.optimization))
+			q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 1, 0, nil)
+			calls := 0
+			q.IsPossibleToOptimize = func(
+				[]*cppbridge.LSSQueryResult,
+				*prom_storage.SelectHints,
+				int64, int64,
+			) bool {
+				calls++
+
+				return true
+			}
+
+			seriesSet := q.Select(s.context, false, c.hints, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
+			s.NotEmpty(storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+			s.Require().NoError(seriesSet.Err())
+			s.Zero(calls)
+			s.Require().NoError(q.Close())
+		})
+	}
 }
 
 func (s *QuerierSuite) TestRangeQuery() {

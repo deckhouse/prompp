@@ -37,18 +37,13 @@ import (
 // SwitchFuncOptimizeSuite
 //
 
+// SwitchFuncOptimizeSuite checks mode and query-shape eligibility before the per-querier cost gate.
 type SwitchFuncOptimizeSuite struct {
 	suite.Suite
-
-	isPossibleToOptimize func() bool
 }
 
 func TestSwitchFuncOptimizeSuite(t *testing.T) {
 	suite.Run(t, new(SwitchFuncOptimizeSuite))
-}
-
-func (s *SwitchFuncOptimizeSuite) SetupSuite() {
-	s.isPossibleToOptimize = func() bool { return true }
 }
 
 func (s *SwitchFuncOptimizeSuite) TestNone() {
@@ -91,7 +86,7 @@ func (s *SwitchFuncOptimizeSuite) TestNone() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0)
+		result := querier.SwitchFuncOptimize(test.hints, 0)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -136,7 +131,7 @@ func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1)
+		result := querier.SwitchFuncOptimize(test.hints, 1)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -181,7 +176,7 @@ func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2)
+		result := querier.SwitchFuncOptimize(test.hints, 2)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -226,7 +221,7 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4)
+		result := querier.SwitchFuncOptimize(test.hints, 4)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -271,7 +266,7 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7)
+		result := querier.SwitchFuncOptimize(test.hints, 7)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -711,8 +706,8 @@ func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error
 		[]*cppbridge.LSSQueryResult,
 		*prom_storage.SelectHints,
 		int64, int64,
-	) func() bool {
-		return func() bool { return true }
+	) bool {
+		return true
 	}
 
 	return q, nil

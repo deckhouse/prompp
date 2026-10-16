@@ -322,7 +322,7 @@ func setDisableCoredumps(logger log.Logger) {
 func setSelectFuncOptimization(logger log.Logger, fvalue string) {
 	fvalue = strings.TrimSpace(fvalue)
 	if fvalue == "" {
-		_ = level.Error(logger).Log(msgStr, "The select_func_optimization should be setted with optimization type.")
+		_ = level.Error(logger).Log(msgStr, "The select_func_optimization must specify an optimization type.")
 
 		return
 	}

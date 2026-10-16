@@ -9,6 +9,12 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+// benchmarkOptimizationGate keeps dispatch indirect, as it is through [querier.Querier.IsPossibleToOptimize].
+var benchmarkOptimizationGate = querier.DefaultIsPossibleToOptimize
+
+// benchmarkOptimizationGateResult retains the predicate result during allocation measurements.
+var benchmarkOptimizationGateResult bool
+
 // DefaultOptimizationGateSuite checks the default aggregation gate at its history, range, and step boundaries.
 type DefaultOptimizationGateSuite struct {
 	suite.Suite
@@ -37,40 +43,50 @@ func (s *DefaultOptimizationGateSuite) SetupTest() {
 func (s *DefaultOptimizationGateSuite) TestInstantAggregationAtHistoryAndRangeThresholds() {
 	possible := querier.DefaultIsPossibleToOptimize(nil, s.hints, s.scrapeIntervalMS, s.headMinTSMS)
 
-	s.True(possible())
+	s.True(possible)
 }
 
 func (s *DefaultOptimizationGateSuite) TestInstantAggregationWithInsufficientHistory() {
 	s.hints.Start--
 	possible := querier.DefaultIsPossibleToOptimize(nil, s.hints, s.scrapeIntervalMS, s.headMinTSMS)
 
-	s.False(possible())
+	s.False(possible)
 }
 
 func (s *DefaultOptimizationGateSuite) TestInstantAggregationWithInsufficientRange() {
 	s.hints.Range--
 	possible := querier.DefaultIsPossibleToOptimize(nil, s.hints, s.scrapeIntervalMS, s.headMinTSMS)
 
-	s.False(possible())
+	s.False(possible)
 }
 
 func (s *DefaultOptimizationGateSuite) TestRangeAggregationAboveScrapeInterval() {
 	s.hints.Step = s.scrapeIntervalMS * 4
 	possible := querier.DefaultIsPossibleToOptimize(nil, s.hints, s.scrapeIntervalMS, s.headMinTSMS)
 
-	s.True(possible())
+	s.True(possible)
 }
 
 func (s *DefaultOptimizationGateSuite) TestRangeAggregationAtScrapeInterval() {
 	s.hints.Step = s.scrapeIntervalMS
 	possible := querier.DefaultIsPossibleToOptimize(nil, s.hints, s.scrapeIntervalMS, s.headMinTSMS)
 
-	s.False(possible())
+	s.False(possible)
 }
 
 func (s *DefaultOptimizationGateSuite) TestRangeAggregationBelowScrapeInterval() {
 	s.hints.Step = s.scrapeIntervalMS - 1
 	possible := querier.DefaultIsPossibleToOptimize(nil, s.hints, s.scrapeIntervalMS, s.headMinTSMS)
 
-	s.False(possible())
+	s.False(possible)
+}
+
+func BenchmarkDefaultOptimizationGate(b *testing.B) {
+	hints := &storage.SelectHints{Start: 15_000, End: 20_000, Range: 5_000, Func: "max_over_time"}
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		benchmarkOptimizationGateResult = benchmarkOptimizationGate(nil, hints, 1_000, 10_000)
+	}
 }
