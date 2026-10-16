@@ -345,16 +345,14 @@ func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
-// headIsOutOfQueryRange reports whether the [pp_storage.Head] certainly holds no data for the
-// [mint, maxt] query range.
+// headIsOutOfQueryRange reports whether the [pp_storage.Head] holds no data for the [mint, maxt]
+// query range.
 //
-// A head with an unknown (invalid) time interval is never out of range: it has to be queried.
+// headTimeInterval obtains the bounds of every shard whose cached interval is unknown, computing them
+// from the data storage, so the interval here is never a guess. An invalid interval therefore means the
+// head holds no data at all, and the comparison below puts such a head out of every query range.
 func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
 	timeInterval := headTimeInterval(head)
-	if timeInterval.IsInvalid() {
-		return false
-	}
-
 	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
 }
 

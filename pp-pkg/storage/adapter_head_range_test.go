@@ -7,6 +7,10 @@
 //
 // This file pins down which heads a query touches: a head whose data cannot
 // intersect the query range is not queried at all.
+//
+// The range check trusts the head time interval to be computed rather than assumed; that a storage
+// with an unknown cached interval has its bounds computed on read is covered by
+// cppbridge HeadSuite.TestTimeInterval.
 
 package storage
 
@@ -44,7 +48,9 @@ func (s *AdapterHeadRangeSuite) ingestAt(tMs int64) {
 	s.Require().NoError(err)
 }
 
-func (s *AdapterHeadRangeSuite) TestEmptyHeadIsQueried() {
+// TestEmptyHeadIsNotQueried covers a head whose bounds are known to be empty: the interval is
+// computed from the data storage, not assumed, so an empty head is out of every query range.
+func (s *AdapterHeadRangeSuite) TestEmptyHeadIsNotQueried() {
 	// Arrange
 	head := s.manager.Proxy().Get()
 
@@ -52,7 +58,7 @@ func (s *AdapterHeadRangeSuite) TestEmptyHeadIsQueried() {
 	outOfRange := headIsOutOfQueryRange(head, 1_000, 2_000)
 
 	// Assert
-	s.False(outOfRange)
+	s.True(outOfRange)
 }
 
 func (s *AdapterHeadRangeSuite) TestHeadIsQueriedForOverlappingRange() {
