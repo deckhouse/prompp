@@ -2,18 +2,14 @@ package cppbridge
 
 import (
 	"runtime"
-	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
 type DataStorage struct {
-	dataStorage    uintptr
-	timeInterval   atomic.Pointer[TimeInterval]
-	lastUpdateTime atomic.Int64
-	m              sync.Mutex
+	dataStorage  uintptr
+	timeInterval atomic.Pointer[TimeInterval]
 }
 
 // NewDataStorage - constructor.
@@ -31,28 +27,21 @@ func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	return ds
 }
 
+// TimeInterval returns the timestamp bounds of the stored data, [NewInvalidTimeInterval] if there is none.
+//
+// The bounds are cached: computing them from the storage walks every series and decodes the first
+// timestamp of each. [DataStorage.EncodeInnerSeriesSlice] keeps the cache up to date, so a storage that is
+// only appended to never needs a rescan.
+//
+// The cache of a storage filled through [HeadWalDecoder.DecodeToDataStorage], which does not maintain it,
+// must be primed with invalidateCache before the first append: an invalid cache is indistinguishable from
+// the cache of an empty storage, and extending it with the bounds of one appended batch would report the
+// restored data as absent.
 func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 	if invalidateCache || ds.timeInterval.Load().IsInvalid() {
 		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
 		ds.timeInterval.Store(&timeInterval)
 		runtime.KeepAlive(ds)
-	}
-
-	return *ds.timeInterval.Load()
-}
-
-// TimeIntervalWithValidateCache gets time interval from [DataStorage] with validate cache.
-func (ds *DataStorage) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) TimeInterval {
-	now := time.Now().UnixMilli()
-	if now-ds.lastUpdateTime.Load() > cacheCheckIntervalMs {
-		// slow path
-		ds.m.Lock()
-		if now-ds.lastUpdateTime.Load() > cacheCheckIntervalMs {
-			timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
-			ds.timeInterval.Store(&timeInterval)
-			ds.lastUpdateTime.Store(now)
-		}
-		ds.m.Unlock()
 	}
 
 	return *ds.timeInterval.Load()
@@ -87,10 +76,20 @@ func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {
 	runtime.KeepAlive(ds)
 }
 
-// EncodeInnerSeriesSlice encodes InnerSeries slice produced by relabeler into the data storage.
+// EncodeInnerSeriesSlice encodes InnerSeries slice produced by relabeler into the data storage
+// and keeps the cached time interval in sync with the appended samples.
 func (ds *DataStorage) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
 	seriesDataEncoderEncodeInnerSeriesSlice(ds.dataStorage, innerSeriesSlice)
 	runtime.KeepAlive(ds)
+
+	appended := NewInvalidTimeInterval()
+	for i := range innerSeriesSlice {
+		interval := innerSeriesSlice[i].TimeInterval()
+		appended.MinT = min(appended.MinT, interval.MinT)
+		appended.MaxT = max(appended.MaxT, interval.MaxT)
+	}
+
+	ds.extendTimeInterval(appended)
 }
 
 // MergeOutOfOrderChunks merges out of order chunks in the data storage.
@@ -163,4 +162,28 @@ func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	seriesDataDataStorageQueryFinal(queriers)
 	runtime.KeepAlive(queriers)
+}
+
+// extendTimeInterval widens the cached time interval to cover interval. The bounds of the data
+// only ever grow, so the cache is never narrowed.
+func (ds *DataStorage) extendTimeInterval(interval TimeInterval) {
+	if interval.IsInvalid() {
+		return
+	}
+
+	for {
+		cached := ds.timeInterval.Load()
+		minT := min(cached.MinT, interval.MinT)
+		maxT := max(cached.MaxT, interval.MaxT)
+
+		// Return before taking the address of an interval, so the common case of an append that widens
+		// nothing does not move one to the heap.
+		if minT == cached.MinT && maxT == cached.MaxT {
+			return
+		}
+
+		if ds.timeInterval.CompareAndSwap(cached, &TimeInterval{MinT: minT, MaxT: maxT}) {
+			return
+		}
+	}
 }

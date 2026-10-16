@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sync/atomic"
-	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,9 +19,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/storage"
 )
-
-// defaultCacheCheckIntervalMs is the default cache check interval in milliseconds.
-const defaultCacheCheckIntervalMs = int64(5*time.Minute) / 1e6 // ns to ms
 
 //
 // Adapter
@@ -243,13 +239,15 @@ func (ar *Adapter) BatchStorage() storage.BatchStorage {
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(
-		queriers,
-		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
-	)
+	if !headIsOutOfQueryRange(ahead, mint, maxt) {
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() {
+		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
 			continue
 		}
 
@@ -289,7 +287,7 @@ func (ar *Adapter) Close() error {
 // HeadQuerier returns [storage.Querier] from active head.
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 	ahead := ar.proxy.Get()
-	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
+	aTimeInterval := headTimeInterval(ahead)
 	return querier.NewQuerier(
 		ahead,
 		querier.NewNoOpShardedDeduplicator,
@@ -321,27 +319,24 @@ func (ar *Adapter) MergeOutOfOrderChunks() {
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	queriers = append(
-		queriers,
-		querier.NewQuerier(
-			ahead,
-			querier.NewNoOpShardedDeduplicator,
-			mint,
-			maxt,
-			ar.scrapeInterval.Load(),
-			aTimeInterval.MinT,
-			ar.activeQuerierMetrics,
-		),
-	)
+	aTimeInterval := headTimeInterval(ahead)
+	if mint <= aTimeInterval.MaxT && maxt >= aTimeInterval.MinT {
+		queriers = append(
+			queriers,
+			querier.NewQuerier(
+				ahead,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.scrapeInterval.Load(),
+				aTimeInterval.MinT,
+				ar.activeQuerierMetrics,
+			),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() {
-			continue
-		}
-
-		timeInterval := headTimeInterval(head)
-		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
+		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
 			continue
 		}
 
@@ -368,23 +363,23 @@ func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
+// headIsOutOfQueryRange reports whether the [pp_storage.Head] holds no data for the [mint, maxt]
+// query range.
+//
+// headTimeInterval obtains the bounds of every shard whose cached interval is unknown, computing them
+// from the data storage, so the interval here is never a guess. An invalid interval therefore means the
+// head holds no data at all, and the comparison below puts such a head out of every query range.
+func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
+	timeInterval := headTimeInterval(head)
+
+	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
+}
+
 // headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
 func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for _, shard := range head.Shards() {
 		interval := shard.TimeInterval(false)
-		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
-		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
-	}
-
-	return timeInterval
-}
-
-// headTimeIntervalWithValidateCache returns [cppbridge.TimeInterval] from [pp_storage.Head] with validate cache.
-func headTimeIntervalWithValidateCache(head *pp_storage.Head, cacheCheckIntervalMs int64) cppbridge.TimeInterval {
-	timeInterval := cppbridge.NewInvalidTimeInterval()
-	for _, shard := range head.Shards() {
-		interval := shard.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
 		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
 		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
 	}

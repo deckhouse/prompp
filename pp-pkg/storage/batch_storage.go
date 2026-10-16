@@ -99,7 +99,7 @@ func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.St
 func (bs *BatchStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	aTimeInterval := cppbridge.NewInvalidTimeInterval()
 	for _, shard := range bs.transactionHead.Shards() {
-		interval := shard.TimeIntervalWithValidateCache(defaultCacheCheckIntervalMs)
+		interval := shard.TimeInterval(false)
 		aTimeInterval.MinT = min(interval.MinT, aTimeInterval.MinT)
 		aTimeInterval.MaxT = max(interval.MaxT, aTimeInterval.MaxT)
 	}
