@@ -58,15 +58,16 @@ func (ds *DataStorage) extendTimeInterval(interval TimeInterval) {
 
 	for {
 		cached := ds.timeInterval.Load()
-		extended := TimeInterval{
-			MinT: min(cached.MinT, interval.MinT),
-			MaxT: max(cached.MaxT, interval.MaxT),
-		}
-		if extended == *cached {
+		minT := min(cached.MinT, interval.MinT)
+		maxT := max(cached.MaxT, interval.MaxT)
+
+		// Return before taking the address of an interval, so the common case of an append that widens
+		// nothing does not move one to the heap.
+		if minT == cached.MinT && maxT == cached.MaxT {
 			return
 		}
 
-		if ds.timeInterval.CompareAndSwap(cached, &extended) {
+		if ds.timeInterval.CompareAndSwap(cached, &TimeInterval{MinT: minT, MaxT: maxT}) {
 			return
 		}
 	}

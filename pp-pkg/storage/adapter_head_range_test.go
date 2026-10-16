@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/prometheus/prometheus/model/labels"
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 )
 
@@ -50,6 +51,17 @@ func (s *AdapterHeadRangeSuite) ingestAt(tMs int64) {
 
 // TestEmptyHeadIsNotQueried covers a head whose bounds are known to be empty: the interval is
 // computed from the data storage, not assumed, so an empty head is out of every query range.
+// requireEveryHeadOutOfRange pins the premise of the zero-querier tests: no head of the adapter can
+// hold data for the range, so Querier and ChunkQuerier build their merge over an empty list.
+func (s *AdapterHeadRangeSuite) requireEveryHeadOutOfRange(mint, maxt int64) {
+	proxy := s.manager.Proxy()
+	s.Require().True(headIsOutOfQueryRange(proxy.Get(), mint, maxt), "the active head must be out of range")
+
+	for _, head := range proxy.Heads() {
+		s.Require().True(headIsOutOfQueryRange(head, mint, maxt), "head %s must be out of range", head.ID())
+	}
+}
+
 func (s *AdapterHeadRangeSuite) TestEmptyHeadIsNotQueried() {
 	// Arrange
 	head := s.manager.Proxy().Get()
@@ -111,4 +123,54 @@ func (s *AdapterHeadRangeSuite) TestHeadIsQueriedForRangeOfLaterAppend() {
 
 	// Assert
 	s.False(headIsOutOfQueryRange(head, 9_000, 11_000))
+}
+
+// TestQuerierWithoutAnyHeadInRange covers the empty querier list. When no head can hold data for the
+// range, every head is skipped and the MultiQuerier is built over zero queriers; it must still answer
+// every method with an empty result instead of failing.
+func (s *AdapterHeadRangeSuite) TestQuerierWithoutAnyHeadInRange() {
+	// Arrange
+	s.ingestAt(2_000)
+	s.requireEveryHeadOutOfRange(10_000, 20_000)
+
+	// Act
+	q, err := s.adapter.Querier(10_000, 20_000)
+	s.Require().NoError(err)
+
+	seriesSet := q.Select(s.ctx, false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
+	labelNames, _, labelNamesErr := q.LabelNames(s.ctx, nil)
+	labelValues, _, labelValuesErr := q.LabelValues(s.ctx, "__name__", nil)
+	closeErr := q.Close()
+
+	// Assert
+	s.False(seriesSet.Next())
+	s.Require().NoError(seriesSet.Err())
+	s.Require().NoError(labelNamesErr)
+	s.Empty(labelNames)
+	s.Require().NoError(labelValuesErr)
+	s.Empty(labelValues)
+	s.Require().NoError(closeErr)
+}
+
+// TestChunkQuerierWithoutAnyHeadInRange is TestQuerierWithoutAnyHeadInRange for the chunk querier,
+// whose empty list goes to storage.NewMergeChunkQuerier instead.
+func (s *AdapterHeadRangeSuite) TestChunkQuerierWithoutAnyHeadInRange() {
+	// Arrange
+	s.ingestAt(2_000)
+	s.requireEveryHeadOutOfRange(10_000, 20_000)
+
+	// Act
+	q, err := s.adapter.ChunkQuerier(10_000, 20_000)
+	s.Require().NoError(err)
+
+	chunkSeriesSet := q.Select(s.ctx, false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
+	labelNames, _, labelNamesErr := q.LabelNames(s.ctx, nil)
+	closeErr := q.Close()
+
+	// Assert
+	s.False(chunkSeriesSet.Next())
+	s.Require().NoError(chunkSeriesSet.Err())
+	s.Require().NoError(labelNamesErr)
+	s.Empty(labelNames)
+	s.Require().NoError(closeErr)
 }
