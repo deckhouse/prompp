@@ -163,10 +163,10 @@ func extractMetadata(header http.Header) *model.Metadata {
 
 	return &model.Metadata{
 		BlockID:                blockID,
-		ShardID:                uint16(shardID),
-		ShardsLog:              uint8(shardsLog),
-		SegmentEncodingVersion: uint8(segmentEncodingVersion),
-		ProtocolVersion:        uint8(protocolVersion),
+		ShardID:                uint16(shardID),               // #nosec G115 // no overflow
+		ShardsLog:              uint8(shardsLog),              // #nosec G115 // no overflow
+		SegmentEncodingVersion: uint8(segmentEncodingVersion), // #nosec G115 // no overflow
+		ProtocolVersion:        uint8(protocolVersion),        // #nosec G115 // no overflow
 		ProductName:            productName,
 		AgentHostname:          agentHostname,
 		AgentUUID:              agentUUID,

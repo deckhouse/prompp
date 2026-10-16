@@ -172,8 +172,8 @@ func TestCheckpoint(t *testing.T) {
 			samplesInWAL, histogramsInWAL, floatHistogramsInWAL := 0, 0, 0
 			var last int64
 			for i := 0; ; i++ {
-				_, n, err := Segments(w.Dir())
-				require.NoError(t, err)
+				_, n, errSegments := Segments(w.Dir())
+				require.NoError(t, errSegments)
 				if n >= 106 {
 					break
 				}
@@ -277,29 +277,29 @@ func TestCheckpoint(t *testing.T) {
 					series, err = dec.Series(rec, series)
 					require.NoError(t, err)
 				case record.Samples:
-					samples, err := dec.Samples(rec, nil)
-					require.NoError(t, err)
+					samples, errSamples := dec.Samples(rec, nil)
+					require.NoError(t, errSamples)
 					for _, s := range samples {
 						require.GreaterOrEqual(t, s.T, last/2, "sample with wrong timestamp")
 					}
 					samplesInCheckpoint += len(samples)
 				case record.HistogramSamples:
-					histograms, err := dec.HistogramSamples(rec, nil)
-					require.NoError(t, err)
+					histograms, errHistogramSamples := dec.HistogramSamples(rec, nil)
+					require.NoError(t, errHistogramSamples)
 					for _, h := range histograms {
 						require.GreaterOrEqual(t, h.T, last/2, "histogram with wrong timestamp")
 					}
 					histogramsInCheckpoint += len(histograms)
 				case record.FloatHistogramSamples:
-					floatHistograms, err := dec.FloatHistogramSamples(rec, nil)
-					require.NoError(t, err)
+					floatHistograms, errFloatHistogramSamples := dec.FloatHistogramSamples(rec, nil)
+					require.NoError(t, errFloatHistogramSamples)
 					for _, h := range floatHistograms {
 						require.GreaterOrEqual(t, h.T, last/2, "float histogram with wrong timestamp")
 					}
 					floatHistogramsInCheckpoint += len(floatHistograms)
 				case record.Exemplars:
-					exemplars, err := dec.Exemplars(rec, nil)
-					require.NoError(t, err)
+					exemplars, errExemplars := dec.Exemplars(rec, nil)
+					require.NoError(t, errExemplars)
 					for _, e := range exemplars {
 						require.GreaterOrEqual(t, e.T, last/2, "exemplar with wrong timestamp")
 					}

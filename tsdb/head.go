@@ -267,7 +267,7 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal, wbl *wlog.WL, opts *Hea
 		stats: stats,
 		reg:   r,
 	}
-	if err := h.resetInMemoryState(); err != nil {
+	if err = h.resetInMemoryState(); err != nil {
 		return nil, err
 	}
 
@@ -785,8 +785,8 @@ func (h *Head) Init(minValidTime int64) error {
 			return fmt.Errorf("segment reader (offset=%d): %w", offset, err)
 		}
 		err = h.loadWAL(wlog.NewReader(sr), syms, multiRef, mmappedChunks, oooMmappedChunks)
-		if err := sr.Close(); err != nil {
-			level.Warn(h.logger).Log("msg", "Error while closing the wal segments reader", "err", err)
+		if errClose := sr.Close(); errClose != nil {
+			level.Warn(h.logger).Log("msg", "Error while closing the wal segments reader", "err", errClose)
 		}
 		if err != nil {
 			return err
@@ -813,8 +813,8 @@ func (h *Head) Init(minValidTime int64) error {
 
 			sr := wlog.NewSegmentBufReader(s)
 			err = h.loadWBL(wlog.NewReader(sr), syms, multiRef, lastMmapRef)
-			if err := sr.Close(); err != nil {
-				level.Warn(h.logger).Log("msg", "Error while closing the wbl segments reader", "err", err)
+			if errClose := sr.Close(); errClose != nil {
+				level.Warn(h.logger).Log("msg", "Error while closing the wbl segments reader", "err", errClose)
 			}
 			if err != nil {
 				return &errLoadWbl{err}
@@ -938,7 +938,7 @@ func (h *Head) loadMmappedChunks(refSeries map[chunks.HeadSeriesRef]*memSeries) 
 
 // removeCorruptedMmappedChunks attempts to delete the corrupted mmapped chunks and if it fails, it clears all the previously
 // loaded mmapped chunks.
-func (h *Head) removeCorruptedMmappedChunks(err error) (map[chunks.HeadSeriesRef][]*mmappedChunk, map[chunks.HeadSeriesRef][]*mmappedChunk, chunks.ChunkDiskMapperRef, error) {
+func (h *Head) removeCorruptedMmappedChunks(errIn error) (map[chunks.HeadSeriesRef][]*mmappedChunk, map[chunks.HeadSeriesRef][]*mmappedChunk, chunks.ChunkDiskMapperRef, error) {
 	level.Info(h.logger).Log("msg", "Deleting mmapped chunk files")
 	// We never want to preserve the in-memory series from snapshots if we are repairing m-map chunks.
 	if err := h.resetInMemoryState(); err != nil {
@@ -947,7 +947,7 @@ func (h *Head) removeCorruptedMmappedChunks(err error) (map[chunks.HeadSeriesRef
 
 	level.Info(h.logger).Log("msg", "Deleting mmapped chunk files")
 
-	if err := h.chunkDiskMapper.DeleteCorrupted(err); err != nil {
+	if err := h.chunkDiskMapper.DeleteCorrupted(errIn); err != nil {
 		level.Info(h.logger).Log("msg", "Deletion of corrupted mmap chunk files failed, discarding chunk files completely", "err", err)
 		if err := h.chunkDiskMapper.Truncate(math.MaxUint32); err != nil {
 			level.Error(h.logger).Log("msg", "Deletion of all mmap chunk files failed", "err", err)
@@ -956,9 +956,9 @@ func (h *Head) removeCorruptedMmappedChunks(err error) (map[chunks.HeadSeriesRef
 	}
 
 	level.Info(h.logger).Log("msg", "Deletion of mmap chunk files successful, reattempting m-mapping the on-disk chunks")
-	mmappedChunks, oooMmappedChunks, lastRef, err := h.loadMmappedChunks(make(map[chunks.HeadSeriesRef]*memSeries))
-	if err != nil {
-		level.Error(h.logger).Log("msg", "Loading on-disk chunks failed, discarding chunk files completely", "err", err)
+	mmappedChunks, oooMmappedChunks, lastRef, errIn := h.loadMmappedChunks(make(map[chunks.HeadSeriesRef]*memSeries))
+	if errIn != nil {
+		level.Error(h.logger).Log("msg", "Loading on-disk chunks failed, discarding chunk files completely", "err", errIn)
 		if err := h.chunkDiskMapper.Truncate(math.MaxUint32); err != nil {
 			level.Error(h.logger).Log("msg", "Deletion of all mmap chunk files failed after failed loading", "err", err)
 		}
@@ -1258,7 +1258,7 @@ func (h *Head) truncateWAL(mint int64) error {
 	}
 	// Start a new segment, so low ingestion volume TSDB don't have more WAL than
 	// needed.
-	if _, err := h.wal.NextSegment(); err != nil {
+	if _, err = h.wal.NextSegment(); err != nil {
 		return fmt.Errorf("next segment: %w", err)
 	}
 	last-- // Never consider last segment for checkpoint.
@@ -1382,7 +1382,7 @@ func (h *Head) truncateSeriesAndChunkDiskMapper(caller string) error {
 	h.minOOOTime.Store(minOOOTime)
 
 	// Truncate the chunk m-mapper.
-	if err := h.chunkDiskMapper.Truncate(uint32(minMmapFile)); err != nil {
+	if err := h.chunkDiskMapper.Truncate(uint32(minMmapFile)); err != nil { // #nosec G115 // no overflow
 		return fmt.Errorf("truncate chunks.HeadReadWriter by file number: %w", err)
 	}
 	return nil
@@ -1926,7 +1926,7 @@ func (s *stripeSeries) gc(mint int64, minOOOMmapRef chunks.ChunkDiskMapperRef) (
 		// series alike.
 		// If we don't hold them all, there's a very small chance that a series receives
 		// samples again while we are half-way into deleting it.
-		refShard := int(series.ref) & (s.size - 1)
+		refShard := int(series.ref) & (s.size - 1) // #nosec G115 // no overflow
 		if hashShard != refShard {
 			s.locks[refShard].Lock()
 			defer s.locks[refShard].Unlock()
@@ -1978,7 +1978,7 @@ func (s *stripeSeries) iterForDeletion(checkDeletedFunc func(int, uint64, *memSe
 }
 
 func (s *stripeSeries) getByID(id chunks.HeadSeriesRef) *memSeries {
-	i := uint64(id) & uint64(s.size-1)
+	i := uint64(id) & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].RLock()
 	series := s.series[i][id]
@@ -1988,7 +1988,7 @@ func (s *stripeSeries) getByID(id chunks.HeadSeriesRef) *memSeries {
 }
 
 func (s *stripeSeries) getByHash(hash uint64, lset labels.Labels) *memSeries {
-	i := hash & uint64(s.size-1)
+	i := hash & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].RLock()
 	series := s.hashes[i].get(hash, lset)
@@ -2010,7 +2010,7 @@ func (s *stripeSeries) getOrSet(hash uint64, lset labels.Labels, createSeries fu
 		series = createSeries()
 	}
 
-	i := hash & uint64(s.size-1)
+	i := hash & uint64(s.size-1) // #nosec G115 // no overflow
 	s.locks[i].Lock()
 
 	if prev := s.hashes[i].get(hash, lset); prev != nil {
@@ -2030,7 +2030,7 @@ func (s *stripeSeries) getOrSet(hash uint64, lset labels.Labels, createSeries fu
 	// as any further calls to this methods would return that series.
 	s.seriesLifecycleCallback.PostCreation(series.labels())
 
-	i = uint64(series.ref) & uint64(s.size-1)
+	i = uint64(series.ref) & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].Lock()
 	s.series[i][series.ref] = series
@@ -2177,7 +2177,7 @@ func (s *memSeries) truncateChunksBefore(mint int64, minOOOMmapRef chunks.ChunkD
 			if chk.maxTime < mint {
 				// If any head chunk is truncated, we can truncate all mmapped chunks.
 				removedInOrder = chk.len() + len(s.mmappedChunks)
-				s.firstChunkID += chunks.HeadChunkID(removedInOrder)
+				s.firstChunkID += chunks.HeadChunkID(removedInOrder) // #nosec G115 // no overflow
 				if i == 0 {
 					// This is the first chunk on the list so we need to remove the entire list.
 					s.headChunks = nil

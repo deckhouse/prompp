@@ -299,6 +299,19 @@ type EngineOpts struct {
 	// series is considered stale.
 	LookbackDelta time.Duration
 
+	// LabelReplaceCacheSize is the capacity of the label_replace result cache.
+	// 0 selects DefaultLabelReplaceCacheSize; a negative value disables the
+	// labels cache (with a non-negative LabelReplaceRegexCacheSize the regex
+	// cache keeps working; everything is off only when both sizes are
+	// negative).
+	LabelReplaceCacheSize int
+
+	// LabelReplaceRegexCacheSize is the capacity of the compiled-regex cache
+	// backing label_replace. 0 selects DefaultLabelReplaceRegexCacheSize; a
+	// negative value disables the regex cache (regexes are then compiled on
+	// every call without being stored).
+	LabelReplaceRegexCacheSize int
+
 	// NoStepSubqueryIntervalFn is the default evaluation interval of
 	// a subquery in milliseconds if no step in range vector was specified `[30m:<step>]`.
 	NoStepSubqueryIntervalFn func(rangeMillis int64) int64
@@ -341,6 +354,7 @@ type Engine struct {
 	enableNegativeOffset     bool
 	enablePerStepStats       bool
 	enableDelayedNameRemoval bool
+	labelReplaceCache        *labelReplaceCache
 }
 
 // NewEngine returns a new engine.
@@ -349,13 +363,14 @@ func NewEngine(opts EngineOpts) *Engine {
 		opts.Logger = log.NewNopLogger()
 	}
 
-	queryResultSummary := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace:  namespace,
-		Subsystem:  subsystem,
-		Name:       "query_duration_seconds",
-		Help:       "Query timings",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-	},
+	queryResultSummary := prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Namespace:  namespace,
+			Subsystem:  subsystem,
+			Name:       "query_duration_seconds",
+			Help:       "Query timings",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		},
 		[]string{"slice"},
 	)
 
@@ -409,6 +424,8 @@ func NewEngine(opts EngineOpts) *Engine {
 		}
 	}
 
+	cache := newLabelReplaceCache(opts.LabelReplaceCacheSize, opts.LabelReplaceRegexCacheSize, opts.Reg)
+
 	if opts.Reg != nil {
 		opts.Reg.MustRegister(
 			metrics.currentQueries,
@@ -420,7 +437,7 @@ func NewEngine(opts EngineOpts) *Engine {
 		)
 	}
 
-	return &Engine{
+	ng := &Engine{
 		timeout:                  opts.Timeout,
 		logger:                   opts.Logger,
 		metrics:                  metrics,
@@ -433,6 +450,9 @@ func NewEngine(opts EngineOpts) *Engine {
 		enablePerStepStats:       opts.EnablePerStepStats,
 		enableDelayedNameRemoval: opts.EnableDelayedNameRemoval,
 	}
+	ng.labelReplaceCache = cache
+
+	return ng
 }
 
 // Close closes ng.
@@ -440,6 +460,8 @@ func (ng *Engine) Close() error {
 	if ng == nil {
 		return nil
 	}
+
+	ng.labelReplaceCache.close()
 
 	if ng.activeQueryTracker != nil {
 		return ng.activeQueryTracker.Close()
@@ -482,7 +504,7 @@ func (ng *Engine) NewInstantQuery(ctx context.Context, q storage.Queryable, opts
 	if err != nil {
 		return nil, err
 	}
-	if err := ng.validateOpts(expr); err != nil {
+	if err = ng.validateOpts(expr); err != nil {
 		return nil, err
 	}
 	*pExpr = PreprocessExpr(expr, ts, ts)
@@ -507,7 +529,7 @@ func (ng *Engine) NewRangeQuery(ctx context.Context, q storage.Queryable, opts Q
 	if err != nil {
 		return nil, err
 	}
-	if err := ng.validateOpts(expr); err != nil {
+	if err = ng.validateOpts(expr); err != nil {
 		return nil, err
 	}
 	if expr.Type() != parser.ValueTypeVector && expr.Type() != parser.ValueTypeScalar {
@@ -654,9 +676,9 @@ func (ng *Engine) exec(ctx context.Context, q *query) (v parser.Value, ws annota
 					f = append(f, k, v)
 				}
 			}
-			if err := l.Log(f...); err != nil {
+			if errLog := l.Log(f...); errLog != nil {
 				ng.metrics.queryLogFailures.Inc()
-				level.Error(ng.logger).Log("msg", "can't log query", "err", err)
+				level.Error(ng.logger).Log("msg", "can't log query", "err", errLog)
 			}
 		}
 		ng.queryLoggerLock.RUnlock()
@@ -743,16 +765,17 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 			samplesStats:             query.sampleStats,
 			noStepSubqueryIntervalFn: ng.noStepSubqueryIntervalFn,
 			enableDelayedNameRemoval: ng.enableDelayedNameRemoval,
+			labelReplaceCache:        ng.labelReplaceCache,
 			querier:                  querier,
 		}
 		query.sampleStats.InitStepTracking(start, start, 1)
 
-		val, warnings, err := evaluator.Eval(ctxInnerEval, s.Expr)
+		val, warnings, errEval := evaluator.Eval(ctxInnerEval, s.Expr)
 
 		evalSpanTimer.Finish()
 
-		if err != nil {
-			return nil, warnings, err
+		if errEval != nil {
+			return nil, warnings, errEval
 		}
 
 		var mat Matrix
@@ -808,6 +831,7 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 		samplesStats:             query.sampleStats,
 		noStepSubqueryIntervalFn: ng.noStepSubqueryIntervalFn,
 		enableDelayedNameRemoval: ng.enableDelayedNameRemoval,
+		labelReplaceCache:        ng.labelReplaceCache,
 		querier:                  querier,
 	}
 	query.sampleStats.InitStepTracking(evaluator.startTimestamp, evaluator.endTimestamp, evaluator.interval)
@@ -1101,6 +1125,7 @@ type evaluator struct {
 	noStepSubqueryIntervalFn func(rangeMillis int64) int64
 	enableDelayedNameRemoval bool
 	querier                  storage.Querier
+	labelReplaceCache        *labelReplaceCache
 }
 
 // errorf causes a panic with the input formatted into an error.
@@ -2007,6 +2032,7 @@ func (ev *evaluator) eval(ctx context.Context, expr parser.Expr) (parser.Value, 
 			samplesStats:             ev.samplesStats.NewChild(),
 			noStepSubqueryIntervalFn: ev.noStepSubqueryIntervalFn,
 			enableDelayedNameRemoval: ev.enableDelayedNameRemoval,
+			labelReplaceCache:        ev.labelReplaceCache,
 			querier:                  ev.querier,
 		}
 
@@ -2052,6 +2078,7 @@ func (ev *evaluator) eval(ctx context.Context, expr parser.Expr) (parser.Value, 
 			samplesStats:             ev.samplesStats.NewChild(),
 			noStepSubqueryIntervalFn: ev.noStepSubqueryIntervalFn,
 			enableDelayedNameRemoval: ev.enableDelayedNameRemoval,
+			labelReplaceCache:        ev.labelReplaceCache,
 			querier:                  ev.querier,
 		}
 		res, ws := newEv.eval(ctx, e.Expr)
@@ -3627,7 +3654,7 @@ func detectHistogramStatsDecoding(expr parser.Expr) {
 			return fmt.Errorf("stop")
 		}
 
-		n, ok := (node).(*parser.VectorSelector)
+		n, ok := node.(*parser.VectorSelector)
 		if !ok {
 			return nil
 		}
