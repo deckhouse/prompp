@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -86,35 +87,43 @@ const optimizeAggregationRatio = 3.3
 // defaultOptimizeType is the default option for selecting functions optimization.
 var defaultOptimizeType = noneOptimizeType
 
-// SetSelectFuncOptimize sets the select func optimization option by name.
-func SetSelectFuncOptimize(opt string) error {
-	switch opt {
-	case "none":
-		selectFuncOptimize = noneOptimizeType
-		return nil
+// SetSelectFuncOptimize replaces the optimization modes used by subsequently created [Querier] instances.
+// Options are separated by | and may have surrounding whitespace. They are applied left to right:
+// none clears the selection, all enables every mode, and other options add their mode to the selection.
+// Invalid input leaves the previous selection unchanged.
+func SetSelectFuncOptimize(opts string) error {
+	optimization := noneOptimizeType
 
-	case "drop_point":
-		selectFuncOptimize |= dropPointOptimizeType
-		return nil
+	for opt := range strings.SplitSeq(opts, "|") {
+		opt = strings.TrimSpace(opt)
 
-	case "new_point":
-		selectFuncOptimize |= newPointOptimizeType
-		return nil
+		switch opt {
+		case "none":
+			optimization = noneOptimizeType
 
-	case "cross":
-		selectFuncOptimize |= crossSeriesOptimizeType
-		return nil
+		case "drop_point":
+			optimization |= dropPointOptimizeType
 
-	case "all":
-		selectFuncOptimize = allOptimizeType
-		return nil
+		case "new_point":
+			optimization |= newPointOptimizeType
 
-	default:
-		return fmt.Errorf(
-			"invalid select func optimization option: '%s', valid options are: "+
-				"'none', 'drop_point', 'new_point', 'cross', 'all'", opt,
-		)
+		case "cross":
+			optimization |= crossSeriesOptimizeType
+
+		case "all":
+			optimization = allOptimizeType
+
+		default:
+			return fmt.Errorf(
+				"invalid select func optimization option: '%s', valid options are: "+
+					"'none', 'drop_point', 'new_point', 'cross', 'all'", opt,
+			)
+		}
 	}
+
+	selectFuncOptimize = optimization
+
+	return nil
 }
 
 // SetDefaultOptimizeType set the default option for selecting functions optimization.

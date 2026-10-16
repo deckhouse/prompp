@@ -327,16 +327,14 @@ func setSelectFuncOptimization(logger log.Logger, fvalue string) {
 		return
 	}
 
-	for opt := range strings.SplitSeq(fvalue, "|") {
-		if err := querier.SetSelectFuncOptimize(opt); err != nil {
-			querier.SetDefaultOptimizeType() // reset to default if error
-			_ = level.Error(logger).Log(
-				msgStr, "Error parsing select_func_optimization value, reset to default.",
-				errStr, err,
-			)
+	if err := querier.SetSelectFuncOptimize(fvalue); err != nil {
+		querier.SetDefaultOptimizeType() // reset to default if error
+		_ = level.Error(logger).Log(
+			msgStr, "Error parsing select_func_optimization value, reset to default.",
+			errStr, err,
+		)
 
-			return
-		}
+		return
 	}
 
 	_ = level.Info(logger).Log(
