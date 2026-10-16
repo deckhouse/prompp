@@ -219,8 +219,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 		ctx,
 		q.head,
 		q.deduplicatorCtor,
-		q.metrics,
-		operationLabelNames,
+		q.metrics.startQuery(operationLabelNames),
 		lssLabelNamesQuerier,
 		hints,
 		matchers...,
@@ -243,8 +242,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 		name,
 		q.head,
 		q.deduplicatorCtor,
-		q.metrics,
-		operationLabelValues,
+		q.metrics.startQuery(operationLabelValues),
 		lssLabelValuesQuerier,
 		hints,
 		matchers...,
@@ -295,13 +293,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	}
 
 	poolProvider := q.head.PoolProvider()
-	resources := newSelectResources[TTask](poolProvider)
+	resources := newSelectResources(poolProvider, q.head)
 	defer func() {
-		resources.release(q.head.PutTask)
+		resources.release()
 
-		if q.metrics != nil {
-			q.metrics.instantDuration.Observe(float64(int64(stats.lap.SinceMicroseconds())))
-		}
+		stats.observeDuration()
 
 		release()
 		stats.lap.Mark(stageCleanup)
@@ -312,12 +308,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		stats.slots = resources.slots
 	}
 
-	snapshots := poolProvider.GetSnapshots()
-	resources.snapshots = snapshots
-	lssQueryResults := poolProvider.GetLSSQueryResults()
-	resources.lssQueryResults = lssQueryResults
+	resources.snapshots = poolProvider.GetSnapshots()
+	resources.lssQueryResults = poolProvider.GetLSSQueryResults()
 
-	resources.lss, err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, snapshots, lssQueryResults, &stats)
+	resources.lss, err = queryLss(
+		lssQueryInstantQuerySelector, q.head, matchers, resources.snapshots, resources.lssQueryResults, &stats,
+	)
 	resources.addTask(resources.lss.task)
 
 	if err != nil {
@@ -330,9 +326,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		valueNotFoundTimestampValue = q.mint - 1
 	}
 
-	seriesSets := poolProvider.GetSeriesSet()
-	resources.seriesSets = seriesSets
-	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
+	resources.seriesSets = poolProvider.GetSeriesSet()
+	loadAndQueryWaiter := NewLoadAndQueryWaiter(q.head)
+	// Capture slice headers so the shard closure does not move the mutable resource owner to the heap.
+	snapshots := resources.snapshots
+	lssQueryResults := resources.lssQueryResults
+	seriesSets := resources.seriesSets
 	slots := stats.slots
 	tDataStorageQuery := q.head.CreateTask(
 		dsQueryInstantQuerier,
@@ -373,7 +372,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	stats.lap.Mark(stageDataStorageQuery)
 	stats.shards.ObserveMax(shardStageDataStorageQuery, slots, slotDataStorageQuery)
 
-	hasQueries := loadAndQueryWaiter.HasQueries()
+	hasQueries := loadAndQueryWaiter.HasQueriesAfterPrimaryWait()
 	err = loadAndQueryWaiter.Wait()
 	if err != nil {
 		SendUnrecoverableError(err)
@@ -386,7 +385,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		stats.lap.Mark(stageDataLoadWait)
 	}
 
-	result := NewMergeShardSeriesSet(seriesSets)
+	result := NewMergeShardSeriesSet(resources.seriesSets)
 	stats.lap.Mark(stageBuildResult)
 
 	return result
@@ -414,13 +413,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	}
 
 	poolProvider := q.head.PoolProvider()
-	resources := newSelectResources[TTask](poolProvider)
+	resources := newSelectResources(poolProvider, q.head)
 	defer func() {
-		resources.release(q.head.PutTask)
+		resources.release()
 
-		if q.metrics != nil {
-			q.metrics.rangeDuration.Observe(float64(int64(stats.lap.SinceMicroseconds())))
-		}
+		stats.observeDuration()
 
 		release()
 		stats.lap.Mark(stageCleanup)
@@ -431,12 +428,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		stats.slots = resources.slots
 	}
 
-	snapshots := poolProvider.GetSnapshots()
-	resources.snapshots = snapshots
-	lssQueryResults := poolProvider.GetLSSQueryResults()
-	resources.lssQueryResults = lssQueryResults
+	resources.snapshots = poolProvider.GetSnapshots()
+	resources.lssQueryResults = poolProvider.GetLSSQueryResults()
 
-	resources.lss, err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, snapshots, lssQueryResults, &stats)
+	resources.lss, err = queryLss(
+		lssQueryRangeQuerySelector, q.head, matchers, resources.snapshots, resources.lssQueryResults, &stats,
+	)
 	resources.addTask(resources.lss.task)
 
 	if err != nil {
@@ -445,18 +442,23 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	}
 
 	hints = SwitchFuncOptimize(hints, q.queryOptimize)
-	shardedSerializedData := poolProvider.GetSerializedData()
-	resources.serializedData = shardedSerializedData
+	resources.serializedData = poolProvider.GetSerializedData()
 	t := queryDataStorage(
-		dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints, &stats,
+		dsQueryRangeQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, &stats,
 	)
 	resources.addTask(t)
 
+	resources.seriesSets = poolProvider.GetSeriesSet()
+
 	var result storage.SeriesSet
 	if isAggregationSeriesFunc(hints) {
-		result = q.makeAggrSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+		result = q.makeAggrSeriesSet(
+			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets,
+		)
 	} else {
-		result = q.makeSeriesSet(lssQueryResults, snapshots, shardedSerializedData)
+		result = q.makeSeriesSet(
+			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets,
+		)
 	}
 
 	stats.lap.Mark(stageBuildResult)
@@ -464,16 +466,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	return result
 }
 
-// makeAggrSeriesSet makes the aggregated series set.
+// makeAggrSeriesSet fills the caller-owned shard buffer and builds a merged set without retaining the buffer.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+	seriesSets []storage.SeriesSet,
 ) storage.SeriesSet {
-	poolProvider := q.head.PoolProvider()
-
-	seriesSets := poolProvider.GetSeriesSet()
-	defer poolProvider.PutSeriesSet(seriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
 			seriesSets[shardID] = NewAggrSeriesSet(
@@ -492,16 +491,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// makeSeriesSet makes the series set.
+// makeSeriesSet fills the caller-owned shard buffer and builds a merged set without retaining the buffer.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+	seriesSets []storage.SeriesSet,
 ) storage.SeriesSet {
-	poolProvider := q.head.PoolProvider()
-
-	seriesSets := poolProvider.GetSeriesSet()
-	defer poolProvider.PutSeriesSet(seriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
 			seriesSets[shardID] = NewSeriesSet(
@@ -602,7 +598,7 @@ func queryDataStorage[
 	hints *storage.SelectHints,
 	stats *queryStats,
 ) TTask {
-	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
+	loadAndQueryWaiter := NewLoadAndQueryWaiter(head)
 	slots := stats.slots
 	tDataStorageQuery := head.CreateTask(
 		taskName,
@@ -638,7 +634,7 @@ func queryDataStorage[
 	stats.lap.Mark(stageDataStorageQuery)
 	stats.shards.ObserveMax(shardStageDataStorageQuery, slots, slotDataStorageQuery)
 
-	hasQueries := loadAndQueryWaiter.HasQueries()
+	hasQueries := loadAndQueryWaiter.HasQueriesAfterPrimaryWait()
 	if err := loadAndQueryWaiter.Wait(); err != nil {
 		clear(shardedSerializedData)
 		SendUnrecoverableError(err)
@@ -651,7 +647,7 @@ func queryDataStorage[
 	return tDataStorageQuery
 }
 
-// queryLabelValues returns label values present in the head for the specific label name.
+// queryLabelNames returns label names present in the head for the given matchers.
 func queryLabelNames[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -662,17 +658,14 @@ func queryLabelNames[
 	ctx context.Context,
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	metrics *Metrics,
-	operation queryOperation,
+	stats queryStats,
 	taskName string,
 	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
-	stats := metrics.startQuery(operation)
-
 	anns := *annotations.New()
 	release, err := head.AcquireQuery(ctx)
-	stats.lap.Mark(stageSemaphoreWait)
+	stats.lap.Mark(metadataStageSemaphoreWait)
 
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
@@ -695,12 +688,10 @@ func queryLabelNames[
 			poolProvider.PutShardSlots(stats.slots)
 		}
 
-		if metrics != nil && operation == operationLabelNames {
-			metrics.LabelNamesDuration.Observe(float64(int64(stats.lap.SinceMicroseconds())))
-		}
+		stats.observeDuration()
 
 		release()
-		stats.lap.Mark(stageCleanup)
+		stats.lap.Mark(metadataStageCleanup)
 	}()
 
 	if stats.shards.Enabled() {
@@ -709,7 +700,7 @@ func queryLabelNames[
 
 	dedup := deduplicatorCtor(head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToPPMatchers(matchers...)
-	stats.lap.Mark(stagePrepare)
+	stats.lap.Mark(metadataStagePrepare)
 	slots := stats.slots
 
 	t = head.CreateTask(
@@ -728,16 +719,16 @@ func queryLabelNames[
 	if err := t.Wait(); err != nil {
 		anns.Add(err)
 	}
-	stats.shards.ObserveMax(shardStageLSS, slots, slotLSS)
+	stats.shards.ObserveMax(metadataShardStageLSSQuery, slots, slotLSS)
 
 	select {
 	case <-ctx.Done():
-		stats.lap.Mark(stageLSSQuery)
+		stats.lap.Mark(metadataStageLSSQuery)
 
 		return nil, anns, context.Cause(ctx)
 	default:
 	}
-	stats.lap.Mark(stageLSSQuery)
+	stats.lap.Mark(metadataStageLSSQuery)
 
 	lns := dedup.Values()
 	sort.Strings(lns)
@@ -745,7 +736,7 @@ func queryLabelNames[
 	if hints.Limit > 0 && hints.Limit < len(lns) {
 		lns = lns[:hints.Limit]
 	}
-	stats.lap.Mark(stageBuildResult)
+	stats.lap.Mark(metadataStageBuildResult)
 
 	return lns, anns, nil
 }
@@ -762,17 +753,14 @@ func queryLabelValues[
 	name string,
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	metrics *Metrics,
-	operation queryOperation,
+	stats queryStats,
 	taskName string,
 	_ *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
-	stats := metrics.startQuery(operation)
-
 	anns := *annotations.New()
 	release, err := head.AcquireQuery(ctx)
-	stats.lap.Mark(stageSemaphoreWait)
+	stats.lap.Mark(metadataStageSemaphoreWait)
 
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
@@ -795,12 +783,10 @@ func queryLabelValues[
 			poolProvider.PutShardSlots(stats.slots)
 		}
 
-		if metrics != nil && operation == operationLabelValues {
-			metrics.LabelValuesDuration.Observe(float64(int64(stats.lap.SinceMicroseconds())))
-		}
+		stats.observeDuration()
 
 		release()
-		stats.lap.Mark(stageCleanup)
+		stats.lap.Mark(metadataStageCleanup)
 	}()
 
 	if stats.shards.Enabled() {
@@ -809,7 +795,7 @@ func queryLabelValues[
 
 	dedup := deduplicatorCtor(head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToPPMatchers(matchers...)
-	stats.lap.Mark(stagePrepare)
+	stats.lap.Mark(metadataStagePrepare)
 	slots := stats.slots
 
 	t = head.CreateTask(
@@ -828,20 +814,20 @@ func queryLabelValues[
 	if err := t.Wait(); err != nil {
 		anns.Add(err)
 	}
-	stats.shards.ObserveMax(shardStageLSS, slots, slotLSS)
+	stats.shards.ObserveMax(metadataShardStageLSSQuery, slots, slotLSS)
 
 	select {
 	case <-ctx.Done():
-		stats.lap.Mark(stageLSSQuery)
+		stats.lap.Mark(metadataStageLSSQuery)
 
 		return nil, anns, context.Cause(ctx)
 	default:
 	}
-	stats.lap.Mark(stageLSSQuery)
+	stats.lap.Mark(metadataStageLSSQuery)
 
 	lvs := dedup.Values()
 	sort.Strings(lvs)
-	stats.lap.Mark(stageBuildResult)
+	stats.lap.Mark(metadataStageBuildResult)
 
 	return lvs, anns, nil
 }
@@ -898,7 +884,7 @@ func queryLss[
 	head.Enqueue(tLSSQuerySelector)
 	err := tLSSQuerySelector.Wait()
 	stats.lap.Mark(stageLSSQuerySelector)
-	stats.shards.ObserveMax(shardStageLSS, slots, slotLSS)
+	stats.shards.ObserveMax(shardStageLSSQuerySelector, slots, slotLSS)
 
 	if err != nil {
 		return resources, err

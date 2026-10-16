@@ -9,27 +9,53 @@ import (
 const (
 	// stageSemaphoreWait waits for head query access, including failed acquisition attempts.
 	stageSemaphoreWait stagestats.Stage = iota
-	// stagePrepare prepares pooled buffers, matchers, and the metadata deduplicator.
+	// stagePrepare prepares pooled buffers and matchers for Select.
 	stagePrepare
-	// stageLSSQuery queries snapshots for Select, or waits for metadata tasks and checks their context.
-	stageLSSQuery
-	// stageBuildResult builds the returned series set, chunk series set, or metadata values.
-	stageBuildResult
-	// stageCleanup releases temporary query resources and the head query semaphore.
-	stageCleanup
 	// stageLSSQuerySelector creates, enqueues, and waits for selector tasks on all shards.
 	stageLSSQuerySelector
+	// stageLSSQuery queries the snapshots selected by [Querier.Select] or [ChunkQuerier.Select].
+	stageLSSQuery
 	// stageDataStorageQuery prepares, enqueues, and waits for primary data queries, including load registration.
 	stageDataStorageQuery
 	// stageDataLoadWait waits for registered data loads after primary queries have completed.
 	stageDataLoadWait
+	// stageBuildResult builds the returned series set or chunk series set.
+	stageBuildResult
+	// stageCleanup releases temporary Select resources and the head query semaphore.
+	stageCleanup
+	// stageCount sizes the Select stage names and is not a measured stage.
+	stageCount
 )
 
 const (
-	// shardStageLSS accounts the maximum duration of selector or metadata queries across shards.
-	shardStageLSS stagestats.Stage = iota
+	// metadataStageSemaphoreWait waits for head query access, including failed acquisition attempts.
+	metadataStageSemaphoreWait stagestats.Stage = iota
+	// metadataStagePrepare prepares matchers and the metadata deduplicator.
+	metadataStagePrepare
+	// metadataStageLSSQuery waits for metadata tasks, handles annotations, and checks the context.
+	metadataStageLSSQuery
+	// metadataStageBuildResult collects, sorts, and limits the metadata values.
+	metadataStageBuildResult
+	// metadataStageCleanup returns metadata tasks and slots and releases the head query semaphore.
+	metadataStageCleanup
+	// metadataStageCount sizes the metadata stage names and is not a measured stage.
+	metadataStageCount
+)
+
+const (
+	// shardStageLSSQuerySelector accounts the maximum duration of Select selector queries across shards.
+	shardStageLSSQuerySelector stagestats.Stage = iota
 	// shardStageDataStorageQuery accounts the maximum duration of primary data queries across shards.
 	shardStageDataStorageQuery
+	// shardStageCount sizes the Select shard stage names and is not a measured stage.
+	shardStageCount
+)
+
+const (
+	// metadataShardStageLSSQuery accounts the maximum duration of metadata queries across shards.
+	metadataShardStageLSSQuery stagestats.Stage = iota
+	// metadataShardStageCount sizes the metadata shard stage names and is not a measured stage.
+	metadataShardStageCount
 )
 
 const (
@@ -58,22 +84,54 @@ const (
 	operationCount
 )
 
-// stageNames maps caller stage indices to metric label values; metadata queries use the prefix through stageCleanup.
-var stageNames = []string{
-	"semaphore_wait", "prepare", "lss_query", "build_result", "cleanup",
-	"lss_query_selector", "data_storage_query", "data_load_wait",
+// stageNames maps Select stage indices to metric labels in execution order.
+var stageNames = [stageCount]string{
+	stageSemaphoreWait:    "semaphore_wait",
+	stagePrepare:          "prepare",
+	stageLSSQuerySelector: "lss_query_selector",
+	stageLSSQuery:         "lss_query",
+	stageDataStorageQuery: "data_storage_query",
+	stageDataLoadWait:     "data_load_wait",
+	stageBuildResult:      "build_result",
+	stageCleanup:          "cleanup",
+}
+
+// metadataStageNames maps metadata stage indices to metric labels independently of Select stages.
+var metadataStageNames = [metadataStageCount]string{
+	metadataStageSemaphoreWait: "semaphore_wait",
+	metadataStagePrepare:       "prepare",
+	metadataStageLSSQuery:      "lss_query",
+	metadataStageBuildResult:   "build_result",
+	metadataStageCleanup:       "cleanup",
+}
+
+// shardStageNames maps Select shard stage indices to metric labels.
+var shardStageNames = [shardStageCount]string{
+	shardStageLSSQuerySelector: "lss_query_selector",
+	shardStageDataStorageQuery: "data_storage_query",
+}
+
+// metadataShardStageNames maps metadata shard stage indices to metric labels.
+var metadataShardStageNames = [metadataShardStageCount]string{
+	metadataShardStageLSSQuery: "lss_query",
 }
 
 // operationNames maps operation indices to the fixed operation label values shared by both metric families.
 var operationNames = [operationCount]string{
-	"select_instant", "select_range", "label_names", "label_values",
-	"select_chunks", "chunk_label_names", "chunk_label_values",
+	operationSelectInstant:    "select_instant",
+	operationSelectRange:      "select_range",
+	operationLabelNames:       "label_names",
+	operationLabelValues:      "label_values",
+	operationSelectChunks:     "select_chunks",
+	operationChunkLabelNames:  "chunk_label_names",
+	operationChunkLabelValues: "chunk_label_values",
 }
 
 // queryOperation indexes the fixed set of instrumented query operations.
 type queryOperation uint8
 
-// queryStats holds the timer, counters, and shard durations for one invocation. Its zero value disables measurement.
+// queryStats holds the timer, counters, shard durations, and legacy observer for one query invocation.
+// Its zero value disables measurement.
 type queryStats struct {
 	// lap accounts consecutive stages on the caller goroutine.
 	lap stagestats.Lap
@@ -81,6 +139,8 @@ type queryStats struct {
 	shards stagestats.Stripe
 	// slots is a pooled buffer with a separate duration row for each shard; nil disables shard timing.
 	slots stagestats.ShardSlots
+	// duration observes the legacy histogram; nil for chunk operations or disabled metrics.
+	duration prometheus.Observer
 }
 
 // queryLSSResources holds the completed selector task and pooled buffers until the caller's cleanup stage.
@@ -99,16 +159,27 @@ type queryRecorders struct {
 	stages *stagestats.Recorder
 	// shards accounts one maximum duration per executed shard stage and invocation.
 	shards *stagestats.Recorder
+	// duration is the legacy histogram selected during [NewMetrics], or nil when the operation has none.
+	duration prometheus.Observer
+}
+
+// observeDuration records the histogram in fractional microseconds returned by [stagestats.Lap.SinceMicroseconds].
+func (s *queryStats) observeDuration() {
+	if s.duration == nil {
+		return
+	}
+
+	s.duration.Observe(s.lap.SinceMicroseconds())
 }
 
 // newQueryRecorders registers or reuses caller and shard recorders with the stages supported by the operation.
 func newQueryRecorders(r prometheus.Registerer, source string, operation queryOperation) queryRecorders {
-	stages := stageNames[:stageCleanup+1]
-	shardStages := []string{"lss_query"}
+	stages := metadataStageNames[:]
+	shardStages := metadataShardStageNames[:]
 
 	if operation == operationSelectInstant || operation == operationSelectRange || operation == operationSelectChunks {
-		stages = stageNames
-		shardStages = []string{"lss_query_selector", "data_storage_query"}
+		stages = stageNames[:]
+		shardStages = shardStageNames[:]
 	}
 
 	constLabels := prometheus.Labels{"source": source, "operation": operationNames[operation]}

@@ -89,8 +89,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 		ctx,
 		q.head,
 		q.deduplicatorCtor,
-		q.metrics,
-		operationChunkLabelNames,
+		q.metrics.startQuery(operationChunkLabelNames),
 		lssLabelNamesChunkQuerier,
 		hints,
 		matchers...,
@@ -113,8 +112,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 		name,
 		q.head,
 		q.deduplicatorCtor,
-		q.metrics,
-		operationChunkLabelValues,
+		q.metrics.startQuery(operationChunkLabelValues),
 		lssLabelValuesChunkQuerier,
 		hints,
 		matchers...,
@@ -144,9 +142,9 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	}
 
 	poolProvider := q.head.PoolProvider()
-	resources := newSelectResources[TTask](poolProvider)
+	resources := newSelectResources[TTask](poolProvider, q.head)
 	defer func() {
-		resources.release(q.head.PutTask)
+		resources.release()
 
 		release()
 		stats.lap.Mark(stageCleanup)
@@ -157,12 +155,12 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		stats.slots = resources.slots
 	}
 
-	snapshots := poolProvider.GetSnapshots()
-	resources.snapshots = snapshots
-	lssQueryResults := poolProvider.GetLSSQueryResults()
-	resources.lssQueryResults = lssQueryResults
+	resources.snapshots = poolProvider.GetSnapshots()
+	resources.lssQueryResults = poolProvider.GetLSSQueryResults()
 
-	resources.lss, err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, snapshots, lssQueryResults, &stats)
+	resources.lss, err = queryLss(
+		lssQueryChunkQuerySelector, q.head, matchers, resources.snapshots, resources.lssQueryResults, &stats,
+	)
 	resources.addTask(resources.lss.task)
 
 	if err != nil {
@@ -170,29 +168,27 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	shardedSerializedData := poolProvider.GetSerializedData()
-	resources.serializedData = shardedSerializedData
+	resources.serializedData = poolProvider.GetSerializedData()
 
 	t := queryDataStorage(
-		dsQueryChunkQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints, &stats,
+		dsQueryChunkQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, &stats,
 	)
 	resources.addTask(t)
 
-	chunkSeriesSets := poolProvider.GetChunkSeriesSet()
-	resources.chunkSeriesSets = chunkSeriesSets
-	for shardID, serializedData := range shardedSerializedData {
+	resources.chunkSeriesSets = poolProvider.GetChunkSeriesSet()
+	for shardID, serializedData := range resources.serializedData {
 		if serializedData == nil {
-			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
+			resources.chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}
 
-		chunkSeriesSets[shardID] = NewChunkSeriesSet(
-			snapshots[shardID],
+		resources.chunkSeriesSets[shardID] = NewChunkSeriesSet(
+			resources.snapshots[shardID],
 			cppbridge.NewSerializedChunkRecoder(serializedData, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
 	}
 
-	result := NewMergeShardChunkSeriesSet(chunkSeriesSets)
+	result := NewMergeShardChunkSeriesSet(resources.chunkSeriesSets)
 	stats.lap.Mark(stageBuildResult)
 
 	return result

@@ -355,7 +355,6 @@ func (s *QuerierStatsSuite) TestSelectorError() {
 func (s *QuerierStatsSuite) TestSharedLoadWaiters() {
 	first := querier.NewLoadAndQueryWaiter[*statsTask, querier.DataStorage, querier.LSS](s.head)
 	second := querier.NewLoadAndQueryWaiter[*statsTask, querier.DataStorage, querier.LSS](s.head)
-	s.False(first.HasQueries())
 	gate := make(chan struct{})
 
 	for _, sh := range s.shards {
@@ -372,12 +371,12 @@ func (s *QuerierStatsSuite) TestSharedLoadWaiters() {
 	err := t.Wait()
 	close(gate)
 	s.Require().NoError(err)
-	s.True(first.HasQueries())
-	s.True(second.HasQueries())
+	s.True(first.HasQueriesAfterPrimaryWait())
+	s.True(second.HasQueriesAfterPrimaryWait())
 	s.Require().NoError(first.Wait())
 	s.Require().NoError(second.Wait())
-	s.True(first.HasQueries())
-	s.True(second.HasQueries())
+	s.True(first.HasQueriesAfterPrimaryWait())
+	s.True(second.HasQueriesAfterPrimaryWait())
 	s.head.PutTask(t)
 
 	for _, sh := range s.shards {

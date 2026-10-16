@@ -18,9 +18,7 @@ type Metrics struct {
 	LabelNamesDuration  prometheus.Histogram
 	LabelValuesDuration prometheus.Histogram
 
-	queries         [operationCount]queryRecorders
-	instantDuration prometheus.Observer
-	rangeDuration   prometheus.Observer
+	queries [operationCount]queryRecorders
 }
 
 // NewMetrics init new [Metrics].
@@ -74,14 +72,17 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 		m.queries[operation] = newQueryRecorders(registerer, source, operation)
 	}
 
-	m.instantDuration = selectDuration.WithLabelValues("instant")
-	m.rangeDuration = selectDuration.WithLabelValues("range")
+	m.queries[operationSelectInstant].duration = selectDuration.WithLabelValues("instant")
+	m.queries[operationSelectRange].duration = selectDuration.WithLabelValues("range")
+	m.queries[operationLabelNames].duration = m.LabelNamesDuration
+	m.queries[operationLabelValues].duration = m.LabelValuesDuration
 
 	return m
 }
 
 // startQuery starts the caller's lap timer and selects a shard counter stripe for one operation invocation.
-// A nil Metrics returns disabled stats without reading the clock.
+// It carries the legacy histogram selected during [NewMetrics].
+// Nil [Metrics] returns disabled stats without reading the clock.
 func (m *Metrics) startQuery(operation queryOperation) queryStats {
 	if m == nil {
 		return queryStats{}
@@ -89,5 +90,9 @@ func (m *Metrics) startQuery(operation queryOperation) queryStats {
 
 	recorders := m.queries[operation]
 
-	return queryStats{lap: recorders.stages.Start(), shards: recorders.shards.RandomStripe()}
+	return queryStats{
+		lap:      recorders.stages.Start(),
+		shards:   recorders.shards.RandomStripe(),
+		duration: recorders.duration,
+	}
 }
