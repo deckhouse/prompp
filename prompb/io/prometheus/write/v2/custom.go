@@ -51,7 +51,7 @@ func (m *Request) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 					return 0, err
 				}
 				i -= size
-				i = encodeVarintTypes(dAtA, i, uint64(size))
+				i = encodeVarintTypes(dAtA, i, uint64(size)) // #nosec G115 // no overflow
 			}
 			i--
 			dAtA[i] = 0x2a
@@ -81,7 +81,7 @@ func (m *TimeSeries) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	if m.CreatedTimestamp != 0 {
-		i = encodeVarintTypes(dAtA, i, uint64(m.CreatedTimestamp))
+		i = encodeVarintTypes(dAtA, i, uint64(m.CreatedTimestamp)) // #nosec G115 // no overflow
 		i--
 		dAtA[i] = 0x30
 	}
@@ -91,7 +91,7 @@ func (m *TimeSeries) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
-		i = encodeVarintTypes(dAtA, i, uint64(size))
+		i = encodeVarintTypes(dAtA, i, uint64(size)) // #nosec G115 // no overflow
 	}
 	i--
 	dAtA[i] = 0x2a
@@ -103,7 +103,7 @@ func (m *TimeSeries) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 					return 0, err
 				}
 				i -= size
-				i = encodeVarintTypes(dAtA, i, uint64(size))
+				i = encodeVarintTypes(dAtA, i, uint64(size)) // #nosec G115 // no overflow
 			}
 			i--
 			dAtA[i] = 0x1a
@@ -117,7 +117,7 @@ func (m *TimeSeries) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 					return 0, err
 				}
 				i -= size
-				i = encodeVarintTypes(dAtA, i, uint64(size))
+				i = encodeVarintTypes(dAtA, i, uint64(size)) // #nosec G115 // no overflow
 			}
 			i--
 			dAtA[i] = 0x22
@@ -131,7 +131,7 @@ func (m *TimeSeries) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 					return 0, err
 				}
 				i -= size
-				i = encodeVarintTypes(dAtA, i, uint64(size))
+				i = encodeVarintTypes(dAtA, i, uint64(size)) // #nosec G115 // no overflow
 			}
 			i--
 			dAtA[i] = 0x12
@@ -145,7 +145,7 @@ func (m *TimeSeries) OptimizedMarshalToSizedBuffer(dAtA []byte) (int, error) {
 		start := i
 		for _, num := range m.LabelsRefs {
 			for num >= 1<<7 {
-				dAtA[i-1] = uint8(uint64(num)&0x7f | 0x80)
+				dAtA[i-1] = uint8(uint64(num)&0x7f | 0x80) // #nosec G115 // no overflow
 				num >>= 7
 				i--
 				j10++

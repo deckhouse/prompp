@@ -139,8 +139,8 @@ func (h *readHandler) remoteReadSamples(
 				return err
 			}
 			defer func() {
-				if err := querier.Close(); err != nil {
-					level.Warn(h.logger).Log("msg", "Error on querier close", "err", err.Error())
+				if errClose := querier.Close(); errClose != nil {
+					level.Warn(h.logger).Log("msg", "Error on querier close", "err", errClose.Error())
 				}
 			}()
 
@@ -207,8 +207,8 @@ func (h *readHandler) remoteReadStreamedXORChunks(ctx context.Context, w http.Re
 				return err
 			}
 			defer func() {
-				if err := querier.Close(); err != nil {
-					level.Warn(h.logger).Log("msg", "Error on chunk querier close", "err", err.Error())
+				if errClose := querier.Close(); errClose != nil {
+					level.Warn(h.logger).Log("msg", "Error on chunk querier close", "err", errClose.Error())
 				}
 			}()
 

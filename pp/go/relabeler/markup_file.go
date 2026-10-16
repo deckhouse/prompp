@@ -434,7 +434,7 @@ func (mr *MarkupReader) readRefillShardEOF(ctx context.Context, h *frames.Header
 		return err
 	}
 
-	dname := mr.m.IDToString(int32(rs.NameID))
+	dname := mr.m.IDToString(int32(rs.NameID)) // #nosec G115 // no overflow
 	if dname == "" {
 		return nil
 	}
