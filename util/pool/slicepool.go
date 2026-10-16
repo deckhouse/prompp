@@ -53,7 +53,7 @@ func (p *SlicePool[T]) Get(size int) []T {
 	return make([]T, size)
 }
 
-// Put adds a slice to the pool.
+// Put adds a slice to the pool if its capacity matches a configured bucket size.
 func (p *SlicePool[T]) Put(item []T) {
 	// If the item is larger than the largest size in the pool, don't put it back.
 	if cap(item) > p.sizes[len(p.sizes)-1] {
@@ -61,7 +61,7 @@ func (p *SlicePool[T]) Put(item []T) {
 	}
 
 	for i, size := range p.sizes {
-		if cap(item) > size {
+		if cap(item) != size {
 			continue
 		}
 
