@@ -1695,6 +1695,71 @@ TEST_F(FinalizeChunkTestFixture, FinalizeValuesGorillaChunk) {
   });
 }
 
+// A series that holds data always keeps an initialized open chunk.
+//
+// Decoder::get_time_interval visits only series whose open chunk is non-empty, so a series whose data
+// lived solely in finalized chunks would be invisible to it: the head time bounds would exclude that
+// data, and a query over it would skip the head that holds it. Every code path that resets or replaces
+// an open chunk has to leave the series with an initialized one; the paths are chunk finalization here,
+// the outdated sample merge in outdated_chunk_merger_tests.cpp and unloading in unloading/unloader_tests.cpp.
+//
+// The contract bites at the capacity boundary, where a sample fills a chunk and no further sample
+// follows: finalization has to stay lazy, driven by the next sample, which refills the open chunk in the
+// same encode call. Finalizing eagerly instead empties the open chunk and drops the whole series out of
+// the interval scan - only SeriesFilledExactlyToChunkCapacityKeepsAnOpenChunk catches that, the tests
+// that encode past the boundary pass either way.
+class OpenChunkContractTestFixture : public EncoderTestTrait<4>, public testing::Test {
+ protected:
+  static constexpr double kValue = 1.0;
+
+  void expect_open_chunk_initialized_for_every_finalized_series() const {
+    for (const auto& [ls_id, _] : storage_.finalized_chunks) {
+      EXPECT_FALSE(storage_.open_chunks[ls_id].is_empty()) << "ls_id " << ls_id << " has finalized chunks but no open chunk";
+    }
+  }
+};
+
+TEST_F(OpenChunkContractTestFixture, FinalizingAChunkLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+
+  // Act
+  for (uint8_t i = 0; i <= kSamplesPerChunk; ++i) {
+    encoder_.encode(0, i, kValue);
+  }
+
+  // Assert
+  ASSERT_NE(nullptr, finalized_chunks(0));
+  expect_open_chunk_initialized_for_every_finalized_series();
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kSamplesPerChunk}), Decoder::get_time_interval(storage_));
+}
+
+TEST_F(OpenChunkContractTestFixture, SeriesFilledExactlyToChunkCapacityKeepsAnOpenChunk) {
+  // Arrange
+
+  // Act
+  for (uint8_t i = 0; i < kSamplesPerChunk; ++i) {
+    encoder_.encode(0, i, kValue);
+  }
+
+  // Assert
+  EXPECT_FALSE(chunk(0).is_empty());
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kSamplesPerChunk - 1}), Decoder::get_time_interval(storage_));
+}
+
+TEST_F(OpenChunkContractTestFixture, FinalizingSeveralChunksLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+
+  // Act
+  for (uint8_t i = 0; i <= kSamplesPerChunk * 3; ++i) {
+    encoder_.encode(0, i, kValue);
+  }
+
+  // Assert
+  ASSERT_NE(nullptr, finalized_chunks(0));
+  expect_open_chunk_initialized_for_every_finalized_series();
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kSamplesPerChunk * 3}), Decoder::get_time_interval(storage_));
+}
+
 class EncodeOutdatedChunkTestFixture : public EncoderTestTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
 
 TEST_F(EncodeOutdatedChunkTestFixture, EncodeUint32ConstantActualSample) {
