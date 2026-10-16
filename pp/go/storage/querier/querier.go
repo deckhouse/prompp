@@ -662,11 +662,16 @@ func SwitchFuncOptimize(
 }
 
 // DefaultIsPossibleToOptimize reports whether the series count and sampling bounds justify optimization.
+// A non-positive scrape interval disables optimization.
 func DefaultIsPossibleToOptimize(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	hints *storage.SelectHints,
 	scrapeIntervalMS, headMinTSMS int64,
 ) bool {
+	if scrapeIntervalMS <= 0 {
+		return false
+	}
+
 	if isCrossSeriesFunc(hints) {
 		countOfSeries := 0
 		for _, lssQueryResult := range lssQueryResults {
