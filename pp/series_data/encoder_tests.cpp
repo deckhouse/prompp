@@ -1711,6 +1711,8 @@ TEST_F(FinalizeChunkTestFixture, FinalizeValuesGorillaChunk) {
 class OpenChunkContractTestFixture : public EncoderTestTrait<4>, public testing::Test {
  protected:
   static constexpr double kValue = 1.0;
+  static constexpr PromPP::Primitives::Timestamp kFilledChunks = 3;
+  static constexpr PromPP::Primitives::Timestamp kLastTimestampOfSeveralChunks = kFilledChunks * kSamplesPerChunk;
 
   void expect_open_chunk_initialized_for_every_finalized_series() const {
     for (const auto& [ls_id, _] : storage_.finalized_chunks) {
@@ -1750,14 +1752,14 @@ TEST_F(OpenChunkContractTestFixture, FinalizingSeveralChunksLeavesTheSeriesWithA
   // Arrange
 
   // Act
-  for (uint8_t i = 0; i <= kSamplesPerChunk * 3; ++i) {
+  for (PromPP::Primitives::Timestamp i = 0; i <= kLastTimestampOfSeveralChunks; ++i) {
     encoder_.encode(0, i, kValue);
   }
 
   // Assert
   ASSERT_NE(nullptr, finalized_chunks(0));
   expect_open_chunk_initialized_for_every_finalized_series();
-  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kSamplesPerChunk * 3}), Decoder::get_time_interval(storage_));
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kLastTimestampOfSeveralChunks}), Decoder::get_time_interval(storage_));
 }
 
 class EncodeOutdatedChunkTestFixture : public EncoderTestTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
