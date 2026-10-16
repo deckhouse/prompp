@@ -174,6 +174,23 @@ func (s *HeadSuite) TestTimeInterval() {
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 4}, actualTimeInterval)
 }
 
+// TestTimeIntervalIsComputedWhenCacheIsUnknown pins the guarantee the head range check relies on: a
+// storage written through a path that does not maintain the cached interval reports computed bounds on
+// read, never the invalid interval that stands for "no data". [DataStorage.Encode] is such a path, as is
+// [HeadWalDecoder.DecodeToDataStorage]; only [DataStorage.EncodeInnerSeriesSlice] maintains the cache.
+func (s *HeadSuite) TestTimeIntervalIsComputedWhenCacheIsUnknown() {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	dataStorage.Encode(0, 100, 1.0)
+	dataStorage.Encode(0, 200, 1.0)
+
+	// Act
+	timeInterval := dataStorage.TimeInterval(false)
+
+	// Assert
+	s.Equal(cppbridge.TimeInterval{MinT: 100, MaxT: 200}, timeInterval)
+}
+
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewDataStorage(false, false)

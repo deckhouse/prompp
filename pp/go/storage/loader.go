@@ -212,6 +212,13 @@ func (*Loader) loadShard(
 		unloadDataStorageInterval,
 	)
 	err := shardDataLoader.Load(readOnly)
+
+	// Restoring from the wal writes to the data storage directly and does not maintain its cached time
+	// interval, so compute it here, while the scan is still spread over the per-shard goroutines of
+	// loadHead. Appends maintain the interval incrementally from there on, and they cannot start before
+	// the head is created, which happens after every shard has been loaded.
+	shardDataLoader.shardData.dataStorage.TimeInterval(true)
+
 	return ShardLoadResult{
 		shard: shard.NewShard(
 			shardDataLoader.shardData.lss,
