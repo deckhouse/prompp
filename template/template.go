@@ -163,7 +163,7 @@ func NewTemplateExpander(
 				return re.ReplaceAllString(text, repl)
 			},
 			"safeHtml": func(text string) html_template.HTML {
-				return html_template.HTML(text)
+				return html_template.HTML(text) // #nosec G203 // user explicitly opts into raw HTML
 			},
 			"match":     regexp.MatchString,
 			"title":     strings.Title, //nolint:staticcheck // TODO(beorn7): Need to come up with a replacement using the cases package.
@@ -360,7 +360,7 @@ func (te Expander) ExpandHTML(templateFiles []string) (result string, resultErr 
 		"tmpl": func(name string, data interface{}) (html_template.HTML, error) {
 			var buffer bytes.Buffer
 			err := tmpl.ExecuteTemplate(&buffer, name, data)
-			return html_template.HTML(buffer.String()), err
+			return html_template.HTML(buffer.String()), err // #nosec G203 // nested template output already escaped
 		},
 	})
 	tmpl, err := tmpl.Parse(te.text)

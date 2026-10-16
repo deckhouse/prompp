@@ -22,7 +22,7 @@ import (
 func RandomUnprivilegedPort(t *testing.T) int {
 	t.Helper()
 
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", ":0") // #nosec G102 // it's meant to be that way
 	if err != nil {
 		t.Fatalf("Listening on random port: %v", err)
 	}

@@ -47,7 +47,7 @@ func readHistogramChunkLayout(b *bstreamReader) (
 	if err != nil {
 		return
 	}
-	schema = int32(v)
+	schema = int32(v) // #nosec G115 // no overflow
 
 	positiveSpans, err = readHistogramChunkLayoutSpans(b)
 	if err != nil {
@@ -83,7 +83,7 @@ func readHistogramChunkLayoutSpans(b *bstreamReader) ([]histogram.Span, error) {
 	if err != nil {
 		return nil, err
 	}
-	for i := 0; i < int(num); i++ {
+	for i := 0; i < int(num); i++ { // #nosec G115 // no overflow
 		length, err := readVarbitUint(b)
 		if err != nil {
 			return nil, err
@@ -95,8 +95,8 @@ func readHistogramChunkLayoutSpans(b *bstreamReader) ([]histogram.Span, error) {
 		}
 
 		spans = append(spans, histogram.Span{
-			Length: uint32(length),
-			Offset: int32(offset),
+			Length: uint32(length), // #nosec G115 // no overflow
+			Offset: int32(offset),  // #nosec G115 // no overflow
 		})
 	}
 	return spans, nil
@@ -115,7 +115,7 @@ func readHistogramChunkLayoutCustomBounds(b *bstreamReader) ([]float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	for i := 0; i < int(num); i++ {
+	for i := 0; i < int(num); i++ { // #nosec G115 // no overflow
 		bound, err := readCustomBound(b)
 		if err != nil {
 			return nil, err
@@ -394,7 +394,7 @@ func expandSpansBothWays(a, b []histogram.Span) (forward, backward []Insert, mer
 				offset++
 			}
 			mergedSpans = append(mergedSpans, histogram.Span{
-				Offset: int32(offset),
+				Offset: int32(offset), // #nosec G115 // no overflow
 				Length: 1,
 			})
 		}
@@ -606,7 +606,7 @@ func adjustForInserts(spans []histogram.Span, inserts []Insert) (mergedSpans []h
 				offset++
 			}
 			mergedSpans = append(mergedSpans, histogram.Span{
-				Offset: int32(offset),
+				Offset: int32(offset), // #nosec G115 // no overflow
 				Length: 1,
 			})
 		}

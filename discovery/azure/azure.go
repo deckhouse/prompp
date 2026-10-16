@@ -343,7 +343,7 @@ func newAzureResourceFromID(id string, logger log.Logger) (*arm.ResourceID, erro
 	}
 	resourceID, err := arm.ParseResourceID(id)
 	if err != nil {
-		err := fmt.Errorf("invalid ID '%s': %w", id, err)
+		err = fmt.Errorf("invalid ID '%s': %w", id, err)
 		level.Error(logger).Log("err", err)
 		return &arm.ResourceID{}, err
 	}
@@ -353,13 +353,13 @@ func newAzureResourceFromID(id string, logger log.Logger) (*arm.ResourceID, erro
 func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 	defer level.Debug(d.logger).Log("msg", "Azure discovery completed")
 
-	client, err := createAzureClient(*d.cfg, d.logger)
+	aclient, err := createAzureClient(*d.cfg, d.logger)
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, fmt.Errorf("could not create Azure client: %w", err)
 	}
 
-	machines, err := client.getVMs(ctx, d.cfg.ResourceGroup)
+	machines, err := aclient.getVMs(ctx, d.cfg.ResourceGroup)
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, fmt.Errorf("could not get virtual machines: %w", err)
@@ -368,14 +368,14 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 	level.Debug(d.logger).Log("msg", "Found virtual machines during Azure discovery.", "count", len(machines))
 
 	// Load the vms managed by scale sets.
-	scaleSets, err := client.getScaleSets(ctx, d.cfg.ResourceGroup)
+	scaleSets, err := aclient.getScaleSets(ctx, d.cfg.ResourceGroup)
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, fmt.Errorf("could not get virtual machine scale sets: %w", err)
 	}
 
 	for _, scaleSet := range scaleSets {
-		scaleSetVms, err := client.getScaleSetVMs(ctx, scaleSet)
+		scaleSetVms, err := aclient.getScaleSetVMs(ctx, scaleSet)
 		if err != nil {
 			d.metrics.failuresCount.Inc()
 			return nil, fmt.Errorf("could not get virtual machine scale set vms: %w", err)
@@ -396,7 +396,7 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 	for _, vm := range machines {
 		go func(vm virtualMachine) {
 			defer wg.Done()
-			labelSet, err := d.vmToLabelSet(ctx, client, vm)
+			labelSet, err := d.vmToLabelSet(ctx, aclient, vm)
 			ch <- target{labelSet: labelSet, err: err}
 		}(vm)
 	}
@@ -571,7 +571,7 @@ func (client *azureClient) getScaleSetVMs(ctx context.Context, scaleSet armcompu
 		return nil, fmt.Errorf("could not parse scale set ID: %w", err)
 	}
 
-	pager := client.vmssvm.NewListPager(r.ResourceGroupName, *(scaleSet.Name), nil)
+	pager := client.vmssvm.NewListPager(r.ResourceGroupName, *scaleSet.Name, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -609,7 +609,7 @@ func mapFromVM(vm armcompute.VirtualMachine) virtualMachine {
 			}
 		}
 		if vm.Properties.OSProfile != nil && vm.Properties.OSProfile.ComputerName != nil {
-			computerName = *(vm.Properties.OSProfile.ComputerName)
+			computerName = *vm.Properties.OSProfile.ComputerName
 		}
 		if vm.Properties.HardwareProfile != nil {
 			size = string(*vm.Properties.HardwareProfile.VMSize)
@@ -617,11 +617,11 @@ func mapFromVM(vm armcompute.VirtualMachine) virtualMachine {
 	}
 
 	return virtualMachine{
-		ID:                *(vm.ID),
-		Name:              *(vm.Name),
+		ID:                *vm.ID,
+		Name:              *vm.Name,
 		ComputerName:      computerName,
-		Type:              *(vm.Type),
-		Location:          *(vm.Location),
+		Type:              *vm.Type,
+		Location:          *vm.Location,
 		OsType:            osType,
 		ScaleSet:          "",
 		Tags:              tags,
@@ -654,7 +654,7 @@ func mapFromVMScaleSetVM(vm armcompute.VirtualMachineScaleSetVM, scaleSetName st
 			}
 		}
 		if vm.Properties.OSProfile != nil && vm.Properties.OSProfile.ComputerName != nil {
-			computerName = *(vm.Properties.OSProfile.ComputerName)
+			computerName = *vm.Properties.OSProfile.ComputerName
 		}
 		if vm.Properties.HardwareProfile != nil {
 			size = string(*vm.Properties.HardwareProfile.VMSize)
@@ -662,14 +662,14 @@ func mapFromVMScaleSetVM(vm armcompute.VirtualMachineScaleSetVM, scaleSetName st
 	}
 
 	return virtualMachine{
-		ID:                *(vm.ID),
-		Name:              *(vm.Name),
+		ID:                *vm.ID,
+		Name:              *vm.Name,
 		ComputerName:      computerName,
-		Type:              *(vm.Type),
-		Location:          *(vm.Location),
+		Type:              *vm.Type,
+		Location:          *vm.Location,
 		OsType:            osType,
 		ScaleSet:          scaleSetName,
-		InstanceID:        *(vm.InstanceID),
+		InstanceID:        *vm.InstanceID,
 		Tags:              tags,
 		NetworkInterfaces: networkInterfaces,
 		Size:              size,
@@ -720,7 +720,7 @@ func (client *azureClient) getVMScaleSetVMNetworkInterfaceByID(ctx context.Conte
 
 // addToCache will add the network interface information for the specified nicID.
 func (d *Discovery) addToCache(nicID string, netInt *armnetwork.Interface) {
-	random := rand.Int63n(int64(time.Duration(d.cfg.RefreshInterval * 3).Seconds()))
+	random := rand.Int63n(int64(time.Duration(d.cfg.RefreshInterval * 3).Seconds())) //nolint:gosec // G404: no need for cryptographic strength here
 	rs := time.Duration(random) * time.Second
 	exptime := time.Duration(d.cfg.RefreshInterval*10) + rs
 	d.cache.Set(nicID, netInt, cache.WithExpiration(exptime))

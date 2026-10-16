@@ -39,8 +39,8 @@ func GenerateTestHistogramWithHint(n int, hint histogram.CounterResetHint) *hist
 // GenerateTestHistogram but it is up to the user to set any known counter reset hint.
 func GenerateTestHistogram(i int) *histogram.Histogram {
 	return &histogram.Histogram{
-		Count:         12 + uint64(i*9),
-		ZeroCount:     2 + uint64(i),
+		Count:         12 + uint64(i*9), // #nosec G115 // no overflow
+		ZeroCount:     2 + uint64(i),    // #nosec G115 // no overflow
 		ZeroThreshold: 0.001,
 		Sum:           18.4 * float64(i+1),
 		Schema:        1,
@@ -59,7 +59,7 @@ func GenerateTestHistogram(i int) *histogram.Histogram {
 
 func GenerateTestCustomBucketsHistogram(i int) *histogram.Histogram {
 	return &histogram.Histogram{
-		Count:  5 + uint64(i*4),
+		Count:  5 + uint64(i*4), // #nosec G115 // no overflow
 		Sum:    18.4 * float64(i+1),
 		Schema: histogram.CustomBucketsSchema,
 		PositiveSpans: []histogram.Span{

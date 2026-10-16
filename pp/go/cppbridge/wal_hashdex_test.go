@@ -446,12 +446,12 @@ func (s *GoModelHashdexTestSuite) TestHappyPath() {
 	prometheusWriteRequest := &prompb.WriteRequest{}
 	s.Require().NoError(protoData.UnmarshalTo(prometheusWriteRequest))
 
-	s.Require().EqualValues(len(testData), len(prometheusWriteRequest.Timeseries))
+	s.Require().Len(prometheusWriteRequest.Timeseries, len(testData))
 
-	for i := 0; i < len(testData); i++ {
+	for i := range testData {
 		s.Require().Len(prometheusWriteRequest.Timeseries[i].Samples, 1)
 		s.Require().EqualValues(testData[i].Timestamp, prometheusWriteRequest.Timeseries[i].Samples[0].Timestamp)
-		s.Require().EqualValues(testData[i].Value, prometheusWriteRequest.Timeseries[i].Samples[0].Value)
+		s.Require().Equal(testData[i].Value, prometheusWriteRequest.Timeseries[i].Samples[0].Value)
 		for j := 0; j < testData[i].LabelSet.Len(); j++ {
 			expectedName := testData[i].LabelSet.Key(j)
 			expectedValue := testData[i].LabelSet.Value(j)

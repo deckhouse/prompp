@@ -83,7 +83,7 @@ func RulesUnitTestResult(results io.Writer, queryOpts promqltest.LazyLoaderOpts,
 }
 
 func ruleUnitTest(filename string, queryOpts promqltest.LazyLoaderOpts, run *regexp.Regexp, diffFlag bool, ts *junitxml.TestSuite) []error {
-	b, err := os.ReadFile(filename)
+	b, err := os.ReadFile(filename) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		ts.Abort(err)
 		return []error{err}
@@ -205,9 +205,9 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 		return []error{err}
 	}
 	defer func() {
-		err := suite.Close()
-		if err != nil {
-			outErr = append(outErr, err)
+		errClose := suite.Close()
+		if errClose != nil {
+			outErr = append(outErr, errClose)
 		}
 	}()
 	suite.SubqueryInterval = evalInterval
@@ -311,12 +311,8 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 			return errs
 		}
 
-		for {
-			if !(curr < len(alertEvalTimes) && ts.Sub(mint) <= time.Duration(alertEvalTimes[curr]) &&
-				time.Duration(alertEvalTimes[curr]) < ts.Add(evalInterval).Sub(mint)) {
-				break
-			}
-
+		for curr < len(alertEvalTimes) && ts.Sub(mint) <= time.Duration(alertEvalTimes[curr]) &&
+			time.Duration(alertEvalTimes[curr]) < ts.Add(evalInterval).Sub(mint) {
 			// We need to check alerts for this time.
 			// If 'ts <= `eval_time=alertEvalTimes[curr]` < ts+evalInterval'
 			// then we compare alerts with the Eval at `ts`.
@@ -496,11 +492,12 @@ Outer:
 
 // seriesLoadingString returns the input series in PromQL notation.
 func (tg *testGroup) seriesLoadingString() string {
-	result := fmt.Sprintf("load %v\n", shortDuration(tg.Interval))
+	var result strings.Builder
+	fmt.Fprintf(&result, "load %v\n", shortDuration(tg.Interval))
 	for _, is := range tg.InputSeries {
-		result += fmt.Sprintf("  %v %v\n", is.Series, is.Values)
+		fmt.Fprintf(&result, "  %v %v\n", is.Series, is.Values)
 	}
-	return result
+	return result.String()
 }
 
 func shortDuration(d model.Duration) string {
@@ -599,13 +596,18 @@ func (la labelsAndAnnotations) String() string {
 	if len(la) == 0 {
 		return "[]"
 	}
-	s := "[\n0:" + indentLines("\n"+la[0].String(), "  ")
+	var s strings.Builder
+	s.WriteString("[\n0:")
+	s.WriteString(indentLines("\n"+la[0].String(), "  "))
 	for i, l := range la[1:] {
-		s += ",\n" + strconv.Itoa(i+1) + ":" + indentLines("\n"+l.String(), "  ")
+		s.WriteString(",\n")
+		s.WriteString(strconv.Itoa(i + 1))
+		s.WriteString(":")
+		s.WriteString(indentLines("\n"+l.String(), "  "))
 	}
-	s += "\n]"
+	s.WriteString("\n]")
 
-	return s
+	return s.String()
 }
 
 type labelAndAnnotation struct {
@@ -656,11 +658,13 @@ func parsedSamplesString(pss []parsedSample) string {
 	if len(pss) == 0 {
 		return "nil"
 	}
-	s := pss[0].String()
+	var s strings.Builder
+	s.WriteString(pss[0].String())
 	for _, ps := range pss[1:] {
-		s += ", " + ps.String()
+		s.WriteString(", ")
+		s.WriteString(ps.String())
 	}
-	return s
+	return s.String()
 }
 
 func (ps *parsedSample) String() string {
