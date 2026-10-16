@@ -717,14 +717,14 @@ func isPossibleToOptimizeAggregationFunc(
 	hints *storage.SelectHints,
 	scrapeIntervalMS, headMinTSMS int64,
 ) bool {
-	if hints.Step <= scrapeIntervalMS {
-		return false
-	}
-
 	if hints.Step == 0 {
 		// instant query, shift is x5 scrape interval and range is x5 scrape interval
 		//revive:disable-next-line:add-constant // x5 scrape interval
 		return hints.Start-headMinTSMS >= scrapeIntervalMS*5 && hints.Range >= scrapeIntervalMS*5
+	}
+
+	if hints.Step <= scrapeIntervalMS {
+		return false
 	}
 
 	if hints.Range < scrapeIntervalMS {
