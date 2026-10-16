@@ -49,6 +49,7 @@ func (s *NewEngineLabelReplaceCacheSuite) TestCloseWaitsForSweepAndPreventsSched
 		// Act: Close cannot finish until the background sweep releases sweepMu.
 		s.Never(func() bool { return len(closeResult) != 0 }, 20*time.Millisecond, time.Millisecond)
 		c.labelsMu.Unlock()
+		//nolint:testifylint // assert, not require: FailNow here would leave the deferred Unlock to run on an already unlocked mutex.
 		s.NoError(<-closeResult)
 		c.labelsMu.Lock()
 	}()

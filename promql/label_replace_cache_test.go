@@ -143,6 +143,7 @@ func (s *LabelReplaceCacheSuite) TestConcurrentLabelsRegexAndSweep() {
 
 	// Assert.
 	for err := range failures {
+		//nolint:testifylint // assert, not require: every concurrent failure should be reported, not just the first.
 		s.NoError(err)
 	}
 
@@ -1015,5 +1016,6 @@ func labelReplaceTestKey(t testing.TB, cache *labelReplaceCache, identity uint64
 // waitLabelReplaceSweep joins the admitted pass without closing the cache.
 func waitLabelReplaceSweep(cache *labelReplaceCache) {
 	cache.sweepMu.Lock()
+	//nolint:staticcheck // SA2001: acquiring and releasing is the wait itself — it blocks until the in-flight sweep releases sweepMu.
 	cache.sweepMu.Unlock()
 }
