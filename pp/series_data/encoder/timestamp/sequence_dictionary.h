@@ -132,6 +132,12 @@ class SequenceDictionary {
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].encoder.timestamp(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].count; }
 
+  // Visits each live sequence once as (stream, last timestamp), however many open and finalized chunks share it.
+  template <class Visitor>
+  PROMPP_ALWAYS_INLINE void for_each_sequence(Visitor&& visitor) const {
+    sequences_.for_each([&visitor](const Sequence& sequence) PROMPP_LAMBDA_INLINE { visitor(sequence.stream, sequence.encoder.timestamp()); });
+  }
+
   // Includes reusable holes left by erased sequences.
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t slot_count() const noexcept { return sequences_.size(); }
   // Sequences with both kinds of reference contribute to both counts.

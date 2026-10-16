@@ -71,6 +71,14 @@ class SequenceDictionaryFixture : public testing::Test {
     return TimestampDecoder::decode_all(stream.reader(), stream.count());
   }
 
+  // Pairs of (first, last) timestamp of every live sequence, in visiting order.
+  [[nodiscard]] std::vector<std::pair<int64_t, int64_t>> visit_sequences() const {
+    std::vector<std::pair<int64_t, int64_t>> visited;
+    dictionary_.for_each_sequence(
+        [&visited](const auto& stream, int64_t last_timestamp) { visited.emplace_back(TimestampDecoder::decode_first(stream.reader()), last_timestamp); });
+    return visited;
+  }
+
   [[nodiscard]] Timestamps decode_finalized(SequenceId stream_id) const {
     const auto& stream = dictionary_.stream(stream_id);
     return TimestampDecoder::decode_all(stream.reader(), stream.count());
@@ -360,6 +368,44 @@ TEST_F(SequenceDictionaryFixture, ReleaseOfLastReferenceFreesSequence) {
 
   // Assert
   EXPECT_EQ(0U, dictionary_.open_sequences_count());
+}
+
+TEST_F(SequenceDictionaryFixture, ForEachSequenceVisitsSharedSequenceOnce) {
+  // Arrange
+  const auto first = append(kInvalidSequenceId, {101, 102});
+  [[maybe_unused]] const auto second = append(kInvalidSequenceId, {101, 102});
+  [[maybe_unused]] const auto finalized = dictionary_.finalize(first);
+
+  // Act
+  const auto visited = visit_sequences();
+
+  // Assert
+  EXPECT_EQ((std::vector<std::pair<int64_t, int64_t>>{{101, 102}}), visited);
+}
+
+TEST_F(SequenceDictionaryFixture, ForEachSequenceVisitsOpenAndFinalizedSequences) {
+  // Arrange
+  [[maybe_unused]] const auto finalized = dictionary_.finalize(append(kInvalidSequenceId, {101, 102}));
+  [[maybe_unused]] const auto open = append(kInvalidSequenceId, {103, 105});
+
+  // Act
+  const auto visited = visit_sequences();
+
+  // Assert
+  EXPECT_EQ((std::vector<std::pair<int64_t, int64_t>>{{101, 102}, {103, 105}}), visited);
+}
+
+TEST_F(SequenceDictionaryFixture, ForEachSequenceSkipsReleasedSequence) {
+  // Arrange
+  const auto released = append(kInvalidSequenceId, {101, 102});
+  [[maybe_unused]] const auto kept = append(kInvalidSequenceId, {103, 104});
+  dictionary_.release(released);
+
+  // Act
+  const auto visited = visit_sequences();
+
+  // Assert
+  EXPECT_EQ((std::vector<std::pair<int64_t, int64_t>>{{103, 104}}), visited);
 }
 
 TEST_F(SequenceDictionaryFixture, RandomWorkloadReferencesEachContentOnce) {
