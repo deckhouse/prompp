@@ -237,7 +237,7 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
-		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
 	)
 
 	for _, head := range ar.proxy.Heads() {
@@ -247,7 +247,7 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 
 		queriers = append(
 			queriers,
-			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
 		)
 	}
 
