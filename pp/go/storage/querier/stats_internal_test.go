@@ -29,7 +29,6 @@ func TestQueryStageLabels(t *testing.T) {
 				stageDataStorageQuery: "data_storage_query",
 				stageDataLoadWait:     "data_load_wait",
 				stageBuildResult:      "build_result",
-				stageCleanup:          "cleanup",
 			},
 			shards: map[stagestats.Stage]string{
 				shardStageLSSQuerySelector: "lss_query_selector",
@@ -48,7 +47,6 @@ func TestQueryStageLabels(t *testing.T) {
 				metadataStagePrepare:       "prepare",
 				metadataStageLSSQuery:      "lss_query",
 				metadataStageBuildResult:   "build_result",
-				metadataStageCleanup:       "cleanup",
 			},
 			shards: map[stagestats.Stage]string{
 				metadataShardStageLSSQuery: "lss_query",

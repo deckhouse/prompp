@@ -21,8 +21,6 @@ const (
 	stageDataLoadWait
 	// stageBuildResult builds the returned series set or chunk series set.
 	stageBuildResult
-	// stageCleanup releases temporary Select resources and the head query semaphore.
-	stageCleanup
 	// stageCount sizes the Select stage names and is not a measured stage.
 	stageCount
 )
@@ -36,8 +34,6 @@ const (
 	metadataStageLSSQuery
 	// metadataStageBuildResult collects, sorts, and limits the metadata values.
 	metadataStageBuildResult
-	// metadataStageCleanup returns metadata tasks and slots and releases the head query semaphore.
-	metadataStageCleanup
 	// metadataStageCount sizes the metadata stage names and is not a measured stage.
 	metadataStageCount
 )
@@ -93,7 +89,6 @@ var stageNames = [stageCount]string{
 	stageDataStorageQuery: "data_storage_query",
 	stageDataLoadWait:     "data_load_wait",
 	stageBuildResult:      "build_result",
-	stageCleanup:          "cleanup",
 }
 
 // metadataStageNames maps metadata stage indices to metric labels independently of Select stages.
@@ -102,7 +97,6 @@ var metadataStageNames = [metadataStageCount]string{
 	metadataStagePrepare:       "prepare",
 	metadataStageLSSQuery:      "lss_query",
 	metadataStageBuildResult:   "build_result",
-	metadataStageCleanup:       "cleanup",
 }
 
 // shardStageNames maps Select shard stage indices to metric labels.
@@ -143,7 +137,7 @@ type queryStats struct {
 	duration prometheus.Observer
 }
 
-// queryLSSResources holds the completed selector task and pooled buffers until the caller's cleanup stage.
+// queryLSSResources holds the completed selector task and pooled buffers until the caller releases its resources.
 type queryLSSResources[TTask Task] struct {
 	// task is returned to the head's task pool during cleanup.
 	task TTask
@@ -164,6 +158,7 @@ type queryRecorders struct {
 }
 
 // observeDuration records the histogram in fractional microseconds returned by [stagestats.Lap.SinceMicroseconds].
+// Its clock reading includes temporary resource cleanup and semaphore release.
 func (s *queryStats) observeDuration() {
 	if s.duration == nil {
 		return

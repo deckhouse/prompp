@@ -297,10 +297,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer func() {
 		resources.release()
 
-		stats.observeDuration()
-
 		release()
-		stats.lap.Mark(stageCleanup)
+		stats.observeDuration()
 	}()
 
 	if stats.shards.Enabled() {
@@ -417,10 +415,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	defer func() {
 		resources.release()
 
-		stats.observeDuration()
-
 		release()
-		stats.lap.Mark(stageCleanup)
+		stats.observeDuration()
 	}()
 
 	if stats.shards.Enabled() {
@@ -688,10 +684,8 @@ func queryLabelNames[
 			poolProvider.PutShardSlots(stats.slots)
 		}
 
-		stats.observeDuration()
-
 		release()
-		stats.lap.Mark(metadataStageCleanup)
+		stats.observeDuration()
 	}()
 
 	if stats.shards.Enabled() {
@@ -783,10 +777,8 @@ func queryLabelValues[
 			poolProvider.PutShardSlots(stats.slots)
 		}
 
-		stats.observeDuration()
-
 		release()
-		stats.lap.Mark(metadataStageCleanup)
+		stats.observeDuration()
 	}()
 
 	if stats.shards.Enabled() {

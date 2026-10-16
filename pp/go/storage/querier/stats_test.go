@@ -102,15 +102,6 @@ func (s *QuerierStatsSuite) TestChunkSelectLoadError() {
 	s.assertSelect("select_chunks", true)
 }
 
-func (s *QuerierStatsSuite) TestCleanupAfterRelease() {
-	s.head.onRelease = func() {
-		s.NotContains(s.counts("select_range", false), "cleanup")
-		s.Equal(uint64(1), s.histogramCount("prompp_querier_query_select_duration", "range"))
-	}
-	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Equal(float64(1), s.counts("select_range", false)["cleanup"])
-}
-
 func (s *QuerierStatsSuite) TestClosedAcquire() {
 	s.head.acquireErr = locker.ErrSemaphoreClosed
 	s.Require().NoError(s.cq.Select(context.Background(), false, s.hints, s.matchers...).Err())
@@ -174,6 +165,42 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 	}
 }
 
+func (s *QuerierStatsSuite) TestHistogramAfterRelease() {
+	for _, tc := range []struct {
+		operation string
+		histogram string
+		queryType string
+	}{
+		{"select_instant", "prompp_querier_query_select_duration", "instant"},
+		{"select_range", "prompp_querier_query_select_duration", "range"},
+		{"label_names", "prompp_querier_query_label_names_duration", ""},
+		{"label_values", "prompp_querier_query_label_values_duration", ""},
+	} {
+		s.Run(tc.operation, func() {
+			s.head.onRelease = func() {
+				s.Zero(s.histogramCount(tc.histogram, tc.queryType))
+			}
+
+			var err error
+
+			switch tc.operation {
+			case "select_instant":
+				err = s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...).Err()
+			case "select_range":
+				err = s.q.Select(context.Background(), false, s.hints, s.matchers...).Err()
+			case "label_names":
+				_, _, err = s.q.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
+			case "label_values":
+				_, _, err = s.q.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
+			}
+
+			s.Require().NoError(err)
+			s.Equal(uint64(1), s.histogramCount(tc.histogram, tc.queryType))
+			s.NotContains(s.counts(tc.operation, false), "cleanup")
+		})
+	}
+}
+
 func (s *QuerierStatsSuite) TestInstant() {
 	result := s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...)
 	s.Require().NoError(result.Err())
@@ -188,7 +215,7 @@ func (s *QuerierStatsSuite) TestInstantLoadError() {
 	s.Require().ErrorIs(result.Err(), err)
 	counts := s.counts("select_instant", false)
 	s.Equal(float64(1), counts["data_load_wait"])
-	s.Equal(float64(1), counts["cleanup"])
+	s.NotContains(counts, "cleanup")
 	s.NotContains(counts, "build_result")
 }
 
@@ -238,7 +265,7 @@ func (s *QuerierStatsSuite) TestMetadataCancelledAfterWait() {
 
 		s.Require().ErrorIs(err, context.Canceled)
 		s.Equal(map[string]float64{
-			"semaphore_wait": 1, "prepare": 1, "lss_query": 1, "cleanup": 1,
+			"semaphore_wait": 1, "prepare": 1, "lss_query": 1,
 		}, s.counts(operation, false))
 	}
 }
@@ -322,7 +349,7 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 		}
 	}
 
-	s.Equal(216, series)
+	s.Equal(188, series)
 }
 
 func (s *QuerierStatsSuite) TestRotationWithDifferentShardCount() {
@@ -341,14 +368,14 @@ func (s *QuerierStatsSuite) TestSelectorError() {
 	result := s.q.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Require().EqualError(result.Err(), "selector failed")
 	s.Equal(map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1, "cleanup": 1,
+		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1,
 	}, s.counts("select_range", false))
 	s.Equal(map[string]float64{"lss_query_selector": 1}, s.counts("select_range", true))
 
 	s.shards[0].lss.selectorErr = nil
 	s.Require().NoError(s.cq.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Equal(float64(2), s.counts("select_range", false)["cleanup"])
+	s.Equal(float64(2), s.counts("select_range", false)["lss_query_selector"])
 	s.Equal(float64(1), s.counts("select_range", true)["data_storage_query"])
 }
 
@@ -415,13 +442,13 @@ func (s *QuerierStatsSuite) TestUnexecutedStagesAreZero() {
 		}
 	}
 
-	s.Equal(108, series)
+	s.Equal(94, series)
 }
 
 func (s *QuerierStatsSuite) assertMetadata(operation string) {
 	s.T().Helper()
 	s.Equal(map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query": 1, "build_result": 1, "cleanup": 1,
+		"semaphore_wait": 1, "prepare": 1, "lss_query": 1, "build_result": 1,
 	}, s.counts(operation, false))
 	s.Equal(map[string]float64{"lss_query": 1}, s.counts(operation, true))
 }
@@ -430,7 +457,7 @@ func (s *QuerierStatsSuite) assertSelect(operation string, load bool) {
 	s.T().Helper()
 	expected := map[string]float64{
 		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1, "lss_query": 1,
-		"data_storage_query": 1, "build_result": 1, "cleanup": 1,
+		"data_storage_query": 1, "build_result": 1,
 	}
 
 	if load {

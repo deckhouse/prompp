@@ -147,7 +147,6 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		resources.release()
 
 		release()
-		stats.lap.Mark(stageCleanup)
 	}()
 
 	if stats.shards.Enabled() {

@@ -1,6 +1,8 @@
 package querier
 
 import (
+	"math/rand/v2"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -81,18 +83,20 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 }
 
 // startQuery starts the caller's lap timer and selects a shard counter stripe for one operation invocation.
+// Both recorders use the same random hint to select their independent stripes.
 // It carries the legacy histogram selected during [NewMetrics].
 // Nil [Metrics] returns disabled stats without reading the clock.
-func (m *Metrics) startQuery(operation queryOperation) queryStats {
+func (m *Metrics) startQuery(operation queryOperation) (stats queryStats) {
 	if m == nil {
-		return queryStats{}
+		return stats
 	}
 
 	recorders := m.queries[operation]
+	hint := rand.Uint32() // #nosec G404 // it's only a stripe selection
 
-	return queryStats{
-		lap:      recorders.stages.Start(),
-		shards:   recorders.shards.RandomStripe(),
-		duration: recorders.duration,
-	}
+	stats.shards = recorders.shards.Stripe(hint)
+	stats.duration = recorders.duration
+	stats.lap = recorders.stages.Stripe(hint).Start()
+
+	return stats
 }
