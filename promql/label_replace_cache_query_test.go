@@ -100,6 +100,7 @@ func (s *LabelReplaceCacheSuite) TestLabelReplaceCacheConcurrentQueries() {
 
 	// Assert.
 	for err := range failures {
+		//nolint:testifylint // assert, not require: every concurrent failure should be reported, not just the first.
 		s.NoError(err)
 	}
 
