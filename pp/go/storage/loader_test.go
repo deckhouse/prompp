@@ -136,7 +136,7 @@ func (s *HeadLoadSuite) lockFileForCreation(fileName string) {
 }
 
 func (s *HeadLoadSuite) appendTimeSeries(head *storage.Head, timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, head, timeSeries)
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, timeSeries)
 }
 
 func (*HeadLoadSuite) shards(head *storage.Head) (result []*shard.Shard) {
@@ -701,7 +701,7 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 	// every append exhausts the segment limit of shard 0 only
 	for i := range numberOfExhaustedSegments {
 		batch := timeSeries[i*int(storagetest.MaxSegmentSize) : (i+1)*int(storagetest.MaxSegmentSize)]
-		_, err = headAppender.Append(s.T().Context(), storagetest.NewIncomingData(&s.Suite, batch), state, false)
+		_, err = headAppender.Append(s.T().Context(), storagetest.NewIncomingData(s.Require().NoError, batch), state, false)
 		s.Require().NoError(err)
 	}
 	s.Require().NoError(services.CFSViaRange(sourceHead))

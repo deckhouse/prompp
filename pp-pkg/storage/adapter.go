@@ -35,6 +35,7 @@ type Adapter struct {
 	hashdexLimits         atomic.Value // stores cppbridge.WALHashdexLimits
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
+	scrapeInterval        atomic.Int64
 
 	// stat
 	activeQuerierMetrics  *querier.Metrics
@@ -137,7 +138,10 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
-	hx, err := cppbridge.NewWALSnappyProtobufHashdex(compressedData.Bytes(), ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits))
+	hx, err := cppbridge.NewWALSnappyProtobufHashdex(
+		compressedData.Bytes(),
+		ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits),
+	)
 	compressedData.Destroy()
 	if err != nil {
 		return err
@@ -269,6 +273,7 @@ func (ar *Adapter) ApplyConfig(cfg *config.Config) error {
 		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit), // #nosec G115 // no overflow
 	}
 	ar.hashdexLimits.Store(limits)
+	ar.scrapeInterval.Store(int64(cfg.GlobalConfig.ScrapeInterval / 1e6)) // ns to ms
 	return nil
 }
 
@@ -281,12 +286,15 @@ func (ar *Adapter) Close() error {
 
 // HeadQuerier returns [storage.Querier] from active head.
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
+	ahead := ar.proxy.Get()
+	aTimeInterval := headTimeInterval(ahead)
 	return querier.NewQuerier(
-		ar.proxy.Get(),
+		ahead,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
 		maxt,
-		nil,
+		ar.scrapeInterval.Load(),
+		aTimeInterval.MinT,
 		ar.activeQuerierMetrics,
 	), nil
 }
@@ -311,15 +319,29 @@ func (ar *Adapter) MergeOutOfOrderChunks() {
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	if !headIsOutOfQueryRange(ahead, mint, maxt) {
+	aTimeInterval := headTimeInterval(ahead)
+	if mint <= aTimeInterval.MaxT && maxt >= aTimeInterval.MinT {
 		queriers = append(
 			queriers,
-			querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+			querier.NewQuerier(
+				ahead,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.scrapeInterval.Load(),
+				aTimeInterval.MinT,
+				ar.activeQuerierMetrics,
+			),
 		)
 	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
+		if ahead.ID() == head.ID() {
+			continue
+		}
+
+		timeInterval := headTimeInterval(head)
+		if mint > timeInterval.MaxT || maxt < timeInterval.MinT {
 			continue
 		}
 
@@ -330,7 +352,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				querier.NewNoOpShardedDeduplicator,
 				mint,
 				maxt,
-				nil,
+				ar.scrapeInterval.Load(),
+				timeInterval.MinT,
 				ar.storageQuerierMetrics,
 			),
 		)
@@ -353,6 +376,7 @@ func (*Adapter) StartTime() (int64, error) {
 // head holds no data at all, and the comparison below puts such a head out of every query range.
 func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
 	timeInterval := headTimeInterval(head)
+
 	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
 }
 
