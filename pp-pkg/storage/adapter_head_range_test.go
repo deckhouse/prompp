@@ -8,9 +8,9 @@
 // This file pins down which heads a query touches: a head whose data cannot
 // intersect the query range is not queried at all.
 //
-// The range check trusts the head time interval to be computed rather than assumed; that a storage
-// with an unknown cached interval has its bounds computed on read is covered by
-// cppbridge HeadSuite.TestTimeInterval.
+// The range check trusts the head time interval to be computed rather than assumed; that a non-empty
+// storage with an unknown cached interval has its bounds computed on read is covered by
+// cppbridge HeadSuite.TestTimeIntervalIsComputedWhenCacheIsUnknown.
 
 package storage
 
