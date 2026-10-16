@@ -1,3 +1,5 @@
+#include <vector>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -172,6 +174,23 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
 
   // Assert
   ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
+}
+
+TEST(VectorWithHolesTest, ForEachSkipsHoles) {
+  // Arrange
+  VectorWithHoles<ValueOnHeap<uint32_t>> vector;
+  vector.emplace_back(101U);
+  vector.emplace_back(102U);
+  vector.emplace_back(103U);
+  vector.erase(1);
+  const auto& const_vector = vector;
+  std::vector<const ValueOnHeap<uint32_t>*> visited;
+
+  // Act
+  const_vector.for_each([&visited](const ValueOnHeap<uint32_t>& value) { visited.emplace_back(&value); });
+
+  // Assert
+  EXPECT_EQ((std::vector{&const_vector[0], &const_vector[2]}), visited);
 }
 
 TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {

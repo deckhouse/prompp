@@ -105,6 +105,13 @@ class VectorWithHoles {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return vector_.size(); }
 
+  // Skips holes; without the holes bitset finding them would cost a walk of the hole list per item.
+  template <class UnaryFunc>
+    requires VectorWithHolesImpl::holes_need_bitset<T>
+  PROMPP_ALWAYS_INLINE void for_each(UnaryFunc&& f) const {
+    for_each_item([&f](const Item& item) PROMPP_LAMBDA_INLINE { f(item.value); });
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     size_t allocated_memory = vector_.capacity() * sizeof(Item);
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
