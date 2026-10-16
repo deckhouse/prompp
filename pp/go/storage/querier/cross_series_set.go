@@ -356,7 +356,7 @@ func crossLabelSetCtor(
 			return errGroupingLabelsIsEnough
 		}
 
-		if l.Name > sortedGrouping[i] {
+		for l.Name > sortedGrouping[i] {
 			i++
 
 			if i >= len(sortedGrouping) {

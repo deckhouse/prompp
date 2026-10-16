@@ -172,6 +172,33 @@ func (s *CrossSeriesSetSuite) TestQueryWithoutGrouping() {
 	s.Require().True(value.IsStaleNaN(actual[2].Samples[0].Value))
 }
 
+func (s *CrossSeriesSetSuite) TestQueryGrouping_MultipleMissingLabelsBeforeExistingLabel() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+	hints := &storage.SelectHints{
+		Start:    10,
+		End:      13,
+		Step:     1,
+		Func:     "sum",
+		By:       true,
+		Grouping: []string{"aaa", "bbb", "ccc", "job"},
+	}
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, 0, 50, cppbridge.NoDownsampling, hints, matcher)
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+
+	// Assert
+	s.Require().NoError(seriesSet.Err())
+	s.Require().Len(actual, 4)
+	s.Equal(labels.FromStrings("__head__shard_id", "head_id__0", "job", "test"), actual[0].Labels)
+	s.Equal(labels.FromStrings("__head__shard_id", "head_id__0", "job", "test2"), actual[1].Labels)
+}
+
 func (s *CrossSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 	// Arrange
 	matcher := model.LabelMatcher{
