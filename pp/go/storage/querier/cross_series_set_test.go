@@ -162,7 +162,7 @@ func (s *CrossSeriesSetSuite) TestQueryWithoutGrouping() {
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
 	s.Require().Equal(expected[1].Labels, actual[1].Labels)
 	s.Require().Equal(expected[2].Labels, actual[2].Labels)
@@ -215,7 +215,7 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
 	s.Require().Equal(expected[1].Labels, actual[1].Labels)
 	s.Require().Equal(expected[2].Labels, actual[2].Labels)
@@ -270,7 +270,7 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
 	s.Require().Equal(expected[1].Labels, actual[1].Labels)
 	s.Require().Equal(expected[2].Labels, actual[2].Labels)
@@ -325,7 +325,7 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGro
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Require().Equal(expected[0].Labels, actual[0].Labels)
 	s.Require().Equal(expected[1].Labels, actual[1].Labels)
 	s.Require().Equal(expected[2].Labels, actual[2].Labels)

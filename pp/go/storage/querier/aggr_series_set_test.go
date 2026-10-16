@@ -135,7 +135,7 @@ func (s *AggrSeriesSetSuite) TestMaxOverTimeFunc() {
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Equal(expected, actual)
 }
 
@@ -173,7 +173,7 @@ func (s *AggrSeriesSetSuite) TestMinOverTimeFunc() {
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Equal(expected, actual)
 }
 
@@ -211,6 +211,6 @@ func (s *AggrSeriesSetSuite) TestLastOverTimeFunc() {
 
 	// Assert
 	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
-	s.Require().Equal(len(expected), len(actual))
+	s.Require().Len(actual, len(expected))
 	s.Equal(expected, actual)
 }
