@@ -82,7 +82,7 @@ func BenchmarkEngineUpstream(b *testing.B) {
 							b.ReportAllocs()
 							b.ResetTimer()
 
-							for i := 0; i < b.N; i++ {
+							for b.Loop() {
 								query, err := engine.NewRangeQuery(ctx, stor, nil, tc.expr,
 									time.Unix(int64(125-steps)*10, 0), time.Unix(1240, 0), 10*time.Second)
 								if err != nil {
@@ -113,7 +113,7 @@ func BenchmarkEnginePreprocess(b *testing.B) {
 		b.Run(expr, func(b *testing.B) {
 			b.ReportAllocs()
 
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				parsed, err := parser.ParseExpr(expr)
 				if err != nil {
 					b.Fatal(err)

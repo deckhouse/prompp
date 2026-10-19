@@ -1297,8 +1297,8 @@ func (ev *evaluator) rangeEval(
 		}
 	}
 
-	vectors := make([]Vector, len(exprs)) // Input vectors for the function.
-	args := make([]parser.Value, len(exprs))
+	vectors := make([]Vector, len(exprs))    // Input vectors for the function.
+	args := make([]parser.Value, len(exprs)) // Argument to function.
 	// Create an output vector that is as big as the input matrix with
 	// the most time series.
 	biggestLen := 1
