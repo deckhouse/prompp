@@ -125,7 +125,7 @@ var operationNames = [operationCount]string{
 type queryOperation uint8
 
 // queryStats holds the timer, counters, shard durations, and legacy observer for one query invocation.
-// Its zero value disables measurement.
+// Stage counters and the legacy histogram can be enabled independently; its zero value disables measurement.
 type queryStats struct {
 	// lap accounts consecutive stages on the caller goroutine.
 	lap stagestats.Lap
@@ -135,6 +135,8 @@ type queryStats struct {
 	slots stagestats.ShardSlots
 	// duration observes the legacy histogram; nil for chunk operations or disabled metrics.
 	duration prometheus.Observer
+	// durationStart is the monotonic start time for the histogram when stage timing is disabled.
+	durationStart int64
 }
 
 // queryLSSResources holds the completed selector task and pooled buffers until the caller releases its resources.
@@ -157,14 +159,20 @@ type queryRecorders struct {
 	duration prometheus.Observer
 }
 
-// observeDuration records the histogram in fractional microseconds returned by [stagestats.Lap.SinceMicroseconds].
+// observeDuration records the legacy histogram in fractional microseconds independently of stage metrics.
 // Its clock reading includes temporary resource cleanup and semaphore release.
 func (s *queryStats) observeDuration() {
 	if s.duration == nil {
 		return
 	}
 
-	s.duration.Observe(s.lap.SinceMicroseconds())
+	if s.lap.Enabled() {
+		s.duration.Observe(s.lap.SinceMicroseconds())
+
+		return
+	}
+
+	s.duration.Observe(float64(stagestats.Now()-s.durationStart) / 1e3)
 }
 
 // newQueryRecorders registers or reuses caller and shard recorders with the stages supported by the operation.

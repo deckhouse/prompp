@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -42,6 +43,10 @@ func TestQuerierStatsSuite(t *testing.T) {
 }
 
 func (s *QuerierStatsSuite) SetupTest() {
+	previous := querier.QueryStageMetricsEnabled
+	querier.QueryStageMetricsEnabled = true
+	s.T().Cleanup(func() { querier.QueryStageMetricsEnabled = previous })
+
 	s.registry = prometheus.NewRegistry()
 	s.metrics = querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
 	raw := newStageStatsHead(s.T(), 4, numberOfShards)
@@ -166,39 +171,7 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 }
 
 func (s *QuerierStatsSuite) TestHistogramAfterRelease() {
-	for _, tc := range []struct {
-		operation string
-		histogram string
-		queryType string
-	}{
-		{"select_instant", "prompp_querier_query_select_duration", "instant"},
-		{"select_range", "prompp_querier_query_select_duration", "range"},
-		{"label_names", "prompp_querier_query_label_names_duration", ""},
-		{"label_values", "prompp_querier_query_label_values_duration", ""},
-	} {
-		s.Run(tc.operation, func() {
-			s.head.onRelease = func() {
-				s.Zero(s.histogramCount(tc.histogram, tc.queryType))
-			}
-
-			var err error
-
-			switch tc.operation {
-			case "select_instant":
-				err = s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...).Err()
-			case "select_range":
-				err = s.q.Select(context.Background(), false, s.hints, s.matchers...).Err()
-			case "label_names":
-				_, _, err = s.q.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
-			case "label_values":
-				_, _, err = s.q.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
-			}
-
-			s.Require().NoError(err)
-			s.Equal(uint64(1), s.histogramCount(tc.histogram, tc.queryType))
-			s.NotContains(s.counts(tc.operation, false), "cleanup")
-		})
-	}
+	s.assertHistogramAfterRelease()
 }
 
 func (s *QuerierStatsSuite) TestInstant() {
@@ -422,6 +395,43 @@ func (s *QuerierStatsSuite) TestSlotsDoNotRetainPreviousQuery() {
 	}, s.counts("select_range", true))
 }
 
+func (s *QuerierStatsSuite) TestStageMetricsDisabled() {
+	querier.QueryStageMetricsEnabled = false
+	s.registry = prometheus.NewRegistry()
+	s.metrics = querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
+	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+	start := time.Now()
+
+	s.assertHistogramAfterRelease()
+	s.head.onRelease = nil
+	s.Require().NoError(s.cq.Select(context.Background(), false, s.hints, s.matchers...).Err())
+	_, _, err := s.cq.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
+	s.Require().NoError(err)
+	_, _, err = s.cq.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
+	s.Require().NoError(err)
+	maxDuration := float64(time.Since(start).Nanoseconds()) / 1e3
+	families, err := s.registry.Gather()
+	s.Require().NoError(err)
+	s.Len(families, 3)
+
+	for _, family := range families {
+		s.NotContains(family.GetName(), "_stage_")
+
+		for _, metric := range family.GetMetric() {
+			histogram := metric.GetHistogram()
+			s.Require().NotNil(histogram)
+			s.Equal(uint64(1), histogram.GetSampleCount())
+			s.Positive(histogram.GetSampleSum())
+			s.LessOrEqual(histogram.GetSampleSum(), maxDuration)
+		}
+	}
+
+	s.head.acquireErr = context.Canceled
+	s.Require().ErrorIs(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err(), context.Canceled)
+	s.Equal(uint64(1), s.histogramCount("prompp_querier_query_select_duration", "range"))
+}
+
 func (s *QuerierStatsSuite) TestSuccessfulLoad() {
 	s.enableLoad(nil)
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
@@ -445,6 +455,44 @@ func (s *QuerierStatsSuite) TestUnexecutedStagesAreZero() {
 	}
 
 	s.Equal(94, series)
+}
+
+func (s *QuerierStatsSuite) assertHistogramAfterRelease() {
+	s.T().Helper()
+
+	for _, tc := range []struct {
+		operation string
+		histogram string
+		queryType string
+	}{
+		{"select_instant", "prompp_querier_query_select_duration", "instant"},
+		{"select_range", "prompp_querier_query_select_duration", "range"},
+		{"label_names", "prompp_querier_query_label_names_duration", ""},
+		{"label_values", "prompp_querier_query_label_values_duration", ""},
+	} {
+		s.Run(tc.operation, func() {
+			s.head.onRelease = func() {
+				s.Zero(s.histogramCount(tc.histogram, tc.queryType))
+			}
+
+			var err error
+
+			switch tc.operation {
+			case "select_instant":
+				err = s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...).Err()
+			case "select_range":
+				err = s.q.Select(context.Background(), false, s.hints, s.matchers...).Err()
+			case "label_names":
+				_, _, err = s.q.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
+			case "label_values":
+				_, _, err = s.q.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
+			}
+
+			s.Require().NoError(err)
+			s.Equal(uint64(1), s.histogramCount(tc.histogram, tc.queryType))
+			s.NotContains(s.counts(tc.operation, false), "cleanup")
+		})
+	}
 }
 
 func (s *QuerierStatsSuite) assertMetadata(operation string) {

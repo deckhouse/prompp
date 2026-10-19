@@ -2,10 +2,17 @@ package storage
 
 import (
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/storage"
 )
 
 func (s *BatchStorageSuite) TestQuerierStageStats_TransactionHeadExcluded() {
+	previous := querier.QueryStageMetricsEnabled
+	querier.QueryStageMetricsEnabled = true
+	s.T().Cleanup(func() { querier.QueryStageMetricsEnabled = previous })
+	s.adapter.activeQuerierMetrics = querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
+	s.adapter.storageQuerierMetrics = querier.NewMetrics(s.registry, querier.QueryableStorageSource)
+
 	bs := s.adapter.BatchStorage().(*BatchStorage)
 	_, err := bs.AppendTimeSeries(s.ctx, s.statsBatch(), s.state, false)
 	s.Require().NoError(err)

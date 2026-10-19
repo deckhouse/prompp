@@ -22,6 +22,10 @@ import (
 )
 
 func BenchmarkQuerierStageStats(b *testing.B) {
+	previous := querier.QueryStageMetricsEnabled
+	querier.QueryStageMetricsEnabled = true
+	b.Cleanup(func() { querier.QueryStageMetricsEnabled = previous })
+
 	for _, size := range []int{0, 16, 1000} {
 		b.Run(fmt.Sprintf("series=%d", size), func(b *testing.B) {
 			h := newStageStatsHead(b, size, numberOfShards)

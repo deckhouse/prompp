@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 )
 
 const (
@@ -14,6 +15,10 @@ const (
 	// QueryableStorageSource metrics source for Storage.
 	QueryableStorageSource = "queryable_storage"
 )
+
+// QueryStageMetricsEnabled enables caller and shard stage metrics for newly created [Metrics].
+// Disabled by default; enable via PROMPP_FEATURES=query_stage_metrics_enable.
+var QueryStageMetricsEnabled = false
 
 // Metrics for [Querier].
 type Metrics struct {
@@ -70,8 +75,10 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 		),
 	}
 
-	for operation := range operationCount {
-		m.queries[operation] = newQueryRecorders(registerer, source, operation)
+	if QueryStageMetricsEnabled {
+		for operation := range operationCount {
+			m.queries[operation] = newQueryRecorders(registerer, source, operation)
+		}
 	}
 
 	m.queries[operationSelectInstant].duration = selectDuration.WithLabelValues("instant")
@@ -84,7 +91,7 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 
 // startQuery starts the caller's lap timer and selects a shard counter stripe for one operation invocation.
 // Both recorders use the same random hint to select their independent stripes.
-// It carries the legacy histogram selected during [NewMetrics].
+// It carries the legacy histogram selected during [NewMetrics] and starts its timer even when stages are disabled.
 // Nil [Metrics] returns disabled stats without reading the clock.
 func (m *Metrics) startQuery(operation queryOperation) (stats queryStats) {
 	if m == nil {
@@ -92,10 +99,19 @@ func (m *Metrics) startQuery(operation queryOperation) (stats queryStats) {
 	}
 
 	recorders := m.queries[operation]
+	stats.duration = recorders.duration
+
+	if recorders.stages == nil {
+		if stats.duration != nil {
+			stats.durationStart = stagestats.Now()
+		}
+
+		return stats
+	}
+
 	hint := rand.Uint32() // #nosec G404 // it's only a stripe selection
 
 	stats.shards = recorders.shards.Stripe(hint)
-	stats.duration = recorders.duration
 	stats.lap = recorders.stages.Stripe(hint).Start()
 
 	return stats
