@@ -37,7 +37,7 @@ func (s *XORReadSuite) TestAppenderSnapshot() {
 
 func (s *XORReadSuite) TestPatterns() {
 	for _, pattern := range []string{
-		"constant", "counter", "gauge", "jitter_counter", "jitter_gauge", "wide_bits",
+		"constant", "counter", "gauge", "jitter_constant", "jitter_counter", "jitter_gauge", "wide_bits",
 	} {
 		s.Run(pattern, func() {
 			for _, size := range []int{0, 1, 2, 3, 7, 120, 1024} {
@@ -59,6 +59,18 @@ func (s *XORReadSuite) TestSeekAndReuse() {
 		s.assertCurrent(iterator, s.samples[position])
 		s.assertIterator(iterator, s.samples[position+1:])
 	}
+}
+
+func (s *XORReadSuite) TestSeekWithTimestampJitter() {
+	chunk, samples := xorReadFixture(s.T(), "jitter_constant", 1024)
+	iterator := chunk.Iterator(nil)
+
+	for _, position := range []int{2, 3, 6, 7, 8, 63, 64, 511, 1023} {
+		s.Require().Equal(ValFloat, iterator.Seek(samples[position].t))
+		s.assertCurrent(iterator, samples[position])
+	}
+
+	s.assertIterator(iterator, nil)
 }
 
 func (s *XORReadSuite) TestSpecialValues() {

@@ -413,35 +413,28 @@ func (it *xorIterator) Next() ValueType {
 }
 
 func (it *xorIterator) readValue() ValueType {
-	// Fast path: read value encoding directly from the buffer when possible.
-	// The two most common cases are:
-	//   1. Value unchanged: single 0 bit.
-	//   2. Value changed, reuse leading/trailing zeros: 10-prefix + mbits significant bits.
-	if it.br.valid >= 1 {
-		if (it.br.buffer>>(it.br.valid-1))&1 == 0 {
-			// Value unchanged.
+	// Inspect both control bits once when available. An unchanged value consumes only the first bit.
+	if it.br.valid >= 2 {
+		control := (it.br.buffer >> (it.br.valid - 2)) & 3
+
+		if control < 2 {
 			it.br.valid--
 			it.numRead++
+
 			return ValFloat
 		}
-		// Value changed. Try the reuse-leading/trailing fast path if the
-		// leading/trailing have been initialized and the buffer has enough bits.
-		if it.leading != 0xff {
+
+		if control == 2 {
 			mbits := 64 - it.leading - it.trailing
+
 			if it.br.valid >= 2+mbits {
-				if (it.br.buffer>>(it.br.valid-2))&1 == 0 {
-					// Reuse leading/trailing (control bits are 10).
-					it.br.valid -= 2 // Consume both control bits.
-					dataMask := (uint64(1) << mbits) - 1
-					bits := (it.br.buffer >> (it.br.valid - mbits)) & dataMask
-					it.br.valid -= mbits
-					vbits := math.Float64bits(it.val)
-					vbits ^= bits << it.trailing
-					it.val = math.Float64frombits(vbits)
-					it.numRead++
-					return ValFloat
-				}
-				// New leading/trailing (control bits are 11): fall through.
+				it.br.valid -= 2 + mbits
+				dataMask := (uint64(1) << mbits) - 1
+				valueBits := (it.br.buffer >> it.br.valid) & dataMask
+				it.val = math.Float64frombits(math.Float64bits(it.val) ^ (valueBits << it.trailing))
+				it.numRead++
+
+				return ValFloat
 			}
 		}
 	}
@@ -451,7 +444,9 @@ func (it *xorIterator) readValue() ValueType {
 		it.err = err
 		return ValNone
 	}
+
 	it.numRead++
+
 	return ValFloat
 }
 

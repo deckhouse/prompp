@@ -11,7 +11,7 @@ import (
 // BenchmarkXORReadPatterns measures complete decoding, including Seek prefixes, with iterator reuse.
 func BenchmarkXORReadPatterns(b *testing.B) {
 	for _, pattern := range []string{
-		"constant", "counter", "gauge", "jitter_counter", "jitter_gauge", "wide_bits",
+		"constant", "counter", "gauge", "jitter_constant", "jitter_counter", "jitter_gauge", "wide_bits",
 	} {
 		b.Run(pattern, func(b *testing.B) {
 			for _, size := range []int{120, 1024} {
@@ -92,6 +92,9 @@ func xorReadFixture(tb testing.TB, pattern string, size int) (*XORChunk, []pair)
 		case "counter":
 		case "gauge":
 			value = math.Sin(float64(i) * 0.1)
+		case "jitter_constant":
+			ts += int64(i%7) * 37
+			value = 42
 		case "jitter_counter":
 			ts += int64(i%7) * 37
 		case "jitter_gauge":
