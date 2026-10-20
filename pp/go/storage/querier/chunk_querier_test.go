@@ -90,7 +90,7 @@ func (s *ChunkQuerierSuite) mustCreateHead(unloadDataStorageInterval time.Durati
 }
 
 func (s *ChunkQuerierSuite) appendTimeSeries(timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, timeSeries)
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, timeSeries)
 }
 
 func (s *ChunkQuerierSuite) createQuerier(selectHints *prom_storage.SelectHints) *ChunkQuerier {

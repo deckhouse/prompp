@@ -15,12 +15,15 @@
 package storage
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 )
 
 // AdapterHeadRangeSuite reuses the Adapter harness of BatchStorageSuite to check
@@ -123,6 +126,46 @@ func (s *AdapterHeadRangeSuite) TestHeadIsQueriedForRangeOfLaterAppend() {
 
 	// Assert
 	s.False(headIsOutOfQueryRange(head, 9_000, 11_000))
+}
+
+func (s *AdapterHeadRangeSuite) TestQuerierUsesEachHeadsTimeBounds() {
+	// Arrange
+	s.ingestAt(2_000)
+	proxy := s.manager.Proxy()
+	oldHead := proxy.Get()
+	newHead, err := s.manager.Builder().Build(oldHead.Generation()+1, 2)
+	s.Require().NoError(err)
+	s.T().Cleanup(func() {
+		s.NoError(newHead.Close())
+		s.NoError(oldHead.Close())
+	})
+	s.Require().NoError(proxy.AddWithReplace(oldHead, 0))
+	s.Require().NoError(proxy.Replace(s.ctx, newHead))
+	oldHead.SetReadOnly()
+	s.ingestAt(10_000)
+
+	// Act
+	q, err := s.adapter.Querier(1_000, 11_000)
+	s.Require().NoError(err)
+
+	// Assert
+	// Inspect the stored bounds: the current optimization gate does not use them for range queries.
+	queriers := reflect.ValueOf(q).Elem().FieldByName("queriers")
+	s.Require().Equal(2, queriers.Len())
+	s.Equal(int64(10_000), queriers.Index(0).Elem().Elem().FieldByName("headMinTSMS").Int())
+	s.Equal(int64(2_000), queriers.Index(1).Elem().Elem().FieldByName("headMinTSMS").Int())
+
+	seriesSet := q.Select(s.ctx, false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Require().NoError(seriesSet.Err())
+	s.Equal([]storagetest.TimeSeries{{
+		Labels: labels.FromStrings("__name__", "metric", "job", "abc"),
+		Samples: []cppbridge.Sample{
+			{Timestamp: 2_000, Value: 1},
+			{Timestamp: 10_000, Value: 1},
+		},
+	}}, actual)
+	s.Require().NoError(q.Close())
 }
 
 // TestQuerierWithoutAnyHeadInRange covers the empty querier list. When no head can hold data for the

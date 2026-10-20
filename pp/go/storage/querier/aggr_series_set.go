@@ -200,11 +200,17 @@ func (*AggrChunkIterator) Err() error {
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
 func (it *AggrChunkIterator) Next() chunkenc.ValueType {
-	if it.nextValue() == chunkenc.ValNone {
+	if !it.chunkIterator.HasData() || it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
 
-	if it.AtT() > it.maxt {
+	if !it.isInitialized {
+		it.isInitialized = true
+	} else {
+		it.chunkIterator.Next()
+	}
+
+	if !it.chunkIterator.HasData() || it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
 
@@ -215,34 +221,22 @@ func (it *AggrChunkIterator) Next() chunkenc.ValueType {
 // [chunkenc.Iterator] interface implementation.
 func (it *AggrChunkIterator) Seek(t int64) chunkenc.ValueType {
 	it.isInitialized = true
-	if t > it.AtT() {
-		return it.Next()
-	}
+	t = max(t, it.mint)
 
-	if it.AtT() > it.maxt {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
-}
-
-// nextValue advances the iterator by one and returns the type of the value.
-func (it *AggrChunkIterator) nextValue() chunkenc.ValueType {
-	if !it.isInitialized {
-		if !it.chunkIterator.HasData() {
+	for it.chunkIterator.HasData() {
+		timestamp := it.AtT()
+		if timestamp > it.maxt {
 			return chunkenc.ValNone
 		}
 
-		it.isInitialized = true
-		return chunkenc.ValFloat
+		if timestamp >= t {
+			return chunkenc.ValFloat
+		}
+
+		it.chunkIterator.Next()
 	}
 
-	it.chunkIterator.Next()
-	if !it.chunkIterator.HasData() {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
+	return chunkenc.ValNone
 }
 
 // reset resets the iterator to the beginning of the serialized data.

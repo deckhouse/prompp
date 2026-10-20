@@ -59,7 +59,7 @@ class InstantQuerier {
   }
 
   PROMPP_ALWAYS_INLINE void query_sample(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
-    if (storage_.open_chunks.size() <= ls_id || storage_.open_chunks[ls_id].is_empty()) [[unlikely]] {
+    if (!storage_.series_exists(ls_id)) [[unlikely]] {
       return;
     }
     if (const auto series_last_ts = Decoder::get_series_max_timestamp(storage_, ls_id); timestamp >= series_last_ts) {
