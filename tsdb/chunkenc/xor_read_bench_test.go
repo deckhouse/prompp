@@ -8,14 +8,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// xorReadSpacing controls synthetic scrape intervals and timestamp jitter.
+type xorReadSpacing struct {
+	interval int64
+	jitter   int64
+}
+
 // BenchmarkXORReadPatterns measures complete decoding, including Seek prefixes, with iterator reuse.
 func BenchmarkXORReadPatterns(b *testing.B) {
-	for _, pattern := range []string{
+	benchmarkXORReadPatterns(b, []string{
 		"constant", "counter", "gauge", "jitter_constant", "jitter_counter", "jitter_gauge", "wide_bits",
+	}, xorReadSpacing{interval: 10_000, jitter: 37})
+}
+
+// BenchmarkXORReadVariants checks staircase values and different scrape intervals and jitter.
+func BenchmarkXORReadVariants(b *testing.B) {
+	for _, spacing := range []xorReadSpacing{
+		{interval: 15_000, jitter: 113},
+		{interval: 30_000, jitter: 997},
 	} {
+		b.Run(fmt.Sprintf("interval=%d/jitter=%d", spacing.interval, spacing.jitter), func(b *testing.B) {
+			benchmarkXORReadPatterns(b, []string{"staircase", "jitter_constant", "jitter_counter", "gauge"}, spacing)
+		})
+	}
+}
+
+func benchmarkXORReadPatterns(b *testing.B, patterns []string, spacing xorReadSpacing) {
+	for _, pattern := range patterns {
 		b.Run(pattern, func(b *testing.B) {
 			for _, size := range []int{120, 1024} {
-				chunk, samples := xorReadFixture(b, pattern, size)
+				chunk, samples := xorReadFixtureWithSpacing(b, pattern, size, spacing)
 
 				b.Run(fmt.Sprintf("samples=%d", size), func(b *testing.B) {
 					for _, seek := range []bool{false, true} {
@@ -76,6 +98,12 @@ func BenchmarkXORReadPatterns(b *testing.B) {
 
 func xorReadFixture(tb testing.TB, pattern string, size int) (*XORChunk, []pair) {
 	tb.Helper()
+
+	return xorReadFixtureWithSpacing(tb, pattern, size, xorReadSpacing{interval: 10_000, jitter: 37})
+}
+
+func xorReadFixtureWithSpacing(tb testing.TB, pattern string, size int, spacing xorReadSpacing) (*XORChunk, []pair) {
+	tb.Helper()
 	chunk := NewXORChunk()
 	appender, err := chunk.Appender()
 	require.NoError(tb, err)
@@ -83,22 +111,24 @@ func xorReadFixture(tb testing.TB, pattern string, size int) (*XORChunk, []pair)
 	randomBits := uint64(0x123456789abcdef)
 
 	for i := range samples {
-		ts := int64(i) * 10_000
+		ts := int64(i) * spacing.interval
 		value := float64(i)
 
 		switch pattern {
 		case "constant":
 			value = 42
 		case "counter":
+		case "staircase":
+			value = float64(i / 16)
 		case "gauge":
 			value = math.Sin(float64(i) * 0.1)
 		case "jitter_constant":
-			ts += int64(i%7) * 37
+			ts += int64(i%7) * spacing.jitter
 			value = 42
 		case "jitter_counter":
-			ts += int64(i%7) * 37
+			ts += int64(i%7) * spacing.jitter
 		case "jitter_gauge":
-			ts += int64(i%7) * 37
+			ts += int64(i%7) * spacing.jitter
 			value = math.Sin(float64(i) * 0.1)
 		case "wide_bits":
 			randomBits ^= randomBits << 13
