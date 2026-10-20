@@ -137,7 +137,7 @@ func (s *WriterSuite) shard() *shard.Shard {
 
 func (s *WriterSuite) fillHead() {
 	ts := time.UnixMilli(1753805651969)
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -309,7 +309,7 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 func (s *WriterSuite) TestSkipEmptyBlock() {
 	// Arrange
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{

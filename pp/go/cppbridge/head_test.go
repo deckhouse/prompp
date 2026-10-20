@@ -176,6 +176,23 @@ func (s *HeadSuite) TestTimeInterval() {
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 4}, actualTimeInterval)
 }
 
+// TestTimeIntervalIsComputedWhenCacheIsUnknown pins the guarantee the head range check relies on: a
+// storage written through a path that does not maintain the cached interval reports computed bounds on
+// read, never the invalid interval that stands for "no data". [DataStorage.Encode] is such a path, as is
+// [HeadWalDecoder.DecodeToDataStorage]; only [DataStorage.EncodeInnerSeriesSlice] maintains the cache.
+func (s *HeadSuite) TestTimeIntervalIsComputedWhenCacheIsUnknown() {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	dataStorage.Encode(0, 100, 1.0)
+	dataStorage.Encode(0, 200, 1.0)
+
+	// Act
+	timeInterval := dataStorage.TimeInterval(false)
+
+	// Assert
+	s.Equal(cppbridge.TimeInterval{MinT: 100, MaxT: 200}, timeInterval)
+}
+
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewDataStorage(false, false)
@@ -217,48 +234,71 @@ func (s *HeadSuite) TestInstantQuery() {
 	s.Equal(cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value}, series[6].Sample)
 }
 
-func (s *HeadSuite) TestQueryFirstTimestampsWithEmptySeriesIds() {
-	// Arrange
-
-	// Act
-	s.dataStorage.QueryFirstTimestamps(nil, nil)
-
-	// Assert
+// testStaleNaNSeries is a struct that represents a series that has been marked as stale NaN.
+type testStaleNaNSeries struct {
+	timestamp int64
+	seriesID  uint32
+	labelSet  string
 }
 
-func (s *HeadSuite) TestQueryFirstTimestamps() {
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSS() {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
+	id0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build()).LabelSetID
+	id1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build()).LabelSetID
+
+	// Act
+	series := make([]testStaleNaNSeries, 2)
+	series[0].timestamp = -1
+	series[1].timestamp = -1
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{id1, id0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	// Assert
+	s.Equal([]testStaleNaNSeries{{timestamp: -1, seriesID: 1}, {timestamp: -1, seriesID: 0}}, series)
+}
+
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithEmptySeries() {
+	// Arrange
+	id0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build()).LabelSetID
+	id1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build()).LabelSetID
+
+	s.dataStorage.Encode(1, 5, 1.0)
+	s.dataStorage.Encode(1, 9, 1.0)
+
+	// Act
+	series := make([]testStaleNaNSeries, 2)
+	series[0].timestamp = -1
+	series[1].timestamp = -1
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{id1, id0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	// Assert
+	s.Equal([]testStaleNaNSeries{{timestamp: 5, seriesID: 1}, {timestamp: -1, seriesID: 0}}, series)
+}
+
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithNonExistingSeries() {
+	// Arrange
+	id0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build()).LabelSetID
+	id1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build()).LabelSetID
 
 	s.dataStorage.Encode(0, 5, 1.0)
 	s.dataStorage.Encode(0, 9, 1.0)
-	s.dataStorage.Encode(1, 2, 2.0)
-	s.dataStorage.Encode(1, 7, 2.0)
 
 	// Act
-	timestamps := make([]int64, 2)
-	s.dataStorage.QueryFirstTimestamps([]uint32{1, 0}, timestamps)
+	series := make([]testStaleNaNSeries, 2)
+	series[0].timestamp = -1
+	series[1].timestamp = -1
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{id1, id0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
 
 	// Assert
-	s.Equal([]int64{2, 5}, timestamps)
-}
-
-func (s *HeadSuite) TestQueryFirstTimestampsInFinalizedChunk() {
-	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
-
-	s.dataStorage.Encode(0, 9, 1.0)
-	s.dataStorage.Encode(0, 5, 1.0)
-
-	s.dataStorage.MergeOutOfOrderChunks()
-
-	// Act
-	timestamps := make([]int64, 1)
-	s.dataStorage.QueryFirstTimestamps([]uint32{0}, timestamps)
-
-	// Assert
-	s.Equal([]int64{5}, timestamps)
+	s.Equal([]testStaleNaNSeries{{timestamp: -1, seriesID: 1}, {timestamp: 5, seriesID: 0}}, series)
 }
 
 type DataStorageSerializedDataMultiSeriesIteratorSuite struct {

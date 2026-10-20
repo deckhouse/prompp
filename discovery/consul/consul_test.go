@@ -402,14 +402,14 @@ func TestGetDatacenterShouldReturnError(t *testing.T) {
 		d := newDiscovery(t, config)
 
 		// Should be empty if not initialized.
-		require.Equal(t, "", d.clientDatacenter)
+		require.Empty(t, d.clientDatacenter)
 
 		err = d.getDatacenter()
 
 		// An error should be returned.
 		require.Equal(t, tc.errMessage, err.Error())
 		// Should still be empty.
-		require.Equal(t, "", d.clientDatacenter)
+		require.Empty(t, d.clientDatacenter)
 	}
 }
 

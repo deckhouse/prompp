@@ -17,6 +17,7 @@ using PromPP::Primitives::LabelSet;
 using PromPP::Primitives::LabelView;
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
+using PromPP::Primitives::TimeInterval;
 using PromPP::Primitives::Timestamp;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
@@ -133,6 +134,63 @@ INSTANTIATE_TEST_SUITE_P(LabelValueLengthLimitExceeded,
                          testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
                                                           .limits = MetricLimits{.label_value_length_limit = 3},
                                                           .expected = rsInvalid}));
+
+class InnerSeriesTimeIntervalFixture : public testing::Test {
+ protected:
+  static constexpr uint32_t kLsId = 0;
+
+  InnerSeries inner_series_;
+};
+
+TEST_F(InnerSeriesTimeIntervalFixture, EmptySeriesHasInvalidTimeInterval) {
+  // Act
+  const auto interval = inner_series_.time_interval();
+
+  // Assert
+  EXPECT_EQ(TimeInterval{}, interval);
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, SampleExtendsTimeInterval) {
+  // Act
+  inner_series_.emplace_back(Sample(1000, 0.1), kLsId, false);
+
+  // Assert
+  EXPECT_EQ((TimeInterval{.min = 1000, .max = 1000}), inner_series_.time_interval());
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, SamplesBatchExtendsTimeIntervalToItsBounds) {
+  // Arrange
+  const std::vector<Sample> samples{Sample(3000, 0.3), Sample(1000, 0.1), Sample(2000, 0.2)};
+
+  // Act
+  inner_series_.emplace_back(samples, kLsId, false);
+
+  // Assert
+  EXPECT_EQ((TimeInterval{.min = 1000, .max = 3000}), inner_series_.time_interval());
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, TimeIntervalSpansSamplesAddedByBothOverloads) {
+  // Arrange
+  const std::vector<Sample> samples{Sample(2000, 0.2), Sample(3000, 0.3)};
+  inner_series_.emplace_back(samples, kLsId, false);
+
+  // Act
+  inner_series_.emplace_back(Sample(1000, 0.1), kLsId, false);
+
+  // Assert
+  EXPECT_EQ((TimeInterval{.min = 1000, .max = 3000}), inner_series_.time_interval());
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, ResetInvalidatesTimeInterval) {
+  // Arrange
+  inner_series_.emplace_back(Sample(1000, 0.1), kLsId, false);
+
+  // Act
+  inner_series_.reset();
+
+  // Assert
+  EXPECT_EQ(TimeInterval{}, inner_series_.time_interval());
+}
 
 struct Stats {
   uint32_t samples_added{0};

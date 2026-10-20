@@ -2,7 +2,8 @@
 #define Sizeof_StdVector 24
 #define Sizeof_BareBonesVector 16
 #define Sizeof_RoaringBitset 40
-#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+#define Sizeof_TimeInterval 16
+#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset + Sizeof_TimeInterval)
 #define Sizeof_GoLabels 16
 
 #define Sizeof_SerializedDataSamplesIterator 152
@@ -985,14 +986,14 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
- * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ * @brief Set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
  *
- * @param args {
- *     lss                 uintptr  // pointer to source queryable lss;
- *     shrink_boundary      uint32  // boundary
- * }
+ * @param lss_ptr Address of an entrypoint::types::LssVariant containing QueryableEncodingBimap.
+ * @param shrink_boundary Pending shrink boundary (uint32_t value passed as uint64_t).
+ *
+ * @attention This binding is called through cgo.
  */
-void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+void prompp_primitives_lss_set_pending_shrink_boundary(uint64_t lss_ptr, uint64_t shrink_boundary);
 
 /**
  * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
@@ -1790,19 +1791,6 @@ void prompp_series_data_serialized_data_dtor(void* args);
  * }
  */
 void prompp_series_data_data_storage_instant_query(void* args, void* res);
-
-/**
- * @brief Get the first sample timestamp per series
- *
- * @param args {
- *        dataStorage uintptr  // pointer to constructed data storage
- *        seriesIds   []uint32 // series ids
- * }
- * @param res {
- *        timestamps []int64  // same length as seriesIds; filled from storage
- * }
- */
-void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res);
 
 /**
  * @brief Fill stalenan series (first sample timestamp + series id) per series id.

@@ -167,7 +167,7 @@ func (a *xorAppender) Append(t int64, v float64) {
 		}
 		a.b.writeBits(math.Float64bits(v), 64)
 	case 1:
-		tDelta = uint64(t - a.t)
+		tDelta = uint64(t - a.t) // #nosec G115 // no overflow
 
 		buf := make([]byte, binary.MaxVarintLen64)
 		for _, b := range buf[:binary.PutUvarint(buf, tDelta)] {
@@ -176,8 +176,8 @@ func (a *xorAppender) Append(t int64, v float64) {
 
 		a.writeVDelta(v)
 	default:
-		tDelta = uint64(t - a.t)
-		dod := int64(tDelta - a.tDelta)
+		tDelta = uint64(t - a.t)        // #nosec G115 // no overflow
+		dod := int64(tDelta - a.tDelta) // #nosec G115 // no overflow
 
 		// Gorilla has a max resolution of seconds, Prometheus milliseconds.
 		// Thus we use higher value range steps with larger bit size.
@@ -192,16 +192,16 @@ func (a *xorAppender) Append(t int64, v float64) {
 			a.b.writeBit(zero)
 		case bitRange(dod, 14):
 			a.b.writeBits(0b10, 2)
-			a.b.writeBits(uint64(dod), 14)
+			a.b.writeBits(uint64(dod), 14) // #nosec G115 // no overflow
 		case bitRange(dod, 17):
 			a.b.writeBits(0b110, 3)
-			a.b.writeBits(uint64(dod), 17)
+			a.b.writeBits(uint64(dod), 17) // #nosec G115 // no overflow
 		case bitRange(dod, 20):
 			a.b.writeBits(0b1110, 4)
-			a.b.writeBits(uint64(dod), 20)
+			a.b.writeBits(uint64(dod), 20) // #nosec G115 // no overflow
 		default:
 			a.b.writeBits(0b1111, 4)
-			a.b.writeBits(uint64(dod), 64)
+			a.b.writeBits(uint64(dod), 64) // #nosec G115 // no overflow
 		}
 
 		a.writeVDelta(v)
@@ -323,24 +323,45 @@ func (it *xorIterator) Next() ValueType {
 			return ValNone
 		}
 		it.tDelta = tDelta
-		it.t += int64(it.tDelta)
+		it.t += int64(it.tDelta) // #nosec G115 // no overflow
 
 		return it.readValue()
+	}
+
+	// Fast path: for the most common case of regular scrape intervals,
+	// dod is 0 which is encoded as a single 0 bit.
+	// Check the bit directly from the buffer to avoid the loop and switch below.
+	if it.br.valid >= 1 {
+		if (it.br.buffer>>(it.br.valid-1))&1 == 0 {
+			// dod == 0: timestamp delta unchanged.
+			it.br.valid--
+			it.t += int64(it.tDelta) // #nosec G115 // same conversion as the regular timestamp path
+
+			// Super fast path: if the value is also unchanged (next bit is 0),
+			// we can skip the xorRead call entirely.
+			if it.br.valid >= 1 && (it.br.buffer>>(it.br.valid-1))&1 == 0 {
+				it.br.valid--
+				it.numRead++
+				return ValFloat
+			}
+			return it.readValue()
+		}
+		// dod != 0: fall through to the normal path below.
 	}
 
 	var d byte
 	// read delta-of-delta
 	for i := 0; i < 4; i++ {
 		d <<= 1
-		bit, err := it.br.readBitFast()
+		bitFast, err := it.br.readBitFast()
 		if err != nil {
-			bit, err = it.br.readBit()
+			bitFast, err = it.br.readBit()
 		}
 		if err != nil {
 			it.err = err
 			return ValNone
 		}
-		if bit == zero {
+		if bitFast == zero {
 			break
 		}
 		d |= 1
@@ -364,7 +385,7 @@ func (it *xorIterator) Next() ValueType {
 			return ValNone
 		}
 
-		dod = int64(bits)
+		dod = int64(bits) // #nosec G115 // no overflow
 	}
 
 	if sz != 0 {
@@ -382,16 +403,49 @@ func (it *xorIterator) Next() ValueType {
 		if bits > (1 << (sz - 1)) {
 			bits -= 1 << sz
 		}
-		dod = int64(bits)
+		dod = int64(bits) // #nosec G115 // no overflow
 	}
 
-	it.tDelta = uint64(int64(it.tDelta) + dod)
-	it.t += int64(it.tDelta)
+	it.tDelta = uint64(int64(it.tDelta) + dod) // #nosec G115 // no overflow
+	it.t += int64(it.tDelta)                   // #nosec G115 // no overflow
 
 	return it.readValue()
 }
 
 func (it *xorIterator) readValue() ValueType {
+	// Fast path: read value encoding directly from the buffer when possible.
+	// The two most common cases are:
+	//   1. Value unchanged: single 0 bit.
+	//   2. Value changed, reuse leading/trailing zeros: 10-prefix + mbits significant bits.
+	if it.br.valid >= 1 {
+		if (it.br.buffer>>(it.br.valid-1))&1 == 0 {
+			// Value unchanged.
+			it.br.valid--
+			it.numRead++
+			return ValFloat
+		}
+		// Value changed. Try the reuse-leading/trailing fast path if the
+		// leading/trailing have been initialized and the buffer has enough bits.
+		if it.leading != 0xff {
+			mbits := 64 - it.leading - it.trailing
+			if it.br.valid >= 2+mbits {
+				if (it.br.buffer>>(it.br.valid-2))&1 == 0 {
+					// Reuse leading/trailing (control bits are 10).
+					it.br.valid -= 2 // Consume both control bits.
+					dataMask := (uint64(1) << mbits) - 1
+					bits := (it.br.buffer >> (it.br.valid - mbits)) & dataMask
+					it.br.valid -= mbits
+					vbits := math.Float64bits(it.val)
+					vbits ^= bits << it.trailing
+					it.val = math.Float64frombits(vbits)
+					it.numRead++
+					return ValFloat
+				}
+				// New leading/trailing (control bits are 11): fall through.
+			}
+		}
+	}
+
 	err := xorRead(&it.br, &it.val, &it.leading, &it.trailing)
 	if err != nil {
 		it.err = err
@@ -410,8 +464,8 @@ func xorWrite(b *bstream, newValue, currentValue float64, leading, trailing *uin
 	}
 	b.writeBit(one)
 
-	newLeading := uint8(bits.LeadingZeros64(delta))
-	newTrailing := uint8(bits.TrailingZeros64(delta))
+	newLeading := uint8(bits.LeadingZeros64(delta))   // #nosec G115 // no overflow
+	newTrailing := uint8(bits.TrailingZeros64(delta)) // #nosec G115 // no overflow
 
 	// Clamp number of leading zeros to avoid overflow when encoding.
 	if newLeading >= 32 {
@@ -442,19 +496,19 @@ func xorWrite(b *bstream, newValue, currentValue float64, leading, trailing *uin
 }
 
 func xorRead(br *bstreamReader, value *float64, leading, trailing *uint8) error {
-	bit, err := br.readBitFast()
+	bitFast, err := br.readBitFast()
 	if err != nil {
-		bit, err = br.readBit()
+		bitFast, err = br.readBit()
 	}
 	if err != nil {
 		return err
 	}
-	if bit == zero {
+	if bitFast == zero {
 		return nil
 	}
-	bit, err = br.readBitFast()
+	bitFast, err = br.readBitFast()
 	if err != nil {
-		bit, err = br.readBit()
+		bitFast, err = br.readBit()
 	}
 	if err != nil {
 		return err
@@ -465,7 +519,7 @@ func xorRead(br *bstreamReader, value *float64, leading, trailing *uint8) error 
 		newLeading, newTrailing, mbits uint8
 	)
 
-	if bit == zero {
+	if bitFast == zero {
 		// Reuse leading/trailing zero bits.
 		newLeading, newTrailing = *leading, *trailing
 		mbits = 64 - newLeading - newTrailing
@@ -477,7 +531,7 @@ func xorRead(br *bstreamReader, value *float64, leading, trailing *uint8) error 
 		if err != nil {
 			return err
 		}
-		newLeading = uint8(bits)
+		newLeading = uint8(bits) // #nosec G115 // no overflow
 
 		bits, err = br.readBitsFast(6)
 		if err != nil {
@@ -486,7 +540,7 @@ func xorRead(br *bstreamReader, value *float64, leading, trailing *uint8) error 
 		if err != nil {
 			return err
 		}
-		mbits = uint8(bits)
+		mbits = uint8(bits) // #nosec G115 // no overflow
 		// 0 significant bits here means we overflowed and we actually
 		// need 64; see comment in xrWrite.
 		if mbits == 0 {
