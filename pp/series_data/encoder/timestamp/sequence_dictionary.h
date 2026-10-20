@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <bit>
 #include <cassert>
 #include <cstddef>
@@ -14,6 +15,7 @@
 #include "bare_bones/vector_with_holes.h"
 #include "encoder.h"
 #include "metrics/metric.h"
+#include "primitives/primitives.h"
 #include "series_data/encoder/bit_sequence.h"
 
 namespace series_data::encoder::timestamp {
@@ -132,10 +134,14 @@ class SequenceDictionary {
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].encoder.timestamp(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].count; }
 
-  // Visits each live sequence once as (stream, last timestamp), however many open and finalized chunks share it.
-  template <class Visitor>
-  PROMPP_ALWAYS_INLINE void for_each_sequence(Visitor&& visitor) const {
-    sequences_.for_each([&visitor](const Sequence& sequence) PROMPP_LAMBDA_INLINE { visitor(sequence.stream, sequence.encoder.timestamp()); });
+  // Min of first and max of last timestamps over live sequences; each sequence counts once however many chunks share it.
+  [[nodiscard]] PromPP::Primitives::TimeInterval time_bounds() const noexcept {
+    PromPP::Primitives::TimeInterval bounds;
+    for (const auto& sequence : sequences_) {
+      bounds.min = std::min(bounds.min, TimestampDecoder::decode_first(sequence.stream.reader()));
+      bounds.max = std::max(bounds.max, sequence.encoder.timestamp());
+    }
+    return bounds;
   }
 
   // Includes reusable holes left by erased sequences.

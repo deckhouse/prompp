@@ -433,14 +433,7 @@ class Decoder {
   // chunks are not covered until they are merged.
   template <class DataStorage>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_time_interval(const DataStorage& storage) noexcept {
-    PromPP::Primitives::TimeInterval interval;
-
-    storage.timestamp_store.for_each_sequence([&interval](const auto& stream, int64_t last_timestamp) PROMPP_LAMBDA_INLINE {
-      interval.min = std::min(interval.min, encoder::timestamp::TimestampDecoder::decode_first(stream.reader()));
-      interval.max = std::max(interval.max, last_timestamp);
-    });
-
-    return interval;
+    return storage.timestamp_store.time_bounds();
   }
 
  private:
