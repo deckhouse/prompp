@@ -8,17 +8,15 @@ import (
 
 // DataStorage is Go wrapper around series_data::Data_storage.
 type DataStorage struct {
-	dataStorage       uintptr
-	gcDestroyDetector *uint64
-	timeInterval      atomic.Pointer[TimeInterval]
+	dataStorage  uintptr
+	timeInterval atomic.Pointer[TimeInterval]
 }
 
 // NewDataStorage - constructor.
 func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	ds := &DataStorage{
-		dataStorage:       seriesDataDataStorageCtor(collectMetrics, useArenas),
-		gcDestroyDetector: &gcDestroyDetector,
-		timeInterval:      atomic.Pointer[TimeInterval]{},
+		dataStorage:  seriesDataDataStorageCtor(collectMetrics, useArenas),
+		timeInterval: atomic.Pointer[TimeInterval]{},
 	}
 	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 
@@ -47,30 +45,6 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 	}
 
 	return *ds.timeInterval.Load()
-}
-
-// extendTimeInterval widens the cached time interval to cover interval. The bounds of the data
-// only ever grow, so the cache is never narrowed.
-func (ds *DataStorage) extendTimeInterval(interval TimeInterval) {
-	if interval.IsInvalid() {
-		return
-	}
-
-	for {
-		cached := ds.timeInterval.Load()
-		minT := min(cached.MinT, interval.MinT)
-		maxT := max(cached.MaxT, interval.MaxT)
-
-		// Return before taking the address of an interval, so the common case of an append that widens
-		// nothing does not move one to the heap.
-		if minT == cached.MinT && maxT == cached.MaxT {
-			return
-		}
-
-		if ds.timeInterval.CompareAndSwap(cached, &TimeInterval{MinT: minT, MaxT: maxT}) {
-			return
-		}
-	}
 }
 
 func (ds *DataStorage) GetQueriedSeriesBitset() []byte {
@@ -178,12 +152,6 @@ func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32,
 	return r
 }
 
-// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64) {
-	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs, timestamps)
-	runtime.KeepAlive(ds)
-}
-
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 // series in seriesIDs directly into the C-shared series slice (pointed to by series).
 func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
@@ -194,4 +162,28 @@ func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	seriesDataDataStorageQueryFinal(queriers)
 	runtime.KeepAlive(queriers)
+}
+
+// extendTimeInterval widens the cached time interval to cover interval. The bounds of the data
+// only ever grow, so the cache is never narrowed.
+func (ds *DataStorage) extendTimeInterval(interval TimeInterval) {
+	if interval.IsInvalid() {
+		return
+	}
+
+	for {
+		cached := ds.timeInterval.Load()
+		minT := min(cached.MinT, interval.MinT)
+		maxT := max(cached.MaxT, interval.MaxT)
+
+		// Return before taking the address of an interval, so the common case of an append that widens
+		// nothing does not move one to the heap.
+		if minT == cached.MinT && maxT == cached.MaxT {
+			return
+		}
+
+		if ds.timeInterval.CompareAndSwap(cached, &TimeInterval{MinT: minT, MaxT: maxT}) {
+			return
+		}
+	}
 }

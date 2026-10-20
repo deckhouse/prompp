@@ -324,9 +324,17 @@ func setDisableCoredumps(logger log.Logger) {
 
 // setSelectFuncOptimization sets the select function optimization for the querier based on the provided feature value.
 func setSelectFuncOptimization(logger log.Logger, fvalue string) {
-	if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
+	fvalue = strings.TrimSpace(fvalue)
+	if fvalue == "" {
+		_ = level.Error(logger).Log(msgStr, "The select_func_optimization must specify an optimization type.")
+
+		return
+	}
+
+	if err := querier.SetSelectFuncOptimize(fvalue); err != nil {
+		querier.SetDefaultOptimizeType() // reset to default if error
 		_ = level.Error(logger).Log(
-			msgStr, "Error parsing select_func_optimization value",
+			msgStr, "Error parsing select_func_optimization value, reset to default.",
 			errStr, err,
 		)
 

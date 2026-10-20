@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 	"unsafe"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -30,13 +32,21 @@ const (
 	// lssLabelNamesQuerier name of task.
 	lssLabelNamesQuerier = "lss_label_names_querier"
 
+	// lssGroupSeriesByLabelNames name of task.
+	lssGroupSeriesByLabelNames = "lss_group_series_by_label_names"
+
 	// dsQueryInstantQuerier name of task.
 	dsQueryInstantQuerier = "data_storage_query_instant_querier"
 	// dsQueryRangeQuerier name of task.
 	dsQueryRangeQuerier = "data_storage_query_range_querier"
+	// dsQueryFirstTimestampsQuerier name of task.
+	dsQueryFirstTimestampsQuerier = "data_storage_query_first_timestamps_querier"
 
-	// DefaultInstantQueryValueNotFoundTimestampValue default value for not found timestamp value.
+	// DefaultInstantQueryValueNotFoundTimestampValue default value for not found timestamp value for instant query.
 	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
+
+	// DefaultNotFoundTimestampValue default value for not found timestamp value.
+	DefaultNotFoundTimestampValue int64 = math.MinInt64
 )
 
 //
@@ -67,39 +77,61 @@ const (
 	allOptimizeType queryOptimizeType = dropPointOptimizeType | newPointOptimizeType | crossSeriesOptimizeType
 )
 
-// SetSelectFuncOptimize sets the select func optimization option by name.
-func SetSelectFuncOptimize(opt string) error {
-	switch opt {
-	case "none":
-		selectFuncOptimize = noneOptimizeType
-		return nil
+// DefaultCountOfSeriesToOptimize is the default count of series to optimize.
+const DefaultCountOfSeriesToOptimize = 10
 
-	case "drop_point":
-		selectFuncOptimize = dropPointOptimizeType
-		return nil
+// optimizeAggregationRatio is the ratio to optimize the aggregation function.
+const optimizeAggregationRatio = 3.3
 
-	case "new_point":
-		selectFuncOptimize = newPointOptimizeType
-		return nil
+// defaultOptimizeType is the default option for selecting functions optimization.
+var defaultOptimizeType = noneOptimizeType
 
-	case "cross":
-		selectFuncOptimize = crossSeriesOptimizeType
-		return nil
+// SetSelectFuncOptimize replaces the optimization modes used by subsequently created [Querier] instances.
+// Options are separated by | and may have surrounding whitespace. They are applied left to right:
+// none clears the selection, all enables every mode, and other options add their mode to the selection.
+// Invalid input leaves the previous selection unchanged.
+func SetSelectFuncOptimize(opts string) error {
+	optimization := noneOptimizeType
 
-	case "all":
-		selectFuncOptimize = allOptimizeType
-		return nil
+	for opt := range strings.SplitSeq(opts, "|") {
+		opt = strings.TrimSpace(opt)
 
-	default:
-		return fmt.Errorf(
-			"invalid select func optimization option: '%s', valid options are: "+
-				"'none', 'drop_point', 'new_point', 'cross', 'all'", opt,
-		)
+		switch opt {
+		case "none":
+			optimization = noneOptimizeType
+
+		case "drop_point":
+			optimization |= dropPointOptimizeType
+
+		case "new_point":
+			optimization |= newPointOptimizeType
+
+		case "cross":
+			optimization |= crossSeriesOptimizeType
+
+		case "all":
+			optimization = allOptimizeType
+
+		default:
+			return fmt.Errorf(
+				"invalid select func optimization option: '%s', valid options are: "+
+					"'none', 'drop_point', 'new_point', 'cross', 'all'", opt,
+			)
+		}
 	}
+
+	selectFuncOptimize = optimization
+
+	return nil
+}
+
+// SetDefaultOptimizeType set the default option for selecting functions optimization.
+func SetDefaultOptimizeType() {
+	selectFuncOptimize = defaultOptimizeType
 }
 
 // selectFuncOptimize is the option for selecting functions optimization.
-var selectFuncOptimize = noneOptimizeType
+var selectFuncOptimize = defaultOptimizeType
 
 // emptySelectHints is an empty select hints, it's used when no optimization is needed.
 var emptySelectHints = &storage.SelectHints{}
@@ -119,11 +151,21 @@ type Querier[
 	TShard Shard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
+	// IsPossibleToOptimize defaults to [DefaultIsPossibleToOptimize].
+	// It is called only when the optimization mode and query shape permit optimization.
+	// Set it before querying to override the optimization gate for this querier.
+	IsPossibleToOptimize func(
+		lssQueryResults []*cppbridge.LSSQueryResult,
+		hints *storage.SelectHints,
+		scrapeIntervalMS, headMinTSMS int64,
+	) bool
+
 	mint             int64
 	maxt             int64
+	scrapeIntervalMS int64
+	headMinTSMS      int64
 	head             THead
 	deduplicatorCtor deduplicatorCtor
-	closer           func() error
 	metrics          *Metrics
 	queryOptimize    queryOptimizeType
 }
@@ -138,11 +180,19 @@ func NewQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
-	closer func() error,
+	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return newQuerierWithSelectFuncOptimize(head, deduplicatorCtor, mint, maxt, closer, metrics, selectFuncOptimize)
+	return newQuerierWithSelectFuncOptimize(
+		head,
+		deduplicatorCtor,
+		mint,
+		maxt,
+		scrapeIntervalMS,
+		headMinTSMS,
+		metrics,
+		selectFuncOptimize,
+	)
 }
 
 // NewQuerierWithOutSelectFuncOptimize init new [Querier] without select func optimization.
@@ -155,8 +205,7 @@ func NewQuerierWithOutSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
-	closer func() error,
+	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return newQuerierWithSelectFuncOptimize(
@@ -164,7 +213,8 @@ func NewQuerierWithOutSelectFuncOptimize[
 		deduplicatorCtor,
 		mint,
 		maxt,
-		closer,
+		scrapeIntervalMS,
+		headMinTSMS,
 		metrics,
 		selectFuncOptimize&dropPointOptimizeType,
 	)
@@ -180,30 +230,27 @@ func newQuerierWithSelectFuncOptimize[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
-	closer func() error,
+	mint, maxt, scrapeIntervalMS, headMinTSMS int64,
 	metrics *Metrics,
 	queryOptimize queryOptimizeType,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
-		mint:             mint,
-		maxt:             maxt,
-		head:             head,
-		deduplicatorCtor: deduplicatorCtor,
-		closer:           closer,
-		metrics:          metrics,
-		queryOptimize:    queryOptimize,
+		IsPossibleToOptimize: DefaultIsPossibleToOptimize,
+		mint:                 mint,
+		maxt:                 maxt,
+		scrapeIntervalMS:     scrapeIntervalMS,
+		headMinTSMS:          headMinTSMS,
+		head:                 head,
+		deduplicatorCtor:     deduplicatorCtor,
+		metrics:              metrics,
+		queryOptimize:        queryOptimize,
 	}
 }
 
 // Close [Querier] if need.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
-	if q.closer != nil {
-		return q.closer()
-	}
-
+func (*Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	return nil
 }
 
@@ -285,7 +332,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
-			return &SeriesSet{}
+			return emptySeriesSet
 		}
 
 		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
@@ -403,7 +450,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
-			return &SeriesSet{}
+			return emptySeriesSet
 		}
 
 		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
@@ -438,23 +485,44 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	}
 
 	hints = SwitchFuncOptimize(hints, q.queryOptimize)
+
+	if hints != emptySelectHints &&
+		!q.IsPossibleToOptimize(resources.lssQueryResults, hints, q.scrapeIntervalMS, q.headMinTSMS) {
+		hints = emptySelectHints
+	}
+
 	resources.serializedData = poolProvider.GetSerializedData()
 	t := queryDataStorage(
 		dsQueryRangeQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, &stats,
 	)
 	resources.addTask(t)
 
-	resources.seriesSets = poolProvider.GetSeriesSet()
-
 	var result storage.SeriesSet
-	if isAggregationSeriesFunc(hints) {
+	optimizationType := "none"
+
+	switch {
+	case isCrossSeriesFunc(hints):
+		optimizationType = "cross_series"
+		result = q.makeCrossSeriesSet(
+			resources.lssQueryResults, resources.snapshots, resources.serializedData, hints,
+		)
+
+	case isAggregationSeriesFunc(hints):
+		optimizationType = "aggregation"
+		resources.seriesSets = poolProvider.GetSeriesSet()
 		result = q.makeAggrSeriesSet(
 			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets,
 		)
-	} else {
+
+	default:
+		resources.seriesSets = poolProvider.GetSeriesSet()
 		result = q.makeSeriesSet(
 			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets,
 		)
+	}
+
+	if q.metrics != nil {
+		q.metrics.OptimizationType.WithLabelValues(optimizationType).Inc()
 	}
 
 	stats.lap.Mark(stageBuildResult)
@@ -512,8 +580,109 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 	return NewMergeShardSeriesSet(seriesSets)
 }
 
-// SwitchFuncOptimize switch the function optimization hints.
-func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeType) *storage.SelectHints {
+// makeCrossSeriesSet queries the cross series set.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	snapshots []*cppbridge.LabelSetSnapshot,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
+	hints *storage.SelectHints,
+) storage.SeriesSet {
+	staleNaNSeries := make([][]StaleNaNSeries, len(lssQueryResults))
+	for i := range staleNaNSeries {
+		if lssQueryResults[i] == nil {
+			continue
+		}
+
+		staleNaNSeries[i] = NewStaleNaNSeriesSlice(lssQueryResults[i].Len(), DefaultNotFoundTimestampValue)
+	}
+
+	tds := q.head.CreateTask(
+		dsQueryFirstTimestampsQuerier,
+		func(shard TShard) error {
+			shardID := shard.ShardID()
+			res := lssQueryResults[shardID]
+			if res == nil {
+				return nil
+			}
+
+			shard.DataStorage().QueryStaleNaNSeries(
+				res.IDs(),
+				uintptr(unsafe.Pointer(unsafe.SliceData(staleNaNSeries[shardID]))), // #nosec G103 // it's safe to use
+			)
+
+			return nil
+		},
+	)
+	q.head.Enqueue(tds)
+
+	poolProvider := q.head.PoolProvider()
+	seriesGroups := poolProvider.GetSeriesGroups()
+	tlss := q.head.CreateTask(
+		lssGroupSeriesByLabelNames,
+		func(shard TShard) error {
+			shardID := shard.ShardID()
+			res := lssQueryResults[shardID]
+			if res == nil {
+				return nil
+			}
+
+			nameIDs := poolProvider.GetNameIDs(len(hints.Grouping))
+			shard.LSS().LabelNameToIDs(hints.Grouping, nameIDs)
+			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(res.IDs(), nameIDs)
+			poolProvider.PutNameIDs(nameIDs)
+
+			return nil
+		},
+	)
+	q.head.Enqueue(tlss)
+
+	_ = tds.Wait()
+	_ = tlss.Wait()
+	q.head.PutTask(tds)
+	q.head.PutTask(tlss)
+
+	seriesSets := poolProvider.GetSeriesSet()
+	sNaNSeriesSets := poolProvider.GetSeriesSet()
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData == nil {
+			sNaNSeriesSets[shardID] = emptySeriesSet
+			seriesSets[shardID] = emptySeriesSet
+			continue
+		}
+
+		sNaNSeriesSets[shardID] = NewStaleNaNSeriesSet(
+			staleNaNSeries[shardID],
+			snapshots[shardID],
+			DefaultNotFoundTimestampValue,
+		)
+
+		seriesSets[shardID] = NewCrossSeriesSet(
+			serializedData,
+			snapshots[shardID],
+			seriesGroups[shardID],
+			q.mint,
+			q.maxt,
+			hints.Grouping,
+			q.head.ID(),
+			uint16(shardID), // #nosec G115 // no overflow
+		)
+	}
+
+	resultSeriesSets := NewMergeManyShardSeriesSets(seriesSets, sNaNSeriesSets)
+
+	poolProvider.PutSeriesSet(sNaNSeriesSets)
+	poolProvider.PutSeriesSet(seriesSets)
+	poolProvider.PutSeriesGroups(seriesGroups)
+
+	return resultSeriesSets
+}
+
+// SwitchFuncOptimize returns hints when the optimization mode and query shape permit optimization.
+// The per-querier cost gate is evaluated separately by [Querier.Select].
+func SwitchFuncOptimize(
+	hints *storage.SelectHints,
+	queryOptimize queryOptimizeType,
+) *storage.SelectHints {
 	if hints == nil {
 		return emptySelectHints
 	}
@@ -522,11 +691,107 @@ func SwitchFuncOptimize(hints *storage.SelectHints, queryOptimize queryOptimizeT
 		return emptySelectHints
 	}
 
-	if funcOptimizeMap[hints.Func]&queryOptimize != 0 && isNotWithout(hints) {
+	if funcOptimizeMap[hints.Func]&queryOptimize != 0 &&
+		isNotWithout(hints) &&
+		isAllowedGroupingForCrossSeriesFunc(hints.Grouping) {
 		return hints
 	}
 
 	return emptySelectHints
+}
+
+// DefaultIsPossibleToOptimize reports whether the series count and sampling bounds justify optimization.
+// A non-positive scrape interval disables optimization.
+func DefaultIsPossibleToOptimize(
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	hints *storage.SelectHints,
+	scrapeIntervalMS, headMinTSMS int64,
+) bool {
+	if scrapeIntervalMS <= 0 {
+		return false
+	}
+
+	if isCrossSeriesFunc(hints) {
+		countOfSeries := 0
+		for _, lssQueryResult := range lssQueryResults {
+			if lssQueryResult == nil {
+				continue
+			}
+
+			countOfSeries += lssQueryResult.Len()
+		}
+
+		return isPossibleToOptimizeCrossSeriesFunc(hints, scrapeIntervalMS, countOfSeries)
+	}
+
+	if isAggregationSeriesFunc(hints) {
+		return isPossibleToOptimizeAggregationFunc(hints, scrapeIntervalMS, headMinTSMS)
+	}
+
+	return false
+}
+
+// isPossibleToOptimizeCrossSeriesFunc checks if the cross series function is possible to optimize.
+func isPossibleToOptimizeCrossSeriesFunc(
+	hints *storage.SelectHints,
+	scrapeIntervalMS int64,
+	countOfSeries int,
+) bool {
+	// for cross series functions for instant query, we don't need to optimize the query
+	if hints.Step == 0 {
+		return false
+	}
+
+	if countOfSeries < DefaultCountOfSeriesToOptimize {
+		return false
+	}
+
+	if len(hints.Grouping) == 0 {
+		return true
+	}
+
+	// grouping by
+	//revive:disable-next-line:add-constant // +2 is required to enable optimization
+	if hints.Step == scrapeIntervalMS && countOfSeries > DefaultCountOfSeriesToOptimize+3 {
+		return true
+	}
+
+	//revive:disable-next-line:add-constant // x2 scrape interval are required to enable optimization
+	if hints.Step >= scrapeIntervalMS*2 && countOfSeries > DefaultCountOfSeriesToOptimize+2 {
+		return true
+	}
+
+	return false
+}
+
+// isPossibleToOptimizeAggregationFunc checks if the aggregation function is possible to optimize.
+func isPossibleToOptimizeAggregationFunc(
+	hints *storage.SelectHints,
+	scrapeIntervalMS, headMinTSMS int64,
+) bool {
+	if hints.Step == 0 {
+		// instant query, shift is x5 scrape interval and range is x5 scrape interval
+		//revive:disable-next-line:add-constant // x5 scrape interval
+		return hints.Start-headMinTSMS >= scrapeIntervalMS*5 && hints.Range >= scrapeIntervalMS*5
+	}
+
+	if hints.Step <= scrapeIntervalMS {
+		return false
+	}
+
+	if hints.Range < scrapeIntervalMS {
+		return false
+	}
+
+	if hints.Step > hints.Range {
+		return true
+	}
+
+	if float64(hints.Step)/float64(scrapeIntervalMS) >= optimizeAggregationRatio {
+		return true
+	}
+
+	return false
 }
 
 // isNotWithout checks if the hints is not without by.
@@ -560,6 +825,26 @@ var funcOptimizeMap = func() map[string]queryOptimizeType {
 
 	return functions
 }()
+
+// isAllowedGroupingForCrossSeriesFunc checks if the series set is an cross series set.
+func isAllowedGroupingForCrossSeriesFunc(grouping []string) bool {
+	for _, group := range grouping {
+		if group == labelHeadIDShardID {
+			logger.Infof(
+				"[QUERIER]: __head__shard_id is in the grouping, it will be ignored: %s",
+				group,
+			)
+			return false
+		}
+	}
+
+	return true
+}
+
+// isCrossSeriesFunc checks if the function is a cross series function.
+func isCrossSeriesFunc(hints *storage.SelectHints) bool {
+	return funcOptimizeMap[hints.Func]&crossSeriesOptimizeType == crossSeriesOptimizeType
+}
 
 // isAggregationSeriesFunc checks if the function is an aggregation series function.
 func isAggregationSeriesFunc(hints *storage.SelectHints) bool {

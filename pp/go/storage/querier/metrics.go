@@ -20,15 +20,19 @@ const (
 // Disabled by default; enable via PROMPP_FEATURES=query_stage_metrics_enable.
 var QueryStageMetricsEnabled = false
 
-// Metrics for [Querier].
+// Metrics records durations, optimization choices, and optional stages for [Querier].
 type Metrics struct {
 	LabelNamesDuration  prometheus.Histogram
 	LabelValuesDuration prometheus.Histogram
+	// OptimizationType counts range-query execution paths independently of stage metrics.
+	OptimizationType *prometheus.CounterVec
 
 	queries [operationCount]queryRecorders
 }
 
 // NewMetrics init new [Metrics].
+//
+//revive:disable-next-line:function-length // metrics constructor.
 func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	factory := util.NewUnconflictRegisterer(registerer)
 	selectDuration := factory.NewHistogramVec(
@@ -72,6 +76,14 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 				},
 				ConstLabels: prometheus.Labels{"source": source},
 			},
+		),
+		OptimizationType: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name:        "prompp_querier_query_optimization_type_count",
+				Help:        "Optimization type count",
+				ConstLabels: prometheus.Labels{"source": source},
+			},
+			[]string{"optimization_type"},
 		),
 	}
 

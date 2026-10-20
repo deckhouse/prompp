@@ -3,15 +3,18 @@ package querier_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
@@ -61,7 +64,7 @@ func (s *QuerierStatsSuite) SetupTest() {
 	}, nil, 0, nil)
 	s.head = &statsHead{Head: engine}
 	s.T().Cleanup(func() { s.Require().NoError(engine.Close()) })
-	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
 	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
 	s.matchers = []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "__name__", "stage_metric")}
 	s.hints = &storage.SelectHints{Start: 0, End: 10, Step: 1}
@@ -135,6 +138,27 @@ func (s *QuerierStatsSuite) TestConcurrentQueries() {
 	}
 
 	s.NotContains(s.counts("select_range", false), "data_load_wait")
+}
+
+func (s *QuerierStatsSuite) TestCrossSeriesRange() {
+	s.Require().NoError(querier.SetSelectFuncOptimize("cross"))
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
+	q.IsPossibleToOptimize = func([]*cppbridge.LSSQueryResult, *storage.SelectHints, int64, int64) bool {
+		return true
+	}
+	s.hints.Func = "sum"
+	result := q.Select(context.Background(), false, s.hints, s.matchers...)
+
+	s.Require().NoError(result.Err())
+	s.assertSelect("select_range", false)
+	s.Equal(uint64(1), s.histogramCount("prompp_querier_query_select_duration", "range"))
+	s.Equal(float64(1), testutil.ToFloat64(s.metrics.OptimizationType.WithLabelValues("cross_series")))
+	before := s.counts("select_range", false)
+	iterateSeriesSet(result)
+
+	s.Require().NoError(result.Err())
+	s.Equal(before, s.counts("select_range", false))
 }
 
 func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
@@ -244,7 +268,7 @@ func (s *QuerierStatsSuite) TestMetadataCancelledAfterWait() {
 }
 
 func (s *QuerierStatsSuite) TestNilMetrics() {
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, nil)
 	s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	s.Empty(s.counts("select_range", false))
 	s.Empty(s.counts("select_range", true))
@@ -252,7 +276,7 @@ func (s *QuerierStatsSuite) TestNilMetrics() {
 
 func (s *QuerierStatsSuite) TestNilRegisterer() {
 	metrics := querier.NewMetrics(nil, querier.QueryableAppenderSource)
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, metrics)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, metrics)
 	s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	s.Empty(s.counts("select_range", false))
 }
@@ -268,12 +292,14 @@ func (s *QuerierStatsSuite) TestNoMatches() {
 
 func (s *QuerierStatsSuite) TestOptimizedRange() {
 	s.Require().NoError(querier.SetSelectFuncOptimize("all"))
-	s.T().Cleanup(func() { s.Require().NoError(querier.SetSelectFuncOptimize("none")) })
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
-	s.hints.Func = "sum_over_time"
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
+	s.hints.Func = "max_over_time"
 	s.hints.Range = 10
+	s.hints.Step = 4
 	s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	s.assertSelect("select_range", false)
+	s.Equal(float64(1), testutil.ToFloat64(s.metrics.OptimizationType.WithLabelValues("aggregation")))
 }
 
 func (s *QuerierStatsSuite) TestRange() {
@@ -292,11 +318,11 @@ func (s *QuerierStatsSuite) TestRangeLoadError() {
 func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 	_ = s.q.Select(context.Background(), false, s.hints, s.matchers...)
 	reused := querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, reused)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, reused)
 	_ = q.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Equal(float64(2), s.counts("select_range", false)["build_result"])
 	other := querier.NewMetrics(s.registry, querier.QueryableStorageSource)
-	q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, other)
+	q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, other)
 	_ = q.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Equal(float64(2), s.counts("select_range", false)["build_result"])
 	families, err := s.registry.Gather()
@@ -304,7 +330,8 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 	var series int
 
 	for _, family := range families {
-		if family.GetType() != dto.MetricType_COUNTER {
+		if !strings.HasPrefix(family.GetName(), "prompp_querier_query_stage_") &&
+			!strings.HasPrefix(family.GetName(), "prompp_querier_query_shard_stage_") {
 			continue
 		}
 
@@ -328,7 +355,7 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 func (s *QuerierStatsSuite) TestRotationWithDifferentShardCount() {
 	for _, count := range []uint16{1, 3} {
 		h := newStageStatsHead(s.T(), 6, count)
-		q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+		q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
 		s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	}
 
@@ -399,7 +426,7 @@ func (s *QuerierStatsSuite) TestStageMetricsDisabled() {
 	querier.QueryStageMetricsEnabled = false
 	s.registry = prometheus.NewRegistry()
 	s.metrics = querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
-	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
 	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
 	start := time.Now()
 
@@ -413,10 +440,16 @@ func (s *QuerierStatsSuite) TestStageMetricsDisabled() {
 	maxDuration := float64(time.Since(start).Nanoseconds()) / 1e3
 	families, err := s.registry.Gather()
 	s.Require().NoError(err)
-	s.Len(families, 3)
+	s.Len(families, 4)
 
 	for _, family := range families {
 		s.NotContains(family.GetName(), "_stage_")
+
+		if family.GetType() != dto.MetricType_HISTOGRAM {
+			s.Equal("prompp_querier_query_optimization_type_count", family.GetName())
+
+			continue
+		}
 
 		for _, metric := range family.GetMetric() {
 			histogram := metric.GetHistogram()
@@ -444,7 +477,8 @@ func (s *QuerierStatsSuite) TestUnexecutedStagesAreZero() {
 	var series int
 
 	for _, family := range families {
-		if family.GetType() != dto.MetricType_COUNTER {
+		if !strings.HasPrefix(family.GetName(), "prompp_querier_query_stage_") &&
+			!strings.HasPrefix(family.GetName(), "prompp_querier_query_shard_stage_") {
 			continue
 		}
 

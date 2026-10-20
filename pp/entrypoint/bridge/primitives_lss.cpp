@@ -354,14 +354,10 @@ extern "C" void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source
   copier.copy_added_series_and_build_indexes();
 }
 
-extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {
-  struct Arguments {
-    LssVariantPtr lss;
-    uint32_t shrink_boundary;
-  };
-  const auto* in = static_cast<const Arguments*>(args);
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-  lss.set_pending_shrink_boundary(in->shrink_boundary);
+extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(uint64_t lss_ptr, uint64_t shrink_boundary) {
+  auto& lss = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::types::LssVariant*>(lss_ptr));
+
+  lss.set_pending_shrink_boundary(static_cast<uint32_t>(shrink_boundary));
 }
 
 extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {

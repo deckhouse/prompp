@@ -27,7 +27,7 @@ func (s *QuerierStatsSuite) TestRealDataStorageLoading() {
 				maxt = 5
 			}
 
-			q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, maxt, nil, s.metrics)
+			q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, maxt, 1, 0, s.metrics)
 			cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
 
 			if operation == "select_chunks" {
@@ -61,7 +61,7 @@ func (s *QuerierStatsSuite) newUnloadableHead() *ppstorage.Head {
 	h, err := ppstorage.NewBuilder(cat, dir, maxSegmentSize, nil, time.Nanosecond).Build(0, numberOfShards)
 	s.Require().NoError(err)
 	s.T().Cleanup(func() { s.Require().NoError(h.Close()) })
-	storagetest.MustAppendTimeSeries(&s.Suite, h, []storagetest.TimeSeries{{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, h, []storagetest.TimeSeries{{
 		Labels: labels.FromStrings("__name__", "stage_metric", "series", "0"),
 		Samples: []cppbridge.Sample{
 			{Timestamp: 0, Value: 1},
