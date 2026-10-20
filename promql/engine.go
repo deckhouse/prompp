@@ -3606,6 +3606,11 @@ func preprocessExprHelper(expr parser.Expr, start, end time.Time) (isStepInvaria
 	case *parser.AggregateExpr:
 		unwrapParenExpr(&n.Expr)
 		unwrapParenExpr(&n.Param)
+
+		if n.Param != nil {
+			preprocessExprHelper(n.Param, start, end)
+		}
+
 		return preprocessExprHelper(n.Expr, start, end)
 
 	case *parser.BinaryExpr:
