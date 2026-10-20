@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iterator>
+#include <ranges>
 
 #include "allocated_memory.h"
 #include "preprocess.h"
@@ -238,3 +239,11 @@ class VectorWithHoles {
 };
 
 }  // namespace BareBones
+
+// VectorWithHoles::size() counts holes, while iteration skips them; disable sized-range fast paths.
+namespace std::ranges {
+
+template <class T, BareBones::ReallocatorInterface Reallocator>
+inline constexpr bool disable_sized_range<BareBones::VectorWithHoles<T, Reallocator>> = true;
+
+}  // namespace std::ranges
