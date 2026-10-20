@@ -208,7 +208,7 @@ func (s *AppenderSuite) TestDropInvalidSeries() {
 	// Act
 	stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("name", "metric1").Build(),
 				Timestamp: 1,
@@ -231,7 +231,7 @@ func (s *AppenderSuite) TestAppendMultipleSamplesInOneSeries() {
 	// Act
 	stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -280,7 +280,7 @@ func (s *AppenderSuite) TestSeriesPerShardTransfer() {
 	// Act
 	stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -329,7 +329,7 @@ func (s *AppenderSuite) TestShardedRelabeledSeriesFullNotEmpty() {
 	// Act
 	stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -399,7 +399,7 @@ func (s *AppenderSuite) TestTrackStaleness() {
 	// Act
 	stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -447,7 +447,7 @@ func (s *AppenderSuite) TestTrackStalenessWithoutHonorTimestamps() {
 	// Act
 	stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -491,7 +491,7 @@ func (s *AppenderSuite) TestWithoutCommitToWal() {
 	// Act
 	_, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -514,7 +514,7 @@ func (s *AppenderSuite) TestWithCommitToWal() {
 	// Act
 	_, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -537,7 +537,7 @@ func (s *AppenderSuite) TestWithCommitToWalByLimitExhausted() {
 	// Act
 	_, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -572,7 +572,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV1CommitsAllShards() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
 		false,
 	)
@@ -592,7 +592,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsOnlyExhaustedShard() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, int64(maxSegmentSize))),
 		state,
 		false,
 	)
@@ -612,7 +612,7 @@ func (s *AppenderSuite) TestLimitExhaustedWalV2CommitsEveryExhaustedShard() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, append(
+		storagetest.NewIncomingData(s.Require().NoError, append(
 			seriesWithSamples(shard0Series, int64(maxSegmentSize)),
 			seriesWithSamples(shard1Series, int64(maxSegmentSize))...,
 		)),
@@ -635,7 +635,7 @@ func (s *AppenderSuite) TestLimitNotExhaustedWalV2DoesNotCommit() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, int64(maxSegmentSize)-1)),
 		state,
 		false,
 	)
@@ -655,7 +655,7 @@ func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
 	// Act
 	_, err := appender.New(h, s.commitAndFlush, appender.Stats{}).Append(
 		s.T().Context(),
-		storagetest.NewIncomingData(&s.Suite, seriesWithSamples(shard0Series, 1)),
+		storagetest.NewIncomingData(s.Require().NoError, seriesWithSamples(shard0Series, 1)),
 		state,
 		true,
 	)
@@ -674,7 +674,7 @@ func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
 	// Act
 	_, _, _ = s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,
@@ -686,7 +686,7 @@ func (s *AppenderSuite) TestCommitToWalWalV2CommitsAllShards() {
 
 	_, stats, err := s.appender.Append(
 		context.Background(),
-		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+		storagetest.NewIncomingData(s.Require().NoError, []model.TimeSeries{
 			{
 				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
 				Timestamp: 1,

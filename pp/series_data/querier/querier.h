@@ -69,16 +69,15 @@ class Querier {
   }
 
   void query_opened_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
-    if (storage_.open_chunks.size() > ls_id) {
-      if (const auto& open_chunk = storage_.open_chunks[ls_id]; !open_chunk.is_empty()) {
-        const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(storage_, open_chunk);
-        if (chunk_start_timestamp_ms > time_interval.max) {
-          return;
-        }
+    if (storage_.series_exists(ls_id)) [[likely]] {
+      const auto& open_chunk = storage_.open_chunks[ls_id];
+      const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(storage_, open_chunk);
+      if (chunk_start_timestamp_ms > time_interval.max) {
+        return;
+      }
 
-        if (time_interval.intersect({.min = chunk_start_timestamp_ms, .max = Decoder::get_open_chunk_last_timestamp(storage_, open_chunk)})) {
-          chunks_.emplace_back(ls_id);
-        }
+      if (time_interval.intersect({.min = chunk_start_timestamp_ms, .max = Decoder::get_open_chunk_last_timestamp(storage_, open_chunk)})) {
+        chunks_.emplace_back(ls_id);
       }
     }
   }
