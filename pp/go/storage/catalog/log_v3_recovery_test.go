@@ -175,6 +175,25 @@ func (s *V3FileTestSuite) TestV3Header_FirstVersionByteCorrupted() {
 	s.requireRecords(record)
 }
 
+func (s *V3FileTestSuite) TestV3Header_LegacyVersionByteStillRecoversSecondSlot() {
+	record := newAppendTestRecord(1, 100)
+	s.Require().NoError(s.fl.Write(&record.SerializedRecord))
+	s.Require().NoError(s.fl.Close())
+	f, err := os.OpenFile(s.filePath, os.O_RDWR, logFilePerm)
+	s.Require().NoError(err)
+	_, err = f.WriteAt([]byte{byte(LogFileVersionV2)}, fileHeaderVersionOffsetV3)
+	s.Require().NoError(err)
+	s.Require().NoError(f.Close())
+
+	s.fl, err = NewFileLogV3(s.filePath)
+	s.Require().NoError(err)
+
+	_, slot, err := readFileHeaderV3(s.fl.file.file)
+	s.Require().NoError(err)
+	s.Require().Equal(uint8(1), slot)
+	s.requireRecords(record)
+}
+
 func (s *V3FileTestSuite) TestV3Header_RejectsUsedWithoutTerminatorSpace() {
 	header := fileHeaderV3{generation: 1, journalSize: journalSizeV3, activeUsed: journalSizeV3}
 	slot := encodeFileHeaderV3(header)

@@ -266,11 +266,17 @@ func syncDir(dirPath string) error {
 }
 
 // tryOpenV3FileHandler recognizes fixed v3 before falling back to a legacy version header.
+// A complete v1/v2 version header takes precedence over magic bytes in record data.
 // Legacy v3 files are still produced by migration and compaction until journal switching is implemented.
 func tryOpenV3FileHandler(fh *FileHandler) (bool, error) {
 	var slots [fileHeaderSlotsCount * fileHeaderSlotSizeV3]byte
 	if _, err := fh.file.ReadAt(slots[:], 0); err != nil && !errors.Is(err, io.EOF) {
 		return false, fmt.Errorf("read file header: %w", err)
+	}
+
+	version := binary.LittleEndian.Uint64(slots[:8])
+	if version == LogFileVersionV1 || version == LogFileVersionV2 {
+		return false, nil
 	}
 
 	header, _, err := decodeFileHeaderSlotsV3(slots[:])
