@@ -415,6 +415,41 @@ func (p *MemPostings) PostingsForLabelMatching(ctx context.Context, name string,
 	return Merge(ctx, its...)
 }
 
+// PostingsForAllLabelValues returns the sorted union of postings for all values of name.
+func (p *MemPostings) PostingsForAllLabelValues(ctx context.Context, name string) Postings {
+	// PP_CHANGES.md: Honor cancellation before and during the locked traversal.
+	if err := ctx.Err(); err != nil {
+		return ErrPostings(err)
+	}
+
+	p.mtx.RLock()
+
+	e := p.m[name]
+	its := make([]Postings, 0, len(e))
+	lps := make([]ListPostings, len(e))
+	i := 0
+	for _, refs := range e {
+		if i%checkContextEveryNIterations == 0 {
+			if err := ctx.Err(); err != nil {
+				p.mtx.RUnlock()
+
+				return ErrPostings(err)
+			}
+		}
+
+		if len(refs) > 0 {
+			lps[i] = ListPostings{list: refs}
+			its = append(its, &lps[i])
+		}
+		i++
+	}
+
+	// Let the mutex go before merging.
+	p.mtx.RUnlock()
+
+	return Merge(ctx, its...)
+}
+
 // labelValues returns a slice of label values for the given label name.
 // It will take the read lock.
 func (p *MemPostings) labelValues(name string) []string {

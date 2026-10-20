@@ -457,6 +457,12 @@ func (r blockIndexReader) PostingsForLabelMatching(
 	return r.ir.PostingsForLabelMatching(ctx, name, match)
 }
 
+// PostingsForAllLabelValues returns a sorted iterator over all postings having a label with the given name.
+// If no postings are found with the label in question, an empty iterator is returned.
+func (r blockIndexReader) PostingsForAllLabelValues(ctx context.Context, name string) index.Postings {
+	return r.ir.PostingsForAllLabelValues(ctx, name)
+}
+
 // Series populates the given builder and chunk metas for the series identified
 // by the reference.
 func (r blockIndexReader) Series(ref storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
