@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
+	"path/filepath"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
@@ -23,17 +23,49 @@ const (
 	logFilePerm = 0o600
 )
 
+// ErrLogNeedsRewrite prevents mixing source and target formats before [Catalog] compacts the log.
+var ErrLogNeedsRewrite = errors.New("log requires rewrite before appending")
+
 //
 // FileLog
 //
 
-// FileLog head-log file, contains [SerializedRecord]s of heads.
+// FileLog reads snapshots in the source file format and writes the target format after compaction.
+// [Catalog] merges and repairs [SerializedRecord] deltas before requesting a rewrite.
 type FileLog struct {
-	version  uint64
-	file     *FileHandler
-	filePath string
-	encoder  Encoder
-	decoder  Decoder
+	version       uint64
+	targetVersion uint64
+	migration     Migration
+	file          *FileHandler
+	filePath      string
+	encoder       Encoder
+	decoder       Decoder
+	reader        recordReader
+}
+
+// NewFileLog opens the source format for reading and defers migration to [Catalog] compaction.
+func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
+	sourceFilePath := filePath
+	fl, err := openFileLog(filePath, sourceFilePath, targetVersion)
+	if err == nil {
+		return fl, nil
+	}
+
+	if !errors.Is(err, ErrUnreadableLogFile) {
+		return nil, err
+	}
+
+	sourceFilePath = fmt.Sprintf("%s.compacted", filePath)
+	fl, err = openFileLog(filePath, sourceFilePath, targetVersion)
+	if err == nil {
+		return fl, nil
+	}
+
+	if !errors.Is(err, ErrUnreadableLogFile) {
+		return nil, err
+	}
+
+	return newFileLogByVersion(filePath, targetVersion)
 }
 
 // NewFileLogV1 init new [FileLog] with [EncoderV1], [DecoderV1], version 1.
@@ -46,10 +78,12 @@ func NewFileLogV1(fileName string) (*FileLog, error) {
 	}
 
 	fl := &FileLog{
-		version: LogFileVersionV1,
-		file:    file,
-		encoder: EncoderV1{},
-		decoder: DecoderV1{},
+		version:       LogFileVersionV1,
+		targetVersion: LogFileVersionV1,
+		filePath:      fileName,
+		file:          file,
+		encoder:       EncoderV1{},
+		decoder:       DecoderV1{},
 	}
 
 	defer func() {
@@ -85,72 +119,6 @@ func NewFileLogV3(filePath string) (*FileLog, error) {
 	return NewFileLog(filePath, LogFileVersionV3)
 }
 
-// NewFileLog init new [FileLog] with migrate to target version encoder and decoder.
-func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
-	sourceFilePath := filePath
-	fl, err := openFileLog(filePath, sourceFilePath, targetVersion)
-	if err == nil {
-		return fl, nil
-	}
-
-	if !errors.Is(err, ErrUnreadableLogFile) {
-		return nil, err
-	}
-
-	logger.Errorf("unreadable log file: filepath: %s, error: %v", sourceFilePath, err)
-
-	sourceFilePath = fmt.Sprintf("%s.compacted", filePath)
-	fl, err = openFileLog(filePath, sourceFilePath, targetVersion)
-	if err == nil {
-		return fl, nil
-	}
-
-	if !errors.Is(err, ErrUnreadableLogFile) {
-		return nil, err
-	}
-
-	logger.Errorf("unreadable log file: filepath: %s, error: %v", sourceFilePath, err)
-
-	return newFileLogByVersion(filePath, targetVersion)
-}
-
-// openFileLog open [FileLog] with migrate to version.
-func openFileLog(filePath, sourceFilePath string, version uint64) (*FileLog, error) {
-	file, encoder, decoder, err := migrate(filePath, sourceFilePath, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return &FileLog{
-		version:  version,
-		file:     file,
-		filePath: filePath,
-		encoder:  encoder,
-		decoder:  decoder,
-	}, nil
-}
-
-// newFileLogByVersion init new [FileLog] by version.
-func newFileLogByVersion(filePath string, version uint64) (*FileLog, error) {
-	encoder, decoder, err := codecsByVersion(version)
-	if err != nil {
-		return nil, fmt.Errorf("create encoder/decoder: %w", err)
-	}
-
-	file, err := createFileHandlerByVersion(filePath, version)
-	if err != nil {
-		return nil, fmt.Errorf("create file handler: %w", err)
-	}
-
-	return &FileLog{
-		version:  version,
-		file:     file,
-		filePath: filePath,
-		encoder:  encoder,
-		decoder:  decoder,
-	}, nil
-}
-
 // Close closes the [FileHandler], rendering it unusable for I/O.
 func (fl *FileLog) Close() error {
 	if fl.isFixedV3() {
@@ -160,26 +128,54 @@ func (fl *FileLog) Close() error {
 	return fl.file.Close()
 }
 
+// NeedsRewrite reports whether the source must be compacted before writing the target format.
+func (fl *FileLog) NeedsRewrite() bool {
+	return fl.version != fl.targetVersion
+}
+
+// Read [SerializedRecord] from [FileLog].
+func (fl *FileLog) Read(sr *SerializedRecord) error {
+	var err error
+	if fl.version == LogFileVersionV3 {
+		if fl.reader.file != fl.file {
+			fl.reader = recordReader{file: fl.file}
+		}
+
+		fl.reader.minUsed = fl.file.activeUsed
+		err = fl.reader.Read(sr)
+	} else {
+		err = fl.decoder.DecodeFrom(fl.file, sr)
+	}
+
+	if err == nil && fl.migration != nil {
+		fl.migration.Migrate(sr)
+	}
+
+	return err
+}
+
 // ReWrite rewrite [FileLog] with [SerializedRecord]s.
 func (fl *FileLog) ReWrite(srecords ...*SerializedRecord) error {
+	if fl.version == LogFileVersionV3 && !fl.NeedsRewrite() {
+		return fl.rewriteV3(srecords)
+	}
+
 	oldFile := fl.file
-	swapFilePath := fmt.Sprintf("%s.compacted", strings.TrimSuffix(fl.filePath, ".compacted"))
-	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.version, fl.encoder, srecords...)
+	swapFilePath := fl.filePath + ".compacted"
+	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.targetVersion, fl.encoder, srecords...)
 	if err != nil {
 		return fmt.Errorf("write log file: %w", err)
 	}
 
 	fl.file = newFile
+	fl.version = fl.targetVersion
+	_, fl.decoder, _ = codecsByVersion(fl.version)
+	fl.migration = getMigration(fl.version, fl.version)
 	if err = oldFile.Close(); err != nil {
 		logger.Errorf("failed to close old file: %v", err)
 	}
 
 	return nil
-}
-
-// Read [SerializedRecord] from [FileLog].
-func (fl *FileLog) Read(sr *SerializedRecord) error {
-	return fl.decoder.DecodeFrom(fl.file, sr)
 }
 
 // Size return current size of [FileHandler].
@@ -189,6 +185,10 @@ func (fl *FileLog) Size() int {
 
 // Write [SerializedRecord] to [FileLog].
 func (fl *FileLog) Write(sr *SerializedRecord) error {
+	if fl.NeedsRewrite() {
+		return ErrLogNeedsRewrite
+	}
+
 	if fl.isFixedV3() {
 		return fl.appendV3(sr)
 	}
@@ -212,7 +212,7 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 	}
 
 	frameLen := len(frame)
-	writeBuf := append(frame, recordVersionEndV3)
+	frame = append(frame, recordVersionEndV3)
 
 	if fl.file.appendErr != nil {
 		return fl.file.appendErr
@@ -220,24 +220,23 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 
 	offset := fl.file.writeOffset
 	if offset < fl.file.journalStart || offset >= fl.file.journalEnd ||
-		int64(len(writeBuf)) > fl.file.journalEnd-offset {
+		int64(len(frame)) > fl.file.journalEnd-offset {
 		return ErrJournalFull
 	}
 
-	if err = fl.file.WriteFixed(writeBuf); err != nil {
+	if err = fl.file.WriteFixed(frame); err != nil {
 		return fmt.Errorf("v3: write record: %w", err)
 	}
 
-	encoder.buffer = writeBuf[:frameLen]
+	encoder.buffer = frame[:frameLen]
 	fl.file.writeOffset += int64(frameLen)
 
 	return nil
 }
 
-// isFixedV3 reports whether the log is the fixed-size layout of the version 3: migrated and
-// rewritten version 3 files keep the growing legacy layout and the v1/v2 write path.
+// isFixedV3 reports whether the open file uses the preallocated v3 layout.
 func (fl *FileLog) isFixedV3() bool {
-	return fl.version == LogFileVersionV3 && fl.file.fixedSize
+	return fl.version == LogFileVersionV3
 }
 
 // needsCompaction counts used bytes for fixed-size journals instead of their allocated file size.
@@ -250,61 +249,94 @@ func (fl *FileLog) needsCompaction(maxSize int) bool {
 	return fl.Size() >= maxSize
 }
 
-func writeSwapAndSwitchAtFilePath(
-	targetFilePath, swapFilePath string,
-	version uint64,
-	encoder Encoder,
-	srecords ...*SerializedRecord,
-) (*FileHandler, error) {
-	swapFile, err := createSwapFile(swapFilePath, version, encoder, srecords...)
+// createSwapFile builds a complete snapshot in the target format, leaving the source untouched on failure.
+func createSwapFile(fileName string, version uint64, encoder Encoder, srs ...*SerializedRecord) (*FileHandler, error) {
+	swapFile, err := createFileHandlerByVersion(fileName, version)
 	if err != nil {
-		return nil, fmt.Errorf("create swap file: %w", err)
+		return nil, err
 	}
 
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, swapFile.Close(), os.RemoveAll(swapFilePath))
+	fl := &FileLog{version: version, targetVersion: version, file: swapFile, encoder: encoder}
+	if version == LogFileVersionV3 {
+		err = fl.rewriteV3(srs)
+	} else {
+		for _, sr := range srs {
+			if err = encoder.EncodeTo(swapFile, sr); err != nil {
+				break
+			}
 		}
-	}()
+	}
 
-	if err = os.Rename(swapFilePath, targetFilePath); err != nil {
-		return nil, fmt.Errorf("rename swap file: %w", err)
+	if err == nil {
+		err = swapFile.Sync()
+	}
+
+	if err != nil {
+		return nil, errors.Join(err, swapFile.Close(), os.Remove(fileName))
 	}
 
 	return swapFile, nil
 }
 
-// creates swap file, writes records & sets read offset at first record.
-func createSwapFile(fileName string, version uint64, encoder Encoder, srs ...*SerializedRecord) (*FileHandler, error) {
-	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
+// newFileLogByVersion init new [FileLog] by version.
+func newFileLogByVersion(filePath string, version uint64) (*FileLog, error) {
+	encoder, decoder, err := codecsByVersion(version)
 	if err != nil {
-		return nil, fmt.Errorf("new file handler: %w", err)
+		return nil, fmt.Errorf("create encoder/decoder: %w", err)
 	}
 
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, swapFile.Close(), os.RemoveAll(fileName))
-		}
-	}()
-
-	offset, err := writeLogFileVersion(swapFile, version)
+	file, err := createFileHandlerByVersion(filePath, version)
 	if err != nil {
-		return nil, fmt.Errorf("write log file version: %w", err)
+		return nil, fmt.Errorf("create file handler: %w", err)
 	}
 
-	for _, srecord := range srs {
-		if err = encoder.EncodeTo(swapFile, srecord); err != nil {
-			return nil, fmt.Errorf("encode record: %w", err)
+	return &FileLog{
+		version:       version,
+		targetVersion: version,
+		migration:     getMigration(version, version),
+		file:          file,
+		filePath:      filePath,
+		encoder:       encoder,
+		decoder:       decoder,
+	}, nil
+}
+
+// openFileLog opens the source without modifying it; [Catalog] merges records before rewriting.
+func openFileLog(filePath, sourceFilePath string, targetVersion uint64) (*FileLog, error) {
+	encoder, _, err := codecsByVersion(targetVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	file, version, err := loadFile(sourceFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	_, decoder, err := codecsByVersion(version)
+	if err != nil {
+		return nil, errors.Join(ErrUnreadableLogFile, err, file.Close())
+	}
+
+	if sourceFilePath != filePath {
+		if err = os.Rename(sourceFilePath, filePath); err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+
+		if err = syncDir(filepath.Dir(filePath)); err != nil {
+			return nil, errors.Join(err, file.Close())
 		}
 	}
 
-	if err = swapFile.Sync(); err != nil {
-		return nil, fmt.Errorf("sync swap file: %w", err)
-	}
-
-	swapFile.SetReadOffset(int64(offset))
-
-	return swapFile, nil
+	return &FileLog{
+		version:       version,
+		targetVersion: targetVersion,
+		migration:     getMigration(version, targetVersion),
+		file:          file,
+		filePath:      filePath,
+		encoder:       encoder,
+		decoder:       decoder,
+	}, nil
 }
 
 // readLogFileVersion reads log file version respecting on disk version size.
@@ -335,4 +367,27 @@ func writeLogFileVersion(writer io.Writer, version uint64) (int, error) {
 	}
 	bytesWritten, err := writer.Write(v[:numberOfBytesToWrite])
 	return bytesWritten, err
+}
+
+// writeSwapAndSwitchAtFilePath commits a fully synced target file by renaming it over the source.
+func writeSwapAndSwitchAtFilePath(
+	targetFilePath, swapFilePath string,
+	version uint64,
+	encoder Encoder,
+	srecords ...*SerializedRecord,
+) (*FileHandler, error) {
+	swapFile, err := createSwapFile(swapFilePath, version, encoder, srecords...)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = os.Rename(swapFilePath, targetFilePath); err != nil {
+		return nil, errors.Join(err, swapFile.Close())
+	}
+
+	if err = syncDir(filepath.Dir(targetFilePath)); err != nil {
+		return nil, errors.Join(err, swapFile.Close())
+	}
+
+	return swapFile, nil
 }

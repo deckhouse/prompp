@@ -23,6 +23,7 @@ type FileHandler struct {
 	fixedSize    bool
 	journalStart int64
 	journalEnd   int64
+	activeUsed   int64
 	appendErr    error
 }
 

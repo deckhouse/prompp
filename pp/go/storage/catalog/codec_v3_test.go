@@ -38,7 +38,7 @@ func (s *CodecV3Suite) encode(sr *SerializedRecord) []byte {
 	return buf.Bytes()
 }
 
-func (s *CodecV3Suite) decode(frame []byte) (*SerializedRecord, error) {
+func (*CodecV3Suite) decode(frame []byte) (*SerializedRecord, error) {
 	sr := &SerializedRecord{mint: math.MaxInt64, maxt: math.MinInt64}
 	err := NewDecoderV3().DecodeFrom(bytes.NewReader(frame), sr)
 

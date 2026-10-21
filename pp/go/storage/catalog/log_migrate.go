@@ -3,11 +3,8 @@ package catalog
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
-
-	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
 var (
@@ -16,91 +13,6 @@ var (
 	// ErrUnreadableLogFile unreadable log file error.
 	ErrUnreadableLogFile = errors.New("unreadable log file")
 )
-
-// migrate source file to target file on target version.
-//
-//revive:disable-next-line:function-result-limit there is no point in packing it into a structure.
-func migrate(
-	targetFilePath, sourceFilePath string,
-	targetVersion uint64,
-) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
-	sourceFile, sourceVersion, err := loadFile(sourceFilePath)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	sourceEncoder, sourceDecoder, err := codecsByVersion(sourceVersion)
-	if err != nil {
-		return nil, nil, nil, errors.Join(ErrUnreadableLogFile, sourceFile.Close())
-	}
-
-	if sourceVersion != targetVersion {
-		return migrateTo(sourceFile, sourceDecoder, targetFilePath, sourceFilePath, targetVersion, sourceVersion)
-	}
-
-	if sourceFilePath == targetFilePath {
-		return sourceFile, sourceEncoder, sourceDecoder, nil
-	}
-
-	err = os.Rename(sourceFilePath, targetFilePath)
-	if err != nil {
-		return nil, nil, nil, errors.Join(err, sourceFile.Close())
-	}
-
-	return sourceFile, sourceEncoder, sourceDecoder, nil
-}
-
-// migrateTo source file to target file on target version.
-//
-//revive:disable-next-line:function-result-limit there is no point in packing it into a structure.
-func migrateTo(
-	sourceFile *FileHandler,
-	sourceDecoder Decoder,
-	targetFilePath, sourceFilePath string,
-	targetVersion, sourceVersion uint64,
-) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
-	targetEncoder, targetDecoder, err := codecsByVersion(targetVersion)
-	if err != nil {
-		return nil, nil, nil, errors.Join(err, sourceFile.Close())
-	}
-
-	srecords := make([]*SerializedRecord, 0, 10) //revive:disable-line:add-constant it's average value of records
-	for {
-		sr := &SerializedRecord{}
-		if err = sourceDecoder.DecodeFrom(sourceFile, sr); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			logger.Errorf("failed to decode record: %v", err)
-			break
-		}
-		srecords = append(srecords, sr)
-	}
-
-	migration := getMigration(sourceVersion, targetVersion)
-	migratedRecords := make([]*SerializedRecord, 0, len(srecords))
-	for _, record := range srecords {
-		migratedRecords = append(migratedRecords, migration.Migrate(record))
-	}
-
-	swapFilePath := fmt.Sprintf("%s.swap", sourceFilePath)
-	targetFile, err := writeSwapAndSwitchAtFilePath(
-		targetFilePath,
-		swapFilePath,
-		targetVersion,
-		targetEncoder,
-		migratedRecords...,
-	)
-	if err != nil {
-		return nil, nil, nil, errors.Join(err, sourceFile.Close())
-	}
-
-	if err = sourceFile.Close(); err != nil {
-		logger.Errorf("failed to close file: %v", err)
-	}
-
-	return targetFile, targetEncoder, targetDecoder, nil
-}
 
 // loadFile load [FileHandler] from file.
 func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {

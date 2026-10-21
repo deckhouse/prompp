@@ -44,7 +44,7 @@ func (s *V3FileTestSuite) TestV3Append_ReopenReadsBackRecordsInOrder() {
 	s.Require().Equal(int64(fileSizeV3), info.Size())
 }
 
-func (s *V3FileTestSuite) TestV3Append_StaleDataAfterTerminatorIsNotRead() {
+func (s *V3FileTestSuite) TestV3Append_NonzeroTailAfterTerminatorIsCorruption() {
 	// Arrange
 	filePath := s.filePath
 	fl := s.fl
@@ -62,10 +62,14 @@ func (s *V3FileTestSuite) TestV3Append_StaleDataAfterTerminatorIsNotRead() {
 	s.Require().NoError(err)
 	s.Require().NoError(fl.file.Sync())
 
-	// Assert: the sequential read stops at the terminator and never reaches the stale data.
+	// Assert: a nonzero tail violates the zero-padding invariant and must be recovered.
 	var got SerializedRecord
 	s.Require().NoError(fl.Read(&got))
 	s.Require().Equal(record.SerializedRecord, got)
+	s.Require().ErrorAs(fl.Read(&got), new(*CorruptedRecordError))
+	s.Require().NoError(fl.Read(&got))
+	s.Require().Equal(stale.SerializedRecord, got)
+	s.Require().ErrorAs(fl.Read(&got), new(*CorruptedRecordError))
 	s.Require().ErrorIs(fl.Read(&got), io.EOF)
 
 	s.Require().Equal(fileSizeV3, fl.Size())

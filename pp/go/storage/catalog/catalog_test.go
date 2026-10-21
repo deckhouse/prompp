@@ -227,7 +227,8 @@ func (s *CatalogSuite) TestCatalogSyncFail() {
 
 func (s *CatalogSuite) TestEmptyLog() {
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -242,6 +243,7 @@ func (s *CatalogSuite) TestSeedReadsTwoRecords() {
 	}
 
 	l := &LogMock{
+		NeedsRewriteFunc: func() bool { return false },
 		ReadFunc: func(sr *catalog.SerializedRecord) error {
 			if len(writtenRecords) > 0 {
 				*sr = writtenRecords[0].SerializedRecord
@@ -271,8 +273,9 @@ func (s *CatalogSuite) TestSeedReadsTwoRecords() {
 
 func (s *CatalogSuite) TestSyncReadError_CompactSucceeds() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return errors.New("corrupt read") },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return errors.New("corrupt read") },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -285,8 +288,9 @@ func (s *CatalogSuite) TestSyncReadError_CompactSucceeds() {
 func (s *CatalogSuite) TestSyncReadError_CompactFails() {
 	expectedError := errors.New("rewrite failed")
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return errors.New("corrupt read") },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return expectedError },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return errors.New("corrupt read") },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return expectedError },
 	}
 
 	_, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -296,10 +300,11 @@ func (s *CatalogSuite) TestSyncReadError_CompactFails() {
 
 func (s *CatalogSuite) TestCreate_CompactWhenSizeAtThresholdThenWrite() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
-		SizeFunc:    func() int { return 42 },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, 42, nil)
@@ -316,9 +321,10 @@ func (s *CatalogSuite) TestCreate_CompactWhenSizeAtThresholdThenWrite() {
 func (s *CatalogSuite) TestCreate_CompactError() {
 	expectedError := errors.New("compact failed")
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return expectedError },
-		SizeFunc:    func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return expectedError },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, 42, nil)
@@ -331,9 +337,10 @@ func (s *CatalogSuite) TestCreate_CompactError() {
 func (s *CatalogSuite) TestCreate_WriteErrorReturnsRecordAndError() {
 	expectedError := errors.New("write failed")
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		WriteFunc: func(*catalog.SerializedRecord) error { return expectedError },
-		SizeFunc:  func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return expectedError },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -348,8 +355,9 @@ func (s *CatalogSuite) TestCreate_WriteErrorReturnsRecordAndError() {
 
 func (s *CatalogSuite) TestGet_NotFound() {
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc: func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -363,8 +371,9 @@ func (s *CatalogSuite) TestGet_NotFound() {
 
 func (s *CatalogSuite) TestDelete_UnknownID() {
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc: func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -376,9 +385,10 @@ func (s *CatalogSuite) TestDelete_UnknownID() {
 
 func (s *CatalogSuite) TestDelete_SuccessAndGetFails() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -396,9 +406,10 @@ func (s *CatalogSuite) TestDelete_SuccessAndGetFails() {
 func (s *CatalogSuite) TestDelete_SetsUpdatedAtToDeletionTime() {
 	// Arrange
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -420,10 +431,11 @@ func (s *CatalogSuite) TestDelete_SetsUpdatedAtToDeletionTime() {
 func (s *CatalogSuite) TestDelete_CompactError() {
 	size := 1000
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:    func() int { return size },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return size },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, size, nil)
@@ -440,9 +452,10 @@ func (s *CatalogSuite) TestDelete_CompactError() {
 
 func (s *CatalogSuite) TestDelete_WriteError() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
-		SizeFunc:  func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -463,9 +476,10 @@ func (s *CatalogSuite) TestDelete_WriteError() {
 
 func (s *CatalogSuite) TestList_FilterAndSort() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -499,8 +513,9 @@ func (s *CatalogSuite) TestList_FilterAndSort() {
 
 func (s *CatalogSuite) TestOnDiskSize() {
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc: func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -510,8 +525,9 @@ func (s *CatalogSuite) TestOnDiskSize() {
 
 func (s *CatalogSuite) TestSetCorrupted_NotFound() {
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc: func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -525,9 +541,10 @@ func (s *CatalogSuite) TestSetCorrupted_NotFound() {
 
 func (s *CatalogSuite) TestSetCorrupted_IdempotentNoSecondWrite() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -548,9 +565,10 @@ func (s *CatalogSuite) TestSetCorrupted_IdempotentNoSecondWrite() {
 
 func (s *CatalogSuite) TestSetCorrupted_WriteError() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
-		SizeFunc:  func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -572,10 +590,11 @@ func (s *CatalogSuite) TestSetCorrupted_WriteError() {
 
 func (s *CatalogSuite) TestSetCorrupted_CompactError() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:    func() int { return 42 },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, 1000, nil)
@@ -594,8 +613,9 @@ func (s *CatalogSuite) TestSetCorrupted_CompactError() {
 
 func (s *CatalogSuite) TestSetStatus_NotFound() {
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc: func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -609,9 +629,10 @@ func (s *CatalogSuite) TestSetStatus_NotFound() {
 
 func (s *CatalogSuite) TestSetStatus_SameStatusActive() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -631,9 +652,10 @@ func (s *CatalogSuite) TestSetStatus_SameStatusActive() {
 
 func (s *CatalogSuite) TestSetStatus_Transition() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -649,10 +671,11 @@ func (s *CatalogSuite) TestSetStatus_Transition() {
 
 func (s *CatalogSuite) TestSetStatus_CompactError() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:    func() int { return 42 },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, 1000, nil)
@@ -671,9 +694,10 @@ func (s *CatalogSuite) TestSetStatus_CompactError() {
 
 func (s *CatalogSuite) TestSetStatus_WriteError() {
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
-		SizeFunc:  func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -693,9 +717,10 @@ func (s *CatalogSuite) TestSetStatus_WriteError() {
 func (s *CatalogSuite) TestCreate_UnknownTimeBounds() {
 	// Arrange
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -713,9 +738,10 @@ func (s *CatalogSuite) TestCreate_UnknownTimeBounds() {
 func (s *CatalogSuite) TestSetTimeBounds() {
 	// Arrange
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -739,9 +765,10 @@ func (s *CatalogSuite) TestSetTimeBounds() {
 func (s *CatalogSuite) TestSetTimeBounds_SameBoundsNoSecondWrite() {
 	// Arrange
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -764,8 +791,9 @@ func (s *CatalogSuite) TestSetTimeBounds_SameBoundsNoSecondWrite() {
 func (s *CatalogSuite) TestSetTimeBounds_NotFound() {
 	// Arrange
 	l := &LogMock{
-		ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc: func() int { return 42 },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -782,9 +810,10 @@ func (s *CatalogSuite) TestSetTimeBounds_NotFound() {
 func (s *CatalogSuite) TestSetStatusWithTimeBounds_WriteError() {
 	// Arrange
 	l := &LogMock{
-		ReadFunc:  func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:  func() int { return 42 },
-		WriteFunc: func(*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -829,8 +858,9 @@ func (s *CatalogSuite) TestMutation_KeepsSegmentsCountChangedDuringWrite() {
 			// Arrange
 			var r *catalog.Record
 			l := &LogMock{
-				ReadFunc: func(*catalog.SerializedRecord) error { return io.EOF },
-				SizeFunc: func() int { return 42 },
+				NeedsRewriteFunc: func() bool { return false },
+				ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+				SizeFunc:         func() int { return 42 },
 				WriteFunc: func(*catalog.SerializedRecord) error {
 					// the WAL writer appends a segment while the change is being written to the log
 					if r != nil {
@@ -961,10 +991,11 @@ func (s *CatalogSuite) TestMutationsKeptAfterCompactAndReopen() {
 
 func (s *CatalogSuite) TestCompact_RemovesDeletedFromRewriteAndSortsByCreatedAt() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:    func() int { return 42 },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -988,10 +1019,11 @@ func (s *CatalogSuite) TestCompact_RemovesDeletedFromRewriteAndSortsByCreatedAt(
 
 func (s *CatalogSuite) TestCompact_SortsTwoRecordsByCreatedAt() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:    func() int { return 42 },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return nil },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
@@ -1017,16 +1049,17 @@ func (s *CatalogSuite) TestCompact_SortsTwoRecordsByCreatedAt() {
 	calls := l.ReWriteCalls()
 	s.Require().Len(calls, 1)
 	s.Require().Len(calls[0].Srecords, 2)
-	s.Require().Same(&r1.SerializedRecord, calls[0].Srecords[0])
-	s.Require().Same(&r2.SerializedRecord, calls[0].Srecords[1])
+	s.Require().Equal(&r1.SerializedRecord, calls[0].Srecords[0])
+	s.Require().Equal(&r2.SerializedRecord, calls[0].Srecords[1])
 }
 
 func (s *CatalogSuite) TestCompact_ReWriteError() {
 	l := &LogMock{
-		ReadFunc:    func(*catalog.SerializedRecord) error { return io.EOF },
-		SizeFunc:    func() int { return 42 },
-		WriteFunc:   func(*catalog.SerializedRecord) error { return nil },
-		ReWriteFunc: func(...*catalog.SerializedRecord) error { return errors.New("rewrite") },
+		NeedsRewriteFunc: func() bool { return false },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return io.EOF },
+		SizeFunc:         func() int { return 42 },
+		WriteFunc:        func(*catalog.SerializedRecord) error { return nil },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return errors.New("rewrite") },
 	}
 
 	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
