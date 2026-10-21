@@ -2,6 +2,7 @@
 
 #include "primitives/label_set.h"
 #include "series_data/encoder.h"
+#include "series_data/outdated_chunk_merger.h"
 #include "series_index/queried_series.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "status.h"
@@ -97,6 +98,37 @@ TEST_F(StatusFixture, EmptyChunk) {
 
   // Assert
   EXPECT_EQ((Status{.min_max_timestamp = {.min = 1, .max = 1}, .chunk_count = 1}), status);
+}
+
+TEST_F(StatusFixture, UnmergedOutdatedSampleIsNotCovered) {
+  // Arrange
+  Encoder<DataStorage, 2> encoder{storage_};
+  encoder.encode(0, 10, 1.0);
+  encoder.encode(0, 20, 1.0);
+  encoder.encode(0, 30, 1.0);
+  encoder.encode(0, 5, 1.0);
+
+  // Act
+  const auto status = get_status();
+
+  // Assert
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 10, .max = 30}), status.min_max_timestamp);
+}
+
+TEST_F(StatusFixture, OutdatedSampleIsCoveredAfterMerge) {
+  // Arrange
+  Encoder<DataStorage, 2> encoder{storage_};
+  encoder.encode(0, 10, 1.0);
+  encoder.encode(0, 20, 1.0);
+  encoder.encode(0, 30, 1.0);
+  encoder.encode(0, 5, 1.0);
+  series_data::OutdatedChunkMerger{encoder}.merge();
+
+  // Act
+  const auto status = get_status();
+
+  // Assert
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 5, .max = 30}), status.min_max_timestamp);
 }
 
 }  // namespace
