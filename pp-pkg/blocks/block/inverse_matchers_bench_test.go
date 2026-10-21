@@ -24,7 +24,7 @@ type inverseMatcherCase struct {
 }
 
 // BenchmarkInverseMatchersBlock measures warm-cache selection through the Prom++ block wrapper.
-// Both binaries must use this same harness; fixture creation and result validation are outside the timer.
+// Fixture creation and result validation run outside the timer.
 func BenchmarkInverseMatchersBlock(b *testing.B) {
 	for _, cardinality := range []int{100, 10000} {
 		b.Run(fmt.Sprintf("cardinality=%d", cardinality), func(b *testing.B) {
