@@ -20,8 +20,8 @@ import (
 	"github.com/prometheus/prometheus/util/testutil"
 )
 
-// allValuesErrorReader injects an iterator error behind the block reader wrapper.
-type allValuesErrorReader struct {
+// postingsErrorReader injects iterator errors behind the block reader wrapper.
+type postingsErrorReader struct {
 	tsdb.IndexReader
 	err error
 }
@@ -86,6 +86,62 @@ func (s *inverseMatchersSuite) TestAllLabelValuesCancellation() {
 	s.Require().ErrorIs(s.ir.PostingsForAllLabelValues(duringRead, "target").Err(), context.Canceled)
 }
 
+func (s *inverseMatchersSuite) TestAllLabelValuesV1() {
+	ir, err := index.NewFileReader("../../../tsdb/testdata/index_format_v1/index")
+	s.Require().NoError(err)
+	s.T().Cleanup(func() { s.Require().NoError(ir.Close()) })
+	r := blockIndexReader{ir: ir}
+	names, err := ir.LabelNames(s.T().Context())
+	s.Require().NoError(err)
+	s.Require().NotEmpty(names)
+
+	for _, name := range names {
+		s.Run(name, func() {
+			values, valuesErr := ir.LabelValues(s.T().Context(), name)
+			s.Require().NoError(valuesErr)
+			p, postingsErr := ir.Postings(s.T().Context(), name, values...)
+			s.Require().NoError(postingsErr)
+			expected, expectedErr := index.ExpandPostings(p)
+			s.Require().NoError(expectedErr)
+			s.Require().NotEmpty(expected)
+			actual, actualErr := index.ExpandPostings(r.PostingsForAllLabelValues(s.T().Context(), name))
+			s.Require().NoError(actualErr)
+			s.Equal(expected, actual)
+			p = r.PostingsForAllLabelValues(s.T().Context(), name)
+			s.True(p.Seek(expected[len(expected)/2]))
+			s.Equal(expected[len(expected)/2], p.At())
+			s.False(p.Seek(expected[len(expected)-1] + 1))
+			s.Require().NoError(p.Err())
+		})
+	}
+
+	refs, err := index.ExpandPostings(r.PostingsForAllLabelValues(s.T().Context(), "missing"))
+	s.Require().NoError(err)
+	s.Empty(refs)
+	ctx, cancel := context.WithCancel(s.T().Context())
+	cancel()
+	s.Require().ErrorIs(r.PostingsForAllLabelValues(ctx, "missing").Err(), context.Canceled)
+}
+
+func (s *inverseMatchersSuite) TestSelectorErrors() {
+	failure := errors.New("index read failed")
+	r := blockIndexReader{ir: postingsErrorReader{
+		IndexReader: s.ir,
+		err:         fmt.Errorf("decode postings: %w", failure),
+	}}
+
+	for _, matcher := range []*labels.Matcher{
+		labels.MustNewMatcher(labels.MatchEqual, "target", ""),
+		labels.MustNewMatcher(labels.MatchRegexp, "target", ""),
+		labels.MustNewMatcher(labels.MatchNotRegexp, "target", "a.*"),
+	} {
+		s.Run(matcher.String(), func() {
+			_, err := tsdb.PostingsForMatchers(s.T().Context(), r, matcher)
+			s.Require().ErrorIs(err, failure)
+		})
+	}
+}
+
 func (s *inverseMatchersSuite) TestSelectors() {
 	for _, typ := range []labels.MatchType{labels.MatchEqual, labels.MatchNotEqual, labels.MatchRegexp, labels.MatchNotRegexp} {
 		for _, pattern := range []string{"", ".*", ".+", "(?s:.+)", "a|b", "a.*", ".*b"} {
@@ -119,13 +175,26 @@ func (s *inverseMatchersSuite) TestSelectors() {
 	}
 }
 
-func (r allValuesErrorReader) PostingsForAllLabelValues(context.Context, string) index.Postings {
+func (r postingsErrorReader) PostingsForAllLabelValues(context.Context, string) index.Postings {
+	return index.ErrPostings(r.err)
+}
+
+func (r postingsErrorReader) PostingsForLabelMatching(context.Context, string, func(string) bool) index.Postings {
 	return index.ErrPostings(r.err)
 }
 
 func TestBlockIndexReaderAllValuesError(t *testing.T) {
 	failure := errors.New("index read failed")
-	r := blockIndexReader{ir: allValuesErrorReader{err: failure}}
+	r := blockIndexReader{ir: postingsErrorReader{err: failure}}
 
 	require.ErrorIs(t, r.PostingsForAllLabelValues(t.Context(), "target").Err(), failure)
+}
+
+func TestOOOCompactionAllLabelValuesUnsupported(t *testing.T) {
+	r := &tsdb.OOOCompactionHeadIndexReader{}
+
+	p := r.PostingsForAllLabelValues(t.Context(), "target")
+
+	require.False(t, p.Next())
+	require.ErrorContains(t, p.Err(), "not supported")
 }

@@ -661,6 +661,14 @@ func TestReader_PostingsForAllLabelValues(t *testing.T) {
 	require.Equal(t, []storage.SeriesRef{3, 4, 5, 6, 7, 8, 9, 10, 11}, refs)
 }
 
+func TestReader_PostingsForAllLabelValuesHonorsContextCancel(t *testing.T) {
+	ir, _, _ := createFileReader(t.Context(), t, nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	require.ErrorIs(t, ir.PostingsForAllLabelValues(ctx, "missing").Err(), context.Canceled)
+}
+
 func TestReader_PostingsForLabelMatchingHonorsContextCancel(t *testing.T) {
 	const seriesCount = 1000
 	var input indexWriterSeriesSlice
