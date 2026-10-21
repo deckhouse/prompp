@@ -958,23 +958,17 @@ func queryLabelNames[
 	}
 
 	poolProvider := head.PoolProvider()
-	var t TTask
-	taskCreated := false
+	resources := newSelectResources(poolProvider, head)
 	defer func() {
-		if taskCreated {
-			head.PutTask(t)
-		}
-
-		if stats.slots != nil {
-			poolProvider.PutShardSlots(stats.slots)
-		}
+		resources.release()
 
 		release()
 		stats.observeDuration()
 	}()
 
 	if stats.shards.Enabled() {
-		stats.slots = poolProvider.GetShardSlots()
+		resources.slots = poolProvider.GetShardSlots()
+		stats.slots = resources.slots
 	}
 
 	dedup := deduplicatorCtor(head.NumberOfShards())
@@ -982,7 +976,7 @@ func queryLabelNames[
 	stats.lap.Mark(metadataStagePrepare)
 	slots := stats.slots
 
-	t = head.CreateTask(
+	t := head.CreateTask(
 		taskName,
 		func(shard TShard) error {
 			start := slots.Start()
@@ -992,7 +986,7 @@ func queryLabelNames[
 			return err
 		},
 	)
-	taskCreated = true
+	resources.addTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -1051,23 +1045,17 @@ func queryLabelValues[
 	}
 
 	poolProvider := head.PoolProvider()
-	var t TTask
-	taskCreated := false
+	resources := newSelectResources(poolProvider, head)
 	defer func() {
-		if taskCreated {
-			head.PutTask(t)
-		}
-
-		if stats.slots != nil {
-			poolProvider.PutShardSlots(stats.slots)
-		}
+		resources.release()
 
 		release()
 		stats.observeDuration()
 	}()
 
 	if stats.shards.Enabled() {
-		stats.slots = poolProvider.GetShardSlots()
+		resources.slots = poolProvider.GetShardSlots()
+		stats.slots = resources.slots
 	}
 
 	dedup := deduplicatorCtor(head.NumberOfShards())
@@ -1075,7 +1063,7 @@ func queryLabelValues[
 	stats.lap.Mark(metadataStagePrepare)
 	slots := stats.slots
 
-	t = head.CreateTask(
+	t := head.CreateTask(
 		taskName,
 		func(shard TShard) error {
 			start := slots.Start()
@@ -1085,7 +1073,7 @@ func queryLabelValues[
 			return err
 		},
 	)
-	taskCreated = true
+	resources.addTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {

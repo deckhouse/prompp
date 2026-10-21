@@ -14,7 +14,7 @@ type taskPool[TTask Task] interface {
 	PutTask(TTask)
 }
 
-// selectResources owns pooled buffers and primary tasks until [Querier.Select] or [ChunkQuerier.Select] returns.
+// selectResources owns pooled buffers and primary tasks until a [Querier] or [ChunkQuerier] operation returns.
 // Unacquired buffers are nil and are skipped during cleanup. Shared data-load tasks remain owned by their waiters.
 type selectResources[TTask Task, TShard poolprovider.Shard] struct {
 	pool *poolprovider.HeadPool[TShard]
