@@ -53,7 +53,7 @@ func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {
 // createFileHandlerByVersion create [FileHandler] by version.
 func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, error) {
 	if version == LogFileVersionV3 {
-		return createV3FileHandler(filePath)
+		return createV3FileHandler(filePath, preallocateV3File, syncDir)
 	}
 
 	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
@@ -63,7 +63,7 @@ func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, 
 
 	offset, err := writeLogFileVersion(fh, version)
 	if err != nil {
-		return nil, errors.Join(err, fh.Close())
+		return nil, errors.Join(err, fh.Close(), os.Remove(filePath))
 	}
 
 	fh.SetReadOffset(int64(offset))

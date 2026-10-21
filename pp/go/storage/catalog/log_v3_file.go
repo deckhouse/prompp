@@ -104,7 +104,12 @@ func (fl *FileLog) rewriteV3(records []*SerializedRecord) error {
 
 // createV3FileHandler creates the fixed-size log file version 3 and returns a [FileHandler]
 // positioned at the beginning of the active journal.
-func createV3FileHandler(filePath string) (_ *FileHandler, err error) {
+// Initialization failures close and remove the file after it has been opened successfully.
+func createV3FileHandler(
+	filePath string,
+	preallocate func(*os.File) error,
+	syncDirectory func(string) error,
+) (_ *FileHandler, err error) {
 	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, err
@@ -112,11 +117,11 @@ func createV3FileHandler(filePath string) (_ *FileHandler, err error) {
 
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, fh.Close())
+			err = errors.Join(err, fh.Close(), os.Remove(filePath))
 		}
 	}()
 
-	if err = preallocateV3File(fh.file); err != nil {
+	if err = preallocate(fh.file); err != nil {
 		return nil, err
 	}
 
@@ -125,7 +130,7 @@ func createV3FileHandler(filePath string) (_ *FileHandler, err error) {
 		return nil, err
 	}
 
-	if err = syncDir(filepath.Dir(filePath)); err != nil {
+	if err = syncDirectory(filepath.Dir(filePath)); err != nil {
 		return nil, err
 	}
 
