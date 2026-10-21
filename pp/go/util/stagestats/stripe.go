@@ -48,3 +48,14 @@ func (s Stripe) Since(stage Stage, start int64) {
 
 	s.Observe(stage, Now()-start)
 }
+
+// Start starts a [Lap] on this stripe. A zero [Stripe] returns a no-op [Lap] without reading the clock.
+func (s Stripe) Start() Lap {
+	if !s.Enabled() {
+		return Lap{}
+	}
+
+	now := Now()
+
+	return Lap{stripe: s, start: now, prev: now}
+}

@@ -8,7 +8,10 @@ import (
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 )
 
 const differFromDefaultMetric = "prompp_features_differ_from_default"
@@ -286,4 +289,27 @@ func (s *LabelReplaceCacheSizeSuite) TestEmptyValueKeepsPreviousValues() {
 
 	s.Equal(16, s.cfg.labelReplaceCacheSize)
 	s.Equal(4, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func TestQueryStageMetricsFeature(t *testing.T) {
+	previous := querier.QueryStageMetricsEnabled
+	t.Cleanup(func() { querier.QueryStageMetricsEnabled = previous })
+	t.Setenv(featuresDefaultEnv, "")
+
+	for _, tc := range []struct {
+		name     string
+		features string
+		enabled  bool
+	}{
+		{name: "disabled by default"},
+		{name: "enabled explicitly", features: "enable_query_stage_metrics", enabled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			querier.QueryStageMetricsEnabled = false
+			t.Setenv(featuresEnv, tc.features)
+			ReadPromPPFeatures(log.NewNopLogger(), noopFlagConfig{}, prometheus.NewRegistry())
+
+			require.Equal(t, tc.enabled, querier.QueryStageMetricsEnabled)
+		})
+	}
 }

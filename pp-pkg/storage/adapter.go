@@ -242,7 +242,9 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 	if !headIsOutOfQueryRange(ahead, mint, maxt) {
 		queriers = append(
 			queriers,
-			querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+			querier.NewChunkQuerier(
+				ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics,
+			),
 		)
 	}
 
@@ -253,7 +255,9 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 
 		queriers = append(
 			queriers,
-			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+			querier.NewChunkQuerier(
+				head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics,
+			),
 		)
 	}
 
