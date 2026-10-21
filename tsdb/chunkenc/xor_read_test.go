@@ -250,6 +250,17 @@ func FuzzXORReadRoundTrip(f *testing.F) {
 		{2, 255, 0, 17},
 		{3, 0, 0, 0, 0, 0, 0, 0x80},
 		{3, 1, 0, 0, 0, 0, 0xf0, 0x7f},
+		// Exercise every delta-of-delta width with increasing and decreasing timestamp deltas.
+		{
+			0, 0, 0, 0, 0, 0, 0, 0,
+			1, 0, 0, 0, 0, 0, 0, 0,
+			127, 1, 0, 0, 0, 0, 0, 0,
+			15, 2, 0, 0, 0, 0, 0, 0,
+			0, 3, 0, 0, 0, 0, 0, 0,
+			15, 2, 0, 0, 0, 0, 0, 0,
+			127, 1, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+		},
 	} {
 		f.Add(seed)
 	}
@@ -279,7 +290,8 @@ func FuzzXORReadRoundTrip(f *testing.F) {
 				next = math.Sin(float64(i))
 			}
 
-			sample := pair{t: samples[len(samples)-1].t + 1 + int64(data[i]), v: next}
+			delta := (1 + int64(data[i])) << (7 * (encoded[1] % 4))
+			sample := pair{t: samples[len(samples)-1].t + delta, v: next}
 			samples = append(samples, sample)
 			appender.Append(sample.t, sample.v)
 		}
