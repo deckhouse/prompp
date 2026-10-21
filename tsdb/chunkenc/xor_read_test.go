@@ -219,14 +219,16 @@ func (s *XORReadSuite) valueReader(valid uint8, next float64, leading, trailing 
 	stream := &bstream{}
 	stream.writeBits(0, int(64-valid))
 
-	if !reuse {
+	iterator := &xorIterator{
+		val: 42, t: 10_000, tDelta: 10_000, numRead: 1, numTotal: 3,
+	}
+
+	if reuse {
+		iterator.leading, iterator.trailing = leading, trailing
+	} else {
 		leading, trailing = 0xff, 0
 	}
 
-	iterator := &xorIterator{
-		leading: leading, trailing: trailing, val: 42,
-		t: 10_000, tDelta: 10_000, numRead: 1, numTotal: 3,
-	}
 	xorWrite(stream, next, 42, &leading, &trailing)
 	stream.writeBits(0b10, 2)
 	stream.writeBits(1, 14)
