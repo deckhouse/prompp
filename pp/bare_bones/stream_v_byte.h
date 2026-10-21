@@ -858,24 +858,30 @@ class CompactSequence {
     uint32_t size_;
     typename Codec::LengthAndMask length_and_mask_;
     uint8_t shift_{};
+    bool bounded_reads_{};
 
    public:
     using iterator_category = std::input_iterator_tag;
     using value_type = typename Codec::value_type;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE DecodeIterator(const uint8_t* key_iterator, const uint8_t* data_iterator, uint32_t size) noexcept
+    PROMPP_ALWAYS_INLINE DecodeIterator(const uint8_t* key_iterator, const uint8_t* data_iterator, uint32_t size, bool bounded_reads = false) noexcept
         : key_iterator_(key_iterator),
           data_iterator_(data_iterator),
           size_(size),
-          length_and_mask_(Codec::get_length_and_mask(size_ == 0 ? 0 : (*key_iterator_ & 0x03))) {}
+          length_and_mask_(Codec::get_length_and_mask(size_ == 0 ? 0 : (*key_iterator_ & 0x03))),
+          bounded_reads_(bounded_reads) {}
 
     PROMPP_ALWAYS_INLINE DecodeIterator& operator++() noexcept {
-      assert(size_ != 0);
+      assert(offset_ != size_);
 
       data_iterator_ += length_and_mask_.length;
 
-      if (++offset_ % kPreAllocationElementsCount == 0) [[unlikely]] {
+      if (++offset_ == size_) {
+        return *this;
+      }
+
+      if (offset_ % kPreAllocationElementsCount == 0) [[unlikely]] {
         key_iterator_ = data_iterator_;
         data_iterator_ += kMaxKeySize;
         shift_ = 0;
@@ -897,7 +903,15 @@ class CompactSequence {
     PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept = default;
     PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return offset_ == size_; }
 
-    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return Codec::decode(length_and_mask_, data_iterator_); }
+    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+      if (bounded_reads_) {
+        // Serialized input does not require readable padding after its encoded bytes.
+        value_type value{};
+        std::memcpy(&value, data_iterator_, length_and_mask_.length);
+        return value & length_and_mask_.mask;
+      }
+      return Codec::decode(length_and_mask_, data_iterator_);
+    }
   };
 
   using iterator = DecodeIterator;
@@ -970,9 +984,12 @@ class CompactSequence {
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
 
-  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept { return {memory, memory + kMaxKeySize, size}; }
+  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept {
+    return size == 0 ? DecodeIterator{nullptr, nullptr, 0} : DecodeIterator{memory, memory + kMaxKeySize, size};
+  }
 
   PROMPP_ALWAYS_INLINE DecodeIterator begin() const noexcept { return decode_iterator(buffer_.begin(), size()); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE static DecodeIteratorSentinel end() noexcept { return {}; }
 
   PROMPP_ALWAYS_INLINE const Memory& buffer() const noexcept { return buffer_; }
@@ -1011,7 +1028,30 @@ class CompactSequence {
     const std::span compact_data(buffer.data(), buffer_size_in_bytes);
     buffer = buffer.subspan(buffer_size_in_bytes);
 
-    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count);
+    if (elements_count == 0) {
+      return DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    auto remaining = compact_data;
+    for (auto count = elements_count; count != 0;) {
+      if (remaining.size() < kMaxKeySize) {
+        return DecodeIterator{nullptr, nullptr, 0};
+      }
+      const auto block_count = std::min(count, kPreAllocationElementsCount);
+      const auto grouped_count = block_count & ~3U;
+      size_t data_size = Codec::decode_data_size(grouped_count, remaining.data());
+      for (auto i = grouped_count; i < block_count; ++i) {
+        data_size += Codec::get_length_and_mask((remaining[i / 4] >> ((i % 4) * 2)) & 3).length;
+      }
+      remaining = remaining.subspan(kMaxKeySize);
+      if (remaining.size() < data_size) {
+        return DecodeIterator{nullptr, nullptr, 0};
+      }
+      remaining = remaining.subspan(data_size);
+      count -= block_count;
+    }
+
+    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count, true);
   }
 
  private:

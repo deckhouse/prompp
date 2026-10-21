@@ -46,6 +46,8 @@ class SeriesIdSequence : public BareBones::EncodedSequence<DeltaRLE> {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
 };
 
+// Known limitation: snapshots share live encoded storage and item counts.
+// Concurrent append and snapshot iteration can race on metadata, keys and wide value reads.
 class SeriesIdSequenceSnapshot {
  public:
   using value_type = DeltaRLE::DataSequence::value_type;

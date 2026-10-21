@@ -175,4 +175,56 @@ TEST_P(CompactSequenceCreateIteratorParamFixture, CreateReadIteratorValid) {
 
 INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceCreateIteratorParamFixture, kIotaCases);
 
+TEST_F(CompactSequenceCreateIteratorFixture, RejectsNonzeroCountWithoutBody) {
+  // Arrange
+  const std::array<uint32_t, 2> header{0, 1};
+  auto buffer = std::as_bytes(std::span(header));
+  std::span<const uint8_t> bytes(reinterpret_cast<const uint8_t*>(buffer.data()), buffer.size());
+
+  // Act
+  const auto it = sequence_.create_read_iterator(bytes);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_TRUE(bytes.empty());
+}
+
+TEST_F(CompactSequenceCreateIteratorFixture, RejectsMissingValueBytes) {
+  // Arrange
+  const std::array<uint8_t, 9> record{1, 0, 0, 0, 1, 0, 0, 0, 3};
+  std::span<const uint8_t> bytes(record);
+
+  // Act
+  const auto it = sequence_.create_read_iterator(bytes);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+}
+
+TEST_F(CompactSequenceCreateIteratorFixture, RejectsCountBeyondAvailableBlocks) {
+  // Arrange
+  const std::array<uint8_t, 9> record{1, 0, 0, 0, 5, 0, 0, 0, 0};
+  std::span<const uint8_t> bytes(record);
+
+  // Act
+  const auto it = sequence_.create_read_iterator(bytes);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+}
+
+TEST_F(CompactSequenceCreateIteratorFixture, ReadsZeroValuesWithoutDecoderPadding) {
+  // Arrange
+  const std::array<uint8_t, 9> record{1, 0, 0, 0, 4, 0, 0, 0, 0};
+  std::span<const uint8_t> bytes(record);
+  const std::array<uint32_t, 4> expected{0, 0, 0, 0};
+
+  // Act
+  const auto it = sequence_.create_read_iterator(bytes);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(it, sequence_.end(), expected.begin(), expected.end()));
+  EXPECT_TRUE(bytes.empty());
+}
+
 }  // namespace

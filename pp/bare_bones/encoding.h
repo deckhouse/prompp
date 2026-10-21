@@ -54,7 +54,7 @@ class RLEBackend {
         if (count_ == std::numeric_limits<value_type>::max() - 1) {
           *i++ = last_;
           *i++ = count_;
-          count_ = 0;
+          clear();
         }
       } else {
         *i++ = last_;
@@ -111,7 +111,6 @@ class RLEBackend {
       if (count_ == std::numeric_limits<value_type>::max()) {
         if (begin != end) {
           last_ = *begin++;
-          assert(begin != end);
 
           if (__builtin_expect(begin == end, false))
             // that's not a normal situation, but we allow one missing count at the end
@@ -254,7 +253,7 @@ class DeltaZigZagTransform {
    public:
     template <std::output_iterator<value_type> IteratorType>
     PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
-      Base::encode(ZigZag::encode(std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_)), i);
+      Base::encode(ZigZag::encode(std::bit_cast<int_type>(static_cast<value_type>(val - last_))), i);
       last_ = val;
     }
 
@@ -300,14 +299,14 @@ class DeltaDeltaZigZagTransform {
     using int_type = std::make_signed_t<value_type>;
 
     value_type last_ = 0;
-    int_type last_delta_ = 0;
+    value_type last_delta_ = 0;
     using Base = typename Backend<DataSequence>::Encoder;
 
    public:
     template <std::output_iterator<value_type> IteratorType>
     PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
-      const int_type curr_delta = std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_);
-      Base::encode(ZigZag::encode(curr_delta - last_delta_), i);
+      const value_type curr_delta = val - last_;
+      Base::encode(ZigZag::encode(std::bit_cast<int_type>(static_cast<value_type>(curr_delta - last_delta_))), i);
       last_delta_ = curr_delta;
       last_ = val;
     }
@@ -326,7 +325,7 @@ class DeltaDeltaZigZagTransform {
     using int_type = std::make_signed_t<value_type>;
 
     value_type last_ = 0;
-    int_type last_delta_ = 0;
+    value_type last_delta_ = 0;
     using Base = typename Backend<DataSequence>::Decoder;
 
    public:
