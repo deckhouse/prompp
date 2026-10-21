@@ -101,7 +101,7 @@ func (s *inverseMatchersSuite) TestSelectors() {
 					}
 					expected := []string{}
 					for _, series := range s.series {
-						if s.matches(series.Labels(), ms) {
+						if testutils.LabelsMatch(series.Labels(), ms) {
 							expected = append(expected, series.Labels().Get("id"))
 						}
 					}
@@ -117,15 +117,6 @@ func (s *inverseMatchersSuite) TestSelectors() {
 			}
 		}
 	}
-}
-
-func (s *inverseMatchersSuite) matches(ls labels.Labels, matchers []*labels.Matcher) bool {
-	for _, matcher := range matchers {
-		if !matcher.Matches(ls.Get(matcher.Name)) {
-			return false
-		}
-	}
-	return true
 }
 
 func (r allValuesErrorReader) PostingsForAllLabelValues(context.Context, string) index.Postings {

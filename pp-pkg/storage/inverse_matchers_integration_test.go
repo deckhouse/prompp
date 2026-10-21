@@ -116,7 +116,7 @@ func (s *inverseMixedSuite) TestMixedSelectSamples() {
 				expected := make(map[string][]cppbridge.Sample)
 
 				for _, series := range s.mixedSeries {
-					if s.matches(series.Labels, ms) {
+					if testutils.LabelsMatch(series.Labels, ms) {
 						expected[series.Labels.Get("id")] = series.Samples
 					}
 				}
@@ -156,7 +156,7 @@ func (s *inverseMixedSuite) checkMetadata(q storage.Querier, allSeries []storage
 				expectedNames := make(map[string]struct{})
 
 				for _, series := range allSeries {
-					if !s.matches(series.Labels, ms) {
+					if !testutils.LabelsMatch(series.Labels, ms) {
 						continue
 					}
 
@@ -182,14 +182,4 @@ func (s *inverseMixedSuite) matchers(typ labels.MatchType, value string) []*labe
 		labels.MustNewMatcher(labels.MatchEqual, "__name__", "inverse_metric"),
 		labels.MustNewMatcher(typ, "target", value),
 	}
-}
-
-func (s *inverseMixedSuite) matches(ls labels.Labels, matchers []*labels.Matcher) bool {
-	for _, matcher := range matchers {
-		if !matcher.Matches(ls.Get(matcher.Name)) {
-			return false
-		}
-	}
-
-	return true
 }

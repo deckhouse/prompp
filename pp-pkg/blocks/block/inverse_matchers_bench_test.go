@@ -46,7 +46,7 @@ func BenchmarkInverseMatchersBlock(b *testing.B) {
 					expectedSum := 0.0
 
 					for i, s := range series {
-						if inverseMatcherMatches(s.Labels(), tc.matchers) {
+						if testutils.LabelsMatch(s.Labels(), tc.matchers) {
 							expected++
 							expectedSum += float64(i * 16)
 						}
@@ -114,16 +114,6 @@ func inverseMatcherCases() []inverseMatcherCase {
 		{"regex_plus", []*labels.Matcher{base, matcher(labels.MatchRegexp, "target", ".+")}},
 		{"negative_regex_plus", []*labels.Matcher{base, matcher(labels.MatchNotRegexp, "target", ".+")}},
 	}
-}
-
-func inverseMatcherMatches(ls labels.Labels, matchers []*labels.Matcher) bool {
-	for _, m := range matchers {
-		if !m.Matches(ls.Get(m.Name)) {
-			return false
-		}
-	}
-
-	return true
 }
 
 func inverseMatcherRead(ctx context.Context, q storage.Querier, matchers []*labels.Matcher) (int, float64, error) {
