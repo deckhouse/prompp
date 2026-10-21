@@ -162,35 +162,76 @@ func (s *QuerierStatsSuite) TestCrossSeriesRange() {
 }
 
 func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
-	s.head.acquireErr = context.Canceled
+	// Arrange
 	ctx := context.Background()
 
-	for _, operation := range []string{
-		"select_instant", "select_range", "select_chunks", "label_names", "label_values",
-		"chunk_label_names", "chunk_label_values",
+	for _, tc := range []struct {
+		operation string
+		call      func() error
+	}{
+		{
+			operation: "select_instant",
+			call: func() error {
+				return s.q.Select(ctx, false, &storage.SelectHints{}, s.matchers...).Err()
+			},
+		},
+		{
+			operation: "select_range",
+			call: func() error {
+				return s.q.Select(ctx, false, s.hints, s.matchers...).Err()
+			},
+		},
+		{
+			operation: "select_chunks",
+			call: func() error {
+				return s.cq.Select(ctx, false, s.hints, s.matchers...).Err()
+			},
+		},
+		{
+			operation: "label_names",
+			call: func() error {
+				_, _, err := s.q.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
+
+				return err
+			},
+		},
+		{
+			operation: "label_values",
+			call: func() error {
+				_, _, err := s.q.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
+
+				return err
+			},
+		},
+		{
+			operation: "chunk_label_names",
+			call: func() error {
+				_, _, err := s.cq.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
+
+				return err
+			},
+		},
+		{
+			operation: "chunk_label_values",
+			call: func() error {
+				_, _, err := s.cq.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
+
+				return err
+			},
+		},
 	} {
-		var err error
+		s.Run(tc.operation, func() {
+			// Arrange
+			s.head.acquireErr = context.Canceled
 
-		switch operation {
-		case "select_instant":
-			err = s.q.Select(ctx, false, &storage.SelectHints{}, s.matchers...).Err()
-		case "select_range":
-			err = s.q.Select(ctx, false, s.hints, s.matchers...).Err()
-		case "select_chunks":
-			err = s.cq.Select(ctx, false, s.hints, s.matchers...).Err()
-		case "label_names":
-			_, _, err = s.q.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
-		case "label_values":
-			_, _, err = s.q.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
-		case "chunk_label_names":
-			_, _, err = s.cq.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
-		case "chunk_label_values":
-			_, _, err = s.cq.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
-		}
+			// Act
+			err := tc.call()
 
-		s.Require().ErrorIs(err, context.Canceled)
-		s.Equal(map[string]float64{"semaphore_wait": 1}, s.counts(operation, false))
-		s.Empty(s.counts(operation, true))
+			// Assert
+			s.Require().ErrorIs(err, context.Canceled)
+			s.Equal(map[string]float64{"semaphore_wait": 1}, s.counts(tc.operation, false))
+			s.Empty(s.counts(tc.operation, true))
+		})
 	}
 }
 
