@@ -130,6 +130,10 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 		querier.InstantQueryFeature = true
 		_ = level.Info(logger).Log(msgStr, "Instant query feature is enabled.")
 
+	case "enable_query_stage_metrics":
+		querier.QueryStageMetricsEnabled = true
+		_ = level.Info(logger).Log(msgStr, "Query stage metrics are enabled.")
+
 	case "disable_remote_write_http2":
 		remotewriter.HTTP2Enabled = false
 		_ = level.Info(logger).Log(msgStr, "HTTP/2 for remote write is disabled.")

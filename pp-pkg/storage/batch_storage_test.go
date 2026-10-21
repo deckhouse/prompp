@@ -9,7 +9,6 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -17,6 +16,7 @@ import (
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -39,14 +39,15 @@ func (b *testTimeSeriesBatch) Destroy() {
 
 type BatchStorageSuite struct {
 	suite.Suite
-	ctx     context.Context
-	dataDir string
-	catalog *catalog.Catalog
-	builder *pp_storage.Builder
-	clock   clockwork.Clock
-	state   *cppbridge.StateV2
-	adapter *Adapter
-	manager *pp_storage.Manager
+	registry *prometheus.Registry
+	ctx      context.Context
+	dataDir  string
+	catalog  *catalog.Catalog
+	builder  *pp_storage.Builder
+	clock    clockwork.Clock
+	state    *cppbridge.StateV2
+	adapter  *Adapter
+	manager  *pp_storage.Manager
 }
 
 func TestBatchStorageSuite(t *testing.T) {
@@ -54,6 +55,7 @@ func TestBatchStorageSuite(t *testing.T) {
 }
 
 func (s *BatchStorageSuite) SetupTest() {
+	s.registry = prometheus.NewRegistry()
 	s.ctx = context.Background()
 	s.clock = clockwork.NewFakeClock()
 	s.dataDir = s.createDataDir()
@@ -61,7 +63,7 @@ func (s *BatchStorageSuite) SetupTest() {
 		s.catalog,
 		s.dataDir,
 		maxSegmentSize,
-		prometheus.DefaultRegisterer,
+		s.registry,
 		unloadDataStorageInterval,
 	)
 	s.state = cppbridge.NewTransitionStateV2()
@@ -107,7 +109,7 @@ func (s *BatchStorageSuite) createManagerAndAdapter() {
 		pp_storage.NewTriggerNotifier(),
 		pp_storage.NewTriggerNotifier(),
 		nil,
-		prometheus.DefaultRegisterer,
+		s.registry,
 	)
 	s.Require().NoError(errManager)
 
@@ -116,7 +118,7 @@ func (s *BatchStorageSuite) createManagerAndAdapter() {
 		s.manager.Proxy(),
 		s.manager.Builder(),
 		s.manager.MergeOutOfOrderChunks,
-		prometheus.DefaultRegisterer,
+		s.registry,
 	)
 }
 
