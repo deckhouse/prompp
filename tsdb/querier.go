@@ -254,6 +254,7 @@ func PostingsForMatchers(ctx context.Context, ix IndexReader, ms ...*labels.Matc
 				return nil, err
 			}
 			its = append(its, allPostings)
+
 		case labelMustBeSet[m.Name]:
 			// If this matcher must be non-empty, we can be smarter.
 			matchesEmpty := m.Matches("")
@@ -288,7 +289,7 @@ func PostingsForMatchers(ctx context.Context, ix IndexReader, ms ...*labels.Matc
 					return index.EmptyPostings(), nil
 				}
 				its = append(its, it)
-			default: // l="a"
+			default: // l="a", l=~"a|b", l=~"a.b", etc.
 				// Non-Not matcher, use normal postingsForMatcher.
 				it, err := postingsForMatcher(ctx, ix, m)
 				if err != nil {
@@ -359,29 +360,16 @@ func inversePostingsForMatcher(ctx context.Context, ix IndexReader, m *labels.Ma
 		return ix.Postings(ctx, m.Name, m.Value)
 	}
 
-	vals, err := ix.LabelValues(ctx, m.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	res := vals[:0]
-	// If the match before inversion was !="" or !~"", we just want all the values.
+	// If the matcher being inverted is =~"" or ="", we just want all the values.
 	if m.Value == "" && (m.Type == labels.MatchRegexp || m.Type == labels.MatchEqual) {
-		res = vals
-	} else {
-		count := 1
-		for _, val := range vals {
-			if count%checkContextEveryNIterations == 0 && ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			count++
-			if !m.Matches(val) {
-				res = append(res, val)
-			}
-		}
+		it := ix.PostingsForAllLabelValues(ctx, m.Name)
+		return it, it.Err()
 	}
 
-	return ix.Postings(ctx, m.Name, res...)
+	it := ix.PostingsForLabelMatching(ctx, m.Name, func(s string) bool {
+		return !m.Matches(s)
+	})
+	return it, it.Err()
 }
 
 func labelValuesWithMatchers(ctx context.Context, r IndexReader, name string, matchers ...*labels.Matcher) ([]string, error) {

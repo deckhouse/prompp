@@ -2383,6 +2383,16 @@ func (m mockIndex) PostingsForLabelMatching(ctx context.Context, name string, ma
 	return index.Merge(ctx, res...)
 }
 
+func (m mockIndex) PostingsForAllLabelValues(ctx context.Context, name string) index.Postings {
+	var res []index.Postings
+	for l, srs := range m.postings {
+		if l.Name == name {
+			res = append(res, index.NewListPostings(srs))
+		}
+	}
+	return index.Merge(ctx, res...)
+}
+
 func (m mockIndex) ShardedPostings(p index.Postings, shardIndex, shardCount uint64) index.Postings {
 	out := make([]storage.SeriesRef, 0, 128)
 
@@ -2985,6 +2995,15 @@ func TestPostingsForMatchers(t *testing.T) {
 				labels.FromStrings("n", "2.5"),
 			},
 		},
+		// Test shortcut i!~".+"
+		{
+			matchers: []*labels.Matcher{labels.MustNewMatcher(labels.MatchRegexp, "n", ".*"), labels.MustNewMatcher(labels.MatchNotRegexp, "i", ".+")},
+			exp: []labels.Labels{
+				labels.FromStrings("n", "1"),
+				labels.FromStrings("n", "2"),
+				labels.FromStrings("n", "2.5"),
+			},
+		},
 	}
 
 	ir, err := h.Index()
@@ -3303,6 +3322,10 @@ func (m mockMatcherIndex) LabelNames(context.Context, ...*labels.Matcher) ([]str
 
 func (m mockMatcherIndex) PostingsForLabelMatching(context.Context, string, func(string) bool) index.Postings {
 	return index.ErrPostings(fmt.Errorf("PostingsForLabelMatching called"))
+}
+
+func (m mockMatcherIndex) PostingsForAllLabelValues(context.Context, string) index.Postings {
+	return index.ErrPostings(errors.New("PostingsForAllLabelValues called"))
 }
 
 func TestPostingsForMatcher(t *testing.T) {
@@ -3703,17 +3726,6 @@ func TestReader_PostingsForLabelMatchingHonorsContextCancel(t *testing.T) {
 	require.Equal(t, failAfter+1, ctx.Count()) // Plus one for the Err() call that puts the error in the result.
 }
 
-func TestReader_InversePostingsForMatcherHonorsContextCancel(t *testing.T) {
-	ir := mockReaderOfLabels{}
-
-	failAfter := uint64(mockReaderOfLabelsSeriesCount / 2 / checkContextEveryNIterations)
-	ctx := &testutil.MockContextErrAfter{FailAfter: failAfter}
-	_, err := inversePostingsForMatcher(ctx, ir, labels.MustNewMatcher(labels.MatchRegexp, "__name__", ".*"))
-
-	require.Error(t, err)
-	require.Equal(t, failAfter+1, ctx.Count()) // Plus one for the Err() call that puts the error in the result.
-}
-
 type mockReaderOfLabels struct{}
 
 const mockReaderOfLabelsSeriesCount = checkContextEveryNIterations * 10
@@ -3744,6 +3756,10 @@ func (m mockReaderOfLabels) LabelNamesFor(context.Context, index.Postings) ([]st
 
 func (m mockReaderOfLabels) PostingsForLabelMatching(context.Context, string, func(string) bool) index.Postings {
 	panic("PostingsForLabelMatching called")
+}
+
+func (m mockReaderOfLabels) PostingsForAllLabelValues(context.Context, string) index.Postings {
+	panic("PostingsForAllLabelValues called")
 }
 
 func (m mockReaderOfLabels) Postings(context.Context, string, ...string) (index.Postings, error) {
