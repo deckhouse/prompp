@@ -139,16 +139,6 @@ type queryStats struct {
 	durationStart int64
 }
 
-// queryLSSResources holds the completed selector task and pooled buffers until the caller releases its resources.
-type queryLSSResources[TTask Task] struct {
-	// task is returned to the head's task pool during cleanup.
-	task TTask
-	// selectors is the pooled buffer used for per-shard selector pointers.
-	selectors []uintptr
-	// errors accumulates per-shard snapshot query errors in a pooled buffer.
-	errors []error
-}
-
 // queryRecorders shares stage counters across invocations and heads for one source and operation.
 type queryRecorders struct {
 	// stages accounts elapsed time on the caller goroutine, including waits.

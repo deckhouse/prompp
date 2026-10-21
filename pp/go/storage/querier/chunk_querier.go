@@ -128,10 +128,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
-	stats := q.metrics.startQuery(operationSelectChunks)
-	release, err := q.head.AcquireQuery(ctx)
-	stats.lap.Mark(stageSemaphoreWait)
-
+	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSelectChunks)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
 			return &EmptyChunkSeriesSet{}
@@ -141,27 +138,11 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	poolProvider := q.head.PoolProvider()
-	resources := newSelectResources[TTask](poolProvider, q.head)
-	defer func() {
-		resources.release()
+	defer resources.close()
 
-		release()
-	}()
-
-	if stats.shards.Enabled() {
-		resources.slots = poolProvider.GetShardSlots()
-		stats.slots = resources.slots
-	}
-
-	resources.snapshots = poolProvider.GetSnapshots()
-	resources.lssQueryResults = poolProvider.GetLSSQueryResults()
-
-	resources.lss, err = queryLss(
-		lssQueryChunkQuerySelector, q.head, matchers, resources.snapshots, resources.lssQueryResults, &stats,
-	)
-	resources.addTask(resources.lss.task)
-
+	stats := &resources.stats
+	poolProvider := resources.pool
+	err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, &resources)
 	if err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
@@ -170,7 +151,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	resources.serializedData = poolProvider.GetSerializedData()
 
 	t := queryDataStorage(
-		dsQueryChunkQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, &stats,
+		dsQueryChunkQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, stats,
 	)
 	resources.addTask(t)
 

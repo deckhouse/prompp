@@ -420,6 +420,59 @@ func (s *QuerierStatsSuite) TestSelectorError() {
 	s.Equal(float64(1), s.counts("select_range", true)["data_storage_query"])
 }
 
+func (s *QuerierStatsSuite) TestSelectorTaskCleanupOnEnqueuePanic() {
+	for _, tc := range []struct {
+		operation string
+		call      func()
+	}{
+		{
+			operation: "select_instant",
+			call: func() {
+				s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...)
+			},
+		},
+		{
+			operation: "select_range",
+			call: func() {
+				s.q.Select(context.Background(), false, s.hints, s.matchers...)
+			},
+		},
+		{
+			operation: "select_chunks",
+			call: func() {
+				s.cq.Select(context.Background(), false, s.hints, s.matchers...)
+			},
+		},
+	} {
+		s.Run(tc.operation, func() {
+			// Arrange
+			var enqueued *statsTask
+			var returned int
+			var released bool
+			s.head.onEnqueue = func(t *statsTask) {
+				enqueued = t
+				panic("enqueue failed")
+			}
+			s.head.onPutTask = func(t *statsTask) {
+				s.Same(enqueued, t)
+				returned++
+			}
+			s.head.onRelease = func() {
+				s.Equal(1, returned)
+				released = true
+			}
+
+			// Act
+			s.Require().PanicsWithValue("enqueue failed", tc.call)
+
+			// Assert
+			s.Require().NotNil(enqueued)
+			s.Equal(1, returned)
+			s.True(released)
+		})
+	}
+}
+
 func (s *QuerierStatsSuite) TestSharedLoadWaiters() {
 	first := querier.NewLoadAndQueryWaiter[*statsTask, querier.DataStorage, querier.LSS](s.head)
 	second := querier.NewLoadAndQueryWaiter[*statsTask, querier.DataStorage, querier.LSS](s.head)

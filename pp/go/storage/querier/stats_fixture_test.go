@@ -15,9 +15,12 @@ import (
 
 type statsTask = task.Generic[*statsShard]
 
+// statsHead injects acquisition and enqueue failures and observes task and semaphore cleanup.
 type statsHead struct {
 	*head.Head[*statsShard, *statsShard]
 	acquireErr error
+	onEnqueue  func(*statsTask)
+	onPutTask  func(*statsTask)
 	onRelease  func()
 }
 
@@ -38,6 +41,24 @@ func (h *statsHead) AcquireQuery(ctx context.Context) (func(), error) {
 			h.onRelease()
 		}
 	}, nil
+}
+
+// Enqueue invokes the test hook before dispatching the task to shards.
+func (h *statsHead) Enqueue(t *statsTask) {
+	if h.onEnqueue != nil {
+		h.onEnqueue(t)
+	}
+
+	h.Head.Enqueue(t)
+}
+
+// PutTask invokes the test hook before returning the completed task to its pool.
+func (h *statsHead) PutTask(t *statsTask) {
+	if h.onPutTask != nil {
+		h.onPutTask(t)
+	}
+
+	h.Head.PutTask(t)
 }
 
 type statsShard struct {
