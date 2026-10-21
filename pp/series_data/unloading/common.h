@@ -6,10 +6,9 @@
 
 namespace series_data::unloading {
 
-using EncodingChunkLengthSequence =
-    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+using EncodingChunkLengthSequence = BareBones::DeltaDeltaZigZagSequence;
 using EncodingChunkIDSequence =
-    BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+    BareBones::RleSequence<BareBones::coding::Identity, BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>;
 
 template <chunk::DataChunk::Type ChunkType, class DataStorage>
 [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage::CompactBitSequence& get_chunk_stream(DataStorage& storage, const chunk::DataChunk& chunk) noexcept {

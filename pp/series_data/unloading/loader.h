@@ -154,8 +154,8 @@ class Loader {
 
   void load_next(std::span<const uint8_t> buffer) {
     const auto bitset_it = BareBones::Bitset::create_read_iterator(buffer);
-    const auto length_it = EncodingChunkLengthSequence::create_read_iterator(buffer, length_encoder_);
-    const auto id_it = EncodingChunkIDSequence::create_read_iterator(buffer, id_encoder_);
+    const auto length_it = EncodingChunkLengthSequence::read_view(buffer).begin();
+    const auto id_it = EncodingChunkIDSequence::read_view(buffer).begin();
 
     const uint8_t* bitseqs_ptr = buffer.data();
 
@@ -227,9 +227,6 @@ class Loader {
   }
 
   Storage& storage_;
-
-  EncodingChunkLengthSequence::encoder_type length_encoder_{};
-  EncodingChunkIDSequence::encoder_type id_encoder_{};
 
   UnorderedVector ls_id_to_infos_{};
 };

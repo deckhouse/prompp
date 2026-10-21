@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include <spanstream>
 #include <sstream>
 #include <string>
@@ -440,6 +442,50 @@ TEST_F(CreateBasicEncoderFromBasicDecoderFixture, Test) {
   // Assert
   ASSERT_EQ((DecodedPoint{.sample = kThirdSample, .ls_id = 0}), third_point);
   ASSERT_EQ((DecodedPoint{.sample = kFourthSample, .ls_id = 1}), fourth_point);
+}
+
+class WalSequenceValidationFixture : public testing::Test {
+ protected:
+  struct EncodedRun {
+    uint32_t code;
+    uint32_t repeats;
+  };
+
+  PromPP::WAL::SequenceStore store_;
+  std::stringstream input_;
+
+  void write_run(EncodedRun run) {
+    PromPP::WAL::SequenceStore codes;
+    codes.push_back(run.code);
+    codes.push_back(run.repeats);
+    // Keep WAL framing valid so only the run violates its contract.
+    input_.put(1);
+    input_.put(1);
+    input_ << codes;
+    input_.seekg(0);
+  }
+};
+
+TEST_F(WalSequenceValidationFixture, RejectsInvalidRunLengthBeforeIteration) {
+  // Arrange
+  write_run({.code = 1, .repeats = std::numeric_limits<uint32_t>::max()});
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::read_sequence_record<1>(input_, store_), BareBones::Exception);
+
+  // Assert
+  EXPECT_TRUE(store_.empty());
+}
+
+TEST_F(WalSequenceValidationFixture, RejectsDeltaRunOutsideValueDomain) {
+  // Arrange
+  write_run({.code = std::numeric_limits<uint32_t>::max(), .repeats = 1});
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::read_sequence_record<1>(input_, store_), BareBones::Exception);
+
+  // Assert
+  EXPECT_TRUE(store_.empty());
 }
 
 }  // namespace

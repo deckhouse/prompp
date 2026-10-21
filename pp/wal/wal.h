@@ -27,6 +27,61 @@
 
 namespace PromPP::WAL {
 
+using SequenceStore = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124Frequent0>;
+using LabelIdSequence = BareBones::RleSequence<BareBones::coding::Delta, SequenceStore>;
+using TimestampSequence = BareBones::RleSequence<BareBones::coding::ZigZagDelta, SequenceStore>;
+
+namespace detail {
+// WAL owns version 1 and format IDs 1 and 2
+template <class Sequence>
+size_t sequence_record_size(const Sequence& sequence) noexcept {
+  assert(sequence.is_flushed());
+  return 2 + sequence.store().save_size();
+}
+template <uint8_t Id, BareBones::OutputStream Stream, class Sequence>
+Stream& write_sequence_record(Stream& out, const Sequence& sequence) {
+  static_assert(Id == 1 || Id == 2);
+  static_assert(std::same_as<Sequence, std::conditional_t<Id == 1, LabelIdSequence, TimestampSequence>>);
+  assert(sequence.is_flushed());
+  const auto original = out.exceptions();
+  auto restore = std::experimental::scope_exit([&] { out.exceptions(original); });
+  out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+  out.put(1);
+  out.put(Id);
+  out << sequence.store();
+  return out;
+}
+
+template <uint8_t Id, class Stream>
+Stream& read_sequence_record(Stream& in, SequenceStore& store) {
+  static_assert(Id == 1 || Id == 2);
+  assert(store.empty());
+  auto cleanup = std::experimental::scope_fail([&] { store.clear(); });
+  const uint8_t version = in.get();
+  if (in.eof()) {
+    return in;
+  }
+  if (version != 1) {
+    throw BareBones::Exception(0xa506b0dd57836363, "Invalid EncodingSequence version %d got from input, only version 1 is supported", version);
+  }
+  const auto original = in.exceptions();
+  // Preserve the existing failure behavior: restoring a throwing mask during unwinding can terminate.
+  auto restore = std::experimental::scope_exit([&] { in.exceptions(original); });
+  in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+  uint8_t id;
+  in.read(reinterpret_cast<char*>(&id), sizeof(id));
+  if (id != Id) {
+    throw BareBones::Exception(0x1e1b301b2eb969ca, "Invalid encoder id %d while reading from input stream, expected id %d", id, Id);
+  }
+  in >> store;
+  using Coding = std::conditional_t<Id == 1, BareBones::coding::Delta, BareBones::coding::ZigZagDelta>;
+  if (!BareBones::RleView<Coding, SequenceStore::View>(store.view()).is_valid()) {
+    throw BareBones::Exception(0xab3ae205da710d27, "Invalid RLE sequence in WAL record %d", Id);
+  }
+  return in;
+}
+}  // namespace detail
+
 // helpers for unifying bitmaps APIs.
 namespace detail {
 template <typename T, typename PosType = size_t>
@@ -153,8 +208,8 @@ class BasicEncoder {
 
   void encode_segment(std::ostream& stream) {
     BareBones::BitSequence gorilla_ts_bitseq, gorilla_v_bitseq;
-    BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<>> ls_id_delta_rle_seq;
-    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<>> ts_delta_rle_seq;
+    LabelIdSequence ls_id_delta_rle_seq;
+    TimestampSequence ts_delta_rle_seq;
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
@@ -223,19 +278,21 @@ class BasicEncoder {
     }
 
     // write ls ids
-    ls_id_bytes_ += ls_id_delta_rle_seq.save_size() + ls_id_crc.save_size();
-    lz4stream_ << ls_id_delta_rle_seq << ls_id_crc;
+    ls_id_delta_rle_seq.flush();
+    ts_delta_rle_seq.flush();
+    ls_id_bytes_ += detail::sequence_record_size(ls_id_delta_rle_seq) + ls_id_crc.save_size();
+    detail::write_sequence_record<1>(lz4stream_, ls_id_delta_rle_seq) << ls_id_crc;
 
     // write ts base
     lz4stream_.write(reinterpret_cast<const char*>(&ts_base_), sizeof(ts_base_));
     ts_bytes_ += sizeof(ts_base_);
 
     // write ts
-    if (ts_delta_rle_is_worth_trying && ts_delta_rle_seq.save_size() < gorilla_ts_bitseq.save_size()) {
+    if (ts_delta_rle_is_worth_trying && detail::sequence_record_size(ts_delta_rle_seq) < gorilla_ts_bitseq.save_size()) {
       lz4stream_.put(0);
 
-      ts_bytes_ += ts_delta_rle_seq.save_size() + ts_crc.save_size();
-      lz4stream_ << ts_delta_rle_seq << ts_crc;
+      ts_bytes_ += detail::sequence_record_size(ts_delta_rle_seq) + ts_crc.save_size();
+      detail::write_sequence_record<2>(lz4stream_, ts_delta_rle_seq) << ts_crc;
     } else {
       lz4stream_.put(1);
 
@@ -573,8 +630,8 @@ class BasicDecoder {
 
   BareBones::BitSequence segment_gorilla_ts_bitseq_;
   BareBones::BitSequence segment_gorilla_v_bitseq_;
-  BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<>> segment_ls_id_delta_rle_seq_{};
-  BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<>> segment_ts_delta_rle_seq_{};
+  SequenceStore segment_ls_id_store_{};
+  SequenceStore segment_ts_store_{};
 
   BareBones::CRC32 segment_ls_id_crc_;
   SampleCrc segment_sample_crc_;
@@ -590,8 +647,8 @@ class BasicDecoder {
   void clear_segment() {
     segment_gorilla_ts_bitseq_.clear();
     segment_gorilla_v_bitseq_.clear();
-    segment_ls_id_delta_rle_seq_.clear();
-    segment_ts_delta_rle_seq_.clear();
+    segment_ls_id_store_.clear();
+    segment_ts_store_.clear();
     segment_ls_id_crc_.clear();
     segment_sample_crc_.clear();
   }
@@ -648,14 +705,14 @@ class BasicDecoder {
       label_sets_.load(in);
 
       // read ls ids
-      in >> segment_ls_id_delta_rle_seq_ >> segment_ls_id_crc_;
+      detail::read_sequence_record<1>(in, segment_ls_id_store_) >> segment_ls_id_crc_;
 
       // read ts base
       in.read(reinterpret_cast<char*>(&sample_decoder_.timestamp_base), sizeof(sample_decoder_.timestamp_base));
 
       // read ts
       if (in.get() == 0) {
-        in >> segment_ts_delta_rle_seq_ >> segment_sample_crc_.timestamp;
+        detail::read_sequence_record<2>(in, segment_ts_store_) >> segment_sample_crc_.timestamp;
       } else {
         in >> segment_gorilla_ts_bitseq_ >> segment_sample_crc_.timestamp;
       }
@@ -699,7 +756,7 @@ class BasicDecoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return sample_decoder_.allocated_memory() + lz4stream_.allocated_memory() + segment_gorilla_ts_bitseq_.allocated_memory() +
-           segment_gorilla_v_bitseq_.allocated_memory() + segment_ls_id_delta_rle_seq_.allocated_memory() + segment_ts_delta_rle_seq_.allocated_memory();
+           segment_gorilla_v_bitseq_.allocated_memory() + segment_ls_id_store_.allocated_memory() + segment_ts_store_.allocated_memory();
   }
 
   // label sets' comparison is expensive, so it must be explicitly compared
@@ -767,15 +824,15 @@ class BasicDecoder {
     };
 
     if (segment_gorilla_ts_bitseq_.empty()) {
-      auto ts_i = segment_ts_delta_rle_seq_.begin();
+      auto ts_i = TimestampSequence::View(segment_ts_store_.view()).begin();
 
-      for (Primitives::LabelSetID ls_id : segment_ls_id_delta_rle_seq_) {
+      for (Primitives::LabelSetID ls_id : LabelIdSequence::View(segment_ls_id_store_.view())) {
         decode_sample(ls_id, *ts_i);
         ++ts_i;
       }
 
       // there are remaining timestamps in Decoder/segment (ls_id), which is unexpected.
-      if (ts_i != segment_ts_delta_rle_seq_.end()) [[unlikely]] {
+      if (ts_i != TimestampSequence::View::end()) [[unlikely]] {
         throw BareBones::Exception(0x6b534297844a47c9,
                                    "Decoder %s got an error after processing segment LabelSets: segment ls_id timestamps counts mismatch, there are "
                                    "remaining timestamp data",
@@ -785,7 +842,7 @@ class BasicDecoder {
       // process non-empty ts
       auto g_ts_bitseq_reader = segment_gorilla_ts_bitseq_.reader();
 
-      for (Primitives::LabelSetID ls_id : segment_ls_id_delta_rle_seq_) {
+      for (Primitives::LabelSetID ls_id : LabelIdSequence::View(segment_ls_id_store_.view())) {
         if (g_ts_bitseq_reader.eof()) [[unlikely]] {
           throw BareBones::Exception(0xf837b80ba182e441,
                                      "Decoder %s exhausted label set values data prematurely, but segment processing expects more LabelSets' timestamps",

@@ -4,7 +4,7 @@
 
 #include <ranges>
 
-#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include "bare_bones/stream_v_byte.h"
 
@@ -136,7 +136,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, CreateReadIteratorNotEnoughBytes) {
   const auto it = sequence_.create_read_iterator(buffer);
 
   // Assert
-  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(BareBones::StreamVByte::DecodeIteratorSentinel{}, it);
   EXPECT_EQ(buffer.size(), data.size());
 }
 
@@ -149,7 +149,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, CreateReadIteratorNotEnoughSizeRead
   const auto it = sequence_.create_read_iterator(buffer);
 
   // Assert
-  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(BareBones::StreamVByte::DecodeIteratorSentinel{}, it);
   EXPECT_EQ(buffer.size(), 0);
 }
 
@@ -185,7 +185,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, RejectsNonzeroCountWithoutBody) {
   const auto it = sequence_.create_read_iterator(bytes);
 
   // Assert
-  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(BareBones::StreamVByte::DecodeIteratorSentinel{}, it);
   EXPECT_TRUE(bytes.empty());
 }
 
@@ -198,7 +198,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, RejectsMissingValueBytes) {
   const auto it = sequence_.create_read_iterator(bytes);
 
   // Assert
-  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(BareBones::StreamVByte::DecodeIteratorSentinel{}, it);
 }
 
 TEST_F(CompactSequenceCreateIteratorFixture, RejectsCountBeyondAvailableBlocks) {
@@ -210,7 +210,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, RejectsCountBeyondAvailableBlocks) 
   const auto it = sequence_.create_read_iterator(bytes);
 
   // Assert
-  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(BareBones::StreamVByte::DecodeIteratorSentinel{}, it);
 }
 
 TEST_F(CompactSequenceCreateIteratorFixture, ReadsZeroValuesWithoutDecoderPadding) {
@@ -223,7 +223,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, ReadsZeroValuesWithoutDecoderPaddin
   const auto it = sequence_.create_read_iterator(bytes);
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(it, sequence_.end(), expected.begin(), expected.end()));
+  EXPECT_THAT(std::ranges::subrange(it, sequence_.end()), testing::ElementsAreArray(expected));
   EXPECT_TRUE(bytes.empty());
 }
 
