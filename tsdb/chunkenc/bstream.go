@@ -261,5 +261,6 @@ func (b *bstreamReader) loadNextBuffer(nbits uint8) bool {
 	b.streamOffset += nbytes
 	b.valid = uint8(nbytes * 8) // #nosec G115 // no overflow
 
-	return true
+	// PP_CHANGES.md: Reject refills shorter than the requested bit count.
+	return b.valid >= nbits
 }
