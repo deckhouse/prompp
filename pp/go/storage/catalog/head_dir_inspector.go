@@ -16,6 +16,8 @@ import (
 
 // HeadDirInspector supplies metadata for heads whose initial catalog record was lost.
 type HeadDirInspector interface {
+	// NumberOfShards returns the highest WAL shard index plus one, or [os.ErrNotExist] for a missing head.
+	// A zero count with no error means the directory exists but has no recognized WAL shards.
 	NumberOfShards(id string) (uint16, error)
 	BirthTime(id string) (time.Time, error)
 }

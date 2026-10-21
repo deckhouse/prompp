@@ -39,6 +39,13 @@ func (s *HeadDirInspectorTestSuite) TestBirthTime() {
 	s.WithinDuration(before, birth, time.Minute)
 }
 
+func (s *HeadDirInspectorTestSuite) TestEmptyDirectory() {
+	count, err := s.inspector.NumberOfShards(s.headID)
+
+	s.Require().NoError(err)
+	s.Zero(count)
+}
+
 func (s *HeadDirInspectorTestSuite) TestMissingDirectory() {
 	_, err := s.inspector.NumberOfShards(uuid.NewString())
 	s.Require().ErrorIs(err, os.ErrNotExist)

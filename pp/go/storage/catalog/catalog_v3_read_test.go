@@ -115,7 +115,10 @@ func (s *V3FileTestSuite) TestV3Catalog_DeltasSurviveDowngradeAndRestart() {
 func (s *V3FileTestSuite) TestV3Catalog_InspectorErrorPreservesJournal() {
 	initial := newAppendTestRecord(1, 100)
 	s.Require().NoError(s.fl.Write(&initial.SerializedRecord))
-	delta := SerializedRecord{id: initial.id, fields: fieldStatus, status: StatusActive}
+	delta := SerializedRecord{
+		id: initial.id, fields: fieldStatus | fieldCreatedAt | fieldUpdatedAt | fieldSegmentsCount,
+		status: StatusActive, createdAt: 123, updatedAt: 200, numberOfSegments: 10,
+	}
 	s.Require().NoError(s.fl.Write(&delta))
 	s.corruptRecordByte(s.fl, s.fl.file.journalStart+int64(recordChecksumOffsetV3), 1)
 	s.crashAndReopen()
@@ -130,6 +133,26 @@ func (s *V3FileTestSuite) TestV3Catalog_InspectorErrorPreservesJournal() {
 	after, err := os.ReadFile(s.filePath)
 	s.Require().NoError(err)
 	s.Equal(before, after)
+	s.crashAndReopen()
+	c, err := New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
+		WithHeadDirInspector(recoveryInspector{shards: 4, birth: time.UnixMilli(500)}))
+	s.Require().NoError(err)
+	got, err := c.Get(initial.ID())
+	s.Require().NoError(err)
+	s.Equal(uint16(4), got.NumberOfShards())
+	s.Equal(int64(123), got.CreatedAt())
+	s.Equal(uint32(10), got.NumberOfSegments())
+	s.Equal(StatusRotated, got.Status())
+
+	s.reopen()
+	c, err = New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+	got, err = c.Get(initial.ID())
+	s.Require().NoError(err)
+	s.Equal(uint16(4), got.NumberOfShards())
+	s.Equal(int64(123), got.CreatedAt())
+	s.Equal(uint32(10), got.NumberOfSegments())
+	s.Equal(StatusRotated, got.Status())
 }
 
 func (s *V3FileTestSuite) TestV3Catalog_RepairsBeforeDowngrade() {
@@ -155,6 +178,8 @@ func (s *V3FileTestSuite) TestV3Catalog_RepairsBeforeDowngrade() {
 				s.Equal(float64(1), testutil.ToFloat64(c.corruptedRecords))
 				got, err := c.Get(record.ID())
 				s.Require().NoError(err)
+				s.Equal(record.NumberOfShards(), got.NumberOfShards())
+				s.Equal(record.CreatedAt(), got.CreatedAt())
 				want := status
 				if status == StatusNew || status == StatusActive {
 					want = StatusRotated
@@ -187,6 +212,7 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 			inspector HeadDirInspector
 			createdAt int64
 			keep      bool
+			errText   string
 		}{
 			{
 				name: "uuid v7", id: (timedV7Generator{at: time.UnixMilli(1760936591360)}).Generate(),
@@ -200,8 +226,15 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 				name: "minimum update of this head", id: uuid.New(), inspector: recoveryInspector{shards: 4},
 				createdAt: 200, keep: true,
 			},
-			{name: "directory missing", id: uuid.New(), inspector: recoveryInspector{}},
-			{name: "inspector missing", id: uuid.New()},
+			{name: "directory missing", id: uuid.New(), inspector: recoveryInspector{err: os.ErrNotExist}},
+			{
+				name: "empty directory", id: uuid.New(), inspector: recoveryInspector{},
+				createdAt: 200, keep: true, errText: "no WAL shards found",
+			},
+			{
+				name: "inspector missing", id: uuid.New(),
+				createdAt: 200, keep: true, errText: "directory inspector is unavailable",
+			},
 		} {
 			s.Run(fmt.Sprintf("v%d/%s", target, scenario.name), func() {
 				path := filepath.Join(s.T().TempDir(), "head.log")
@@ -225,9 +258,24 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 				fl, err = NewFileLog(path, target)
 				s.Require().NoError(err)
 				s.T().Cleanup(func() { _ = fl.Close() })
+				before, err := os.ReadFile(path)
+				s.Require().NoError(err)
 
 				c, err := New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
 					WithHeadDirInspector(scenario.inspector))
+				if scenario.errText != "" {
+					s.Require().ErrorContains(err, scenario.errText)
+					s.Nil(c)
+					after, readErr := os.ReadFile(path)
+					s.Require().NoError(readErr)
+					s.Equal(before, after)
+					s.Require().NoError(fl.file.Close())
+					fl, err = NewFileLog(path, target)
+					s.Require().NoError(err)
+					c, err = New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
+						WithHeadDirInspector(recoveryInspector{shards: 4}))
+				}
+
 				s.Require().NoError(err)
 				if !scenario.keep {
 					_, getErr := c.Get(scenario.id.String())

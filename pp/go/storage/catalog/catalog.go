@@ -519,20 +519,25 @@ func (c *Catalog) repairRecords(suspect map[uuid.UUID]struct{}, minUpdated map[u
 }
 
 // restoreRecordMetadata fills missing shard and creation metadata for a head.
-// It returns false when the inspector or the head's WAL files are unavailable.
+// It returns false only when the inspector confirms that the head directory does not exist.
+// Unavailable inspection or a directory without WAL shards aborts recovery without rewriting the log.
 func (c *Catalog) restoreRecordMetadata(record *Record, fallback int64) (bool, error) {
+	id := record.id.String()
 	if c.inspector == nil {
+		return false, fmt.Errorf("restore head %s: directory inspector is unavailable", id)
+	}
+
+	shards, err := c.inspector.NumberOfShards(id)
+	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 
-	id := record.id.String()
-	shards, err := c.inspector.NumberOfShards(id)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err != nil {
 		return false, fmt.Errorf("inspect head %s: %w", id, err)
 	}
 
-	if errors.Is(err, os.ErrNotExist) || shards == 0 {
-		return false, nil
+	if shards == 0 {
+		return false, fmt.Errorf("restore head %s: no WAL shards found", id)
 	}
 
 	record.numberOfShards = shards
