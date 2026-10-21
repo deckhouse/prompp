@@ -246,6 +246,7 @@ func (s *XORReadSuite) valueReader(valid uint8, next float64, leading, trailing 
 func FuzzXORReadRoundTrip(f *testing.F) {
 	for _, seed := range [][]byte{
 		{0},
+		{55}, // Regression: truncation within the first float payload.
 		{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		{2, 255, 0, 17},
 		{3, 0, 0, 0, 0, 0, 0, 0x80},
@@ -325,8 +326,14 @@ func FuzzXORReadRoundTrip(f *testing.F) {
 		count := 0
 
 		for iterator.Next() == ValFloat {
+			require.Less(t, count, len(samples))
+			ts, actual := iterator.At()
+			require.Equal(t, samples[count].t, ts)
+			require.Equal(t, math.Float64bits(samples[count].v), math.Float64bits(actual))
 			count++
-			require.LessOrEqual(t, count, len(samples))
 		}
+
+		require.True(t, iterator.Err() != nil || count == len(samples),
+			"iterator stopped before decoding all samples without an error")
 	})
 }
