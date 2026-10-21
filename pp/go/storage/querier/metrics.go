@@ -17,7 +17,7 @@ const (
 )
 
 // QueryStageMetricsEnabled enables caller and shard stage metrics for newly created [Metrics].
-// Disabled by default; enable via PROMPP_FEATURES=query_stage_metrics_enable.
+// Disabled by default; enable via PROMPP_FEATURES=enable_query_stage_metrics.
 var QueryStageMetricsEnabled = false
 
 // Metrics records durations, optimization choices, and optional stages for [Querier].

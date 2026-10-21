@@ -302,7 +302,7 @@ func TestQueryStageMetricsFeature(t *testing.T) {
 		enabled  bool
 	}{
 		{name: "disabled by default"},
-		{name: "enabled explicitly", features: "query_stage_metrics_enable", enabled: true},
+		{name: "enabled explicitly", features: "enable_query_stage_metrics", enabled: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			querier.QueryStageMetricsEnabled = false

@@ -123,7 +123,7 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 		querier.InstantQueryFeature = false
 		_ = level.Info(logger).Log(msgStr, "Instant query feature is disabled.")
 
-	case "query_stage_metrics_enable":
+	case "enable_query_stage_metrics":
 		querier.QueryStageMetricsEnabled = true
 		_ = level.Info(logger).Log(msgStr, "Query stage metrics are enabled.")
 
