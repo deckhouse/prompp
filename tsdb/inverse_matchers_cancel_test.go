@@ -1,4 +1,4 @@
-package block
+package tsdb
 
 import (
 	"context"
@@ -9,14 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/util/testutil"
 )
 
 func TestInverseMatchersHonorCancellation(t *testing.T) {
-	opts := tsdb.DefaultHeadOptions()
+	opts := DefaultHeadOptions()
 	opts.ChunkDirRoot = t.TempDir()
-	h, err := tsdb.NewHead(nil, nil, nil, nil, opts, nil)
+	h, err := NewHead(nil, nil, nil, nil, opts, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, h.Close()) })
 	app := h.Appender(t.Context())
@@ -34,7 +33,7 @@ func TestInverseMatchersHonorCancellation(t *testing.T) {
 	for _, typ := range []labels.MatchType{labels.MatchRegexp, labels.MatchNotRegexp} {
 		t.Run(fmt.Sprint(typ), func(t *testing.T) {
 			ctx := &testutil.MockContextErrAfter{FailAfter: 2}
-			p, err := tsdb.PostingsForMatchers(ctx, ir, labels.MustNewMatcher(typ, "target", ".+"))
+			p, err := PostingsForMatchers(ctx, ir, labels.MustNewMatcher(typ, "target", ".+"))
 			if err == nil {
 				err = p.Err()
 			}
