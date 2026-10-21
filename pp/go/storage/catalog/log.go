@@ -46,7 +46,7 @@ type FileLog struct {
 // NewFileLog opens the source format for reading and defers migration to [Catalog] compaction.
 func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
 	sourceFilePath := filePath
-	fl, err := openFileLog(filePath, sourceFilePath, targetVersion)
+	fl, err := openFileLog(filePath, sourceFilePath, targetVersion, syncDir)
 	if err == nil {
 		return fl, nil
 	}
@@ -56,7 +56,7 @@ func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
 	}
 
 	sourceFilePath = fmt.Sprintf("%s.compacted", filePath)
-	fl, err = openFileLog(filePath, sourceFilePath, targetVersion)
+	fl, err = openFileLog(filePath, sourceFilePath, targetVersion, syncDir)
 	if err == nil {
 		return fl, nil
 	}
@@ -160,22 +160,7 @@ func (fl *FileLog) ReWrite(srecords ...*SerializedRecord) error {
 		return fl.rewriteV3(srecords)
 	}
 
-	oldFile := fl.file
-	swapFilePath := fl.filePath + ".compacted"
-	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.targetVersion, fl.encoder, srecords...)
-	if err != nil {
-		return fmt.Errorf("write log file: %w", err)
-	}
-
-	fl.file = newFile
-	fl.version = fl.targetVersion
-	_, fl.decoder, _ = codecsByVersion(fl.version)
-	fl.migration = getMigration(fl.version, fl.version)
-	if err = oldFile.Close(); err != nil {
-		logger.Errorf("failed to close old file: %v", err)
-	}
-
-	return nil
+	return fl.rewrite(srecords, syncDir)
 }
 
 // Size return current size of [FileHandler].
@@ -249,6 +234,30 @@ func (fl *FileLog) needsCompaction(maxSize int) bool {
 	return fl.Size() >= maxSize
 }
 
+// rewrite adopts the replacement after rename and closes both files if syncing the directory fails.
+func (fl *FileLog) rewrite(srecords []*SerializedRecord, syncDirectory func(string) error) error {
+	oldFile := fl.file
+	swapFilePath := fl.filePath + ".compacted"
+	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.targetVersion, fl.encoder, srecords...)
+	if err != nil {
+		return fmt.Errorf("write log file: %w", err)
+	}
+
+	fl.file = newFile
+	fl.version = fl.targetVersion
+	_, fl.decoder, _ = codecsByVersion(fl.version)
+	fl.migration = getMigration(fl.version, fl.version)
+	if err = oldFile.Close(); err != nil {
+		logger.Errorf("failed to close old file: %v", err)
+	}
+
+	if err = syncDirectory(filepath.Dir(fl.filePath)); err != nil {
+		return errors.Join(fmt.Errorf("sync log directory: %w", err), newFile.Close())
+	}
+
+	return nil
+}
+
 // createSwapFile builds a complete snapshot in the target format, leaving the source untouched on failure.
 func createSwapFile(fileName string, version uint64, encoder Encoder, srs ...*SerializedRecord) (*FileHandler, error) {
 	swapFile, err := createFileHandlerByVersion(fileName, version)
@@ -301,8 +310,13 @@ func newFileLogByVersion(filePath string, version uint64) (*FileLog, error) {
 	}, nil
 }
 
-// openFileLog opens the source without modifying it; [Catalog] merges records before rewriting.
-func openFileLog(filePath, sourceFilePath string, targetVersion uint64) (*FileLog, error) {
+// openFileLog loads the source, promoting a fallback file by rename before syncing its directory.
+// A directory sync failure closes the file and prevents returning a writable log.
+func openFileLog(
+	filePath, sourceFilePath string,
+	targetVersion uint64,
+	syncDirectory func(string) error,
+) (*FileLog, error) {
 	encoder, _, err := codecsByVersion(targetVersion)
 	if err != nil {
 		return nil, err
@@ -323,8 +337,8 @@ func openFileLog(filePath, sourceFilePath string, targetVersion uint64) (*FileLo
 			return nil, errors.Join(err, file.Close())
 		}
 
-		if err = syncDir(filepath.Dir(filePath)); err != nil {
-			return nil, errors.Join(err, file.Close())
+		if err = syncDirectory(filepath.Dir(filePath)); err != nil {
+			return nil, errors.Join(fmt.Errorf("sync log directory: %w", err), file.Close())
 		}
 	}
 
@@ -369,7 +383,8 @@ func writeLogFileVersion(writer io.Writer, version uint64) (int, error) {
 	return bytesWritten, err
 }
 
-// writeSwapAndSwitchAtFilePath commits a fully synced target file by renaming it over the source.
+// writeSwapAndSwitchAtFilePath renames a synced target file over the source.
+// The caller must adopt the returned file and sync the parent directory after a successful rename.
 func writeSwapAndSwitchAtFilePath(
 	targetFilePath, swapFilePath string,
 	version uint64,
@@ -382,10 +397,6 @@ func writeSwapAndSwitchAtFilePath(
 	}
 
 	if err = os.Rename(swapFilePath, targetFilePath); err != nil {
-		return nil, errors.Join(err, swapFile.Close())
-	}
-
-	if err = syncDir(filepath.Dir(targetFilePath)); err != nil {
 		return nil, errors.Join(err, swapFile.Close())
 	}
 
