@@ -152,6 +152,7 @@ func benchmarkPersistedBlockRead(b *testing.B, config blockBenchmarkConfig) {
 				{"filtered_sum_by", "sum by(job)(block_metric_total{region='r0'})"},
 				{
 					"sparse_sum_by",
+					// All configured series counts are multiples of 4, so seriesCount-4 is the last index in region r0.
 					fmt.Sprintf("sum by(job)(block_metric_total{region='r0',instance='%06d'})", seriesCount-4),
 				},
 				{"sum_rate", "sum by(job)(rate(block_metric_total{region='r0'}[5m]))"},
