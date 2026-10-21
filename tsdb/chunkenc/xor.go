@@ -424,6 +424,7 @@ func (it *xorIterator) readValue() ValueType {
 			return ValFloat
 		}
 
+		// Control bits 10 reuse the previous XOR window.
 		if control == 2 {
 			mbits := 64 - it.leading - it.trailing
 
@@ -439,6 +440,8 @@ func (it *xorIterator) readValue() ValueType {
 		}
 	}
 
+	// New windows (control == 3) and short buffers fall back to xorRead for decoding and refills.
+	// mbits == 64 (including after Reset) needs 66 buffered bits, so it cannot reach the dataMask calculation.
 	err := xorRead(&it.br, &it.val, &it.leading, &it.trailing)
 	if err != nil {
 		it.err = err
