@@ -1780,11 +1780,6 @@ func (r *Reader) PostingsForLabelMatching(ctx context.Context, name string, matc
 
 // PostingsForAllLabelValues returns the sorted union of postings for all values of name.
 func (r *Reader) PostingsForAllLabelValues(ctx context.Context, name string) Postings {
-	// PP_CHANGES.md: Honor cancellation even when the label has no values.
-	if err := ctx.Err(); err != nil {
-		return ErrPostings(err)
-	}
-
 	return r.postingsForLabelMatching(ctx, name, nil)
 }
 

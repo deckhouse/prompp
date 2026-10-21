@@ -120,7 +120,9 @@ func (s *inverseMatchersSuite) TestAllLabelValuesV1() {
 	s.Empty(refs)
 	ctx, cancel := context.WithCancel(s.T().Context())
 	cancel()
-	s.Require().ErrorIs(r.PostingsForAllLabelValues(ctx, "missing").Err(), context.Canceled)
+	refs, err = index.ExpandPostings(r.PostingsForAllLabelValues(ctx, "missing"))
+	s.Require().NoError(err)
+	s.Empty(refs)
 }
 
 func (s *inverseMatchersSuite) TestSelectorErrors() {
