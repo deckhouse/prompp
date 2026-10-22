@@ -75,17 +75,18 @@ func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, 
 // Migration
 //
 
-// Migration migrates record interface.
+// Migration converts a [SerializedRecord] to another log version in place.
 type Migration interface {
-	Migrate(sr *SerializedRecord) *SerializedRecord
+	// Migrate updates sr in place.
+	Migrate(sr *SerializedRecord)
 }
 
-// MigrationFunc is Migration interface function wrapper.
-type MigrationFunc func(sr *SerializedRecord) *SerializedRecord
+// MigrationFunc adapts an in-place conversion function to [Migration].
+type MigrationFunc func(sr *SerializedRecord)
 
-// Migrate reacord version.
-func (fn MigrationFunc) Migrate(sr *SerializedRecord) *SerializedRecord {
-	return fn(sr)
+// Migrate applies the conversion to sr in place.
+func (fn MigrationFunc) Migrate(sr *SerializedRecord) {
+	fn(sr)
 }
 
 //
@@ -95,21 +96,19 @@ func (fn MigrationFunc) Migrate(sr *SerializedRecord) *SerializedRecord {
 // MigrationV2 migrates record from v1 to v2 and vice versa.
 type MigrationV2 struct{}
 
+// Down migrates from v2 to v1.
+func (MigrationV2) Down(sr *SerializedRecord) {
+	if sr.status == StatusRotated && sr.corrupted {
+		sr.status = StatusCorrupted
+	}
+}
+
 // Up migrates from v1 to v2.
-func (MigrationV2) Up(sr *SerializedRecord) *SerializedRecord {
+func (MigrationV2) Up(sr *SerializedRecord) {
 	if sr.status == StatusCorrupted {
 		sr.corrupted = true
 		sr.status = StatusRotated
 	}
-	return sr
-}
-
-// Down migrates from v2 to v1.
-func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
-	if sr.status == StatusRotated && sr.corrupted {
-		sr.status = StatusCorrupted
-	}
-	return sr
 }
 
 //
@@ -119,25 +118,23 @@ func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
 // MigrationV3 migrates record from v2 to v3 and vice versa.
 type MigrationV3 struct{}
 
+// Down migrates from v3 to v2.
+func (MigrationV3) Down(sr *SerializedRecord) {
+	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
+}
+
 // Up migrates from v2 to v3. The time bounds are unknown in v2, so they are marked as unknown.
-func (MigrationV3) Up(sr *SerializedRecord) *SerializedRecord {
+func (MigrationV3) Up(sr *SerializedRecord) {
 	sr.numberOfSegments = numberOfSegmentsByLastAppendedSegmentID(sr.lastAppendedSegmentID.RawValue())
 	sr.mint = math.MaxInt64
 	sr.maxt = math.MinInt64
-	return sr
-}
-
-// Down migrates from v3 to v2.
-func (MigrationV3) Down(sr *SerializedRecord) *SerializedRecord {
-	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
-	return sr
 }
 
 //
 // ChainedMigration
 //
 
-// ChainedMigration combines migrations to provide multiple migrations.
+// ChainedMigration applies a sequence of [Migration] conversions to the same [SerializedRecord].
 type ChainedMigration struct {
 	migrations []Migration
 }
@@ -147,12 +144,11 @@ func NewChainedMigration(migrations ...Migration) *ChainedMigration {
 	return &ChainedMigration{migrations: migrations}
 }
 
-// Migrate is an Migration interface implementation.
-func (c *ChainedMigration) Migrate(sr *SerializedRecord) *SerializedRecord {
+// Migrate applies each conversion to sr in order.
+func (c *ChainedMigration) Migrate(sr *SerializedRecord) {
 	for _, migration := range c.migrations {
-		sr = migration.Migrate(sr)
+		migration.Migrate(sr)
 	}
-	return sr
 }
 
 // getMigration create [Migration] from version to version.
