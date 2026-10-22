@@ -357,7 +357,8 @@ func openFileLog(
 	}, nil
 }
 
-// readLogFileVersion reads log file version respecting on disk version size.
+// readLogFileVersion reads the version byte and consumes the remaining legacy v1/v2 header bytes.
+// Legacy headers occupy eight bytes; the v3 file header stores its version in a single byte.
 func readLogFileVersion(reader io.Reader) (version uint64, err error) {
 	var v [8]byte
 	_, err = reader.Read(v[:1])
@@ -365,10 +366,12 @@ func readLogFileVersion(reader io.Reader) (version uint64, err error) {
 		return 0, err
 	}
 
-	version = binary.LittleEndian.Uint64(v[:8])
+	version = uint64(v[0])
+
 	if version <= LogFileVersionV2 {
-		// skip next 7 bytes
+		// Skip the remaining bytes of the legacy uint64 header.
 		_, err = reader.Read(v[1:8])
+
 		return version, err
 	}
 
