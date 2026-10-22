@@ -144,7 +144,7 @@ func (s *FileLogReplaceTestSuite) requireRewriteSyncFailure() {
 	snapshot := newAppendTestRecord(2, 200)
 	var fileAtSync *FileHandler
 
-	err := s.fl.rewrite([]*SerializedRecord{&snapshot.SerializedRecord}, func(dir string) error {
+	err := s.fl.rewriteV2([]*SerializedRecord{&snapshot.SerializedRecord}, func(dir string) error {
 		s.Equal(filepath.Dir(s.filePath), dir)
 		fileAtSync = s.fl.file
 

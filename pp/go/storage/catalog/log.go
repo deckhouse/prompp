@@ -163,7 +163,7 @@ func (fl *FileLog) ReWrite(srecords ...*SerializedRecord) error {
 		return fl.rewriteV3(srecords)
 	}
 
-	return fl.rewrite(srecords, syncDir)
+	return fl.rewriteV2(srecords, syncDir)
 }
 
 // Size return current size of [FileHandler].
@@ -237,8 +237,8 @@ func (fl *FileLog) needsCompaction(maxSize int) bool {
 	return fl.Size() >= maxSize
 }
 
-// rewrite adopts the replacement after rename and closes both files if syncing the directory fails.
-func (fl *FileLog) rewrite(srecords []*SerializedRecord, syncDirectory func(string) error) error {
+// rewriteV2 adopts the replacement after rename and closes both files if syncing the directory fails.
+func (fl *FileLog) rewriteV2(srecords []*SerializedRecord, syncDirectory func(string) error) error {
 	oldFile := fl.file
 	swapFilePath := fl.filePath + ".compacted"
 	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.targetVersion, fl.encoder, srecords...)
