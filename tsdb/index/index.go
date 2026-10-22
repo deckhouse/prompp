@@ -1795,27 +1795,76 @@ func (r *Reader) postingsForLabelMatching(ctx context.Context, name string, matc
 		return EmptyPostings()
 	}
 
-	postingsEstimate := 0
-	if match == nil {
-		// The caller wants all postings for name.
-		postingsEstimate = len(e) * symbolFactor
+	if match != nil {
+		return r.postingsForLabelMatchingOffsets(ctx, e, match)
 	}
+
+	postingsEstimate := len(e) * symbolFactor
 
 	lastVal := e[len(e)-1].value
 	its := make([]Postings, 0, postingsEstimate)
 	if err := r.traversePostingOffsets(ctx, e[0].off, func(val string, postingsOff uint64) (bool, error) {
-		if match == nil || match(val) {
-			// We want this postings iterator since the value is a match.
-			postingsDec := encoding.NewDecbufAt(r.b, int(postingsOff), castagnoliTable) // #nosec G115 // no overflow
-			_, p, err := r.dec.PostingsFromDecbuf(postingsDec)
-			if err != nil {
-				return false, fmt.Errorf("decode postings: %w", err)
-			}
-			its = append(its, p)
+		postingsDec := encoding.NewDecbufAt(r.b, int(postingsOff), castagnoliTable) // #nosec G115 // no overflow
+		_, p, err := r.dec.PostingsFromDecbuf(postingsDec)
+		if err != nil {
+			return false, fmt.Errorf("decode postings: %w", err)
 		}
+		its = append(its, p)
+
 		return val != lastVal, nil
 	}); err != nil {
 		return ErrPostings(err)
+	}
+
+	return Merge(ctx, its...)
+}
+
+// postingsForLabelMatchingOffsets records matching offsets once, then allocates exactly the required iterators.
+func (r *Reader) postingsForLabelMatchingOffsets(
+	ctx context.Context, entries []postingOffset, match func(string) bool,
+) Postings {
+	// Pack full-width offsets so sparse matches do not reserve space for unmatched values.
+	var offsetBuf [128]byte
+	offsets := offsetBuf[:0]
+	count := 0
+	lastVal := entries[len(entries)-1].value
+
+	if err := r.traversePostingOffsets(ctx, entries[0].off, func(val string, offset uint64) (bool, error) {
+		if match(val) {
+			if cap(offsets)-len(offsets) < binary.MaxVarintLen64 {
+				// Doubling reduces total allocated bytes for broad matches.
+				grown := make([]byte, len(offsets), 2*cap(offsets))
+				copy(grown, offsets)
+				offsets = grown
+			}
+
+			offsets = binary.AppendUvarint(offsets, offset)
+			count++
+		}
+
+		return val != lastVal, nil
+	}); err != nil {
+		return ErrPostings(err)
+	}
+
+	its := make([]Postings, count)
+	decodedOffsets := encoding.Decbuf{B: offsets}
+
+	for i := range its {
+		if i%checkContextEveryNIterations == 0 {
+			if err := ctx.Err(); err != nil {
+				return ErrPostings(err)
+			}
+		}
+
+		offset := decodedOffsets.Uvarint64()
+		d := encoding.NewDecbufAt(r.b, int(offset), castagnoliTable) // #nosec G115 // no overflow
+		_, p, err := r.dec.PostingsFromDecbuf(d)
+		if err != nil {
+			return ErrPostings(fmt.Errorf("decode postings: %w", err))
+		}
+
+		its[i] = p
 	}
 
 	return Merge(ctx, its...)
