@@ -1,1 +1,1 @@
-exports_files(["linters.bzl"])
+exports_files(["linters.bzl", "repositories.bzl"])

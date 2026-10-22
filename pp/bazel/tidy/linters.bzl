@@ -1,9 +1,25 @@
-"""Use the upstream clang-tidy aspect on existing C++ targets."""
+"""Use upstream clang-tidy aspects for production and shallow analysis."""
 
 load("@aspect_rules_lint//lint:clang_tidy.bzl", "lint_clang_tidy_aspect")
 
-clang_tidy = lint_clang_tidy_aspect(
-    binary = Label("//:clang_tidy"),
-    global_config = [Label("//:.clang-tidy")],
-    rule_kinds = ["cc_binary", "cc_library", "cc_test"],
-)
+def _clang_tidy(args = []):
+    return lint_clang_tidy_aspect(
+        binary = Label("//:clang_tidy"),
+        global_config = [Label("//:.clang-tidy")],
+        angle_includes_are_system = False,
+        rule_kinds = ["cc_binary", "cc_library", "cc_test"],
+        args = args,
+    )
+
+clang_tidy = _clang_tidy()
+
+clang_tidy_shallow = _clang_tidy(args = [
+    "--extra-arg=-Xclang",
+    "--extra-arg=-analyzer-config",
+    "--extra-arg=-Xclang",
+    "--extra-arg=mode=shallow",
+    "--extra-arg=-Xclang",
+    "--extra-arg=-analyzer-inline-max-stack-depth",
+    "--extra-arg=-Xclang",
+    "--extra-arg=1",
+])

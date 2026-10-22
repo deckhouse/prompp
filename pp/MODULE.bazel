@@ -27,6 +27,9 @@ local_path_override(
 # Static analysis only; excluded from production builds with --ignore_dev_dependency.
 bazel_dep(name = "aspect_rules_lint", version = "2.9.1", dev_dependency = True)
 
+local_clang_tidy = use_repo_rule("//bazel/tidy:repositories.bzl", "local_clang_tidy")
+local_clang_tidy(name = "local_clang_tidy", dev_dependency = True)
+
 # --- Tools not published to BCR (use git_override) ----------------------------
 # Hedron's Compile Commands Extractor (dev-only).
 bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
