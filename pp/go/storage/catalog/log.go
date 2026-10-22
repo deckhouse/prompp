@@ -44,6 +44,7 @@ type FileLog struct {
 }
 
 // NewFileLog opens the source format for reading and defers migration to [Catalog] compaction.
+// A damaged fixed-v3 source may be recovered from a fallback, but is never replaced with an empty log.
 func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
 	sourceFilePath := filePath
 	fl, err := openFileLog(filePath, sourceFilePath, targetVersion, syncDir)
@@ -51,18 +52,20 @@ func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
 		return fl, nil
 	}
 
-	if !errors.Is(err, ErrUnreadableLogFile) {
+	if !errors.Is(err, ErrUnreadableLogFile) &&
+		!errors.Is(err, ErrInvalidV3Header) && !errors.Is(err, ErrInvalidV3FileSize) {
 		return nil, err
 	}
 
+	sourceErr := err
 	sourceFilePath = fmt.Sprintf("%s.compacted", filePath)
 	fl, err = openFileLog(filePath, sourceFilePath, targetVersion, syncDir)
 	if err == nil {
 		return fl, nil
 	}
 
-	if !errors.Is(err, ErrUnreadableLogFile) {
-		return nil, err
+	if !errors.Is(sourceErr, ErrUnreadableLogFile) || !errors.Is(err, ErrUnreadableLogFile) {
+		return nil, errors.Join(sourceErr, err)
 	}
 
 	return newFileLogByVersion(filePath, targetVersion)

@@ -42,6 +42,8 @@ const (
 const fileMagicV3 = "HLG"
 
 var (
+	// ErrInvalidV3FileSize means the fixed-size log file version 3 has an unexpected length.
+	ErrInvalidV3FileSize = errors.New("invalid v3 file size")
 	// ErrInvalidV3Header the header slots of the log file version 3 are invalid.
 	ErrInvalidV3Header = errors.New("invalid v3 file header")
 	// ErrJournalFull means the next frame and its terminator do not fit in the active journal.
@@ -421,7 +423,7 @@ func verifyPreallocatedSize(f *os.File) error {
 	}
 
 	if info.Size() != fileSizeV3 {
-		return fmt.Errorf("preallocated file size: got %d, want %d", info.Size(), fileSizeV3)
+		return fmt.Errorf("%w: preallocated file size: got %d, want %d", ErrInvalidV3FileSize, info.Size(), fileSizeV3)
 	}
 
 	return nil
