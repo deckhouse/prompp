@@ -218,6 +218,7 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 
 	encoder.buffer = frame[:frameLen]
 	fl.file.writeOffset += int64(frameLen)
+	fl.file.activeUsed = fl.file.writeOffset - fl.file.journalStart
 
 	return nil
 }

@@ -12,7 +12,7 @@ import (
 // FileHandler
 //
 
-// FileHandler handler for work with [os.File].
+// FileHandler tracks read and write positions in an [os.File], including fixed-size v3 journal bounds.
 type FileHandler struct {
 	file        *os.File
 	size        int
@@ -23,8 +23,10 @@ type FileHandler struct {
 	fixedSize    bool
 	journalStart int64
 	journalEnd   int64
-	activeUsed   int64
-	appendErr    error
+	// activeUsed is the known used length of the active journal, excluding its terminator.
+	// Successful appends and opening scans advance it beyond the persisted header checkpoint.
+	activeUsed int64
+	appendErr  error
 }
 
 // NewFileHandler init new [FileHandler].

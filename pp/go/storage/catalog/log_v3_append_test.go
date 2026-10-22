@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"syscall"
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
@@ -42,6 +44,22 @@ func (s *V3FileTestSuite) TestV3Append_ReopenReadsBackRecordsInOrder() {
 	info, err := os.Stat(filePath)
 	s.Require().NoError(err)
 	s.Require().Equal(int64(fileSizeV3), info.Size())
+}
+
+func (s *V3FileTestSuite) TestV3Append_FailedWriteKeepsReadBoundary() {
+	first := newAppendTestRecord(1, 100)
+	s.Require().NoError(s.fl.Write(&first.SerializedRecord))
+	offset := s.fl.file.writeOffset
+	used := s.fl.file.activeUsed
+	s.fl.file.size = int(offset)
+
+	err := s.fl.Write(&newAppendTestRecord(2, 200).SerializedRecord)
+	s.fl.file.size = fileSizeV3
+
+	s.Require().ErrorIs(err, syscall.ENOSPC)
+	s.Equal(offset, s.fl.file.writeOffset)
+	s.Equal(used, s.fl.file.activeUsed)
+	s.requireRecords(first)
 }
 
 func (s *V3FileTestSuite) TestV3Append_NonzeroTailAfterTerminatorIsCorruption() {
@@ -149,6 +167,40 @@ func (s *V3FileTestSuite) TestV3Append_TornTailIsDroppedOnOpen() {
 	records := c.List(nil, nil)
 	s.Require().Len(records, 1)
 	s.Require().Equal(kept.ID(), records[0].ID())
+}
+
+func (s *V3FileTestSuite) TestV3Append_ZeroedTailIsCorruptionBeforeReopen() {
+	for _, checkpoint := range []bool{false, true} {
+		s.Run(fmt.Sprint("checkpoint=", checkpoint), func() {
+			first := newAppendTestRecord(1, 100)
+			if checkpoint {
+				s.Require().NoError(s.fl.ReWrite(&first.SerializedRecord))
+			} else {
+				s.Require().NoError(s.fl.ReWrite())
+				s.Require().NoError(s.fl.Write(&first.SerializedRecord))
+			}
+
+			var got SerializedRecord
+			s.Require().NoError(s.fl.Read(&got))
+			s.Equal(first.id, got.id)
+			s.Require().ErrorIs(s.fl.Read(&got), io.EOF)
+			headerBefore, _, err := readFileHeaderV3(s.fl.file.file)
+			s.Require().NoError(err)
+			offset := s.fl.file.writeOffset
+			s.Require().NoError(s.fl.Write(&newAppendTestRecord(2, 200).SerializedRecord))
+			headerAfter, _, err := readFileHeaderV3(s.fl.file.file)
+			s.Require().NoError(err)
+			s.Equal(headerBefore, headerAfter)
+			_, err = s.fl.file.file.WriteAt(make([]byte, s.fl.file.writeOffset-offset), offset)
+			s.Require().NoError(err)
+
+			var damaged *CorruptedRecordError
+			s.Require().ErrorAs(s.fl.Read(&got), &damaged)
+			s.Equal(offset, damaged.Offset)
+			s.Equal(first.id, got.id)
+			s.Require().ErrorIs(s.fl.Read(&got), io.EOF)
+		})
+	}
 }
 
 func (s *V3FileTestSuite) TestV3Close_HeaderRewriteErrorStillClosesFile() {

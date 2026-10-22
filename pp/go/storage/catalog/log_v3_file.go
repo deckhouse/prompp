@@ -299,6 +299,8 @@ func openV3FileHandler(fh *FileHandler, header fileHeaderV3) error {
 		if err := reader.Read(&record); err != nil {
 			fh.readOffset = fh.journalStart
 			if errors.Is(err, io.EOF) {
+				fh.activeUsed = fh.writeOffset - fh.journalStart
+
 				return nil
 			}
 

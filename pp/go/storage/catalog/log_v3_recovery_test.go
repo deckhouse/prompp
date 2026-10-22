@@ -231,6 +231,27 @@ func (s *V3FileTestSuite) TestV3Header_UnexpectedFileSizeIsRejected() {
 	s.Require().Nil(fl)
 }
 
+func (s *V3FileTestSuite) TestV3Open_ScannedTailIsCorruptionWhenZeroed() {
+	first := newAppendTestRecord(1, 100)
+	s.Require().NoError(s.fl.Write(&first.SerializedRecord))
+	offset := s.fl.file.writeOffset
+	s.Require().NoError(s.fl.Write(&newAppendTestRecord(2, 200).SerializedRecord))
+	s.crashAndReopen()
+	header, _, err := readFileHeaderV3(s.fl.file.file)
+	s.Require().NoError(err)
+	s.Zero(header.activeUsed)
+	_, err = s.fl.file.file.WriteAt(make([]byte, s.fl.file.writeOffset-offset), offset)
+	s.Require().NoError(err)
+
+	var got SerializedRecord
+	s.Require().NoError(s.fl.Read(&got))
+	s.Equal(first.id, got.id)
+	var damaged *CorruptedRecordError
+	s.Require().ErrorAs(s.fl.Read(&got), &damaged)
+	s.Equal(offset, damaged.Offset)
+	s.Require().ErrorIs(s.fl.Read(&got), io.EOF)
+}
+
 func (s *V3FileTestSuite) TestV3Open_TerminatorBeforeCheckpointRequiresRecovery() {
 	s.Require().NoError(s.fl.Write(&newAppendTestRecord(1, 100).SerializedRecord))
 	s.Require().NoError(s.fl.Close())
