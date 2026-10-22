@@ -4,17 +4,11 @@ load("//:bazel/rules/march_variant.bzl", "march_variants")
 
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
-    name = "clang_tidy_config_default",
-    srcs = [
-        ".clang-tidy",
-    ],
-)
+exports_files([".clang-tidy"])
 
-label_flag(
-    name = "clang_tidy_config",
-    build_setting_default = ":clang_tidy_config_default",
-    visibility = ["//visibility:public"],
+sh_binary(
+    name = "clang_tidy",
+    srcs = ["scripts/clang_tidy.sh"],
 )
 
 cc_library(

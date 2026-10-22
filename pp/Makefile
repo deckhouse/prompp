@@ -1,11 +1,11 @@
 ## New part of make to replace r-scripts
 include scripts/bazel.mk
 
-all_files := $(shell git ls-files -co --exclude-standard)
-vendored := $(patsubst ./%,%,$(shell find . -path '*/vendor/*'))
-our_files := $(filter-out $(vendored),$(all_files))
-cc_files := $(patsubst ./%,%,$(shell find . -type f -regex '.*\.\(h\|hpp\|cpp\)' -a -not -path './third_party/*'))
-our_cc_files := $(filter $(cc_files),$(all_files))
+all_files = $(shell git ls-files -co --exclude-standard)
+vendored = $(patsubst ./%,%,$(shell find . -path '*/vendor/*'))
+our_files = $(filter-out $(vendored),$(all_files))
+cc_files = $(patsubst ./%,%,$(shell find . -type f -regex '.*\.\(h\|hpp\|cpp\)' -a -not -path './third_party/*'))
+our_cc_files = $(filter $(cc_files),$(all_files))
 
 .PHONY: help
 help: ## Show this message
@@ -15,29 +15,32 @@ help: ## Show this message
 build-entrypoint: ## Build entry point and copy artifacts to Go directory
 	$(MAKE) -C entrypoint clean install
 
+.SECONDEXPANSION:
+
 .PHONY: cyrillic
-cyrillic: $(our_files) ## Check there is no cyrillic symbols in code
+cyrillic: $$(our_files) ## Check there is no cyrillic symbols in code
 	@if LC_ALL=C.utf8 grep -I -H --color='auto' -P -n "\p{Cyrillic}" $^; then \
 		exit 1;\
 	fi
 
 .PHONY: format
-format: $(our_cc_files)
+format: $$(our_cc_files)
 	@clang-format --dry-run  --Werror $^
 
 .PHONY: reformat
-reformat: $(our_cc_files)
+reformat: $$(our_cc_files)
 	@clang-format -i $^
 
 .PHONY: tidy
 tidy: ## Check clang-tidy for all libraries code
 tidy: tidy_flags := --config=clang-tidy
-tidy: tidy_flags += --aspects @bazel_clang_tidy//clang_tidy:clang_tidy.bzl%clang_tidy_aspect
-tidy: tidy_flags += --@bazel_clang_tidy//:clang_tidy_config=//:clang_tidy_config
+tidy: tidy_flags += --aspects //bazel/tidy:linters.bzl%clang_tidy
+tidy: tidy_flags += --@aspect_rules_lint//lint:fail_on_violation
 tidy: compilation_mode := fastbuild
-tidy: cc_targets := $(shell bazel query 'kind("cc_.*", //...)')
+# Benchmarks are covered by benchmarks_all; legacy performance tests are unused.
+tidy: cc_targets = $(shell $(bazel) query 'kind("cc_.*", //...) except filter("/benchmarks:", //...) except //:performance_tests_bin')
 tidy:
-	@$(bazel_build) $(tidy_flags) --output_groups=report --platform_suffix=tidy $(cc_targets)
+	@$(bazel_build) $(tidy_flags) --output_groups=rules_lint_human --platform_suffix=tidy $(cc_targets)
 
 .PHONY: test
 test: ## Run all cpp tests
@@ -46,7 +49,7 @@ ifdef filter
 test: test_args := --test_arg=--gtest_filter=$(filter)
 endif
 else
-test: target := $(shell bazel query 'kind("cc_test.*", //...)')
+test: target = $(shell $(bazel) query 'kind("cc_test.*", //...)')
 endif
 test:
 	@$(bazel_test) $(test_args) --test_output=errors -- $(target)

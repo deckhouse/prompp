@@ -10,7 +10,7 @@ HeaderFilterRegex: '^(bare_bones|entrypoint|head|metrics|performance_tests|primi
 ExtraArgs:
   - '-Wno-deprecated-declarations'
 FormatStyle: file
-SystemHeaders: true
+SystemHeaders: false
 CheckOptions:
   misc-include-cleaner.IgnoreHeaders: 'gtest/.*;gmock/.*;benchmark/.*;parallel_hashmap/.*'
   misc-include-cleaner.MissingIncludes: false
