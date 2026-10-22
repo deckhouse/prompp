@@ -385,7 +385,7 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 	}
 
 	headRecords := headCatalog.List(
-		nil,
+		func(record *catalog.Record) bool { return record.NumberOfShards() != 0 },
 		func(lhs, rhs *catalog.Record) bool {
 			return lhs.CreatedAt() < rhs.CreatedAt()
 		},
@@ -452,7 +452,7 @@ func scanForNextHead(
 	}
 
 	headRecords := headCatalog.List(
-		nil,
+		func(record *catalog.Record) bool { return record.NumberOfShards() != 0 },
 		func(lhs, rhs *catalog.Record) bool {
 			return lhs.CreatedAt() > rhs.CreatedAt()
 		},

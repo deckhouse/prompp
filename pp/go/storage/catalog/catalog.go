@@ -85,7 +85,8 @@ func (DefaultIDGenerator) Generate() uuid.UUID {
 // Catalog
 //
 
-// Catalog of current head records.
+// Catalog tracks heads and retains unavailable metadata for recovery at the next startup.
+// Heads awaiting recovery are hidden from [Catalog.Get] and [Catalog.List].
 type Catalog struct {
 	mtx                 sync.Mutex
 	clock               clockwork.Clock
@@ -101,6 +102,9 @@ type Catalog struct {
 	compactions         prometheus.Counter
 	logRecords          int
 	tombstones          int
+
+	// pendingRecords retains heads with unavailable metadata for recovery on the next startup.
+	pendingRecords map[string]*Record
 }
 
 // New init new [Catalog].
@@ -130,6 +134,7 @@ func New(
 		log:            log,
 		idGenerator:    idGenerator,
 		records:        make(map[string]*Record),
+		pendingRecords: make(map[string]*Record),
 		maxLogFileSize: maxLogFileSize,
 		corruptedHead: factory.NewCounter(
 			prometheus.CounterOpts{
@@ -389,11 +394,13 @@ func (c *Catalog) compactIfNeeded() error {
 
 // compactLog rewrite [Log] with current in-memory [Record]s.
 func (c *Catalog) compactLog() error {
-	srecords := make([]*SerializedRecord, 0, len(c.records))
-	for _, record := range c.records {
-		snapshot := record.SerializedRecord
-		snapshot.fields = fullFields(&snapshot)
-		srecords = append(srecords, &snapshot)
+	srecords := make([]*SerializedRecord, 0, len(c.records)+len(c.pendingRecords))
+	for _, records := range []map[string]*Record{c.records, c.pendingRecords} {
+		for _, record := range records {
+			snapshot := record.SerializedRecord
+			snapshot.fields = fullFields(&snapshot)
+			srecords = append(srecords, &snapshot)
+		}
 	}
 
 	sort.Slice(srecords, func(i, j int) bool {
@@ -481,22 +488,25 @@ func (c *Catalog) recoveredCreationTime(id uuid.UUID, fallback int64) int64 {
 		return time.Unix(seconds, nanos).UnixMilli()
 	}
 
-	if birth, err := c.inspector.BirthTime(id.String()); err == nil && !birth.IsZero() {
-		return birth.UnixMilli()
+	if c.inspector != nil {
+		if birth, err := c.inspector.BirthTime(id.String()); err == nil && !birth.IsZero() {
+			return birth.UnixMilli()
+		}
 	}
 
 	return fallback
 }
 
 // repairRecords reconstructs missing creation metadata and rotates heads affected by damaged frames.
-func (c *Catalog) repairRecords(suspect map[uuid.UUID]struct{}, minUpdated map[uuid.UUID]int64) (bool, error) {
+func (c *Catalog) repairRecords(suspect map[uuid.UUID]struct{}, minUpdated map[uuid.UUID]int64) bool {
 	changed := false
 	for id, record := range c.records {
 		_, damaged := suspect[record.id]
 		if record.numberOfShards == 0 {
 			restored, err := c.restoreRecordMetadata(record, minUpdated[record.id])
 			if err != nil {
-				return false, err
+				logger.Warnf("deferring head metadata recovery until next startup: id=%s err=%v", id, err)
+				c.pendingRecords[id] = record
 			}
 
 			changed = true
@@ -515,14 +525,18 @@ func (c *Catalog) repairRecords(suspect map[uuid.UUID]struct{}, minUpdated map[u
 		}
 	}
 
-	return changed, nil
+	return changed
 }
 
 // restoreRecordMetadata fills missing shard and creation metadata for a head.
-// It returns false only when the inspector confirms that the head directory does not exist.
-// Unavailable inspection or a directory without WAL shards aborts recovery without rewriting the log.
+// Heads without WAL shards are marked [StatusPersisted] for garbage collection.
+// It returns false for missing directories or unavailable inspection; errors defer recovery until the next startup.
 func (c *Catalog) restoreRecordMetadata(record *Record, fallback int64) (bool, error) {
 	id := record.id.String()
+	if !record.fields.has(fieldCreatedAt) {
+		record.createdAt = c.recoveredCreationTime(record.id, fallback)
+	}
+
 	if c.inspector == nil {
 		return false, fmt.Errorf("restore head %s: directory inspector is unavailable", id)
 	}
@@ -536,13 +550,9 @@ func (c *Catalog) restoreRecordMetadata(record *Record, fallback int64) (bool, e
 		return false, fmt.Errorf("inspect head %s: %w", id, err)
 	}
 
-	if shards == 0 {
-		return false, fmt.Errorf("restore head %s: no WAL shards found", id)
-	}
-
 	record.numberOfShards = shards
-	if !record.fields.has(fieldCreatedAt) {
-		record.createdAt = c.recoveredCreationTime(record.id, fallback)
+	if shards == 0 {
+		record.status = StatusPersisted
 	}
 
 	return true, nil
@@ -585,12 +595,7 @@ func (c *Catalog) sync() error {
 		c.applyLoadedRecord(&r.SerializedRecord, minUpdated)
 	}
 
-	repaired, err := c.repairRecords(suspect, minUpdated)
-	if err != nil {
-		return err
-	}
-
-	if repaired {
+	if c.repairRecords(suspect, minUpdated) {
 		rewrite = true
 	}
 

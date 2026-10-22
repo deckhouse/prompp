@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -112,49 +113,6 @@ func (s *V3FileTestSuite) TestV3Catalog_DeltasSurviveDowngradeAndRestart() {
 	s.Equal(before, after)
 }
 
-func (s *V3FileTestSuite) TestV3Catalog_InspectorErrorPreservesJournal() {
-	initial := newAppendTestRecord(1, 100)
-	s.Require().NoError(s.fl.Write(&initial.SerializedRecord))
-	delta := SerializedRecord{
-		id: initial.id, fields: fieldStatus | fieldCreatedAt | fieldUpdatedAt | fieldSegmentsCount,
-		status: StatusActive, createdAt: 123, updatedAt: 200, numberOfSegments: 10,
-	}
-	s.Require().NoError(s.fl.Write(&delta))
-	s.corruptRecordByte(s.fl, s.fl.file.journalStart+int64(recordChecksumOffsetV3), 1)
-	s.crashAndReopen()
-	before, err := os.ReadFile(s.filePath)
-	s.Require().NoError(err)
-	inspectionErr := errors.New("metadata read failure")
-
-	_, err = New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
-		WithHeadDirInspector(recoveryInspector{err: inspectionErr}))
-
-	s.Require().ErrorIs(err, inspectionErr)
-	after, err := os.ReadFile(s.filePath)
-	s.Require().NoError(err)
-	s.Equal(before, after)
-	s.crashAndReopen()
-	c, err := New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
-		WithHeadDirInspector(recoveryInspector{shards: 4, birth: time.UnixMilli(500)}))
-	s.Require().NoError(err)
-	got, err := c.Get(initial.ID())
-	s.Require().NoError(err)
-	s.Equal(uint16(4), got.NumberOfShards())
-	s.Equal(int64(123), got.CreatedAt())
-	s.Equal(uint32(10), got.NumberOfSegments())
-	s.Equal(StatusRotated, got.Status())
-
-	s.reopen()
-	c, err = New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil)
-	s.Require().NoError(err)
-	got, err = c.Get(initial.ID())
-	s.Require().NoError(err)
-	s.Equal(uint16(4), got.NumberOfShards())
-	s.Equal(int64(123), got.CreatedAt())
-	s.Equal(uint32(10), got.NumberOfSegments())
-	s.Equal(StatusRotated, got.Status())
-}
-
 func (s *V3FileTestSuite) TestV3Catalog_RepairsBeforeDowngrade() {
 	for _, target := range []uint64{LogFileVersionV3, LogFileVersionV2} {
 		for _, status := range []Status{StatusNew, StatusActive, StatusRotated, StatusPersisted} {
@@ -212,7 +170,8 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 			inspector HeadDirInspector
 			createdAt int64
 			keep      bool
-			errText   string
+			pending   bool
+			empty     bool
 		}{
 			{
 				name: "uuid v7", id: (timedV7Generator{at: time.UnixMilli(1760936591360)}).Generate(),
@@ -227,14 +186,16 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 				createdAt: 200, keep: true,
 			},
 			{name: "directory missing", id: uuid.New(), inspector: recoveryInspector{err: os.ErrNotExist}},
+			{name: "empty directory", id: uuid.New(), empty: true},
+			{name: "directory without WAL", id: uuid.New(), empty: true},
+			{name: "inspector missing", id: uuid.New(), pending: true},
 			{
-				name: "empty directory", id: uuid.New(), inspector: recoveryInspector{},
-				createdAt: 200, keep: true, errText: "no WAL shards found",
+				name: "permission denied", id: uuid.New(),
+				inspector: recoveryInspector{err: os.ErrPermission}, pending: true,
 			},
-			{
-				name: "inspector missing", id: uuid.New(),
-				createdAt: 200, keep: true, errText: "directory inspector is unavailable",
-			},
+			{name: "I/O error", id: uuid.New(), inspector: recoveryInspector{err: syscall.EIO}, pending: true},
+			{name: "directory read error", id: uuid.New(), pending: true},
+			{name: "shard count overflow", id: uuid.New(), pending: true},
 		} {
 			s.Run(fmt.Sprintf("v%d/%s", target, scenario.name), func() {
 				path := filepath.Join(s.T().TempDir(), "head.log")
@@ -258,28 +219,96 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 				fl, err = NewFileLog(path, target)
 				s.Require().NoError(err)
 				s.T().Cleanup(func() { _ = fl.Close() })
-				before, err := os.ReadFile(path)
-				s.Require().NoError(err)
+				if scenario.empty {
+					headDir := filepath.Join(filepath.Dir(path), scenario.id.String())
+					s.Require().NoError(os.Mkdir(headDir, 0o700))
+					if scenario.name == "directory without WAL" {
+						s.Require().NoError(os.WriteFile(filepath.Join(headDir, "remote.cursor"), nil, 0o600))
+					}
+
+					scenario.inspector = NewHeadDirInspector(filepath.Dir(path))
+				}
+
+				if scenario.name == "directory read error" || scenario.name == "shard count overflow" {
+					headDir := filepath.Join(filepath.Dir(path), scenario.id.String())
+					if scenario.name == "directory read error" {
+						s.Require().NoError(os.WriteFile(headDir, nil, 0o600))
+					} else {
+						s.Require().NoError(os.Mkdir(headDir, 0o700))
+						s.Require().NoError(os.WriteFile(filepath.Join(headDir, "shard_65535.wal"), nil, 0o600))
+					}
+
+					scenario.inspector = NewHeadDirInspector(filepath.Dir(path))
+				}
 
 				c, err := New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
 					WithHeadDirInspector(scenario.inspector))
-				if scenario.errText != "" {
-					s.Require().ErrorContains(err, scenario.errText)
-					s.Nil(c)
-					after, readErr := os.ReadFile(path)
-					s.Require().NoError(readErr)
-					s.Equal(before, after)
-					s.Require().NoError(fl.file.Close())
+				s.Require().NoError(err)
+				_, err = c.Get(other.ID())
+				s.Require().NoError(err)
+
+				if scenario.empty {
+					got, getErr := c.Get(scenario.id.String())
+					s.Require().NoError(getErr)
+					s.Equal(StatusPersisted, got.Status())
+					s.Zero(got.NumberOfShards())
+					s.Require().NoError(fl.Close())
 					fl, err = NewFileLog(path, target)
 					s.Require().NoError(err)
 					c, err = New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
-						WithHeadDirInspector(recoveryInspector{shards: 4}))
+						WithHeadDirInspector(scenario.inspector))
+					s.Require().NoError(err)
+					got, err = c.Get(scenario.id.String())
+					s.Require().NoError(err)
+					s.Equal(StatusPersisted, got.Status())
+					gc := NewGC(filepath.Dir(path), c, clockwork.NewFakeClock(), nil, nil, time.Hour)
+					gc.Iterate()
+					_, err = c.Get(scenario.id.String())
+					s.Require().Error(err)
+					_, err = os.Stat(filepath.Join(filepath.Dir(path), scenario.id.String()))
+					s.Require().ErrorIs(err, os.ErrNotExist)
+
+					return
 				}
 
-				s.Require().NoError(err)
 				if !scenario.keep {
 					_, getErr := c.Get(scenario.id.String())
 					s.Require().Error(getErr)
+					s.Len(c.List(nil, nil), 1)
+					s.Require().NoError(fl.Close())
+					fl, err = NewFileLog(path, target)
+					s.Require().NoError(err)
+					c, err = New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil)
+					s.Require().NoError(err)
+					s.Len(c.List(nil, nil), 1)
+					_, err = c.Get(other.ID())
+					s.Require().NoError(err)
+					_, err = c.Create(2)
+					s.Require().NoError(err)
+					s.Require().NoError(c.Compact())
+
+					if scenario.pending {
+						s.Len(c.pendingRecords, 1)
+						createdAt := c.pendingRecords[scenario.id.String()].CreatedAt()
+						s.Require().NoError(fl.Close())
+						fl, err = NewFileLog(path, target)
+						s.Require().NoError(err)
+						c, err = New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
+							WithHeadDirInspector(recoveryInspector{shards: 4}))
+						s.Require().NoError(err)
+						got, getErr := c.Get(scenario.id.String())
+						s.Require().NoError(getErr)
+						s.Equal(uint16(4), got.NumberOfShards())
+						s.Equal(createdAt, got.CreatedAt())
+						s.Equal(uint32(10), got.NumberOfSegments())
+						s.Equal(StatusRotated, got.Status())
+						s.Empty(c.pendingRecords)
+					}
+
+					if scenario.name == "directory read error" || scenario.name == "shard count overflow" {
+						_, statErr := os.Stat(filepath.Join(filepath.Dir(path), scenario.id.String()))
+						s.Require().NoError(statErr)
+					}
 
 					return
 				}
@@ -294,4 +323,51 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 			})
 		}
 	}
+}
+
+func (s *V3FileTestSuite) TestV3Catalog_RestoresLostShardCount() {
+	initial := newAppendTestRecord(1, 100)
+	s.Require().NoError(s.fl.Write(&initial.SerializedRecord))
+	delta := SerializedRecord{
+		id: initial.id, fields: fieldStatus | fieldCreatedAt | fieldUpdatedAt | fieldSegmentsCount,
+		status: StatusActive, createdAt: 123, updatedAt: 200, numberOfSegments: 10,
+	}
+	s.Require().NoError(s.fl.Write(&delta))
+	s.corruptRecordByte(s.fl, s.fl.file.journalStart+int64(recordChecksumOffsetV3), 1)
+	s.crashAndReopen()
+	headDir := filepath.Join(filepath.Dir(s.filePath), initial.ID())
+	s.Require().NoError(os.Mkdir(headDir, 0o700))
+	walPath := filepath.Join(headDir, "shard_0.wal")
+	s.Require().NoError(os.WriteFile(walPath, []byte("WAL data"), 0o600))
+	c, err := New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
+		WithHeadDirInspector(recoveryInspector{shards: 4, err: syscall.EIO}))
+	s.Require().NoError(err)
+	s.Empty(c.List(nil, nil))
+	s.Len(c.pendingRecords, 1)
+	gc := NewGC(filepath.Dir(s.filePath), c, clockwork.NewFakeClock(), nil, nil, time.Hour)
+	gc.Iterate()
+	contents, err := os.ReadFile(walPath)
+	s.Require().NoError(err)
+	s.Equal("WAL data", string(contents))
+	s.Require().NoError(c.Compact())
+	s.reopen()
+	c, err = New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil,
+		WithHeadDirInspector(recoveryInspector{shards: 4, birth: time.UnixMilli(500)}))
+	s.Require().NoError(err)
+	got, err := c.Get(initial.ID())
+	s.Require().NoError(err)
+	s.Equal(uint16(4), got.NumberOfShards())
+	s.Equal(int64(123), got.CreatedAt())
+	s.Equal(uint32(10), got.NumberOfSegments())
+	s.Equal(StatusRotated, got.Status())
+
+	s.reopen()
+	c, err = New(clockwork.NewFakeClock(), s.fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+	got, err = c.Get(initial.ID())
+	s.Require().NoError(err)
+	s.Equal(uint16(4), got.NumberOfShards())
+	s.Equal(int64(123), got.CreatedAt())
+	s.Equal(uint32(10), got.NumberOfSegments())
+	s.Equal(StatusRotated, got.Status())
 }
