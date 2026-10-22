@@ -1666,6 +1666,17 @@ func (m mockIndex) PostingsForLabelMatching(ctx context.Context, name string, ma
 	return index.Merge(ctx, res...)
 }
 
+// PostingsForAllLabelValues returns the postings for all values of a given name.
+func (m mockIndex) PostingsForAllLabelValues(ctx context.Context, name string) index.Postings {
+	var res []index.Postings
+	for l, srs := range m.postings {
+		if l.Name == name {
+			res = append(res, index.NewListPostings(srs))
+		}
+	}
+	return index.Merge(ctx, res...)
+}
+
 // Series returns the series for a given series ref.
 func (m mockIndex) Series(ref storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
 	s, ok := m.series[ref]

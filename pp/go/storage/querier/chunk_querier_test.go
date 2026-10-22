@@ -99,7 +99,7 @@ func (s *ChunkQuerierSuite) createQuerier(selectHints *prom_storage.SelectHints)
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, selectHints.Start, selectHints.End, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, selectHints.Start, selectHints.End, nil, nil)
 	runtime.SetFinalizer(q, (*ChunkQuerier).Close)
 	return q
 }
