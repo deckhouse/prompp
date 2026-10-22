@@ -50,7 +50,8 @@ func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {
 	return fh, version, nil
 }
 
-// createFileHandlerByVersion create [FileHandler] by version.
+// createFileHandlerByVersion creates a log file and positions its reader after the version header.
+// Legacy headers are written without syncing; callers sync the complete new file.
 func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, error) {
 	if version == LogFileVersionV3 {
 		return createV3FileHandler(filePath, preallocateV3File, syncDir)

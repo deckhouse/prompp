@@ -99,6 +99,10 @@ func NewFileLogV1(fileName string) (*FileLog, error) {
 		if err = binary.Write(file, binary.LittleEndian, fl.version); err != nil {
 			return nil, errors.Join(fmt.Errorf("failed to write log file version: %w", err), fl.Close())
 		}
+
+		if err = file.Sync(); err != nil {
+			return nil, errors.Join(fmt.Errorf("sync log file version: %w", err), fl.Close())
+		}
 	} else {
 		var version uint64
 		if err = binary.Read(file, binary.LittleEndian, &version); err != nil {
@@ -171,7 +175,7 @@ func (fl *FileLog) Size() int {
 	return fl.file.Size()
 }
 
-// Write [SerializedRecord] to [FileLog].
+// Write appends a [SerializedRecord] and syncs it before reporting success.
 func (fl *FileLog) Write(sr *SerializedRecord) error {
 	if fl.NeedsRewrite() {
 		return ErrLogNeedsRewrite
@@ -181,7 +185,15 @@ func (fl *FileLog) Write(sr *SerializedRecord) error {
 		return fl.appendV3(sr)
 	}
 
-	return fl.encoder.EncodeTo(fl.file, sr)
+	if err := fl.encoder.EncodeTo(fl.file, sr); err != nil {
+		return err
+	}
+
+	if err := fl.file.Sync(); err != nil {
+		return fmt.Errorf("sync log record: %w", err)
+	}
+
+	return nil
 }
 
 // appendV3 appends the frame of the record version 3 with the journal terminator in a single
@@ -214,6 +226,10 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 
 	if err = fl.file.WriteFixed(frame); err != nil {
 		return fmt.Errorf("v3: write record: %w", err)
+	}
+
+	if err = fl.file.Sync(); err != nil {
+		return fmt.Errorf("v3: sync record: %w", err)
 	}
 
 	encoder.buffer = frame[:frameLen]
@@ -278,10 +294,10 @@ func createSwapFile(fileName string, version uint64, encoder Encoder, srs ...*Se
 				break
 			}
 		}
-	}
 
-	if err == nil {
-		err = swapFile.Sync()
+		if err == nil {
+			err = swapFile.Sync()
+		}
 	}
 
 	if err != nil {
@@ -301,6 +317,12 @@ func newFileLogByVersion(filePath string, version uint64) (*FileLog, error) {
 	file, err := createFileHandlerByVersion(filePath, version)
 	if err != nil {
 		return nil, fmt.Errorf("create file handler: %w", err)
+	}
+
+	if version != LogFileVersionV3 {
+		if err = file.Sync(); err != nil {
+			return nil, errors.Join(fmt.Errorf("sync new log: %w", err), file.Close(), os.Remove(filePath))
+		}
 	}
 
 	return &FileLog{
