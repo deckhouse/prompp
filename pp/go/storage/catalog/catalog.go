@@ -413,7 +413,14 @@ func (c *Catalog) compactLog() error {
 		var buffer [maxRecordSizeV3]byte
 		total := 0
 		for _, record := range srecords {
-			frame, _ := appendFrameV3(buffer[:0], record)
+			frame, encodeErr := appendFrameV3(buffer[:0], record)
+			if encodeErr != nil {
+				err = errors.Join(err, fmt.Errorf("calculate snapshot size for head %s: %w", record.id, encodeErr))
+				logger.Errorf("catalog journal cannot hold %d live heads: %v", len(srecords), err)
+
+				return err
+			}
+
 			total += len(frame)
 		}
 
