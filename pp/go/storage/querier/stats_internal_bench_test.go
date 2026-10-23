@@ -9,6 +9,10 @@ import (
 
 // BenchmarkStartQuery measures timer and stripe selection without query execution.
 func BenchmarkStartQuery(b *testing.B) {
+	previous := QueryStageMetricsEnabled
+	QueryStageMetricsEnabled = true
+	b.Cleanup(func() { QueryStageMetricsEnabled = previous })
+
 	for _, enabled := range []bool{false, true} {
 		name := "off"
 		var metrics *Metrics
