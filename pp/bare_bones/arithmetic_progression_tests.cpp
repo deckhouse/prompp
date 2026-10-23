@@ -1,4 +1,3 @@
-#include <array>
 #include <limits>
 
 #include <gmock/gmock.h>
@@ -12,19 +11,17 @@ static_assert(std::ranges::borrowed_range<ArithmeticProgression>);
 static_assert(!std::ranges::contiguous_range<ArithmeticProgression>);
 TEST(ArithmeticProgressionTest, DefaultProgressionIsEmpty) {
   // Arrange
-  const std::array<uint32_t, 0> expected{};
 
   // Act
   const ArithmeticProgression values;
 
   // Assert
   EXPECT_EQ(0U, values.size());
-  EXPECT_THAT(values, testing::ElementsAreArray(expected));
+  EXPECT_THAT(values, testing::ElementsAre());
 }
 
 TEST(ArithmeticProgressionTest, ValuesStartAtFirstAndAdvanceByStep) {
   // Arrange
-  const std::array<uint32_t, 3> expected{2, 4, 6};
 
   // Act
   const ArithmeticProgression values(2, 2, 3);
@@ -33,35 +30,32 @@ TEST(ArithmeticProgressionTest, ValuesStartAtFirstAndAdvanceByStep) {
   EXPECT_EQ(2U, values.first());
   EXPECT_EQ(2, values.step());
   EXPECT_EQ(3U, values.size());
-  EXPECT_THAT(values, testing::ElementsAreArray(expected));
+  EXPECT_THAT(values, testing::ElementsAre(2, 4, 6));
 }
 
 TEST(ArithmeticProgressionTest, ZeroStepRepeatsOneValue) {
   // Arrange
-  const std::array<uint32_t, 3> expected{7, 7, 7};
 
   // Act
   const ArithmeticProgression values(7, 0, 3);
 
   // Assert
-  EXPECT_THAT(values, testing::ElementsAreArray(expected));
+  EXPECT_THAT(values, testing::ElementsAre(7, 7, 7));
 }
 
 TEST(ArithmeticProgressionTest, NegativeStepDecreasesValues) {
   // Arrange
-  const std::array<uint32_t, 3> expected{6, 4, 2};
 
   // Act
   const ArithmeticProgression values(6, -2, 3);
 
   // Assert
-  EXPECT_THAT(values, testing::ElementsAreArray(expected));
+  EXPECT_THAT(values, testing::ElementsAre(6, 4, 2));
 }
 
 TEST(ArithmeticProgressionTest, IteratorSupportsRandomAccess) {
   // Arrange
   const ArithmeticProgression values(10, -2, 4);
-  const std::array<uint32_t, 4> expected{10, 8, 6, 4};
 
   // Act
   const auto middle = values.begin() + 2;
@@ -69,7 +63,7 @@ TEST(ArithmeticProgressionTest, IteratorSupportsRandomAccess) {
   // Assert
   EXPECT_EQ(6U, *middle);
   EXPECT_EQ(4, values.end() - values.begin());
-  EXPECT_THAT(values, testing::ElementsAreArray(expected));
+  EXPECT_THAT(values, testing::ElementsAre(10, 8, 6, 4));
 }
 
 TEST(ArithmeticProgressionTest, IteratorSurvivesTemporaryRange) {
@@ -114,6 +108,7 @@ TEST(ArithmeticProgressionTest, MaximumSizeHasRepresentableEndDistance) {
 
   // Assert
   EXPECT_EQ(4294967295LL, distance);
+  EXPECT_EQ(-4294967295LL, values.begin() - values.end());
   EXPECT_EQ(4294967294U, values.back());
 }
 

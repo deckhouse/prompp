@@ -1,4 +1,3 @@
-#include <array>
 #include <utility>
 #include <vector>
 
@@ -20,13 +19,12 @@ class SeriesIdSequenceSnapshotFixture : public ::testing::Test {
 
 TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotOfEmptySequenceIsEmpty) {
   // Arrange
-  const std::array<uint32_t, 0> expected{};
 
   // Act
   const SeriesIdSequenceSnapshot snapshot(sequence_);
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre());
   EXPECT_EQ(0U, snapshot.count());
 }
 
@@ -34,13 +32,12 @@ TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotCopiesValuesAndCount) {
   // Arrange
   sequence_.push_back(1);
   sequence_.push_back(2);
-  const std::array<uint32_t, 2> expected{1, 2};
 
   // Act
   const SeriesIdSequenceSnapshot snapshot(sequence_);
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2));
   EXPECT_EQ(2U, snapshot.count());
 }
 
@@ -49,26 +46,24 @@ TEST_F(SeriesIdSequenceSnapshotFixture, AppendDoesNotExtendSnapshot) {
   sequence_.push_back(1);
   sequence_.push_back(2);
   const SeriesIdSequenceSnapshot snapshot(sequence_);
-  const std::array<uint32_t, 2> expected{1, 2};
 
   // Act
   sequence_.push_back(3);
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2));
   EXPECT_EQ(2U, snapshot.count());
 }
 
 TEST_F(SeriesIdSequenceSnapshotFixture, EmptySnapshotDoesNotFollowSourceAppend) {
   // Arrange
   const SeriesIdSequenceSnapshot snapshot(sequence_);
-  const std::array<uint32_t, 0> expected{};
 
   // Act
   sequence_.push_back(1);
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre());
 }
 
 TEST_F(SeriesIdSequenceSnapshotFixture, ClearDoesNotInvalidateSnapshot) {
@@ -77,13 +72,12 @@ TEST_F(SeriesIdSequenceSnapshotFixture, ClearDoesNotInvalidateSnapshot) {
   sequence_.push_back(2);
   sequence_.push_back(4);
   const SeriesIdSequenceSnapshot snapshot(sequence_);
-  const std::array<uint32_t, 3> expected{1, 2, 4};
 
   // Act
   sequence_.clear();
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2, 4));
   EXPECT_TRUE(sequence_.empty());
 }
 
@@ -94,15 +88,13 @@ TEST_F(SeriesIdSequenceSnapshotFixture, ReuseAfterClearDoesNotChangeSnapshot) {
   sequence_.push_back(4);
   const SeriesIdSequenceSnapshot snapshot(sequence_);
   sequence_.clear();
-  const std::array<uint32_t, 3> expected_snapshot{1, 2, 4};
-  const std::array<uint32_t, 1> expected_source{0};
 
   // Act
   sequence_.push_back(0);
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected_snapshot));
-  EXPECT_THAT(sequence_, testing::ElementsAreArray(expected_source));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2, 4));
+  EXPECT_THAT(sequence_, testing::ElementsAre(0));
 }
 
 TEST_F(SeriesIdSequenceSnapshotFixture, AssigningSourceDoesNotChangeSnapshotCopy) {
@@ -112,21 +104,18 @@ TEST_F(SeriesIdSequenceSnapshotFixture, AssigningSourceDoesNotChangeSnapshotCopy
   SeriesIdSequenceSnapshot snapshot(sequence_);
   const auto copy = snapshot;
   sequence_.push_back(3);
-  const std::array<uint32_t, 3> expected_snapshot{1, 2, 3};
-  const std::array<uint32_t, 2> expected_copy{1, 2};
 
   // Act
   snapshot = sequence_;
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected_snapshot));
-  EXPECT_THAT(copy, testing::ElementsAreArray(expected_copy));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2, 3));
+  EXPECT_THAT(copy, testing::ElementsAre(1, 2));
 }
 
 TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotSurvivesSourceDestruction) {
   // Arrange
   SeriesIdSequenceSnapshot snapshot;
-  const std::array<uint32_t, 3> expected{1, 2, 4};
 
   // Act
   {
@@ -138,7 +127,7 @@ TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotSurvivesSourceDestruction) {
   }
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2, 4));
 }
 
 TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotSurvivesSourceMove) {
@@ -147,14 +136,13 @@ TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotSurvivesSourceMove) {
   sequence_.push_back(2);
   sequence_.push_back(4);
   const SeriesIdSequenceSnapshot snapshot(sequence_);
-  const std::array<uint32_t, 3> expected{1, 2, 4};
 
   // Act
   auto moved = std::move(sequence_);
 
   // Assert
-  EXPECT_THAT(snapshot, testing::ElementsAreArray(expected));
-  EXPECT_THAT(moved, testing::ElementsAreArray(expected));
+  EXPECT_THAT(snapshot, testing::ElementsAre(1, 2, 4));
+  EXPECT_THAT(moved, testing::ElementsAre(1, 2, 4));
   EXPECT_TRUE(sequence_.empty());
 }
 

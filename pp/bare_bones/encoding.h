@@ -1,10 +1,10 @@
 #pragma once
 
 #include <bit>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -18,7 +18,17 @@
 #include "zigzag.h"
 
 namespace BareBones {
-namespace encoding_detail {
+// Encoded value and decoded occurrence count. A zero length denotes an empty run.
+// Coding policies consume this public value type. The wire format stores length - 1.
+struct EncodedRun {
+  uint32_t code{};
+  uint32_t length{};
+};
+
+namespace coding {
+// Component-local helpers. Clients use RleSequence, RleView and the coding policy contracts.
+// These definitions stay in this header because the component uses templates.
+namespace detail {
 // One owner retains the persisted (code, length - 1) format and the pending run.
 template <class Store>
 class RunEncoder {
@@ -43,7 +53,7 @@ class RunEncoder {
 
   template <std::output_iterator<value_type> IteratorType>
   PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
-    // assume last_ = val on first call
+    // An empty encoder starts its first run with this value.
     if (count_ == std::numeric_limits<value_type>::max())
       last_ = val;
 
@@ -79,13 +89,10 @@ class RunEncoder {
   PROMPP_ALWAYS_INLINE value_type count() const noexcept { return count_; }
   PROMPP_ALWAYS_INLINE value_type last() const noexcept { return last_; }
 };
-struct Run {
-  uint32_t code{};
-  uint32_t length{};
-};
-// This is the only parser of persisted RLE pairs. A missing final count denotes a singleton.
+// Read (code, length - 1) pairs, then consume the pending tail.
+// A final code without a count denotes a singleton. UINT32_MAX is not a valid count.
 template <class Iterator, class Sentinel>
-Run read_run(Iterator& source, const Sentinel& end, Run& tail, bool& valid) noexcept {
+EncodedRun read_run(Iterator& source, const Sentinel& end, EncodedRun& tail, bool& valid) noexcept {
   if (source == end) {
     return std::exchange(tail, {});
   }
@@ -97,14 +104,13 @@ Run read_run(Iterator& source, const Sentinel& end, Run& tail, bool& valid) noex
   }
   return {code, repeats + 1};
 }
-}  // namespace encoding_detail
+}  // namespace detail
 
-namespace coding {
 struct Identity {
   static uint32_t encode(uint32_t value) noexcept { return value; }
-  static bool validate(encoding_detail::Run) noexcept { return true; }
+  static bool validate(EncodedRun) noexcept { return true; }
   static bool has_pending() noexcept { return false; }
-  static ArithmeticProgression decode(encoding_detail::Run run) noexcept { return {run.code, 0, run.length}; }
+  static ArithmeticProgression decode(EncodedRun run) noexcept { return {run.code, 0, run.length}; }
 };
 // Input values must be nondecreasing. Repeated values are permitted.
 class Delta {
@@ -116,8 +122,8 @@ class Delta {
     return value - std::exchange(previous_, value);
   }
   // Validation advances its own cursor without constructing a progression.
-  bool validate(encoding_detail::Run run) noexcept {
-    const uint64_t last = uint64_t(previous_) + uint64_t(run.code) * run.length;
+  bool validate(EncodedRun run) noexcept {
+    const uint64_t last = static_cast<uint64_t>(previous_) + static_cast<uint64_t>(run.code) * run.length;
     if (last > std::numeric_limits<uint32_t>::max()) {
       return false;
     }
@@ -125,7 +131,7 @@ class Delta {
     return true;
   }
   static bool has_pending() noexcept { return false; }
-  ArithmeticProgression decode(encoding_detail::Run run) noexcept {
+  ArithmeticProgression decode(EncodedRun run) noexcept {
     const uint32_t first = previous_ + run.code;
     ArithmeticProgression result(first, run.code, run.length);
     previous_ = result.back();
@@ -136,16 +142,16 @@ class Delta {
 // Exposed progressions stop at each boundary. The remaining run stays with this coding cursor.
 class ZigZagDelta {
   uint32_t previous_{};
-  encoding_detail::Run pending_{};
+  EncodedRun pending_{};
 
  public:
   uint32_t encode(uint32_t value) noexcept { return Encoding::ZigZag::encode(std::bit_cast<int32_t>(value - std::exchange(previous_, value))); }
-  bool validate(encoding_detail::Run run) noexcept {
+  bool validate(EncodedRun run) noexcept {
     previous_ += static_cast<uint32_t>(Encoding::ZigZag::decode(run.code)) * run.length;
     return true;
   }
   bool has_pending() const noexcept { return pending_.length != 0; }
-  ArithmeticProgression decode(encoding_detail::Run run) noexcept {
+  ArithmeticProgression decode(EncodedRun run) noexcept {
     if (has_pending()) {
       assert(run.length == 0);
       run = pending_;
@@ -171,14 +177,14 @@ class ZigZagDelta {
 // Use separate cursors for encoding, validation and decoding. validate advances over a complete run.
 // decode emits one non-wrapping prefix. Drain has_pending() with decode({}) before supplying the next run.
 template <class Coding>
-concept RunCoding = std::is_nothrow_default_constructible_v<Coding> && std::is_nothrow_copy_constructible_v<Coding> &&
-                    std::is_nothrow_copy_assignable_v<Coding> && std::is_nothrow_move_constructible_v<Coding> && std::is_nothrow_move_assignable_v<Coding> &&
-                    requires(Coding coding, uint32_t value, encoding_detail::Run run) {
-                      { coding.encode(value) } noexcept -> std::same_as<uint32_t>;
-                      { coding.decode(run) } noexcept -> std::same_as<ArithmeticProgression>;
-                      { coding.validate(run) } noexcept -> std::same_as<bool>;
-                      { coding.has_pending() } noexcept -> std::same_as<bool>;
-                    };
+concept RunCoding =
+    std::is_nothrow_default_constructible_v<Coding> && std::is_nothrow_copy_constructible_v<Coding> && std::is_nothrow_copy_assignable_v<Coding> &&
+    std::is_nothrow_move_constructible_v<Coding> && std::is_nothrow_move_assignable_v<Coding> && requires(Coding coding, uint32_t value, EncodedRun run) {
+      { coding.encode(value) } noexcept -> std::same_as<uint32_t>;
+      { coding.decode(run) } noexcept -> std::same_as<ArithmeticProgression>;
+      { coding.validate(run) } noexcept -> std::same_as<bool>;
+      { coding.has_pending() } noexcept -> std::same_as<bool>;
+    };
 
 // View access must not throw. std::ranges::subrange copies its nonthrowing iterator and sentinel.
 template <class View>
@@ -206,20 +212,21 @@ concept RleStore =
 
 // A view borrows its integer storage. Mutation invalidates it. Its iterators copy the open run and coding state.
 // Iteration requires valid pairs and coding-domain values. Check is_valid() before reading external integer stores.
+// Dereference and increment require a non-end iterator. Violating these preconditions has undefined behavior.
 template <RunCoding Coding, IntegerReadView StoreView>
 class RleView : public std::ranges::view_interface<RleView<Coding, StoreView>> {
   StoreView store_;
-  encoding_detail::Run tail_{};
+  EncodedRun tail_{};
 
  public:
   RleView() = default;
-  RleView(StoreView store, encoding_detail::Run tail = {}) noexcept : store_(store), tail_(tail) {}
+  RleView(StoreView store, EncodedRun tail = {}) noexcept : store_(store), tail_(tail) {}
   struct Sentinel {};
   class Iterator;
   class ProgressionIterator {
     std::ranges::iterator_t<StoreView> source_{};
     [[no_unique_address]] std::ranges::sentinel_t<StoreView> end_{};
-    encoding_detail::Run tail_{};
+    EncodedRun tail_{};
     [[no_unique_address]] Coding coding_{};
     ArithmeticProgression current_{};
     friend class Iterator;
@@ -231,14 +238,11 @@ class RleView : public std::ranges::view_interface<RleView<Coding, StoreView>> {
     using reference = const value_type&;
     using pointer = void;
     ProgressionIterator() = default;
-    ProgressionIterator(StoreView store, encoding_detail::Run tail) noexcept : source_(store.begin()), end_(store.end()), tail_(tail) { ++*this; }
+    ProgressionIterator(StoreView store, EncodedRun tail) noexcept : source_(store.begin()), end_(store.end()), tail_(tail) { ++*this; }
     ProgressionIterator& operator++() noexcept {
       bool valid = true;
-      const auto run = coding_.has_pending() ? encoding_detail::Run{} : encoding_detail::read_run(source_, end_, tail_, valid);
-      // Unchecked iteration requires a valid store. External record readers validate before iteration.
-      if (!valid) {
-        std::abort();
-      }
+      const auto run = coding_.has_pending() ? EncodedRun{} : coding::detail::read_run(source_, end_, tail_, valid);
+      assert(valid);
       current_ = run.length == 0 && !coding_.has_pending() ? ArithmeticProgression{} : coding_.decode(run);
       return *this;
     }
@@ -260,7 +264,7 @@ class RleView : public std::ranges::view_interface<RleView<Coding, StoreView>> {
     using reference = value_type;
     using pointer = void;
     Iterator() = default;
-    Iterator(StoreView store, encoding_detail::Run tail) noexcept : run_(store, tail) {}
+    Iterator(StoreView store, EncodedRun tail) noexcept : run_(store, tail) {}
     Iterator& operator++() noexcept {
       auto& current = run_.current_;
       if (current.size() == 1) {
@@ -284,7 +288,7 @@ class RleView : public std::ranges::view_interface<RleView<Coding, StoreView>> {
     auto tail = tail_;
     Coding coding;
     bool valid = true;
-    for (auto run = encoding_detail::read_run(source, end, tail, valid); run.length != 0; run = encoding_detail::read_run(source, end, tail, valid)) {
+    for (auto run = coding::detail::read_run(source, end, tail, valid); run.length != 0; run = coding::detail::read_run(source, end, tail, valid)) {
       if (!coding.validate(run)) {
         return false;
       }
@@ -299,7 +303,7 @@ class RleView : public std::ranges::view_interface<RleView<Coding, StoreView>> {
 template <RunCoding Coding, RleStore Store = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 class RleSequence {
   Store store_{};
-  encoding_detail::RunEncoder<Store> run_{};
+  coding::detail::RunEncoder<Store> run_{};
   [[no_unique_address]] Coding coding_{};
 
  public:
@@ -350,11 +354,11 @@ class RleSequence {
   // Concurrent append and iteration can still race on shared key bytes and wide value reads.
   class Snapshot {
     [[no_unique_address]] typename Store::Snapshot store_{};
-    encoding_detail::Run tail_{};
+    EncodedRun tail_{};
 
    public:
     Snapshot() = default;
-    Snapshot(typename Store::Snapshot store, encoding_detail::Run tail) noexcept : store_(std::move(store)), tail_(tail) {}
+    Snapshot(typename Store::Snapshot store, EncodedRun tail) noexcept : store_(std::move(store)), tail_(tail) {}
     [[nodiscard]] auto view() const noexcept { return RleView<Coding, decltype(store_.view())>{store_.view(), tail_}; }
     [[nodiscard]] auto begin() const noexcept { return view().begin(); }
     [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
@@ -367,9 +371,7 @@ class RleSequence {
   }
 
  private:
-  [[nodiscard]] encoding_detail::Run open_run() const noexcept {
-    return run_.empty() ? encoding_detail::Run{} : encoding_detail::Run{run_.last(), run_.count() + 1};
-  }
+  [[nodiscard]] EncodedRun open_run() const noexcept { return run_.empty() ? EncodedRun{} : EncodedRun{run_.last(), run_.count() + 1}; }
 };
 
 // Chunk lengths use second differences. They have a scalar view and no RLE progression contract.

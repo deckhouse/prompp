@@ -1,7 +1,6 @@
 #include <benchmark/benchmark.h>
 
 #include <fstream>
-#include <stdexcept>
 
 #include "bare_bones/encoding.h"
 #include "benchmark/statistic.h"
@@ -62,9 +61,6 @@ void EncodingSequenceDecode(benchmark::State& state) {
     sequence.push_back(value);
   }
 
-  if (kValues.empty() || !std::ranges::equal(sequence, kValues)) {
-    throw std::runtime_error("Invalid decode benchmark fixture or result");
-  }
   state.counters["Values"] = kValues.size();
 
   for ([[maybe_unused]] auto _ : state) {

@@ -15,6 +15,7 @@ class ArithmeticProgression : public std::ranges::view_interface<ArithmeticProgr
   class Iterator {
    public:
     using value_type = uint32_t;
+    // Distances are signed and must represent every uint32_t-sized progression.
     using difference_type = int64_t;
     using iterator_category = std::random_access_iterator_tag;
     using iterator_concept = std::random_access_iterator_tag;

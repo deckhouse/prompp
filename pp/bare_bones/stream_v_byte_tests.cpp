@@ -217,13 +217,12 @@ TEST_F(CompactSequenceCreateIteratorFixture, ReadsZeroValuesWithoutDecoderPaddin
   // Arrange
   const std::array<uint8_t, 9> record{1, 0, 0, 0, 4, 0, 0, 0, 0};
   std::span<const uint8_t> bytes(record);
-  const std::array<uint32_t, 4> expected{0, 0, 0, 0};
 
   // Act
   const auto it = sequence_.create_read_iterator(bytes);
 
   // Assert
-  EXPECT_THAT(std::ranges::subrange(it, sequence_.end()), testing::ElementsAreArray(expected));
+  EXPECT_THAT(std::ranges::subrange(it, sequence_.end()), testing::ElementsAre(0, 0, 0, 0));
   EXPECT_TRUE(bytes.empty());
 }
 
