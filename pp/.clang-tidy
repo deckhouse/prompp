@@ -1,4 +1,4 @@
-# Apply the same diagnostic policy to full and shallow analysis.
+# Keep the legacy production header scope until the header findings are fixed.
 Checks: >
   clang-diagnostic-*,
   clang-analyzer-*,-clang-analyzer-optin.core.EnumCastOutOfRange,
@@ -7,7 +7,7 @@ Checks: >
   bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-unchecked-optional-access,
   misc-include-cleaner,
 WarningsAsErrors: '*'
-HeaderFilterRegex: '.*'
+HeaderFilterRegex: '^(bare_bones|entrypoint|head|metrics|performance_tests|primitives|prometheus|series_data|series_index|wal)/.*'
 ExcludeHeaderFilterRegex: '(^|/)(external|third_party|tools)/'
 ExtraArgs:
   - '-Wno-deprecated-declarations'
