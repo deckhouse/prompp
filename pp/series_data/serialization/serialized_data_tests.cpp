@@ -25,7 +25,7 @@ using series_data::serialization::SerializedDataView;
 using series_data::decoder::SeekKind;
 using series_data::decoder::SeekResult;
 
-class SerializerDeserializerTrait {
+class SerializerTrait {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
@@ -58,9 +58,9 @@ class SerializerDeserializerTrait {
   }
 };
 
-class SerializerDeserializerFixture : public SerializerDeserializerTrait, public testing::Test {};
+class SerializerFixture : public SerializerTrait, public testing::Test {};
 
-TEST_F(SerializerDeserializerFixture, EmptyChunksList) {
+TEST_F(SerializerFixture, EmptyChunksList) {
   // Arrange
 
   // Act
@@ -72,7 +72,7 @@ TEST_F(SerializerDeserializerFixture, EmptyChunksList) {
   ASSERT_EQ(DataStorage::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
 }
 
-TEST_F(SerializerDeserializerFixture, TwoUint32ConstantChunkWithCommonTimestampStream) {
+TEST_F(SerializerFixture, TwoUint32ConstantChunkWithCommonTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
@@ -109,7 +109,7 @@ TEST_F(SerializerDeserializerFixture, TwoUint32ConstantChunkWithCommonTimestampS
       decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixture, TwoUint32ConstantFinalizedChunkWithCommonTimestampStream) {
+TEST_F(SerializerFixture, TwoUint32ConstantFinalizedChunkWithCommonTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
@@ -156,7 +156,7 @@ TEST_F(SerializerDeserializerFixture, TwoUint32ConstantFinalizedChunkWithCommonT
       decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixture, OpenAndFinalizedChunksShareTimestampDescriptor) {
+TEST_F(SerializerFixture, OpenAndFinalizedChunksShareTimestampDescriptor) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(0, 2, 1.0);
@@ -177,7 +177,7 @@ TEST_F(SerializerDeserializerFixture, OpenAndFinalizedChunksShareTimestampDescri
   EXPECT_TRUE(std::ranges::equal(SampleList{{.timestamp = 1, .value = 2.0}, {.timestamp = 2, .value = 2.0}}, decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixture, ThreeUint32ConstantChunkWithCommonAndUniqueTimestampStream) {
+TEST_F(SerializerFixture, ThreeUint32ConstantChunkWithCommonAndUniqueTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
@@ -225,7 +225,7 @@ TEST_F(SerializerDeserializerFixture, ThreeUint32ConstantChunkWithCommonAndUniqu
       decode_current_chunk(serialized_view, 2)));
 }
 
-TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
+TEST_F(SerializerFixture, AllChunkTypes) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
 
@@ -328,7 +328,7 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
+TEST_F(SerializerFixture, FinalizedAllChunkTypes) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
@@ -440,7 +440,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-TEST_F(SerializerDeserializerFixture, ChunkWithFinalizedTimestampStream) {
+TEST_F(SerializerFixture, ChunkWithFinalizedTimestampStream) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(1, 100, 1.0);
@@ -458,7 +458,7 @@ TEST_F(SerializerDeserializerFixture, ChunkWithFinalizedTimestampStream) {
       decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixture, MultipleChunksOnOneSeriesId) {
+TEST_F(SerializerFixture, MultipleChunksOnOneSeriesId) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 1.0);
@@ -485,7 +485,7 @@ TEST_F(SerializerDeserializerFixture, MultipleChunksOnOneSeriesId) {
       decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerFixture, QueryFinalizedOnly) {
+TEST_F(SerializerFixture, QueryFinalizedOnly) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 1.0);
@@ -509,7 +509,7 @@ TEST_F(SerializerDeserializerFixture, QueryFinalizedOnly) {
       decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerFixture, MultipleChunksOnOneSeriesIdWithSeveralFinalized) {
+TEST_F(SerializerFixture, MultipleChunksOnOneSeriesIdWithSeveralFinalized) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 2.0);
@@ -540,7 +540,7 @@ TEST_F(SerializerDeserializerFixture, MultipleChunksOnOneSeriesIdWithSeveralFina
                                  decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerFixture, CreateIteratorFromChunkId) {
+TEST_F(SerializerFixture, CreateIteratorFromChunkId) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 2.0);
@@ -571,7 +571,7 @@ TEST_F(SerializerDeserializerFixture, CreateIteratorFromChunkId) {
                                  decode_chunk_by_id(serialized_view, serialized_view.next_series().second)));
 }
 
-TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
+TEST_F(SerializerFixture, AllChunkTypesWithStalenan) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, STALE_NAN);
@@ -693,7 +693,7 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
+TEST_F(SerializerFixture, FinalizedAllChunkTypesWithStalenan) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, STALE_NAN);
@@ -824,9 +824,9 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-class SerializerDeserializerSharedPtrFixture : public SerializerDeserializerTrait, public testing::Test {};
+class SerializerSharedPtrFixture : public SerializerTrait, public testing::Test {};
 
-TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInAscInteger) {
+TEST_F(SerializerSharedPtrFixture, UseSamplesCountFromSerializedDataInAscInteger) {
   // Arrange
   encoder_.encode(0, 100, 101.0);
   encoder_.encode(0, 200, 2001.0);
@@ -856,7 +856,7 @@ TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedData
       decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInAscIntegerThenValuesGorilla) {
+TEST_F(SerializerSharedPtrFixture, UseSamplesCountFromSerializedDataInAscIntegerThenValuesGorilla) {
   // Arrange
   encoder_.encode(0, 100, 101.0);
   encoder_.encode(0, 200, 2001.0);
@@ -884,7 +884,7 @@ TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedData
       decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedDataInValuesGorilla) {
+TEST_F(SerializerSharedPtrFixture, UseSamplesCountFromSerializedDataInValuesGorilla) {
   // Arrange
   encoder_.encode(0, 100, 101.1);
   encoder_.encode(1, 100, 101.1);
@@ -912,7 +912,7 @@ TEST_F(SerializerDeserializerSharedPtrFixture, UseSamplesCountFromSerializedData
       decode_current_chunk(serialized_view, 0)));
 }
 
-class SerializedDataNextIterFixture : public SerializerDeserializerTrait, public testing::Test {
+class SerializedDataNextIterFixture : public SerializerTrait, public testing::Test {
  protected:
   static std::vector<uint32_t> get_chunks_ids(SerializedDataView& view) {
     std::vector<uint32_t> ans{};
@@ -1004,7 +1004,7 @@ TEST_F(SerializedDataNextIterFixture, SeveralChunks) {
   EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series().first);
 }
 
-class SerializedDataIterFixture : public SerializerDeserializerTrait, public testing::Test {};
+class SerializedDataIterFixture : public SerializerTrait, public testing::Test {};
 
 TEST_F(SerializedDataIterFixture, ResetIteratorToSameSeries) {
   // Arrange
@@ -1107,7 +1107,7 @@ TEST_F(SerializedDataIterFixture, ResetIteratorToAnotherSerializedData) {
                                                Sample{.timestamp = 4, .value = 1.3}, Sample{.timestamp = 5, .value = 1.4}}));
 }
 
-class SerializedDataIterSeekToFixture : public SerializerDeserializerTrait, public testing::Test {
+class SerializedDataIterSeekToFixture : public SerializerTrait, public testing::Test {
  protected:
   SerializedData serialized_data_;
 
@@ -1257,7 +1257,7 @@ TEST_F(SerializedDataIterSeekToFixture, SeekToOnEndIterator) {
   EXPECT_EQ(iterator, DecodeIteratorSentinel{});
 }
 
-class SerializedDataIterSeekFixture : public SerializerDeserializerTrait, public testing::Test {
+class SerializedDataIterSeekFixture : public SerializerTrait, public testing::Test {
  protected:
   SerializedData serialized_data_;
 
@@ -1495,6 +1495,99 @@ TEST_F(SerializedDataIterSeekFixture, ConsecutiveSeekAfterStop) {
   EXPECT_EQ((Sample{.timestamp = 1, .value = 1.0}), sample_after_stop);
   EXPECT_THAT(seen_on_second_seek, testing::ElementsAre(2, 3, 4));
   EXPECT_EQ((Sample{.timestamp = 4, .value = 4.0}), *iterator);
+}
+
+class SerializedDataViewEnumerateSeriesFixture : public testing::Test {
+ protected:
+  DataStorage storage_;
+  Encoder<> encoder_{storage_};
+  DataSerializer<> serializer_{storage_};
+
+  struct ChunkInfo {
+    uint32_t series_id;
+    uint32_t chunk_id;
+
+    bool operator==(const ChunkInfo& other) const noexcept = default;
+  };
+
+  [[nodiscard]] SerializedData serialize() noexcept {
+    auto data = serializer_.serialize();
+    storage_.reset();
+    return data;
+  }
+
+  std::vector<ChunkInfo> enumerate_series() noexcept {
+    std::vector<ChunkInfo> series_ids;
+    SerializedDataView{serialize()}.enumerate_series([&](const auto& chunk, uint32_t chunk_id) { series_ids.emplace_back(chunk.label_set_id, chunk_id); });
+    return series_ids;
+  }
+};
+
+TEST_F(SerializedDataViewEnumerateSeriesFixture, NoSeries) {
+  // Arrange
+
+  // Act
+  const auto series_ids = enumerate_series();
+
+  // Assert
+  EXPECT_TRUE(series_ids.empty());
+}
+
+TEST_F(SerializedDataViewEnumerateSeriesFixture, OneSeries) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+
+  // Act
+  const auto series_ids = enumerate_series();
+
+  // Assert
+  EXPECT_EQ((std::vector{ChunkInfo{.series_id = 0U, .chunk_id = 0}}), series_ids);
+}
+
+TEST_F(SerializedDataViewEnumerateSeriesFixture, TwoSeries) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(1, 1, 2.0);
+
+  // Act
+  const auto series_ids = enumerate_series();
+
+  // Assert
+  EXPECT_EQ((std::vector{ChunkInfo{.series_id = 0U, .chunk_id = 0}, ChunkInfo{.series_id = 1U, .chunk_id = 1U}}), series_ids);
+}
+
+TEST_F(SerializedDataViewEnumerateSeriesFixture, OneSeriesWithTwoChunks) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(0, 3, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 4, 1.0);
+
+  // Act
+  const auto series_ids = enumerate_series();
+
+  // Assert
+  EXPECT_EQ((std::vector{ChunkInfo{.series_id = 0U, .chunk_id = 0}}), series_ids);
+}
+
+TEST_F(SerializedDataViewEnumerateSeriesFixture, TwoSeriesWithMultipleChunksEach) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(1, 1, 2.0);
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(1, 2, 2.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  ChunkFinalizer::finalize(storage_, 1, storage_.open_chunks[1]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(1, 3, 2.0);
+
+  // Act
+  const auto series_ids = enumerate_series();
+
+  // Assert
+  EXPECT_EQ((std::vector{ChunkInfo{.series_id = 0U, .chunk_id = 0}, ChunkInfo{.series_id = 1U, .chunk_id = 2U}}), series_ids);
 }
 
 }  // namespace
