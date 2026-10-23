@@ -1,20 +1,15 @@
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("//:bazel/rules/cc_static_library.bzl", "cc_static_library")
 load("//:bazel/rules/entrypoint_codegen.bzl", "entrypoint_fact_checking")
 load("//:bazel/rules/march_variant.bzl", "march_variants")
 
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
-    name = "clang_tidy_config_default",
-    srcs = [
-        ".clang-tidy",
-    ],
-)
+exports_files([".clang-tidy"])
 
-label_flag(
-    name = "clang_tidy_config",
-    build_setting_default = ":clang_tidy_config_default",
-    visibility = ["//visibility:public"],
+native_binary(
+    name = "clang_tidy",
+    src = "@local_clang_tidy//:clang-tidy",
 )
 
 cc_library(
