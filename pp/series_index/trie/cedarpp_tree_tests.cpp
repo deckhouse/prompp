@@ -131,6 +131,8 @@ class CedarTrieSerializeDeserializeFixture : public CedarTrieFixture, public ::t
 
 TEST_P(CedarTrieSerializeDeserializeFixture, RoundTripPreservesItems) {
   // Arrange
+  auto expected_items = GetParam().items;
+  std::sort(expected_items.begin(), expected_items.end());
   std::stringstream stream;
   CedarTrie trie2;
 
@@ -139,10 +141,8 @@ TEST_P(CedarTrieSerializeDeserializeFixture, RoundTripPreservesItems) {
   stream >> trie2;
 
   // Assert
-  auto& sorted_items = const_cast<SerializeDeserializeCase&>(GetParam()).items;
-  std::sort(sorted_items.begin(), sorted_items.end());
-  EXPECT_EQ(GetParam().items, items(trie2));
-  EXPECT_EQ(GetParam().items.size(), trie2.count());
+  EXPECT_EQ(expected_items, items(trie2));
+  EXPECT_EQ(expected_items.size(), trie2.count());
 }
 
 INSTANTIATE_TEST_SUITE_P(EmptyTrie, CedarTrieSerializeDeserializeFixture, testing::Values(SerializeDeserializeCase{}));
@@ -150,9 +150,9 @@ INSTANTIATE_TEST_SUITE_P(Cases,
                          CedarTrieSerializeDeserializeFixture,
                          testing::Values(SerializeDeserializeCase{.items = {{.key = "key", .value = 1}}},
                                          SerializeDeserializeCase{.items = {
+                                                                      {.key = "key3", .value = 3},
                                                                       {.key = "key1", .value = 1},
                                                                       {.key = "key2", .value = 2},
-                                                                      {.key = "key3", .value = 3},
                                                                   }}));
 
 }  // namespace
