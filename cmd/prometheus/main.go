@@ -789,6 +789,7 @@ func main() {
 		catalog.DefaultIDGenerator{},
 		int(catalogMaxLogFileSize),
 		prometheus.DefaultRegisterer,
+		catalog.WithHeadDirInspector(catalog.NewHeadDirInspector(dataDir)),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)

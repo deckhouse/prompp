@@ -3,11 +3,8 @@ package catalog
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
-
-	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
 var (
@@ -16,91 +13,6 @@ var (
 	// ErrUnreadableLogFile unreadable log file error.
 	ErrUnreadableLogFile = errors.New("unreadable log file")
 )
-
-// migrate source file to target file on target version.
-//
-//revive:disable-next-line:function-result-limit there is no point in packing it into a structure.
-func migrate(
-	targetFilePath, sourceFilePath string,
-	targetVersion uint64,
-) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
-	sourceFile, sourceVersion, err := loadFile(sourceFilePath)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	sourceEncoder, sourceDecoder, err := codecsByVersion(sourceVersion)
-	if err != nil {
-		return nil, nil, nil, errors.Join(ErrUnreadableLogFile, sourceFile.Close())
-	}
-
-	if sourceVersion != targetVersion {
-		return migrateTo(sourceFile, sourceDecoder, targetFilePath, sourceFilePath, targetVersion, sourceVersion)
-	}
-
-	if sourceFilePath == targetFilePath {
-		return sourceFile, sourceEncoder, sourceDecoder, nil
-	}
-
-	err = os.Rename(sourceFilePath, targetFilePath)
-	if err != nil {
-		return nil, nil, nil, errors.Join(err, sourceFile.Close())
-	}
-
-	return sourceFile, sourceEncoder, sourceDecoder, nil
-}
-
-// migrateTo source file to target file on target version.
-//
-//revive:disable-next-line:function-result-limit there is no point in packing it into a structure.
-func migrateTo(
-	sourceFile *FileHandler,
-	sourceDecoder Decoder,
-	targetFilePath, sourceFilePath string,
-	targetVersion, sourceVersion uint64,
-) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
-	targetEncoder, targetDecoder, err := codecsByVersion(targetVersion)
-	if err != nil {
-		return nil, nil, nil, errors.Join(err, sourceFile.Close())
-	}
-
-	srecords := make([]*SerializedRecord, 0, 10) //revive:disable-line:add-constant it's average value of records
-	for {
-		sr := &SerializedRecord{}
-		if err = sourceDecoder.DecodeFrom(sourceFile, sr); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			logger.Errorf("failed to decode record: %v", err)
-			break
-		}
-		srecords = append(srecords, sr)
-	}
-
-	migration := getMigration(sourceVersion, targetVersion)
-	migratedRecords := make([]*SerializedRecord, 0, len(srecords))
-	for _, record := range srecords {
-		migratedRecords = append(migratedRecords, migration.Migrate(record))
-	}
-
-	swapFilePath := fmt.Sprintf("%s.swap", sourceFilePath)
-	targetFile, err := writeSwapAndSwitchAtFilePath(
-		targetFilePath,
-		swapFilePath,
-		targetVersion,
-		targetEncoder,
-		migratedRecords...,
-	)
-	if err != nil {
-		return nil, nil, nil, errors.Join(err, sourceFile.Close())
-	}
-
-	if err = sourceFile.Close(); err != nil {
-		logger.Errorf("failed to close file: %v", err)
-	}
-
-	return targetFile, targetEncoder, targetDecoder, nil
-}
 
 // loadFile load [FileHandler] from file.
 func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {
@@ -138,10 +50,11 @@ func loadFile(filePath string) (_ *FileHandler, _ uint64, err error) {
 	return fh, version, nil
 }
 
-// createFileHandlerByVersion create [FileHandler] by version.
+// createFileHandlerByVersion creates a log file and positions its reader after the version header.
+// Legacy headers are written without syncing; callers sync the complete new file.
 func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, error) {
 	if version == LogFileVersionV3 {
-		return createV3FileHandler(filePath)
+		return createV3FileHandler(filePath, preallocateV3File, syncDir)
 	}
 
 	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
@@ -151,7 +64,7 @@ func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, 
 
 	offset, err := writeLogFileVersion(fh, version)
 	if err != nil {
-		return nil, errors.Join(err, fh.Close())
+		return nil, errors.Join(err, fh.Close(), os.Remove(filePath))
 	}
 
 	fh.SetReadOffset(int64(offset))
@@ -163,17 +76,18 @@ func createFileHandlerByVersion(filePath string, version uint64) (*FileHandler, 
 // Migration
 //
 
-// Migration migrates record interface.
+// Migration converts a [SerializedRecord] to another log version in place.
 type Migration interface {
-	Migrate(sr *SerializedRecord) *SerializedRecord
+	// Migrate updates sr in place.
+	Migrate(sr *SerializedRecord)
 }
 
-// MigrationFunc is Migration interface function wrapper.
-type MigrationFunc func(sr *SerializedRecord) *SerializedRecord
+// MigrationFunc adapts an in-place conversion function to [Migration].
+type MigrationFunc func(sr *SerializedRecord)
 
-// Migrate reacord version.
-func (fn MigrationFunc) Migrate(sr *SerializedRecord) *SerializedRecord {
-	return fn(sr)
+// Migrate applies the conversion to sr in place.
+func (fn MigrationFunc) Migrate(sr *SerializedRecord) {
+	fn(sr)
 }
 
 //
@@ -183,21 +97,19 @@ func (fn MigrationFunc) Migrate(sr *SerializedRecord) *SerializedRecord {
 // MigrationV2 migrates record from v1 to v2 and vice versa.
 type MigrationV2 struct{}
 
+// Down migrates from v2 to v1.
+func (MigrationV2) Down(sr *SerializedRecord) {
+	if sr.status == StatusRotated && sr.corrupted {
+		sr.status = StatusCorrupted
+	}
+}
+
 // Up migrates from v1 to v2.
-func (MigrationV2) Up(sr *SerializedRecord) *SerializedRecord {
+func (MigrationV2) Up(sr *SerializedRecord) {
 	if sr.status == StatusCorrupted {
 		sr.corrupted = true
 		sr.status = StatusRotated
 	}
-	return sr
-}
-
-// Down migrates from v2 to v1.
-func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
-	if sr.status == StatusRotated && sr.corrupted {
-		sr.status = StatusCorrupted
-	}
-	return sr
 }
 
 //
@@ -207,25 +119,23 @@ func (MigrationV2) Down(sr *SerializedRecord) *SerializedRecord {
 // MigrationV3 migrates record from v2 to v3 and vice versa.
 type MigrationV3 struct{}
 
+// Down migrates from v3 to v2.
+func (MigrationV3) Down(sr *SerializedRecord) {
+	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
+}
+
 // Up migrates from v2 to v3. The time bounds are unknown in v2, so they are marked as unknown.
-func (MigrationV3) Up(sr *SerializedRecord) *SerializedRecord {
+func (MigrationV3) Up(sr *SerializedRecord) {
 	sr.numberOfSegments = numberOfSegmentsByLastAppendedSegmentID(sr.lastAppendedSegmentID.RawValue())
 	sr.mint = math.MaxInt64
 	sr.maxt = math.MinInt64
-	return sr
-}
-
-// Down migrates from v3 to v2.
-func (MigrationV3) Down(sr *SerializedRecord) *SerializedRecord {
-	sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(sr.numberOfSegments)
-	return sr
 }
 
 //
 // ChainedMigration
 //
 
-// ChainedMigration combines migrations to provide multiple migrations.
+// ChainedMigration applies a sequence of [Migration] conversions to the same [SerializedRecord].
 type ChainedMigration struct {
 	migrations []Migration
 }
@@ -235,12 +145,11 @@ func NewChainedMigration(migrations ...Migration) *ChainedMigration {
 	return &ChainedMigration{migrations: migrations}
 }
 
-// Migrate is an Migration interface implementation.
-func (c *ChainedMigration) Migrate(sr *SerializedRecord) *SerializedRecord {
+// Migrate applies each conversion to sr in order.
+func (c *ChainedMigration) Migrate(sr *SerializedRecord) {
 	for _, migration := range c.migrations {
-		sr = migration.Migrate(sr)
+		migration.Migrate(sr)
 	}
-	return sr
 }
 
 // getMigration create [Migration] from version to version.
