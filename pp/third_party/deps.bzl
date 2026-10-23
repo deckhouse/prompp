@@ -135,7 +135,7 @@ def _third_party_deps_impl(_ctx):
 
     git_repository(
         name = "snappy",
-        commit = "7406111ac4ae539ea0db8b7ea2dc76730cd957f4",
+        commit = "946606459314e55d029c85f9a8c46f8809467f0f",
         remote = "https://github.com/google/snappy",
         shallow_since = "1778353109 +0000",
     )
