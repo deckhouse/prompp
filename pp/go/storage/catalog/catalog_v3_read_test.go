@@ -162,7 +162,16 @@ func (s *V3FileTestSuite) TestV3Catalog_RepairsBeforeDowngrade() {
 	}
 }
 
+//revive:disable-next-line:cyclomatic // this is test.
+//revive:disable-next-line:cognitive-complexity // this is test.
 func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
+	const (
+		// directoryReadError identifies recovery after a failed directory read.
+		directoryReadError = "directory read error"
+		// shardCountOverflow identifies recovery when the shard count cannot fit in uint16.
+		shardCountOverflow = "shard count overflow"
+	)
+
 	for _, target := range []uint64{LogFileVersionV3, LogFileVersionV2} {
 		for _, scenario := range []struct {
 			name      string
@@ -178,8 +187,11 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 				inspector: recoveryInspector{shards: 4}, createdAt: 1760936591360, keep: true,
 			},
 			{
-				name: "directory birth", id: uuid.New(), inspector: recoveryInspector{shards: 4, birth: time.UnixMilli(500)},
-				createdAt: 500, keep: true,
+				name:      "directory birth",
+				id:        uuid.New(),
+				inspector: recoveryInspector{shards: 4, birth: time.UnixMilli(500)},
+				createdAt: 500,
+				keep:      true,
 			},
 			{
 				name: "minimum update of this head", id: uuid.New(), inspector: recoveryInspector{shards: 4},
@@ -194,8 +206,8 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 				inspector: recoveryInspector{err: os.ErrPermission}, pending: true,
 			},
 			{name: "I/O error", id: uuid.New(), inspector: recoveryInspector{err: syscall.EIO}, pending: true},
-			{name: "directory read error", id: uuid.New(), pending: true},
-			{name: "shard count overflow", id: uuid.New(), pending: true},
+			{name: directoryReadError, id: uuid.New(), pending: true},
+			{name: shardCountOverflow, id: uuid.New(), pending: true},
 		} {
 			s.Run(fmt.Sprintf("v%d/%s", target, scenario.name), func() {
 				path := filepath.Join(s.T().TempDir(), "head.log")
@@ -229,9 +241,9 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 					scenario.inspector = NewHeadDirInspector(filepath.Dir(path))
 				}
 
-				if scenario.name == "directory read error" || scenario.name == "shard count overflow" {
+				if scenario.name == directoryReadError || scenario.name == shardCountOverflow {
 					headDir := filepath.Join(filepath.Dir(path), scenario.id.String())
-					if scenario.name == "directory read error" {
+					if scenario.name == directoryReadError {
 						s.Require().NoError(os.WriteFile(headDir, nil, 0o600))
 					} else {
 						s.Require().NoError(os.Mkdir(headDir, 0o700))
@@ -305,7 +317,7 @@ func (s *V3FileTestSuite) TestV3Catalog_RestoresLostInitialRecord() {
 						s.Empty(c.pendingRecords)
 					}
 
-					if scenario.name == "directory read error" || scenario.name == "shard count overflow" {
+					if scenario.name == directoryReadError || scenario.name == shardCountOverflow {
 						_, statErr := os.Stat(filepath.Join(filepath.Dir(path), scenario.id.String()))
 						s.Require().NoError(statErr)
 					}

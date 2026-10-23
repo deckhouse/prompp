@@ -9,10 +9,21 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+const (
+	// migrationDamageHeaders identifies damage to both v3 file header slots.
+	migrationDamageHeaders = "headers"
+	// migrationDamageLong identifies a v3 file exceeding its fixed size.
+	migrationDamageLong = "long"
+	// migrationDamageShort identifies a truncated v3 file.
+	migrationDamageShort = "short"
+	// migrationSourceUnsupported identifies a log with an unsupported version.
+	migrationSourceUnsupported = "unsupported"
+)
+
 func (s *V3FileTestSuite) TestMigration_CompactedFallbackForDamagedV3() {
 	for _, target := range []uint64{LogFileVersionV2, LogFileVersionV3} {
 		for _, source := range []uint64{LogFileVersionV2, LogFileVersionV3} {
-			for _, damage := range []string{"headers", "short", "long"} {
+			for _, damage := range []string{migrationDamageHeaders, migrationDamageShort, migrationDamageLong} {
 				s.Run(fmt.Sprintf("target%d/source%d/%s", target, source, damage), func() {
 					path := filepath.Join(s.T().TempDir(), "head.log")
 					s.writeDamagedV3Log(path, damage)
@@ -70,8 +81,8 @@ func (s *V3FileTestSuite) TestMigration_DamagedFallbackPreservesBothFiles() {
 	for _, target := range []uint64{LogFileVersionV2, LogFileVersionV3} {
 		s.Run(fmt.Sprintf("target%d", target), func() {
 			path := filepath.Join(s.T().TempDir(), "head.log")
-			before := s.writeDamagedV3Log(path, "headers")
-			fallbackBefore := s.writeDamagedV3Log(path+".compacted", "short")
+			before := s.writeDamagedV3Log(path, migrationDamageHeaders)
+			fallbackBefore := s.writeDamagedV3Log(path+".compacted", migrationDamageShort)
 
 			fl, err := NewFileLog(path, target)
 
@@ -90,7 +101,7 @@ func (s *V3FileTestSuite) TestMigration_DamagedFallbackPreservesBothFiles() {
 
 func (s *V3FileTestSuite) TestMigration_DamagedV3WithoutFallbackPreservesSource() {
 	for _, target := range []uint64{LogFileVersionV2, LogFileVersionV3} {
-		for _, damage := range []string{"headers", "short", "long"} {
+		for _, damage := range []string{migrationDamageHeaders, migrationDamageShort, migrationDamageLong} {
 			s.Run(fmt.Sprintf("target%d/%s", target, damage), func() {
 				path := filepath.Join(s.T().TempDir(), "head.log")
 				before := s.writeDamagedV3Log(path, damage)
@@ -164,12 +175,12 @@ func (s *V3FileTestSuite) TestMigration_OpeningDoesNotChangeSource() {
 }
 
 func (s *V3FileTestSuite) TestMigration_UnreadableLogClassification() {
-	for _, source := range []string{"missing", "empty", "unsupported"} {
+	for _, source := range []string{"missing", "empty", migrationSourceUnsupported} {
 		s.Run(source, func() {
 			path := filepath.Join(s.T().TempDir(), "head.log")
 			if source != "missing" {
 				var data []byte
-				if source == "unsupported" {
+				if source == migrationSourceUnsupported {
 					data = []byte{0xff}
 				}
 
@@ -189,15 +200,15 @@ func (s *V3FileTestSuite) writeDamagedV3Log(path, damage string) []byte {
 	s.writeRecoveryLog(path, LogFileVersionV3, newAppendTestRecord(9, 900))
 
 	switch damage {
-	case "headers":
+	case migrationDamageHeaders:
 		data, err := os.ReadFile(path)
 		s.Require().NoError(err)
 		data[fileHeaderGenerationOffsetV3] ^= 1
 		data[fileHeaderSlotSizeV3+fileHeaderGenerationOffsetV3] ^= 1
 		s.Require().NoError(os.WriteFile(path, data, logFilePerm))
-	case "short":
+	case migrationDamageShort:
 		s.Require().NoError(os.Truncate(path, fileHeaderAreaSizeV3))
-	case "long":
+	case migrationDamageLong:
 		s.Require().NoError(os.Truncate(path, fileSizeV3+1))
 	default:
 		s.FailNow("unknown log damage", damage)
