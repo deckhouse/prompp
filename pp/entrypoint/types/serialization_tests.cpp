@@ -12,7 +12,7 @@
 namespace {
 
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::decoder::DecodeIteratorSentinel;
 using series_data::encoder::Sample;
@@ -25,9 +25,10 @@ class SerializedDataGoFixture : public testing::Test {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  Querier querier_{storage_};
+  Querier<> querier_{storage_};
 
-  [[nodiscard]] static SampleList decode_chunk(const entrypoint::types::SerializedDataGo& data, uint32_t chunk_id) {
+  template <class Storage>
+  [[nodiscard]] static SampleList decode_chunk(const entrypoint::types::SerializedDataGo<Storage>& data, uint32_t chunk_id) {
     SampleList decoded;
     std::ranges::copy(data.samples_iterator(chunk_id), DecodeIteratorSentinel{}, std::back_inserter(decoded));
     return decoded;

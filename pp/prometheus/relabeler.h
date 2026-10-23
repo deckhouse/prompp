@@ -123,22 +123,29 @@ struct InnerSerie {
 
 // InnerSeries - vector with relabeled result.
 //
-// size - number of timeseries processed;
-// data - vector with timeseries;
+// size          - number of timeseries processed;
+// data          - vector with timeseries;
+// time_interval - timestamp bounds of the collected samples, invalid while empty;
 class InnerSeries {
   size_t size_{0};
   BareBones::Vector<InnerSerie> data_;
   roaring::Roaring tracked_stale_nans_;
+  Primitives::TimeInterval time_interval_;
 
  public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<InnerSerie>& data() const { return data_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const { return size_; }
 
+  // time_interval returns the timestamp bounds of the collected samples. The samples land in the data storage as they
+  // are, so the bounds are maintained here to keep the head time bounds up to date without rescanning the storage.
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::TimeInterval& time_interval() const noexcept { return time_interval_; }
+
   PROMPP_ALWAYS_INLINE void reserve(size_t n) { data_.reserve(n); }
 
   PROMPP_ALWAYS_INLINE void emplace_back(const Primitives::Sample& sample, uint32_t ls_id, bool track_stale_nans) {
     data_.emplace_back(sample, ls_id);
+    extend_time_interval(sample.timestamp());
 
     if (track_stale_nans) [[likely]] {
       tracked_stale_nans_.add(ls_id);
@@ -151,6 +158,7 @@ class InnerSeries {
     data_.reserve_and_write(samples.size(), [&](InnerSerie* series_buffer, uint32_t series_size) {
       for (const auto& sample : samples) {
         std::construct_at(series_buffer, sample, ls_id);
+        extend_time_interval(sample.timestamp());
         ++series_buffer;
       }
       return series_size;
@@ -166,9 +174,16 @@ class InnerSeries {
     data_.clear();
     size_ = 0;
     tracked_stale_nans_ = roaring::Roaring{};
+    time_interval_.reset();
   }
 
   PROMPP_ALWAYS_INLINE roaring::Roaring& tracked_stale_nans() { return tracked_stale_nans_; }
+
+ private:
+  PROMPP_ALWAYS_INLINE void extend_time_interval(Primitives::Timestamp timestamp) noexcept {
+    time_interval_.min = std::min(time_interval_.min, timestamp);
+    time_interval_.max = std::max(time_interval_.max, timestamp);
+  }
 };
 
 // RelabeledSerie - element after relabeling with new ls(for next step).
@@ -482,6 +497,12 @@ class PerShardRelabeler {
 //
 // PerGoroutineRelabeler
 //
+
+template <class Lss>
+concept LssWithActiveSeriesMark = requires(Lss& lss) {
+  { lss.mark_active(uint32_t()) };
+  { lss.mark_active_atomic(uint32_t()) };
+};
 
 // PerGoroutineRelabeler stateful relabeler for shard goroutines.
 template <template <class> class SeriesContainer>
@@ -845,6 +866,11 @@ class PerGoroutineRelabeler {
     fill_inner_series(floats, floats.begin(), shards_inner_series, [&](auto& item) {
       if (auto ls_id = target_lss.find(timeseries_buf_.label_set(), item.hash()); ls_id.has_value()) {
         shards_inner_series[shard_id_].emplace_back(timeseries_buf_.samples(), *ls_id, false);
+
+        if constexpr (LssWithActiveSeriesMark<TargetLSS>) {
+          target_lss.mark_active_atomic(*ls_id);
+        }
+
         stats.samples_added += timeseries_buf_.samples().size();
         return true;
       }

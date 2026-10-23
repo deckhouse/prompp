@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 
 #include "primitives/sample.h"
@@ -10,12 +11,15 @@ namespace PromPP::WAL::hashdex::scraper::inline marked {
 
 #pragma pack(push, 1)
 struct MarkedString {
-  uint32_t offset = 0;
+  // Absolute offset into the scrape buffer. 64-bit so that scrape/federate responses
+  // larger than 4 GiB stay addressable (label offsets are rebased to the metric line
+  // before being encoded, so LabelCodec keeps its compact 32-bit representation).
+  uint64_t offset = 0;
   uint32_t length = 0;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static MarkedString create(std::string_view value, std::string_view buffer) noexcept {
     return {
-        .offset = static_cast<uint32_t>(value.data() - buffer.data()),
+        .offset = static_cast<uint64_t>(value.data() - buffer.data()),
         .length = static_cast<uint32_t>(value.size()),
     };
   }
@@ -45,7 +49,10 @@ struct MarkedSample {
 
 struct MarkedMetric {
   uint64_t hash;
-  uint32_t base_offset;
+  // Absolute offset of the metric line into the scrape buffer; 64-bit for > 4 GiB responses.
+  uint64_t base_offset;
+  // Offset into the per-scrape markup byte buffer; kept 32-bit and guarded (see
+  // MetricMarkupBuffer::add_metric / MarkupBufferOverflowError).
   uint32_t data_offset;
 };
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sync/atomic"
-	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,12 +35,14 @@ type Adapter struct {
 	hashdexLimits         atomic.Value // stores cppbridge.WALHashdexLimits
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
+	scrapeInterval        atomic.Int64
 
 	// stat
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
 	appendDuration        prometheus.Histogram
 	samplesAppended       prometheus.Counter
+	appendRecorders       appender.Recorders
 }
 
 // NewAdapter init new [Adapter].
@@ -79,6 +80,7 @@ func NewAdapter(
 			Help:        "Total number of appended samples.",
 			ConstLabels: prometheus.Labels{"type": "float"},
 		}),
+		appendRecorders: appender.NewRecorders(registerer),
 	}
 	ar.hashdexLimits.Store(cppbridge.DefaultWALHashdexLimits())
 	return ar
@@ -95,14 +97,15 @@ func (ar *Adapter) AppendHashdex(
 		return cppbridge.RelabelerStats{}, nil
 	}
 
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(float64(stats.SamplesAdded))
-	}(time.Now())
-
+	lap := ar.appendRecorders.Stages.Start()
 	err = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
+		lap.Mark(appender.StageSemaphoreWait)
 		var appendError error
-		stats, appendError = appender.New(h, services.CFViaRange).Append(
+		stats, appendError = appender.New(
+			h,
+			services.CFViaRangeByMask,
+			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
+		).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
@@ -111,6 +114,9 @@ func (ar *Adapter) AppendHashdex(
 
 		return appendError
 	})
+
+	ar.appendDuration.Observe(lap.SinceMicroseconds())
+	ar.samplesAppended.Add(float64(stats.SamplesAdded))
 
 	return stats, err
 }
@@ -132,7 +138,10 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
-	hx, err := cppbridge.NewWALSnappyProtobufHashdex(compressedData.Bytes(), ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits))
+	hx, err := cppbridge.NewWALSnappyProtobufHashdex(
+		compressedData.Bytes(),
+		ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits),
+	)
 	compressedData.Destroy()
 	if err != nil {
 		return err
@@ -143,13 +152,14 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	}
 
 	var floatsAppended float64
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(floatsAppended)
-	}(time.Now())
-
-	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err := appender.New(h, services.CFViaRange).Append(
+	lap := ar.appendRecorders.Stages.Start()
+	errAppend := ar.proxy.With(ctx, func(h *pp_storage.Head) error {
+		lap.Mark(appender.StageSemaphoreWait)
+		stats, err := appender.New(
+			h,
+			services.CFViaRangeByMask,
+			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
+		).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
 			state,
@@ -159,6 +169,11 @@ func (ar *Adapter) AppendSnappyProtobuf(
 
 		return err
 	})
+
+	ar.appendDuration.Observe(lap.SinceMicroseconds())
+	ar.samplesAppended.Add(floatsAppended)
+
+	return errAppend
 }
 
 // AppendTimeSeries append TimeSeries data to [Head].
@@ -179,13 +194,14 @@ func (ar *Adapter) AppendTimeSeries(
 		return stats, nil
 	}
 
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(float64(stats.SamplesAdded))
-	}(time.Now())
-
+	lap := ar.appendRecorders.Stages.Start()
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err = appender.New(h, services.CFViaRange).Append(
+		lap.Mark(appender.StageSemaphoreWait)
+		stats, err = appender.New(
+			h,
+			services.CFViaRangeByMask,
+			appender.Stats{Lap: lap, Shards: ar.appendRecorders.Shards},
+		).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx, Data: data},
 			state,
@@ -194,6 +210,9 @@ func (ar *Adapter) AppendTimeSeries(
 
 		return nil
 	})
+
+	ar.appendDuration.Observe(lap.SinceMicroseconds())
+	ar.samplesAppended.Add(float64(stats.SamplesAdded))
 
 	return stats, err
 }
@@ -220,19 +239,25 @@ func (ar *Adapter) BatchStorage() storage.BatchStorage {
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(
-		queriers,
-		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
-	)
+	if !headIsOutOfQueryRange(ahead, mint, maxt) {
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(
+				ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics,
+			),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() {
+		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
 			continue
 		}
 
 		queriers = append(
 			queriers,
-			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+			querier.NewChunkQuerier(
+				head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics,
+			),
 		)
 	}
 
@@ -247,11 +272,12 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 // Label limit fields follow the same 0 = no limit semantics as scrape config.
 func (ar *Adapter) ApplyConfig(cfg *config.Config) error {
 	limits := cppbridge.WALHashdexLimits{
-		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),
-		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),
-		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit),
+		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),            // #nosec G115 // no overflow
+		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),  // #nosec G115 // no overflow
+		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit), // #nosec G115 // no overflow
 	}
 	ar.hashdexLimits.Store(limits)
+	ar.scrapeInterval.Store(int64(cfg.GlobalConfig.ScrapeInterval / 1e6)) // ns to ms
 	return nil
 }
 
@@ -264,12 +290,15 @@ func (ar *Adapter) Close() error {
 
 // HeadQuerier returns [storage.Querier] from active head.
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
+	ahead := ar.proxy.Get()
+	aTimeInterval := headTimeInterval(ahead)
 	return querier.NewQuerier(
-		ar.proxy.Get(),
+		ahead,
 		querier.NewNoOpShardedDeduplicator,
 		mint,
 		maxt,
-		nil,
+		ar.scrapeInterval.Load(),
+		aTimeInterval.MinT,
 		ar.activeQuerierMetrics,
 	), nil
 }
@@ -294,10 +323,21 @@ func (ar *Adapter) MergeOutOfOrderChunks() {
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(
-		queriers,
-		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
-	)
+	aTimeInterval := headTimeInterval(ahead)
+	if mint <= aTimeInterval.MaxT && maxt >= aTimeInterval.MinT {
+		queriers = append(
+			queriers,
+			querier.NewQuerier(
+				ahead,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.scrapeInterval.Load(),
+				aTimeInterval.MinT,
+				ar.activeQuerierMetrics,
+			),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
@@ -305,7 +345,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 		}
 
 		timeInterval := headTimeInterval(head)
-		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
+		if mint > timeInterval.MaxT || maxt < timeInterval.MinT {
 			continue
 		}
 
@@ -316,7 +356,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				querier.NewNoOpShardedDeduplicator,
 				mint,
 				maxt,
-				nil,
+				ar.scrapeInterval.Load(),
+				timeInterval.MinT,
 				ar.storageQuerierMetrics,
 			),
 		)
@@ -329,6 +370,18 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
+}
+
+// headIsOutOfQueryRange reports whether the [pp_storage.Head] holds no data for the [mint, maxt]
+// query range.
+//
+// headTimeInterval obtains the bounds of every shard whose cached interval is unknown, computing them
+// from the data storage, so the interval here is never a guess. An invalid interval therefore means the
+// head holds no data at all, and the comparison below puts such a head out of every query range.
+func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
+	timeInterval := headTimeInterval(head)
+
+	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
 }
 
 // headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].

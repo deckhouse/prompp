@@ -20,7 +20,7 @@ using std::operator""s;
 
 class LoaderTestFixture : public testing::Test {
  protected:
-  series_data::DataStorage storage_;
+  series_data::DataStorage<> storage_;
   series_data::Encoder<> encoder_{storage_};
   BareBones::ShrinkedToFitOStringStream stream1_;
   BareBones::ShrinkedToFitOStringStream stream2_;
@@ -496,7 +496,7 @@ TEST_F(LoaderSelectionTestFixture, LoadAll) {
 
 class LoaderUnorderedVectorTestFixture : public testing::Test {
  protected:
-  Loader::UnorderedVector vector_;
+  Loader<>::UnorderedVector vector_;
 };
 
 TEST_F(LoaderUnorderedVectorTestFixture, Empty) {

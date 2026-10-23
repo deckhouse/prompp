@@ -58,8 +58,13 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
-	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
-	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/expirationpolicy"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/lcompactor"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/manager"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/tcompactor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
+
 	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"         // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
@@ -70,9 +75,7 @@ import (
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"             // PP_CHANGES.md: rebuild on cpp
 
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
-	block "github.com/prometheus/prometheus/pp/go/storage/block"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
@@ -94,6 +97,7 @@ import (
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/wlog"
 	"github.com/prometheus/prometheus/util/documentcli"
 	"github.com/prometheus/prometheus/util/logging"
@@ -175,6 +179,9 @@ type flagConfig struct {
 	WalMaxSamplesPerSegment uint32
 	HeadRetentionTimeout    model.Duration
 	UseBlockManagerStorage  bool
+
+	labelReplaceCacheSize      int
+	labelReplaceRegexCacheSize int
 
 	featureList   []string
 	memlimitRatio float64
@@ -281,6 +288,21 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 	return nil
 }
 
+// DisableBlockManagerStorage disables the storage of blocks in the block manager.
+func (c *flagConfig) DisableBlockManagerStorage() {
+	c.UseBlockManagerStorage = false
+}
+
+// SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
+func (c *flagConfig) SetLabelReplaceCacheSize(size int) {
+	c.labelReplaceCacheSize = size
+}
+
+// SetLabelReplaceRegexCacheSize sets the capacity of the label_replace compiled-regex cache.
+func (c *flagConfig) SetLabelReplaceRegexCacheSize(size int) {
+	c.labelReplaceRegexCacheSize = size
+}
+
 func main() {
 	if os.Getenv("DEBUG") != "" {
 		runtime.SetBlockProfileRate(20)
@@ -317,7 +339,7 @@ func main() {
 			Gatherer:   prometheus.DefaultGatherer,
 		},
 		promlogConfig:          promlog.Config{},
-		UseBlockManagerStorage: false,
+		UseBlockManagerStorage: true,
 	}
 
 	a := kingpin.New(filepath.Base(os.Args[0]), "The Prom++ monitoring server").UsageWriter(os.Stdout)
@@ -558,23 +580,23 @@ func main() {
 
 	_, err := a.Parse(os.Args[1:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing command line arguments: %w", err))
+		fmt.Fprintln(os.Stderr, fmt.Errorf("error parsing command line arguments: %w", err))
 		a.Usage(os.Args[1:])
 		os.Exit(2)
 	}
 
 	logger := promlog.New(&cfg.promlogConfig)
 
-	readPromPPFeatures(logger, &cfg)
+	featuresflags.ReadPromPPFeatures(logger, &cfg, prometheus.DefaultRegisterer)
 
-	if err := cfg.setFeatureListOptions(logger); err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing feature list: %w", err))
+	if err = cfg.setFeatureListOptions(logger); err != nil {
+		fmt.Fprintln(os.Stderr, fmt.Errorf("error parsing feature list: %w", err))
 		os.Exit(1)
 	}
 
 	if cfg.nameEscapingScheme != "" {
-		scheme, err := model.ToEscapingScheme(cfg.nameEscapingScheme)
-		if err != nil {
+		scheme, errEscaping := model.ToEscapingScheme(cfg.nameEscapingScheme)
+		if errEscaping != nil {
 			fmt.Fprintf(os.Stderr, `Invalid name escaping scheme: %q; Needs to be one of "values", "underscores", or "dots"`, cfg.nameEscapingScheme)
 			os.Exit(1)
 		}
@@ -627,7 +649,7 @@ func main() {
 		level.Error(logger).Log("msg", fmt.Sprintf("Error loading config (--config.file=%s)", cfg.configFile), "file", absPath, "err", err)
 		os.Exit(2)
 	}
-	if _, err := cfgFile.GetScrapeConfigs(); err != nil {
+	if _, err = cfgFile.GetScrapeConfigs(); err != nil {
 		absPath, pathErr := filepath.Abs(cfg.configFile)
 		if pathErr != nil {
 			absPath = cfg.configFile
@@ -681,9 +703,9 @@ func main() {
 
 		// Check for overflows. This limits our max retention to 100y.
 		if cfg.tsdb.RetentionDuration < 0 {
-			y, err := model.ParseDuration("100y")
-			if err != nil {
-				panic(err)
+			y, errParse := model.ParseDuration("100y")
+			if errParse != nil {
+				panic(errParse)
 			}
 			cfg.tsdb.RetentionDuration = y
 			level.Warn(logger).Log("msg", "Time retention value is too high. Limiting to: "+y.String())
@@ -691,9 +713,9 @@ func main() {
 
 		// Max block size settings.
 		if cfg.tsdb.MaxBlockDuration == 0 {
-			maxBlockDuration, err := model.ParseDuration("31d")
-			if err != nil {
-				panic(err)
+			maxBlockDuration, errParse := model.ParseDuration("31d")
+			if errParse != nil {
+				panic(errParse)
 			}
 			// When the time retention is set and not too big use to define the max block duration.
 			if cfg.tsdb.RetentionDuration != 0 && cfg.tsdb.RetentionDuration/10 < maxBlockDuration {
@@ -748,6 +770,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// #nosec G301 // this is meant to be that way
 	if err = os.MkdirAll(dataDir, 0o777); err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
@@ -827,7 +850,7 @@ func main() {
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
-	if err := adapter.ApplyConfig(cfgFile); err != nil {
+	if err = adapter.ApplyConfig(cfgFile); err != nil {
 		level.Error(logger).Log("msg", "failed to apply config to adapter", "err", err)
 		os.Exit(1)
 	}
@@ -839,17 +862,16 @@ func main() {
 
 	// PP_CHANGES.md: rebuild on cpp start
 	// Server mode supports two historical-block storage schemes selected by the
-	// PROMPP_FEATURES=enable_block_manager feature flag:
-	// 1) enabled:  block.Manager + block.Compactor for persisted blocks.
-	// 2) disabled (default): pre-PR-377 mode with tsdb.DB serving persisted blocks.
+	// PROMPP_FEATURES feature flag:
+	// 1) block.Manager + block.Compactor for persisted blocks. This is the
+	//    default; it can be turned off with PROMPP_FEATURES=disable_block_manager.
+	// 2) pre-PR-377 mode with tsdb.DB serving persisted blocks, used when the
+	//    block manager is disabled.
 	// In both modes, PP head manager + adapter remain the write path.
 	var (
-		blockManager     *block.Manager
-		blockCompactor   *block.Compactor
 		tsdbHistorical   *tsdbHistoricalStorage
-		compactCancel    context.CancelFunc
-		persistedStorage storage.Storage       = localStorage
-		startTimeFn      func() (int64, error) = localStorage.StartTime
+		persistedStorage storage.Storage = localStorage
+		startTimeFn                      = localStorage.StartTime
 	)
 	if !agentMode {
 		// Storage is constructed eagerly here for both schemes. The historical
@@ -881,21 +903,48 @@ func main() {
 				"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 				"EnableOverlappingCompaction", cfg.tsdb.EnableOverlappingCompaction,
 			)
-			retentionMs := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
-			blocksToDelete := pp_pkg_tsdb.NewBlocksToDelete(
-				retentionMs,
-				int64(cfg.tsdb.MaxBytes),
-				pp_pkg_tsdb.CatalogHeadsExtraSize(dataDir, headCatalog),
-				prometheus.DefaultRegisterer,
-			)
-			blockManager, err = block.NewManager(
+			retentionMS := int64(time.Duration(cfg.tsdb.RetentionDuration) / time.Millisecond)
+
+			chunkPool := chunkenc.NewPool()
+			compactCtx, compactCancel := context.WithCancel(context.Background())
+			blockCompactor, errCompactor := tcompactor.NewTCompactor(
+				compactCtx,
+				log.With(logger, "component", "tcompactor"),
 				localStoragePath,
-				&block.Options{
-					RetentionDuration:           retentionMs,
+				tcompactor.Options{
+					TsdbOptions: lcompactor.LeveledCompactorOptions{
+						MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
+						EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
+					},
+					MinBlockDuration: int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
+					MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
+				}, chunkPool, prometheus.DefaultRegisterer,
+			)
+			if errCompactor != nil {
+				level.Error(logger).Log("msg", "failed to create tcompactor", "err", errCompactor)
+				os.Exit(1)
+			}
+
+			blocksToDelete := expirationpolicy.NewExpirationPolicy[*block.Block](
+				dataDir,
+				headCatalog,
+				&expirationpolicy.Options{
+					RetentionDuration: retentionMS,
+					MaxBytes:          int64(cfg.tsdb.MaxBytes),
+				},
+				prometheus.DefaultRegisterer,
+			).BlocksToDelete
+
+			blockManager, errCompactor := manager.NewManager(
+				localStoragePath,
+				&manager.Options{
+					RetentionDuration:           retentionMS,
 					CorruptedRetentionDuration:  time.Duration(cfg.tsdb.CorruptedRetentionDuration),
 					EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
 				},
+				blockCompactor,
 				blocksToDelete,
+				chunkPool,
 				localstorageobserver.NewLocalStorageObserver(
 					localStoragePath,
 					headCatalog,
@@ -905,26 +954,10 @@ func main() {
 				log.With(logger, "component", "blockmanager"),
 				prometheus.DefaultRegisterer,
 			)
-			if err != nil {
-				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
+			if errCompactor != nil {
+				level.Error(logger).Log("msg", "failed to initialize block manager", "err", errCompactor)
 				os.Exit(1)
 			}
-
-			var compactCtx context.Context
-			compactCtx, compactCancel = context.WithCancel(context.Background())
-			blockCompactor, err = block.NewCompactor(compactCtx, localStoragePath, &block.CompactorOptions{
-				MinBlockDuration:            int64(time.Duration(cfg.tsdb.MinBlockDuration) / time.Millisecond),
-				MaxBlockDuration:            int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
-				MaxBlockChunkSegmentSize:    int64(cfg.tsdb.MaxBlockChunkSegmentSize),
-				EnableOverlappingCompaction: cfg.tsdb.EnableOverlappingCompaction,
-			}, blockManager, log.With(logger, "component", "blockcompactor"), prometheus.DefaultRegisterer)
-			if err != nil {
-				level.Error(logger).Log("msg", "failed to create block compactor", "err", err)
-				os.Exit(1)
-			}
-			// Drive compaction from the manager's single reload loop so compact
-			// and block deletion never run concurrently.
-			blockManager.SetCompactor(blockCompactor)
 
 			bs := &blockStorage{m: blockManager, onClose: func() error {
 				// Cancel any in-flight leveled compaction first so the manager
@@ -938,9 +971,9 @@ func main() {
 		} else {
 			level.Info(logger).Log("msg", "Using pre-PR-377 historical TSDB storage scheme")
 			opts := cfg.tsdb.ToTSDBOptions()
-			db, err := tsdb.Open(localStoragePath, logger, prometheus.DefaultRegisterer, &opts, localStorage.stats)
-			if err != nil {
-				level.Error(logger).Log("msg", "opening storage failed", "err", err)
+			db, errOpen := tsdb.Open(localStoragePath, logger, prometheus.DefaultRegisterer, &opts, localStorage.stats)
+			if errOpen != nil {
+				level.Error(logger).Log("msg", "opening storage failed", "err", errOpen)
 				os.Exit(1)
 			}
 			tsdbHistorical = &tsdbHistoricalStorage{db: db}
@@ -1062,13 +1095,13 @@ func main() {
 		l := func(format string, a ...interface{}) {
 			level.Info(logger).Log("component", "automaxprocs", "msg", fmt.Sprintf(strings.TrimPrefix(format, "maxprocs: "), a...))
 		}
-		if _, err := maxprocs.Set(maxprocs.Logger(l)); err != nil {
-			level.Warn(logger).Log("component", "automaxprocs", "msg", "Failed to set GOMAXPROCS automatically", "err", err)
+		if _, errSet := maxprocs.Set(maxprocs.Logger(l)); errSet != nil {
+			level.Warn(logger).Log("component", "automaxprocs", "msg", "Failed to set GOMAXPROCS automatically", "err", errSet)
 		}
 	}
 
 	if cfg.enableAutoGOMEMLIMIT {
-		if _, err := memlimit.SetGoMemLimitWithOpts(
+		if _, errSet := memlimit.SetGoMemLimitWithOpts(
 			memlimit.WithRatio(cfg.memlimitRatio),
 			memlimit.WithProvider(
 				memlimit.ApplyFallback(
@@ -1076,19 +1109,19 @@ func main() {
 					memlimit.FromSystem,
 				),
 			),
-		); err != nil {
-			level.Warn(logger).Log("component", "automemlimit", "msg", "Failed to set GOMEMLIMIT automatically", "err", err)
+		); errSet != nil {
+			level.Warn(logger).Log("component", "automemlimit", "msg", "Failed to set GOMEMLIMIT automatically", "err", errSet)
 		}
 	}
 
 	if !agentMode {
-		activeQueryTracker, err := promql.NewActiveQueryTracker(
+		activeQueryTracker, errTracker := promql.NewActiveQueryTracker(
 			localStoragePath,
 			cfg.queryConcurrency,
 			log.With(logger, "component", "active query tracker"),
 		)
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to initialize active query tracker", "err", err)
+		if errTracker != nil {
+			level.Error(logger).Log("msg", "failed to initialize active query tracker", "err", errTracker)
 			os.Exit(1)
 		}
 
@@ -1102,16 +1135,18 @@ func main() {
 			NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 			// EnableAtModifier and EnableNegativeOffset have to be
 			// always on for regular PromQL as of Prometheus v2.33.
-			EnableAtModifier:         true,
-			EnableNegativeOffset:     true,
-			EnablePerStepStats:       cfg.enablePerStepStats,
-			EnableDelayedNameRemoval: cfg.promqlEnableDelayedNameRemoval,
+			EnableAtModifier:           true,
+			EnableNegativeOffset:       true,
+			EnablePerStepStats:         cfg.enablePerStepStats,
+			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
+			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
+			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
 		}
 
 		queryEngine = promql.NewEngine(opts)
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
-		ruleManager, err = rules.NewManager(&rules.ManagerOptions{
+		ruleManager, errTracker = rules.NewManager(&rules.ManagerOptions{
 			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
 			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
 			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
@@ -1132,8 +1167,8 @@ func main() {
 				return ruleQueryOffset
 			},
 		})
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to create a rule manager", "err", err)
+		if errTracker != nil {
+			level.Error(logger).Log("msg", "failed to create a rule manager", "err", errTracker)
 			os.Exit(1)
 		}
 	}
@@ -1219,9 +1254,9 @@ func main() {
 					return nil
 				}
 
-				l, err := logging.NewJSONFileLogger(cfg.GlobalConfig.QueryLogFile)
-				if err != nil {
-					return err
+				l, errLogger := logging.NewJSONFileLogger(cfg.GlobalConfig.QueryLogFile)
+				if errLogger != nil {
+					return errLogger
 				}
 				queryEngine.SetQueryLogger(l)
 				return nil
@@ -1235,9 +1270,9 @@ func main() {
 			name: "scrape_sd",
 			reloader: func(cfg *config.Config) error {
 				c := make(map[string]discovery.Configs)
-				scfgs, err := cfg.GetScrapeConfigs()
-				if err != nil {
-					return err
+				scfgs, errCfg := cfg.GetScrapeConfigs()
+				if errCfg != nil {
+					return errCfg
 				}
 				for _, v := range scfgs {
 					c[v.JobName] = v.ServiceDiscoveryConfigs
@@ -1267,10 +1302,10 @@ func main() {
 				// Get all rule files matching the configuration paths.
 				var files []string
 				for _, pat := range cfg.RuleFiles {
-					fs, err := filepath.Glob(pat)
-					if err != nil {
+					fs, errGlob := filepath.Glob(pat)
+					if errGlob != nil {
 						// The only error can be a bad pattern.
-						return fmt.Errorf("error retrieving rule files for %s: %w", pat, err)
+						return fmt.Errorf("error retrieving rule files for %s: %w", pat, errGlob)
 					}
 					files = append(files, fs...)
 				}
@@ -1313,7 +1348,7 @@ func main() {
 	listeners, err := webHandler.Listeners()
 	if err != nil {
 		level.Error(logger).Log("msg", "Unable to start web listeners", "err", err)
-		if err := queryEngine.Close(); err != nil {
+		if err = queryEngine.Close(); err != nil {
 			level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
 		}
 		os.Exit(1)
@@ -1811,12 +1846,12 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 	return eu, nil
 }
 
-// blockStorage adapts a read-only block.Manager (persisted blocks) to
+// PP_CHANGES.md: rebuild on cpp
+// blockStorage adapts a read-only manager.Manager (persisted blocks) to
 // storage.Storage so it can be used as a fanout secondary. Appends are dropped:
 // the head adapter is the fanout primary that stores samples.
-// PP_CHANGES.md: rebuild on cpp
 type blockStorage struct {
-	m       *block.Manager
+	m       *manager.Manager
 	onClose func() error
 }
 
@@ -1870,10 +1905,10 @@ func (s *tsdbHistoricalStorage) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
+// PP_CHANGES.md: rebuild on cpp
 // noopAppender silently drops samples and reports success, so that the fanout
 // appender (which appends to every secondary) does not fail on the read-only
 // blockStorage secondary.
-// PP_CHANGES.md: rebuild on cpp
 type noopAppender struct{}
 
 func (noopAppender) Append(storage.SeriesRef, labels.Labels, int64, float64) (storage.SeriesRef, error) {
@@ -2104,7 +2139,7 @@ func (s *readyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
 }
 
 // ErrNotReady is returned if the underlying scrape manager is not ready yet.
-var ErrNotReady = errors.New("Scrape manager not ready")
+var ErrNotReady = errors.New("scrape manager not ready")
 
 // ReadyScrapeManager allows a scrape manager to be retrieved. Even if it's set at a later point in time.
 type readyScrapeManager struct {
@@ -2260,165 +2295,4 @@ func (p *rwProtoMsgFlagParser) Set(opt string) error {
 	}
 	*p.msgs = append(*p.msgs, t)
 	return nil
-}
-
-func readPromPPFeatures(logger log.Logger, cfg *flagConfig) {
-	features := os.Getenv("PROMPP_FEATURES")
-	if features == "" {
-		return
-	}
-
-	for _, feature := range strings.Split(features, ",") {
-		fname, fvalue, _ := strings.Cut(feature, "=")
-		switch strings.TrimSpace(fname) {
-		case "head_read_concurrency":
-			var (
-				v   = 1
-				err error
-			)
-
-			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
-				v, err = strconv.Atoi(fvalue)
-				if err != nil {
-					level.Error(logger).Log("msg", "[FEATURE] Error parsing head_read_concurrency value", "err", err)
-					continue
-				}
-			}
-
-			head.ExtraWorkers = v
-			level.Info(logger).Log(
-				"msg",
-				"[FEATURE] Concurrency reading is enabled.",
-				"extra",
-				v,
-			)
-
-		case "head_default_number_of_shards":
-			fvalue := strings.TrimSpace(fvalue)
-			if fvalue == "" {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is empty, no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-				continue
-			}
-
-			v, err := strconv.Atoi(fvalue)
-			switch {
-			case err != nil:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-					"err", err,
-				)
-
-			case v > math.MaxUint16:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-			case v < 1:
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-
-			default:
-				pp_storage.DefaultNumberOfShards = uint16(v)
-				level.Info(logger).Log(
-					"msg", "[FEATURE] Changed default number of shards.",
-					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
-				)
-			}
-
-		case "disable_commits_on_remote_write":
-			rwprocessor.AlwaysCommit = false
-			pp_pkg_handler.OTLPAlwaysCommit = false
-
-		case "disable_unload_data_storage":
-			pp_storage.UnloadDataStorage = false
-			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is disabled.")
-
-		case "disable_block_compaction":
-			pp_pkg_tsdb.BlockCompactionDisabled = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
-
-		case "federation_split_families":
-			fvalue := strings.TrimSpace(fvalue)
-			if fvalue == "" {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] The federation_split_families should be setted with number.",
-				)
-				continue
-			}
-			v, err := strconv.Atoi(fvalue)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing federation_split_families value",
-					"err", err,
-				)
-				continue
-			}
-			_ = level.Info(logger).Log(
-				"msg", "[FEATURE] Split federation families with pages.",
-				"pages", v,
-			)
-			web.FederationSplitFamiliesPageSize = v
-
-		case "default_sample_age_limit":
-			fvalue = strings.TrimSpace(fvalue)
-			defaultSampleAgeLimit, err := model.ParseDuration(fvalue)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
-					"err", err,
-				)
-				continue
-			}
-
-			_ = level.Info(logger).Log(
-				"msg", "[FEATURE] default_sample_age_limit is set.",
-				"limit", fvalue,
-			)
-
-			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
-
-		case "enable_instant_query_feature":
-			querier.InstantQueryFeature = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Instant query feature is enabled.")
-
-		case "shrink_shard_copier":
-			pp_storage.ShrinkShardCopier = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Shrink shard copier is enabled.")
-
-		case "enable_block_manager":
-			if cfg != nil {
-				cfg.UseBlockManagerStorage = true
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Block-manager historical storage is enabled.")
-
-		case "disable_coredumps":
-			if err := prom_runtime.DisableCoreDumps(); err != nil {
-				_ = level.Error(logger).Log("msg", "[FEATURE] Failed to disable core dumps.", "err", err)
-				continue
-			}
-			_ = level.Info(logger).Log("msg", "[FEATURE] Core dumps are disabled (RLIMIT_CORE=0).")
-
-		case "select_func_optimization":
-			if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
-				level.Error(logger).Log(
-					"msg", "[FEATURE] Error parsing select_func_optimization value",
-					"err", err,
-				)
-				continue
-			}
-
-			level.Info(logger).Log(
-				"msg", "[FEATURE] Select function optimization is set.",
-				"optimization", fvalue,
-			)
-		}
-	}
 }

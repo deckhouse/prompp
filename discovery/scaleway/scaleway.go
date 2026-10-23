@@ -243,7 +243,7 @@ type authTokenFileRoundTripper struct {
 // newAuthTokenFileRoundTripper adds the auth token read from the file to a request.
 func newAuthTokenFileRoundTripper(tokenFile string, rt http.RoundTripper) (http.RoundTripper, error) {
 	// fail-fast if we can't read the file.
-	_, err := os.ReadFile(tokenFile)
+	_, err := os.ReadFile(tokenFile) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, fmt.Errorf("unable to read auth token file %s: %w", tokenFile, err)
 	}

@@ -11,7 +11,7 @@ namespace {
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::TimeInterval;
 using PromPP::Primitives::Timestamp;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::chunk::DataChunk;

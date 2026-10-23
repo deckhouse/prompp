@@ -1,0 +1,58 @@
+# Alternating stale samples change the matching signatures at every range step.
+# A previously matched series must neither remain present nor count as a duplicate.
+load 1m
+  lhs{id="x",part="a"} 1 1 1 1 1
+  lhs{id="x",part="b"} 2 2 2 2 2
+  lhs{id="y",part="a"} 3 3 3 3 3
+  rhs{id="x"} 10 stale 30 stale 50
+  rhs{id="y"} stale 20 stale 40 stale
+
+eval range from 0 to 4m step 1m lhs{part="a"} + on(id) rhs
+  {id="x"} 11 _ 31 _ 51
+  {id="y"} _ 23 _ 43 _
+
+eval range from 0 to 4m step 1m lhs{part="a"} == bool on(id) rhs
+  {id="x"} 0 _ 0 _ 0
+  {id="y"} _ 0 _ 0 _
+
+eval range from 0 to 4m step 1m lhs * on(id) group_left rhs
+  {id="x",part="a"} 10 _ 30 _ 50
+  {id="x",part="b"} 20 _ 60 _ 100
+  {id="y",part="a"} _ 60 _ 120 _
+
+eval range from 0 to 4m step 1m rhs * on(id) group_right lhs
+  {id="x",part="a"} 10 _ 30 _ 50
+  {id="x",part="b"} 20 _ 60 _ 100
+  {id="y",part="a"} _ 60 _ 120 _
+
+eval range from 0 to 4m step 1m lhs and on(id) rhs
+  lhs{id="x",part="a"} 1 _ 1 _ 1
+  lhs{id="x",part="b"} 2 _ 2 _ 2
+  lhs{id="y",part="a"} _ 3 _ 3 _
+
+eval range from 0 to 4m step 1m lhs unless on(id) rhs
+  lhs{id="x",part="a"} _ 1 _ 1 _
+  lhs{id="x",part="b"} _ 2 _ 2 _
+  lhs{id="y",part="a"} 3 _ 3 _ 3
+
+eval range from 0 to 4m step 1m rhs or on(id) lhs
+  rhs{id="x"} 10 _ 30 _ 50
+  rhs{id="y"} _ 20 _ 40 _
+  lhs{id="x",part="a"} _ 1 _ 1 _
+  lhs{id="x",part="b"} _ 2 _ 2 _
+  lhs{id="y",part="a"} 3 _ 3 _ 3
+
+# Parenthesized parameters and fixed range selectors preserve their value.
+eval range from 0 to 4m step 1m clamp((lhs{part="a"}), (2), (3))
+  {id="x",part="a"} 2 2 2 2 2
+  {id="y",part="a"} 3 3 3 3 3
+
+eval range from 0 to 4m step 1m sum_over_time(lhs{part="a"}[2m] @ 120)
+  {id="x",part="a"} 2 2 2 2 2
+  {id="y",part="a"} 6 6 6 6 6
+
+# bool still removes the metric name when it is explicitly included by grouping.
+eval range from 0 to 4m step 1m lhs == bool on(id) group_left(__name__) rhs
+  {id="x",part="a"} 0 _ 0 _ 0
+  {id="x",part="b"} 0 _ 0 _ 0
+  {id="y",part="a"} _ 0 _ 0 _

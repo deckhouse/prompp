@@ -55,7 +55,7 @@ class ExceptionThrowFixture : public testing::Test {
 
   [[noreturn]] static void throw_exception() { throw BareBones::Exception(0xcc63de60c4c06e86, "series %d", 42); }
 
-  static std::string_view catch_exception_as_std_exception() {
+  static std::string catch_exception_as_std_exception() {
     try {
       throw_exception();
     } catch (const std::exception& exception) {
@@ -79,7 +79,7 @@ TEST_F(ExceptionThrowFixture, CanBeCaughtAsStdException) {
   // Arrange
 
   // Act
-  const std::string_view caught_message = catch_exception_as_std_exception();
+  const std::string caught_message = catch_exception_as_std_exception();
 
   // Assert
   EXPECT_EQ(kExpectedMessage, caught_message);

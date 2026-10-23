@@ -67,15 +67,15 @@ func (l *WALHashdexLimits) UnmarshalBinary(data []byte) error {
 	var offset int
 
 	maxLabelNameLength, n := binary.Uvarint(data[offset:])
-	l.MaxLabelNameLength = uint32(maxLabelNameLength)
+	l.MaxLabelNameLength = uint32(maxLabelNameLength) // #nosec G115 // no overflow
 	offset += n
 
 	maxLabelValueLength, n := binary.Uvarint(data[offset:])
-	l.MaxLabelValueLength = uint32(maxLabelValueLength)
+	l.MaxLabelValueLength = uint32(maxLabelValueLength) // #nosec G115 // no overflow
 	offset += n
 
 	maxLabelNamesPerTimeseries, n := binary.Uvarint(data[offset:])
-	l.MaxLabelNamesPerTimeseries = uint32(maxLabelNamesPerTimeseries)
+	l.MaxLabelNamesPerTimeseries = uint32(maxLabelNamesPerTimeseries) // #nosec G115 // no overflow
 	offset += n
 
 	maxTimeseriesCount, _ := binary.Uvarint(data[offset:])
@@ -248,6 +248,7 @@ const (
 	scraperInvalidUtf8
 	scraperParseInvalidValue
 	scraperParseInvalidTimestamp
+	scraperMarkupBufferOverflow
 )
 
 var (
@@ -261,6 +262,8 @@ var (
 	ErrScraperParseInvalidValue = errors.New("scraper parse invalid value")
 	// ErrScraperParseInvalidTimestamp error when parse invalid timestamp.
 	ErrScraperParseInvalidTimestamp = errors.New("scraper parse invalid timestamp")
+	// ErrScraperMarkupBufferOverflow error when the scrape markup buffer exceeds 4 GiB.
+	ErrScraperMarkupBufferOverflow = errors.New("scraper markup buffer size exceeds 4 GiB")
 
 	codeToError = map[uint32]error{
 		scraperParseNoError:          nil,
@@ -269,6 +272,7 @@ var (
 		scraperInvalidUtf8:           ErrScraperInvalidUtf8,
 		scraperParseInvalidValue:     ErrScraperParseInvalidValue,
 		scraperParseInvalidTimestamp: ErrScraperParseInvalidTimestamp,
+		scraperMarkupBufferOverflow:  ErrScraperMarkupBufferOverflow,
 	}
 )
 

@@ -35,7 +35,9 @@ using Cardinality = uint32_t;
 
 template <class MatchType>
 struct Matcher {
-  BareBones::Vector<MatchType> matches{};
+  using Matches = BareBones::Vector<MatchType>;
+
+  Matches matches{};
   MatchType label_name_match{};
   Cardinality cardinality{};
   PromPP::Prometheus::MatchStatus status{PromPP::Prometheus::MatchStatus::kUnknown};

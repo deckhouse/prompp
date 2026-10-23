@@ -9,7 +9,7 @@
 
 namespace PromPP::WAL::hashdex {
 
-template <class Lss>
+template <class Lss, class DataStorage>
 class GoHead : public Prometheus::hashdex::Abstract {
  public:
   using Hashes = BareBones::Vector<size_t>;
@@ -24,7 +24,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
     using pointer = Iterator*;
     using reference = Iterator&;
 
-    PROMPP_ALWAYS_INLINE Iterator(const Hashes* hashes, const Lss* lss, const series_data::DataStorage* data_storage)
+    PROMPP_ALWAYS_INLINE Iterator(const Hashes* hashes, const Lss* lss, const DataStorage* data_storage)
         : hashes_(hashes), lss_(lss), data_storage_(data_storage), max_ls_id_(lss->next_item_index()) {}
 
     PROMPP_ALWAYS_INLINE const Iterator& operator*() const noexcept { return *this; }
@@ -59,14 +59,14 @@ class GoHead : public Prometheus::hashdex::Abstract {
    private:
     const Hashes* hashes_;
     const Lss* lss_;
-    const series_data::DataStorage* data_storage_;
+    const DataStorage* data_storage_;
     uint32_t ls_id_{};
     uint32_t max_ls_id_;
   };
 
   class Floats {
    public:
-    PROMPP_ALWAYS_INLINE void reset(const Lss* lss, const series_data::DataStorage* data_storage) noexcept {
+    PROMPP_ALWAYS_INLINE void reset(const Lss* lss, const DataStorage* data_storage) noexcept {
       lss_ = lss;
       data_storage_ = data_storage;
 
@@ -84,10 +84,10 @@ class GoHead : public Prometheus::hashdex::Abstract {
    private:
     Hashes hashes_;
     const Lss* lss_{};
-    const series_data::DataStorage* data_storage_{};
+    const DataStorage* data_storage_{};
   };
 
-  PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, series_data::DataStorage* data_storage) {
+  PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, DataStorage* data_storage) {
     series_data::Encoder encoder(*data_storage);
     series_data::OutdatedChunkMerger{encoder}.merge();
 

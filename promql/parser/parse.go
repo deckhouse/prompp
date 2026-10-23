@@ -314,7 +314,8 @@ func (p *parser) unexpected(context, expected string) {
 	p.addParseErr(p.yyParser.lval.item.PositionRange(), errors.New(errMsg.String()))
 }
 
-var errUnexpected = errors.New("unexpected error")
+// ErrUnexpected is returned when the parser recovers from a runtime panic.
+var ErrUnexpected = errors.New("unexpected error")
 
 // recover is the handler that turns panics into returns from the top level of Parse.
 func (p *parser) recover(errp *error) {
@@ -326,7 +327,7 @@ func (p *parser) recover(errp *error) {
 		buf = buf[:runtime.Stack(buf, false)]
 
 		fmt.Fprintf(os.Stderr, "parser panic: %v\n%s", e, buf)
-		*errp = errUnexpected
+		*errp = ErrUnexpected
 	case e != nil:
 		*errp = e.(error)
 	}
@@ -539,9 +540,9 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 
 	val, ok := (*desc)["schema"]
 	if ok {
-		schema, ok := val.(int64)
-		if ok {
-			output.Schema = int32(schema)
+		schema, okInt64 := val.(int64)
+		if okInt64 {
+			output.Schema = int32(schema) // #nosec G115 // no overflow
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing schema number: %v", val)
 		}
@@ -549,8 +550,8 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 
 	val, ok = (*desc)["sum"]
 	if ok {
-		sum, ok := val.(float64)
-		if ok {
+		sum, okFloat64 := val.(float64)
+		if okFloat64 {
 			output.Sum = sum
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing sum number: %v", val)
@@ -558,8 +559,8 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 	}
 	val, ok = (*desc)["count"]
 	if ok {
-		count, ok := val.(float64)
-		if ok {
+		count, okFloat64 := val.(float64)
+		if okFloat64 {
 			output.Count = count
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing count number: %v", val)
@@ -568,8 +569,8 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 
 	val, ok = (*desc)["z_bucket"]
 	if ok {
-		bucket, ok := val.(float64)
-		if ok {
+		bucket, okFloat64 := val.(float64)
+		if okFloat64 {
 			output.ZeroCount = bucket
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing z_bucket number: %v", val)
@@ -577,8 +578,8 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 	}
 	val, ok = (*desc)["z_bucket_w"]
 	if ok {
-		bucketWidth, ok := val.(float64)
-		if ok {
+		bucketWidth, okFloat64 := val.(float64)
+		if okFloat64 {
 			output.ZeroThreshold = bucketWidth
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing z_bucket_w number: %v", val)
@@ -586,8 +587,8 @@ func (p *parser) buildHistogramFromMap(desc *map[string]interface{}) *histogram.
 	}
 	val, ok = (*desc)["custom_values"]
 	if ok {
-		customValues, ok := val.([]float64)
-		if ok {
+		customValues, okFloat64 := val.([]float64)
+		if okFloat64 {
 			output.CustomValues = customValues
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing custom_values: %v", val)
@@ -632,8 +633,8 @@ func (p *parser) buildHistogramBucketsAndSpans(desc *map[string]interface{}, buc
 	bucketCount := 0
 	val, ok := (*desc)[bucketsKey]
 	if ok {
-		val, ok := val.([]float64)
-		if ok {
+		val, okFloat64 := val.([]float64)
+		if okFloat64 {
 			buckets = val
 			bucketCount = len(buckets)
 		} else {
@@ -645,7 +646,7 @@ func (p *parser) buildHistogramBucketsAndSpans(desc *map[string]interface{}, buc
 	if ok {
 		val, ok := val.(int64)
 		if ok {
-			offset = int32(val)
+			offset = int32(val) // #nosec G115 // no overflow
 		} else {
 			p.addParseErrf(p.yyParser.lval.item.PositionRange(), "error parsing %s number: %v", offsetKey, val)
 		}

@@ -7,7 +7,7 @@
 namespace {
 
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::querier::QueriedChunk;
@@ -24,7 +24,7 @@ class QuerierFixture : public testing::TestWithParam<QuerierCase> {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  Querier querier_{storage_};
+  Querier<> querier_{storage_};
 
   void fill_storage() {
     for (uint32_t ls_id = 0; ls_id < 2; ++ls_id) {
@@ -139,7 +139,7 @@ class QuerierLoaderUnloaderTestFixture : public ::testing::Test {
 
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  Querier querier_{storage_};
+  Querier<> querier_{storage_};
 };
 
 TEST_F(QuerierLoaderUnloaderTestFixture, QuerierNeedLoading) {

@@ -18,12 +18,12 @@ Two extensions are exposed:
 """
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "4141c384aa2a8e2da87dd17d16457caaecfeeda1",
+        commit = "b66cffcd5f5d6ee34a4f96d57bf016d9a22cb023",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -75,17 +75,9 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/parallel_hashmap:btree.h.patch"),
             Label("//third_party/patches/parallel_hashmap:0003-custom_hash_eq.patch"),
         ],
-        sha256 = "b61435437713e2d98ce2a5539a0bff7e6e9e6a6b9fe507dbf490a852b8c2904f",
-        strip_prefix = "parallel-hashmap-1.35",
-        url = "https://github.com/greg7mdp/parallel-hashmap/archive/refs/tags/1.35.zip",
-    )
-
-    http_archive(
-        name = "scope_exit",
-        build_file = Label("//third_party:scope_exit.BUILD"),
-        sha256 = "9428fcdf00714e25fc7c67c28faf0821787b3234165b542a7f2223f464747d83",
-        strip_prefix = "SC22WG21_Papers-7f9c58dabea6872f86f7960157e2ca38880e14cb/workspace/P0052_scope_exit/src",
-        url = "https://github.com/PeterSommerlad/SC22WG21_Papers/archive/7f9c58dabea6872f86f7960157e2ca38880e14cb.zip",
+        sha256 = "75959ad0fc9f1421cd6bb462b8f77e7de4328edd5e547ae798e417cb22b81d9c",
+        strip_prefix = "parallel-hashmap-1.37",
+        url = "https://github.com/greg7mdp/parallel-hashmap/archive/refs/tags/1.37.zip",
     )
 
     http_archive(
@@ -185,15 +177,8 @@ def _third_party_deps_impl(_ctx):
     http_archive(
         name = "simdutf",
         build_file = Label("//third_party:simdutf.BUILD"),
-        sha256 = "66c85f591133e3baa23cc441d6e2400dd2c94c4902820734ddbcd9e04dd3988b",
-        url = "https://github.com/simdutf/simdutf/releases/download/v6.2.0/singleheader.zip",
-    )
-
-    http_file(
-        name = "fastfloat_header",
-        downloaded_file_path = "fastfloat/fast_float.h",
-        sha256 = "1335e82c61fda54476ecbd94b92356deebeb3f0122802c3f103ee528ac08624e",
-        url = "https://github.com/fastfloat/fast_float/releases/download/v8.0.0/fast_float.h",
+        sha256 = "be74bbed96491196995f73d72a24472a0c2010b58e57ee1ae8880fecbe96a325",
+        url = "https://github.com/simdutf/simdutf/releases/download/v6.5.0/singleheader.zip",
     )
 
 third_party_deps = module_extension(implementation = _third_party_deps_impl)

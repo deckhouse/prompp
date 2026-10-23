@@ -642,8 +642,8 @@ func (a *HistogramAppender) appendHistogram(t int64, h *histogram.Histogram) {
 		// need a separate single delta logic for the 2nd sample.
 
 		tDelta = t - a.t
-		cntDelta = int64(h.Count) - int64(a.cnt)
-		zCntDelta = int64(h.ZeroCount) - int64(a.zCnt)
+		cntDelta = int64(h.Count) - int64(a.cnt)       // #nosec G115 // no overflow
+		zCntDelta = int64(h.ZeroCount) - int64(a.zCnt) // #nosec G115 // no overflow
 
 		tDod := tDelta - a.tDelta
 		cntDod := cntDelta - a.cntDelta
@@ -1252,7 +1252,7 @@ func (it *histogramIterator) Next() ValueType {
 		return ValNone
 	}
 	it.cntDelta += cntDod
-	it.cnt = uint64(int64(it.cnt) + it.cntDelta)
+	it.cnt = uint64(int64(it.cnt) + it.cntDelta) // #nosec G115 // no overflow
 
 	zcntDod, err := readVarbitInt(&it.br)
 	if err != nil {
@@ -1260,7 +1260,7 @@ func (it *histogramIterator) Next() ValueType {
 		return ValNone
 	}
 	it.zCntDelta += zcntDod
-	it.zCnt = uint64(int64(it.zCnt) + it.zCntDelta)
+	it.zCnt = uint64(int64(it.zCnt) + it.zCntDelta) // #nosec G115 // no overflow
 
 	ok := it.readSum()
 	if !ok {

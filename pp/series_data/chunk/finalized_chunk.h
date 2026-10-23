@@ -2,15 +2,17 @@
 
 #include <forward_list>
 
+#include "bare_bones/allocator.h"
 #include "bare_bones/preprocess.h"
 
 namespace series_data::chunk {
 
+template <BareBones::ReallocatorInterface Reallocator = BareBones::DefaultReallocator>
 class FinalizedChunkList {
  public:
-  using ChunksList = std::forward_list<DataChunk, BareBones::Allocator<DataChunk>>;
+  using ChunksList = std::forward_list<DataChunk, BareBones::Allocator<DataChunk, Reallocator>>;
 
-  explicit FinalizedChunkList(size_t& allocated_memory_) : chunks_(BareBones::Allocator<DataChunk>{allocated_memory_}) {}
+  explicit FinalizedChunkList(size_t& allocated_memory_) : chunks_(BareBones::Allocator<DataChunk, Reallocator>{allocated_memory_}) {}
 
   template <class GetFinalizedChunkFirstTimestamp>
   DataChunk& emplace(const DataChunk& chunk, GetFinalizedChunkFirstTimestamp&& get_finalized_chunk_first_timestamp) {

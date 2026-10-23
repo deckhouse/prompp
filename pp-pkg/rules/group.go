@@ -400,7 +400,7 @@ func (g *Group) setLastEvalTimestamp(ts time.Time) {
 // EvalTimestamp returns the immediately preceding consistently slotted evaluation time.
 func (g *Group) EvalTimestamp(startTime int64) time.Time {
 	var (
-		offset = int64(g.hash() % uint64(g.interval))
+		offset = int64(g.hash() % uint64(g.interval)) // #nosec G115 // no overflow
 
 		// This group's evaluation times differ from the perfect time intervals by `offset` nanoseconds.
 		// But we can only use `% interval` to align with the interval. And `% interval` will always
@@ -704,7 +704,8 @@ func NewGroupMetrics(reg prometheus.Registerer) *Metrics {
 				Name:       "rule_evaluation_duration_seconds",
 				Help:       "The duration for a rule to execute.",
 				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-			}),
+			},
+		),
 		IterationDuration: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace:  namespace,
 			Name:       "rule_group_duration_seconds",

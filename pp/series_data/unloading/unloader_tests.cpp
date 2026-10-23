@@ -16,9 +16,9 @@ class UnloaderFixture : public ::testing::Test {
  protected:
   static constexpr auto kEmptySnapshot = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
 
-  series_data::DataStorage storage_;
+  series_data::DataStorage<> storage_;
   series_data::Encoder<> encoder_{storage_};
-  Unloader unloader_{storage_};
+  Unloader<> unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 
@@ -91,9 +91,9 @@ TEST_F(UnloaderFixture, DontUnloadQueriedSeriesAfterCreateSnapshot) {
 
 class UnloaderTestFixture : public ::testing::Test {
  protected:
-  series_data::DataStorage storage_;
+  series_data::DataStorage<> storage_;
   series_data::Encoder<> encoder_{storage_};
-  Unloader unloader_{storage_};
+  Unloader<> unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 
@@ -161,6 +161,29 @@ TEST_F(UnloaderSelectionTestFixture, UnloadAfterQuery) {
             storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits());
   ASSERT_EQ(1U, storage_.unloaded_series_bitmap.popcount());
   ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(2));
+}
+
+// A series that holds data always keeps an initialized open chunk, and its timestamps stay readable;
+// the rationale is on OpenChunkContractTestFixture in encoder_tests.cpp. Unloading trims the value
+// stream of a chunk, so it must leave both the chunk itself and the timestamp stream alone — otherwise
+// the head time bounds would lose the unloaded data.
+TEST_F(UnloaderFixture, UnloadingLeavesTheSeriesWithAnOpenChunkAndItsTimeBounds) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  const auto time_interval_before_unload = Decoder::get_time_interval(storage_);
+
+  // Act
+  unloader_.create_snapshot(stream_);
+  unloader_.unload();
+
+  // Assert
+  ASSERT_EQ(1U, storage_.unloaded_series_bitmap.popcount());
+  EXPECT_FALSE(storage_.open_chunks[0].is_empty());
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 1, .max = 3}), time_interval_before_unload);
+  EXPECT_EQ(time_interval_before_unload, Decoder::get_time_interval(storage_));
 }
 
 }  // namespace

@@ -1,11 +1,10 @@
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
-#include "primitives/snug_composites.h"
 #include "series_data/encoder.h"
+#include "series_data/outdated_chunk_merger.h"
 #include "series_index/queried_series.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 #include "status.h"
 
 namespace {
@@ -13,7 +12,7 @@ namespace {
 using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 using head::StatusGetterLSS;
 using PromPP::Primitives::LabelViewSet;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using QuerySource = series_index::QueriedSeries::Source;
 
@@ -47,7 +46,7 @@ TEST_F(StatusFixture, EmptyLssAndStorage) {
 
 TEST_F(StatusFixture, FinalizedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 3, 1.0);
@@ -61,7 +60,7 @@ TEST_F(StatusFixture, FinalizedChunk) {
 
 TEST_F(StatusFixture, FinalizedTimestreamChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -77,7 +76,7 @@ TEST_F(StatusFixture, FinalizedTimestreamChunk) {
 
 TEST_F(StatusFixture, OpenedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 2, 1.0);
   encoder.encode(2, 3, 1.0);
@@ -91,7 +90,7 @@ TEST_F(StatusFixture, OpenedChunk) {
 
 TEST_F(StatusFixture, EmptyChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(5, 1, 1.0);
 
   // Act
@@ -99,6 +98,37 @@ TEST_F(StatusFixture, EmptyChunk) {
 
   // Assert
   EXPECT_EQ((Status{.min_max_timestamp = {.min = 1, .max = 1}, .chunk_count = 1}), status);
+}
+
+TEST_F(StatusFixture, UnmergedOutdatedSampleIsNotCovered) {
+  // Arrange
+  Encoder<DataStorage, 2> encoder{storage_};
+  encoder.encode(0, 10, 1.0);
+  encoder.encode(0, 20, 1.0);
+  encoder.encode(0, 30, 1.0);
+  encoder.encode(0, 5, 1.0);
+
+  // Act
+  const auto status = get_status();
+
+  // Assert
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 10, .max = 30}), status.min_max_timestamp);
+}
+
+TEST_F(StatusFixture, OutdatedSampleIsCoveredAfterMerge) {
+  // Arrange
+  Encoder<DataStorage, 2> encoder{storage_};
+  encoder.encode(0, 10, 1.0);
+  encoder.encode(0, 20, 1.0);
+  encoder.encode(0, 30, 1.0);
+  encoder.encode(0, 5, 1.0);
+  series_data::OutdatedChunkMerger{encoder}.merge();
+
+  // Act
+  const auto status = get_status();
+
+  // Assert
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 5, .max = 30}), status.min_max_timestamp);
 }
 
 }  // namespace

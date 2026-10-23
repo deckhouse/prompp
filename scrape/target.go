@@ -145,7 +145,7 @@ func (t *Target) SetMetadataStore(s MetricMetadataStore) {
 func (t *Target) hash() uint64 {
 	h := fnv.New64a()
 
-	h.Write([]byte(fmt.Sprintf("%016d", t.labels.Hash())))
+	fmt.Fprintf(h, "%016d", t.labels.Hash())
 	h.Write([]byte(t.URL().String()))
 
 	return h.Sum64()
@@ -159,8 +159,8 @@ func (t *Target) offset(interval time.Duration, offsetSeed uint64) time.Duration
 	// Base is a pinned to absolute time, no matter how often offset is called.
 	var (
 		base   = int64(interval) - now%int64(interval)
-		offset = (t.hash() ^ offsetSeed) % uint64(interval)
-		next   = base + int64(offset)
+		offset = (t.hash() ^ offsetSeed) % uint64(interval) // #nosec G115 // no overflow
+		next   = base + int64(offset)                       // #nosec G115 // no overflow
 	)
 
 	if next > int64(interval) {
@@ -303,12 +303,12 @@ func (t *Target) intervalAndTimeout(defaultInterval, defaultDuration time.Durati
 	intervalLabel := t.labels.Get(model.ScrapeIntervalLabel)
 	interval, err := model.ParseDuration(intervalLabel)
 	if err != nil {
-		return defaultInterval, defaultDuration, fmt.Errorf("Error parsing interval label %q: %w", intervalLabel, err)
+		return defaultInterval, defaultDuration, fmt.Errorf("error parsing interval label %q: %w", intervalLabel, err)
 	}
 	timeoutLabel := t.labels.Get(model.ScrapeTimeoutLabel)
 	timeout, err := model.ParseDuration(timeoutLabel)
 	if err != nil {
-		return defaultInterval, defaultDuration, fmt.Errorf("Error parsing timeout label %q: %w", timeoutLabel, err)
+		return defaultInterval, defaultDuration, fmt.Errorf("error parsing timeout label %q: %w", timeoutLabel, err)
 	}
 
 	return time.Duration(interval), time.Duration(timeout), nil
@@ -476,13 +476,13 @@ func PopulateLabels(lb *labels.Builder, cfg *config.ScrapeConfig, noDefaultPort 
 	// If the address is not valid, we don't append a port either.
 	addPort := func(s string) (string, string, bool) {
 		// If we can split, a port exists and we don't have to add one.
-		if host, port, err := net.SplitHostPort(s); err == nil {
+		if host, port, errSplit := net.SplitHostPort(s); errSplit == nil {
 			return host, port, false
 		}
 		// If adding a port makes it valid, the previous error
 		// was not due to an invalid address and we can append a port.
-		_, _, err := net.SplitHostPort(s + ":1234")
-		return "", "", err == nil
+		_, _, errSplit := net.SplitHostPort(s + ":1234")
+		return "", "", errSplit == nil
 	}
 
 	addr := lb.Get(model.AddressLabel)
@@ -518,7 +518,7 @@ func PopulateLabels(lb *labels.Builder, cfg *config.ScrapeConfig, noDefaultPort 
 		}
 	}
 
-	if err := config.CheckTargetAddress(model.LabelValue(addr)); err != nil {
+	if err = config.CheckTargetAddress(model.LabelValue(addr)); err != nil {
 		return labels.EmptyLabels(), labels.EmptyLabels(), err
 	}
 

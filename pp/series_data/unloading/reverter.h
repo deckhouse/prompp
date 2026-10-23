@@ -6,9 +6,10 @@
 
 namespace series_data::unloading {
 
+template <class Storage = DataStorage<>>
 class LoadReverter {
  public:
-  explicit LoadReverter(DataStorage& storage) : storage_(storage) {}
+  explicit LoadReverter(Storage& storage) : storage_(storage) {}
 
   template <LsIDStorageInterface LsIDStorage>
   void add_series_to_revert(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) noexcept {
@@ -58,7 +59,7 @@ class LoadReverter {
       return;
     }
 
-    DataStorage::CompactBitSequence seq;
+    typename Storage::CompactBitSequence seq;
     seq.push_back_bytes(chunk_bit_sequence.raw_bytes() + BareBones::Bit::to_ceil_bytes(chunk_bit_sequence.size_in_bits() - meta.source_size_in_bits),
                         meta.source_size_in_bits);
     chunk_bit_sequence = std::move(seq);
@@ -67,7 +68,7 @@ class LoadReverter {
   }
 
   BareBones::Vector<LsIdSizeChunkId> source_sizes_;
-  DataStorage& storage_;
+  Storage& storage_;
 };
 
 }  // namespace series_data::unloading

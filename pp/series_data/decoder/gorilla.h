@@ -1,6 +1,6 @@
 #pragma once
 
-#include "series_data/encoder/gorilla.h"
+#include "bare_bones/gorilla.h"
 #include "traits.h"
 
 namespace series_data::decoder {
@@ -10,9 +10,6 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<GorillaDecodeIte
   using Base = DecodeIteratorTrait<GorillaDecodeIteratorGeneral>;
 
  public:
-  template <class CompactBitSequence>
-  explicit GorillaDecodeIteratorGeneral(const CompactBitSequence& stream)
-      : GorillaDecodeIteratorGeneral(encoder::bit_sequence_items_count(stream.raw_bytes()), encoder::bit_sequence_reader(stream.bytes())) {}
   GorillaDecodeIteratorGeneral(SampleCountType samples_count, const BareBones::BitSequenceReader& reader)
       : data_{.remaining_samples = samples_count, .reader{reader}, .decoder = {}} {
     if (data_.remaining_samples > 0) [[likely]] {
@@ -68,7 +65,5 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<GorillaDecodeIte
     data_.sample.timestamp = data_.decoder.last_timestamp();
   }
 };
-
-using GorillaDecodeIterator = GorillaDecodeIteratorGeneral<uint8_t>;
 
 }  // namespace series_data::decoder

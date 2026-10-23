@@ -6,7 +6,7 @@
 #include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
-#include "series_data/data_storage.h"
+#include "series_data/encoder/bit_sequence.h"
 
 namespace series_data::unloading {
 
@@ -69,7 +69,8 @@ class SnapshotWriter {
       const uint32_t bitmap_byte_count = ls_id_bitmap.get_write_size();
       const uint32_t chunk_length_byte_count = chunk_length_sequence.data().get_write_size();
       const uint32_t chunk_id_byte_count = chunk_id_sequence.data().get_write_size();
-      const uint32_t reader_padding_byte_count = payload_byte_count == 0 ? 0 : DataStorage::CompactBitSequence::reserved_bytes_for_reader().size();
+      const uint32_t reader_padding_byte_count =
+          payload_byte_count == 0 ? 0 : encoder::CompactBitSequence<BareBones::DefaultReallocator>::reserved_bytes_for_reader().size();
 
       stream.reserve(bitmap_byte_count + chunk_length_byte_count + chunk_id_byte_count + payload_byte_count + reader_padding_byte_count);
     }
@@ -86,7 +87,7 @@ class SnapshotWriter {
   template <class Stream>
   static void write_reader_padding(Stream& stream, uint32_t payload_byte_count) noexcept {
     if (payload_byte_count != 0) {
-      const auto& reserved_bytes = DataStorage::CompactBitSequence::reserved_bytes_for_reader();
+      const auto& reserved_bytes = encoder::CompactBitSequence<BareBones::DefaultReallocator>::reserved_bytes_for_reader();
       stream.write(reserved_bytes.data(), reserved_bytes.size());
     }
   }

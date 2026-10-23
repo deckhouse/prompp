@@ -58,7 +58,7 @@ func (bs *BatchStorage) AppendTimeSeries(
 		return stats, err
 	}
 
-	stats, err = appender.New(bs.transactionHead, services.CFViaRange).Append(
+	stats, err = appender.New(bs.transactionHead, services.CFViaRangeByMask, appender.Stats{}).Append(
 		ctx,
 		&appender.IncomingData{Hashdex: hx, Data: data},
 		state,
@@ -97,5 +97,20 @@ func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.St
 
 // Querier calls f() with the given parameters. Returns a [querier.Querier].
 func (bs *BatchStorage) Querier(mint, maxt int64) (storage.Querier, error) {
-	return querier.NewQuerier(bs.transactionHead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
+	aTimeInterval := cppbridge.NewInvalidTimeInterval()
+	for _, shard := range bs.transactionHead.Shards() {
+		interval := shard.TimeInterval(false)
+		aTimeInterval.MinT = min(interval.MinT, aTimeInterval.MinT)
+		aTimeInterval.MaxT = max(interval.MaxT, aTimeInterval.MaxT)
+	}
+
+	return querier.NewQuerier(
+		bs.transactionHead,
+		querier.NewNoOpShardedDeduplicator,
+		mint,
+		maxt,
+		bs.adapter.scrapeInterval.Load(),
+		aTimeInterval.MinT,
+		nil,
+	), nil
 }

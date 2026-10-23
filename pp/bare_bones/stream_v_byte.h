@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <utility>
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include "bare_bones/iterator.h"
 #include "exception.h"

@@ -90,6 +90,7 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	return result
 }
 
+// SeriesGroups group series by label names.
 type SeriesGroups struct {
 	Groups [][]uint32
 }
@@ -158,16 +159,30 @@ func newLSSQueryResult(
 	}
 
 	if status != LSSQueryStatusMatch {
-		primitivesLabelSetMatchesFree(lqr)
+		lqr.Close()
 
 		return lqr
 	}
 
 	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
-		primitivesLabelSetMatchesFree(result)
+		result.Close()
 	})
 
 	return lqr
+}
+
+// Close frees the C-allocated result buffers and cancels the finalizer.
+// It is idempotent: subsequent calls (and the finalizer) are no-ops.
+// After Close the result must not be read anymore.
+func (r *LSSQueryResult) Close() {
+	if r.matches == nil && r.labelSetLengths == nil {
+		return
+	}
+
+	runtime.SetFinalizer(r, nil)
+	primitivesLabelSetMatchesFree(r)
+	r.matches = nil
+	r.labelSetLengths = nil
 }
 
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {

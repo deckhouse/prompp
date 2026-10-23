@@ -18,7 +18,6 @@ type HeadSuite struct {
 	suite.Suite
 	lss         *cppbridge.LabelSetStorage
 	dataStorage *cppbridge.DataStorage
-	encoder     *cppbridge.HeadEncoder
 }
 
 func TestHeadSuite(t *testing.T) {
@@ -27,8 +26,7 @@ func TestHeadSuite(t *testing.T) {
 
 func (s *HeadSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.dataStorage = cppbridge.NewDataStorage(false)
-	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
+	s.dataStorage = cppbridge.NewDataStorage(false, true)
 }
 
 func (s *HeadSuite) TestChunkRecoder() {
@@ -36,10 +34,10 @@ func (s *HeadSuite) TestChunkRecoder() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(0, 2, 1.0)
-	s.encoder.Encode(1, 3, 2.0)
-	s.encoder.Encode(1, 4, 2.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(0, 2, 1.0)
+	s.dataStorage.Encode(1, 3, 2.0)
+	s.dataStorage.Encode(1, 4, 2.0)
 	recoder := cppbridge.NewChunkRecoder(s.lss, 2, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4}, cppbridge.NoDownsampling)
 
 	// Act
@@ -75,10 +73,10 @@ func (s *HeadSuite) TestChunkRecoderWithBatchIterator() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(0, 2, 1.0)
-	s.encoder.Encode(1, 3, 2.0)
-	s.encoder.Encode(1, 4, 2.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(0, 2, 1.0)
+	s.dataStorage.Encode(1, 3, 2.0)
+	s.dataStorage.Encode(1, 4, 2.0)
 
 	recoder := cppbridge.NewChunkRecoder(s.lss, 1, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4}, cppbridge.NoDownsampling)
 
@@ -116,10 +114,10 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
 
-	s.encoder.Encode(0, 1, 1.0)
-	s.encoder.Encode(0, 2, 1.0)
-	s.encoder.Encode(1, 3, 2.0)
-	s.encoder.Encode(1, 4, 2.0)
+	s.dataStorage.Encode(0, 1, 1.0)
+	s.dataStorage.Encode(0, 2, 1.0)
+	s.dataStorage.Encode(1, 3, 2.0)
+	s.dataStorage.Encode(1, 4, 2.0)
 
 	timeInterval := cppbridge.TimeInterval{MinT: 0, MaxT: 4}
 	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
@@ -160,16 +158,15 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 
 func (s *HeadSuite) TestTimeInterval() {
 	// Arrange
-	dataStorage := cppbridge.NewDataStorage(false)
-	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	encoder.Encode(0, 1, 1.0)
-	encoder.Encode(0, 2, 1.0)
-	encoder.Encode(1, 2, 1.0)
-	encoder.Encode(1, 3, 1.0)
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	dataStorage.Encode(0, 1, 1.0)
+	dataStorage.Encode(0, 2, 1.0)
+	dataStorage.Encode(1, 2, 1.0)
+	dataStorage.Encode(1, 3, 1.0)
 
 	// Act
 	timeInterval := dataStorage.TimeInterval(false)
-	encoder.Encode(1, 4, 1.0)
+	dataStorage.Encode(1, 4, 1.0)
 	cachedTimeInterval := dataStorage.TimeInterval(false)
 	actualTimeInterval := dataStorage.TimeInterval(true)
 
@@ -179,10 +176,26 @@ func (s *HeadSuite) TestTimeInterval() {
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 4}, actualTimeInterval)
 }
 
+// TestTimeIntervalIsComputedWhenCacheIsUnknown pins the guarantee the head range check relies on: a
+// storage written through a path that does not maintain the cached interval reports computed bounds on
+// read, never the invalid interval that stands for "no data". [DataStorage.Encode] is such a path, as is
+// [HeadWalDecoder.DecodeToDataStorage]; only [DataStorage.EncodeInnerSeriesSlice] maintains the cache.
+func (s *HeadSuite) TestTimeIntervalIsComputedWhenCacheIsUnknown() {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	dataStorage.Encode(0, 100, 1.0)
+	dataStorage.Encode(0, 200, 1.0)
+
+	// Act
+	timeInterval := dataStorage.TimeInterval(false)
+
+	// Assert
+	s.Equal(cppbridge.TimeInterval{MinT: 100, MaxT: 200}, timeInterval)
+}
+
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
-	dataStorage := cppbridge.NewDataStorage(false)
-	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
+	dataStorage := cppbridge.NewDataStorage(false, false)
 	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
@@ -198,7 +211,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	}
 
 	for _, serie := range series {
-		encoder.Encode(serie.SeriesID, serie.Timestamp, serie.Value)
+		dataStorage.Encode(serie.SeriesID, serie.Timestamp, serie.Value)
 	}
 
 	seriesIDs := []uint32{0, 1, 2, 3}
@@ -221,55 +234,77 @@ func (s *HeadSuite) TestInstantQuery() {
 	s.Equal(cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value}, series[6].Sample)
 }
 
-func (s *HeadSuite) TestQueryFirstTimestampsWithEmptySeriesIds() {
-	// Arrange
-
-	// Act
-	s.dataStorage.QueryFirstTimestamps(nil, nil)
-
-	// Assert
+// testStaleNaNSeries is a struct that represents a series that has been marked as stale NaN.
+type testStaleNaNSeries struct {
+	timestamp int64
+	seriesID  uint32
+	labelSet  string
 }
 
-func (s *HeadSuite) TestQueryFirstTimestamps() {
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSS() {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build())
-
-	s.encoder.Encode(0, 5, 1.0)
-	s.encoder.Encode(0, 9, 1.0)
-	s.encoder.Encode(1, 2, 2.0)
-	s.encoder.Encode(1, 7, 2.0)
+	id0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build()).LabelSetID
+	id1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build()).LabelSetID
 
 	// Act
-	timestamps := make([]int64, 2)
-	s.dataStorage.QueryFirstTimestamps([]uint32{1, 0}, timestamps)
+	series := make([]testStaleNaNSeries, 2)
+	series[0].timestamp = -1
+	series[1].timestamp = -1
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{id1, id0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
 
 	// Assert
-	s.Equal([]int64{2, 5}, timestamps)
+	s.Equal([]testStaleNaNSeries{{timestamp: -1, seriesID: 1}, {timestamp: -1, seriesID: 0}}, series)
 }
 
-func (s *HeadSuite) TestQueryFirstTimestampsInFinalizedChunk() {
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithEmptySeries() {
 	// Arrange
-	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
+	id0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build()).LabelSetID
+	id1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build()).LabelSetID
 
-	s.encoder.Encode(0, 9, 1.0)
-	s.encoder.Encode(0, 5, 1.0)
-
-	s.encoder.MergeOutOfOrderChunks()
+	s.dataStorage.Encode(1, 5, 1.0)
+	s.dataStorage.Encode(1, 9, 1.0)
 
 	// Act
-	timestamps := make([]int64, 1)
-	s.dataStorage.QueryFirstTimestamps([]uint32{0}, timestamps)
+	series := make([]testStaleNaNSeries, 2)
+	series[0].timestamp = -1
+	series[1].timestamp = -1
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{id1, id0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
 
 	// Assert
-	s.Equal([]int64{5}, timestamps)
+	s.Equal([]testStaleNaNSeries{{timestamp: 5, seriesID: 1}, {timestamp: -1, seriesID: 0}}, series)
+}
+
+func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithNonExistingSeries() {
+	// Arrange
+	id0 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build()).LabelSetID
+	id1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "2").Build()).LabelSetID
+
+	s.dataStorage.Encode(0, 5, 1.0)
+	s.dataStorage.Encode(0, 9, 1.0)
+
+	// Act
+	series := make([]testStaleNaNSeries, 2)
+	series[0].timestamp = -1
+	series[1].timestamp = -1
+	s.dataStorage.QueryStaleNaNSeries(
+		[]uint32{id1, id0},
+		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
+	)
+
+	// Assert
+	s.Equal([]testStaleNaNSeries{{timestamp: -1, seriesID: 1}, {timestamp: 5, seriesID: 0}}, series)
 }
 
 type DataStorageSerializedDataMultiSeriesIteratorSuite struct {
 	suite.Suite
 	lss *cppbridge.LabelSetStorage
 	ds  *cppbridge.DataStorage
-	enc *cppbridge.HeadEncoder
 }
 
 func TestDataStorageSerializedDataMultiSeriesIteratorSuite(t *testing.T) {
@@ -278,8 +313,7 @@ func TestDataStorageSerializedDataMultiSeriesIteratorSuite(t *testing.T) {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.ds = cppbridge.NewDataStorage(false)
-	s.enc = cppbridge.NewHeadEncoderWithDataStorage(s.ds)
+	s.ds = cppbridge.NewDataStorage(false, false)
 
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "a").Build())
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
@@ -337,10 +371,10 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestSumWithIteratorR
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) testSum(method createIteratorMethod) {
 	// Arrange
-	s.enc.Encode(0, 50, 10.0)
-	s.enc.Encode(1, 80, 20.0)
-	s.enc.Encode(0, 150, 20.0)
-	s.enc.Encode(1, 180, 30.0)
+	s.ds.Encode(0, 50, 10.0)
+	s.ds.Encode(1, 80, 20.0)
+	s.ds.Encode(0, 150, 20.0)
+	s.ds.Encode(1, 180, 30.0)
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{
@@ -360,10 +394,10 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) testSum(method creat
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 	// Arrange
-	s.enc.Encode(0, 50, 10.0)
-	s.enc.Encode(1, 130, 20.0)
-	s.enc.Encode(0, 150, 30.0)
-	s.enc.Encode(1, 180, 20.0)
+	s.ds.Encode(0, 50, 10.0)
+	s.ds.Encode(1, 130, 20.0)
+	s.ds.Encode(0, 150, 30.0)
+	s.ds.Encode(1, 180, 20.0)
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{
@@ -384,10 +418,10 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMin() {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
 	// Arrange
-	s.enc.Encode(0, 50, 20.0)
-	s.enc.Encode(1, 80, 10.0)
-	s.enc.Encode(0, 150, 20.0)
-	s.enc.Encode(1, 180, 30.0)
+	s.ds.Encode(0, 50, 20.0)
+	s.ds.Encode(1, 80, 10.0)
+	s.ds.Encode(0, 150, 20.0)
+	s.ds.Encode(1, 180, 30.0)
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{
@@ -408,11 +442,11 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestMax() {
 
 func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) TestNoSeries() {
 	// Arrange
-	s.enc.Encode(0, 50, 20.0)
-	s.enc.Encode(1, 80, 10.0)
-	s.enc.Encode(0, 150, 20.0)
-	s.enc.Encode(1, 180, 30.0)
-	s.enc.Encode(2, 180, 30.0)
+	s.ds.Encode(0, 50, 20.0)
+	s.ds.Encode(1, 80, 10.0)
+	s.ds.Encode(0, 150, 20.0)
+	s.ds.Encode(1, 180, 30.0)
+	s.ds.Encode(2, 180, 30.0)
 
 	// Act
 	samples := s.collectSamples(storage.SelectHints{

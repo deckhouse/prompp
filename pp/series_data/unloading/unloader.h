@@ -10,9 +10,10 @@
 
 namespace series_data::unloading {
 
+template <class Storage = DataStorage<>>
 class Unloader {
  public:
-  explicit Unloader(DataStorage& storage) : storage_(storage) {}
+  explicit Unloader(Storage& storage) : storage_(storage) {}
 
   template <class Stream>
   void create_snapshot(Stream& stream) {
@@ -32,7 +33,7 @@ class Unloader {
     unloaded_chunks_.clear();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& storage() noexcept { return storage_; }
 
  private:
   struct ChunkSize {
@@ -45,10 +46,10 @@ class Unloader {
    public:
     class Iterator {
      public:
-      Iterator(DataStorage& storage, const ChunkSize* chunk) noexcept : storage_(storage), chunk_(chunk) {}
+      Iterator(Storage& storage, const ChunkSize* chunk) noexcept : storage_(storage), chunk_(chunk) {}
 
       [[nodiscard]] SnapshotChunkView operator*() const noexcept {
-        const auto& bitseq = get_chunk_stream(storage_, chunk_->ls_id, chunk_->chunk_id);
+        const auto& bitseq = get_chunk_stream<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[chunk_->ls_id]);
         return {chunk_->ls_id, chunk_->chunk_id, {bitseq.raw_bytes(), chunk_->trim_bytes}};
       }
 
@@ -60,21 +61,21 @@ class Unloader {
       [[nodiscard]] bool operator==(const Iterator& other) const noexcept { return chunk_ == other.chunk_; }
 
      private:
-      DataStorage& storage_;
+      Storage& storage_;
       const ChunkSize* chunk_;
     };
 
-    SnapshotChunkRange(DataStorage& storage, const BareBones::Vector<ChunkSize>& chunks) noexcept : storage_(storage), chunks_(chunks) {}
+    SnapshotChunkRange(Storage& storage, const BareBones::Vector<ChunkSize>& chunks) noexcept : storage_(storage), chunks_(chunks) {}
 
     [[nodiscard]] Iterator begin() const noexcept { return {storage_, chunks_.data()}; }
     [[nodiscard]] Iterator end() const noexcept { return {storage_, chunks_.data() + chunks_.size()}; }
 
    private:
-    DataStorage& storage_;
+    Storage& storage_;
     const BareBones::Vector<ChunkSize>& chunks_;
   };
 
-  DataStorage& storage_;
+  Storage& storage_;
   BareBones::Vector<ChunkSize> unloaded_chunks_;
 
   void select_chunks_to_unload() noexcept {
@@ -96,16 +97,9 @@ class Unloader {
       unloaded_chunks_.emplace_back(ChunkSize{
           .ls_id = ls_id,
           .trim_bytes = static_cast<uint16_t>(BareBones::Bit::to_bytes(bitseq.size_in_bits())),
-          .chunk_id = static_cast<uint8_t>(get_open_chunk_id(ls_id)),
+          .chunk_id = static_cast<uint8_t>(storage_.get_open_chunk_index(ls_id)),
       });
     }
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_id(uint32_t ls_id) const noexcept {
-    if (const auto it = storage_.finalized_chunks.find(ls_id); it != storage_.finalized_chunks.end()) {
-      return it->second.count();
-    }
-    return 0;
   }
 };
 }  // namespace series_data::unloading

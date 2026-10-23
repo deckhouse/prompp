@@ -8,12 +8,12 @@ namespace {
 
 using BareBones::BitSequenceReader;
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::OutdatedChunkMerger;
 using series_data::chunk::DataChunk;
-using series_data::chunk::FinalizedChunkList;
+using FinalizedChunkList = DataStorage::FinalizedChunkList;
 using series_data::encoder::BitSequenceWithItemsCount;
 using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
@@ -31,7 +31,7 @@ class OutdatedChunkMergerTrait {
   using ExpectedListOfSampleList = BareBones::Vector<ExpectedSampleList>;
 
   DataStorage storage_;
-  Encoder<kSamplesPerChunkValue> encoder_{storage_};
+  Encoder<DataStorage, kSamplesPerChunkValue> encoder_{storage_};
   OutdatedChunkMerger<decltype(encoder_)> merger_{encoder_};
 
   [[nodiscard]] const DataChunk& get_open_chunk(uint32_t ls_id) { return storage_.open_chunks[ls_id]; }
@@ -330,6 +330,51 @@ TEST_F(OutdatedChunkMergerWithFinalizationFixture, UseFinlizedTimestampStreamAft
           },
       },
       Decoder::decode_chunks(storage_, *finalized, get_open_chunk(5))));
+}
+
+// A series that holds data always keeps an initialized open chunk; the rationale is on
+// OpenChunkContractTestFixture in encoder_tests.cpp. This covers the merge paths, which replace an open
+// chunk (replace_open_chunk) and finalize a merged one.
+class OutdatedChunkMergerOpenChunkContractFixture : public OutdatedChunkMergerWithFinalizationFixture {
+ protected:
+  void expect_open_chunk_initialized_for_every_finalized_series() const {
+    for (const auto& [ls_id, _] : storage_.finalized_chunks) {
+      EXPECT_FALSE(storage_.open_chunks[ls_id].is_empty()) << "ls_id " << ls_id << " has finalized chunks but no open chunk";
+    }
+  }
+};
+
+TEST_F(OutdatedChunkMergerOpenChunkContractFixture, MergingIntoAFinalizedChunkLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+  encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
+          {.ls_id = 0, .sample = {.timestamp = 3, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 5, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 7, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 9, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 11, .value = 1.2}}});
+  encode_outdated({{.ls_id = 0, .sample = {.timestamp = 0, .value = 1.0}}});
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  ASSERT_NE(nullptr, get_finalized_chunks(0));
+  expect_open_chunk_initialized_for_every_finalized_series();
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = 11}), Decoder::get_time_interval(storage_));
+}
+
+TEST_F(OutdatedChunkMergerOpenChunkContractFixture, MergingIntoAnOpenChunkLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+  encode({{.ls_id = 0, .sample = {.timestamp = 3, .value = 1.0}}, {.ls_id = 0, .sample = {.timestamp = 5, .value = 1.1}}});
+  encode_outdated({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}}});
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_EQ(nullptr, get_finalized_chunks(0));
+  EXPECT_FALSE(get_open_chunk(0).is_empty());
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 1, .max = 5}), Decoder::get_time_interval(storage_));
 }
 
 class OutdatedChunkMergerInFinalizedChunkFixture : public OutdatedChunkMergerWithFinalizationFixture {};
@@ -779,7 +824,7 @@ INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantC
 INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.1));
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(-1.0));
 
-class OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {
+class OutdatedChunkMergerCornerCasesFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {
  protected:
   [[nodiscard]] SampleList decode_series(uint32_t ls_id) {
     SampleList result;
@@ -792,7 +837,7 @@ class OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture : publi
 // becomes empty after merging into it while there are still finalized chunks left to iterate.
 // merge_outdated_samples_in_finalized_chunks must stop instead of dereferencing samples.front()
 // on the empty span (heap-buffer-overflow reported by ASan in production heads).
-TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesNotReadPastEndOfSamples) {
+TEST_F(OutdatedChunkMergerCornerCasesFixture, DoesNotReadPastEndOfSamples) {
   // Arrange
   // 9 in-order samples produce 2 finalized chunks ({2,4,6,8}, {10,12,14,16})
   // plus an open chunk ({18}); kSamplesPerChunk == 4.
@@ -830,6 +875,53 @@ TEST_F(OutdatedChunkMergerSamplesExhaustedBeforeLastFinalizedChunkFixture, DoesN
           {.timestamp = 18, .value = 1.0},
       },
       decode_series(0)));
+}
+
+TEST_F(OutdatedChunkMergerCornerCasesFixture, FinalizeSharedStateWithChildsAtMerge) {
+  // Arrange
+  encoder_.encode(0, 10, 1.0);
+  encoder_.encode(1, 10, 1.0);
+  encoder_.encode(0, 20, 1.0);
+
+  encoder_.encode(2, 1, 1.0);
+  encoder_.encode(2, 2, 1.0);
+  encoder_.encode(2, 3, 1.0);
+  encoder_.encode(2, 4, 1.0);
+  encoder_.encode(2, 30, 1.0);
+  encoder_.encode(2, 10, 1.0);
+
+  merger_.merge();
+
+  // Act
+  encoder_.encode(1, 20, 1.0);
+  encoder_.encode(0, 30, 1.0);
+  encoder_.encode(1, 30, 1.0);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 20, .value = 1.0},
+          {.timestamp = 30, .value = 1.0},
+      },
+      decode_series(0)));
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 20, .value = 1.0},
+          {.timestamp = 30, .value = 1.0},
+      },
+      decode_series(1)));
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 1, .value = 1.0},
+          {.timestamp = 2, .value = 1.0},
+          {.timestamp = 3, .value = 1.0},
+          {.timestamp = 4, .value = 1.0},
+          {.timestamp = 10, .value = 1.0},
+          {.timestamp = 30, .value = 1.0},
+      },
+      decode_series(2)));
 }
 
 }  // namespace

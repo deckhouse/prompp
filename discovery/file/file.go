@@ -375,7 +375,7 @@ func (d *Discovery) refresh(ctx context.Context, ch chan<- []*targetgroup.Group)
 // readFile reads a JSON or YAML list of targets groups from the file, depending on its
 // file extension. It returns full configuration target groups.
 func (d *Discovery) readFile(filename string) ([]*targetgroup.Group, error) {
-	fd, err := os.Open(filename)
+	fd, err := os.Open(filename) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -395,11 +395,11 @@ func (d *Discovery) readFile(filename string) ([]*targetgroup.Group, error) {
 
 	switch ext := filepath.Ext(filename); strings.ToLower(ext) {
 	case ".json":
-		if err := json.Unmarshal(content, &targetGroups); err != nil {
+		if err = json.Unmarshal(content, &targetGroups); err != nil {
 			return nil, err
 		}
 	case ".yml", ".yaml":
-		if err := yaml.UnmarshalStrict(content, &targetGroups); err != nil {
+		if err = yaml.UnmarshalStrict(content, &targetGroups); err != nil {
 			return nil, err
 		}
 	default:

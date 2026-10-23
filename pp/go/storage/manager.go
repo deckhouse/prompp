@@ -55,14 +55,12 @@ const (
 )
 
 var (
-	// UnloadDataStorage flags for unloading [DataStorage].
-	UnloadDataStorage = true
-
 	// DefaultNumberOfShards default number of shards.
 	DefaultNumberOfShards uint16 = 2
 
 	// ShrinkShardCopier flags for shrinking the shard copier.
-	ShrinkShardCopier = false
+	// Enabled by default; disable via PROMPP_FEATURES=disable_shrink_shard_copier.
+	ShrinkShardCopier = true
 )
 
 //
@@ -170,10 +168,7 @@ func NewManager(
 		return nil, fmt.Errorf("%s is not directory", o.DataDir)
 	}
 
-	var unloadDataStorageInterval time.Duration
-	if UnloadDataStorage {
-		unloadDataStorageInterval = DefaultUnloadDataStorageInterval
-	}
+	unloadDataStorageInterval := DefaultUnloadDataStorageInterval
 
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
@@ -441,9 +436,9 @@ func (hi *headInformer) SetActiveStatus(headID string) error {
 	return err
 }
 
-// SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
-func (hi *headInformer) SetRotatedStatus(headID string) error {
-	_, err := hi.catalog.SetStatus(headID, catalog.StatusRotated)
+// SetRotatedStatus sets the [catalog.StatusRotated] status and the time bounds of the [Head] data by headID.
+func (hi *headInformer) SetRotatedStatus(headID string, timeInterval cppbridge.TimeInterval) error {
+	_, err := hi.catalog.SetStatusWithTimeBounds(headID, catalog.StatusRotated, timeInterval.MinT, timeInterval.MaxT)
 	return err
 }
 

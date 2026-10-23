@@ -148,7 +148,7 @@ func (s *PersistenerSuite) TestNoPersistWritableHead() {
 func (s *PersistenerSuite) TestNoPersistPersistedHead() {
 	// Arrange
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -173,7 +173,7 @@ func (s *PersistenerSuite) TestNoPersistPersistedHead() {
 func (s *PersistenerSuite) TestOutdatedPersistedHead() {
 	// Arrange
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -200,7 +200,7 @@ func (s *PersistenerSuite) TestOutdatedHead() {
 	s.clock.Advance(tsdbRetentionPeriod)
 
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -212,10 +212,15 @@ func (s *PersistenerSuite) TestOutdatedHead() {
 
 	// Act
 	outdated := s.persistener.Persist([]*storage.Head{head})
+	record, err := s.catalog.Get(head.ID())
 
 	// Assert
 	s.Equal([]*storage.Head{head}, outdated)
 	s.Empty(s.blockWriter.WriteCalls())
+	s.Require().NoError(err)
+	s.Equal(catalog.StatusPersisted, record.Status())
+	s.Equal(int64(0), record.Mint())
+	s.Equal(int64(0), record.Maxt())
 }
 
 func (s *PersistenerSuite) TestPersistHeadSuccess() {
@@ -229,12 +234,12 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
-		return blockWriter.Write(shard)
+	s.blockWriter.WriteFunc = func(shard *shard.Shard, numberOfShards uint16) ([]block.WrittenBlock, error) {
+		return blockWriter.Write(shard, numberOfShards)
 	}
 
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -254,6 +259,8 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 	s.Len(s.writeNotifier.NotifyCalls(), 1)
 	s.Require().NoError(err)
 	s.Equal(catalog.StatusPersisted, record.Status())
+	s.Equal(int64(1), record.Mint())
+	s.Equal(int64(1), record.Maxt())
 }
 
 func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
@@ -267,16 +274,16 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
+	s.blockWriter.WriteFunc = func(shard *shard.Shard, numberOfShards uint16) ([]block.WrittenBlock, error) {
 		if len(s.blockWriter.WriteCalls()) == 2 {
 			return nil, errors.New("some error")
 		}
 
-		return blockWriter.Write(shard)
+		return blockWriter.Write(shard, numberOfShards)
 	}
 
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -346,7 +353,7 @@ func (s *PersistenerServiceSuite) TestRemoveOutdatedHeadFromKeeper() {
 	// Arrange
 	s.clock.Advance(tsdbRetentionPeriod)
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -369,7 +376,7 @@ func (s *PersistenerServiceSuite) TestRemoveOutdatedHeadFromKeeper() {
 func (s *PersistenerServiceSuite) TestLoadHeadsInKeeper() {
 	// Arrange
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -392,7 +399,7 @@ func (s *PersistenerServiceSuite) TestLoadHeadsInKeeper() {
 func (s *PersistenerServiceSuite) TestHeadAlreadyExistsInKeeper() {
 	// Arrange
 	head := s.mustCreateHead()
-	storagetest.MustAppendTimeSeries(&s.Suite, head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{

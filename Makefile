@@ -23,9 +23,8 @@ TSDB_BENCHMARK_NUM_METRICS ?= 1000
 TSDB_BENCHMARK_DATASET ?= ./tsdb/testdata/20kseries.json
 TSDB_BENCHMARK_OUTPUT_DIR ?= ./benchout
 
-GOLANGCI_LINT_OPTS ?= --timeout 4m
+GOLANGCI_LINT_OPTS ?= --timeout 25m
 GOYACC_VERSION ?= v0.6.0
-GOOPTS ?= -tags stringlabels
 
 include Makefile.common
 

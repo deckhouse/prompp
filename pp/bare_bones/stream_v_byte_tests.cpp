@@ -1,5 +1,4 @@
 #include <iterator>
-#include <list>
 #include <string>
 #include <vector>
 
@@ -11,6 +10,7 @@
 
 namespace {
 
+using BareBones::SharedPtrControlBlockWithItemCount;
 using BareBones::StreamVByte::CompactSequence;
 using BareBones::StreamVByte::Sequence;
 
@@ -97,10 +97,10 @@ INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceIotaFixture, kIotaCases);
 class ReadonlyCompactSequence : public testing::Test {
  protected:
   template <class T>
-  using SharedMemory = BareBones::SharedMemory<T, BareBones::DefaultReallocator>;
+  using SharedMemory = BareBones::SharedMemory<T, SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   template <class T>
-  using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+  using SharedSpan = BareBones::SharedSpan<T, SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   using Codec = BareBones::StreamVByte::Codec0124;
 

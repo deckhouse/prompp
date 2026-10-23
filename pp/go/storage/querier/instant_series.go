@@ -24,7 +24,6 @@ func NewInstantSeriesSlice(size int, defaultTimestamp int64) []InstantSeries {
 
 // InstantSeriesSet contains a instant set of series, allows to iterate over sorted, populated series.
 type InstantSeriesSet struct {
-	lssQueryResult              *cppbridge.LSSQueryResult
 	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	valueNotFoundTimestampValue int64
 	nextSeriesIndex             int
@@ -32,14 +31,15 @@ type InstantSeriesSet struct {
 }
 
 // NewInstantSeriesSet init new [InstantSeriesSet].
+// The series id is filled inline in each instantSeries by the C++ instant query (next to the
+// sample), so the query result buffer is not referenced here and can be released right after
+// the data storage query (see [cppbridge.LSSQueryResult.Close]).
 func NewInstantSeriesSet(
-	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
 	instantSeries []InstantSeries,
 ) *InstantSeriesSet {
 	return &InstantSeriesSet{
-		lssQueryResult:              lssQueryResult,
 		labelSetSnapshot:            labelSetSnapshot,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
 		instantSeries:               instantSeries,
@@ -70,8 +70,8 @@ func (ss *InstantSeriesSet) Next() bool {
 		ss.nextSeriesIndex++
 	}
 
-	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
-	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(ss.labelSetSnapshot, lsID)
+	series := &ss.instantSeries[ss.nextSeriesIndex]
+	series.LabelSet = labels.NewLabelsWithLSS(ss.labelSetSnapshot, series.SeriesID)
 
 	ss.nextSeriesIndex++
 	return true
@@ -87,9 +87,14 @@ func (*InstantSeriesSet) Warnings() annotations.Annotations {
 //
 
 // InstantSeries is a instant stream of data points belonging to a metric.
+// NOTE: this struct is shared with C++ (entrypoint::types::SampleWithGoLabels):
+// the data storage instant query writes Timestamp/Value into it by pointer, so its
+// layout must stay in sync with the C++ side. Any field added here must be mirrored
+// in SampleWithGoLabels (SeriesID -> series_id_, LabelSet -> go_labels_).
 type InstantSeries struct {
 	Timestamp int64
 	Value     float64
+	SeriesID  uint32
 	LabelSet  labels.Labels
 }
 

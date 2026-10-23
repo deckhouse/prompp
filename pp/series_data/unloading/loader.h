@@ -14,9 +14,10 @@
 
 namespace series_data::unloading {
 
+template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
 struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
   uint8_t chunk_id = 0;
-  encoder::CompactBitSequence<DataStorage::Reallocator> buffer{};
+  encoder::CompactBitSequence<Reallocator> buffer{};
 
   void reset() noexcept {
     chunk_id = 0;
@@ -26,13 +27,17 @@ struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
 
 }  // namespace series_data::unloading
 
-template <>
-struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo> : std::true_type {};
+template <BareBones::ReallocatorInterface Reallocator>
+struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo<Reallocator>> : std::true_type {};
 
 namespace series_data::unloading {
 
+template <class Storage = DataStorage<>>
 class Loader {
  public:
+  using Reallocator = typename Storage::Reallocator;
+  using SeriesToLoadInfo = series_data::unloading::SeriesToLoadInfo<Reallocator>;
+
   class UnorderedVector {
    public:
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return ls_id_to_offset_.empty(); }
@@ -123,10 +128,10 @@ class Loader {
     phmap::flat_hash_map<uint32_t, uint32_t> ls_id_to_offset_{};
   };
 
-  explicit Loader(DataStorage& storage) : storage_(storage) {}
+  explicit Loader(Storage& storage) : storage_(storage) {}
 
   template <LsIDStorageInterface LsIDStorage>
-  explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) : storage_(storage) {
+  explicit Loader(Storage& storage, const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) : storage_(storage) {
     add_series_to_load(ls_id_range, ls_id_range_count);
   }
 
@@ -150,7 +155,7 @@ class Loader {
     SnapshotReader::visit(buffer, [this](const SnapshotChunkView& chunk) { process_snapshot_chunk(chunk); });
   }
 
-  template <EncoderInterface Encoder = Encoder<>>
+  template <EncoderInterface Encoder = series_data::Encoder<Storage, kSamplesPerChunkDefault>>
   void load_finalize() {
     for (const auto& [ls_id, info] : ls_id_to_infos_) {
       if (info.buffer.size_in_bits() != 0) {
@@ -170,7 +175,7 @@ class Loader {
 
   [[nodiscard]] bool empty() const noexcept { return ls_id_to_infos_.empty(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& storage() noexcept { return storage_; }
 
  private:
   void process_snapshot_chunk(const SnapshotChunkView& chunk) {
@@ -195,7 +200,7 @@ class Loader {
     chunk_bit_sequence = std::move(info.buffer);
   }
 
-  DataStorage& storage_;
+  Storage& storage_;
 
   UnorderedVector ls_id_to_infos_{};
 };

@@ -139,7 +139,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const typename SortingIndexBuilder::Index& sorting_index() const noexcept { return sorting_index_.index(); }
 
-  PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(); }
+  PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(next_item_index_impl()); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return trie_index_.allocated_memory() + reverse_index_.allocated_memory() + ls_id_set_allocated_memory_ + ls_id_hash_set_allocated_memory_ +
@@ -148,6 +148,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
   PROMPP_ALWAYS_INLINE void mark_active(uint32_t ls_id) noexcept { mark_series_as_added(ls_id); }
+  PROMPP_ALWAYS_INLINE void mark_active_atomic(uint32_t ls_id) noexcept { mark_series_as_added_atomic(ls_id); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_impl(uint32_t id) const noexcept {
     assert(id < next_item_index_impl());
@@ -251,6 +252,21 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     added_series_.reserve(count);
   }
 
+  // Releases the label set -> ls id lookup table: find() stops finding series and find_or_emplace() must not be called anymore.
+  void release_hash_set() {
+    ls_id_hash_set_.clear();
+    // clear() keeps small tables (capacity <= 127) allocated, reserve(0) on an empty table releases them
+    ls_id_hash_set_.reserve(0);
+  }
+
+  // Releases ls id set (and the hash set): ls_id_set() is empty afterwards.
+  // The sorting index is built beforehand because it can't be rebuilt without ls_id_set_.
+  void release_ls_id_set() {
+    release_hash_set();
+    build_deferred_indexes();
+    ls_id_set_.clear();
+  }
+
  private:
   using LabelSet = typename Base::value_type;
   using Trie = trie::CedarTrie;
@@ -319,6 +335,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept { added_series_.set(ls_id); }
+  PROMPP_ALWAYS_INLINE void mark_series_as_added_atomic(uint32_t ls_id) noexcept { added_series_.set_atomic(ls_id); }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
 
@@ -354,8 +371,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void prune_hidden_series_before_fixed_state(uint32_t boundary) noexcept {
-    assert(boundary <= added_series_.size());
-    const auto added_series_size = added_series_.size();
+    assert(added_series_.size() <= boundary || added_series_.is_set(boundary));
+    const auto added_series_size = next_item_index_impl();
     const auto active_series_count = static_cast<size_t>(added_series_.popcount());
 
     if (should_rebuild_before_fixed_state(boundary, added_series_size, active_series_count)) [[unlikely]] {
@@ -364,7 +381,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       erase_before_fixed_state(boundary);
     }
 
-    sorting_index_.rebuild(next_item_index_impl() - 1);
+    sorting_index_.rebuild(next_item_index_impl());
   }
 
   [[nodiscard]] bool should_rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) const noexcept {
@@ -394,7 +411,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   void rebuild_before_fixed_state(uint32_t boundary, size_t added_series_size, size_t active_series_count) noexcept {
     ls_id_set_.clear();
     ls_id_hash_set_.clear();
-    ls_id_hash_set_.reserve(active_series_count + added_series_size - boundary);
+    ls_id_hash_set_.reserve(active_series_count + (added_series_size > boundary ? (added_series_size - boundary) : 0));
 
     const auto hasher = this->hasher();
     for (const auto ls_id : added_series_) {
@@ -402,14 +419,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
         break;
       }
       ls_id_set_.emplace(ls_id);
-      const auto label_set = this->operator[](ls_id);
-      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(this->operator[](ls_id))), typename Base::Proxy(ls_id));
     }
 
     for (uint32_t ls_id = boundary; ls_id < added_series_size; ++ls_id) {
       ls_id_set_.emplace(ls_id);
-      const auto label_set = this->operator[](ls_id);
-      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(this->operator[](ls_id))), typename Base::Proxy(ls_id));
     }
   }
 };
@@ -439,7 +454,8 @@ class QueryableEncodingBimapCopier {
       values.resize(names_count);
 
       uint32_t v_id = 0;
-      for (auto it = source_view.keys().begin(), e = source_view.keys().end(); it != e; ++it, ++v_id) {
+      const auto keys = source_view.keys();
+      for (auto it = keys.begin(); it != keys.end(); ++it, ++v_id) {
         auto& value_cache = values[v_id];
 
         resize_and_fill_ids_list(value_cache, source_view.values(it.id()).size());
@@ -480,6 +496,8 @@ class QueryableEncodingBimapCopier {
 
     const auto cmp = sorting_index_.get_comparator();
     std::sort(old_new_ids_.begin(), old_new_ids_.end(), [&](const id_pair& a, const id_pair& b) { return cmp(a.old_id, b.old_id); });
+
+    destination_.added_series_.resize(dst_src_ids_mapping_.size());
   }
 
   void copy_ls_id_set() {

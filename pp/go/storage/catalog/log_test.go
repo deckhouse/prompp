@@ -2,11 +2,13 @@ package catalog_test
 
 import (
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -87,6 +89,88 @@ func (s *FileLogTestSuite) TestMigrateV1ToV3() {
 	s.Require().NoError(logFile.Close())
 
 	fileContentIsEqual(s, logFilePath, "testdata/headv3.log")
+}
+
+func (s *FileLogTestSuite) TestReadRecordsAfterMigration() {
+	// Arrange
+	tmpDir := filepath.Join(s.T().TempDir(), "logtest")
+	s.Require().NoError(os.CopyFS(tmpDir, os.DirFS("testdata")))
+	logFile, err := catalog.NewFileLogV2(filepath.Join(tmpDir, "headv1.log"))
+	s.Require().NoError(err)
+	defer func() { _ = logFile.Close() }()
+
+	// Act
+	c, err := catalog.New(
+		clockwork.NewFakeClock(),
+		logFile,
+		catalog.DefaultIDGenerator{},
+		catalog.DefaultMaxLogFileSize,
+		nil,
+	)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Len(c.List(nil, nil), len(s.records))
+}
+
+func (s *FileLogTestSuite) TestMigrateV2ToV3_UnknownTimeBounds() {
+	// Arrange
+	tmpDir := filepath.Join(s.T().TempDir(), "logtest")
+	s.Require().NoError(os.CopyFS(tmpDir, os.DirFS("testdata")))
+	logFile, err := catalog.NewFileLogV3(filepath.Join(tmpDir, "headv2.log"))
+	s.Require().NoError(err)
+	defer func() { _ = logFile.Close() }()
+
+	// Act
+	c, err := catalog.New(clockwork.NewFakeClock(), logFile, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, nil)
+
+	// Assert
+	s.Require().NoError(err)
+	records := c.List(nil, nil)
+	s.Require().NotEmpty(records)
+	for _, record := range records {
+		s.False(record.HasTimeBounds(), record.ID())
+	}
+}
+
+func (s *FileLogTestSuite) TestReopenV2WithV3MagicInRecordUUID() {
+	id := uuid.MustParse("00112233-4455-4677-8899-484c47ddeeff")
+	records := []*catalog.Record{
+		catalog.NewRecordWithData(id, 1, 100, 100, 0, false, 0, catalog.StatusNew, nil),
+		catalog.NewRecordWithData(id, 1, 100, 200, 0, false, 0, catalog.StatusActive, nil),
+	}
+	filePath := filepath.Join(s.T().TempDir(), "head.log")
+	fl, err := catalog.NewFileLogV2(filePath)
+	s.Require().NoError(err)
+	s.T().Cleanup(func() {
+		if fl != nil {
+			_ = fl.Close()
+		}
+	})
+	for _, record := range records {
+		s.Require().NoError(fl.Write(&record.SerializedRecord))
+	}
+	s.Require().NoError(fl.Close())
+	before, err := os.ReadFile(filePath)
+	s.Require().NoError(err)
+	s.Require().Equal("HLG", string(before[65:68]))
+
+	fl, err = catalog.NewFileLogV2(filePath)
+	s.Require().NoError(err)
+
+	for _, record := range records {
+		got := catalog.NewEmptyRecord()
+		s.Require().NoError(fl.Read(&got.SerializedRecord))
+		s.Require().Equal(record.ID(), got.ID())
+		s.Require().Equal(record.Status(), got.Status())
+		s.Require().Equal(record.UpdatedAt(), got.UpdatedAt())
+		s.Require().Nil(got.LastAppendedSegmentID())
+	}
+	var got catalog.SerializedRecord
+	s.Require().ErrorIs(fl.Read(&got), io.EOF)
+	after, err := os.ReadFile(filePath)
+	s.Require().NoError(err)
+	s.Require().Equal(before, after)
 }
 
 func fileContentIsEqual(s *FileLogTestSuite, filePath1, filePath2 string) {

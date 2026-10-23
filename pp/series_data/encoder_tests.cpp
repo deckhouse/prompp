@@ -7,15 +7,14 @@ namespace {
 
 using BareBones::BitSequenceReader;
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
-using series_data::chunk::FinalizedChunkList;
+using FinalizedChunkList = DataStorage::FinalizedChunkList;
 using OutdatedChunk = DataStorage::OutdatedChunk;
 using BitSequenceWithItemsCount = DataStorage::BitSequenceWithItemsCount;
-using series_data::encoder::GorillaEncoder;
 using series_data::encoder::SampleList;
 using series_data::encoder::timestamp::TimestampDecoder;
 using series_data::encoder::value::TwoDoubleConstantEncoder;
@@ -28,7 +27,7 @@ class EncoderTestTrait {
   using ListOfSampleList = BareBones::Vector<SampleList>;
 
   DataStorage storage_;
-  Encoder<kSamplesPerChunk> encoder_{storage_};
+  Encoder<DataStorage, kSamplesPerChunk> encoder_{storage_};
 
   [[nodiscard]] const DataChunk& chunk(uint32_t ls_id) const noexcept { return storage_.open_chunks[ls_id]; }
   [[nodiscard]] const FinalizedChunkList* finalized_chunks(uint32_t ls_id) const noexcept {
@@ -47,7 +46,7 @@ class EncoderTestTrait {
   }
 
   [[nodiscard]] const BitSequenceWithItemsCount& open_chunk_timestamp(uint32_t ls_id) const noexcept {
-    return storage_.timestamp_encoder.get_stream(storage_.open_chunks[ls_id].timestamp_encoder_state_id);
+    return storage_.timestamp_store.stream(storage_.open_chunks[ls_id].timestamp_id);
   }
   [[nodiscard]] BitSequenceReader open_chunk_timestamp_reader(uint32_t ls_id) const noexcept { return open_chunk_timestamp(ls_id).reader(); }
 
@@ -359,7 +358,7 @@ TEST_F(EncodeTestFixture, ValuesGorillaEncoder) {
                                  Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0))));
 }
 
-TEST_F(EncodeTestFixture, GorillaEncoder) {
+TEST_F(EncodeTestFixture, SwitchToValuesGorillaEncoderWithUniqueTimeseries) {
   // Arrange
 
   // Act
@@ -370,7 +369,8 @@ TEST_F(EncodeTestFixture, GorillaEncoder) {
   encoder_.encode(0, 5, STALE_NAN);
 
   // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kValuesGorilla, chunk(0).encoding_state.encoding_type);
+  EXPECT_EQ((BareBones::Vector<int64_t>{1, 2, 3, 4, 5}), decode_open_chunk_timestamp_list(0));
 
   EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.1},
                         {.timestamp = 2, .value = 1.1},
@@ -1008,95 +1008,6 @@ TEST_F(EncodeTestFixture, EncodeValuesGorillaWithOOOStalenan) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
-TEST_F(EncodeTestFixture, EncodeGorillaWithStalenan) {
-  // Arrange
-
-  // Act
-  encoder_.encode(0, 1, 1.1);
-
-  encoder_.encode(0, 2, 2.0);
-
-  encoder_.encode(0, 3, 3.0);
-  encoder_.encode(0, 4, STALE_NAN);
-
-  // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
-  ASSERT_TRUE(chunk(0).encoding_state.has_last_stalenan);
-
-  EXPECT_EQ((SampleList{
-                {1, 1.1},
-                {2, 2.0},
-                {3, 3.0},
-                {4, STALE_NAN},
-            }),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
-TEST_F(EncodeTestFixture, EncodeGorillaWith2Stalenan) {
-  // Arrange
-
-  // Act
-  encoder_.encode(0, 1, 1.1);
-
-  encoder_.encode(0, 2, 2.0);
-
-  encoder_.encode(0, 3, 3.0);
-  encoder_.encode(0, 4, STALE_NAN);
-  encoder_.encode(0, 5, STALE_NAN);
-
-  // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
-  ASSERT_TRUE(chunk(0).encoding_state.has_last_stalenan);
-
-  EXPECT_EQ((SampleList{
-                {1, 1.1},
-                {2, 2.0},
-                {3, 3.0},
-                {4, STALE_NAN},
-            }),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
-TEST_F(EncodeTestFixture, EncodeGorillaWithDuplicateStalenan) {
-  // Arrange
-  encoder_.encode(0, 1, 1.0);
-  encoder_.encode(0, 2, 2.0);
-  encoder_.encode(0, 3, 3.0);
-
-  // Act
-  encoder_.encode(0, 3, STALE_NAN);
-
-  // Assert
-  EXPECT_EQ(0, storage_.outdated_chunks.size());
-
-  EXPECT_EQ((SampleList{
-                {1, 1.0},
-                {2, 2.0},
-                {3, 3.0},
-            }),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
-TEST_F(EncodeTestFixture, EncodeGorillaWithOOOStalenan) {
-  // Arrange
-  encoder_.encode(0, 1, 1.0);
-  encoder_.encode(0, 2, 2.0);
-  encoder_.encode(0, 3, 3.0);
-
-  // Act
-  encoder_.encode(0, 2, STALE_NAN);
-
-  // Assert
-  EXPECT_EQ(0, storage_.outdated_chunks.size());
-
-  EXPECT_EQ((SampleList{
-                {1, 1.0},
-                {2, 2.0},
-                {3, 3.0},
-            }),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
 TEST_F(EncodeTestFixture, SwitchToAscEncoderFromUint32WithStalenan) {
   // Arrange
 
@@ -1322,29 +1233,7 @@ TEST_F(EncodeTestFixture, ValuesGorillaEncoderValueAfterStalenan) {
   // Assert
   ASSERT_EQ(EncodingType::kValuesGorilla, chunk(0).encoding_state.encoding_type);
   ASSERT_FALSE(chunk(0).encoding_state.has_last_stalenan);
-  EXPECT_EQ((SampleList{
-                {1, 1.1},
-                {2, 2.0},
-                {3, 3.0},
-                {4, STALE_NAN},
-                {5, 4.0},
-            }),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
-TEST_F(EncodeTestFixture, GorillaEncoderValueAfterStalenan) {
-  // Arrange
-
-  // Act
-  encoder_.encode(0, 1, 1.1);
-  encoder_.encode(0, 2, 2.0);
-  encoder_.encode(0, 3, 3.0);
-  encoder_.encode(0, 4, STALE_NAN);
-  encoder_.encode(0, 5, 4.0);
-
-  // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
-  ASSERT_FALSE(chunk(0).encoding_state.has_last_stalenan);
+  EXPECT_EQ((BareBones::Vector<int64_t>{1, 2, 3, 4, 5}), decode_open_chunk_timestamp_list(0));
   EXPECT_EQ((SampleList{
                 {1, 1.1},
                 {2, 2.0},
@@ -1500,6 +1389,22 @@ TEST_F(EncodeTestFixture, AllocateQueriedSeries) {
   EXPECT_TRUE(storage_.queried_series_bitmap.is_set(1));
 }
 
+TEST_F(EncodeTestFixture, SeriesEncodedOneAfterAnotherShareTimestampSequence) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(0, 3, 1.0);
+
+  // Act
+  encoder_.encode(1, 1, 5.0);
+  encoder_.encode(1, 2, 5.0);
+  encoder_.encode(1, 3, 5.0);
+
+  // Assert
+  EXPECT_EQ(chunk(0).timestamp_id, chunk(1).timestamp_id);
+  EXPECT_EQ(1U, storage_.timestamp_store.open_sequences_count());
+}
+
 class FinalizeChunkTestFixture : public EncoderTestTrait<4>, public testing::Test {
  protected:
   static constexpr double kIntegerValue = 1.0;
@@ -1573,6 +1478,44 @@ TEST_F(FinalizeChunkTestFixture, FinalizeUint32ConstantChunkWithNonUniqueTimeser
   };
   assert_result(0, samples_asserter);
   assert_result(1, samples_asserter);
+}
+
+TEST_F(FinalizeChunkTestFixture, SeriesEncodedOneAfterAnotherShareFinalizedTimestampStream) {
+  // Arrange
+  encoder_.encode(0, 0, kIntegerValue);
+  encoder_.encode(0, 1, kIntegerValue);
+  encoder_.encode(0, 2, kIntegerValue);
+  encoder_.encode(0, 3, kIntegerValue);
+  encoder_.encode(0, 4, kIntegerValue);
+
+  // Act
+  encoder_.encode(1, 0, kDoubleValue);
+  encoder_.encode(1, 1, kDoubleValue);
+  encoder_.encode(1, 2, kDoubleValue);
+  encoder_.encode(1, 3, kDoubleValue);
+  encoder_.encode(1, 4, kDoubleValue);
+
+  // Assert
+  ASSERT_NE(nullptr, finalized_chunks(0));
+  ASSERT_NE(nullptr, finalized_chunks(1));
+  EXPECT_EQ(finalized_chunks(0)->front().timestamp_id, finalized_chunks(1)->front().timestamp_id);
+  EXPECT_EQ(1U, storage_.timestamp_store.finalized_sequences_count());
+}
+
+TEST_F(FinalizeChunkTestFixture, FinalizingOneSeriesKeepsSeriesSharingItsTimestampsOpen) {
+  // Arrange
+  encoder_.encode(0, 1, kIntegerValue);
+  encoder_.encode(1, 1, kIntegerValue);
+  encoder_.encode(0, 2, kIntegerValue);
+  encoder_.encode(1, 2, kIntegerValue);
+  series_data::ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+
+  // Act
+  encoder_.encode(1, 3, kIntegerValue);
+
+  // Assert
+  EXPECT_EQ(nullptr, finalized_chunks(1));
+  EXPECT_EQ((BareBones::Vector<int64_t>{1, 2, 3}), decode_open_chunk_timestamp_list(1));
 }
 
 TEST_F(FinalizeChunkTestFixture, FinalizeFloat32ConstantChunk) {
@@ -1752,34 +1695,71 @@ TEST_F(FinalizeChunkTestFixture, FinalizeValuesGorillaChunk) {
   });
 }
 
-TEST_F(FinalizeChunkTestFixture, FinalizeGorillaChunk) {
+// A series that holds data always keeps an initialized open chunk.
+//
+// Decoder::get_time_interval visits only series whose open chunk is non-empty, so a series whose data
+// lived solely in finalized chunks would be invisible to it: the head time bounds would exclude that
+// data, and a query over it would skip the head that holds it. Every code path that resets or replaces
+// an open chunk has to leave the series with an initialized one; the paths are chunk finalization here,
+// the outdated sample merge in outdated_chunk_merger_tests.cpp and unloading in unloading/unloader_tests.cpp.
+//
+// The contract bites at the capacity boundary, where a sample fills a chunk and no further sample
+// follows: finalization has to stay lazy, driven by the next sample, which refills the open chunk in the
+// same encode call. Finalizing eagerly instead empties the open chunk and drops the whole series out of
+// the interval scan - only SeriesFilledExactlyToChunkCapacityKeepsAnOpenChunk catches that, the tests
+// that encode past the boundary pass either way.
+class OpenChunkContractTestFixture : public EncoderTestTrait<4>, public testing::Test {
+ protected:
+  static constexpr double kValue = 1.0;
+  static constexpr PromPP::Primitives::Timestamp kFilledChunks = 3;
+  static constexpr PromPP::Primitives::Timestamp kLastTimestampOfSeveralChunks = kFilledChunks * kSamplesPerChunk;
+
+  void expect_open_chunk_initialized_for_every_finalized_series() const {
+    for (const auto& [ls_id, _] : storage_.finalized_chunks) {
+      EXPECT_FALSE(storage_.open_chunks[ls_id].is_empty()) << "ls_id " << ls_id << " has finalized chunks but no open chunk";
+    }
+  }
+};
+
+TEST_F(OpenChunkContractTestFixture, FinalizingAChunkLeavesTheSeriesWithAnOpenChunk) {
   // Arrange
 
   // Act
-  encoder_.encode(0, 0, 1.1);
-  encoder_.encode(0, 1, 2.1);
-  encoder_.encode(0, 2, 3.1);
-  encoder_.encode(0, 3, 4.1);
-  encoder_.encode(0, 4, 5.1);
+  for (uint8_t i = 0; i <= kSamplesPerChunk; ++i) {
+    encoder_.encode(0, i, kValue);
+  }
 
   // Assert
-  assert_result(0, [this](const FinalizedChunkList& finalized_chunks, const DataChunk& open_chunk) {
-    ASSERT_EQ(EncodingType::kDoubleConstant, open_chunk.encoding_state.encoding_type);
-    EXPECT_EQ(EncodingType::kGorilla, finalized_chunks.front().encoding_state.encoding_type);
+  ASSERT_NE(nullptr, finalized_chunks(0));
+  expect_open_chunk_initialized_for_every_finalized_series();
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kSamplesPerChunk}), Decoder::get_time_interval(storage_));
+}
 
-    EXPECT_EQ((ListOfSampleList{
-                  {
-                      {.timestamp = 0, .value = 1.1},
-                      {.timestamp = 1, .value = 2.1},
-                      {.timestamp = 2, .value = 3.1},
-                      {.timestamp = 3, .value = 4.1},
-                  },
-                  {
-                      {.timestamp = 4, .value = 5.1},
-                  },
-              }),
-              Decoder::decode_chunks(storage_, finalized_chunks, open_chunk));
-  });
+TEST_F(OpenChunkContractTestFixture, SeriesFilledExactlyToChunkCapacityKeepsAnOpenChunk) {
+  // Arrange
+
+  // Act
+  for (uint8_t i = 0; i < kSamplesPerChunk; ++i) {
+    encoder_.encode(0, i, kValue);
+  }
+
+  // Assert
+  EXPECT_FALSE(chunk(0).is_empty());
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kSamplesPerChunk - 1}), Decoder::get_time_interval(storage_));
+}
+
+TEST_F(OpenChunkContractTestFixture, FinalizingSeveralChunksLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+
+  // Act
+  for (PromPP::Primitives::Timestamp i = 0; i <= kLastTimestampOfSeveralChunks; ++i) {
+    encoder_.encode(0, i, kValue);
+  }
+
+  // Assert
+  ASSERT_NE(nullptr, finalized_chunks(0));
+  expect_open_chunk_initialized_for_every_finalized_series();
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = kLastTimestampOfSeveralChunks}), Decoder::get_time_interval(storage_));
 }
 
 class EncodeOutdatedChunkTestFixture : public EncoderTestTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
@@ -2086,6 +2066,8 @@ TEST_F(EncodeOutdatedChunkTestFixture, EncodeValuesGorillaActualSample) {
 
   // Assert
   ASSERT_EQ(EncodingType::kValuesGorilla, chunk(0).encoding_state.encoding_type);
+  EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.1}, {.timestamp = 2, .value = 2.1}, {.timestamp = 3, .value = 3.1}, {.timestamp = 4, .value = STALE_NAN}}),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
   EXPECT_EQ((BareBones::Vector<int64_t>{1, 2, 3, 4}), decode_open_chunk_timestamp_list(0));
 }
 
@@ -2130,60 +2112,9 @@ TEST_F(EncodeOutdatedChunkTestFixture, EncodeValuesGorillaOutdatedSample) {
 
   // Assert
   ASSERT_EQ(EncodingType::kValuesGorilla, chunk(0).encoding_state.encoding_type);
-  EXPECT_EQ((BareBones::Vector<int64_t>{2, 3, 4, 5}), decode_open_chunk_timestamp_list(0));
-
-  const auto outdated = outdated_chunk(0);
-  ASSERT_NE(nullptr, outdated);
-  EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 1, .value = 1.1}}), Decoder::decode_outdated_chunk(*outdated));
-}
-
-TEST_F(EncodeOutdatedChunkTestFixture, EncodeGorillaActualSample) {
-  // Arrange
-
-  // Act
-  encoder_.encode(0, 1, 1.1);
-  encoder_.encode(0, 2, 2.1);
-  encoder_.encode(0, 3, 3.1);
-  encoder_.encode(0, 4, STALE_NAN);
-  encoder_.encode(0, 4, STALE_NAN);
-
-  // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
-  EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.1}, {.timestamp = 2, .value = 2.1}, {.timestamp = 3, .value = 3.1}, {.timestamp = 4, .value = STALE_NAN}}),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
-TEST_F(EncodeOutdatedChunkTestFixture, EncodeGorillaNonActualSample) {
-  // Arrange
-
-  // Act
-  encoder_.encode(0, 1, 1.1);
-  encoder_.encode(0, 2, 2.1);
-  encoder_.encode(0, 3, 3.1);
-  encoder_.encode(0, 4, STALE_NAN);
-  encoder_.encode(0, 4, 3.0);
-
-  // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
-  EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.1}, {.timestamp = 2, .value = 2.1}, {.timestamp = 3, .value = 3.1}, {.timestamp = 4, .value = STALE_NAN}}),
-            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-}
-
-TEST_F(EncodeOutdatedChunkTestFixture, EncodeGorillaOutdatedSample) {
-  // Arrange
-
-  // Act
-  encoder_.encode(0, 2, 1.1);
-  encoder_.encode(0, 3, 2.1);
-  encoder_.encode(0, 4, 3.1);
-  encoder_.encode(0, 5, STALE_NAN);
-  encoder_.encode(0, 1, 1.0);
-  encoder_.encode(0, 1, 1.1);
-
-  // Assert
-  ASSERT_EQ(EncodingType::kGorilla, chunk(0).encoding_state.encoding_type);
   EXPECT_EQ((SampleList{{.timestamp = 2, .value = 1.1}, {.timestamp = 3, .value = 2.1}, {.timestamp = 4, .value = 3.1}, {.timestamp = 5, .value = STALE_NAN}}),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+  EXPECT_EQ((BareBones::Vector<int64_t>{2, 3, 4, 5}), decode_open_chunk_timestamp_list(0));
 
   const auto outdated = outdated_chunk(0);
   ASSERT_NE(nullptr, outdated);
@@ -2220,35 +2151,29 @@ TEST_F(EraseOpenChunkTestFixture, EraseUint32Encoder) {
   // Arrange
   encoder_.encode(0, 0, 1.0);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
 
   // Assert
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseFloat32Encoder) {
   // Arrange
   encoder_.encode(0, 0, -1.0);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
 
   // Assert
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseDoubleEncoder) {
   // Arrange
   encoder_.encode(0, 0, 1.1);
-
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
 
   // Act
   storage_.delete_open_chunk(0);
@@ -2256,7 +2181,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseDoubleEncoder) {
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseTwoDoubleEncoder) {
@@ -2264,15 +2189,13 @@ TEST_F(EraseOpenChunkTestFixture, EraseTwoDoubleEncoder) {
   encoder_.encode(0, 0, 1.1);
   encoder_.encode(0, 1, 1.2);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
 
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseAscIntegerEncoder) {
@@ -2281,15 +2204,13 @@ TEST_F(EraseOpenChunkTestFixture, EraseAscIntegerEncoder) {
   encoder_.encode(0, 1, 2.0);
   encoder_.encode(0, 2, 3.0);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
 
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseAscIntegerThenValueGorillaEncoder) {
@@ -2299,15 +2220,13 @@ TEST_F(EraseOpenChunkTestFixture, EraseAscIntegerThenValueGorillaEncoder) {
   encoder_.encode(0, 2, 3.0);
   encoder_.encode(0, 3, 4.1);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
 
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoder) {
@@ -2319,15 +2238,13 @@ TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoder) {
   encoder_.encode(0, 3, 3.1);
   encoder_.encode(1, 3, 1.0);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
 
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_NO_THROW({ storage_.timestamp_encoder.get_states().at(state_id); });
+  EXPECT_EQ(1U, storage_.timestamp_store.open_sequences_count());
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoderAll) {
@@ -2339,8 +2256,6 @@ TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoderAll) {
   encoder_.encode(0, 3, 3.1);
   encoder_.encode(1, 3, 1.1);
 
-  const auto state_id = chunk(0).timestamp_encoder_state_id;
-
   // Act
   storage_.delete_open_chunk(0);
   storage_.delete_open_chunk(1);
@@ -2350,10 +2265,10 @@ TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoderAll) {
   ASSERT_THROW({ storage_.variant_encoders.at(1); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
   ASSERT_EQ(chunk(1).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
-TEST_F(EraseOpenChunkTestFixture, EraseGorillaEncoder) {
+TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoderWithUniqueTimeserie) {
   // Arrange
   encoder_.encode(0, 1, 1.1);
   encoder_.encode(0, 2, 2.1);
@@ -2363,8 +2278,9 @@ TEST_F(EraseOpenChunkTestFixture, EraseGorillaEncoder) {
   storage_.delete_open_chunk(0);
 
   // Assert
-  ASSERT_THROW({ storage_.gorilla_encoders.at(0); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
+  EXPECT_EQ(0U, storage_.timestamp_store.open_sequences_count());
 }
 
 class EraseFinalizedChunkTestFixture : public EncoderTestTrait<4>, public testing::Test {};
@@ -2377,8 +2293,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseUint32Encoder) {
   encoder_.encode(0, 3, 1.0);
   encoder_.encode(0, 4, 1.0);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2386,7 +2300,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseUint32Encoder) {
   const auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseFloat32Encoder) {
@@ -2397,8 +2311,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseFloat32Encoder) {
   encoder_.encode(0, 3, -1.0);
   encoder_.encode(0, 4, -1.0);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2406,7 +2318,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseFloat32Encoder) {
   const auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
@@ -2417,8 +2329,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
   encoder_.encode(0, 3, 1.1);
   encoder_.encode(0, 4, 1.1);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2426,7 +2336,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
 
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
@@ -2440,8 +2350,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseTwoDoubleEncoder) {
   encoder_.encode(0, 3, 1.2);
   encoder_.encode(0, 4, 1.2);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2449,7 +2357,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseTwoDoubleEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
 
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
@@ -2463,8 +2371,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseAscIntegerEncoder) {
   encoder_.encode(0, 3, 4.0);
   encoder_.encode(0, 4, 4.1);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2472,7 +2378,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseAscIntegerEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
   ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
@@ -2486,8 +2392,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseAscIntegerThenValuesGorillaEncoder) 
   encoder_.encode(0, 3, 4.0);
   encoder_.encode(0, 4, 4.1);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2495,7 +2399,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseAscIntegerThenValuesGorillaEncoder) 
   auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
   ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
@@ -2514,8 +2418,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoder) {
   encoder_.encode(0, 5, 4.1);
   encoder_.encode(1, 5, 1.0);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
 
@@ -2523,7 +2425,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoder) {
   const auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_NO_THROW({ storage_.finalized_timestamp_streams.at(state_id); });
+  EXPECT_EQ(1U, storage_.timestamp_store.finalized_sequences_count());
   ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
@@ -2542,8 +2444,6 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoderAll) {
   encoder_.encode(0, 5, 4.1);
   encoder_.encode(1, 5, 1.1);
 
-  const auto state_id = finalized_chunks(0)->front().timestamp_encoder_state_id;
-
   // Act
   storage_.delete_finalized_chunk(0, finalized_chunks(0)->front());
   storage_.delete_finalized_chunk(1, finalized_chunks(1)->front());
@@ -2554,11 +2454,11 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoderAll) {
   finalized = finalized_chunks(1);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
   ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 }
 
-TEST_F(EraseFinalizedChunkTestFixture, EraseGorillaEncoder) {
+TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoderWithUniqueTimeserie) {
   // Arrange
   encoder_.encode(0, 1, 1.1);
   encoder_.encode(0, 2, 2.1);
@@ -2573,8 +2473,10 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseGorillaEncoder) {
   const auto finalized = finalized_chunks(0);
   ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
+  EXPECT_EQ(0U, storage_.timestamp_store.finalized_sequences_count());
   ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
+
+  ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
 }
 
 }  // namespace
