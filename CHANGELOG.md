@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.8.17 / 2026-10-21
+
+### Features
+1. **Head query latency can now be broken down by stage.** Instant and range `Select`, `ChunkQuerier` and label names / values queries report per-stage duration and execution counters (`prompp_querier_query_stage_*`) — semaphore wait, LSS lookup, `DataStorage` query, remaining data-load wait and result construction — together with the maximum synchronous call duration across shards (`prompp_querier_query_shard_stage_*`). The labels are fixed (`source`, `operation`, `stage`), bounding cardinality at 188 series. The stage metrics are off by default and enabled with `PROMPP_FEATURES=enable_query_stage_metrics`; the existing `prompp_querier_query_*_duration` histograms keep their names, labels and buckets, now include resource cleanup and semaphore release, and record fractional microseconds (#543).
+2. **`label_replace` results are memoized.** Rules and dashboards repeat the same `label_replace` over the same series, and every evaluation used to recompile the regexp and rebuild every labelset. The engine now keeps two bounded LRU caches — result labelsets (keyed by the arguments, the source value and the hash of the source labelset) and compiled regexps — shared by all evaluators, including subqueries. Capacities are set with `PROMPP_FEATURES=label_replace_cache_size=N,label_replace_regex_cache_size=M` (`0` or absent keeps the defaults of 65536 and 128, a negative value turns a cache off); hits, misses, evictions and entries are reported as `prometheus_engine_label_replace_cache_*` (#537).
+
+### Fixes
+1. **A failed C++ allocation throws `std::bad_alloc` again.** The jemalloc patch from the GCC 16 migration constructed a `std::bad_alloc` temporary instead of throwing it, so a throwing `operator new` returned `nullptr` on OOM and the failure surfaced later as a null dereference far from the cause (#539).
+2. **Setting the pending shrink boundary during rotation no longer holds a P.** The call removes hidden series and rebuilds indexes, taking hundreds of milliseconds; it went through fastcgo, which keeps the P for the whole call and delays Go scheduling and GC stop-the-world coordination. It is now a regular cgo call (#547).
+3. **A truncated TSDB chunk now ends with EOF instead of a mis-decoded sample.** The bitstream reader reported a refill as successful even when fewer bits than requested were left, so the last float of a truncated chunk could be returned as a valid sample (#549).
+
+### Performance
+1. **The active head is skipped for queries outside its time range.** Head time bounds are now maintained incrementally on append, so the active head's interval is accurate without rescanning the data storage, and the range check applies to it too; it also gained its missing half — a head whose data starts after the query range is no longer queried. When the bounds do need to be computed (WAL load, rotation), they come from the shared timestamp sequences instead of a pass over every series: about 1.2 ms → 7 µs on a 200k-series head (#541, #544).
+2. **PromQL vector matching is cheaper in range queries.** Seven upstream engine optimizations were backported: numeric matching signatures instead of string keys, buffers and result sets reused across steps, `labels.Builder` reset only on cache misses, and fewer step-invariant and parenthesis wrappers. On 1,000 series × 120 steps one-to-one joins are 26% faster, `group_left` 28% and `or` 36%, with 10–89% fewer bytes allocated (#545).
+3. **Persisted-block reads spend less CPU on XOR decoding and postings.** Upstream fast paths decode regular timestamps, unchanged values and reused XOR windows directly from the bit buffer, and postings intersections skip redundant `Seek` calls: intersections are 30–36% faster and `sum by(job)` over constant and counter data 8–20% faster, while gauge aggregation is about 2–3% slower (#546).
+4. **Inverse label matchers on persisted blocks traverse postings directly.** `label!=""`, `label=""` and similar selectors no longer enumerate label values and look up their postings one by one: postings construction is about 27% faster and a selective `Select` up to 25% faster, at the cost of more allocated bytes for broad negative regexps (#550).
+
+### Other
+1. **The preallocated v3 catalog log layout is in place, without changing the production format.** The new file has two journal regions and two CRC-protected header slots, restores the append position after a crash and rejects corrupted headers without overwriting the file. Production keeps writing v2; switching journals on compaction and writing v3 will follow (#540).
+
 ## v0.8.16 / 2026-10-09
 
 ### Features
