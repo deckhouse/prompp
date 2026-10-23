@@ -90,8 +90,8 @@ class Unloader {
     }
 
     sequences.ls_id_bitmap.write_to(stream);
-    sequences.chunk_length_sequence.data().write_to(stream);
-    sequences.chunk_id_sequence.data().write_to(stream);
+    sequences.chunk_length_sequence.store().write_to(stream);
+    sequences.chunk_id_sequence.store().write_to(stream);
   }
 
   template <class Stream>
@@ -136,8 +136,8 @@ class Unloader {
                                                                      uint32_t total_bitseqs_size) noexcept {
     uint32_t reserved_stream_size = 0;
     reserved_stream_size += ls_id_bitmap.get_write_size();
-    reserved_stream_size += chunk_id_sequence.data().get_write_size();
-    reserved_stream_size += chunk_length_sequence.data().get_write_size();
+    reserved_stream_size += chunk_id_sequence.store().get_write_size();
+    reserved_stream_size += chunk_length_sequence.store().get_write_size();
     if (total_bitseqs_size) {
       reserved_stream_size += total_bitseqs_size + Storage::CompactBitSequence::reserved_bytes_for_reader().size();
     }
