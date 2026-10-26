@@ -1,4 +1,6 @@
 #include <iterator>
+#include <random>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -174,5 +176,90 @@ TEST_P(CompactSequenceCreateIteratorParamFixture, CreateReadIteratorValid) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceCreateIteratorParamFixture, kIotaCases);
+
+struct SequenceValuesCase {
+  const char* name;
+  std::vector<uint32_t> values;
+};
+
+template <class Codec>
+class StreamVByteSequenceValuesFixture : public testing::TestWithParam<SequenceValuesCase> {
+ protected:
+  Sequence<Codec> sequence_;
+
+  void fill_sequence() { std::ranges::copy(this->GetParam().values, std::back_inserter(sequence_)); }
+
+ public:
+  static auto cases() {
+    std::mt19937 generator(42);
+    std::vector<uint32_t> mixed_values(100);
+    std::ranges::generate(mixed_values, [&generator] { return generator(); });
+    return testing::Values(SequenceValuesCase{.name = "Empty", .values = {}}, SequenceValuesCase{.name = "Zeros", .values = std::vector<uint32_t>(100, 0)},
+                           SequenceValuesCase{.name = "MixedValues", .values = std::move(mixed_values)});
+  }
+};
+
+using StreamVByte0124ValuesFixture = StreamVByteSequenceValuesFixture<BareBones::StreamVByte::Codec0124>;
+using StreamVByte1234ValuesFixture = StreamVByteSequenceValuesFixture<BareBones::StreamVByte::Codec1234>;
+
+TEST_P(StreamVByte0124ValuesFixture, PreservesInsertionOrder) {
+  // Arrange
+
+  // Act
+  fill_sequence();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, sequence_));
+}
+
+TEST_P(StreamVByte0124ValuesFixture, StreamRoundTripPreservesValuesAndSaveSize) {
+  // Arrange
+  fill_sequence();
+  Sequence<BareBones::StreamVByte::Codec0124> restored;
+  std::stringstream stream;
+
+  // Act
+  stream << sequence_;
+  stream >> restored;
+
+  // Assert
+  EXPECT_EQ(sequence_.save_size(), stream.str().size());
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, restored));
+}
+
+INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
+                         StreamVByte0124ValuesFixture,
+                         StreamVByte0124ValuesFixture::cases(),
+                         [](const testing::TestParamInfo<SequenceValuesCase>& info) { return info.param.name; });
+
+TEST_P(StreamVByte1234ValuesFixture, PreservesInsertionOrder) {
+  // Arrange
+
+  // Act
+  fill_sequence();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, sequence_));
+}
+
+TEST_P(StreamVByte1234ValuesFixture, StreamRoundTripPreservesValuesAndSaveSize) {
+  // Arrange
+  fill_sequence();
+  Sequence<BareBones::StreamVByte::Codec1234> restored;
+  std::stringstream stream;
+
+  // Act
+  stream << sequence_;
+  stream >> restored;
+
+  // Assert
+  EXPECT_EQ(sequence_.save_size(), stream.str().size());
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, restored));
+}
+
+INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
+                         StreamVByte1234ValuesFixture,
+                         StreamVByte1234ValuesFixture::cases(),
+                         [](const testing::TestParamInfo<SequenceValuesCase>& info) { return info.param.name; });
 
 }  // namespace

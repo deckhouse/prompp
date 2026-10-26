@@ -23,7 +23,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "b66cffcd5f5d6ee34a4f96d57bf016d9a22cb023",
+        commit = "cd8e73f067129f8489e35c7b51c7a68552b289d2",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -44,9 +44,9 @@ def _third_party_dev_deps_impl(_ctx):
     http_archive(
         name = "tracy",
         build_file = Label("//third_party:tracy.BUILD"),
-        sha256 = "ce2fb5b89aeb6db8401d7efe1bfe8393b7a81ca551273e8c6dd46ed37c02a040",
-        strip_prefix = "tracy-0.12.0/",
-        url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.tar.gz",
+        sha256 = "d4efc50ebcb0bfcfdbba148995aeb75044c0d80f5d91223aebfaa8fa9e563d2b",
+        strip_prefix = "tracy-0.13.1/",
+        url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.13.1.tar.gz",
     )
 
 third_party_dev_deps = module_extension(implementation = _third_party_dev_deps_impl)
