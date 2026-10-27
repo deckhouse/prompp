@@ -354,7 +354,7 @@ cc_library(
 
 cc_test(
     name = "profiling_test",
-    srcs = glob(["profiling/*_tests.cpp"]) + ["profiling/shared_tests.h"],
+    srcs = glob(["profiling/*_tests.cpp"]),
     deps = [
         ":profiling",
         "@gtest//:gtest_main",

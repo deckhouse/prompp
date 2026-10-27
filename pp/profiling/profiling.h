@@ -4,7 +4,34 @@
 #include <cstdint>
 #include <source_location>
 
-// Macro payloads are not evaluated in disabled builds. Direct C++ calls retain normal argument evaluation.
+// Use PROMPP_PROFILE(operation, ...) to measure lexical scopes:
+//   PROMPP_PROFILE(function);                    // Use the current function name.
+//   PROMPP_PROFILE(scope, "decode");             // Use a string literal label.
+//   PROMPP_PROFILE(named_scope, zone, "decode"); // Name the guard for value updates.
+//   PROMPP_PROFILE(value, zone, count);          // Attach a uint64_t value to this zone.
+//   PROMPP_PROFILE(enabled)                     // Expand to 0 or 1, including in #if.
+//
+// Example:
+//   void process_batch(uint64_t count) {
+//     PROMPP_PROFILE(function);
+//     {
+//       PROMPP_PROFILE(named_scope, decode, "decode");
+//       decode_values(count);
+//       PROMPP_PROFILE(value, decode, count);
+//     }
+//   }
+//
+// A zone starts at the macro and ends when control leaves its C++ scope.
+// Return, break, continue and exception unwinding also end the zone.
+// Labels must be ordinary string literals. Each call site retains its file, line and function.
+// Set a value only on the innermost active zone. Set the parent's value after child zones end.
+// Close nested zones in reverse order on the thread that started them.
+// Put anonymous function and scope markers on separate source lines at the same lexical level.
+// Use distinct guard names for multiple named_scope markers at the same lexical level.
+//
+// Build with Bazel --config=profile to enable profiling.
+// Disabled builds erase scope declarations and value expressions without evaluating their arguments.
+// Direct Marker and ScopedZone calls retain normal argument evaluation.
 #define PROMPP_PROFILE(operation, ...) PROMPP_PROFILE_DETAIL_##operation(__VA_ARGS__)
 
 #if defined(PROMPP_PROFILING_ENABLE) && PROMPP_PROFILING_ENABLE
