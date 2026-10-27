@@ -231,6 +231,9 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //			FinalizeFunc: func() (TSegment, error) {
 //				panic("mock out the Finalize method")
 //			},
+//			LongFinalizeFunc: func() (TSegment, error) {
+//				panic("mock out the LongFinalize method")
+//			},
 //			WrittenSeriesIDSentinelFunc: func() uint32 {
 //				panic("mock out the WrittenSeriesIDSentinel method")
 //			},
@@ -247,6 +250,9 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
 
+	// LongFinalizeFunc mocks the LongFinalize method.
+	LongFinalizeFunc func() (TSegment, error)
+
 	// WrittenSeriesIDSentinelFunc mocks the WrittenSeriesIDSentinel method.
 	WrittenSeriesIDSentinelFunc func() uint32
 
@@ -260,12 +266,16 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 		// Finalize holds details about calls to the Finalize method.
 		Finalize []struct {
 		}
+		// LongFinalize holds details about calls to the LongFinalize method.
+		LongFinalize []struct {
+		}
 		// WrittenSeriesIDSentinel holds details about calls to the WrittenSeriesIDSentinel method.
 		WrittenSeriesIDSentinel []struct {
 		}
 	}
 	lockEncode                  sync.RWMutex
 	lockFinalize                sync.RWMutex
+	lockLongFinalize            sync.RWMutex
 	lockWrittenSeriesIDSentinel sync.RWMutex
 }
 
@@ -325,6 +335,33 @@ func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 	mock.lockFinalize.RLock()
 	calls = mock.calls.Finalize
 	mock.lockFinalize.RUnlock()
+	return calls
+}
+
+// LongFinalize calls LongFinalizeFunc.
+func (mock *EncoderMock[TSegment]) LongFinalize() (TSegment, error) {
+	if mock.LongFinalizeFunc == nil {
+		panic("EncoderMock.LongFinalizeFunc: method is nil but Encoder.LongFinalize was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockLongFinalize.Lock()
+	mock.calls.LongFinalize = append(mock.calls.LongFinalize, callInfo)
+	mock.lockLongFinalize.Unlock()
+	return mock.LongFinalizeFunc()
+}
+
+// LongFinalizeCalls gets all the calls that were made to LongFinalize.
+// Check the length with:
+//
+//	len(mockedEncoder.LongFinalizeCalls())
+func (mock *EncoderMock[TSegment]) LongFinalizeCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockLongFinalize.RLock()
+	calls = mock.calls.LongFinalize
+	mock.lockLongFinalize.RUnlock()
 	return calls
 }
 

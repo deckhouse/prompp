@@ -13,8 +13,6 @@ import (
 	"github.com/jonboulle/clockwork"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/stretchr/testify/suite"
-
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -75,30 +73,34 @@ func (tsd *timeSeriesDataSlice) Destroy() {
 	tsd.timeSeries = nil
 }
 
+// NoErrorFunc is a function that can be used to assert that an error is nil.
+type NoErrorFunc func(err error, msgAndArgs ...any)
+
 // MustAppendTimeSeries add time series to head.
-func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeSeries) {
-	headAppender := appender.New(head, services.CFViaRange)
+func MustAppendTimeSeries(ctx context.Context, noErrorFunc NoErrorFunc, head *storage.Head, timeSeries []TimeSeries) {
+	headAppender := appender.New(head, services.CFViaRangeByMask, appender.Stats{})
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
-	s.Require().NoError(err)
+	noErrorFunc(err)
 
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetStatelessRelabeler(statelessRelabeler)
 
 	for i := range timeSeries {
 		_, err = headAppender.Append(
-			context.Background(),
-			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
+			ctx,
+			NewIncomingData(noErrorFunc, timeSeries[i].toModelTimeSeries()),
 			state,
-			true)
-		s.NoError(err)
+			true,
+		)
+		noErrorFunc(err)
 	}
 }
 
-func NewIncomingData(s *suite.Suite, timeSeries []model.TimeSeries) *appender.IncomingData {
+func NewIncomingData(noErrorFunc NoErrorFunc, timeSeries []model.TimeSeries) *appender.IncomingData {
 	tsd := timeSeriesDataSlice{timeSeries: timeSeries}
 	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-	s.Require().NoError(err)
+	noErrorFunc(err)
 
 	return &appender.IncomingData{Hashdex: hx, Data: &tsd}
 }
@@ -147,7 +149,7 @@ func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStora
 		*shard.Shard,
 		*shard.PerGoroutineShard,
 		*storage.TransactionHead,
-	](th, func(*storage.TransactionHead) error { return nil })
+	](th, func(*storage.TransactionHead, []bool) error { return nil }, appender.Stats{})
 
 	if _, err = app.Append(
 		context.Background(),
@@ -173,7 +175,7 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 
 		iterator := cppbridge.NewDataStorageSerializedDataSamplesIterator(serializedData, chunkRef)
 		for {
-			if !iterator.HasData() {
+			if !iterator.HasData() { //nolint:staticcheck // this is test
 				break
 			}
 

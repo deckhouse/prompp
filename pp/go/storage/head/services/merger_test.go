@@ -82,7 +82,7 @@ func (*MergerSuite) createShardOnMemory(
 		shard.NewDataStorage(false, true),
 		unloadedDataStorage,
 		queriedSeriesStorage,
-		wal.NewWal(shardWalEncoder, segmentWriter, lss, maxSegmentSize, shardID, nil),
+		wal.NewWal(shardWalEncoder, segmentWriter, wal.FileFormatVersion, lss, maxSegmentSize, shardID, nil),
 		shardID,
 	)
 }

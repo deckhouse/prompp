@@ -81,6 +81,10 @@ type IndexReader interface {
 	// If no postings are found having at least one matching label, an empty iterator is returned.
 	PostingsForLabelMatching(ctx context.Context, name string, match func(value string) bool) index.Postings
 
+	// PostingsForAllLabelValues returns a sorted iterator over all postings having a label with the given name.
+	// If no postings are found with the label in question, an empty iterator is returned.
+	PostingsForAllLabelValues(ctx context.Context, name string) index.Postings
+
 	// SortedPostings returns a postings list that is reordered to be sorted
 	// by the label set of the underlying series.
 	SortedPostings(index.Postings) index.Postings
@@ -309,7 +313,7 @@ const (
 func chunkDir(dir string) string { return filepath.Join(dir, "chunks") }
 
 func readMetaFile(dir string) (*BlockMeta, int64, error) {
-	b, err := os.ReadFile(filepath.Join(dir, metaFilename))
+	b, err := os.ReadFile(filepath.Join(dir, metaFilename)) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, 0, err
 	}
@@ -337,7 +341,7 @@ func writeMetaFile(logger log.Logger, dir string, meta *BlockMeta) (int64, error
 		}
 	}()
 
-	f, err := os.Create(tmp)
+	f, err := os.Create(tmp) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return 0, err
 	}
@@ -586,6 +590,10 @@ func (r blockIndexReader) PostingsForLabelMatching(ctx context.Context, name str
 	return r.ir.PostingsForLabelMatching(ctx, name, match)
 }
 
+func (r blockIndexReader) PostingsForAllLabelValues(ctx context.Context, name string) index.Postings {
+	return r.ir.PostingsForAllLabelValues(ctx, name)
+}
+
 func (r blockIndexReader) SortedPostings(p index.Postings) index.Postings {
 	return r.ir.SortedPostings(p)
 }
@@ -661,7 +669,7 @@ func (pb *Block) Delete(ctx context.Context, mint, maxt int64, ms ...*labels.Mat
 
 Outer:
 	for p.Next() {
-		err := ir.Series(p.At(), &builder, &chks)
+		err = ir.Series(p.At(), &builder, &chks)
 		if err != nil {
 			return err
 		}
@@ -735,12 +743,12 @@ func (pb *Block) CleanTombstones(dest string, c Compactor) ([]ulid.ULID, bool, e
 // Snapshot creates snapshot of the block into dir.
 func (pb *Block) Snapshot(dir string) error {
 	blockDir := filepath.Join(dir, pb.meta.ULID.String())
-	if err := os.MkdirAll(blockDir, 0o777); err != nil {
+	if err := os.MkdirAll(blockDir, 0o777); err != nil { //nolint:gosec // this is meant to be that way
 		return fmt.Errorf("create snapshot block dir: %w", err)
 	}
 
 	chunksDir := chunkDir(blockDir)
-	if err := os.MkdirAll(chunksDir, 0o777); err != nil {
+	if err := os.MkdirAll(chunksDir, 0o777); err != nil { //nolint:gosec // this is meant to be that way
 		return fmt.Errorf("create snapshot chunk dir: %w", err)
 	}
 

@@ -51,7 +51,7 @@ func main() {
 	logger := initLogger(*verbose)
 	logger = log.With(logger, "cmd", cmd)
 
-	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{})
+	featuresflags.ReadPromPPFeatures(logger, noopFlagConfig{}, nil)
 
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 	switch cmd {
@@ -103,3 +103,9 @@ type noopFlagConfig struct{}
 
 // DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
+
+// SetLabelReplaceCacheSize is a no-op FlagConfig method.
+func (noopFlagConfig) SetLabelReplaceCacheSize(int) {}
+
+// SetLabelReplaceRegexCacheSize is a no-op FlagConfig method.
+func (noopFlagConfig) SetLabelReplaceRegexCacheSize(int) {}

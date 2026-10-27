@@ -5,6 +5,7 @@ import (
 	"math"
 	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 	"unique"
 
@@ -335,6 +336,36 @@ func (s *QueryableLSSSuite) testQueryLabelNamesImpl(test_case queryLabelNameCase
 	s.Equal(test_case.expectedNames, result.Names())
 }
 
+func (s *QueryableLSSSuite) TestReleaseHashSet() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+	for i := range 1000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", "lol_"+strconv.Itoa(i)))
+	}
+	prevMem := lss.AllocatedMemory()
+
+	// Act
+	lss.ReleaseHashSet()
+
+	// Assert
+	s.Less(lss.AllocatedMemory(), prevMem)
+}
+
+func (s *QueryableLSSSuite) TestReleaseLSIDSet() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+	for i := range 1000 {
+		lss.FindOrEmplace(model.LabelSetFromPairs("__name__", "kek", "label", "lol_"+strconv.Itoa(i)))
+	}
+	prevMem := lss.AllocatedMemory()
+
+	// Act
+	lss.ReleaseLSIDSet()
+
+	// Assert
+	s.Less(lss.AllocatedMemory(), prevMem)
+}
+
 type queryLabelValuesCase struct {
 	labelName      string
 	matchers       []model.LabelMatcher
@@ -365,12 +396,14 @@ func (s *QueryableLSSSuite) TestQueryLabelValues() {
 
 func (s *QueryableLSSSuite) TestGetLabelNameIDs() {
 	// Arrange
+	names := []string{"lol", "foo", "nope", "lol"}
+	nameIDs := make([]uint32, len(names))
 
 	// Act
-	out := s.lss.GetLabelNameIDs([]string{"lol", "foo", "nope", "lol"})
+	s.lss.LabelNameToIDs(names, nameIDs)
 
 	// Assert
-	s.Equal([]uint32{0, 3, math.MaxUint32, 0}, out)
+	s.Equal([]uint32{0, 3, math.MaxUint32, 0}, nameIDs)
 }
 
 func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {

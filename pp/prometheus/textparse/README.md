@@ -3,7 +3,7 @@ We use re2c as lexer generator for parse prometheus text metrics format.
 ## Installation
 
 ```bash
-apt install re2c=4.5.1-1
+apt install re2c=4.6-1
 ```
 
 ## Prometheus lexer code generation

@@ -165,10 +165,15 @@ func (gc *GC) Stop() {
 // isOutdatedCorruptedHead checks if the corrupted head is outdated.
 func (gc *GC) isOutdatedCorruptedHead(record *Record) bool {
 	if gc.maxRetentionPeriod == 0 {
-		return gc.clock.Since(time.UnixMilli(record.CreatedAt())) >= defaultCorruptedHeadRetentionPeriod
+		return gc.sinceRetentionTimestamp(record) >= defaultCorruptedHeadRetentionPeriod
 	}
 
-	return gc.clock.Since(time.UnixMilli(record.CreatedAt())) >= gc.maxRetentionPeriod
+	return gc.sinceRetentionTimestamp(record) >= gc.maxRetentionPeriod
+}
+
+// sinceRetentionTimestamp returns the time elapsed since the [Record.RetentionTimestamp].
+func (gc *GC) sinceRetentionTimestamp(record *Record) time.Duration {
+	return gc.clock.Since(time.UnixMilli(record.RetentionTimestamp()))
 }
 
 // possibleRemoval a filter to remove unwanted wals.
@@ -178,7 +183,7 @@ func (gc *GC) possibleRemoval(record *Record) bool {
 	}
 
 	// the head is outdated and data on it is no longer required
-	if gc.clock.Since(time.UnixMilli(record.CreatedAt())) >= gc.maxRetentionPeriod {
+	if gc.sinceRetentionTimestamp(record) >= gc.maxRetentionPeriod {
 		return true
 	}
 

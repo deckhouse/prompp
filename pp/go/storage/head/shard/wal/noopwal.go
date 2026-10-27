@@ -22,9 +22,19 @@ func (NoopWal) Commit() error {
 	return nil
 }
 
+// LongCommit implementation of [NoopWal], do nothing.
+func (NoopWal) LongCommit() error {
+	return nil
+}
+
 // CurrentSize implementation of [NoopWal], do nothing.
 func (NoopWal) CurrentSize() int64 {
 	return 0
+}
+
+// IndependentCommit implementation of [NoopWal], always returns false.
+func (NoopWal) IndependentCommit() bool {
+	return false
 }
 
 // Flush implementation of [NoopWal], do nothing.

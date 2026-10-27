@@ -2,7 +2,7 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://deckhouse.io/vex/prompp/images/prompp",
   "author": "Deckhouse <contact@deckhouse.io>",
-  "version": 2,
+  "version": 3,
   "statements": [
     {
       "vulnerability": {
@@ -87,6 +87,44 @@
       "justification": "vulnerable_code_not_present",
       "impact_statement": "The unmaintained golang.org/x/crypto/openpgp package tree (openpgp, openpgp/packet, openpgp/armor, openpgp/clearsign, openpgp/errors, openpgp/elgamal, openpgp/s2k) is not imported anywhere in Prom++. golang.org/x/crypto is an indirect dependency and only its bcrypt, blowfish, chacha20, chacha20poly1305, cryptobyte, hkdf, pkcs12 and sha3 packages reach the build graph, so no openpgp code is linked into the shipped binaries. Scanners flag this advisory by module version matching on golang.org/x/crypto rather than by imported package, so it may still be reported even though the vulnerable code is absent.",
       "timestamp": "2026-08-13T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2022-0646"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/github.com/aws/aws-sdk-go"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "CBC padding oracle issue in the AWS S3 Crypto SDK. The advisory covers the S3 Crypto SDK (github.com/aws/aws-sdk-go/service/s3/s3crypto), which is not imported anywhere in Prom++. aws-sdk-go is used only for service discovery: the build graph reaches aws, aws/awserr, aws/credentials, aws/credentials/stscreds, aws/ec2metadata, aws/session, service/ec2 and service/lightsail, and no S3 or client-side-encryption code is linked into the shipped binaries. Scanners flag this advisory by module version matching on aws-sdk-go rather than by imported package, so it may still be reported even though the vulnerable code is absent.",
+      "timestamp": "2026-09-19T00:00:00Z"
+    },
+    {
+      "vulnerability": {
+        "name": "GO-2022-0635"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/prometheus/prometheus",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/github.com/aws/aws-sdk-go"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "In-band key negotiation issue in the AWS S3 Crypto SDK. The advisory covers the S3 Crypto SDK (github.com/aws/aws-sdk-go/service/s3/s3crypto), which is not imported anywhere in Prom++. aws-sdk-go is used only for service discovery: the build graph reaches aws, aws/awserr, aws/credentials, aws/credentials/stscreds, aws/ec2metadata, aws/session, service/ec2 and service/lightsail, and no S3 or client-side-encryption code is linked into the shipped binaries. Scanners flag this advisory by module version matching on aws-sdk-go rather than by imported package, so it may still be reported even though the vulnerable code is absent.",
+      "timestamp": "2026-09-19T00:00:00Z"
     }
   ],
   "timestamp": "2026-08-13T00:00:00Z"

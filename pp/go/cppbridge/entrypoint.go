@@ -1485,6 +1485,37 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
+// primitivesLSSReleaseHashSet releases label set -> ls id hash set of lss.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func primitivesLSSReleaseHashSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_hash_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// primitivesLSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func primitivesLSSReleaseLSIDSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_ls_id_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
@@ -1620,7 +1651,7 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
-func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
+func primitivesLSSGetLabelNameIDs(lss uintptr, names []string, nameIDs []uint32) {
 	args := struct {
 		lss   uintptr
 		names []string
@@ -1628,7 +1659,7 @@ func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 
 	res := struct {
 		outIDs []uint32
-	}{make([]uint32, len(names))}
+	}{nameIDs}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -1636,8 +1667,6 @@ func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.outIDs
 }
 
 func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
@@ -1749,21 +1778,18 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 	)
 }
 
-// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// primitivesLSSSetPendingShrinkBoundary uses cgo to set the pending shrink boundary
 // on LSS (switch to "fixed" state before snapshot and copy).
 // Attention: works only with QueryableEncodingBimap type of LSS.
 func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
-	args := struct {
-		lss            uintptr
-		shrinkBoundary uint32
-	}{lss, shrinkBoundary}
-
+	// Removing hidden series and rebuilding indexes can take hundreds of milliseconds.
+	// fastcgo would hold the P on the system stack and delay GC stop-the-world coordination.
+	// A regular cgo call lets the runtime reuse the P and coordinate GC without waiting for C++ to return.
+	// Only the stable C++-allocated LSS address and the scalar boundary cross the call;
+	// no Go memory is passed, so [runtime.Pinner] is unnecessary.
 	testGC()
 	start := time.Now()
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_set_pending_shrink_boundary,
-		uintptr(unsafe.Pointer(&args)),
-	)
+	C.prompp_primitives_lss_set_pending_shrink_boundary(C.uint64_t(lss), C.uint64_t(shrinkBoundary))
 	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
@@ -2220,23 +2246,6 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	)
 
 	return res
-}
-
-func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32, timestamps []int64) {
-	args := struct {
-		dataStorage uintptr
-		seriesIDs   []uint32
-	}{dataStorage, seriesIDs}
-	res := struct {
-		timestamps []int64
-	}{timestamps}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_query_first_timestamps,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
 }
 
 func seriesDataDataStorageQueryStaleNaNSeries(dataStorage uintptr, seriesIDs []uint32, series uintptr) {
@@ -3257,6 +3266,33 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	)
 	headWalEncoderFinalizeSum.Add(float64(time.Since(start).Nanoseconds()))
 	headWalEncoderFinalizeCount.Inc()
+
+	return res.samples, res.segment, handleException(res.exception)
+}
+
+// headWalEncoderLongFinalize - finalize the encoded data in the C++ encoder to Segment.
+// Unlike [headWalEncoderFinalize] it uses a regular CGO call instead of fastcgo, so a long-running
+// finalization (e.g. after copying all added series into a new head) does not block the Go scheduler and GC.
+func headWalEncoderLongFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
+	res := &struct {
+		segment   []byte
+		exception []byte
+		samples   uint32
+	}{}
+
+	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
+	// although they are nil at call time and C++ fills them with C-allocated memory only.
+	// An address hidden in an integer is not adjusted if the goroutine stack is moved before
+	// the call enters C (e.g. a stack shrink on preemption in the _Cfunc_ wrapper prologue),
+	// so res is pinned: this moves it to the heap and keeps its address stable.
+	var pinner runtime.Pinner
+	pinner.Pin(res)
+	defer pinner.Unpin()
+
+	start := time.Now()
+	testGC()
+	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(res))))
+	headWalEncoderLongFinalizeDurationMax.set(float64(time.Since(start).Nanoseconds()))
 
 	return res.samples, res.segment, handleException(res.exception)
 }

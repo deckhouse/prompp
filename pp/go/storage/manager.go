@@ -436,9 +436,9 @@ func (hi *headInformer) SetActiveStatus(headID string) error {
 	return err
 }
 
-// SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
-func (hi *headInformer) SetRotatedStatus(headID string) error {
-	_, err := hi.catalog.SetStatus(headID, catalog.StatusRotated)
+// SetRotatedStatus sets the [catalog.StatusRotated] status and the time bounds of the [Head] data by headID.
+func (hi *headInformer) SetRotatedStatus(headID string, timeInterval cppbridge.TimeInterval) error {
+	_, err := hi.catalog.SetStatusWithTimeBounds(headID, catalog.StatusRotated, timeInterval.MinT, timeInterval.MaxT)
 	return err
 }
 

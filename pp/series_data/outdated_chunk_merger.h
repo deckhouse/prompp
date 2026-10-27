@@ -12,6 +12,7 @@ template <EncoderInterface Encoder>
 class OutdatedChunkMerger {
  public:
   using OutdatedChunk = Encoder::DataStorage::OutdatedChunk;
+  using FinalizedChunkList = Encoder::DataStorage::FinalizedChunkList;
 
   explicit OutdatedChunkMerger(Encoder& encoder) : encoder_(encoder) {}
 
@@ -131,7 +132,7 @@ class OutdatedChunkMerger {
     return samples;
   }
 
-  void merge_outdated_samples_in_finalized_chunks(uint32_t ls_id, const chunk::FinalizedChunkList& finalized_chunks, SamplesSpan& samples) {
+  void merge_outdated_samples_in_finalized_chunks(uint32_t ls_id, const FinalizedChunkList& finalized_chunks, SamplesSpan& samples) {
     for (auto it = finalized_chunks.begin(), next_it = std::next(it); it != finalized_chunks.end(); ++next_it) {
       if (samples.empty()) {
         return;
@@ -211,11 +212,6 @@ class OutdatedChunkMerger {
 
       case kValuesGorilla: {
         merge_outdated_samples<kValuesGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
-        break;
-      }
-
-      case kGorilla: {
-        merge_outdated_samples<kGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
         break;
       }
     }

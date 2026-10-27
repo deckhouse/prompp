@@ -68,13 +68,13 @@ func repairBadIndexVersion(logger log.Logger, dir string) error {
 			"ulid", meta.ULID,
 		)
 
-		repl, err := os.Create(filepath.Join(d, "index.repaired"))
+		repl, err := os.Create(filepath.Join(d, "index.repaired")) // #nosec G304 // it's meant to be that way
 		if err != nil {
 			return fmt.Errorf("create index.repaired for block dir: %v: %w", d, err)
 		}
 		tmpFiles = append(tmpFiles, repl.Name())
 
-		broken, err := os.Open(filepath.Join(d, indexFilename))
+		broken, err := os.Open(filepath.Join(d, indexFilename)) // #nosec G304 // it's meant to be that way
 		if err != nil {
 			return fmt.Errorf("open broken index for block dir: %v: %w", d, err)
 		}
@@ -124,7 +124,7 @@ func repairBadIndexVersion(logger log.Logger, dir string) error {
 }
 
 func readBogusMetaFile(dir string) (*BlockMeta, error) {
-	b, err := os.ReadFile(filepath.Join(dir, metaFilename))
+	b, err := os.ReadFile(filepath.Join(dir, metaFilename)) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}

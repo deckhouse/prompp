@@ -46,8 +46,8 @@ TEST_F(SortingIndexFixture, BuildAndSort) {
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act
-  index_.build();
-  index_.sort(series_ids.begin(), series_ids.end());
+  index_.build(static_cast<uint32_t>(kItems.size()));
+  index_.sort(series_ids.begin(), series_ids.end(), static_cast<uint32_t>(kItems.size()));
 
   // Assert
   EXPECT_FALSE(index_.empty());
@@ -57,14 +57,14 @@ TEST_F(SortingIndexFixture, BuildAndSort) {
 TEST_F(SortingIndexFixture, UpdateAndSort) {
   // Arrange
   set_.emplace(0);
-  index_.build();
+  index_.build(1);
 
   std::array series_ids{"d"_idx, "b"_idx, "a"_idx};
 
   // Act
   index_.update(set_.emplace(1).first);
   index_.update(set_.emplace(2).first);
-  index_.sort(series_ids.begin(), series_ids.end());
+  index_.sort(series_ids.begin(), series_ids.end(), 3);
 
   // Assert
   EXPECT_FALSE(index_.empty());
@@ -74,7 +74,7 @@ TEST_F(SortingIndexFixture, UpdateAndSort) {
 TEST_F(SortingIndexFixture, ResetIndexOnUpdateError) {
   // Arrange
   set_.emplace(0);
-  index_.build();
+  index_.build(1);
 
   // Act
   index_.update(set_.emplace(1).first);
@@ -94,7 +94,7 @@ TEST_F(SortingIndexFixture, BuildIndexInSort) {
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act
-  index_.sort(series_ids.begin(), series_ids.end());
+  index_.sort(series_ids.begin(), series_ids.end(), static_cast<uint32_t>(kItems.size()));
 
   // Assert
   EXPECT_FALSE(index_.empty());
@@ -111,7 +111,7 @@ TEST_F(SortingIndexFixture, IndexSnapshot) {
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act
-  index.build();
+  index.build(static_cast<uint32_t>(kItems.size()));
   series_index::SortingIndex<SharedSpan>(index.index()).sort(series_ids.begin(), series_ids.end());
 
   // Assert

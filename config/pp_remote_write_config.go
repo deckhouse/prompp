@@ -3,7 +3,7 @@
 package config
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 // cryptographic strength is not required
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -246,6 +246,6 @@ func toHash(data interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	hash := md5.Sum(bytes)
+	hash := md5.Sum(bytes) // #nosec G401 // cryptographic strength is not required
 	return hex.EncodeToString(hash[:]), nil
 }

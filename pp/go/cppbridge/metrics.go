@@ -40,14 +40,6 @@ func (m *CppMetricWrapper) Write(out *dto.Metric) error {
 	return nil
 }
 
-func (m *CppMetricWrapper) Labels() Labels {
-	labels := make(Labels, 0, len(m.cppMetric.metric.Label))
-	for _, l := range m.cppMetric.metric.Label {
-		labels = append(labels, Label{Name: *l.Name, Value: *l.Value})
-	}
-	return labels
-}
-
 type cppMetrics struct {
 	generation uint64
 	cache      map[*CppMetric]*CppMetricWrapper

@@ -13,7 +13,7 @@ using series_data::Decoder;
 using series_data::Encoder;
 using series_data::OutdatedChunkMerger;
 using series_data::chunk::DataChunk;
-using series_data::chunk::FinalizedChunkList;
+using FinalizedChunkList = DataStorage::FinalizedChunkList;
 using series_data::encoder::BitSequenceWithItemsCount;
 using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
@@ -330,6 +330,51 @@ TEST_F(OutdatedChunkMergerWithFinalizationFixture, UseFinlizedTimestampStreamAft
           },
       },
       Decoder::decode_chunks(storage_, *finalized, get_open_chunk(5))));
+}
+
+// A series that holds data always keeps an initialized open chunk; the rationale is on
+// OpenChunkContractTestFixture in encoder_tests.cpp. This covers the merge paths, which replace an open
+// chunk (replace_open_chunk) and finalize a merged one.
+class OutdatedChunkMergerOpenChunkContractFixture : public OutdatedChunkMergerWithFinalizationFixture {
+ protected:
+  void expect_open_chunk_initialized_for_every_finalized_series() const {
+    for (const auto& [ls_id, _] : storage_.finalized_chunks) {
+      EXPECT_FALSE(storage_.open_chunks[ls_id].is_empty()) << "ls_id " << ls_id << " has finalized chunks but no open chunk";
+    }
+  }
+};
+
+TEST_F(OutdatedChunkMergerOpenChunkContractFixture, MergingIntoAFinalizedChunkLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+  encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
+          {.ls_id = 0, .sample = {.timestamp = 3, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 5, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 7, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 9, .value = 1.1}},
+          {.ls_id = 0, .sample = {.timestamp = 11, .value = 1.2}}});
+  encode_outdated({{.ls_id = 0, .sample = {.timestamp = 0, .value = 1.0}}});
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  ASSERT_NE(nullptr, get_finalized_chunks(0));
+  expect_open_chunk_initialized_for_every_finalized_series();
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 0, .max = 11}), Decoder::get_time_interval(storage_));
+}
+
+TEST_F(OutdatedChunkMergerOpenChunkContractFixture, MergingIntoAnOpenChunkLeavesTheSeriesWithAnOpenChunk) {
+  // Arrange
+  encode({{.ls_id = 0, .sample = {.timestamp = 3, .value = 1.0}}, {.ls_id = 0, .sample = {.timestamp = 5, .value = 1.1}}});
+  encode_outdated({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}}});
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_EQ(nullptr, get_finalized_chunks(0));
+  EXPECT_FALSE(get_open_chunk(0).is_empty());
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 1, .max = 5}), Decoder::get_time_interval(storage_));
 }
 
 class OutdatedChunkMergerInFinalizedChunkFixture : public OutdatedChunkMergerWithFinalizationFixture {};

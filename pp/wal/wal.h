@@ -1,7 +1,7 @@
 #pragma once
 
-#include <scope_exit.h>
 #include <chrono>
+#include <experimental/scope>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -158,7 +158,9 @@ class BasicEncoder {
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
-    bool ts_delta_rle_is_worth_trying = segment_samples_.series_count() * 0.1 > (segment_samples_.samples_count() - segment_samples_.series_count());
+    const uint64_t samples = segment_samples_.samples_count();
+    const uint64_t series = segment_samples_.series_count();
+    bool ts_delta_rle_is_worth_trying = samples >= series && 10 * (samples - series) < series;
 
     ts_base_ = std::min(ts_base_, segment_samples_.earliest_sample());
 
@@ -300,7 +302,7 @@ class BasicEncoder {
 
   PROMPP_ALWAYS_INLINE const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
 
-  inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
+  PROMPP_ALWAYS_INLINE const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
   PROMPP_ALWAYS_INLINE uint16_t shard_id() const noexcept { return shard_id_; }
 

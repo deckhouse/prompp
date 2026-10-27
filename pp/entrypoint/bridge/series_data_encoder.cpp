@@ -1,9 +1,7 @@
 #include "series_data_encoder.h"
 
 #include "entrypoint/types/data_storage.h"
-#include "entrypoint/types/serialization.h"
 #include "prometheus/relabeler.h"
-#include "series_data/data_storage.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"
 

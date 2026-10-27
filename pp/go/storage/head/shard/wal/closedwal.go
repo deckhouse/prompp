@@ -34,6 +34,11 @@ func (ClosedWal) Commit() error {
 	return ErrWalClosed
 }
 
+// LongCommit implementation of [ClosedWal], returns [ErrWalClosed].
+func (ClosedWal) LongCommit() error {
+	return ErrWalClosed
+}
+
 // CurrentSize implementation of [ClosedWal], always returns 0.
 func (ClosedWal) CurrentSize() int64 {
 	return 0
@@ -42,6 +47,11 @@ func (ClosedWal) CurrentSize() int64 {
 // WrittenSeriesIDSentinel implementation of [ClosedWal], always returns 0.
 func (ClosedWal) WrittenSeriesIDSentinel() uint32 {
 	return 0
+}
+
+// IndependentCommit implementation of [ClosedWal], always returns false.
+func (ClosedWal) IndependentCommit() bool {
+	return false
 }
 
 // Flush implementation of [ClosedWal], returns [ErrWalClosed].

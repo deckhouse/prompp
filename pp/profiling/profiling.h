@@ -4,4 +4,4 @@
 #define TRACY_ENABLE
 #endif
 
-#include "tracy/Tracy.hpp"
+#include "tracy/Tracy.hpp"  // IWYU pragma: export

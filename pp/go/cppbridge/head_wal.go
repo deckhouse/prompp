@@ -107,6 +107,15 @@ func (e *HeadWalEncoder) Finalize() (*HeadEncodedSegment, error) {
 	return NewHeadEncodedSegment(segment, samples), err
 }
 
+// LongFinalize finalizes the encoder and returns the encoded segment. Same as [HeadWalEncoder.Finalize],
+// but made via a regular CGO call, use it when the finalization is expected to be long
+// (e.g. after copying all added series into a new head).
+func (e *HeadWalEncoder) LongFinalize() (*HeadEncodedSegment, error) {
+	samples, segment, err := headWalEncoderLongFinalize(e.encoder)
+	runtime.KeepAlive(e)
+	return NewHeadEncodedSegment(segment, samples), err
+}
+
 // WrittenSeriesIDSentinel returns max item index written to WAL.
 func (e *HeadWalEncoder) WrittenSeriesIDSentinel() uint32 {
 	lsid := headWalEncoderWrittenSeriesIDSentinel(e.encoder)

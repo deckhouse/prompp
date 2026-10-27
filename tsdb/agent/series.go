@@ -182,7 +182,7 @@ func (s *stripeSeries) GC(mint int64) map[chunks.HeadSeriesRef]struct{} {
 
 		// The series is stale. We need to obtain a second lock for the
 		// ref if it's different than the hash lock.
-		refLock := int(series.ref) & (s.size - 1)
+		refLock := int(series.ref) & (s.size - 1) // #nosec G115 // no overflow
 		if hashLock != refLock {
 			s.locks[refLock].Lock()
 		}
@@ -220,14 +220,14 @@ func (s *stripeSeries) GC(mint int64) map[chunks.HeadSeriesRef]struct{} {
 }
 
 func (s *stripeSeries) GetByID(id chunks.HeadSeriesRef) *memSeries {
-	refLock := uint64(id) & uint64(s.size-1)
+	refLock := uint64(id) & uint64(s.size-1) // #nosec G115 // no overflow
 	s.locks[refLock].RLock()
 	defer s.locks[refLock].RUnlock()
 	return s.series[refLock][id]
 }
 
 func (s *stripeSeries) GetByHash(hash uint64, lset labels.Labels) *memSeries {
-	hashLock := hash & uint64(s.size-1)
+	hashLock := hash & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[hashLock].RLock()
 	defer s.locks[hashLock].RUnlock()
@@ -236,8 +236,8 @@ func (s *stripeSeries) GetByHash(hash uint64, lset labels.Labels) *memSeries {
 
 func (s *stripeSeries) Set(hash uint64, series *memSeries) {
 	var (
-		hashLock = hash & uint64(s.size-1)
-		refLock  = uint64(series.ref) & uint64(s.size-1)
+		hashLock = hash & uint64(s.size-1)               // #nosec G115 // no overflow
+		refLock  = uint64(series.ref) & uint64(s.size-1) // #nosec G115 // no overflow
 	)
 
 	// We can't hold both locks at once otherwise we might deadlock with a
@@ -255,7 +255,7 @@ func (s *stripeSeries) Set(hash uint64, series *memSeries) {
 }
 
 func (s *stripeSeries) GetLatestExemplar(ref chunks.HeadSeriesRef) *exemplar.Exemplar {
-	i := uint64(ref) & uint64(s.size-1)
+	i := uint64(ref) & uint64(s.size-1) // #nosec G115 // no overflow
 
 	s.locks[i].RLock()
 	exemplar := s.exemplars[i][ref]
@@ -265,7 +265,7 @@ func (s *stripeSeries) GetLatestExemplar(ref chunks.HeadSeriesRef) *exemplar.Exe
 }
 
 func (s *stripeSeries) SetLatestExemplar(ref chunks.HeadSeriesRef, exemplar *exemplar.Exemplar) {
-	i := uint64(ref) & uint64(s.size-1)
+	i := uint64(ref) & uint64(s.size-1) // #nosec G115 // no overflow
 
 	// Make sure that's a valid series id and record its latest exemplar
 	s.locks[i].Lock()

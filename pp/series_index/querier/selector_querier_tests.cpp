@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
-#include "primitives/snug_composites.h"
 #include "series_index/querier/selector.h"
 #include "series_index/querier/selector_querier.h"
 #include "series_index/queryable_encoding_bimap.h"

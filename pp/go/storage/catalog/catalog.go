@@ -65,7 +65,12 @@ type DefaultIDGenerator struct{}
 
 // Generate UUID.
 func (DefaultIDGenerator) Generate() uuid.UUID {
-	return uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.New()
+	}
+
+	return id
 }
 
 //
@@ -174,13 +179,14 @@ func (c *Catalog) Delete(id string) error {
 
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.deletedAt = c.clock.Now().UnixMilli()
-	changed.updatedAt = r.deletedAt
+	changed.updatedAt = changed.deletedAt
+	changed.fields = fullFields(changed)
 
 	if err := c.log.Write(changed); err != nil {
 		return fmt.Errorf(logWriteErr, err)
 	}
 
-	applyRecordChanges(r, changed)
+	applyRecordChanges(&r.SerializedRecord, changed, diffFields(&r.SerializedRecord, changed))
 	delete(c.records, r.id.String())
 
 	return nil
@@ -254,12 +260,13 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.corrupted = true
 	changed.updatedAt = c.clock.Now().UnixMilli()
+	changed.fields = fullFields(changed)
 
 	if err = c.log.Write(changed); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
 	}
 
-	applyRecordChanges(r, changed)
+	applyRecordChanges(&r.SerializedRecord, changed, diffFields(&r.SerializedRecord, changed))
 	c.records[id] = r
 
 	c.corruptedHead.Inc()
@@ -281,7 +288,46 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 		return nil, fmt.Errorf(notFoundErr, id)
 	}
 
-	if r.status == status {
+	return c.setStatusWithTimeBounds(r, status, r.mint, r.maxt)
+}
+
+// SetStatusWithTimeBounds set status and time bounds of the [Head] data for ID and returns [Record] if exist.
+func (c *Catalog) SetStatusWithTimeBounds(id string, status Status, mint, maxt int64) (_ *Record, err error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf(compactErr, err)
+	}
+
+	r, ok := c.records[id]
+	if !ok {
+		return nil, fmt.Errorf(notFoundErr, id)
+	}
+
+	return c.setStatusWithTimeBounds(r, status, mint, maxt)
+}
+
+// SetTimeBounds set time bounds of the [Head] data for ID and returns [Record] if exist.
+func (c *Catalog) SetTimeBounds(id string, mint, maxt int64) (_ *Record, err error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf(compactErr, err)
+	}
+
+	r, ok := c.records[id]
+	if !ok {
+		return nil, fmt.Errorf(notFoundErr, id)
+	}
+
+	return c.setStatusWithTimeBounds(r, r.status, mint, maxt)
+}
+
+// setStatusWithTimeBounds set status and time bounds for [Record] and write changes to [Log].
+func (c *Catalog) setStatusWithTimeBounds(r *Record, status Status, mint, maxt int64) (_ *Record, err error) {
+	if r.status == status && r.mint == mint && r.maxt == maxt {
 		if status == StatusActive {
 			c.activeHeadCreatedAt.Set(float64(r.createdAt))
 		}
@@ -291,14 +337,17 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 
 	changed := createSerializedRecordCopy(&r.SerializedRecord)
 	changed.status = status
+	changed.mint = mint
+	changed.maxt = maxt
 	changed.updatedAt = c.clock.Now().UnixMilli()
+	changed.fields = fullFields(changed)
 
 	if err = c.log.Write(changed); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
 	}
 
-	applyRecordChanges(r, changed)
-	c.records[id] = r
+	applyRecordChanges(&r.SerializedRecord, changed, diffFields(&r.SerializedRecord, changed))
+	c.records[r.id.String()] = r
 
 	if status == StatusActive {
 		c.activeHeadCreatedAt.Set(float64(r.createdAt))
@@ -309,6 +358,14 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 
 // compactIfNeeded compact [Catalog] if necessary.
 func (c *Catalog) compactIfNeeded() error {
+	if fl, ok := c.log.(*FileLog); ok {
+		if !fl.needsCompaction(c.maxLogFileSize) {
+			return nil
+		}
+
+		return c.compactLog()
+	}
+
 	if c.log.Size() < c.maxLogFileSize {
 		return nil
 	}
@@ -320,6 +377,7 @@ func (c *Catalog) compactIfNeeded() error {
 func (c *Catalog) compactLog() error {
 	srecords := make([]*SerializedRecord, 0, len(c.records))
 	for _, record := range c.records {
+		record.fields = fullFields(&record.SerializedRecord)
 		srecords = append(srecords, &record.SerializedRecord)
 	}
 

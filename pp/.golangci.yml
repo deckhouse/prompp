@@ -1,0 +1,218 @@
+version: "2"
+run:
+  # default concurrency is a available CPU number
+  concurrency: 4
+  build-tags:
+    - static
+  # exit code when at least one issue was found, default is 1
+  issues-exit-code: 1
+  # include test files or not, default is true
+  tests: true
+linters:
+  default: none
+  enable:
+    - bodyclose # checks whether HTTP response body is closed successfully [fast: false, auto-fix: false]
+    - dupl # Tool for code clone detection [fast: true, auto-fix: false]
+    - goconst # Finds repeated strings that could be replaced by a constant [fast: true, auto-fix: false]
+    - gocritic # The most opinionated Go source code linter [fast: true, auto-fix: false]
+    - godox # Tool for detection of FIXME, TODO and other comment keywords [fast: true, auto-fix: false]
+    - gosec # Inspects source code for security problems [fast: true, auto-fix: false]
+    - govet # Vet examines Go source code and reports suspicious constructs, such as Printf calls whose arguments do not align with the format string [fast: false, auto-fix: false]
+    - ineffassign # Detects when assignments to existing variables are not used [fast: true, auto-fix: false]
+    - misspell # Finds commonly misspelled English words in comments [fast: true, auto-fix: true]
+    - nakedret # Finds naked returns in functions greater than a specified function length [fast: true, auto-fix: false]
+    - revive
+    - staticcheck # Staticcheck is a go vet on steroids, applying a ton of static analysis checks [fast: false, auto-fix: false]
+    - testifylint # Checks usage of github.com/stretchr/testify.
+    - unconvert # Remove unnecessary type conversions [fast: true, auto-fix: false]
+    - unused # Checks Go code for unused constants, variables, functions and types [fast: false, auto-fix: false]
+  settings:
+    dupl:
+      # tokens count to trigger issue, 150 by default
+      threshold: 100
+    goconst:
+      # minimal length of string constant, 3 by default
+      min-len: 3
+      # minimal occurrences count to trigger, 3 by default
+      min-occurrences: 3
+    gocritic:
+      # Enable multiple checks by tags, run `GL_DEBUG=gocritic golangci-lint` run to see all tags and checks.
+      # Empty list by default. See https://github.com/go-critic/go-critic#usage -> section "Tags".
+      enabled-tags:
+        - style
+        - performance
+      settings:
+        captLocal: # must be valid enabled check name
+          paramsOnly: true
+    govet:
+      # report about shadowed variables
+      enable:
+        - shadow
+      # settings per analyzer
+      settings:
+        printf: # analyzer name, run `go tool vet help` to see all analyzers
+          funcs: # run `go tool vet help printf` to see available settings for `printf` analyzer
+            - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+            - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+            - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
+            - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
+    misspell:
+      # Correct spellings using locale preferences for US or UK.
+      # Default is to use a neutral variety of English.
+      # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+      locale: US
+      ignore-rules:
+        - someword
+    nakedret:
+      # make an issue if func has more lines of code than this setting and it has naked returns; default is 30
+      max-func-lines: 30
+    revive:
+      # By default, revive will enable only the linting rules that are named in the configuration file.
+      # So, it's needed to explicitly enable all required rules here.
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md
+      rules:
+        - name: context-keys-type
+        - name: time-naming
+        - name: var-declaration
+        - name: unexported-return
+        - name: errorf
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: range
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: argument-limit
+          arguments:
+            - 10
+        - name: cyclomatic
+          arguments:
+            - 10
+        - name: empty-block
+        - name: superfluous-else
+        - name: confusing-naming
+        - name: get-return
+        - name: modifies-parameter
+        - name: confusing-results
+        - name: deep-exit
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: add-constant
+          arguments:
+            - allowInts: 0,1
+              allowStrs: '"","/"'
+        - name: flag-parameter
+        - name: unnecessary-stmt
+        - name: struct-tag
+        - name: modifies-value-receiver
+        - name: constant-logical-expr
+        - name: bool-literal-in-expr
+        - name: redefines-builtin-id
+        - name: function-result-limit
+          arguments:
+            - 3
+        - name: imports-blocklist # imports-blacklist
+          arguments:
+            - github.com/davecgh/go-spew/spew
+        - name: range-val-in-closure
+        - name: range-val-address
+        - name: waitgroup-by-value
+        - name: atomic
+        - name: empty-lines
+        - name: line-length-limit
+          arguments:
+            - 120
+        - name: duplicated-imports
+        - name: import-shadowing
+        - name: bare-return
+        - name: unused-receiver
+        - name: unhandled-error
+        - name: cognitive-complexity
+          arguments:
+            - 20
+        - name: string-of-int
+        - name: early-return
+        - name: unconditional-recursion
+        - name: identical-branches
+        - name: function-length
+          arguments:
+            - 30
+            - 50
+    testifylint:
+      enable:
+        - bool-compare
+        - compares
+        - empty
+        - error-is-as
+        - error-nil
+        - expected-actual
+        - len
+        - require-error
+        - suite-dont-use-pkg
+        - suite-extra-assert-call
+      disable:
+        - float-compare
+        - go-require
+  exclusions:
+    generated: lax
+    rules:
+      # Exclude some linters from running on tests files.
+      - linters:
+          - dupl
+          - errcheck
+          - gocyclo
+          - gosec
+          - scopelint
+        path: _test\.go
+      - linters:
+          - revive
+        path: _test\.go
+        text: add-constant
+      - linters:
+          - revive
+        path: _test\.go
+        text: line-length-limit
+      - linters:
+          - revive
+        path: _test\.go
+        text: function-length
+      - linters:
+          - staticcheck
+        text: 'SA9003:' # Empty body in an if or else branch
+      - linters:
+          - staticcheck
+        text: 'ST1000:' # Incorrect or missing package comment
+      - linters:
+          - staticcheck
+        text: 'QF1008:' # embedded fields from selector
+      - path: (.+)\.go$
+        text: abcdef
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      # simplify code: gofmt with `-s` option, true by default
+      simplify: true
+    goimports:
+      # put imports beginning with prefix after 3rd-party packages;
+      # it's a comma-separated list of prefixes
+      local-prefixes:
+        - fox.flant.com
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
