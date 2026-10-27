@@ -47,16 +47,6 @@ cc_test(
     ],
 )
 
-cc_binary(
-    name = "bare_bones_coredump_test",
-    srcs = [
-        "bare_bones/tests/coredump_test_separate.cpp",
-    ],
-    deps = [
-        ":bare_bones",
-    ],
-)
-
 cc_library(
     name = "primitives",
     hdrs = glob(["primitives/**/*.h"]),
@@ -366,10 +356,7 @@ cc_library(
 
 cc_library(
     name = "series_index",
-    hdrs = glob(
-        include = ["series_index/**/*.h"],
-        exclude = ["series_index/tests/**/*.h"],
-    ),
+    hdrs = glob(["series_index/**/*.h"]),
     deps = [
         ":bare_bones_headers",
         ":primitives",
@@ -382,10 +369,7 @@ cc_library(
 
 cc_test(
     name = "series_index_test",
-    srcs = glob([
-        "series_index/**/*_tests.cpp",
-        "series_index/tests/**/*.h",
-    ]),
+    srcs = glob(["series_index/**/*_tests.cpp"]),
     deps = [
         ":series_index",
         "@gtest//:gtest_main",
