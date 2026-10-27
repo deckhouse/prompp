@@ -99,7 +99,7 @@ void reset_timings_if_needed(benchmark::State& state) {
 }
 
 void FreezeAllStepsWithTiming(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   using std::chrono::steady_clock;
   reset_timings_if_needed(state);
 

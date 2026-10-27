@@ -8,6 +8,11 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "debug",
+    values = {"compilation_mode": "dbg"},
+)
+
 cmake(
     name = "tracy_client",
     lib_source = ":src",
@@ -23,7 +28,11 @@ cmake(
     ],
     build_args = ["-j `nproc`"],
     targets = ["TracyClient"],
-    out_static_libs = ["libTracyClient.a"],
+    # Tracy installs non-Release configurations into a configuration subdirectory.
+    out_static_libs = select({
+        ":debug": ["Debug/libTracyClient.a"],
+        "//conditions:default": ["libTracyClient.a"],
+    }),
     visibility = ["//visibility:private"],
 )
 

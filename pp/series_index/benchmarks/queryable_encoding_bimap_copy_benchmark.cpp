@@ -61,7 +61,7 @@ struct CopyPartsTimings {
 std::vector<CopyPartsTimings> copy_parts_timings;
 
 void CopyAllStepsWithTiming(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 

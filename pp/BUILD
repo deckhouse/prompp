@@ -336,16 +336,29 @@ cc_binary(
 
 cc_library(
     name = "profiling",
-    hdrs = glob(["profiling/**/*.h"]),
-    deps = [
-    ] + select({
-         "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
-         "//conditions:default": ["@tracy//:tracy_headers"],
-    }),
-    defines = select({
-        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE"],
+    srcs = ["profiling/profiling.cpp"],
+    hdrs = ["profiling/profiling.h"],
+    implementation_deps = select({
+        "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
         "//conditions:default": [],
     }),
+    defines = select({
+        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE=1"],
+        "//conditions:default": ["PROMPP_PROFILING_ENABLE=0"],
+    }),
+    local_defines = select({
+        "//bazel/toolchain:with_profiling": ["TRACY_ENABLE"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_test(
+    name = "profiling_test",
+    srcs = glob(["profiling/*_tests.cpp"]) + ["profiling/shared_tests.h"],
+    deps = [
+        ":profiling",
+        "@gtest//:gtest_main",
+    ],
 )
 
 cc_library(

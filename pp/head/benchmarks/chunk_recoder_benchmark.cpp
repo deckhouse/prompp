@@ -26,7 +26,7 @@ const DataStorage& get_data_storage_for_benchmark() {
 }
 
 void ChunkRecoder(benchmark::State& state, PromPP::Primitives::Timestamp downsampling) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& storage = get_data_storage_for_benchmark();
 
   const auto time_interval = series_data::Decoder::get_time_interval(storage);

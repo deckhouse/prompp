@@ -52,7 +52,7 @@ BareBones::Vector<Label> get_labels() {
 }
 
 void GenerateReverseIndex(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   static const auto& labels = get_labels();
   static size_t allocated_memory = 0;
 

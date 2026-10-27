@@ -218,7 +218,7 @@ struct IndexWriterCallTimings {
 std::vector<IndexWriterCallTimings> index_writer_call_timings;
 
 void IndexWriterEntrypointCalls(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   using std::chrono::steady_clock;
 
   const auto& lss = get_lss_no_shrink();
