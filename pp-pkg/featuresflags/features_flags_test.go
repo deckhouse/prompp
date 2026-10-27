@@ -204,18 +204,27 @@ type noopFlagConfig struct{}
 // DisableBlockManagerStorage implements FlagConfig.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
 
+// EnableExpensiveQueryLogging implements [FlagConfig].
+func (noopFlagConfig) EnableExpensiveQueryLogging() {}
+
 // SetLabelReplaceCacheSize implements FlagConfig.
 func (noopFlagConfig) SetLabelReplaceCacheSize(int) {}
 
 // SetLabelReplaceRegexCacheSize implements FlagConfig.
 func (noopFlagConfig) SetLabelReplaceRegexCacheSize(int) {}
 
-// recordingFlagConfig implements FlagConfig and records the applied label_replace cache sizes.
+// recordingFlagConfig implements [FlagConfig] and records applied cache sizes and query diagnostics.
 type recordingFlagConfig struct {
 	noopFlagConfig
 
 	labelReplaceCacheSize      int
 	labelReplaceRegexCacheSize int
+	expensiveQueryLogging      bool
+}
+
+// EnableExpensiveQueryLogging implements [FlagConfig].
+func (c *recordingFlagConfig) EnableExpensiveQueryLogging() {
+	c.expensiveQueryLogging = true
 }
 
 // SetLabelReplaceCacheSize implements FlagConfig.
@@ -310,6 +319,30 @@ func TestQueryStageMetricsFeature(t *testing.T) {
 			ReadPromPPFeatures(log.NewNopLogger(), noopFlagConfig{}, prometheus.NewRegistry())
 
 			require.Equal(t, tc.enabled, querier.QueryStageMetricsEnabled)
+		})
+	}
+}
+
+func TestExpensiveQueryLoggingFeature(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		features string
+		enabled  bool
+	}{
+		{name: "disabled by default"},
+		{name: "enabled explicitly", features: "enable_expensive_query_logging", enabled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given
+			t.Setenv(featuresEnv, tc.features)
+			t.Setenv(featuresDefaultEnv, "")
+			cfg := &recordingFlagConfig{}
+
+			// When
+			ReadPromPPFeatures(log.NewNopLogger(), cfg, prometheus.NewRegistry())
+
+			// Then
+			require.Equal(t, tc.enabled, cfg.expensiveQueryLogging)
 		})
 	}
 }

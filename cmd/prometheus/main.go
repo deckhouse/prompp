@@ -154,6 +154,7 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 		})
 }
 
+// flagConfig holds startup settings for Prometheus and the Prom++ engine.
 type flagConfig struct {
 	configFile string
 
@@ -182,6 +183,7 @@ type flagConfig struct {
 
 	labelReplaceCacheSize      int
 	labelReplaceRegexCacheSize int
+	expensiveQueryLogging      bool
 
 	featureList   []string
 	memlimitRatio float64
@@ -291,6 +293,11 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 // DisableBlockManagerStorage disables the storage of blocks in the block manager.
 func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
+}
+
+// EnableExpensiveQueryLogging enables cost diagnostics in the PromQL engine.
+func (c *flagConfig) EnableExpensiveQueryLogging() {
+	c.expensiveQueryLogging = true
 }
 
 // SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
@@ -1135,12 +1142,13 @@ func main() {
 			NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 			// EnableAtModifier and EnableNegativeOffset have to be
 			// always on for regular PromQL as of Prometheus v2.33.
-			EnableAtModifier:           true,
-			EnableNegativeOffset:       true,
-			EnablePerStepStats:         cfg.enablePerStepStats,
-			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
-			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
-			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
+			EnableAtModifier:            true,
+			EnableNegativeOffset:        true,
+			EnablePerStepStats:          cfg.enablePerStepStats,
+			EnableDelayedNameRemoval:    cfg.promqlEnableDelayedNameRemoval,
+			LabelReplaceCacheSize:       cfg.labelReplaceCacheSize,
+			LabelReplaceRegexCacheSize:  cfg.labelReplaceRegexCacheSize,
+			EnableExpensiveQueryLogging: cfg.expensiveQueryLogging, // PP_CHANGES.md: Query diagnostics.
 		}
 
 		queryEngine = promql.NewEngine(opts)

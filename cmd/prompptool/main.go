@@ -104,6 +104,9 @@ type noopFlagConfig struct{}
 // DisableBlockManagerStorage is a no-op implementation of the FlagConfig interface, used when no feature flags are set.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
 
+// EnableExpensiveQueryLogging implements [featuresflags.FlagConfig].
+func (noopFlagConfig) EnableExpensiveQueryLogging() {}
+
 // SetLabelReplaceCacheSize is a no-op FlagConfig method.
 func (noopFlagConfig) SetLabelReplaceCacheSize(int) {}
 
