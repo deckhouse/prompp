@@ -1485,8 +1485,8 @@ func TestMemPostings_PostingsForAllLabelValuesHonorsContextCancel(t *testing.T) 
 	duringRead := &testutil.MockContextErrAfter{FailAfter: 2}
 	require.ErrorIs(t, mp.PostingsForAllLabelValues(duringRead, "foo").Err(), context.Canceled)
 
-	// A subsequent write must succeed after cancellation releases the read lock.
-	mp.Add(2, labels.FromStrings("foo", "2"))
+	require.True(t, mp.mtx.TryLock(), "cancellation must release the read lock")
+	mp.mtx.Unlock()
 }
 
 func TestMemPostings_PostingsForLabelMatchingHonorsContextCancel(t *testing.T) {
