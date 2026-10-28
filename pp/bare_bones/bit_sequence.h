@@ -463,7 +463,7 @@ class BitSequence {
 
   PROMPP_ALWAYS_INLINE void reserve_memory(size_t bits_count) noexcept {
     // always reserve at least 12 extra bytes at the tail, because read/write can touch up to 12 bytes
-    data_.grow_to_fit_at_least_and_fill_with_zeros((bits_count + 12 * 8 + 7) >> 3);
+    data_.grow_to_fit_at_least_and_fill_with_zeros((bits_count + size_t{12} * 8 + 7) >> 3);
     max_size_for_current_data_size_ = (data_.size() << 3) - 12 * 8;
   }
 

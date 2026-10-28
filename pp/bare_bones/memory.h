@@ -124,7 +124,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
   PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
   PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
-  PROMPP_ALWAYS_INLINE ~Memory() noexcept { Reallocator::free(control_block_.data); }
+  PROMPP_ALWAYS_INLINE ~Memory() noexcept { Reallocator::free(static_cast<void*>(control_block_.data)); }
 
   PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
     if (this != &o) [[likely]] {
@@ -136,7 +136,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
 
   PROMPP_ALWAYS_INLINE Memory& operator=(Memory&& o) noexcept {
     if (this != &o) [[likely]] {
-      Reallocator::free(control_block_.data);
+      Reallocator::free(static_cast<void*>(control_block_.data));
       control_block_ = std::exchange(o.control_block_, {});
     }
 
@@ -157,7 +157,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    control_block_.data = static_cast<T*>(Reallocator::reallocate(control_block_.data, new_size * sizeof(T)));
+    control_block_.data = static_cast<T*>(Reallocator::reallocate(static_cast<void*>(control_block_.data), new_size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
     if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
@@ -310,7 +310,9 @@ class SharedPtr {
       if (old_size > 0) [[likely]] {
         PRAGMA_DIAGNOSTIC(push)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+#ifdef DIAGNOSTIC_STRINGOP_OVERREAD
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_STRINGOP_OVERREAD)
+#endif
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_ARRAY_BOUNDS)
         std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
         PRAGMA_DIAGNOSTIC(pop)

@@ -146,7 +146,9 @@ class GenericBitset {
 
     PROMPP_ALWAYS_INLINE void next() noexcept {
       if (!block_ && block_n_ != last_block_n_) {
-        while (++block_n_ != last_block_n_ && !data_[block_n_]) {
+        ++block_n_;
+        while (block_n_ != last_block_n_ && !data_[block_n_]) {
+          ++block_n_;
         }
         block_ = data_[block_n_];
       }
