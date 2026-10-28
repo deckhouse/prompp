@@ -17,11 +17,11 @@ PROMPP_ALWAYS_INLINE uint32_t encode(int32_t val) noexcept {
 }
 
 PROMPP_ALWAYS_INLINE int64_t decode(uint64_t val) noexcept {
-  return (val >> 1) ^ (0 - (val & 1));
+  return static_cast<int64_t>(val >> 1) ^ -static_cast<int64_t>(val & 1);
 }
 
 PROMPP_ALWAYS_INLINE int32_t decode(uint32_t val) noexcept {
-  return (val >> 1) ^ (0 - (val & 1));
+  return static_cast<int32_t>(val >> 1) ^ -static_cast<int32_t>(val & 1);
 }
 
 }  // namespace BareBones::Encoding::ZigZag

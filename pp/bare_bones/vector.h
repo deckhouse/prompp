@@ -289,6 +289,10 @@ class GenericVector {
   }
 
  private:
+  friend Derived;
+
+  GenericVector() = default;
+
   PROMPP_ALWAYS_INLINE void grow_storage(SizeType new_size) noexcept {
     reserve(new_size);
 

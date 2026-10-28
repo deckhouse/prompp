@@ -77,6 +77,10 @@ class GenericMemory {
   [[nodiscard]] PROMPP_ALWAYS_INLINE operator T*() noexcept { return begin(); }
 
  private:
+  friend Derived;
+
+  GenericMemory() = default;
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SizeType get_allocation_size(SizeType needed_size) noexcept {
     if constexpr (kIsUnitTestBuild || kIsBuildWithAsan) {
       // In unit tests or in build with asan we allocate only needed_size bytes. It helps us to debug memory access errors

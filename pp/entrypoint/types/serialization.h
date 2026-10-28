@@ -25,7 +25,7 @@ class SerializedDataGo {
                             SelectHints&& select_hints,
                             PromPP::Primitives::Timestamp downsampling_ms)
       : data_{::series_data::serialization::DataSerializer<DataStorage>{storage}.serialize(queried_chunks)},
-        select_hints_(std::move(select_hints)),
+        select_hints_(select_hints),
         downsampling_ms_(downsampling_ms) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_buffer_view() const noexcept { return data_view_.get_buffer_view(); }
