@@ -361,7 +361,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
   const auto out = static_cast<Result*>(res);
   // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   std::visit(
-      [out](auto& chunk_recoder) PROMPP_LAMBDA_INLINE {
+      [out](auto& chunk_recoder) PROMPP(lambda_inline) {
         chunk_recoder.recode_next_chunk(*out);
         out->has_more_data = chunk_recoder.has_more_data();
         out->buffer.reset_to(chunk_recoder.bytes());

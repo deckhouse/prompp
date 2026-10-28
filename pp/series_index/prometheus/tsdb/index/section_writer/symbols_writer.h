@@ -27,7 +27,7 @@ class SymbolsWriter {
   uint32_t serialized_unique_symbols_length_ = 0;
   uint32_t unique_symbols_count_ = 0;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t serialized_string_length(const std::string_view& str) noexcept {
+  [[nodiscard]] static PROMPP(inline) uint32_t serialized_string_length(const std::string_view& str) noexcept {
     return BareBones::Encoding::VarInt::length(str.length()) + str.length();
   }
 

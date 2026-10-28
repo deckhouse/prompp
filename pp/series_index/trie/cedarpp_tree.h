@@ -36,19 +36,19 @@ class CedarEnumerativeIterator {
     }
   }
 
-  PROMPP_ALWAYS_INLINE bool next() noexcept {
+  PROMPP(inline) bool next() noexcept {
     next_value();
     return is_valid();
   }
 
-  PROMPP_ALWAYS_INLINE CedarEnumerativeIterator& operator++() noexcept {
+  PROMPP(inline) CedarEnumerativeIterator& operator++() noexcept {
     next_value();
     return *this;
   }
-  PROMPP_ALWAYS_INLINE uint32_t operator*() const noexcept { return value_; }
+  PROMPP(inline) uint32_t operator*() const noexcept { return value_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept { return value_ != static_cast<uint32_t>(Trie::error_code::CEDAR_NO_PATH); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] PROMPP(inline) bool is_valid() const noexcept { return value_ != static_cast<uint32_t>(Trie::error_code::CEDAR_NO_PATH); }
+  [[nodiscard]] PROMPP(inline) uint32_t value() const noexcept { return value_; }
 
   [[nodiscard]] std::string_view tail_from_root() { return trie_->restore_key(from_, length_ - root_length_, restored_key_); }
   [[nodiscard]] std::string_view key() { return trie_->restore_key(from_, length_, restored_key_); }
@@ -62,18 +62,18 @@ class CedarEnumerativeIterator {
   size_t length_{};
   uint32_t value_{static_cast<uint32_t>(Trie::error_code::CEDAR_NO_PATH)};
 
-  PROMPP_ALWAYS_INLINE void next_value() noexcept { value_ = trie_->next(from_, length_, root_); }
+  PROMPP(inline) void next_value() noexcept { value_ = trie_->next(from_, length_, root_); }
 };
 
 class CedarTraversal {
  public:
   explicit CedarTraversal(Trie* trie) : trie_(trie) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CedarEnumerativeIterator make_enumerative_iterator() const noexcept { return {trie_, from_, length_, false}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CedarEnumerativeIterator make_enumerative_iterator_to_subnodes() const noexcept {
+  [[nodiscard]] PROMPP(inline) CedarEnumerativeIterator make_enumerative_iterator() const noexcept { return {trie_, from_, length_, false}; }
+  [[nodiscard]] PROMPP(inline) CedarEnumerativeIterator make_enumerative_iterator_to_subnodes() const noexcept {
     return {trie_, from_, length_, value_ != static_cast<uint32_t>(Trie::error_code::CEDAR_NO_VALUE)};
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CedarEnumerativeIterator make_enumerative_iterator(const std::string_view& prefix) const noexcept {
+  [[nodiscard]] PROMPP(inline) CedarEnumerativeIterator make_enumerative_iterator(const std::string_view& prefix) const noexcept {
     return {trie_, from_, 0, prefix};
   }
 
@@ -87,7 +87,7 @@ class CedarTraversal {
     return true;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_leaf() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool is_leaf() const noexcept {
     if (value_ == static_cast<uint32_t>(Trie::error_code::CEDAR_NO_VALUE)) {
       return false;
     }
@@ -101,13 +101,13 @@ class CedarTraversal {
     return trie_->next(from, length, from) == Trie::error_code::CEDAR_NO_PATH;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t lookup(std::string_view key) const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t lookup(std::string_view key) const noexcept {
     return trie_->exactMatchSearch<uint32_t>(key.data(), key.length(), from_);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static std::string_view tail() noexcept { return {}; }
+  [[nodiscard]] static PROMPP(inline) std::string_view tail() noexcept { return {}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] PROMPP(inline) uint32_t value() const noexcept { return value_; }
 
  private:
   Trie* trie_;
@@ -121,17 +121,17 @@ class CedarMatchesList {
  public:
   CedarMatchesList(MatchesList& matches, const ValueMatchResolver& match_resolver) : matches_(matches), value_match_resolver_(match_resolver) {}
 
-  PROMPP_ALWAYS_INLINE void clear() const { matches_.clear(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t count() const noexcept { return matches_.size(); }
+  PROMPP(inline) void clear() const { matches_.clear(); }
+  [[nodiscard]] PROMPP(inline) size_t count() const noexcept { return matches_.size(); }
 
-  PROMPP_ALWAYS_INLINE void add_node(const CedarTraversal& traversal) const {
+  PROMPP(inline) void add_node(const CedarTraversal& traversal) const {
     for (auto iterator = traversal.make_enumerative_iterator(); iterator.is_valid(); ++iterator) {
       matches_.push_back(value_match_resolver_(*iterator));
     }
   }
 
   template <class Condition>
-  PROMPP_ALWAYS_INLINE void add_node(const CedarTraversal& traversal, Condition&& condition) {
+  PROMPP(inline) void add_node(const CedarTraversal& traversal, Condition&& condition) {
     for (auto iterator = traversal.make_enumerative_iterator(); iterator.is_valid(); ++iterator) {
       if (condition(iterator.tail_from_root())) {
         matches_.push_back(value_match_resolver_(*iterator));
@@ -139,20 +139,20 @@ class CedarMatchesList {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void add_subnodes(const CedarTraversal& traversal) const {
+  PROMPP(inline) void add_subnodes(const CedarTraversal& traversal) const {
     for (auto iterator = traversal.make_enumerative_iterator_to_subnodes(); iterator.is_valid(); ++iterator) {
       matches_.push_back(value_match_resolver_(*iterator));
     }
   }
 
-  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal) const { matches_.push_back(value_match_resolver_(traversal.value())); }
-  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal, const std::string_view& prefix) const {
+  PROMPP(inline) void add_leaf(const CedarTraversal& traversal) const { matches_.push_back(value_match_resolver_(traversal.value())); }
+  PROMPP(inline) void add_leaf(const CedarTraversal& traversal, const std::string_view& prefix) const {
     if (const auto value = traversal.lookup(prefix); value != static_cast<uint32_t>(cedar::da<uint32_t>::error_code::CEDAR_NO_VALUE)) {
       matches_.push_back(value_match_resolver_(value));
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const MatchesList& matches() const noexcept { return matches_; }
+  [[nodiscard]] PROMPP(inline) const MatchesList& matches() const noexcept { return matches_; }
 
  private:
   MatchesList& matches_;
@@ -168,14 +168,14 @@ class CedarTrie {
   template <class List, querier::ValueMatchResolverInterface ValueMatchResolver>
   using MatchesList = CedarMatchesList<List, ValueMatchResolver>;
 
-  PROMPP_ALWAYS_INLINE void insert(std::string_view key, uint32_t id) noexcept {
+  PROMPP(inline) void insert(std::string_view key, uint32_t id) noexcept {
     if (count_ <= id) {
       trie_.update(key.data(), key.length(), 0) = id;
       ++count_;
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> lookup(std::string_view key) const noexcept {
+  [[nodiscard]] PROMPP(inline) std::optional<uint32_t> lookup(std::string_view key) const noexcept {
     if (auto value = trie_.exactMatchSearch<uint32_t>(key.data(), key.length(), 0); value != static_cast<uint32_t>(Trie::error_code::CEDAR_NO_VALUE)) {
       return value;
     }
@@ -183,11 +183,11 @@ class CedarTrie {
     return std::nullopt;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CedarEnumerativeIterator make_enumerative_iterator() const noexcept { return {const_cast<Trie*>(&trie_), 0, 0, false}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CedarTraversal make_traversal() const { return CedarTraversal{const_cast<Trie*>(&trie_)}; }
+  [[nodiscard]] PROMPP(inline) CedarEnumerativeIterator make_enumerative_iterator() const noexcept { return {const_cast<Trie*>(&trie_), 0, 0, false}; }
+  [[nodiscard]] PROMPP(inline) CedarTraversal make_traversal() const { return CedarTraversal{const_cast<Trie*>(&trie_)}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return trie_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return count_; }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return trie_.allocated_memory(); }
 
   template <class OutputStream>
   friend OutputStream& operator<<(OutputStream& stream, CedarTrie& trie) {

@@ -25,12 +25,12 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
 
    public:
     template <class LabelSet>
-    PROMPP_ALWAYS_INLINE explicit Item(const LabelSet& ls, Primitives::Sample sample) : hash_(hash_value(ls)), data_(ls, {sample}) {}
+    explicit PROMPP(inline) Item(const LabelSet& ls, Primitives::Sample sample) : hash_(hash_value(ls)), data_(ls, {sample}) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+    [[nodiscard]] PROMPP(inline) size_t hash() const { return hash_; }
 
     template <class Timeseries>
-    PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
+    PROMPP(inline) void read(Timeseries& timeseries) const {
       timeseries = data_;
     }
   };
@@ -42,7 +42,7 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
   // metrics_injection injection of additional metrics with Heartbeat.
   void metric_injection(const MetaInjection& meta) {
     HeartbeatMetricsInserter inserter({.agent_uuid = meta.agent_uuid, .hostname = meta.hostname});
-    inserter.insert(meta.now, meta.sent_at, [this](const auto& timeseries) PROMPP_LAMBDA_INLINE {
+    inserter.insert(meta.now, meta.sent_at, [this](const auto& timeseries) PROMPP(lambda_inline) {
       floats_.emplace_back(timeseries.label_set(), timeseries.samples()[0]);
       ++series_;
     });
@@ -50,11 +50,11 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
 
  public:
   // presharding from decoder make presharding slice with hash and TimeseriesSemiview.
-  PROMPP_ALWAYS_INLINE void presharding(WAL::BasicDecoder<>& decoder) {
+  PROMPP(inline) void presharding(WAL::BasicDecoder<>& decoder) {
     WAL::BasicDecoder<>::label_set_value_type ls_view;  // composite_type
     Primitives::LabelSetID last_ls_id = std::numeric_limits<Primitives::LabelSetID>::max();
     const auto& label_sets = decoder.label_sets();
-    decoder.process_segment([&](Primitives::LabelSetID ls_id, Primitives::Timestamp ts, double value) PROMPP_LAMBDA_INLINE {
+    decoder.process_segment([&](Primitives::LabelSetID ls_id, Primitives::Timestamp ts, double value) PROMPP(lambda_inline) {
       if (last_ls_id != ls_id) {
         ls_view = label_sets[ls_id];
         last_ls_id = ls_id;
@@ -68,14 +68,14 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
   }
 
   // presharding from decoder make presharding slice with hash and TimeseriesSemiview with metadata.
-  PROMPP_ALWAYS_INLINE void presharding(WAL::BasicDecoder<>& decoder, const MetaInjection& meta) {
+  PROMPP(inline) void presharding(WAL::BasicDecoder<>& decoder, const MetaInjection& meta) {
     presharding(decoder);
     metric_injection(meta);
   }
 
   // write_stats write sharding stats.
   template <class Stats>
-  PROMPP_ALWAYS_INLINE void write_stats(WAL::BasicDecoder<>& decoder, Stats& stats) {
+  PROMPP(inline) void write_stats(WAL::BasicDecoder<>& decoder, Stats& stats) {
     stats.created_at = decoder.created_at_tsns();
     stats.encoded_at = decoder.encoded_at_tsns();
     stats.samples = floats_.size();
@@ -87,10 +87,10 @@ class BasicDecoder : public Prometheus::hashdex::Abstract {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series() const noexcept { return series_; }
+  [[nodiscard]] PROMPP(inline) uint32_t series() const noexcept { return series_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
+  [[nodiscard]] PROMPP(inline) const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] static PROMPP(inline) auto metadata() noexcept {
     struct Stub {};
     return Stub{};
   }

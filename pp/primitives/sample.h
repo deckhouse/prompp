@@ -23,7 +23,7 @@ class Sample {
   value_type& value() noexcept { return value_; }
 
   template <size_t I>
-  PROMPP_ALWAYS_INLINE const auto& get() const noexcept {
+  PROMPP(inline) const auto& get() const noexcept {
     if constexpr (I == 0)
       return timestamp_;
     if constexpr (I == 1)
@@ -32,7 +32,7 @@ class Sample {
   }
 
   template <size_t I>
-  PROMPP_ALWAYS_INLINE auto& get() noexcept {
+  PROMPP(inline) auto& get() noexcept {
     if constexpr (I == 0)
       return timestamp_;
     if constexpr (I == 1)
@@ -42,7 +42,7 @@ class Sample {
 
   template <class T>
   // TODO requires is_sample
-  PROMPP_ALWAYS_INLINE Sample& operator=(const T& s) noexcept {
+  PROMPP(inline) Sample& operator=(const T& s) noexcept {
     timestamp_ = s.timestamp();
     value_ = s.value();
     return *this;
@@ -54,17 +54,17 @@ class Sample {
 
   template <class T>
   // TODO requires is_sample
-  PROMPP_ALWAYS_INLINE bool operator==(const T& s) const noexcept {
+  PROMPP(inline) bool operator==(const T& s) const noexcept {
     return timestamp_ == s.timestamp() && std::bit_cast<uint64_t>(value_) == std::bit_cast<uint64_t>(s.value());
   }
 
   template <class T>
   // TODO requires is_sample
-  PROMPP_ALWAYS_INLINE explicit Sample(const T& s) noexcept : timestamp_(s.timestamp()), value_(s.value()) {}
+  explicit PROMPP(inline) Sample(const T& s) noexcept : timestamp_(s.timestamp()), value_(s.value()) {}
 
-  PROMPP_ALWAYS_INLINE Sample(timestamp_type timestamp, value_type value) noexcept : timestamp_(timestamp), value_(value) {}
+  PROMPP(inline) Sample(timestamp_type timestamp, value_type value) noexcept : timestamp_(timestamp), value_(value) {}
 
-  PROMPP_ALWAYS_INLINE Sample() noexcept = default;
+  PROMPP(inline) Sample() noexcept = default;
 };
 
 // ADL get function

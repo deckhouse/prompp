@@ -16,7 +16,7 @@ namespace series_data {
 
 template <bool kUseArenas = true>
 struct DataStorage {
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
   struct DataStorageAllocatorTag {};
   using Reallocator = std::conditional_t<kUseArenas, BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>, BareBones::DefaultReallocator>;
 #else
@@ -42,19 +42,19 @@ struct DataStorage {
         }
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const DataStorage* storage() const noexcept { return storage_; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_id() const noexcept { return std::distance(storage_->open_chunks.begin(), open_chunk_); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::DataChunk::Type chunk_type() const noexcept {
+      [[nodiscard]] PROMPP(inline) const DataStorage* storage() const noexcept { return storage_; }
+      [[nodiscard]] PROMPP(inline) uint32_t series_id() const noexcept { return std::distance(storage_->open_chunks.begin(), open_chunk_); }
+      [[nodiscard]] PROMPP(inline) chunk::DataChunk::Type chunk_type() const noexcept {
         return finalized_chunk_iterator_ == finalized_chunk_end_iterator_ ? chunk::DataChunk::Type::kOpen : chunk::DataChunk::Type::kFinalized;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_open() const noexcept { return chunk_type() == chunk::DataChunk::Type::kOpen; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const chunk::DataChunk& chunk() const noexcept {
+      [[nodiscard]] PROMPP(inline) bool is_open() const noexcept { return chunk_type() == chunk::DataChunk::Type::kOpen; }
+      [[nodiscard]] PROMPP(inline) const chunk::DataChunk& chunk() const noexcept {
         return chunk_type() == chunk::DataChunk::Type::kOpen ? *open_chunk_ : *finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
+      [[nodiscard]] PROMPP(inline) FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
         return finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
+      [[nodiscard]] PROMPP(inline) FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
         return finalized_chunk_end_iterator_;
       }
 
@@ -66,7 +66,7 @@ struct DataStorage {
       FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
       const chunk::DataChunk* open_chunk_{};
 
-      PROMPP_ALWAYS_INLINE void next_value() noexcept {
+      PROMPP(inline) void next_value() noexcept {
         if (finalized_chunk_iterator_ != finalized_chunk_end_iterator_) {
           ++finalized_chunk_iterator_;
           return;
@@ -75,7 +75,7 @@ struct DataStorage {
         open_chunk_ = nullptr;
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_value() const noexcept { return open_chunk_ != nullptr; }
+      [[nodiscard]] PROMPP(inline) bool has_value() const noexcept { return open_chunk_ != nullptr; }
     };
 
     using iterator_category = std::forward_iterator_tag;
@@ -86,21 +86,21 @@ struct DataStorage {
 
     explicit SeriesChunkIterator(const DataStorage* data_storage, uint32_t ls_id) : data_(data_storage, ls_id) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const Data& operator*() const noexcept { return data_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const Data* operator->() const noexcept { return &data_; }
+    [[nodiscard]] PROMPP(inline) const Data& operator*() const noexcept { return data_; }
+    [[nodiscard]] PROMPP(inline) const Data* operator->() const noexcept { return &data_; }
 
-    PROMPP_ALWAYS_INLINE SeriesChunkIterator& operator++() noexcept {
+    PROMPP(inline) SeriesChunkIterator& operator++() noexcept {
       data_.next_value();
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE SeriesChunkIterator operator++(int) noexcept {
+    PROMPP(inline) SeriesChunkIterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return !data_.has_value(); }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return !data_.has_value(); }
 
    private:
     Data data_;
@@ -116,10 +116,10 @@ struct DataStorage {
 
     explicit ChunkIterator(const DataStorage* storage) : storage_(storage), iterator_(storage->open_chunks.begin()), series_chunk_iterator_(storage, 0U) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesChunkIterator::Data& operator*() const noexcept { return *series_chunk_iterator_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesChunkIterator::Data* operator->() const noexcept { return series_chunk_iterator_.operator->(); }
+    [[nodiscard]] PROMPP(inline) const SeriesChunkIterator::Data& operator*() const noexcept { return *series_chunk_iterator_; }
+    [[nodiscard]] PROMPP(inline) const SeriesChunkIterator::Data* operator->() const noexcept { return series_chunk_iterator_.operator->(); }
 
-    PROMPP_ALWAYS_INLINE ChunkIterator& operator++() noexcept {
+    PROMPP(inline) ChunkIterator& operator++() noexcept {
       if (++series_chunk_iterator_ == IteratorSentinel{}) {
         if (++iterator_ != storage_->open_chunks.end()) {
           series_chunk_iterator_ = SeriesChunkIterator{storage_, static_cast<uint32_t>(std::distance(storage_->open_chunks.begin(), iterator_))};
@@ -128,13 +128,13 @@ struct DataStorage {
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE ChunkIterator operator++(int) noexcept {
+    PROMPP(inline) ChunkIterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept {
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept {
       return iterator_ == storage_->open_chunks.end() && series_chunk_iterator_ == IteratorSentinel{};
     }
 
@@ -148,8 +148,8 @@ struct DataStorage {
    public:
     explicit SeriesChunks(const DataStorage* storage, uint32_t series_id) : storage_(storage), series_id_(series_id) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunkIterator begin() const noexcept { return SeriesChunkIterator{storage_, series_id_}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] PROMPP(inline) SeriesChunkIterator begin() const noexcept { return SeriesChunkIterator{storage_, series_id_}; }
+    [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
    private:
     const DataStorage* storage_;
@@ -160,19 +160,19 @@ struct DataStorage {
    public:
     explicit Chunks(const DataStorage* storage) : storage_(storage) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t non_empty_chunk_count() const noexcept { return non_empty_open_chunk_count() + finalized_chunk_count(); }
+    [[nodiscard]] PROMPP(inline) uint32_t non_empty_chunk_count() const noexcept { return non_empty_open_chunk_count() + finalized_chunk_count(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t non_empty_open_chunk_count() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t non_empty_open_chunk_count() const noexcept {
       return std::ranges::count_if(storage_->open_chunks, [](const chunk::DataChunk& chunk) { return !chunk.is_empty(); });
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t finalized_chunk_count() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t finalized_chunk_count() const noexcept {
       return std::accumulate(storage_->finalized_chunks.begin(), storage_->finalized_chunks.end(), uint32_t{},
-                             [](uint32_t count, const auto& chunks_pair) PROMPP_LAMBDA_INLINE { return count + chunks_pair.second.count(); });
+                             [](uint32_t count, const auto& chunks_pair) PROMPP(lambda_inline) { return count + chunks_pair.second.count(); });
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE ChunkIterator begin() const noexcept { return ChunkIterator{storage_}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] PROMPP(inline) ChunkIterator begin() const noexcept { return ChunkIterator{storage_}; }
+    [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
    private:
     const DataStorage* storage_;
@@ -224,10 +224,12 @@ struct DataStorage {
 
   BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
+  [[nodiscard]] PROMPP(inline) SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
+  [[nodiscard]] PROMPP(inline) Chunks chunks() const noexcept { return Chunks{this}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool series_exists(uint32_t ls_id) const noexcept { return open_chunks.size() > ls_id && !open_chunks[ls_id].is_empty(); }
+  [[nodiscard]] PROMPP(inline) bool series_exists(uint32_t ls_id) const noexcept {
+    return open_chunks.size() > ls_id && !open_chunks[ls_id].is_empty();
+  }
 
   void delete_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) noexcept {
     if (const auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {
@@ -251,12 +253,12 @@ struct DataStorage {
     chunk.reset();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(encoder::timestamp::SequenceId timestamp_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const BitSequenceWithItemsCount& get_timestamp_stream(encoder::timestamp::SequenceId timestamp_id) const noexcept {
     return timestamp_store.stream(timestamp_id);
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer.stream();
     } else {
@@ -265,7 +267,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) noexcept {
+  [[nodiscard]] PROMPP(inline) CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer.stream();
     } else {
@@ -274,7 +276,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].values_gorilla.stream();
     } else {
@@ -283,7 +285,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) noexcept {
+  [[nodiscard]] PROMPP(inline) CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].values_gorilla.stream();
     } else {
@@ -292,7 +294,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer_then_values_gorilla.stream();
     } else {
@@ -301,7 +303,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) noexcept {
+  [[nodiscard]] PROMPP(inline) CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer_then_values_gorilla.stream();
     } else {
@@ -309,9 +311,9 @@ struct DataStorage {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return allocated_memory_impl<Reallocator>(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return allocated_memory_impl<Reallocator>(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory(EncodingType encoding_type) const noexcept {
     if (is_variant_encoder(encoding_type)) {
       return BareBones::accumulate(open_chunks, 0ULL, [this, encoding_type](size_t allocated_memory, const auto& chunk) {
         if (chunk.encoding_state.encoding_type == encoding_type) {
@@ -324,7 +326,7 @@ struct DataStorage {
     return 0;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_index(uint32_t ls_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t get_open_chunk_index(uint32_t ls_id) const noexcept {
     if (const auto it = finalized_chunks.find(ls_id); it != finalized_chunks.end()) [[unlikely]] {
       return it->second.count();
     }
@@ -396,14 +398,14 @@ struct DataStorage {
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
-  PROMPP_ALWAYS_INLINE void constructor_impl() noexcept {
+  PROMPP(inline) void constructor_impl() noexcept {
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
       arena_index = Reallocator::create_arena();
     }
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
-  PROMPP_ALWAYS_INLINE void destructor_impl() noexcept {
+  PROMPP(inline) void destructor_impl() noexcept {
     metrics->detach();
 
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
@@ -425,7 +427,7 @@ struct DataStorage {
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory_impl() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory_impl() const noexcept {
     using enum EncodingType;
 
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
@@ -449,7 +451,7 @@ struct DataStorage {
   }
 
   template <BareBones::ReallocatorInterface Reallocator>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard_impl() const noexcept {
+  [[nodiscard]] PROMPP(inline) auto thread_arena_guard_impl() const noexcept {
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
       return Reallocator::thread_arena_guard(arena_index);
     } else {
@@ -461,7 +463,7 @@ struct DataStorage {
   }
 
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard() const noexcept { return thread_arena_guard_impl<Reallocator>(); }
+  [[nodiscard]] PROMPP(inline) auto thread_arena_guard() const noexcept { return thread_arena_guard_impl<Reallocator>(); }
 };
 
 }  // namespace series_data

@@ -26,20 +26,20 @@ class AscIntegerThenValuesGorillaDecodeIterator : public DecodeIteratorTrait<Asc
     }
   }
 
-  PROMPP_ALWAYS_INLINE AscIntegerThenValuesGorillaDecodeIterator& operator++() noexcept {
+  PROMPP(inline) AscIntegerThenValuesGorillaDecodeIterator& operator++() noexcept {
     if (decode()) [[likely]] {
       update_sample();
     }
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE AscIntegerThenValuesGorillaDecodeIterator operator++(int) noexcept {
+  PROMPP(inline) AscIntegerThenValuesGorillaDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+  [[nodiscard]] PROMPP(inline) double decoded_value() const noexcept {
     if (data_.value_type == encoder::ValueType::kStaleNan) [[unlikely]] {
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
@@ -80,7 +80,7 @@ class AscIntegerThenValuesGorillaDecodeIterator : public DecodeIteratorTrait<Asc
  private:
   friend DecodeIteratorTrait;
 
-  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+  PROMPP(inline) bool decode() noexcept {
     if (try_decode_timestamp()) [[likely]] {
       decode_value();
       return true;
@@ -89,12 +89,12 @@ class AscIntegerThenValuesGorillaDecodeIterator : public DecodeIteratorTrait<Asc
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+  PROMPP(inline) void update_sample() noexcept {
     data_.sample.timestamp = decoded_timestamp();
     data_.sample.value = decoded_value();
   }
 
-  PROMPP_ALWAYS_INLINE void decode_value() noexcept {
+  PROMPP(inline) void decode_value() noexcept {
     using enum encoder::ValueType;
 
     if (data_.value_type != kSwitchToValuesGorillaMark) {
@@ -107,7 +107,7 @@ class AscIntegerThenValuesGorillaDecodeIterator : public DecodeIteratorTrait<Asc
     }
   }
 
-  PROMPP_ALWAYS_INLINE void switch_to_values_gorilla() noexcept {
+  PROMPP(inline) void switch_to_values_gorilla() noexcept {
     std::construct_at(&data_.values_gorilla);
     ValuesGorillaDecodeIterator::decode_value<ValuesGorillaDecodeIterator::SampleType::kFirst>(data_.values_gorilla.decoder, data_.reader);
   }

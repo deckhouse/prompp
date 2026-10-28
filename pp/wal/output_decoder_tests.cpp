@@ -16,8 +16,8 @@ struct GoTimeSeries {
   uint64_t timestamp{};
   double value{};
 
-  PROMPP_ALWAYS_INLINE GoTimeSeries() = default;
-  PROMPP_ALWAYS_INLINE GoTimeSeries(std::initializer_list<PromPP::Primitives::LabelView> lvs, const PromPP::Primitives::Sample& sample) {
+  PROMPP(inline) GoTimeSeries() = default;
+  PROMPP(inline) GoTimeSeries(std::initializer_list<PromPP::Primitives::LabelView> lvs, const PromPP::Primitives::Sample& sample) {
     size_t index{0};
     for (const auto& [ln, lv] : lvs) {
       PromPP::Primitives::Go::LabelView go_label_view;
@@ -105,7 +105,7 @@ struct TestWALOutputDecoder : public testing::Test {
   }
 
   template <class SegmentStream>
-  PROMPP_ALWAYS_INLINE void make_segment(const std::vector<GoTimeSeries>& gtss, SegmentStream& segment_stream, Encoder& enc) {
+  PROMPP(inline) void make_segment(const std::vector<GoTimeSeries>& gtss, SegmentStream& segment_stream, Encoder& enc) {
     // make Hashdex
     Slice<GoTimeSeries> go_time_series_slice;
     for (const GoTimeSeries& gts : gtss) {
@@ -120,7 +120,7 @@ struct TestWALOutputDecoder : public testing::Test {
     enc.finalize(&stats_, segment_stream);
   }
 
-  PROMPP_ALWAYS_INLINE void stateless_relabeler_reset_to(std::initializer_list<RelabelConfigTest> cfgs) {
+  PROMPP(inline) void stateless_relabeler_reset_to(std::initializer_list<RelabelConfigTest> cfgs) {
     rcts_.resize(0);
     rcts_buf_.resize(0);
     rcts_.reserve(cfgs.size());
@@ -513,7 +513,7 @@ class SegmentSamplesStorageListSplitMessagesFixture : public ::testing::Test {
     int64_t t;
     double v;
 
-    PROMPP_ALWAYS_INLINE bool operator==(const MessageBoundary& boundary) const noexcept = default;
+    PROMPP(inline) bool operator==(const MessageBoundary& boundary) const noexcept = default;
   };
 
   Slice<GoMessage> messages_;

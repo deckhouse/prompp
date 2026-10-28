@@ -13,7 +13,7 @@ struct Query {
   PromPP::Primitives::TimeInterval time_interval;
   Vector label_set_ids;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept { return !label_set_ids.empty() && time_interval.max >= time_interval.min; }
+  [[nodiscard]] PROMPP(inline) bool is_valid() const noexcept { return !label_set_ids.empty() && time_interval.max >= time_interval.min; }
 
   bool operator==(const Query&) const noexcept = default;
 
@@ -62,7 +62,7 @@ struct Query {
   }
 };
 
-struct PROMPP_ATTRIBUTE_PACKED QueriedChunk {
+struct PROMPP(packed) QueriedChunk {
   static constexpr uint32_t kOpenChunkId = std::numeric_limits<uint32_t>::max();
 
   const PromPP::Primitives::LabelSetID ls_id;
@@ -71,8 +71,8 @@ struct PROMPP_ATTRIBUTE_PACKED QueriedChunk {
   explicit QueriedChunk(PromPP::Primitives::LabelSetID _ls_id) : ls_id(_ls_id), finalized_chunk_id(kOpenChunkId) {}
   QueriedChunk(PromPP::Primitives::LabelSetID _ls_id, uint32_t _finalized_chunk_id) : ls_id(_ls_id), finalized_chunk_id(_finalized_chunk_id) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_open() const noexcept { return finalized_chunk_id == kOpenChunkId; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_id() const noexcept { return ls_id; }
+  [[nodiscard]] PROMPP(inline) bool is_open() const noexcept { return finalized_chunk_id == kOpenChunkId; }
+  [[nodiscard]] PROMPP(inline) uint32_t series_id() const noexcept { return ls_id; }
 
   bool operator==(const QueriedChunk&) const noexcept = default;
 };

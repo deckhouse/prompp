@@ -47,9 +47,7 @@ void ChunkRecoder(benchmark::State& state, PromPP::Primitives::Timestamp downsam
   }
 }
 
-void ChunkRecoder(benchmark::State& state) {
-  ChunkRecoder(state, series_data::decoder::decorator::kNoDownsampling);
-}
+void ChunkRecoder(benchmark::State& state) { ChunkRecoder(state, series_data::decoder::decorator::kNoDownsampling); }
 
 void ChunkRecoderWithDownsampling(benchmark::State& state) {
   constexpr PromPP::Primitives::Timestamp kDownsampling5Minutes = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::minutes(5)).count();

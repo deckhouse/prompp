@@ -24,9 +24,7 @@ struct GenericLengthAndMask {
   bool operator==(const GenericLengthAndMask& other) const noexcept = default;
 };
 
-PROMPP_ALWAYS_INLINE uint32_t keys_size(uint32_t size) noexcept {
-  return (size + 3) / 4;
-}
+PROMPP(inline) uint32_t keys_size(uint32_t size) noexcept { return (size + 3) / 4; }
 
 class Codec1234 {
  public:
@@ -60,7 +58,7 @@ class Codec1234 {
  protected:
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode_branchless_tresspassing(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_branchless_tresspassing(uint32_t val, IteratorType& d_i) noexcept {
     /**
      * ATTENTION! This method trespasses up to 3 bytes further after the last element, so you should
      * somehow account for that. One of the possible solution might be to reserve/resize for 3 extra
@@ -87,7 +85,7 @@ class Codec1234 {
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
     if (val < (1 << 8)) {  // 1 byte
       *d_i++ = static_cast<uint8_t>(val);
       return 0;
@@ -109,7 +107,7 @@ class Codec1234 {
 
   template <std::output_iterator<uint8_t> IteratorType>
     requires(!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
     if (val < (1 << 8)) {  // 1 byte
       *d_i++ = static_cast<uint8_t>(val);
       return 0;
@@ -135,19 +133,19 @@ class Codec1234 {
   using value_type = uint32_t;
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
     return encode_branchless_tresspassing(val, d_i);
   }
 
   template <std::output_iterator<uint8_t> IteratorType>
     requires(!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
     return encode_simple(val, d_i);
   }
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
     /**
      * ATTENTION! This method trespasses up to 3 bytes further after the last element, so you should
      * somehow account for that. One of the possible solution might be to reserve/resize for 3 extra
@@ -158,7 +156,7 @@ class Codec1234 {
 
   template <std::random_access_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t> && (!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
     if (length_and_mask.length == 1) {
       return *d_i;
     } else if (length_and_mask.length == 2) {
@@ -170,11 +168,11 @@ class Codec1234 {
     }
   }
 
-  PROMPP_ALWAYS_INLINE static constexpr LengthAndMask get_length_and_mask(uint8_t code) noexcept { return kLut[code]; }
+  static PROMPP(inline) constexpr LengthAndMask get_length_and_mask(uint8_t code) noexcept { return kLut[code]; }
 
   template <std::forward_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static size_t decode_data_size(uint32_t size, IteratorType begin) noexcept {
+  static PROMPP(inline) size_t decode_data_size(uint32_t size, IteratorType begin) noexcept {
     static constexpr auto lut = generate_key_to_length_lut();
 
     // code 0 doesn't mean 0 byte, but in lut it is, so we need to account for that
@@ -190,7 +188,7 @@ class Codec1234 {
 class Codec1234Mostly1 : public Codec1234 {
  public:
   template <std::output_iterator<uint8_t> IteratorType>
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
     return encode_simple(val, d_i);
   }
 };
@@ -226,7 +224,7 @@ class Codec0124 {
  protected:
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode_branchless_tresspassing(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_branchless_tresspassing(uint32_t val, IteratorType& d_i) noexcept {
     /**
      * ATTENTION! This method trespasses up to 4 bytes further after the last element, so you should
      * somehow account for that. One of the possible solution might be to reserve/resize for 3 extra
@@ -253,7 +251,7 @@ class Codec0124 {
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
     if (val == 0) {  // 0 byte
       return 0;
     } else if (val < (1 << 8)) {  // 1 byte
@@ -272,7 +270,7 @@ class Codec0124 {
 
   template <std::output_iterator<uint8_t> IteratorType>
     requires(!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_simple(uint32_t val, IteratorType& d_i) noexcept {
     if (val == 0) {  // 0 byte
       return 0;
     } else if (val < (1 << 8)) {  // 1 byte
@@ -295,19 +293,19 @@ class Codec0124 {
   using value_type = uint32_t;
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
     return encode_branchless_tresspassing(val, d_i);
   }
 
   template <std::output_iterator<uint8_t> IteratorType>
     requires(!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
     return encode_simple(val, d_i);
   }
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
     /*
      * ATTENTION! This method trespasses up to 4 bytes further after the last element, so you should
      * somehow account for that. One of the possible solution might be to reserve/resize for 4 extra
@@ -318,7 +316,7 @@ class Codec0124 {
 
   template <std::random_access_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t> && (!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint32_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
     if (length_and_mask.length == 0) {
       return 0;
     } else if (length_and_mask.length == 1) {
@@ -330,11 +328,11 @@ class Codec0124 {
     }
   }
 
-  PROMPP_ALWAYS_INLINE static constexpr LengthAndMask get_length_and_mask(uint8_t code) noexcept { return kLut[code]; }
+  static PROMPP(inline) constexpr LengthAndMask get_length_and_mask(uint8_t code) noexcept { return kLut[code]; }
 
   template <std::forward_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static size_t decode_data_size(uint32_t size, IteratorType begin) noexcept {
+  static PROMPP(inline) size_t decode_data_size(uint32_t size, IteratorType begin) noexcept {
     static constexpr auto lut = generate_key_to_length_lut();
 
     size_t res = 0;
@@ -349,7 +347,7 @@ class Codec0124 {
 class Codec0124Frequent0 : public Codec0124 {
  public:
   template <std::output_iterator<uint8_t> IteratorType>
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint32_t val, IteratorType& d_i) noexcept {
     return encode_simple(val, d_i);
   }
 };
@@ -386,7 +384,7 @@ class Codec1238 {
  protected:
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode_branchless_tresspassing(uint64_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_branchless_tresspassing(uint64_t val, IteratorType& d_i) noexcept {
     /**
      * ATTENTION! This method trespasses up to 7 bytes further after the last element, so you should
      * somehow account for that. One of the possible solution might be to reserve/resize for 7 extra
@@ -417,7 +415,7 @@ class Codec1238 {
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode_simple(uint64_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_simple(uint64_t val, IteratorType& d_i) noexcept {
     if (val < (1 << 8)) {  // 1 byte
       *d_i++ = static_cast<uint8_t>(val);
       return 0;
@@ -439,7 +437,7 @@ class Codec1238 {
 
   template <std::output_iterator<uint8_t> IteratorType>
     requires(!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint8_t encode_simple(uint64_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode_simple(uint64_t val, IteratorType& d_i) noexcept {
     if (val < (1 << 8)) {  // 1 byte
       *d_i++ = static_cast<uint8_t>(val);
       return 0;
@@ -470,19 +468,19 @@ class Codec1238 {
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint64_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint64_t val, IteratorType& d_i) noexcept {
     return encode_branchless_tresspassing(val, d_i);
   }
 
   template <std::output_iterator<uint8_t> IteratorType>
     requires(!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint64_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint64_t val, IteratorType& d_i) noexcept {
     return encode_simple(val, d_i);
   }
 
   template <std::contiguous_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static uint64_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint64_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
     /**
      * ATTENTION! This method trespasses up to 7 bytes further after the last element, so you should
      * somehow account for that. One of the possible solution might be to reserve/resize for 7 extra
@@ -494,7 +492,7 @@ class Codec1238 {
 
   template <std::random_access_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t> && (!std::contiguous_iterator<IteratorType>)
-  PROMPP_ALWAYS_INLINE static uint64_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint64_t decode(const LengthAndMask& length_and_mask, const IteratorType& d_i) noexcept {
     if (length_and_mask.length == 1) {
       return *d_i;
     } else if (length_and_mask.length == 2) {
@@ -508,11 +506,11 @@ class Codec1238 {
     }
   }
 
-  PROMPP_ALWAYS_INLINE static constexpr LengthAndMask get_length_and_mask(uint8_t code) noexcept { return kLut[code]; }
+  static PROMPP(inline) constexpr LengthAndMask get_length_and_mask(uint8_t code) noexcept { return kLut[code]; }
 
   template <std::forward_iterator IteratorType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, uint8_t>
-  PROMPP_ALWAYS_INLINE static size_t decode_data_size(uint32_t size, IteratorType begin) noexcept {
+  static PROMPP(inline) size_t decode_data_size(uint32_t size, IteratorType begin) noexcept {
     static constexpr auto lut = generate_key_to_length_lut();
 
     // code 0 doesn't mean 0 byte, but in lut it is, so we need to account for that
@@ -528,7 +526,7 @@ class Codec1238 {
 class Codec1238Mostly1 : public Codec1238 {
  public:
   template <std::output_iterator<uint8_t> IteratorType>
-  PROMPP_ALWAYS_INLINE static uint8_t encode(uint64_t val, IteratorType& d_i) noexcept {
+  static PROMPP(inline) uint8_t encode(uint64_t val, IteratorType& d_i) noexcept {
     return encode_simple(val, d_i);
   }
 };
@@ -551,7 +549,7 @@ class EncodeIterator {
   using value_type = typename Codec::value_type;
 
  private:
-  PROMPP_ALWAYS_INLINE void encode(value_type val) noexcept {
+  PROMPP(inline) void encode(value_type val) noexcept {
     if (shift_ == 8) [[unlikely]] {
       shift_ = 0;
       ++k_i_;
@@ -567,12 +565,12 @@ class EncodeIterator {
   using iterator_category = std::output_iterator_tag;
   using difference_type = std::ptrdiff_t;
 
-  PROMPP_ALWAYS_INLINE explicit EncodeIterator(KInnerIteratorType k_i = {}, DInnerIteratorType d_i = {}) noexcept : k_i_(k_i), d_i_(d_i) { *k_i_ = 0; }
+  explicit PROMPP(inline) EncodeIterator(KInnerIteratorType k_i = {}, DInnerIteratorType d_i = {}) noexcept : k_i_(k_i), d_i_(d_i) { *k_i_ = 0; }
 
-  PROMPP_ALWAYS_INLINE EncodeIterator& operator++() noexcept { return *this; }
-  PROMPP_ALWAYS_INLINE EncodeIterator& operator++(int) noexcept { return *this; }
-  PROMPP_ALWAYS_INLINE EncodeIterator& operator*() noexcept { return *this; }
-  PROMPP_ALWAYS_INLINE EncodeIterator& operator=(value_type val) noexcept {
+  PROMPP(inline) EncodeIterator& operator++() noexcept { return *this; }
+  PROMPP(inline) EncodeIterator& operator++(int) noexcept { return *this; }
+  PROMPP(inline) EncodeIterator& operator*() noexcept { return *this; }
+  PROMPP(inline) EncodeIterator& operator=(value_type val) noexcept {
     encode(val);
     return *this;
   }
@@ -596,14 +594,14 @@ class DecodeIterator {
   using value_type = typename Codec::value_type;
   using difference_type = std::ptrdiff_t;
 
-  PROMPP_ALWAYS_INLINE explicit DecodeIterator(inner_iterator_type k_i = inner_iterator_type(),
-                                               inner_iterator_type d_i = inner_iterator_type(),
-                                               uint32_t size = 0) noexcept
+  explicit PROMPP(inline) DecodeIterator(inner_iterator_type k_i = inner_iterator_type(),
+                                                 inner_iterator_type d_i = inner_iterator_type(),
+                                                 uint32_t size = 0) noexcept
       : k_i_(k_i), d_i_(d_i), n_(size), length_and_mask_(Codec::get_length_and_mask(n_ == 0 ? 0 : (*k_i_ & 0x03))) {}
 
-  PROMPP_ALWAYS_INLINE DecodeIterator(inner_iterator_type i, uint32_t size) noexcept : DecodeIterator(i, i + keys_size(size), size) {}
+  PROMPP(inline) DecodeIterator(inner_iterator_type i, uint32_t size) noexcept : DecodeIterator(i, i + keys_size(size), size) {}
 
-  PROMPP_ALWAYS_INLINE DecodeIterator& operator++() noexcept {
+  PROMPP(inline) DecodeIterator& operator++() noexcept {
     assert(n_ != 0);
 
     d_i_ += length_and_mask_.length;
@@ -619,15 +617,15 @@ class DecodeIterator {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE DecodeIterator operator++(int) noexcept {
+  PROMPP(inline) DecodeIterator operator++(int) noexcept {
     DecodeIterator retval = *this;
     ++(*this);
     return retval;
   }
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept { return n_ == other.n_; }
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return !n_; }
+  PROMPP(inline) bool operator==(const DecodeIterator& other) const noexcept { return n_ == other.n_; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const noexcept { return !n_; }
 
-  PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return Codec::decode(length_and_mask_, d_i_); }
+  PROMPP(inline) value_type operator*() const noexcept { return Codec::decode(length_and_mask_, d_i_); }
 };
 
 template <class Codec, uint32_t PreAllocationElementsCount = 1024>
@@ -647,10 +645,10 @@ class Sequence {
  public:
   using value_type = typename Codec::value_type;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return keys_.allocated_memory() + data_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return keys_.allocated_memory() + data_.allocated_memory(); }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_size(uint32_t size) const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t next_size(uint32_t size) const noexcept {
     if (size == std::numeric_limits<uint32_t>::max()) {
       [[unlikely]] std::abort();
     }
@@ -659,7 +657,7 @@ class Sequence {
     return (size + PreAllocationElementsCount) & ~(PreAllocationElementsCount - 1);
   }
 
-  PROMPP_ALWAYS_INLINE void reserve_keys(uint32_t size) noexcept {
+  PROMPP(inline) void reserve_keys(uint32_t size) noexcept {
     assert(size >= size_);
 
     // grow to fit new size
@@ -667,7 +665,7 @@ class Sequence {
     k_i_ = keys_ + (size_ >> 2);
   }
 
-  PROMPP_ALWAYS_INLINE void reserve_data(uint32_t size, uint32_t actual_data_size) noexcept {
+  PROMPP(inline) void reserve_data(uint32_t size, uint32_t actual_data_size) noexcept {
     assert(size >= size_);
 
     // grow to fit actual size plus new elements in worst case (sizeof(value_type) per element)
@@ -677,7 +675,7 @@ class Sequence {
     d_i_ = data_ + actual_data_size;
   }
 
-  PROMPP_ALWAYS_INLINE void reserve_for_next_elements() noexcept {
+  PROMPP(inline) void reserve_for_next_elements() noexcept {
     const uint32_t new_size = next_size(size_);
     reserve_keys(new_size);
     reserve_data(new_size, d_i_ - data_);
@@ -688,13 +686,13 @@ class Sequence {
   using const_iterator = DecodeIterator<Codec, Vector<const uint8_t>::iterator>;
   using sentinel = DecodeIteratorSentinel;
 
-  PROMPP_ALWAYS_INLINE Sequence() noexcept = default;
+  PROMPP(inline) Sequence() noexcept = default;
   Sequence(const Sequence&) = delete;
   Sequence& operator=(const Sequence&) = delete;
-  PROMPP_ALWAYS_INLINE Sequence(Sequence&&) noexcept = default;
-  PROMPP_ALWAYS_INLINE Sequence& operator=(Sequence&&) noexcept = default;
+  PROMPP(inline) Sequence(Sequence&&) noexcept = default;
+  PROMPP(inline) Sequence& operator=(Sequence&&) noexcept = default;
 
-  PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept {
+  PROMPP(inline) void push_back(value_type val) noexcept {
     if ((size_ % PreAllocationElementsCount) == 0) {
       [[unlikely]] reserve_for_next_elements();
     }
@@ -713,7 +711,7 @@ class Sequence {
     k_i_ += !(size_ & 0x03);
   }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     if (size_ != 0) {
       size_ = 0;
       std::memset(keys_, 0, k_i_ - keys_ + 1);
@@ -724,15 +722,15 @@ class Sequence {
 
   // TODO: shrink_to_fit
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return size_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !size_; }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return !size_; }
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return const_iterator(keys_, data_, size_); }
+  PROMPP(inline) auto begin() const noexcept { return const_iterator(keys_, data_, size_); }
 
-  PROMPP_ALWAYS_INLINE static auto end() noexcept { return sentinel(); }
+  static PROMPP(inline) auto end() noexcept { return sentinel(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t save_size() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t save_size() const noexcept {
     // version is written and read by methods put() and get() and they write and read 1 byte
     return 1 + sizeof(uint32_t) + keys_size(size_) + (d_i_ - data_);
   }
@@ -813,12 +811,12 @@ class Sequence {
 };
 
 template <class Codec, class KIteratorType, class DIteratorType>
-PROMPP_ALWAYS_INLINE auto encoder(KIteratorType k_i, DIteratorType d_i) noexcept {
+PROMPP(inline) auto encoder(KIteratorType k_i, DIteratorType d_i) noexcept {
   return EncodeIterator<Codec, KIteratorType, DIteratorType>(k_i, d_i);
 }
 
 template <class Codec, class ContainerType>
-PROMPP_ALWAYS_INLINE auto back_inserter(ContainerType& c, uint32_t size) noexcept {
+PROMPP(inline) auto back_inserter(ContainerType& c, uint32_t size) noexcept {
   /**
    * ATTENTION! This function expects that c.push_back (indirectly called from std::back_inserter) when called
    * after reserve doesn't invalidate iterators!
@@ -834,7 +832,7 @@ PROMPP_ALWAYS_INLINE auto back_inserter(ContainerType& c, uint32_t size) noexcep
 
 template <class Codec, std::random_access_iterator InnerIteratorType>
   requires std::is_same_v<typename std::iterator_traits<InnerIteratorType>::value_type, uint8_t>
-PROMPP_ALWAYS_INLINE auto decoder(InnerIteratorType i, uint32_t size) noexcept {
+PROMPP(inline) auto decoder(InnerIteratorType i, uint32_t size) noexcept {
   return std::pair(DecodeIterator<Codec, InnerIteratorType>(i, size), DecodeIteratorSentinel());
 }
 
@@ -864,13 +862,13 @@ class CompactSequence {
     using value_type = typename Codec::value_type;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE DecodeIterator(const uint8_t* key_iterator, const uint8_t* data_iterator, uint32_t size) noexcept
+    PROMPP(inline) DecodeIterator(const uint8_t* key_iterator, const uint8_t* data_iterator, uint32_t size) noexcept
         : key_iterator_(key_iterator),
           data_iterator_(data_iterator),
           size_(size),
           length_and_mask_(Codec::get_length_and_mask(size_ == 0 ? 0 : (*key_iterator_ & 0x03))) {}
 
-    PROMPP_ALWAYS_INLINE DecodeIterator& operator++() noexcept {
+    PROMPP(inline) DecodeIterator& operator++() noexcept {
       assert(size_ != 0);
 
       data_iterator_ += length_and_mask_.length;
@@ -889,15 +887,15 @@ class CompactSequence {
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE DecodeIterator operator++(int) noexcept {
+    PROMPP(inline) DecodeIterator operator++(int) noexcept {
       DecodeIterator retval = *this;
       ++*this;
       return retval;
     }
-    PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept = default;
-    PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return offset_ == size_; }
+    PROMPP(inline) bool operator==(const DecodeIterator& other) const noexcept = default;
+    PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const noexcept { return offset_ == size_; }
 
-    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return Codec::decode(length_and_mask_, data_iterator_); }
+    PROMPP(inline) value_type operator*() const noexcept { return Codec::decode(length_and_mask_, data_iterator_); }
   };
 
   using iterator = DecodeIterator;
@@ -914,7 +912,7 @@ class CompactSequence {
   typename Memory::iterator key_iterator_ = nullptr;
   typename Memory::iterator data_iterator_ = nullptr;
 
-  PROMPP_ALWAYS_INLINE void reserve_for_next_elements() noexcept {
+  PROMPP(inline) void reserve_for_next_elements() noexcept {
     const auto current_size = data_iterator_ - buffer_;
     buffer_.grow_to_fit_at_least_and_fill_with_zeros(current_size + kMaxKeySize + kMaxDataSize + kKeysAdditionalAllocationSizeForDecoder);
 
@@ -932,7 +930,7 @@ class CompactSequence {
     requires kIsReadOnly
   explicit CompactSequence(const AnotherCompactSequence& other) noexcept : buffer_(other.buffer_), key_iterator_(nullptr), data_iterator_(nullptr) {}
 
-  PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept
+  PROMPP(inline) void push_back(value_type val) noexcept
     requires(!kIsReadOnly)
   {
     if ((size() % kPreAllocationElementsCount) == 0) [[unlikely]] {
@@ -947,9 +945,9 @@ class CompactSequence {
     key_iterator_ += !(size() % 4);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     if (size() != 0) [[likely]] {
       std::memset(buffer_, 0, kMaxKeySize);
       key_iterator_ = buffer_;
@@ -959,7 +957,7 @@ class CompactSequence {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
       return buffer_.items_count();
     } else if constexpr (kIsReadOnly) {
@@ -968,23 +966,23 @@ class CompactSequence {
       return buffer_.control_block().items_count;
     }
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return size() == 0; }
 
-  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept { return {memory, memory + kMaxKeySize, size}; }
+  static PROMPP(inline) DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept { return {memory, memory + kMaxKeySize, size}; }
 
-  PROMPP_ALWAYS_INLINE DecodeIterator begin() const noexcept { return decode_iterator(buffer_.begin(), size()); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static DecodeIteratorSentinel end() noexcept { return {}; }
+  PROMPP(inline) DecodeIterator begin() const noexcept { return decode_iterator(buffer_.begin(), size()); }
+  [[nodiscard]] static PROMPP(inline) DecodeIteratorSentinel end() noexcept { return {}; }
 
-  PROMPP_ALWAYS_INLINE const Memory& buffer() const noexcept { return buffer_; }
+  PROMPP(inline) const Memory& buffer() const noexcept { return buffer_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t get_write_size() const noexcept {
     const uint32_t buffer_size_in_bytes = size_in_bytes();
     using ElementsCount = uint32_t;
     return sizeof(buffer_size_in_bytes) + sizeof(ElementsCount) + buffer_size_in_bytes;
   }
 
   template <OutputStream S>
-  PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
+  PROMPP(inline) void write_to(S& stream) const noexcept {
     const uint32_t buffer_size_in_bytes = size_in_bytes();
     const uint32_t elements_count = size();
     stream.write(reinterpret_cast<const char*>(&buffer_size_in_bytes), sizeof(buffer_size_in_bytes));
@@ -992,7 +990,7 @@ class CompactSequence {
     stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
   }
 
-  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+  static PROMPP(inline) auto create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
     if (buffer.size() < 2 * sizeof(uint32_t)) [[unlikely]] {
       return DecodeIterator{nullptr, nullptr, 0};
     }
@@ -1015,7 +1013,7 @@ class CompactSequence {
   }
 
  private:
-  PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept {
+  PROMPP(inline) void set_size(uint32_t new_size) noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
       buffer_.set_items_count(new_size);
     } else {
@@ -1023,7 +1021,7 @@ class CompactSequence {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Memory::SizeType size_in_bytes() const noexcept {
+  [[nodiscard]] PROMPP(inline) typename Memory::SizeType size_in_bytes() const noexcept {
     return std::min<typename Memory::SizeType>(data_iterator_ - buffer_ + sizeof(value_type) + kKeysAdditionalAllocationSizeForDecoder,
                                                buffer_.control_block().data_size);
   }

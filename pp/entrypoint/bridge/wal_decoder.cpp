@@ -101,7 +101,7 @@ extern "C" void prompp_wal_decoder_decode_to_hashdex_with_metric_injection(void*
     PromPP::Primitives::Go::String agent_uuid;
     PromPP::Primitives::Go::String hostname;
 
-    [[nodiscard]] explicit PROMPP_ALWAYS_INLINE operator PromPP::WAL::hashdex::BasicDecoder::MetaInjection() const noexcept {
+    [[nodiscard]] explicit PROMPP(inline) operator PromPP::WAL::hashdex::BasicDecoder::MetaInjection() const noexcept {
       return PromPP::WAL::hashdex::BasicDecoder::MetaInjection{
           .now = now,
           .sent_at = sent_at,
@@ -347,7 +347,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
     out->dropped_series_count = in->decoder->dropped_series_count();
     uint32_t prev_sample_count = in->samples_storage->samples_count();
     in->decoder->process_segment([in, out](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp ts, PromPP::Primitives::Sample::value_type v,
-                                           bool is_dropped) PROMPP_LAMBDA_INLINE {
+                                           bool is_dropped) PROMPP(lambda_inline) {
       if (is_dropped) {
         // skip dropped sample
         ++out->dropped_sample_count;

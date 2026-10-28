@@ -13,23 +13,23 @@ class SparseVector {
   Container<T> data_;
 
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !element_exists_.size(); }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return !element_exists_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return element_exists_.size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t items_count() const noexcept { return data_.size(); }
+  [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return element_exists_.size(); }
+  [[nodiscard]] PROMPP(inline) size_t items_count() const noexcept { return data_.size(); }
 
-  PROMPP_ALWAYS_INLINE void resize(size_t size) noexcept {
+  PROMPP(inline) void resize(size_t size) noexcept {
     element_exists_.resize(size);
     element_positions_.resize(size);
   }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     element_exists_.clear();
     element_positions_.clear();
     data_.clear();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T& operator[](uint32_t key) noexcept {
+  [[nodiscard]] PROMPP(inline) T& operator[](uint32_t key) noexcept {
     assert(key < element_exists_.size());
 
     if (element_exists_.is_set(key)) [[unlikely]] {
@@ -41,7 +41,7 @@ class SparseVector {
     return data_.emplace_back();
   }
 
-  PROMPP_ALWAYS_INLINE const T& operator[](uint32_t key) const noexcept {
+  PROMPP(inline) const T& operator[](uint32_t key) const noexcept {
     assert(key < element_exists_.size());
 
     return data_[element_positions_[key]];
@@ -58,27 +58,27 @@ class SparseVector {
     using value_type = std::pair<uint32_t, const T&>;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE Iterator() noexcept = default;
-    PROMPP_ALWAYS_INLINE explicit Iterator(const SparseVector* vec) noexcept : vec_(vec), i_(vec_->element_exists_.begin()) {}
+    PROMPP(inline) Iterator() noexcept = default;
+    explicit PROMPP(inline) Iterator(const SparseVector* vec) noexcept : vec_(vec), i_(vec_->element_exists_.begin()) {}
 
-    PROMPP_ALWAYS_INLINE auto operator*() const noexcept { return std::pair<uint32_t, const T&>(*i_, vec_->data_[vec_->element_positions_[*i_]]); }
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) auto operator*() const noexcept { return std::pair<uint32_t, const T&>(*i_, vec_->data_[vec_->element_positions_[*i_]]); }
+    PROMPP(inline) Iterator& operator++() noexcept {
       ++i_;
       return *this;
     }
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       Iterator retval = *this;
       ++i_;
       return retval;
     }
-    PROMPP_ALWAYS_INLINE bool operator==(const Iterator& o) const noexcept { return i_ == o.i_; }
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return i_ == Bitset::IteratorSentinel(); }
+    PROMPP(inline) bool operator==(const Iterator& o) const noexcept { return i_ == o.i_; }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return i_ == Bitset::IteratorSentinel(); }
   };
 
   using const_iterator = Iterator;
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(this); }
-  PROMPP_ALWAYS_INLINE static auto end() noexcept { return IteratorSentinel(); }
+  PROMPP(inline) auto begin() const noexcept { return Iterator(this); }
+  static PROMPP(inline) auto end() noexcept { return IteratorSentinel(); }
 };
 
 template <class T, template <class> class Container>

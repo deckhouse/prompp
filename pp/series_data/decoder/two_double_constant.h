@@ -31,20 +31,20 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
     }
   }
 
-  PROMPP_ALWAYS_INLINE TwoDoubleConstantDecodeIterator& operator++() noexcept {
+  PROMPP(inline) TwoDoubleConstantDecodeIterator& operator++() noexcept {
     if (decode()) [[likely]] {
       update_sample();
     }
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE TwoDoubleConstantDecodeIterator operator++(int) noexcept {
+  PROMPP(inline) TwoDoubleConstantDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+  [[nodiscard]] PROMPP(inline) double decoded_value() const noexcept {
     if (data_.remaining_samples == 1 && data_.last_stalenan) [[unlikely]] {
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
@@ -70,7 +70,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
  private:
   friend DecodeIteratorTrait;
 
-  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+  PROMPP(inline) bool decode() noexcept {
     if (data_.value1_count > 0) [[likely]] {
       --data_.value1_count;
     }
@@ -78,7 +78,7 @@ class TwoDoubleConstantDecodeIterator : public DecodeIteratorTrait<TwoDoubleCons
     return try_decode_timestamp();
   }
 
-  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+  PROMPP(inline) void update_sample() noexcept {
     data_.sample.timestamp = decoded_timestamp();
     data_.sample.value = decoded_value();
   }

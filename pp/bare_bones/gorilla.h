@@ -11,18 +11,16 @@ namespace Encoding::Gorilla {
 
 constexpr double STALE_NAN = std::bit_cast<double>(0x7ff0000000000002ull);
 
-constexpr PROMPP_ALWAYS_INLINE bool isstalenan(double v) noexcept {
-  return std::bit_cast<uint64_t>(v) == 0x7ff0000000000002ull;
-}
+PROMPP(inline) constexpr bool isstalenan(double v) noexcept { return std::bit_cast<uint64_t>(v) == 0x7ff0000000000002ull; }
 
 template <class DeltaType = int64_t>
-struct PROMPP_ATTRIBUTE_PACKED TimestampEncoderState {
+struct PROMPP(packed) TimestampEncoderState {
   int64_t last_ts{};
   DeltaType last_ts_delta{};  // for stream gorilla samples might not be ordered
 
   bool operator==(const TimestampEncoderState&) const noexcept = default;
 
-  PROMPP_ALWAYS_INLINE void reset() noexcept {
+  PROMPP(inline) void reset() noexcept {
     last_ts = {};
     last_ts_delta = {};
   }
@@ -47,24 +45,24 @@ struct DodSignificantLengths {
 static constexpr auto kDefaultDodSignificantLengths = DodSignificantLengths{.first = 5, .second = 15, .third = 18};
 
 template <class TimestampEncoderStateType = TimestampEncoderState<>, DodSignificantLengths kDodSignificantLengths = kDefaultDodSignificantLengths>
-class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder {
+class PROMPP(packed) ZigZagTimestampEncoder {
  public:
   TimestampEncoderStateType state{};
 
   ZigZagTimestampEncoder() noexcept = default;
   explicit ZigZagTimestampEncoder(const TimestampEncoderStateType& state) noexcept : state(state) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
+  [[nodiscard]] PROMPP(inline) int64_t timestamp() const noexcept { return state.last_ts; }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode(int64_t ts, BitSequence& stream) {
     state.last_ts = ts;
 
     stream.push_back_u64_svbyte_0248(ZigZag::encode(ts));
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode_delta(int64_t ts, BitSequence& stream) {
     state.last_ts_delta = ts - state.last_ts;
     state.last_ts = ts;
 
@@ -72,7 +70,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta_of_delta(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode_delta_of_delta(int64_t ts, BitSequence& stream) {
     const auto ts_delta = ts - state.last_ts;
     const int64_t delta_of_delta = ts_delta - state.last_ts_delta;
     const uint64_t ts_dod_zigzag = ZigZag::encode(delta_of_delta);
@@ -84,7 +82,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE static void encode_delta_of_delta(uint64_t ts_dod_zigzag, BitSequence& stream) {
+  static PROMPP(inline) void encode_delta_of_delta(uint64_t ts_dod_zigzag, BitSequence& stream) {
     if (ts_dod_zigzag == 0) {
       stream.push_back_single_zero_bit();
     } else {
@@ -108,19 +106,19 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder {
   }
 };
 
-struct PROMPP_ATTRIBUTE_PACKED ValuesDecoderState {
+struct PROMPP(packed) ValuesDecoderState {
   double last_v{};
   uint8_t last_v_xor_length{};
   uint8_t last_v_xor_trailing_z{};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t last_v_xor_leading_z() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint8_t last_v_xor_leading_z() const noexcept {
     return Bit::to_bits(sizeof(uint64_t)) - last_v_xor_trailing_z - last_v_xor_length;
   }
 
   bool operator==(const ValuesDecoderState&) const noexcept = default;
 };
 
-struct PROMPP_ATTRIBUTE_PACKED ValuesEncoderState {
+struct PROMPP(packed) ValuesEncoderState {
   double last_v{};
   uint8_t last_v_xor_length{};
   uint8_t last_v_xor_leading_z{Bit::to_bits(sizeof(uint64_t))};
@@ -136,9 +134,9 @@ struct PROMPP_ATTRIBUTE_PACKED ValuesEncoderState {
 
   bool operator==(const ValuesEncoderState&) const noexcept = default;
 
-  PROMPP_ALWAYS_INLINE void reset() noexcept { reset({}); }
+  PROMPP(inline) void reset() noexcept { reset({}); }
 
-  PROMPP_ALWAYS_INLINE void reset(const ValuesDecoderState& state) noexcept {
+  PROMPP(inline) void reset(const ValuesDecoderState& state) noexcept {
     this->last_v = state.last_v;
     this->last_v_xor_length = state.last_v_xor_length;
     this->last_v_xor_leading_z = state.last_v_xor_leading_z();
@@ -153,17 +151,17 @@ enum class GorillaState : uint8_t {
   kOtherPoint = 2,
 };
 
-class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
+class PROMPP(packed) TimestampEncoder {
  public:
   TimestampEncoderState<> state{};
 
   TimestampEncoder() noexcept = default;
   explicit TimestampEncoder(const TimestampEncoderState<>& state) noexcept : state(state) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
+  [[nodiscard]] PROMPP(inline) int64_t timestamp() const noexcept { return state.last_ts; }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode(int64_t ts, BitSequence& stream) {
     state.last_ts = ts;
 
     uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
@@ -171,7 +169,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode_delta(int64_t ts, BitSequence& stream) {
     state.last_ts_delta = ts - state.last_ts;
     state.last_ts = ts;
 
@@ -180,7 +178,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta_of_delta(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode_delta_of_delta(int64_t ts, BitSequence& stream) {
     const auto ts_delta = ts - state.last_ts;
     const int64_t delta_of_delta = ts_delta - state.last_ts_delta;
 
@@ -211,7 +209,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
 
  private:
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE static void push_varint_buffer(const uint8_t* buffer, size_t bytes, BitSequence& stream) {
+  static PROMPP(inline) void push_varint_buffer(const uint8_t* buffer, size_t bytes, BitSequence& stream) {
     if (bytes <= sizeof(uint64_t)) {
       stream.push_back_bits_u64(BareBones::Bit::to_bits(bytes), *reinterpret_cast<const uint64_t*>(buffer));
     } else {
@@ -241,12 +239,12 @@ concept TimestampDecoderInterface = requires(TimestampDecoder& decoder, const Ti
 template <DodSignificantLengths kDodSignificantLengths = kDefaultDodSignificantLengths>
 class ZigZagTimestampNullDecoder {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t timestamp() noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t timestamp() noexcept {
     assert(false);
 
     return 0;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto& state() const noexcept {
+  [[nodiscard]] PROMPP(inline) auto& state() const noexcept {
     assert(false);
 
     static struct {
@@ -254,14 +252,14 @@ class ZigZagTimestampNullDecoder {
     return state;
   }
 
-  PROMPP_ALWAYS_INLINE static void decode(int64_t) noexcept {}
-  PROMPP_ALWAYS_INLINE static void decode(BitSequenceReader& reader) { reader.ff_u64_svbyte_0248(); }
+  static PROMPP(inline) void decode(int64_t) noexcept {}
+  static PROMPP(inline) void decode(BitSequenceReader& reader) { reader.ff_u64_svbyte_0248(); }
 
-  PROMPP_ALWAYS_INLINE static void decode_delta(int64_t) noexcept {}
-  PROMPP_ALWAYS_INLINE static void decode_delta(BitSequenceReader& reader) { reader.ff_u64_svbyte_2468(); }
+  static PROMPP(inline) void decode_delta(int64_t) noexcept {}
+  static PROMPP(inline) void decode_delta(BitSequenceReader& reader) { reader.ff_u64_svbyte_2468(); }
 
-  PROMPP_ALWAYS_INLINE static void decode_delta_of_delta(int64_t) noexcept {}
-  PROMPP_ALWAYS_INLINE static void decode_delta_of_delta(BitSequenceReader& reader) {
+  static PROMPP(inline) void decode_delta_of_delta(int64_t) noexcept {}
+  static PROMPP(inline) void decode_delta_of_delta(BitSequenceReader& reader) {
     if (const uint32_t buf = reader.read_u32(); buf & 0b1) {
       if ((buf & 0b10) == 0) {
         reader.ff(2 + kDodSignificantLengths.first);
@@ -282,31 +280,31 @@ class ZigZagTimestampNullDecoder {
 };
 
 template <DodSignificantLengths kDodSignificantLengths = kDefaultDodSignificantLengths>
-class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder {
+class PROMPP(packed) ZigZagTimestampDecoder {
  public:
   ZigZagTimestampDecoder() = default;
   explicit ZigZagTimestampDecoder(const TimestampEncoderState<>& state) : state_(state) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state_.last_ts; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState<>& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) int64_t timestamp() const noexcept { return state_.last_ts; }
+  [[nodiscard]] PROMPP(inline) const TimestampEncoderState<>& state() const noexcept { return state_; }
 
-  PROMPP_ALWAYS_INLINE void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
-  PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& reader) { state_.last_ts = ZigZag::decode(reader.consume_u64_svbyte_0248()); }
+  PROMPP(inline) void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
+  PROMPP(inline) void decode(BitSequenceReader& reader) { state_.last_ts = ZigZag::decode(reader.consume_u64_svbyte_0248()); }
 
-  PROMPP_ALWAYS_INLINE void decode_delta(int64_t timestamp) noexcept {
+  PROMPP(inline) void decode_delta(int64_t timestamp) noexcept {
     state_.last_ts_delta = timestamp - state_.last_ts;
     state_.last_ts = timestamp;
   }
-  PROMPP_ALWAYS_INLINE void decode_delta(BitSequenceReader& reader) {
+  PROMPP(inline) void decode_delta(BitSequenceReader& reader) {
     state_.last_ts_delta = ZigZag::decode(reader.consume_u64_svbyte_2468());
     state_.last_ts += state_.last_ts_delta;
   }
 
-  PROMPP_ALWAYS_INLINE void decode_delta_of_delta(int64_t timestamp) noexcept {
+  PROMPP(inline) void decode_delta_of_delta(int64_t timestamp) noexcept {
     state_.last_ts_delta = timestamp - state_.last_ts;
     state_.last_ts = timestamp;
   }
-  PROMPP_ALWAYS_INLINE void decode_delta_of_delta(BitSequenceReader& reader) {
+  PROMPP(inline) void decode_delta_of_delta(BitSequenceReader& reader) {
     if (const uint32_t buf = reader.read_u32(); buf & 0b1) {
       uint64_t dod_zigzag;
 
@@ -342,27 +340,27 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder {
   TimestampEncoderState<> state_{};
 };
 
-class PROMPP_ATTRIBUTE_PACKED TimestampDecoder {
+class PROMPP(packed) TimestampDecoder {
  public:
   TimestampDecoder() = default;
   explicit TimestampDecoder(const TimestampEncoderState<>& state) : state_(state) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state_.last_ts; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState<>& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) int64_t timestamp() const noexcept { return state_.last_ts; }
+  [[nodiscard]] PROMPP(inline) const TimestampEncoderState<>& state() const noexcept { return state_; }
 
-  PROMPP_ALWAYS_INLINE void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
-  PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& reader) { state_.last_ts = VarInt::read(reader); }
+  PROMPP(inline) void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
+  PROMPP(inline) void decode(BitSequenceReader& reader) { state_.last_ts = VarInt::read(reader); }
 
-  PROMPP_ALWAYS_INLINE void decode_delta(int64_t timestamp) noexcept {
+  PROMPP(inline) void decode_delta(int64_t timestamp) noexcept {
     state_.last_ts_delta = timestamp - state_.last_ts;
     state_.last_ts = timestamp;
   }
-  PROMPP_ALWAYS_INLINE void decode_delta(BitSequenceReader& reader) {
+  PROMPP(inline) void decode_delta(BitSequenceReader& reader) {
     state_.last_ts_delta = std::bit_cast<int64_t>(VarInt::read_uint(reader));
     state_.last_ts += state_.last_ts_delta;
   }
 
-  PROMPP_ALWAYS_INLINE void decode_delta_of_delta(int64_t timestamp) noexcept {
+  PROMPP(inline) void decode_delta_of_delta(int64_t timestamp) noexcept {
     state_.last_ts_delta = timestamp - state_.last_ts;
     state_.last_ts = timestamp;
   }
@@ -411,23 +409,23 @@ concept ValuesEncoderInterface = requires(ValuesEncoder& encoder, const ValuesEn
   { encoder.encode(double(), sequence) } -> std::same_as<void>;
 };
 
-class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
+class PROMPP(packed) ValuesEncoder {
  public:
   ValuesEncoder() noexcept = default;
   explicit ValuesEncoder(const ValuesDecoderState& state) noexcept : state_(state) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return state_.last_v; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const ValuesEncoderState& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return state_.last_v; }
+  [[nodiscard]] PROMPP(inline) const ValuesEncoderState& state() const noexcept { return state_; }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_first(double v, BitSequence& stream) noexcept {
+  PROMPP(inline) void encode_first(double v, BitSequence& stream) noexcept {
     state_.last_v = v;
 
     stream.push_back_d64_svbyte_0468(v);
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_first(double v, uint32_t count, BitSequence& stream) noexcept {
+  PROMPP(inline) void encode_first(double v, uint32_t count, BitSequence& stream) noexcept {
     assert(count >= 1);
 
     encode_first(v, stream);
@@ -497,7 +495,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode(double v, uint32_t count, BitSequence& stream) noexcept {
+  PROMPP(inline) void encode(double v, uint32_t count, BitSequence& stream) noexcept {
     assert(count >= 1);
 
     encode(v, stream);
@@ -519,20 +517,20 @@ concept ValuesDecoderInterface = requires(ValuesDecoder& decoder, const ValuesDe
   { decoder.decode(reader) } -> std::same_as<void>;
 };
 
-class PROMPP_ATTRIBUTE_PACKED ValuesNullDecoder {
+class PROMPP(packed) ValuesNullDecoder {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static double value() noexcept {
+  [[nodiscard]] static PROMPP(inline) double value() noexcept {
     assert(false);
 
     return 0.0;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& state() const noexcept {
+  [[nodiscard]] PROMPP(inline) const auto& state() const noexcept {
     assert(false);
 
     return state_;
   }
 
-  PROMPP_ALWAYS_INLINE static void decode_first(BitSequenceReader& reader) noexcept { reader.ff_d64_svbyte_0468(); }
+  static PROMPP(inline) void decode_first(BitSequenceReader& reader) noexcept { reader.ff_d64_svbyte_0468(); }
 
   void decode(BitSequenceReader& reader) noexcept {
     const uint32_t buf = reader.read_u32();
@@ -558,7 +556,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesNullDecoder {
   bool operator==(const ValuesNullDecoder& other) const noexcept = default;
 
  private:
-  struct PROMPP_ATTRIBUTE_PACKED State {
+  struct PROMPP(packed) State {
     uint8_t last_v_xor_length{};
 
     bool operator==(const State& other) const noexcept = default;
@@ -567,16 +565,16 @@ class PROMPP_ATTRIBUTE_PACKED ValuesNullDecoder {
   State state_{};
 };
 
-class PROMPP_ATTRIBUTE_PACKED ValuesDecoder {
+class PROMPP(packed) ValuesDecoder {
  public:
   ValuesDecoder() = default;
   explicit ValuesDecoder(const ValuesEncoderState& state)
       : state_{.last_v = state.last_v, .last_v_xor_length = state.last_v_xor_length, .last_v_xor_trailing_z = state.last_v_xor_trailing_z} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return state_.last_v; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const ValuesDecoderState& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return state_.last_v; }
+  [[nodiscard]] PROMPP(inline) const ValuesDecoderState& state() const noexcept { return state_; }
 
-  PROMPP_ALWAYS_INLINE void decode_first(BitSequenceReader& reader) noexcept { state_.last_v = reader.consume_d64_svbyte_0468(); }
+  PROMPP(inline) void decode_first(BitSequenceReader& reader) noexcept { state_.last_v = reader.consume_d64_svbyte_0468(); }
 
   void decode(BitSequenceReader& reader) noexcept {
     const uint32_t buf = reader.read_u32();
@@ -617,8 +615,8 @@ template <TimestampDecoderInterface TimestampDecoder, ValuesDecoderInterface Val
 class StreamDecoder;
 
 template <TimestampEncoderInterface TimestampEncoder, ValuesEncoderInterface ValuesEncoder>
-class PROMPP_ATTRIBUTE_PACKED StreamEncoder {
-  struct PROMPP_ATTRIBUTE_PACKED State {
+class PROMPP(packed) StreamEncoder {
+  struct PROMPP(packed) State {
     TimestampEncoder timestamp_encoder;
     ValuesEncoder values_encoder;
     GorillaState state{GorillaState::kFirstPoint};
@@ -641,12 +639,12 @@ class PROMPP_ATTRIBUTE_PACKED StreamEncoder {
   template <class DecoderState>
   explicit StreamEncoder(const DecoderState& state) : state_(state) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp() const noexcept { return state_.timestamp_encoder.timestamp(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double last_value() const noexcept { return state_.values_encoder.value(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const State& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) int64_t last_timestamp() const noexcept { return state_.timestamp_encoder.timestamp(); }
+  [[nodiscard]] PROMPP(inline) double last_value() const noexcept { return state_.values_encoder.value(); }
+  [[nodiscard]] PROMPP(inline) const State& state() const noexcept { return state_; }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode(int64_t ts, double v, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
+  PROMPP(inline) void encode(int64_t ts, double v, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
     if (state_.state == GorillaState::kFirstPoint) [[unlikely]] {
       state_.timestamp_encoder.encode(ts, ts_bitseq);
       state_.values_encoder.encode_first(v, v_bitseq);
@@ -664,7 +662,7 @@ class PROMPP_ATTRIBUTE_PACKED StreamEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_constant_value(int64_t timestamp, double value, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
+  PROMPP(inline) void encode_constant_value(int64_t timestamp, double value, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
     if (state_.state == GorillaState::kFirstPoint) [[unlikely]] {
       state_.timestamp_encoder.encode(timestamp, ts_bitseq);
       state_.values_encoder.encode_first(value, v_bitseq);
@@ -689,8 +687,8 @@ class PROMPP_ATTRIBUTE_PACKED StreamEncoder {
 static_assert(sizeof(StreamEncoder<ZigZagTimestampEncoder<>, ValuesEncoder>) == 29);
 
 template <TimestampDecoderInterface TimestampDecoder, ValuesDecoderInterface ValuesDecoder>
-class PROMPP_ATTRIBUTE_PACKED StreamDecoder {
-  struct PROMPP_ATTRIBUTE_PACKED State {
+class PROMPP(packed) StreamDecoder {
+  struct PROMPP(packed) State {
     [[no_unique_address]] TimestampDecoder timestamp_decoder;
     [[no_unique_address]] ValuesDecoder values_decoder;
     GorillaState state{GorillaState::kFirstPoint};
@@ -715,13 +713,13 @@ class PROMPP_ATTRIBUTE_PACKED StreamDecoder {
   StreamDecoder() = default;
 
   template <class EncoderState>
-  explicit PROMPP_ALWAYS_INLINE StreamDecoder(const EncoderState& state) : state_{state} {}
+  explicit PROMPP(inline) StreamDecoder(const EncoderState& state) : state_{state} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const State& state() const noexcept { return state_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp() const noexcept { return state_.timestamp_decoder.timestamp(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double last_value() const noexcept { return state_.values_decoder.value(); }
+  [[nodiscard]] PROMPP(inline) const State& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) int64_t last_timestamp() const noexcept { return state_.timestamp_decoder.timestamp(); }
+  [[nodiscard]] PROMPP(inline) double last_value() const noexcept { return state_.values_decoder.value(); }
 
-  PROMPP_ALWAYS_INLINE void decode(int64_t ts, BitSequenceReader& v_bitseq) noexcept {
+  PROMPP(inline) void decode(int64_t ts, BitSequenceReader& v_bitseq) noexcept {
     if (state_.state == GorillaState::kFirstPoint) [[unlikely]] {
       state_.timestamp_decoder.decode(ts);
       state_.values_decoder.decode_first(v_bitseq);
@@ -738,7 +736,7 @@ class PROMPP_ATTRIBUTE_PACKED StreamDecoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& ts_bitseq, BitSequenceReader& v_bitseq) noexcept {
+  PROMPP(inline) void decode(BitSequenceReader& ts_bitseq, BitSequenceReader& v_bitseq) noexcept {
     if (state_.state == GorillaState::kFirstPoint) [[unlikely]] {
       state_.timestamp_decoder.decode(ts_bitseq);
       state_.values_decoder.decode_first(v_bitseq);

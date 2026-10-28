@@ -23,7 +23,7 @@ namespace series_data::encoder::timestamp {
 inline constexpr uint64_t kEmptySequenceHash = 0x9e3779b97f4a7c15ULL;
 
 // For a fixed prefix, each mixing step is reversible, so distinct appended timestamps produce distinct hashes.
-[[nodiscard]] PROMPP_ALWAYS_INLINE constexpr uint64_t extend_hash(uint64_t hash, int64_t timestamp) noexcept {
+[[nodiscard]] PROMPP(inline) constexpr uint64_t extend_hash(uint64_t hash, int64_t timestamp) noexcept {
   uint64_t x = std::rotl(hash, 29) ^ static_cast<uint64_t>(timestamp);
   x ^= x >> 12;
   x ^= x << 25;
@@ -72,7 +72,7 @@ class SequenceDictionary {
 
     // Creating a sequence may relocate `parent`; do not use it after insertion.
     SequenceId created_id = kInvalidSequenceId;
-    const auto it = index_.lazy_emplace(extension, [&](const auto& construct) PROMPP_LAMBDA_INLINE {
+    const auto it = index_.lazy_emplace(extension, [&](const auto& construct) PROMPP(lambda_inline) {
       created_id = in_place ? sequence_id : copy_and_append(sequence_id, extension.hash, timestamp);
       construct(created_id);
     });
@@ -102,7 +102,7 @@ class SequenceDictionary {
   }
 
   // Releases one open reference to `sequence_id`; `kInvalidSequenceId` has no reference to release.
-  PROMPP_ALWAYS_INLINE void release(SequenceId sequence_id) noexcept {
+  PROMPP(inline) void release(SequenceId sequence_id) noexcept {
     if (sequence_id == kInvalidSequenceId) [[unlikely]] {
       return;
     }
@@ -119,7 +119,7 @@ class SequenceDictionary {
   }
 
   // Releases one finalized reference to `sequence_id`. The sequence is freed when neither kind of reference remains.
-  PROMPP_ALWAYS_INLINE void release_finalized(SequenceId sequence_id) noexcept {
+  PROMPP(inline) void release_finalized(SequenceId sequence_id) noexcept {
     auto& sequence = sequences_[sequence_id];
     assert(sequence.finalized_references > 0);
     if (--sequence.finalized_references == 0) {
@@ -130,9 +130,9 @@ class SequenceDictionary {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& stream(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].stream; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].encoder.timestamp(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].count; }
+  [[nodiscard]] PROMPP(inline) const BitSequenceWithItemsCount& stream(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].stream; }
+  [[nodiscard]] PROMPP(inline) int64_t last_timestamp(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].encoder.timestamp(); }
+  [[nodiscard]] PROMPP(inline) uint8_t count(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].count; }
 
   // Min of first and max of last timestamps over live sequences; each sequence counts once however many chunks share it.
   [[nodiscard]] PromPP::Primitives::TimeInterval time_bounds() const noexcept {
@@ -145,15 +145,15 @@ class SequenceDictionary {
   }
 
   // Includes reusable holes left by erased sequences.
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t slot_count() const noexcept { return sequences_.size(); }
+  [[nodiscard]] PROMPP(inline) uint32_t slot_count() const noexcept { return sequences_.size(); }
   // Sequences with both kinds of reference contribute to both counts.
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t open_sequences_count() const noexcept { return open_sequences_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t finalized_sequences_count() const noexcept { return finalized_sequences_count_; }
+  [[nodiscard]] PROMPP(inline) uint32_t open_sequences_count() const noexcept { return open_sequences_count_; }
+  [[nodiscard]] PROMPP(inline) uint32_t finalized_sequences_count() const noexcept { return finalized_sequences_count_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return sequences_.allocated_memory() + index_allocated_memory_; }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return sequences_.allocated_memory() + index_allocated_memory_; }
 
   // A non-null `slot_count_gauge` must outlive the dictionary.
-  PROMPP_ALWAYS_INLINE void set_slot_count_gauge(metrics::Gauge* slot_count_gauge) noexcept {
+  PROMPP(inline) void set_slot_count_gauge(metrics::Gauge* slot_count_gauge) noexcept {
     slot_count_gauge_ = slot_count_gauge;
     if (slot_count_gauge_ != nullptr) [[likely]] {
       slot_count_gauge_->set(sequences_.size());
@@ -176,7 +176,7 @@ class SequenceDictionary {
     Sequence() = default;
     explicit Sequence(DoNotInitializeTag tag) noexcept : stream(tag) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
+    [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
   };
   static_assert(sizeof(Sequence) == 64);
   // Keep the stream pointer aligned so leak detection can follow it.
@@ -195,8 +195,8 @@ class SequenceDictionary {
 
     explicit SequenceHash(const BareBones::VectorWithHoles<Sequence, Reallocator>& sequences) noexcept : sequences_(&sequences) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(SequenceId id) const noexcept { return (*sequences_)[id].hash; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const Extension& extension) const noexcept { return extension.hash; }
+    [[nodiscard]] PROMPP(inline) size_t operator()(SequenceId id) const noexcept { return (*sequences_)[id].hash; }
+    [[nodiscard]] PROMPP(inline) size_t operator()(const Extension& extension) const noexcept { return extension.hash; }
 
    private:
     const BareBones::VectorWithHoles<Sequence, Reallocator>* sequences_;
@@ -208,8 +208,8 @@ class SequenceDictionary {
 
     explicit SequenceEqual(const BareBones::VectorWithHoles<Sequence, Reallocator>& sequences) noexcept : sequences_(&sequences) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator()(SequenceId a, SequenceId b) const noexcept { return a == b; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator()(SequenceId id, const Extension& extension) const noexcept {
+    [[nodiscard]] PROMPP(inline) bool operator()(SequenceId a, SequenceId b) const noexcept { return a == b; }
+    [[nodiscard]] PROMPP(inline) bool operator()(SequenceId id, const Extension& extension) const noexcept {
       return matches_extension((*sequences_)[id], extension);
     }
 
@@ -285,7 +285,7 @@ class SequenceDictionary {
   SequenceId append_to_empty(int64_t timestamp) {
     const Extension extension{.hash = extend_hash(kEmptySequenceHash, timestamp), .parent = nullptr, .timestamp = timestamp};
     SequenceId created_id = kInvalidSequenceId;
-    const auto it = index_.lazy_emplace(extension, [&](const auto& construct) PROMPP_LAMBDA_INLINE {
+    const auto it = index_.lazy_emplace(extension, [&](const auto& construct) PROMPP(lambda_inline) {
       auto& sequence = emplace_sequence();
       TimestampEncoder::encode_first(sequence.encoder, timestamp, sequence.stream);
       sequence.count = 1;
@@ -350,7 +350,7 @@ class SequenceDictionary {
     sequences_.erase(sequence_id);
   }
 
-  PROMPP_ALWAYS_INLINE void cache_append(SequenceId parent_id, int64_t timestamp, SequenceId result_id) noexcept {
+  PROMPP(inline) void cache_append(SequenceId parent_id, int64_t timestamp, SequenceId result_id) noexcept {
     append_cache_ = {.parent_id = parent_id, .result_id = result_id, .timestamp = timestamp};
   }
 };

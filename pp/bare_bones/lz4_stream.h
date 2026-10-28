@@ -80,9 +80,11 @@ class basic_ostream final : public std::ostream {
    *
    * After calling this function no more data should be written to the stream.
    */
-  PROMPP_ALWAYS_INLINE void close() { buffer_.close(); }
+  PROMPP(inline) void close() {
+    buffer_.close();
+  }
 
-  PROMPP_ALWAYS_INLINE void set_stream(std::ostream* stream) { buffer_.set_stream(stream); }
+  PROMPP(inline) void set_stream(std::ostream* stream) { buffer_.set_stream(stream); }
 
  private:
   class output_buffer final : public std::streambuf {
@@ -107,7 +109,7 @@ class basic_ostream final : public std::ostream {
 
     ~output_buffer() override { close(); }
 
-    PROMPP_ALWAYS_INLINE void close() {
+    PROMPP(inline) void close() {
       if (closed_) {
         return;
       }
@@ -120,7 +122,7 @@ class basic_ostream final : public std::ostream {
       closed_ = true;
     }
 
-    PROMPP_ALWAYS_INLINE void set_stream(std::ostream* stream) {
+    PROMPP(inline) void set_stream(std::ostream* stream) {
       stream_ = stream;
       write_header();
     }
@@ -151,7 +153,7 @@ class basic_ostream final : public std::ostream {
       return 0;
     }
 
-    PROMPP_ALWAYS_INLINE void compress_and_write() {
+    PROMPP(inline) void compress_and_write() {
       // TODO: Throw exception instead or set badbit
       assert(!closed_);
       assert(stream_ != nullptr);
@@ -165,7 +167,7 @@ class basic_ostream final : public std::ostream {
       stream_->write(dest_buf_.data(), ret);
     }
 
-    PROMPP_ALWAYS_INLINE void flush() {
+    PROMPP(inline) void flush() {
       assert(!closed_);
       assert(stream_ != nullptr);
 
@@ -176,7 +178,7 @@ class basic_ostream final : public std::ostream {
       stream_->write(dest_buf_.data(), ret);
     }
 
-    PROMPP_ALWAYS_INLINE void write_header() {
+    PROMPP(inline) void write_header() {
       // TODO: Throw exception instead or set badbit
       assert(!closed_);
 
@@ -220,12 +222,12 @@ class basic_istream final : public std::istream {
    */
   explicit basic_istream(std::istream* stream) : std::istream(&buffer_), buffer_(stream) {}
 
-  PROMPP_ALWAYS_INLINE void set_stream(std::istream* stream) {
+  PROMPP(inline) void set_stream(std::istream* stream) {
     buffer_.set_stream(stream);
     clear();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
  private:
   class input_buffer final : public std::streambuf {
@@ -263,12 +265,12 @@ class basic_istream final : public std::istream {
     input_buffer(const input_buffer&) = delete;
     input_buffer& operator=(const input_buffer&) = delete;
 
-    PROMPP_ALWAYS_INLINE void set_stream(std::istream* stream) noexcept {
+    PROMPP(inline) void set_stream(std::istream* stream) noexcept {
       stream_ = stream;
       set_pointers(0);
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return LZ4F_allocated_memory(ctx_); }
+    [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return LZ4F_allocated_memory(ctx_); }
 
    private:
     std::array<char, DecompressedBufferSize> decompressed_buffer_;
@@ -279,7 +281,7 @@ class basic_istream final : public std::istream {
     size_t data_block_count_{};
     LZ4F_decompressionContext_t ctx_{};
 
-    PROMPP_ALWAYS_INLINE void set_pointers(size_t decompressed_size) {
+    PROMPP(inline) void set_pointers(size_t decompressed_size) {
       setg(&decompressed_buffer_.front(), &decompressed_buffer_.front(), &decompressed_buffer_.front() + decompressed_size);
     }
 
@@ -299,7 +301,7 @@ class basic_istream final : public std::istream {
       return header_size;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool read_first_data_block() {
+    [[nodiscard]] PROMPP(inline) bool read_first_data_block() {
       size_t header_size{};
       if (header_size = read_header(); header_size == 0) {
         throw std::runtime_error(std::string("Invalid LZ4 header: ") + LZ4F_getErrorName(header_size));
@@ -344,7 +346,7 @@ class basic_istream final : public std::istream {
       return data_block_size + header_size;
     }
 
-    PROMPP_ALWAYS_INLINE size_t decompress() {
+    PROMPP(inline) size_t decompress() {
       auto src_size = source_buffer_view_.size();
       auto decompressed_size = decompressed_buffer_.size();
       if (const size_t ret = LZ4F_decompress(ctx_, &decompressed_buffer_.front(), &decompressed_size, source_buffer_view_.data(), &src_size, nullptr);
@@ -356,7 +358,7 @@ class basic_istream final : public std::istream {
       return decompressed_size;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t unpack_data_block_size(uint32_t size) noexcept {
+    [[nodiscard]] static PROMPP(inline) uint32_t unpack_data_block_size(uint32_t size) noexcept {
       constexpr uint32_t kCompressFlag = 1 << 31;
       return size & ~kCompressFlag;
     }

@@ -338,6 +338,7 @@ cc_library(
     name = "profiling",
     srcs = ["profiling/profiling.cpp"],
     hdrs = ["profiling/profiling.h"],
+    deps = [":bare_bones_headers"],
     implementation_deps = select({
         "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
         "//conditions:default": [],

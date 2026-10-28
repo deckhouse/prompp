@@ -1,48 +1,19 @@
 #pragma once
 
-#define PROMPP_ATTRIBUTE_INLINE __attribute__((always_inline))
-#define PROMPP_ATTRIBUTE_NOINLINE __attribute__((noinline))
+#include "macro.h"
 
-#ifdef NDEBUG
-#define PROMPP_ALWAYS_INLINE inline PROMPP_ATTRIBUTE_INLINE
-#define PROMPP_LAMBDA_INLINE PROMPP_ATTRIBUTE_INLINE
-#else
-#define PROMPP_ALWAYS_INLINE inline PROMPP_ATTRIBUTE_NOINLINE
-#define PROMPP_LAMBDA_INLINE PROMPP_ATTRIBUTE_NOINLINE
-#endif
+// PROMPP(feature, jemalloc): 1 if jemalloc headers are available, 0 otherwise; also valid in #if.
+#define PROMPP_DETAIL_feature(name) PROMPP_DETAIL_FEATURE_##name()
 
-#define PROMPP_ATTRIBUTE_PACKED __attribute__((__packed__))
-
-#define PROMPP_STRINGIFY(a) #a
-
-#ifdef __clang__
-#define DIAGNOSTIC_CLASS_MEMACCESS "-Wdynamic-class-memaccess"
-#define DIAGNOSTIC_STRINGOP_OVERREAD "-Wstringop-overread"
-#define DIAGNOSTIC_ARRAY_BOUNDS "-Warray-bounds"
-#define DIAGNOSTIC_MAYBE_UNINITIALIZED "-Wuninitialized"
-#define PRAGMA_DIAGNOSTIC(value) _Pragma(PROMPP_STRINGIFY(clang diagnostic value))
-#elif __GNUC__
-#define DIAGNOSTIC_CLASS_MEMACCESS "-Wclass-memaccess"
-#define DIAGNOSTIC_STRINGOP_OVERREAD "-Wstringop-overread"
-#define DIAGNOSTIC_ARRAY_BOUNDS "-Warray-bounds"
-#define DIAGNOSTIC_MAYBE_UNINITIALIZED "-Wmaybe-uninitialized"
-#define PRAGMA_DIAGNOSTIC(value) _Pragma(PROMPP_STRINGIFY(GCC diagnostic value))
-#else
-#error #pragma diagnostic is not supported
-#endif
-
+// PROMPP(test): 1 if GTest headers are available, 0 otherwise; the existing test-build heuristic, also valid in #if.
 #if __has_include(<gtest/gtest.h>)
-constexpr auto kIsUnitTestBuild = true;
+#  define PROMPP_DETAIL_test() 1
 #else
-constexpr auto kIsUnitTestBuild = false;
-#endif
-
-#ifdef __SANITIZE_ADDRESS__
-constexpr auto kIsBuildWithAsan = true;
-#else
-constexpr auto kIsBuildWithAsan = false;
+#  define PROMPP_DETAIL_test() 0
 #endif
 
 #if __has_include(<jemalloc/jemalloc.h>)
-#define JEMALLOC_AVAILABLE 1
+#  define PROMPP_DETAIL_FEATURE_jemalloc() 1
+#else
+#  define PROMPP_DETAIL_FEATURE_jemalloc() 0
 #endif

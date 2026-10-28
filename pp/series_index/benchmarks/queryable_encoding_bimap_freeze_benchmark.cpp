@@ -79,7 +79,7 @@ struct FreezePartsTimings {
   std::chrono::nanoseconds lazy_sorting_index_rebuild{};
   std::chrono::nanoseconds finalize_copy_and_shrink{};
 
-  PROMPP_ALWAYS_INLINE std::chrono::nanoseconds total() const noexcept {
+  PROMPP(inline) std::chrono::nanoseconds total() const noexcept {
     return copy_added_series_and_build_indexes + set_pending_shrink_boundary + lazy_sorting_index_rebuild + finalize_copy_and_shrink;
   }
 };

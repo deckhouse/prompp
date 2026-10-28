@@ -11,7 +11,7 @@ using PromPP::Primitives::Go::String;
 
 extern "C" void prompp_metrics_register() {
   [[maybe_unused]] static auto _ = [] {
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
     metrics::CreateMetricsPage<metrics::JemallocMetrics>();
 #endif
     return 0;

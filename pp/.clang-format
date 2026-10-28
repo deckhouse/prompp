@@ -1,6 +1,17 @@
 ---
 BasedOnStyle: Chromium
 ColumnLimit: 160
+IndentPPDirectives: AfterHash
+PPIndentWidth: 2
+AllowShortFunctionsOnASingleLine: All
+BreakAfterAttributes: Never
+# Keep function specifiers before the return type. Preserve existing const/volatile placement.
+QualifierAlignment: Custom
+QualifierOrder: [friend, static, inline, constexpr, type]
 AttributeMacros:
   - __capability
   - __attribute__
+# Formatting-only model for inline/packed/lambda_inline. Keep other arities, including diagnostics and cat, unexpanded.
+# The model does not sort PROMPP(inline) relative to language specifiers.
+Macros:
+  - PROMPP(x)=__attribute__((x))

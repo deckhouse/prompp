@@ -13,8 +13,8 @@ class LabelSet {
     add_metric_name_label();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::LabelSet& labels() const noexcept { return labels_; }
-  PROMPP_ALWAYS_INLINE void set_name(const std::string_view& name) const { *name_ = name; }
+  [[nodiscard]] PROMPP(inline) const PromPP::Primitives::LabelSet& labels() const noexcept { return labels_; }
+  PROMPP(inline) void set_name(const std::string_view& name) const { *name_ = name; }
 
  private:
   static constexpr PromPP::Primitives::Label::second_type kEmptyName = "_";

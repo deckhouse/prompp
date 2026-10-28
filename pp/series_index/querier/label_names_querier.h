@@ -29,8 +29,8 @@ class LabelNamesQuerier {
   const Index& index_;
 
   template <class NameHandler>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE QuerierStatus query_all_label_names(NameHandler&& name_handler) const {
-    enumerate_label_names(std::forward<NameHandler>(name_handler), [](uint32_t) PROMPP_LAMBDA_INLINE { return true; });
+  [[nodiscard]] PROMPP(inline) QuerierStatus query_all_label_names(NameHandler&& name_handler) const {
+    enumerate_label_names(std::forward<NameHandler>(name_handler), [](uint32_t) PROMPP(lambda_inline) { return true; });
     return QuerierStatus::kMatch;
   }
 
@@ -46,9 +46,10 @@ class LabelNamesQuerier {
   }
 
   template <class NameHandler>
-  PROMPP_ALWAYS_INLINE void query_matched_unique_label_names(SeriesIdSpan series_ids, NameHandler&& name_handler) const {
+  PROMPP(inline) void query_matched_unique_label_names(SeriesIdSpan series_ids, NameHandler&& name_handler) const {
     auto name_ids = get_unique_name_ids(series_ids);
-    enumerate_label_names(std::forward<NameHandler>(name_handler), [&name_ids](uint32_t name_id) PROMPP_LAMBDA_INLINE { return name_ids.contains(name_id); });
+    enumerate_label_names(std::forward<NameHandler>(name_handler),
+                          [&name_ids](uint32_t name_id) PROMPP(lambda_inline) { return name_ids.contains(name_id); });
   }
 
   [[nodiscard]] std::unordered_set<uint32_t> get_unique_name_ids(SeriesIdSpan series_ids) const {

@@ -15,8 +15,8 @@ struct Limits {
 
 class Abstract {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view replica() const noexcept { return replica_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view cluster() const noexcept { return cluster_; }
+  [[nodiscard]] PROMPP(inline) std::string_view replica() const noexcept { return replica_; }
+  [[nodiscard]] PROMPP(inline) std::string_view cluster() const noexcept { return cluster_; }
 
  protected:
   std::string_view replica_;

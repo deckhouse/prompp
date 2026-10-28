@@ -20,7 +20,7 @@ using UnknownFields = Slice<uint8_t>;
 using CacheSize = int32_t;
 
 struct LabelPair {
-  PROMPP_ALWAYS_INLINE LabelPair(const String* n, const String* v) : name(n), value(v) {}
+  PROMPP(inline) LabelPair(const String* n, const String* v) : name(n), value(v) {}
 
   MessageState state{};
   CacheSize size_cache{};
@@ -55,8 +55,8 @@ struct Counter {
 };
 
 struct Metric {
-  PROMPP_ALWAYS_INLINE Metric(const SliceView<const LabelPair*>& label_set, Gauge* gauge_ptr) : labels(label_set), gauge(gauge_ptr) {}
-  PROMPP_ALWAYS_INLINE Metric(const SliceView<const LabelPair*>& label_set, Counter* counter_ptr) : labels(label_set), counter(counter_ptr) {}
+  PROMPP(inline) Metric(const SliceView<const LabelPair*>& label_set, Gauge* gauge_ptr) : labels(label_set), gauge(gauge_ptr) {}
+  PROMPP(inline) Metric(const SliceView<const LabelPair*>& label_set, Counter* counter_ptr) : labels(label_set), counter(counter_ptr) {}
 
   MessageState state{};
   CacheSize size_cache{};
@@ -103,7 +103,7 @@ struct MetricDescriptor {
     std::ranges::sort(const_label_pairs, [](const LabelPair* a, const LabelPair* b) { return *a->name < *b->name; });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t calculate_id() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint64_t calculate_id() const noexcept {
     BareBones::XXHash hash;
 
     hash.extend(static_cast<std::string_view>(fq_name));
@@ -117,7 +117,7 @@ struct MetricDescriptor {
     return hash.digest();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t calculate_dim_hash() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint64_t calculate_dim_hash() const noexcept {
     BareBones::XXHash hash;
 
     hash.extend(static_cast<std::string_view>(help));

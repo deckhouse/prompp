@@ -9,7 +9,7 @@ class ChunkFinalizer {
   template <class DataStorage>
   static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
     (void)storage.timestamp_store.finalize(chunk.timestamp_id);
-    const auto finalize_variant_encoder = [&storage, &chunk](auto& encoder, EncodingType encoding_type) PROMPP_LAMBDA_INLINE {
+    const auto finalize_variant_encoder = [&storage, &chunk](auto& encoder, EncodingType encoding_type) PROMPP(lambda_inline) {
       const auto& finalized_stream = storage.finalized_data_streams.emplace_back(encoder.finalize_stream());
       storage.variant_encoders.erase(chunk.encoder.external_index, encoding_type);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
@@ -29,9 +29,9 @@ class ChunkFinalizer {
 
  private:
   template <class DataStorage>
-  PROMPP_ALWAYS_INLINE static void emplace_finalized_chunk(DataStorage& storage, uint32_t ls_id, const chunk::DataChunk& chunk) {
+  static PROMPP(inline) void emplace_finalized_chunk(DataStorage& storage, uint32_t ls_id, const chunk::DataChunk& chunk) {
     storage.finalized_chunks.try_emplace(ls_id, storage.finalized_chunks_map_allocated_memory)
-        .first->second.emplace(chunk, [&storage](const chunk::DataChunk& chunk) PROMPP_LAMBDA_INLINE {
+        .first->second.emplace(chunk, [&storage](const chunk::DataChunk& chunk) PROMPP(lambda_inline) {
           return Decoder::get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
         });
     storage.metrics->finalized_chunks().inc();

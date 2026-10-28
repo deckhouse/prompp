@@ -1,10 +1,13 @@
-#include <memory>
 #include <stdexcept>
 #include <type_traits>
 
 #include <gtest/gtest.h>
 
 #include "profiling.h"
+
+#if PROMPP_PROFILE(enabled) && PROMPP(debug)
+#  include <memory>
+#endif
 
 namespace {
 
@@ -228,7 +231,7 @@ TEST(Profiling, PublishesCallSiteForTraceValidation) {
   RecordProperty("trace_source_line", expected_line);
 }
 
-#if PROMPP_PROFILE(enabled) && !defined(NDEBUG)
+#if PROMPP_PROFILE(enabled) && PROMPP(debug)
 TEST(ProfilingDeathTest, RejectsValueForParentWhileChildIsActive) {
   // Arrange
   static const Marker parent_marker{"parent value test site"};

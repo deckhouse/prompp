@@ -36,9 +36,9 @@ namespace lss_memory {
 thread_local inline bool has_reallocations{};
 
 struct Reallocator {
-  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept { return BareBones::DefaultReallocator::allocation_size(needed_size); }
+  static PROMPP(inline) size_t allocation_size(size_t needed_size) noexcept { return BareBones::DefaultReallocator::allocation_size(needed_size); }
 
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) {
+  static PROMPP(inline) void* reallocate(void* memory, size_t size) {
     const auto result = BareBones::DefaultReallocator::reallocate(memory, size);
     if (result != memory) [[likely]] {
       has_reallocations = true;
@@ -46,7 +46,7 @@ struct Reallocator {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return BareBones::DefaultReallocator::free(memory); }
+  static PROMPP(inline) void free(void* memory) { return BareBones::DefaultReallocator::free(memory); }
 };
 
 static_assert(BareBones::ReallocatorInterface<Reallocator>);
@@ -86,8 +86,8 @@ class SnapshotLSS : public PromPP::Primitives::SnugComposites::LabelSet::Decodin
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return Base::operator[](id); }
+  [[nodiscard]] PROMPP(inline) const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
+  [[nodiscard]] PROMPP(inline) value_type operator[](uint32_t id) const noexcept { return Base::operator[](id); }
 
  private:
   SortingIndex sorting_index_;
@@ -114,7 +114,7 @@ class ShrinkAwareSnapshotLSS : public SnapshotLSS {
   }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type resolve_shrunk_series(uint32_t id) const noexcept {
+  [[nodiscard]] PROMPP(inline) value_type resolve_shrunk_series(uint32_t id) const noexcept {
     return shrink_state_.template resolve_shrunk_series<value_type>(
         id, [this](uint32_t storage_id) { return SnapshotLSS::operator[](storage_id); }, Base::kInvalidId);
   }
@@ -128,7 +128,7 @@ class ReallocationsDetector {
  public:
   explicit ReallocationsDetector(const Lss& lss) : lss_(lss), sorting_index_buffer_(get_sorting_index_buffer()) { lss_memory::has_reallocations = false; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_reallocations() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool has_reallocations() const noexcept {
     return lss_memory::has_reallocations || sorting_index_buffer_ != get_sorting_index_buffer();
   }
 
@@ -136,7 +136,7 @@ class ReallocationsDetector {
   const Lss& lss_;
   const uint32_t* sorting_index_buffer_{};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const uint32_t* get_sorting_index_buffer() const noexcept {
+  [[nodiscard]] PROMPP(inline) const uint32_t* get_sorting_index_buffer() const noexcept {
     if constexpr (std::is_same_v<Lss, QueryableEncodingBimap>) {
       return lss_.sorting_index().index.data();
     }

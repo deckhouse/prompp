@@ -11,14 +11,14 @@
 namespace series_data::encoder {
 
 template <BareBones::ReallocatorInterface Reallocator>
-union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
+union PROMPP(packed) EncoderVariant {
   value::DoubleConstantEncoder double_constant{0};
   value::TwoDoubleConstantEncoder two_double_constant;
   value::AscIntegerEncoder<Reallocator> asc_integer;
   value::AscIntegerThenValuesGorillaEncoder<Reallocator> asc_integer_then_values_gorilla;
   value::ValuesGorillaEncoder<Reallocator> values_gorilla;
 
-  PROMPP_ALWAYS_INLINE void destroy(EncodingType encoding_type) {
+  PROMPP(inline) void destroy(EncodingType encoding_type) {
     switch (encoding_type) {
       case EncodingType::kDoubleConstant: {
         std::destroy_at(&double_constant);
@@ -52,7 +52,7 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
   }
 
   template <EncodingType E, class... Args>
-  PROMPP_ALWAYS_INLINE void construct(Args&&... args) {
+  PROMPP(inline) void construct(Args&&... args) {
     using enum EncodingType;
     if constexpr (E == kDoubleConstant) {
       std::construct_at(&double_constant, std::forward<Args>(args)...);
@@ -69,7 +69,7 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory(EncodingType encoding_type) const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory(EncodingType encoding_type) const noexcept {
     switch (encoding_type) {
       case EncodingType::kDoubleConstant:
       case EncodingType::kTwoDoubleConstant: {

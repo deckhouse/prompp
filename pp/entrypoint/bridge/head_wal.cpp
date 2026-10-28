@@ -226,11 +226,10 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
         [in](auto& storage) {
           [[maybe_unused]] const auto arena_guard = storage.thread_arena_guard();
           series_data::Encoder encoder{storage};
-          in->decoder->decode(in->segment,
-                              [in, &encoder](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
-                                in->decoder->label_set().mark_active(ls_id);
-                                encoder.encode(ls_id, timestamp, value);
-                              });
+          in->decoder->decode(in->segment, [in, &encoder](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP(lambda_inline) {
+                                                 in->decoder->label_set().mark_active(ls_id);
+                                                 encoder.encode(ls_id, timestamp, value);
+                                               });
         },
         *in->data_storage);
     out->create_timestamp = in->decoder->decoder().created_at_tsns();

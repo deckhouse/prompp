@@ -123,9 +123,7 @@ diagnostics::Severity diagnostic_severity_for(CXDiagnosticSeverity severity) {
   return diagnostics::Severity::kInfo;
 }
 
-bool should_report_clang_diagnostic(CXDiagnosticSeverity severity) {
-  return severity == CXDiagnostic_Error || severity == CXDiagnostic_Fatal;
-}
+bool should_report_clang_diagnostic(CXDiagnosticSeverity severity) { return severity == CXDiagnostic_Error || severity == CXDiagnostic_Fatal; }
 
 enum class SourceFileOrigin : uint8_t {
   kInput,
@@ -201,53 +199,29 @@ std::string normalize_path(std::string path) {
   return relative;
 }
 
-std::string TypeView::spelling() const {
-  return clang_string_to_string(clang_getTypeSpelling(context_->cx_type(*this)));
-}
+std::string TypeView::spelling() const { return clang_string_to_string(clang_getTypeSpelling(context_->cx_type(*this))); }
 
-CursorView TypeView::canonical_declaration() const {
-  return context_->make_cursor(clang_getTypeDeclaration(clang_getCanonicalType(context_->cx_type(*this))));
-}
+CursorView TypeView::canonical_declaration() const { return context_->make_cursor(clang_getTypeDeclaration(clang_getCanonicalType(context_->cx_type(*this)))); }
 
-std::string CursorView::spelling() const {
-  return clang_string_to_string(clang_getCursorSpelling(context_->cx_cursor(*this)));
-}
+std::string CursorView::spelling() const { return clang_string_to_string(clang_getCursorSpelling(context_->cx_cursor(*this))); }
 
-std::string CursorView::raw_comment() const {
-  return clang_string_to_string(clang_Cursor_getRawCommentText(context_->cx_cursor(*this)));
-}
+std::string CursorView::raw_comment() const { return clang_string_to_string(clang_Cursor_getRawCommentText(context_->cx_cursor(*this))); }
 
-TypeView CursorView::type() const {
-  return context_->make_type(clang_getCursorType(context_->cx_cursor(*this)));
-}
+TypeView CursorView::type() const { return context_->make_type(clang_getCursorType(context_->cx_cursor(*this))); }
 
-TypeView CursorView::result_type() const {
-  return context_->make_type(clang_getResultType(clang_getCursorType(context_->cx_cursor(*this))));
-}
+TypeView CursorView::result_type() const { return context_->make_type(clang_getResultType(clang_getCursorType(context_->cx_cursor(*this)))); }
 
-CursorKind CursorView::kind() const {
-  return cursor_kind_for(clang_getCursorKind(context_->cx_cursor(*this)));
-}
+CursorKind CursorView::kind() const { return cursor_kind_for(clang_getCursorKind(context_->cx_cursor(*this))); }
 
-bool CursorView::is_null() const {
-  return clang_Cursor_isNull(context_->cx_cursor(*this));
-}
+bool CursorView::is_null() const { return clang_Cursor_isNull(context_->cx_cursor(*this)); }
 
-bool CursorView::is_definition() const {
-  return clang_isCursorDefinition(context_->cx_cursor(*this));
-}
+bool CursorView::is_definition() const { return clang_isCursorDefinition(context_->cx_cursor(*this)); }
 
-bool CursorView::has_c_language() const {
-  return clang_getCursorLanguage(context_->cx_cursor(*this)) == CXLanguage_C;
-}
+bool CursorView::has_c_language() const { return clang_getCursorLanguage(context_->cx_cursor(*this)) == CXLanguage_C; }
 
-int CursorView::argument_count() const {
-  return clang_Cursor_getNumArguments(context_->cx_cursor(*this));
-}
+int CursorView::argument_count() const { return clang_Cursor_getNumArguments(context_->cx_cursor(*this)); }
 
-CursorView CursorView::argument(int index) const {
-  return context_->make_cursor(clang_Cursor_getArgument(context_->cx_cursor(*this), index));
-}
+CursorView CursorView::argument(int index) const { return context_->make_cursor(clang_Cursor_getArgument(context_->cx_cursor(*this), index)); }
 
 namespace detail {
 
@@ -466,20 +440,14 @@ ParseSession::~ParseSession() {
   delete impl_;
 }
 
-CursorView ParseSession::root_cursor() const {
-  return impl_->make_cursor(clang_getTranslationUnitCursor(impl_->translation_unit()));
-}
+CursorView ParseSession::root_cursor() const { return impl_->make_cursor(clang_getTranslationUnitCursor(impl_->translation_unit())); }
 
-void ParseSession::add_clang_diagnostics() {
-  impl_->add_clang_diagnostics();
-}
+void ParseSession::add_clang_diagnostics() { impl_->add_clang_diagnostics(); }
 
 facts::SourceLocation ParseSession::source_location_for(CursorView cursor) {
   return impl_->source_location_for(clang_getCursorLocation(impl_->cx_cursor(cursor)));
 }
 
-bool ParseSession::is_input_source_file(CursorView cursor) {
-  return impl_->is_input_source_file(cursor);
-}
+bool ParseSession::is_input_source_file(CursorView cursor) { return impl_->is_input_source_file(cursor); }
 
 }  // namespace epgen::clang_adapter

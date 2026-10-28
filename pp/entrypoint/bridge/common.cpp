@@ -1,8 +1,8 @@
 #include "common.h"
 #include "bare_bones/jemalloc.h"
 
-#if !JEMALLOC_AVAILABLE
-#include <malloc.h>
+#if !PROMPP(feature, jemalloc)
+#  include <malloc.h>
 #endif
 
 #include "primitives/go_slice.h"
@@ -16,7 +16,7 @@ extern "C" void prompp_free_bytes(void* args) {
 extern "C" void je_jemalloc_constructor(void);
 
 extern "C" void prompp_jemalloc_init() {
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
   je_jemalloc_constructor();
 #endif
 }
@@ -30,7 +30,7 @@ extern "C" void prompp_mem_info(void* res) {
 
   const auto out = static_cast<Result*>(res);
 
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
   BareBones::jemalloc::refresh_stats();
 
   size_t size;
@@ -57,7 +57,7 @@ extern "C" void prompp_dump_memory_profile([[maybe_unused]] void* args, void* re
 
   const auto out = static_cast<Result*>(res);
 
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
   auto in = static_cast<Arguments*>(args);
   std::string filename_c_string(in->filename.data(), in->filename.size());
   const char* filename = filename_c_string.c_str();

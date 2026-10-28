@@ -155,7 +155,7 @@ uint32_t first_non_empty_series_id(const Lss& lss) {
   return 0;
 }
 
-PROMPP_ALWAYS_INLINE void reset_stream(std::ostringstream& stream) {
+PROMPP(inline) void reset_stream(std::ostringstream& stream) {
   stream.str({});
   stream.clear();
 }

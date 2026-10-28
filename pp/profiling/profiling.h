@@ -4,47 +4,24 @@
 #include <cstdint>
 #include <source_location>
 
-// Use PROMPP_PROFILE(operation, ...) to measure lexical scopes:
-//   PROMPP_PROFILE(function);                    // Use the current function name.
-//   PROMPP_PROFILE(scope, "decode");             // Use a string literal label.
-//   PROMPP_PROFILE(named_scope, zone, "decode"); // Name the guard for value updates.
-//   PROMPP_PROFILE(value, zone, count);          // Attach a uint64_t value to this zone.
-//   PROMPP_PROFILE(enabled)                     // Expand to 0 or 1, including in #if.
-//
-// Example:
-//   void process_batch(uint64_t count) {
-//     PROMPP_PROFILE(function);
-//     {
-//       PROMPP_PROFILE(named_scope, decode, "decode");
-//       decode_values(count);
-//       PROMPP_PROFILE(value, decode, count);
-//     }
-//   }
-//
-// A zone starts at the macro and ends when control leaves its C++ scope.
-// Return, break, continue and exception unwinding also end the zone.
-// Labels must be ordinary string literals. Each call site retains its file, line and function.
-// Set a value only on the innermost active zone. Set the parent's value after child zones end.
-// Close nested zones in reverse order on the thread that started them.
-// Put anonymous function and scope markers on separate source lines at the same lexical level.
-// Use distinct guard names for multiple named_scope markers at the same lexical level.
-//
-// Build with Bazel --config=profile to enable profiling.
-// Disabled builds erase scope declarations and value expressions without evaluating their arguments.
-// Direct Marker and ScopedZone calls retain normal argument evaluation.
-#define PROMPP_PROFILE(operation, ...) PROMPP_PROFILE_DETAIL_##operation(__VA_ARGS__)
+#include "bare_bones/macro.h"
 
+// PROMPP_PROFILE(operation, ...): profile scopes with Bazel --config=profile; otherwise, arguments are not evaluated.
+// Each marker records the caller's file, line and function. PROMPP_PROFILE_DETAIL_* macros are private.
+#define PROMPP_PROFILE(operation, ...) PROMPP(cat, PROMPP_PROFILE_DETAIL_, operation)(__VA_ARGS__)
+
+// PROMPP_PROFILE(enabled): 1 when profiling is enabled, 0 otherwise; also valid in #if.
 #if defined(PROMPP_PROFILING_ENABLE) && PROMPP_PROFILING_ENABLE
-#define PROMPP_PROFILE_DETAIL_enabled() 1
+#  define PROMPP_PROFILE_DETAIL_enabled() 1
 #else
-#define PROMPP_PROFILE_DETAIL_enabled() 0
+#  define PROMPP_PROFILE_DETAIL_enabled() 0
 #endif
 
 namespace PromPP::Profiling {
 
 class ScopedZone;
 
-// Markers describe static call sites. Their names and addresses must remain valid until process exit.
+// Keep each Marker and its name alive until process exit.
 class Marker final {
  public:
   explicit Marker(const char* name, std::source_location location = std::source_location::current()) noexcept;
@@ -87,22 +64,20 @@ class [[nodiscard]] ScopedZone final {
   Impl& impl() noexcept;
 
   // Debug storage also holds the nesting link. Release storage stays byte-aligned.
-#ifdef NDEBUG
+#  if !PROMPP(debug)
   static constexpr std::size_t kStorageSize = 1;
   static constexpr std::size_t kStorageAlignment = alignof(std::byte);
-#else
+#  else
   static constexpr std::size_t kStorageSize = 2 * sizeof(void*);
   static constexpr std::size_t kStorageAlignment = alignof(void*);
-#endif
+#  endif
   alignas(kStorageAlignment) std::byte storage_[kStorageSize];
 #endif
 };
 
 #if !PROMPP_PROFILE(enabled)
 inline Marker::Marker(const char*, std::source_location) noexcept {}
-inline ScopedZone Marker::enter() const noexcept {
-  return ScopedZone{*this};
-}
+inline ScopedZone Marker::enter() const noexcept { return ScopedZone{*this}; }
 inline ScopedZone::ScopedZone(const Marker&) noexcept {}
 inline ScopedZone::~ScopedZone() noexcept = default;
 inline void ScopedZone::set_value(uint64_t) noexcept {}
@@ -110,30 +85,37 @@ inline void ScopedZone::set_value(uint64_t) noexcept {}
 
 }  // namespace PromPP::Profiling
 
-#define PROMPP_PROFILE_DETAIL_CAT_IMPL(a, b) a##b
-#define PROMPP_PROFILE_DETAIL_CAT(a, b) PROMPP_PROFILE_DETAIL_CAT_IMPL(a, b)
-
 #if PROMPP_PROFILE(enabled)
 // Pass the caller location into the lambda so its function name does not become operator().
-#define PROMPP_PROFILE_DETAIL_MAKE(zone, label)                                                 \
-  [[maybe_unused]] ::PromPP::Profiling::ScopedZone zone {                                       \
+// Keep explicit macro alignment. The formatter models PROMPP for declaration layout.
+// clang-format off
+#  define PROMPP_PROFILE_DETAIL_MAKE(zone, label)                                              \
+  [[maybe_unused]] ::PromPP::Profiling::ScopedZone zone{                                       \
     [](const char* name, std::source_location location) -> const ::PromPP::Profiling::Marker& { \
-      static const ::PromPP::Profiling::Marker marker{name, location};                          \
-      return marker;                                                                            \
-    }(label, std::source_location::current())                                                   \
+      static const ::PromPP::Profiling::Marker marker{name, location};                         \
+      return marker;                                                                           \
+    }(label, std::source_location::current())                                                  \
   }
+// clang-format on
 
-// Anonymous markers on the same lexical level require separate source lines.
-#define PROMPP_PROFILE_DETAIL_function() PROMPP_PROFILE_DETAIL_MAKE(PROMPP_PROFILE_DETAIL_CAT(prompp_profile_zone_, __LINE__), __func__)
-#define PROMPP_PROFILE_DETAIL_scope(name) PROMPP_PROFILE_DETAIL_MAKE(PROMPP_PROFILE_DETAIL_CAT(prompp_profile_zone_, __LINE__), "" name)
-#define PROMPP_PROFILE_DETAIL_named_scope(zone, name) PROMPP_PROFILE_DETAIL_MAKE(zone, "" name)
-#define PROMPP_PROFILE_DETAIL_value(zone, ...) \
-  do {                                         \
-    (zone).set_value((__VA_ARGS__));           \
+// PROMPP_PROFILE(function); Measure until this C++ scope ends, using the current function name.
+// Put anonymous function and scope markers on separate lines at the same lexical level.
+#  define PROMPP_PROFILE_DETAIL_function() PROMPP_PROFILE_DETAIL_MAKE(PROMPP(cat, prompp_profile_zone_, __LINE__), __func__)
+// PROMPP_PROFILE(scope, "decode"); Measure until this scope ends; use an ordinary string literal label.
+#  define PROMPP_PROFILE_DETAIL_scope(name) PROMPP_PROFILE_DETAIL_MAKE(PROMPP(cat, prompp_profile_zone_, __LINE__), "" name)
+// PROMPP_PROFILE(named_scope, zone, "decode"); Name a scope guard for PROMPP_PROFILE(value, zone, count).
+// Use an ordinary string literal label and a distinct guard name in this scope.
+#  define PROMPP_PROFILE_DETAIL_named_scope(zone, name) PROMPP_PROFILE_DETAIL_MAKE(zone, "" name)
+// PROMPP_PROFILE(value, zone, count); Set a uint64_t value on the innermost active zone, after its children end.
+// clang-format off
+#  define PROMPP_PROFILE_DETAIL_value(zone, ...)                                               \
+  do {                                                                                         \
+    (zone).set_value((__VA_ARGS__));                                                           \
   } while (false)
+// clang-format on
 #else
-#define PROMPP_PROFILE_DETAIL_function() ((void)0)
-#define PROMPP_PROFILE_DETAIL_scope(name) ((void)0)
-#define PROMPP_PROFILE_DETAIL_named_scope(zone, name) ((void)0)
-#define PROMPP_PROFILE_DETAIL_value(zone, ...) ((void)0)
+#  define PROMPP_PROFILE_DETAIL_function() ((void)0)
+#  define PROMPP_PROFILE_DETAIL_scope(name) ((void)0)
+#  define PROMPP_PROFILE_DETAIL_named_scope(zone, name) ((void)0)
+#  define PROMPP_PROFILE_DETAIL_value(zone, ...) ((void)0)
 #endif
