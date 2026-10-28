@@ -4,8 +4,7 @@ compilation_mode?=opt## Bazel compilation mode opt or dbg
 asan?=false## Build with address sanitizer
 use_docker?=true## Use bazel in docker
 bazel_verbose?=false## More verbose output
-profiling?=false## Enable profiling for targets
-profiling_opts?=## Comma-separated profiling options : on_demand, instrumental or no_sampling, no_callstack, callstack_depth (max 62)
+profiling?=false## Build with Tracy instrumentation zones enabled
 
 # Bazel workspace directory relative to this file
 bazel_workspace_root := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))..)
@@ -17,16 +16,22 @@ bazel := bazel
 # For general purpose using alpine (musl runtime bindings) as production build.
 # But musl doesn't support sanitizers and we use based on ubuntu (glibc) environment.
 
+# Every --platform_suffix set here or in bazel_build_march overrides the one
+# --config=profile brings, so each has to carry the profiling state itself.
+platform_suffix_prefix :=
+ifeq ($(profiling),true)
+	bazel_flags += --config=profile
+	platform_suffix_prefix := prof_
+endif
+
 bazel_flags += --compilation_mode=$(compilation_mode)
 ifeq ($(asan),true)
-	bazel_flags += --asan --strip=never --platform_suffix=asan
+	bazel_flags += --asan --strip=never --platform_suffix=$(platform_suffix_prefix)asan
 endif
 ifeq ($(bazel_verbose),true)
 	bazel_flags += --subcommands --verbose_failures --sandbox_debug
 endif
-ifeq ($(profiling),true)
-	bazel_flags += --profiling --profiling_opts=$(profiling_opts)
-endif
+
 
 # bazel_in_root is a shortcut to run command in project root
 bazel_in_root := cd $(bazel_workspace_root)
@@ -59,4 +64,4 @@ bazel_test = $(bazel) test $(bazel_flags)
 # $(bazel_in_root);\
 # 	$(call bazel_build_march,nehalem) -- //:my_target
 # ```
-bazel_build_march = $(bazel_build) --march=$(1) --platform_suffix=$$(echo $(1) | sed 's/[^a-zA-Z0-9]/_/g')
+bazel_build_march = $(bazel_build) --march=$(1) --platform_suffix=$(platform_suffix_prefix)$$(echo $(1) | sed 's/[^a-zA-Z0-9]/_/g')

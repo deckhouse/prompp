@@ -34,11 +34,11 @@ inline constinit std::array kMetricTypeNames = {
 
 }  // namespace internal
 
-[[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view MetricTypeToString(MetricType type) noexcept {
+[[nodiscard]] PROMPP(inline) std::string_view MetricTypeToString(MetricType type) noexcept {
   return internal::kMetricTypeNames[static_cast<uint8_t>(type)];
 }
 
-[[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view MetricTypeToString(uint32_t type) noexcept {
+[[nodiscard]] PROMPP(inline) std::string_view MetricTypeToString(uint32_t type) noexcept {
   if (type < internal::kMetricTypeNames.size()) {
     return MetricTypeToString(static_cast<MetricType>(type));
   }

@@ -39,9 +39,7 @@ class WindowBoundaryCalculatorFixture : public testing::TestWithParam<IntervalCa
 
 using StepRangeWindowCalculatorFixture = WindowBoundaryCalculatorFixture<StepRangeWindowCalculator>;
 
-TEST_P(StepRangeWindowCalculatorFixture, Test) {
-  test();
-}
+TEST_P(StepRangeWindowCalculatorFixture, Test) { test(); }
 
 INSTANTIATE_TEST_SUITE_P(NoInterval,
                          StepRangeWindowCalculatorFixture,
@@ -383,9 +381,7 @@ INSTANTIATE_TEST_SUITE_P(RangeLargerThanStepNotDivisibleNoInvertedWindows,
 
 using StepLookbackDeltaWindowCalculatorFixture = WindowBoundaryCalculatorFixture<StepLookbackDeltaWindowCalculator>;
 
-TEST_P(StepLookbackDeltaWindowCalculatorFixture, Test) {
-  test();
-}
+TEST_P(StepLookbackDeltaWindowCalculatorFixture, Test) { test(); }
 
 INSTANTIATE_TEST_SUITE_P(NoInterval,
                          StepLookbackDeltaWindowCalculatorFixture,

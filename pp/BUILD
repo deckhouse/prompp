@@ -18,9 +18,28 @@ label_flag(
 )
 
 cc_library(
+    name = "bare_bones_preprocessor",
+    hdrs = [
+        "bare_bones/arch.h",
+        "bare_bones/compiler.h",
+        "bare_bones/macro.h",
+        "bare_bones/preprocess.h",
+    ],
+)
+
+cc_library(
     name = "bare_bones_headers",
-    hdrs = glob(["bare_bones/*.h"]),
+    hdrs = glob(
+        ["bare_bones/*.h"],
+        exclude = [
+            "bare_bones/arch.h",
+            "bare_bones/compiler.h",
+            "bare_bones/macro.h",
+            "bare_bones/preprocess.h",
+        ],
+    ),
     deps = [
+        ":bare_bones_preprocessor",
         "@lz4",
         "@parallel_hashmap",
         "@xxHash",
@@ -271,6 +290,7 @@ cc_library(
         "entrypoint/init/**/*.hpp",
     ]),
     linkstatic = True,
+    deps = [":bare_bones_preprocessor"],
 )
 
 cc_static_library(
@@ -336,16 +356,30 @@ cc_binary(
 
 cc_library(
     name = "profiling",
-    hdrs = glob(["profiling/**/*.h"]),
-    deps = [
-    ] + select({
-         "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
-         "//conditions:default": ["@tracy//:tracy_headers"],
-    }),
-    defines = select({
-        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE"],
+    srcs = ["profiling/profiling.cpp"],
+    hdrs = ["profiling/profiling.h"],
+    deps = [":bare_bones_preprocessor"],
+    implementation_deps = select({
+        "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
         "//conditions:default": [],
     }),
+    defines = select({
+        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE=1"],
+        "//conditions:default": ["PROMPP_PROFILING_ENABLE=0"],
+    }),
+    local_defines = select({
+        "//bazel/toolchain:with_profiling": ["TRACY_ENABLE"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_test(
+    name = "profiling_test",
+    srcs = glob(["profiling/*_tests.cpp"]),
+    deps = [
+        ":profiling",
+        "@gtest//:gtest_main",
+    ],
 )
 
 cc_library(

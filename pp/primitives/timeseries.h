@@ -25,9 +25,9 @@ class BasicTimeseries {
   template <class LabelSet>
   BasicTimeseries(const LabelSet& label_set, SamplesType samples) noexcept : label_set_(label_set), samples_(std::move(samples)) {}
 
-  PROMPP_ALWAYS_INLINE bool operator==(const BasicTimeseries&) const noexcept = default;
+  PROMPP(inline) bool operator==(const BasicTimeseries&) const noexcept = default;
 
-  PROMPP_ALWAYS_INLINE auto& label_set() noexcept {
+  PROMPP(inline) auto& label_set() noexcept {
     if constexpr (std::is_pointer_v<LabelSetType>) {
       return *label_set_;
     } else {
@@ -35,7 +35,7 @@ class BasicTimeseries {
     }
   }
 
-  PROMPP_ALWAYS_INLINE const auto& label_set() const noexcept {
+  PROMPP(inline) const auto& label_set() const noexcept {
     if constexpr (std::is_pointer_v<LabelSetType>) {
       return *label_set_;
     } else {
@@ -43,12 +43,12 @@ class BasicTimeseries {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void set_label_set(LabelSetType label_set) noexcept {
+  PROMPP(inline) void set_label_set(LabelSetType label_set) noexcept {
     static_assert(std::is_pointer_v<LabelSetType>, "this functions can be used only if LabelSetType is a pointer");
     label_set_ = label_set;
   }
 
-  PROMPP_ALWAYS_INLINE const auto& samples() const noexcept {
+  PROMPP(inline) const auto& samples() const noexcept {
     if constexpr (std::is_pointer_v<SamplesType>) {
       return *samples_;
     } else {
@@ -56,7 +56,7 @@ class BasicTimeseries {
     }
   }
 
-  PROMPP_ALWAYS_INLINE auto& samples() noexcept {
+  PROMPP(inline) auto& samples() noexcept {
     if constexpr (std::is_pointer_v<SamplesType>) {
       return *samples_;
     } else {
@@ -64,12 +64,12 @@ class BasicTimeseries {
     }
   }
 
-  PROMPP_LAMBDA_INLINE void set_samples(const SamplesType& samples) noexcept {
+  PROMPP(lambda_inline) void set_samples(const SamplesType& samples) noexcept {
     static_assert(std::is_pointer_v<SamplesType>, "this functions can be used only if SamplesType is a pointer");
     samples_ = samples;
   }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     label_set().clear();
     samples().clear();
   }

@@ -8,18 +8,18 @@
 
 namespace series_data::chunk {
 
-struct PROMPP_ATTRIBUTE_PACKED DataChunk {
+struct PROMPP(packed) DataChunk {
   enum class Type : uint8_t {
     kOpen = 0,
     kFinalized,
   };
 
-  union PROMPP_ATTRIBUTE_PACKED EncoderData {
+  union PROMPP(packed) EncoderData {
     encoder::value::Uint32ConstantEncoder uint32_constant;
     encoder::value::Float32ConstantEncoder float32_constant;
     uint32_t external_index;
 
-    PROMPP_ALWAYS_INLINE bool operator==(const EncoderData& other) const noexcept { return external_index == other.external_index; }
+    PROMPP(inline) bool operator==(const EncoderData& other) const noexcept { return external_index == other.external_index; }
   };
 
   EncoderData encoder{.external_index = 0};
@@ -45,16 +45,16 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
 
   bool operator==(const DataChunk&) const noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return encoding_state.encoding_type == EncodingType::kUnknown; }
+  [[nodiscard]] PROMPP(inline) bool is_empty() const noexcept { return encoding_state.encoding_type == EncodingType::kUnknown; }
 
-  PROMPP_ALWAYS_INLINE void reset() noexcept {
+  PROMPP(inline) void reset() noexcept {
     encoder.external_index = 0;
     timestamp_id = encoder::timestamp::kInvalidSequenceId;
     encoding_state = EncodingState{.encoding_type = EncodingType::kUnknown, .has_last_stalenan = false};
   }
 
-  PROMPP_ALWAYS_INLINE void mark_last_stalenan() noexcept { encoding_state.has_last_stalenan = true; }
-  PROMPP_ALWAYS_INLINE void unmark_last_stalenan() noexcept { encoding_state.has_last_stalenan = false; }
+  PROMPP(inline) void mark_last_stalenan() noexcept { encoding_state.has_last_stalenan = true; }
+  PROMPP(inline) void unmark_last_stalenan() noexcept { encoding_state.has_last_stalenan = false; }
 };
 
 }  // namespace series_data::chunk

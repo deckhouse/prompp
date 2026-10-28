@@ -38,18 +38,18 @@ class WindowFunctionIterator {
     advance();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
+  PROMPP(inline) const encoder::Sample& operator*() const { return iterator_.operator*(); }
+  PROMPP(inline) const encoder::Sample* operator->() const { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const noexcept { return iterator_ == sentinel; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel& sentinel) const noexcept { return iterator_ == sentinel; }
 
-  PROMPP_ALWAYS_INLINE WindowFunctionIterator& operator++() {
+  PROMPP(inline) WindowFunctionIterator& operator++() {
     ++iterator_;
     advance();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE WindowFunctionIterator operator++(int) {
+  PROMPP(inline) WindowFunctionIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;

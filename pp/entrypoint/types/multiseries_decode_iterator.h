@@ -54,7 +54,7 @@ class MultiSeriesDecodeIterator {
 #undef DEFINE_CONSTRUCTOR
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) const {
+  PROMPP(inline) decltype(auto) visit(Visitor&& visitor) const {
     switch (type_) {
       case Type::kMin: {
         return std::forward<Visitor>(visitor)(iterator_.min);
@@ -71,40 +71,41 @@ class MultiSeriesDecodeIterator {
   }
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) {
-    return const_cast<const MultiSeriesDecodeIterator*>(this)->visit(
-        [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
+  PROMPP(inline) decltype(auto) visit(Visitor&& visitor) {
+    return const_cast<const MultiSeriesDecodeIterator*>(this)->visit([&]<typename Iterator>(const Iterator& iterator) PROMPP(lambda_inline) {
+      return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator));
+    });
   }
 
   ~MultiSeriesDecodeIterator() {
-    visit([](const auto& iterator) PROMPP_LAMBDA_INLINE { std::destroy_at(&iterator); });
+    visit([](const auto& iterator) PROMPP(lambda_inline) { std::destroy_at(&iterator); });
   }
 
-  PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample& operator*() const {
-    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto& { return *iterator; });
+  PROMPP(inline) const ::series_data::encoder::Sample& operator*() const {
+    return visit([](const auto& iterator) PROMPP(lambda_inline) -> const auto& { return *iterator; });
   }
-  PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample* operator->() const {
-    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto* { return iterator.operator->(); });
-  }
-
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const {
-    return visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; });
+  PROMPP(inline) const ::series_data::encoder::Sample* operator->() const {
+    return visit([](const auto& iterator) PROMPP(lambda_inline) -> const auto* { return iterator.operator->(); });
   }
 
-  PROMPP_ALWAYS_INLINE MultiSeriesDecodeIterator& operator++() {
-    visit([]<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE { ++iterator; });
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel& sentinel) const {
+    return visit([&sentinel](const auto& iterator) PROMPP(lambda_inline) { return iterator == sentinel; });
+  }
+
+  PROMPP(inline) MultiSeriesDecodeIterator& operator++() {
+    visit([]<typename Iterator>(Iterator& iterator) PROMPP(lambda_inline) { ++iterator; });
     return *this;
   }
 
   template <class IteratorsGenerator>
-  PROMPP_ALWAYS_INLINE void reset(const ::series_data::decoder::decorator::WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
-    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.reset(parameters, std::forward<IteratorsGenerator>(iterators_generator)); });
+  PROMPP(inline) void reset(const ::series_data::decoder::decorator::WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
+    visit([&](auto& iterator) PROMPP(lambda_inline) { iterator.reset(parameters, std::forward<IteratorsGenerator>(iterators_generator)); });
   }
 
-  PROMPP_ALWAYS_INLINE static void create_series_iterators(const SelectHints& select_hints,
-                                                           std::span<const uint32_t> series_ids,
-                                                           const ::series_data::serialization::SerializedDataView& data_view,
-                                                           BareBones::Vector<Iterator>& iterators) {
+  static PROMPP(inline) void create_series_iterators(const SelectHints& select_hints,
+                                                             std::span<const uint32_t> series_ids,
+                                                             const ::series_data::serialization::SerializedDataView& data_view,
+                                                             BareBones::Vector<Iterator>& iterators) {
     const auto initial_interval = WindowBoundaryCalculator::initial_window(select_hints.function_parameters);
 
     iterators.reserve(series_ids.size());
@@ -116,7 +117,7 @@ class MultiSeriesDecodeIterator {
     });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
+  [[nodiscard]] PROMPP(inline) Type type() const noexcept { return type_; }
 
  private:
   union Iterators {
@@ -130,10 +131,10 @@ class MultiSeriesDecodeIterator {
   Type type_;
 };
 
-PROMPP_ALWAYS_INLINE void construct_multi_series_decode_iterator(MultiSeriesDecodeIterator* iterator,
-                                                                 const SelectHints& select_hints,
-                                                                 std::span<const uint32_t> series_ids,
-                                                                 const ::series_data::serialization::SerializedDataView& data_view) {
+PROMPP(inline) void construct_multi_series_decode_iterator(MultiSeriesDecodeIterator* iterator,
+                                                                    const SelectHints& select_hints,
+                                                                    std::span<const uint32_t> series_ids,
+                                                                    const ::series_data::serialization::SerializedDataView& data_view) {
   const auto create_series_iterators = [&] {
     BareBones::Vector<MultiSeriesDecodeIterator::Iterator> iterators;
     MultiSeriesDecodeIterator::create_series_iterators(select_hints, series_ids, data_view, iterators);

@@ -13,7 +13,7 @@ namespace PromPP::WAL::hashdex {
 class Protobuf : public Prometheus::hashdex::Abstract {
  public:
   Protobuf() noexcept = default;
-  explicit PROMPP_ALWAYS_INLINE Protobuf(const Prometheus::hashdex::Limits& limits) noexcept
+  explicit PROMPP(inline) Protobuf(const Prometheus::hashdex::Limits& limits) noexcept
       : limits_{
             .max_label_name_length = limits.max_label_name_length,
             .max_label_value_length = limits.max_label_value_length,
@@ -21,7 +21,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
             .max_timeseries_count = limits.max_timeseries_count,
         } {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& limits() const noexcept { return limits_; }
+  [[nodiscard]] PROMPP(inline) const auto& limits() const noexcept { return limits_; }
 
   void presharding(std::string_view protobuf, bool skip_no_samples_series) {
     enum Tag : uint8_t {
@@ -55,13 +55,13 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   };
 
   // snappy_presharding uncompress protobuf via snappy and make presharding slice with hash and proto.
-  PROMPP_ALWAYS_INLINE void snappy_presharding(std::string_view snappy_protobuf, bool skip_no_samples_series) {
+  PROMPP(inline) void snappy_presharding(std::string_view snappy_protobuf, bool skip_no_samples_series) {
     snappy::Uncompress(snappy_protobuf.data(), snappy_protobuf.size(), &protobuf_);
     presharding(protobuf_, skip_no_samples_series);
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
+  [[nodiscard]] PROMPP(inline) const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] PROMPP(inline) const auto& metadata() const noexcept { return metadata_; }
 
  private:
   class Item {
@@ -69,11 +69,11 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     std::string_view data_;
 
    public:
-    PROMPP_ALWAYS_INLINE explicit Item(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+    explicit PROMPP(inline) Item(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
+    [[nodiscard]] PROMPP(inline) size_t hash() const { return hash_; }
 
     template <class Timeseries>
-    PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
+    PROMPP(inline) void read(Timeseries& timeseries) const {
       Prometheus::RemoteWrite::read_timeseries(protozero::pbf_reader(data_), timeseries);
     }
   };

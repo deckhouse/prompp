@@ -6,7 +6,7 @@
 
 namespace PromPP::Prometheus::textparse {
 
-PROMPP_ALWAYS_INLINE constexpr void unquote(std::string_view& string) noexcept {
+PROMPP(inline) constexpr void unquote(std::string_view& string) noexcept {
   if (string.length() > 1 && string.front() == '"' && string.back() == '"') {
     string.remove_prefix(1);
     string.remove_suffix(1);
@@ -16,9 +16,9 @@ PROMPP_ALWAYS_INLINE constexpr void unquote(std::string_view& string) noexcept {
 template <class StringPieceHandler>
   requires std::is_invocable_v<StringPieceHandler, std::string_view>
 constexpr void unescape_label_value(std::string_view label_value, StringPieceHandler handle_string_piece) noexcept {
-  static constexpr auto is_escaped_char = [](char ch) PROMPP_LAMBDA_INLINE { return ch == '"' || ch == '\\' || ch == 'n'; };
+  static constexpr auto is_escaped_char = [](char ch) PROMPP(lambda_inline) { return ch == '"' || ch == '\\' || ch == 'n'; };
 
-  const auto handle_string_piece_with_result = [&handle_string_piece](std::string_view string_piece) PROMPP_LAMBDA_INLINE {
+  const auto handle_string_piece_with_result = [&handle_string_piece](std::string_view string_piece) PROMPP(lambda_inline) {
     if constexpr (std::is_void_v<decltype(handle_string_piece(string_piece))>) {
       handle_string_piece(string_piece);
       return true;
@@ -60,7 +60,7 @@ constexpr void unescape_label_value(std::string_view label_value, StringPieceHan
   }
 }
 
-PROMPP_ALWAYS_INLINE constexpr bool is_escaped_char(const char* ptr, const char* start_ptr) noexcept {
+PROMPP(inline) constexpr bool is_escaped_char(const char* ptr, const char* start_ptr) noexcept {
   if (ptr[-1] == '\\') [[unlikely]] {
     bool is_escaped = true;
     for (--ptr; ptr > start_ptr && ptr[-1] == '\\'; --ptr) {

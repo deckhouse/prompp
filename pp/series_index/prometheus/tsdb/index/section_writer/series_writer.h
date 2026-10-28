@@ -73,7 +73,7 @@ class SeriesWriter {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void emplace_series_reference(PromPP::Primitives::LabelSetID ls_id, size_t position) const {
+  PROMPP(inline) void emplace_series_reference(PromPP::Primitives::LabelSetID ls_id, size_t position) const {
     const auto section_ref = position / PromPP::Prometheus::tsdb::index::kSeriesAlignment;
     // The symbols table precedes the series section, so a written reference is never zero,
     // which lets PostingsWriter use zero as the "not written" sentinel.

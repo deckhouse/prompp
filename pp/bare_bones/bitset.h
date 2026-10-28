@@ -1,12 +1,6 @@
 #pragma once
 
 #include <cassert>
-#ifdef __x86_64__
-#include <x86intrin.h>
-#endif
-#ifdef __ARM_FEATURE_CRC32
-#include <arm_acle.h>
-#endif
 
 #include <algorithm>
 #include <atomic>
@@ -69,17 +63,17 @@ class GenericBitset {
 
   // TODO shrink_to_fit
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return data_.control_block().items_count; }
+  [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return data_.control_block().items_count; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return static_cast<size_t>(data_.size()) * 64; }
+  [[nodiscard]] PROMPP(inline) size_t capacity() const noexcept { return static_cast<size_t>(data_.size()) * 64; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept {
     return std::ranges::all_of(data_, [](const uint64_t v) { return v == 0; });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
+  [[nodiscard]] PROMPP(inline) bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
 
-  PROMPP_ALWAYS_INLINE void set(uint32_t v) noexcept {
+  PROMPP(inline) void set(uint32_t v) noexcept {
     if (v >= size()) [[unlikely]] {
       resize(v + 1);
     }
@@ -87,40 +81,40 @@ class GenericBitset {
     data_[v >> 6] |= (1ull << (v & 0x3F));
   }
 
-  PROMPP_ALWAYS_INLINE void set_atomic(uint32_t v) noexcept {
+  PROMPP(inline) void set_atomic(uint32_t v) noexcept {
     assert(v < size());
     std::atomic_ref{data_[v >> 6]} |= (1ull << (v & 0x3F));
   }
 
   template <class It>
-  PROMPP_ALWAYS_INLINE void set(It begin, It end) noexcept {
+  PROMPP(inline) void set(It begin, It end) noexcept {
     for (auto it = begin; it != end; ++it) {
       set(*it);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void set(std::initializer_list<uint32_t> values) noexcept { set(values.begin(), values.end()); }
+  PROMPP(inline) void set(std::initializer_list<uint32_t> values) noexcept { set(values.begin(), values.end()); }
 
-  PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
+  PROMPP(inline) void reset(uint32_t v) noexcept {
     assert(v < size());
     data_[v >> 6] &= ~(1ull << (v & 0x3F));
   }
 
-  PROMPP_ALWAYS_INLINE void reset_atomic(uint32_t v) noexcept {
+  PROMPP(inline) void reset_atomic(uint32_t v) noexcept {
     assert(v < size());
     std::atomic_ref{data_[v >> 6]} &= ~(1ull << (v & 0x3F));
   }
 
   template <class It>
-  PROMPP_ALWAYS_INLINE void reset(It begin, It end) noexcept {
+  PROMPP(inline) void reset(It begin, It end) noexcept {
     for (auto it = begin; it != end; ++it) {
       reset(*it);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void reset(std::initializer_list<uint32_t> values) noexcept { reset(values.begin(), values.end()); }
+  PROMPP(inline) void reset(std::initializer_list<uint32_t> values) noexcept { reset(values.begin(), values.end()); }
 
-  PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {
+  PROMPP(inline) bool operator[](uint32_t v) const noexcept {
     assert(v < size());
     return (data_[v >> 6] & (1ull << (v & 0x3F))) > 0;
   }
@@ -144,7 +138,7 @@ class GenericBitset {
     uint64_t block_;
     uint32_t j_{64};
 
-    PROMPP_ALWAYS_INLINE void next() noexcept {
+    PROMPP(inline) void next() noexcept {
       if (!block_ && block_n_ != last_block_n_) {
         while (++block_n_ != last_block_n_ && !data_[block_n_]) {
         }
@@ -161,30 +155,30 @@ class GenericBitset {
     using difference_type = std::ptrdiff_t;
 
     Iterator() = default;
-    PROMPP_ALWAYS_INLINE explicit Iterator(const uint64_t* data, uint32_t size, uint32_t i) noexcept
+    explicit PROMPP(inline) Iterator(const uint64_t* data, uint32_t size, uint32_t i) noexcept
         : data_(data), last_block_n_(size ? ((size - 1) >> 6) : 0), block_n_(i >> 6), j_(i & 0x3F) {
       block_ = size ? data_[block_n_] : 0;
       next();
     }
 
-    PROMPP_ALWAYS_INLINE uint32_t operator*() const noexcept { return (block_n_ << 6) | j_; }
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) uint32_t operator*() const noexcept { return (block_n_ << 6) | j_; }
+    PROMPP(inline) Iterator& operator++() noexcept {
       next();
       return *this;
     }
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const Iterator retval = *this;
       next();
       return retval;
     }
-    PROMPP_ALWAYS_INLINE bool operator==(const Iterator& other) const noexcept { return block_n_ == other.block_n_ && j_ == other.j_; }
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return block_n_ == last_block_n_ && j_ == 64; }
+    PROMPP(inline) bool operator==(const Iterator& other) const noexcept { return block_n_ == other.block_n_ && j_ == other.j_; }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return block_n_ == last_block_n_ && j_ == 64; }
   };
 
   using const_iterator = Iterator;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(data_, size(), 0); }
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
+  [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return Iterator(data_, size(), 0); }
+  [[nodiscard]] static PROMPP(inline) auto end() noexcept { return IteratorSentinel(); }
 
   class ZeroIterator {
     const uint64_t* data_{};
@@ -194,7 +188,7 @@ class GenericBitset {
     uint32_t j_{64};
     uint64_t block_{};
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t build_zero_masked_block(uint32_t block_n) const noexcept {
+    [[nodiscard]] PROMPP(inline) uint64_t build_zero_masked_block(uint32_t block_n) const noexcept {
       uint64_t block = ~data_[block_n];
       if (block_n == last_block_n_) [[unlikely]] {
         const uint32_t last_bits = size_ & 0x3F;
@@ -205,7 +199,7 @@ class GenericBitset {
       return block;
     }
 
-    PROMPP_ALWAYS_INLINE void next() noexcept {
+    PROMPP(inline) void next() noexcept {
       while (true) {
         if (!block_) {
           if (block_n_ == last_block_n_) [[unlikely]] {
@@ -229,7 +223,7 @@ class GenericBitset {
     using difference_type = std::ptrdiff_t;
 
     ZeroIterator() = default;
-    PROMPP_ALWAYS_INLINE explicit ZeroIterator(const uint64_t* data, uint32_t size) noexcept : data_(data), size_(size) {
+    explicit PROMPP(inline) ZeroIterator(const uint64_t* data, uint32_t size) noexcept : data_(data), size_(size) {
       if (size_ == 0 || !data_) {
         return;
       }
@@ -239,39 +233,39 @@ class GenericBitset {
       next();
     }
 
-    PROMPP_ALWAYS_INLINE uint32_t operator*() const noexcept { return (block_n_ << 6) | j_; }
-    PROMPP_ALWAYS_INLINE ZeroIterator& operator++() noexcept {
+    PROMPP(inline) uint32_t operator*() const noexcept { return (block_n_ << 6) | j_; }
+    PROMPP(inline) ZeroIterator& operator++() noexcept {
       next();
       return *this;
     }
-    PROMPP_ALWAYS_INLINE ZeroIterator operator++(int) noexcept {
+    PROMPP(inline) ZeroIterator operator++(int) noexcept {
       const ZeroIterator retval = *this;
       next();
       return retval;
     }
-    PROMPP_ALWAYS_INLINE bool operator==(const ZeroIterator& other) const noexcept { return block_n_ == other.block_n_ && j_ == other.j_; }
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return j_ == 64; }
+    PROMPP(inline) bool operator==(const ZeroIterator& other) const noexcept { return block_n_ == other.block_n_ && j_ == other.j_; }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return j_ == 64; }
   };
 
   struct Zeroes {
     const uint64_t* data{};
     uint32_t size{};
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return ZeroIterator(data, size); }
-    [[nodiscard]] static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return ZeroIterator(data, size); }
+    [[nodiscard]] static PROMPP(inline) auto end() noexcept { return IteratorSentinel(); }
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Zeroes zeroes() const noexcept { return Zeroes{.data = data_, .size = static_cast<uint32_t>(size())}; }
+  [[nodiscard]] PROMPP(inline) Zeroes zeroes() const noexcept { return Zeroes{.data = data_, .size = static_cast<uint32_t>(size())}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t zerocount() const noexcept { return static_cast<uint32_t>(size()) - popcount(); }
+  [[nodiscard]] PROMPP(inline) uint32_t zerocount() const noexcept { return static_cast<uint32_t>(size()) - popcount(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return data_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return data_.allocated_memory(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t popcount() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t popcount() const noexcept {
     return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t count, uint64_t word) { return count + std::popcount(word); });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t last_significant_bit() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t last_significant_bit() const noexcept {
     const auto begin = data_.begin();
     for (auto ptr = begin + data_.size(); ptr-- != begin;) {
       if (*ptr != 0) {
@@ -282,13 +276,13 @@ class GenericBitset {
     return kNotFound;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t get_write_size() const noexcept {
     const uint32_t data_size_in_bytes = memory_size_in_bytes();
     return sizeof(data_size_in_bytes) + data_size_in_bytes;
   }
 
   template <OutputStream S>
-  PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
+  PROMPP(inline) void write_to(S& stream) const noexcept {
     const uint32_t data_size_in_bits = size();
     const uint32_t data_size_in_bytes = memory_size_in_bytes();
 
@@ -300,7 +294,7 @@ class GenericBitset {
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
 
-  static PROMPP_ALWAYS_INLINE Iterator create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+  static PROMPP(inline) Iterator create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
     if (buffer.size() < sizeof(uint32_t)) [[unlikely]] {
       return Iterator{nullptr, 0, 0};
     }
@@ -340,12 +334,12 @@ class GenericBitset {
   }
 
  private:
-  PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
+  PROMPP(inline) void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
 
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes(uint32_t bytes) noexcept {
+  [[nodiscard]] static PROMPP(inline) size_t memory_size_in_bytes(uint32_t bytes) noexcept {
     return Bit::to_ceil_units<uint64_t>(bytes) * sizeof(uint64_t);
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return memory_size_in_bytes(size()); }
+  [[nodiscard]] PROMPP(inline) size_t memory_size_in_bytes() const noexcept { return memory_size_in_bytes(size()); }
 };
 
 using Bitset = GenericBitset<DefaultReallocator>;

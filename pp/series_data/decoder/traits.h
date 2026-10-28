@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
 #include "series_data/encoder/sample.h"
@@ -52,7 +54,7 @@ concept DecodeIteratorData = requires(Data data) {
 
   data.remaining_samples;
 
-#ifdef __cpp_lib_is_pointer_interconvertible
+#if PROMPP(feature, std_pointer_interconvertible)
   requires std::is_pointer_interconvertible_with_class(&Data::sample);
 #endif
 };
@@ -72,12 +74,12 @@ class DecodeIteratorTrait {
   const encoder::Sample& operator*() const noexcept { return derived()->data_.sample; }
   const encoder::Sample* operator->() const noexcept { return &derived()->data_.sample; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return derived()->data_.remaining_samples == 0; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto remaining_samples() const noexcept { return derived()->data_.remaining_samples; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const noexcept { return derived()->data_.remaining_samples == 0; }
+  [[nodiscard]] PROMPP(inline) auto remaining_samples() const noexcept { return derived()->data_.remaining_samples; }
 
   template <SeekKind Kind, class SeekHandler>
     requires Seekable<Derived>
-  PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+  PROMPP(inline) void seek(SeekHandler&& handler) {
     static constexpr auto has_kind = [](SeekResult operation) { return static_cast<uint8_t>(Kind) & static_cast<uint8_t>(operation); };
 
     if (derived()->data_.remaining_samples == 0) [[unlikely]] {
@@ -109,7 +111,7 @@ class DecodeIteratorTrait {
     } while (derived()->decode());
   }
 
-  PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
+  PROMPP(inline) void seek_to(PromPP::Primitives::Timestamp timestamp) {
     if (derived()->data_.remaining_samples == 0) [[unlikely]] {
       return;
     }
@@ -123,15 +125,15 @@ class DecodeIteratorTrait {
     derived()->update_sample();
   }
 
-  PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { derived()->data_.sample.timestamp = kInvalidTimestamp; }
+  PROMPP(inline) void invalidate_sample() noexcept { derived()->data_.sample.timestamp = kInvalidTimestamp; }
 
-  PROMPP_ALWAYS_INLINE void decode_timestamp() noexcept
+  PROMPP(inline) void decode_timestamp() noexcept
     requires(DecodeIteratorDataWithTimestampDecoder<typename Derived::Data>)
   {
     std::ignore = derived()->data_.timestamp_decoder.decode();
   }
 
-  PROMPP_ALWAYS_INLINE bool try_decode_timestamp() noexcept
+  PROMPP(inline) bool try_decode_timestamp() noexcept
     requires(DecodeIteratorDataWithTimestampDecoder<typename Derived::Data>)
   {
     if (--derived()->data_.remaining_samples > 0) [[likely]] {
@@ -142,15 +144,15 @@ class DecodeIteratorTrait {
     return false;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept
+  [[nodiscard]] PROMPP(inline) PromPP::Primitives::Timestamp decoded_timestamp() const noexcept
     requires(DecodeIteratorDataWithTimestampDecoder<typename Derived::Data>)
   {
     return derived()->data_.timestamp_decoder.timestamp();
   }
 
  protected:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
+  [[nodiscard]] PROMPP(inline) Derived* derived() noexcept { return static_cast<Derived*>(this); }
+  [[nodiscard]] PROMPP(inline) const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
 }  // namespace series_data::decoder

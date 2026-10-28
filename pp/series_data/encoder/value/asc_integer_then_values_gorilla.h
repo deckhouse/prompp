@@ -6,7 +6,7 @@
 namespace series_data::encoder::value {
 
 template <BareBones::ReallocatorInterface Reallocator>
-class PROMPP_ATTRIBUTE_PACKED AscIntegerThenValuesGorillaEncoder : public ValuesGorillaEncoder<Reallocator> {
+class PROMPP(packed) AscIntegerThenValuesGorillaEncoder : public ValuesGorillaEncoder<Reallocator> {
  public:
   using ValuesGorillaEncoder = series_data::encoder::value::ValuesGorillaEncoder<Reallocator>;
 
@@ -21,7 +21,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerThenValuesGorillaEncoder : public Values
   using ValuesGorillaEncoder::stream;
 
  private:
-  PROMPP_ALWAYS_INLINE static CompactBitSequence<Reallocator> switch_to_values_gorilla(AscIntegerEncoder<Reallocator>&& asc_integer_encoder) {
+  static PROMPP(inline) CompactBitSequence<Reallocator> switch_to_values_gorilla(AscIntegerEncoder<Reallocator>&& asc_integer_encoder) {
     auto stream = std::move(asc_integer_encoder).release_stream();
     AscIntegerEncoder<Reallocator>::Encoder::write_switch_to_values_gorilla_mark(stream);
     return stream;

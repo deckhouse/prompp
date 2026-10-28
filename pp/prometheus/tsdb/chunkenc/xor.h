@@ -4,16 +4,16 @@
 
 namespace PromPP::Prometheus::tsdb::chunkenc {
 
-class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
+class PROMPP(packed) TimestampEncoder {
  public:
   static constexpr uint8_t kMaxItemSizeInBits = BareBones::Bit::to_bits(BareBones::Encoding::VarInt::kMaxVarIntLength);
 
   BareBones::Encoding::Gorilla::TimestampEncoderState<> state{};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
+  [[nodiscard]] PROMPP(inline) int64_t timestamp() const noexcept { return state.last_ts; }
 
   template <class BStream>
-  PROMPP_ALWAYS_INLINE void encode(int64_t ts, BStream& stream) {
+  PROMPP(inline) void encode(int64_t ts, BStream& stream) {
     state.last_ts = ts;
 
     uint8_t varint_buffer[VarInt::kMaxVarIntLength];
@@ -21,7 +21,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode_delta(int64_t ts, BitSequence& stream) {
     state.last_ts_delta = ts - state.last_ts;
     state.last_ts = ts;
 
@@ -30,7 +30,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta_of_delta(int64_t ts, BitSequence& stream) {
+  PROMPP(inline) void encode_delta_of_delta(int64_t ts, BitSequence& stream) {
     static constexpr uint8_t kDodSignificantLengths[] = {14, 17, 20};
 
     const auto ts_delta = ts - state.last_ts;
@@ -60,31 +60,31 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   using VarInt = BareBones::Encoding::VarInt;
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE static void push_varint_buffer(const uint8_t* buffer, size_t bytes, BitSequence& stream) {
+  static PROMPP(inline) void push_varint_buffer(const uint8_t* buffer, size_t bytes, BitSequence& stream) {
     for (auto b = buffer, end = buffer + bytes; b != end; ++b) {
       stream.write_byte(*b);
     }
   }
 
-  PROMPP_ALWAYS_INLINE constexpr static bool bit_range(int64_t x, uint8_t nbits) noexcept {
+  static PROMPP(inline) constexpr bool bit_range(int64_t x, uint8_t nbits) noexcept {
     return -((1LL << (nbits - 1)) - 1) <= x && x <= 1LL << (nbits - 1);
   }
 
-  PROMPP_ALWAYS_INLINE constexpr static uint64_t get_bit_mask(uint8_t bits) noexcept {
+  static PROMPP(inline) constexpr uint64_t get_bit_mask(uint8_t bits) noexcept {
     return std::numeric_limits<uint64_t>::max() >> (BareBones::Bit::kUint64Bits - bits);
   }
 };
 
-class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
+class PROMPP(packed) ValuesEncoder {
  public:
   static constexpr uint8_t kXorLengthMaskBits = 1 + 1 + 5 + 6;
   static constexpr uint8_t kMaxItemSizeInBits = kXorLengthMaskBits + BareBones::Bit::kUint64Bits;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return state_.last_v; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Encoding::Gorilla::ValuesEncoderState& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return state_.last_v; }
+  [[nodiscard]] PROMPP(inline) const BareBones::Encoding::Gorilla::ValuesEncoderState& state() const noexcept { return state_; }
 
   template <class BStream>
-  PROMPP_ALWAYS_INLINE void encode_first(double v, BStream& stream) noexcept {
+  PROMPP(inline) void encode_first(double v, BStream& stream) noexcept {
     state_.last_v = v;
 
     stream.write_bits(std::bit_cast<uint64_t>(v), BareBones::Bit::kUint64Bits);

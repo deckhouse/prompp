@@ -14,9 +14,7 @@ std::string Test::name() const {
   return name;
 }
 
-std::string Test::input_file_name(const Config& config) const {
-  return input_file_base_name() + "." + test_data_file_name_suffix(config);
-}
+std::string Test::input_file_name(const Config& config) const { return input_file_base_name() + "." + test_data_file_name_suffix(config); }
 
 std::string Test::output_file_name(const Config& config) const {
   if (has_output()) {

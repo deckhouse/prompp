@@ -19,7 +19,7 @@ using series_data::Decoder;
 using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
 
-struct PROMPP_ATTRIBUTE_PACKED OutdatedSample {
+struct PROMPP(packed) OutdatedSample {
   int64_t timestamp;
   double value;
   uint32_t ls_id;

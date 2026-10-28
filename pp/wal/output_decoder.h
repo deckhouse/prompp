@@ -25,7 +25,7 @@ struct RefSample {
   int64_t t;
   double v;
 
-  PROMPP_ALWAYS_INLINE bool operator==(const RefSample&) const noexcept = default;
+  PROMPP(inline) bool operator==(const RefSample&) const noexcept = default;
 };
 
 struct ShardRefSample {
@@ -37,22 +37,22 @@ class OutputDecoderCache {
  public:
   static constexpr auto kIsDropped = Primitives::kInvalidLabelSetID;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return cache_.allocated_memory(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return cache_.size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool have_changes() const noexcept { return cache_.size() > dumped_cache_size_; }
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept { return cache_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return cache_.size(); }
+  [[nodiscard]] PROMPP(inline) bool have_changes() const noexcept { return cache_.size() > dumped_cache_size_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::LabelSetID operator[](Primitives::LabelSetID source_ls_id) const noexcept { return cache_[source_ls_id]; }
+  [[nodiscard]] PROMPP(inline) Primitives::LabelSetID operator[](Primitives::LabelSetID source_ls_id) const noexcept { return cache_[source_ls_id]; }
 
-  PROMPP_ALWAYS_INLINE void reserve(uint32_t size) noexcept { cache_.reserve(size); }
-  PROMPP_ALWAYS_INLINE void add_dropped() noexcept { add(kIsDropped); }
-  PROMPP_ALWAYS_INLINE void add(Primitives::LabelSetID ls_id) noexcept { cache_.emplace_back(ls_id); }
+  PROMPP(inline) void reserve(uint32_t size) noexcept { cache_.reserve(size); }
+  PROMPP(inline) void add_dropped() noexcept { add(kIsDropped); }
+  PROMPP(inline) void add(Primitives::LabelSetID ls_id) noexcept { cache_.emplace_back(ls_id); }
 
-  PROMPP_ALWAYS_INLINE void dump_changes(std::ostream& out) {
+  PROMPP(inline) void dump_changes(std::ostream& out) {
     BareBones::serialize(out, std::span{&cache_[dumped_cache_size_], cache_.size() - dumped_cache_size_});
     dumped_cache_size_ = cache_.size();
   }
 
-  PROMPP_ALWAYS_INLINE void load_changes(std::istream& in) {
+  PROMPP(inline) void load_changes(std::istream& in) {
     BareBones::deserialize(in, cache_);
     dumped_cache_size_ = cache_.size();
   }
@@ -68,34 +68,34 @@ class GorillaSampleDecoderWithSkips {
  public:
   Primitives::Timestamp timestamp_base{std::numeric_limits<Primitives::Timestamp>::max()};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE OutputDecoderCache& cache() noexcept { return cache_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const OutputDecoderCache& cache() const noexcept { return cache_; }
+  [[nodiscard]] PROMPP(inline) OutputDecoderCache& cache() noexcept { return cache_; }
+  [[nodiscard]] PROMPP(inline) const OutputDecoderCache& cache() const noexcept { return cache_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept {
     return cache_.allocated_memory() + gorilla_decoders_.allocated_memory() + null_gorilla_decoders_.allocated_memory();
   }
 
-  PROMPP_ALWAYS_INLINE static void load(std::istream&) {}
+  static PROMPP(inline) void load(std::istream&) {}
 
-  PROMPP_ALWAYS_INLINE static void set_series_count(Primitives::LabelSetID) {}
+  static PROMPP(inline) void set_series_count(Primitives::LabelSetID) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
-                                                               Primitives::Timestamp timestamp,
-                                                               BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc&) {
+  [[nodiscard]] PROMPP(inline) Primitives::Sample decode(Primitives::LabelSetID ls_id,
+                                                                 Primitives::Timestamp timestamp,
+                                                                 BareBones::BitSequenceReader& value_sequence,
+                                                                 SampleCrc&) {
     return decode_impl(ls_id, timestamp, value_sequence);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
-                                                               BareBones::BitSequenceReader& timestamp_sequence,
-                                                               BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc&) {
+  [[nodiscard]] PROMPP(inline) Primitives::Sample decode(Primitives::LabelSetID ls_id,
+                                                                 BareBones::BitSequenceReader& timestamp_sequence,
+                                                                 BareBones::BitSequenceReader& value_sequence,
+                                                                 SampleCrc&) {
     return decode_impl(ls_id, timestamp_sequence, value_sequence);
   }
 
-  PROMPP_ALWAYS_INLINE static SampleCrc::ValidationResult validate_crc(SampleCrc, SampleCrc) noexcept { return SampleCrc::ValidationResult::kValid; }
+  static PROMPP(inline) SampleCrc::ValidationResult validate_crc(SampleCrc, SampleCrc) noexcept { return SampleCrc::ValidationResult::kValid; }
 
-  PROMPP_ALWAYS_INLINE void sync_decoders_with_cache() {
+  PROMPP(inline) void sync_decoders_with_cache() {
     const auto size_before = null_gorilla_decoders_.size();
     null_gorilla_decoders_.resize(cache_.size());
 
@@ -110,7 +110,7 @@ class GorillaSampleDecoderWithSkips {
   }
 
  private:
-  union PROMPP_ATTRIBUTE_PACKED NullGorillaDecoderOrId {
+  union PROMPP(packed) NullGorillaDecoderOrId {
     NullGorillaDecoder decoder;
     uint32_t id{};
   };
@@ -120,9 +120,9 @@ class GorillaSampleDecoderWithSkips {
   BareBones::Vector<NullGorillaDecoderOrId> null_gorilla_decoders_;
 
   template <class Timestamp>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode_impl(Primitives::LabelSetID source_ls_id,
-                                                                    Timestamp&& timestamp,
-                                                                    BareBones::BitSequenceReader& value_sequence) {
+  [[nodiscard]] PROMPP(inline) Primitives::Sample decode_impl(Primitives::LabelSetID source_ls_id,
+                                                                      Timestamp&& timestamp,
+                                                                      BareBones::BitSequenceReader& value_sequence) {
     if (source_ls_id >= cache_.size()) [[unlikely]] {
       throw BareBones::Exception(0xf0e57d2a0e5ce7ed, "Error while processing segment LabelSets: Unknown segment's LabelSet's id %d", source_ls_id);
     }
@@ -156,7 +156,7 @@ class OutputDecoder : private BaseOutputDecoder {
   uint32_t dropped_series_count_{};
 
   // align_cache_to_lss add new labels from lss via relabeler to cache.
-  PROMPP_ALWAYS_INLINE void align_cache_to_lss() {
+  PROMPP(inline) void align_cache_to_lss() {
     add_series_count_ = 0;
     dropped_series_count_ = 0;
     auto& cache = sample_decoder().cache();
@@ -186,16 +186,16 @@ class OutputDecoder : private BaseOutputDecoder {
 
   // load_segment override private load_segment from BaseOutputDecoder.
   template <class InputStream>
-  PROMPP_ALWAYS_INLINE void load_segment(InputStream& in, BaseOutputDecoder& wal) {
+  PROMPP(inline) void load_segment(InputStream& in, BaseOutputDecoder& wal) {
     in >> wal;
   }
 
  public:
   // WALOutputDecoder constructor with empty state.
-  PROMPP_ALWAYS_INLINE explicit OutputDecoder(Prometheus::Relabel::StatelessRelabeler& stateless_relabeler,
-                                              EncodingBimap& output_lss,
-                                              Primitives::Go::SliceView<std::pair<Primitives::Go::String, Primitives::Go::String>>& external_labels,
-                                              BasicEncoderVersion encoder_version = Writer::version)
+  explicit PROMPP(inline) OutputDecoder(Prometheus::Relabel::StatelessRelabeler& stateless_relabeler,
+                                                EncodingBimap& output_lss,
+                                                Primitives::Go::SliceView<std::pair<Primitives::Go::String, Primitives::Go::String>>& external_labels,
+                                                BasicEncoderVersion encoder_version = Writer::version)
       : BaseOutputDecoder{wal_lss_, encoder_version}, stateless_relabeler_{stateless_relabeler}, output_lss_(output_lss) {
     external_labels_.reserve(external_labels.size());
     for (const auto& [ln, lv] : external_labels) {
@@ -204,16 +204,22 @@ class OutputDecoder : private BaseOutputDecoder {
   }
 
   // cache return current cache.
-  PROMPP_ALWAYS_INLINE const auto& cache() const noexcept { return sample_decoder().cache(); }
+  PROMPP(inline) const auto& cache() const noexcept {
+    return sample_decoder().cache();
+  }
 
   // add_series_count return number of add series after load segment.
-  PROMPP_ALWAYS_INLINE uint64_t add_series_count() const noexcept { return add_series_count_; }
+  PROMPP(inline) uint64_t add_series_count() const noexcept {
+    return add_series_count_;
+  }
 
   // dropped_series_count return number of dropped series after load segment.
-  PROMPP_ALWAYS_INLINE uint64_t dropped_series_count() const noexcept { return dropped_series_count_; }
+  PROMPP(inline) uint64_t dropped_series_count() const noexcept {
+    return dropped_series_count_;
+  }
 
   // dump_to dump delta state(delta caches and delta checkpoint lss) to output stream.
-  PROMPP_ALWAYS_INLINE void dump_to(std::ostream& out) {
+  PROMPP(inline) void dump_to(std::ostream& out) {
     // take current checkpoint and delta with current and previous checkpoints
     auto current_cp = output_lss_.checkpoint();
     const auto delta_cp = current_cp - dumped_checkpoint_;
@@ -233,7 +239,7 @@ class OutputDecoder : private BaseOutputDecoder {
 
   // load_from load state(lss and cache) from incoming stream.
   template <class InputStream>
-  PROMPP_ALWAYS_INLINE void load_from(InputStream& in) {
+  PROMPP(inline) void load_from(InputStream& in) {
     while (true) {
       if (in.eof()) {
         dumped_checkpoint_ = output_lss_.checkpoint();
@@ -327,11 +333,11 @@ class SegmentSamplesStorageList {
 
     explicit Iterator(const Primitives::Go::Slice<SegmentSamplesStorage>& storages) : storages_(&storages) { advance(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *it_; }
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return *it_; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t storage_index() const noexcept { return storage_index_; }
+    [[nodiscard]] PROMPP(inline) uint32_t storage_index() const noexcept { return storage_index_; }
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       if (++it_ == SegmentSamplesStorage::end()) {
         ++storage_index_;
         advance();
@@ -339,13 +345,13 @@ class SegmentSamplesStorageList {
 
       return *this;
     }
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const auto tmp = *this;
       ++*this;
       return tmp;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const BareBones::iterator::IteratorSentinelType&) const noexcept {
+    [[nodiscard]] PROMPP(inline) bool operator==(const BareBones::iterator::IteratorSentinelType&) const noexcept {
       return storage_index_ == storages_->size() && it_ == SegmentSamplesStorage::end();
     }
 
@@ -354,7 +360,7 @@ class SegmentSamplesStorageList {
     SegmentSamplesStorage::Iterator it_{};
     uint32_t storage_index_{};
 
-    PROMPP_ALWAYS_INLINE void advance() noexcept {
+    PROMPP(inline) void advance() noexcept {
       for (; storage_index_ != storages_->size(); ++storage_index_) {
         if (const auto& storage = storages_->operator[](storage_index_); !storage.empty()) {
           it_ = storage.begin();
@@ -365,10 +371,10 @@ class SegmentSamplesStorageList {
   };
 
   [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
+  [[nodiscard]] static PROMPP(inline) BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
+  [[nodiscard]] PROMPP(inline) Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
+  [[nodiscard]] PROMPP(inline) const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
 
  private:
   Primitives::Go::Slice<SegmentSamplesStorage> storages_;
@@ -393,7 +399,7 @@ struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_t
 namespace PromPP::WAL {
 
 inline void split_messages(const SegmentSamplesStorageList& storages, uint32_t samples_count, Primitives::Go::Slice<GoMessage>& messages) {
-  static const auto samples_in_series = [](const SegmentSamplesStorageList::Iterator& it) PROMPP_LAMBDA_INLINE {
+  static const auto samples_in_series = [](const SegmentSamplesStorageList::Iterator& it) PROMPP(lambda_inline) {
     const auto& list = (*it).second;
     return list.is_single() ? 1U : list.samples().size();
   };
@@ -422,10 +428,12 @@ class GoSliceSink : public snappy::Sink {
 
  public:
   // GoSliceSink constructor over go slice.
-  PROMPP_ALWAYS_INLINE explicit GoSliceSink(Primitives::Go::Slice<char>& out) : out_(out) {}
+  explicit PROMPP(inline) GoSliceSink(Primitives::Go::Slice<char>& out) : out_(out) {}
 
   // Append implementation snappy::Sink.
-  PROMPP_ALWAYS_INLINE void Append(const char* data, size_t len) override { out_.push_back(data, data + len); }
+  PROMPP(inline) void Append(const char* data, size_t len) override {
+    out_.push_back(data, data + len);
+  }
 };
 
 // ProtobufEncoderStats stats for encoded to snappy protobuf data.
@@ -433,7 +441,7 @@ struct ProtobufEncoderStats {
   int64_t max_timestamp{};
   size_t samples_count{};
 
-  PROMPP_ALWAYS_INLINE bool operator==(const ProtobufEncoderStats& other) const noexcept = default;
+  PROMPP(inline) bool operator==(const ProtobufEncoderStats& other) const noexcept = default;
 };
 
 class ProtobufEncoder {
@@ -457,7 +465,7 @@ class ProtobufEncoder {
   std::string protobuf_;
 
   template <class SnapshotGetter>
-  PROMPP_ALWAYS_INLINE void create_protobuf_message(const SnapshotGetter& snapshot_getter, GoMessage& message) {
+  PROMPP(inline) void create_protobuf_message(const SnapshotGetter& snapshot_getter, GoMessage& message) {
     message.max_timestamp = 0;
 
     protozero::pbf_writer pb_writer(protobuf_);
@@ -475,7 +483,7 @@ class ProtobufEncoder {
         snapshot = &snapshot_getter(storage_index);
       }
 
-      const auto write_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
+      const auto write_sample = [&](const Primitives::Sample& sample) PROMPP(lambda_inline) {
         Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
 
         message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
@@ -507,7 +515,7 @@ class ProtobufEncoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void snappy_compress(Primitives::Go::Slice<char>& output) const {
+  PROMPP(inline) void snappy_compress(Primitives::Go::Slice<char>& output) const {
     GoSliceSink writer(output);
     snappy::ByteArraySource reader(protobuf_.c_str(), protobuf_.size());
     snappy::Compress(&reader, &writer);

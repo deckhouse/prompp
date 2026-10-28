@@ -39,7 +39,7 @@ TEST_P(TrieIndexIteratorFixture, Test) {
   std::vector<TrieIndexItem> actual;
 
   // Act
-  std::ranges::transform(index_, std::back_inserter(actual), [](const auto& item) PROMPP_LAMBDA_INLINE {
+  std::ranges::transform(index_, std::back_inserter(actual), [](const auto& item) PROMPP(lambda_inline) {
     return TrieIndexItem{.name = std::string(item.name()), .name_id = item.name_id(), .value = std::string(item.value()), .value_id = item.value_id()};
   });
 

@@ -50,9 +50,9 @@ class BasicLabelSet {
   BasicLabelSet& operator=(const BasicLabelSet&) = default;
   BasicLabelSet& operator=(BasicLabelSet&&) noexcept = default;
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept { labels_.clear(); }
+  PROMPP(inline) void clear() noexcept { labels_.clear(); }
 
-  PROMPP_ALWAYS_INLINE LabelType* add(const LabelType& label) noexcept {
+  PROMPP(inline) LabelType* add(const LabelType& label) noexcept {
     // if label value empty - skip label
     if (label.second.empty()) [[unlikely]] {
       return nullptr;
@@ -74,14 +74,14 @@ class BasicLabelSet {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void append(std::string_view name, std::string_view value) noexcept {
+  PROMPP(inline) void append(std::string_view name, std::string_view value) noexcept {
     if (!value.empty()) [[likely]] {
       labels_.emplace_back(name, value);
     }
   }
 
   template <class LabelSet>
-  PROMPP_ALWAYS_INLINE void append_unsorted(const LabelSet& label_set) {
+  PROMPP(inline) void append_unsorted(const LabelSet& label_set) {
     labels_.reserve(labels_.size() + label_set.size());
 
     for (const auto& label : label_set) {
@@ -92,7 +92,7 @@ class BasicLabelSet {
   }
 
   template <class LabelSet>
-  PROMPP_ALWAYS_INLINE void append_sorted(const LabelSet& label_set) {
+  PROMPP(inline) void append_sorted(const LabelSet& label_set) {
     assert(std::ranges::is_sorted(label_set, [](const auto& a, const auto& b) { return a.first < b.first; }));
 
     labels_.reserve(labels_.size() + label_set.size());
@@ -103,7 +103,7 @@ class BasicLabelSet {
   }
 
   template <class LabelSet>
-  PROMPP_ALWAYS_INLINE void add(const LabelSet& label_set) {
+  PROMPP(inline) void add(const LabelSet& label_set) {
     labels_.reserve(labels_.size() + label_set.size());
 
     for (auto& label : label_set) {
@@ -112,7 +112,7 @@ class BasicLabelSet {
   }
 
   template <class SymbolType>
-  PROMPP_ALWAYS_INLINE LabelType::second_type* get(const SymbolType& label_name) noexcept {
+  PROMPP(inline) LabelType::second_type* get(const SymbolType& label_name) noexcept {
     if (auto i = std::lower_bound(labels_.begin(), labels_.end(), label_name, [](const LabelType& a, const auto& b) { return a.first < b; });
         i->first == label_name) [[likely]] {
       return &i->second;
@@ -121,23 +121,23 @@ class BasicLabelSet {
     return nullptr;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return labels_.size(); }
+  [[nodiscard]] PROMPP(inline) auto size() const noexcept { return labels_.size(); }
 
-  PROMPP_ALWAYS_INLINE void reserve(size_t size) noexcept { labels_.reserve(size); }
-  PROMPP_ALWAYS_INLINE void resize(size_t size) noexcept { labels_.resize(size); }
+  PROMPP(inline) void reserve(size_t size) noexcept { labels_.reserve(size); }
+  PROMPP(inline) void resize(size_t size) noexcept { labels_.resize(size); }
 
   using iterator = typename Container<LabelType>::iterator;
   using const_iterator = typename Container<LabelType>::const_iterator;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return labels_.begin(); }
-  PROMPP_ALWAYS_INLINE iterator begin() noexcept { return labels_.begin(); }
+  [[nodiscard]] PROMPP(inline) const_iterator begin() const noexcept { return labels_.begin(); }
+  PROMPP(inline) iterator begin() noexcept { return labels_.begin(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return labels_.end(); }
-  PROMPP_ALWAYS_INLINE iterator end() noexcept { return labels_.end(); }
+  [[nodiscard]] PROMPP(inline) const_iterator end() const noexcept { return labels_.end(); }
+  PROMPP(inline) iterator end() noexcept { return labels_.end(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelType& operator[](uint32_t index) const noexcept { return labels_[index]; }
+  [[nodiscard]] PROMPP(inline) const LabelType& operator[](uint32_t index) const noexcept { return labels_[index]; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(labels_); }
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(labels_); }
 
   template <class T>
   bool operator==(const T& o) const noexcept {
@@ -149,13 +149,13 @@ class BasicLabelSet {
     return std::ranges::lexicographical_compare(begin(), end(), o.begin(), o.end());
   }
 
-  PROMPP_ALWAYS_INLINE friend size_t hash_value(const BasicLabelSet& label_set) noexcept { return hash::hash_of_label_set(label_set); }
+  friend PROMPP(inline) size_t hash_value(const BasicLabelSet& label_set) noexcept { return hash::hash_of_label_set(label_set); }
 
   class Names {
     const Container<LabelType>& labels_;
 
     friend class BasicLabelSet;
-    PROMPP_ALWAYS_INLINE explicit Names(const BasicLabelSet& label_set) : labels_(label_set.labels_) {}
+    explicit PROMPP(inline) Names(const BasicLabelSet& label_set) : labels_(label_set.labels_) {}
 
    public:
     class Iterator {
@@ -166,29 +166,29 @@ class BasicLabelSet {
       using value_type = typename std::tuple_element<0, LabelType>::type;
       using difference_type = std::ptrdiff_t;
 
-      PROMPP_ALWAYS_INLINE explicit Iterator(typename Container<LabelType>::const_iterator i = {}) noexcept : i_(i) {}
+      explicit PROMPP(inline) Iterator(typename Container<LabelType>::const_iterator i = {}) noexcept : i_(i) {}
 
-      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      PROMPP(inline) Iterator& operator++() noexcept {
         ++i_;
         return *this;
       }
 
-      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      PROMPP(inline) Iterator operator++(int) noexcept {
         Iterator retval = *this;
         ++(*this);
         return retval;
       }
 
-      PROMPP_ALWAYS_INLINE bool operator==(const Iterator& o) const noexcept { return i_ == o.i_; }
+      PROMPP(inline) bool operator==(const Iterator& o) const noexcept { return i_ == o.i_; }
 
-      PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return i_->first; }
+      PROMPP(inline) const value_type& operator*() const noexcept { return i_->first; }
     };
 
-    PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(labels_.begin()); }
+    PROMPP(inline) auto begin() const noexcept { return Iterator(labels_.begin()); }
 
-    PROMPP_ALWAYS_INLINE auto end() const noexcept { return Iterator(labels_.end()); }
+    PROMPP(inline) auto end() const noexcept { return Iterator(labels_.end()); }
 
-    PROMPP_ALWAYS_INLINE auto size() const noexcept { return labels_.size(); }
+    PROMPP(inline) auto size() const noexcept { return labels_.size(); }
 
     template <class T>
     bool operator==(const T& o) const noexcept {
@@ -200,15 +200,15 @@ class BasicLabelSet {
       return std::ranges::lexicographical_compare(begin(), end(), o.begin(), o.end());
     }
 
-    PROMPP_ALWAYS_INLINE friend size_t hash_value(const Names& label_set_names) noexcept { return hash::hash_of_string_list(label_set_names); }
+    friend PROMPP(inline) size_t hash_value(const Names& label_set_names) noexcept { return hash::hash_of_string_list(label_set_names); }
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Names names() const noexcept { return Names(*this); }
+  [[nodiscard]] PROMPP(inline) Names names() const noexcept { return Names(*this); }
 
  private:
   Container<LabelType> labels_;
 
-  PROMPP_ALWAYS_INLINE void sort() noexcept {
+  PROMPP(inline) void sort() noexcept {
     std::ranges::sort(labels_, [](const auto& a, const auto& b) { return a.first < b.first; });
   }
 };

@@ -15,7 +15,7 @@
 namespace series_data::unloading {
 
 template <BareBones::ReallocatorInterface Reallocator = DataStorage<>::Reallocator>
-struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
+struct PROMPP(packed) SeriesToLoadInfo {
   uint8_t chunk_id = 0;
   encoder::CompactBitSequence<Reallocator> buffer{};
 
@@ -40,16 +40,16 @@ class Loader {
 
   class UnorderedVector {
    public:
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return ls_id_to_offset_.empty(); }
+    [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return ls_id_to_offset_.empty(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return ls_id_to_offset_.size(); }
+    [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return ls_id_to_offset_.size(); }
 
-    PROMPP_ALWAYS_INLINE void reserve(size_t size) noexcept {
+    PROMPP(inline) void reserve(size_t size) noexcept {
       series_to_load_infos_.resize(size);
       ls_id_to_offset_.reserve(size);
     }
 
-    PROMPP_ALWAYS_INLINE void clear() noexcept {
+    PROMPP(inline) void clear() noexcept {
       ls_id_to_offset_.erase(ls_id_to_offset_.begin(), ls_id_to_offset_.end());
       for (auto& info : series_to_load_infos_) {
         info.reset();
@@ -66,50 +66,50 @@ class Loader {
       using value_type = PairType;
       using difference_type = std::ptrdiff_t;
 
-      PROMPP_ALWAYS_INLINE Iterator() noexcept = default;
-      PROMPP_ALWAYS_INLINE Iterator(MapIterator map_it, Vector* parent) noexcept : map_it_(map_it), vector_ptr_(parent) {}
+      PROMPP(inline) Iterator() noexcept = default;
+      PROMPP(inline) Iterator(MapIterator map_it, Vector* parent) noexcept : map_it_(map_it), vector_ptr_(parent) {}
 
-      PROMPP_ALWAYS_INLINE PairType operator*() const noexcept { return {map_it_->first, vector_ptr_->operator[](map_it_->second)}; }
+      PROMPP(inline) PairType operator*() const noexcept { return {map_it_->first, vector_ptr_->operator[](map_it_->second)}; }
 
-      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      PROMPP(inline) Iterator& operator++() noexcept {
         ++map_it_;
         return *this;
       }
 
-      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      PROMPP(inline) Iterator operator++(int) noexcept {
         Iterator retval = *this;
         ++map_it_;
         return retval;
       }
 
-      PROMPP_ALWAYS_INLINE bool operator==(const Iterator& other) const { return vector_ptr_ == other.vector_ptr_ && map_it_ == other.map_it_; }
+      PROMPP(inline) bool operator==(const Iterator& other) const { return vector_ptr_ == other.vector_ptr_ && map_it_ == other.map_it_; }
 
      private:
       MapIterator map_it_{};
       Vector* vector_ptr_{nullptr};
     };
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() noexcept { return Iterator{ls_id_to_offset_.begin(), &series_to_load_infos_}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator{ls_id_to_offset_.begin(), &series_to_load_infos_}; }
+    [[nodiscard]] PROMPP(inline) auto begin() noexcept { return Iterator{ls_id_to_offset_.begin(), &series_to_load_infos_}; }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return Iterator{ls_id_to_offset_.begin(), &series_to_load_infos_}; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
+    [[nodiscard]] PROMPP(inline) auto end() noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
+    [[nodiscard]] PROMPP(inline) auto end() const noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto find(uint32_t key) noexcept {
+    [[nodiscard]] PROMPP(inline) auto find(uint32_t key) noexcept {
       if (const auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
         return Iterator{it, &series_to_load_infos_};
       }
       return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_};
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto find(uint32_t key) const noexcept {
+    [[nodiscard]] PROMPP(inline) auto find(uint32_t key) const noexcept {
       if (const auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
         return Iterator{it, &series_to_load_infos_};
       }
       return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_};
     }
 
-    PROMPP_ALWAYS_INLINE auto insert(uint32_t key) noexcept {
+    PROMPP(inline) auto insert(uint32_t key) noexcept {
       if (const auto it = find(key); it != end()) [[unlikely]] {
         (*it).second.reset();
         return it;
@@ -175,7 +175,7 @@ class Loader {
 
   [[nodiscard]] bool empty() const noexcept { return ls_id_to_infos_.empty(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) Storage& storage() noexcept { return storage_; }
 
  private:
   void process_snapshot_chunk(const SnapshotChunkView& chunk) {

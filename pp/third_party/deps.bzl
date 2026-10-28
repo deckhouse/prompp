@@ -44,9 +44,9 @@ def _third_party_dev_deps_impl(_ctx):
     http_archive(
         name = "tracy",
         build_file = Label("//third_party:tracy.BUILD"),
-        sha256 = "d4efc50ebcb0bfcfdbba148995aeb75044c0d80f5d91223aebfaa8fa9e563d2b",
-        strip_prefix = "tracy-0.13.1/",
-        url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.13.1.tar.gz",
+        sha256 = "bf4af567e9c7524d07f3caa745fad02fb33bd5694f11910750382d1efbb251c1",
+        strip_prefix = "tracy-0.14.1/",
+        url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.14.1.tar.gz",
     )
 
 third_party_dev_deps = module_extension(implementation = _third_party_dev_deps_impl)

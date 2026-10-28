@@ -1,25 +1,20 @@
-#if defined(__x86_64__) || defined(_M_AMD64)
-#define PROMPP_PLATFORM_AMD64 1
-#endif
-#if defined(__aarch64__) || defined(_M_ARM64)
-#define PROMPP_PLATFORM_ARM64 1
-#endif
+#include "bare_bones/arch.h"
+#include "bare_bones/compiler.h"
 
 #include <cstring>
-#if PROMPP_PLATFORM_AMD64
-#include <cstdint>
+#if PROMPP(arch, amd64)
+#  include <cstdint>
 
 //#entrypoint.amd64_includes
-#elif PROMPP_PLATFORM_ARM64
-#include <asm/hwcap.h>
-#include <sys/auxv.h>
+#elif PROMPP(arch, arm64)
+#  include <sys/auxv.h>
 
 //#entrypoint.arm64_includes
 #endif
 
 //#entrypoint.function_pointers
 
-#if PROMPP_PLATFORM_AMD64
+#if PROMPP(arch, amd64)
 enum class arch_flavor : uint8_t { generic, nehalem, haswell };
 
 arch_flavor determine_arch_flavor() {
@@ -37,7 +32,7 @@ arch_flavor determine_arch_flavor() {
 
   return arch_flavor::haswell;
 }
-#elif PROMPP_PLATFORM_ARM64
+#elif PROMPP(arch, arm64)
 enum class arch_flavor : uint8_t { generic, crc32 };
 
 arch_flavor determine_arch_flavor() {
@@ -85,11 +80,11 @@ EXTERN_FUNCTION(void, free, (void*));
 
 static void initialize();
 
-#if !defined(__SANITIZE_ADDRESS__)
-#define DEFINE_ALLOCATOR_SYMBOL(return_type, name, args, parameters) \
+#if !PROMPP(asan)
+#  define DEFINE_ALLOCATOR_SYMBOL(return_type, name, args, parameters) \
   extern "C" return_type name args { return name ## _func parameters; }
 #else
-#define DEFINE_ALLOCATOR_SYMBOL(return_type, name, args, parameters)
+#  define DEFINE_ALLOCATOR_SYMBOL(return_type, name, args, parameters)
 #endif
 
 // NOLINTBEGIN(bugprone-macro-parentheses)
@@ -115,8 +110,8 @@ OVERRIDE_ALLOCATOR_SYMBOL(void, free, (void *ptr), (ptr));
 #undef OVERRIDE_ALLOCATOR_SYMBOL
 #undef DEFINE_ALLOCATOR_SYMBOL
 
-#if !defined(__SANITIZE_ADDRESS__)
-#define SELECT_ARCH(arch, flavor)  \
+#if !PROMPP(asan)
+#  define SELECT_ARCH(arch, flavor)  \
   arch##_prompp_jemalloc_init();   \
   malloc_func = arch##_malloc;   \
   realloc_func = arch##_realloc; \
@@ -128,7 +123,7 @@ OVERRIDE_ALLOCATOR_SYMBOL(void, free, (void *ptr), (ptr));
   free_func = arch##_free;       \
   prompp_flavor = flavor;
 #else
-#define SELECT_ARCH(arch, flavor)  \
+#  define SELECT_ARCH(arch, flavor)  \
   prompp_flavor = flavor;
 #endif
 
@@ -138,7 +133,7 @@ static __attribute__((constructor)) void initialize() {
   }
 
   switch (determine_arch_flavor()) {
-#if PROMPP_PLATFORM_AMD64
+#if PROMPP(arch, amd64)
     case arch_flavor::haswell: {
 //#entrypoint.amd64_haswell_bindings
       SELECT_ARCH(amd64_haswell, "haswell");
@@ -154,7 +149,7 @@ static __attribute__((constructor)) void initialize() {
       SELECT_ARCH(amd64_k8, "k8");
       break;
     }
-#elif PROMPP_PLATFORM_ARM64
+#elif PROMPP(arch, arm64)
     case arch_flavor::crc32: {
 //#entrypoint.arm64_armv8_a_crc_bindings
       SELECT_ARCH(arm64_armv8_a_crc, "armv8-a+crc");

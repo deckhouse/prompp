@@ -215,7 +215,7 @@ class RegexpSearcher {
     }
 
     if (prepare_regexp(rgx)) {
-      matches_.add_node(trv, [this](std::string_view node_tail) PROMPP_LAMBDA_INLINE { return prepared_prog_.full_match(node_tail); });
+      matches_.add_node(trv, [this](std::string_view node_tail) PROMPP(lambda_inline) { return prepared_prog_.full_match(node_tail); });
     }
   }
 
@@ -229,7 +229,7 @@ class RegexpSearcher {
     }
   }
 
-  PROMPP_ALWAYS_INLINE bool prepare_regexp(re2::Regexp* rgx) { return prepared_prog_.compile(rgx); }
+  PROMPP(inline) bool prepare_regexp(re2::Regexp* rgx) { return prepared_prog_.compile(rgx); }
 };
 
 }  // namespace series_index::querier::regexp

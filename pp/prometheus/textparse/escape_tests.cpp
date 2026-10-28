@@ -15,7 +15,7 @@ class UnescapeLabelValueFixture : public ::testing::TestWithParam<UnescapeLabelV
  protected:
   [[nodiscard]] static std::vector<std::string_view> unescape(std::string_view label_value) {
     std::vector<std::string_view> result;
-    unescape_label_value(label_value, [&result](const std::string_view& piece) PROMPP_LAMBDA_INLINE { result.emplace_back(piece); });
+    unescape_label_value(label_value, [&result](const std::string_view& piece) PROMPP(lambda_inline) { result.emplace_back(piece); });
     return result;
   }
 };

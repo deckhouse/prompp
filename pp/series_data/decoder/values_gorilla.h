@@ -30,21 +30,21 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
     }
   }
 
-  PROMPP_ALWAYS_INLINE ValuesGorillaDecodeIterator& operator++() noexcept {
+  PROMPP(inline) ValuesGorillaDecodeIterator& operator++() noexcept {
     if (decode()) [[likely]] {
       update_sample();
     }
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE ValuesGorillaDecodeIterator operator++(int) noexcept {
+  PROMPP(inline) ValuesGorillaDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
   template <SampleType Type>
-  PROMPP_ALWAYS_INLINE static void decode_value(Decoder& decoder, BareBones::BitSequenceReader& reader) noexcept {
+  static PROMPP(inline) void decode_value(Decoder& decoder, BareBones::BitSequenceReader& reader) noexcept {
     if constexpr (Type == SampleType::kFirst) {
       decoder.decode_first(reader);
     } else {
@@ -52,7 +52,7 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return data_.decoder.value(); }
+  [[nodiscard]] PROMPP(inline) double decoded_value() const noexcept { return data_.decoder.value(); }
 
  protected:
   struct Data {
@@ -70,7 +70,7 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
  private:
   friend DecodeIteratorTrait;
 
-  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+  PROMPP(inline) bool decode() noexcept {
     if (try_decode_timestamp()) [[likely]] {
       decode_value<SampleType::kOther>();
       return true;
@@ -79,13 +79,13 @@ class ValuesGorillaDecodeIterator : public DecodeIteratorTrait<ValuesGorillaDeco
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+  PROMPP(inline) void update_sample() noexcept {
     data_.sample.timestamp = decoded_timestamp();
     data_.sample.value = decoded_value();
   }
 
   template <SampleType Type>
-  PROMPP_ALWAYS_INLINE void decode_value() noexcept {
+  PROMPP(inline) void decode_value() noexcept {
     decode_value<Type>(data_.decoder, data_.reader);
   }
 };
