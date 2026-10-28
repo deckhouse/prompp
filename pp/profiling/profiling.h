@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <source_location>
 
-#include "bare_bones/macro.h"
+#include "bare_bones/compiler.h"
 
 // PROMPP_PROFILE(operation, ...): profile scopes with Bazel --config=profile; otherwise, arguments are not evaluated.
 // Each marker records the caller's file, line and function. PROMPP_PROFILE_DETAIL_* macros are private.

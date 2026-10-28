@@ -6,9 +6,10 @@
 #include <climits>
 #include <cstdint>
 
+#include "arch.h"
 #include "preprocess.h"
 
-#ifdef __x86_64__
+#if PROMPP(arch, amd64)
 #  include <x86intrin.h>
 #endif
 
@@ -17,7 +18,7 @@ namespace BareBones::Bit {
 static_assert(std::endian::native == std::endian::little, "big endian arch is not yet supported");
 
 PROMPP(inline) uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) noexcept {
-#ifdef __BMI__
+#if PROMPP(isa, x86_bmi)
   return _bextr_u32(src, start, len);
 #else
   assert(start < 32);
@@ -27,7 +28,7 @@ PROMPP(inline) uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) noexce
 }
 
 PROMPP(inline) uint64_t bextr(uint64_t src, uint32_t start, uint32_t len) noexcept {
-#ifdef __BMI__
+#if PROMPP(isa, x86_bmi)
   return _bextr_u64(src, start, len);
 #else
   assert(start < 64);

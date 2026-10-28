@@ -5,10 +5,12 @@
 #include <cstdint>
 #include <fstream>
 
-#ifdef __x86_64__
+#include "arch.h"
+
+#if PROMPP(arch, amd64)
 #  include <x86intrin.h>
 #endif
-#ifdef __ARM_FEATURE_CRC32
+#if PROMPP(isa, arm_crc32)
 #  include <arm_acle.h>
 #endif
 
@@ -23,11 +25,11 @@ namespace BareBones {
 class CRC32 {
   uint32_t crc_ = 0;
 
-#if defined(__SSE4_2__)
+#if PROMPP(isa, x86_sse42)
   PROMPP(inline) void compute(uint32_t data) noexcept { crc_ = _mm_crc32_u32(crc_, data); }
 
   PROMPP(inline) void compute(uint64_t data) noexcept { crc_ = _mm_crc32_u64(crc_, data); }
-#elif defined(__ARM_FEATURE_CRC32)
+#elif PROMPP(isa, arm_crc32)
   PROMPP(inline) void compute(uint32_t data) noexcept { crc_ = __crc32cw(crc_, data); }
 
   PROMPP(inline) void compute(uint64_t data) noexcept { crc_ = __crc32cd(crc_, data); }

@@ -3,13 +3,6 @@
 #include <bit>
 #include <fstream>
 
-#ifdef __x86_64__
-#  include <x86intrin.h>
-#endif
-#ifdef __ARM_FEATURE_CRC32
-#  include <arm_acle.h>
-#endif
-
 #include <experimental/scope>
 #include <span>
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
 #include "series_data/encoder/sample.h"
@@ -52,7 +54,7 @@ concept DecodeIteratorData = requires(Data data) {
 
   data.remaining_samples;
 
-#ifdef __cpp_lib_is_pointer_interconvertible
+#if PROMPP(feature, std_pointer_interconvertible)
   requires std::is_pointer_interconvertible_with_class(&Data::sample);
 #endif
 };
