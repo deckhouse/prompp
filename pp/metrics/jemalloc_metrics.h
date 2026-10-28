@@ -8,7 +8,13 @@
 namespace metrics {
 
 struct JemallocMetrics final : MetricsPage<JemallocMetrics> {
-  using MetricsPage::MetricsPage;
+  JemallocMetrics() = default;
+  explicit JemallocMetrics(uint32_t page_object_size) : MetricsPage(page_object_size) {}
+  JemallocMetrics(uint32_t page_object_size, uint32_t metric_offset) : MetricsPage(page_object_size, metric_offset) {}
+
+  template <class MemberType>
+    requires std::is_base_of_v<Metric, MemberType>
+  explicit JemallocMetrics(MemberType JemallocMetrics::* first_metric_member) : MetricsPage(first_metric_member) {}
 
   CounterRef releases_total{PromPP::Primitives::LabelViewSet{}, "prompp_common_jemalloc_arena_pool_releases_total",
                             &BareBones::jemalloc::FreeArenas::releases_total};

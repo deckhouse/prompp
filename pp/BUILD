@@ -314,10 +314,7 @@ cc_library(
 
 cc_binary(
     name = "performance_tests_bin",
-    srcs = glob(
-        include = ["performance_tests/**/*.cpp"],
-        exclude = ["performance_tests/tests/**/*.cpp"],
-    ),
+    srcs = glob(["performance_tests/**/*.cpp"]),
     malloc = "@jemalloc",
     deps = [
         ":performance_tests_headers",
@@ -329,15 +326,6 @@ cc_binary(
         ":wal",
         "//third_party:protozero",
         "@cedar",
-    ],
-)
-
-cc_test(
-    name = "dummy_wal_test",
-    srcs = ["performance_tests/tests/dummy_wal_tests.cpp"],
-    deps = [
-        ":performance_tests_headers",
-        "@gtest//:gtest_main",
     ],
 )
 

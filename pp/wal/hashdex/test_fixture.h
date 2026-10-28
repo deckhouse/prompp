@@ -36,7 +36,7 @@ inline void calculate_labelset_hash(std::vector<FloatMetric>& floats) noexcept {
 }
 
 template <Prometheus::hashdex::HashdexInterface Hashdex>
-[[nodiscard]] std::vector<FloatMetric> get_floats(const Hashdex& hashdex) noexcept {
+[[nodiscard]] std::vector<FloatMetric> get_floats(const Hashdex& hashdex) {
   std::vector<FloatMetric> items;
   items.reserve(hashdex.floats().size());
 
@@ -49,7 +49,7 @@ template <Prometheus::hashdex::HashdexInterface Hashdex>
 }
 
 template <Prometheus::hashdex::HashdexInterface Hashdex>
-[[nodiscard]] std::vector<Metadata> get_metadata(const Hashdex& hashdex) noexcept {
+[[nodiscard]] std::vector<Metadata> get_metadata(const Hashdex& hashdex) {
   std::vector<Metadata> items;
   items.reserve(hashdex.metadata().size());
 

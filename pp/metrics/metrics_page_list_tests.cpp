@@ -81,7 +81,7 @@ TEST_F(MetricsPageListFixture, TestIteratorWithRefreshableMetricsPage) {
   // Arrange
   static constexpr auto kExpectedValue = 12345;
 
-  struct RefreshableMetrics final : MetricsPage<Metrics> {
+  struct RefreshableMetrics final : MetricsPage<RefreshableMetrics> {
     using MetricsPage::MetricsPage;
 
     void refresh_metrics() noexcept override { uint64_gauge.set(kExpectedValue); }

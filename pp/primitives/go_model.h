@@ -42,8 +42,6 @@ struct LabelSet {
     using iterator_category = std::forward_iterator_tag;
     using difference_type = ptrdiff_t;
 
-    explicit PairsIterator(const LabelSet* label_set) : label_set_(label_set), iterator_(label_set->pairs.begin()) {}
-
     PROMPP_ALWAYS_INLINE Derived& operator++() noexcept {
       ++iterator_;
       return *static_cast<Derived*>(this);
@@ -60,13 +58,18 @@ struct LabelSet {
    protected:
     const LabelSet* label_set_;
     SliceView<LabelView>::const_iterator iterator_;
+
+   private:
+    friend Derived;
+
+    explicit PairsIterator(const LabelSet* label_set) : label_set_(label_set), iterator_(label_set->pairs.begin()) {}
   };
 
   class Iterator : public PairsIterator<Iterator> {
    public:
     using PairsIterator::difference_type;
     using PairsIterator::iterator_category;
-    using PairsIterator::PairsIterator;
+    explicit Iterator(const LabelSet* label_set) : PairsIterator(label_set) {}
     using value_type = std::pair<std::string_view, std::string_view>;
     using pointer = value_type*;
     using reference = value_type&;
@@ -82,7 +85,7 @@ struct LabelSet {
      public:
       using PairsIterator::difference_type;
       using PairsIterator::iterator_category;
-      using PairsIterator::PairsIterator;
+      explicit NamesIterator(const LabelSet* label_set) : PairsIterator(label_set) {}
       using value_type = std::string_view;
       using pointer = value_type*;
       using reference = value_type&;
