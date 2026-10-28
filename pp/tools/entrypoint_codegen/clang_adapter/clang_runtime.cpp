@@ -3,12 +3,10 @@
 #include <clang-c/Index.h>
 
 #include <cassert>
-#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_map>
-#include <utility>
 
 namespace epgen::clang_adapter {
 
@@ -366,7 +364,7 @@ class ParseSession::Impl : public AstContext {
     CXUnsavedFile unsaved_file{
         .Filename = source_path.c_str(),
         .Contents = virtual_source.data(),
-        .Length = static_cast<unsigned long>(virtual_source.size()),
+        .Length = static_cast<decltype(CXUnsavedFile::Length)>(virtual_source.size()),
     };
 
     CXTranslationUnit raw_tu = nullptr;
