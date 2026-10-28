@@ -60,34 +60,50 @@ TEST_F(FactStoreTest, StoresSourceFilesAndDirectStrings) {
   EXPECT_EQ(facts_.source_file(source_file_id).path, "entrypoint.cpp");
 }
 
-TEST_F(FactStoreTest, ReturnsDirectlyOwnedLists) {
-  // Parsed source: entrypoint.cpp
-  // void prompp_fn(void* args, void* res);
-
+TEST_F(FactStoreTest, CopiesFunctionOwnedLists) {
   // Arrange
   const SourceLocation location{.file = facts_.add_source_file("entrypoint.cpp"), .line = 3, .column = 5};
-  const std::vector<ParamDecl> params{
-      ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
-      ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
-  };
-  const std::vector<FieldDecl> fields{
-      FieldDecl{.name = "series", .type_spelling = "int", .location = location},
+  FunctionDecl function{
+      .name = "prompp_fn",
+      .return_type_spelling = "void",
+      .documentation = "",
+      .bridge_kind = BridgeKind::kFastCGo,
+      .params =
+          {
+              ParamDecl{.name = "args", .type_spelling = "void*", .role = ParamRole::kArgs, .location = location},
+              ParamDecl{.name = "res", .type_spelling = "void*", .role = ParamRole::kRes, .location = location},
+          },
+      .layouts =
+          {
+              LayoutDecl{
+                  .kind = LayoutKind::kArguments,
+                  .fields = {FieldDecl{.name = "series", .type_spelling = "int", .location = location}},
+                  .location = location,
+              },
+          },
+      .location = location,
+      .has_c_linkage = true,
   };
 
   // Act
-  const auto stored_params = params;
-  const auto stored_fields = fields;
+  const auto function_id = facts_.add_function(function);
+  function.params[0].name = "changed";
+  function.params.clear();
+  function.layouts[0].fields[0].name = "changed";
+  function.layouts[0].fields.clear();
+  function.layouts.clear();
+  const auto& stored_function = facts_.function(function_id);
 
   // Assert
-  ASSERT_EQ(stored_params.size(), 2);
-  EXPECT_EQ(stored_params[0].name, "args");
-  EXPECT_EQ(stored_params[1].name, "res");
+  ASSERT_EQ(2U, stored_function.params.size());
+  EXPECT_EQ("args", stored_function.params[0].name);
+  EXPECT_EQ("res", stored_function.params[1].name);
+  EXPECT_EQ(ParamRole::kArgs, stored_function.params[0].role);
+  EXPECT_EQ(ParamRole::kRes, stored_function.params[1].role);
 
-  EXPECT_EQ(stored_params[0].role, ParamRole::kArgs);
-  EXPECT_EQ(stored_params[1].role, ParamRole::kRes);
-
-  ASSERT_EQ(stored_fields.size(), 1);
-  EXPECT_EQ(stored_fields[0].name, "series");
+  ASSERT_EQ(1U, stored_function.layouts.size());
+  ASSERT_EQ(1U, stored_function.layouts[0].fields.size());
+  EXPECT_EQ("series", stored_function.layouts[0].fields[0].name);
 }
 
 TEST_F(FactStoreTest, ResolvesFunctionOwnedLists) {
@@ -102,8 +118,6 @@ TEST_F(FactStoreTest, ResolvesFunctionOwnedLists) {
   const std::vector<LayoutDecl> layouts{
       LayoutDecl{.kind = LayoutKind::kArguments, .fields = {}, .location = location},
   };
-  const auto param_list_id = params;
-  const auto layout_list_id = layouts;
 
   // Act
   const auto function_id = facts_.add_function(FunctionDecl{
@@ -111,8 +125,8 @@ TEST_F(FactStoreTest, ResolvesFunctionOwnedLists) {
       .return_type_spelling = "void",
       .documentation = "",
       .bridge_kind = BridgeKind::kFastCGo,
-      .params = param_list_id,
-      .layouts = layout_list_id,
+      .params = params,
+      .layouts = layouts,
       .location = location,
       .has_c_linkage = true,
   });
