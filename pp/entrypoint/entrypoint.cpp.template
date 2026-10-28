@@ -7,8 +7,6 @@
 
 //#entrypoint.amd64_includes
 #elif PROMPP(arch, arm64)
-// Keep the architecture's HWCAP definitions explicit.
-#  include <asm/hwcap.h>  // IWYU pragma: keep
 #  include <sys/auxv.h>
 
 //#entrypoint.arm64_includes
