@@ -32,13 +32,14 @@ reformat: $$(our_cc_files)
 	@clang-format -i $^
 
 .PHONY: tidy
-tidy: tidy-entrypoint tidy-bridge-header ## Check clang-tidy for all project C++ targets
+tidy: tidy-entrypoint tidy-bridge-header tidy-filter-test ## Check clang-tidy for all project C++ targets
 tidy: tidy_flags := --config=clang-tidy
 tidy: tidy_flags += --@aspect_rules_lint//lint:fail_on_violation
 tidy: compilation_mode := fastbuild
 # Select modes from existing source paths, including benchmark filegroups.
 # Keep the mixed legacy performance harness under full analysis.
-tidy: tidy_cc_query = kind("cc_.*", //...) except filter("^//(third_party|tools)(/|:)", //...)
+tidy: tidy_cc_query = kind("cc_.*", //...) except filter("^//third_party(/|:)", //...)
+tidy: tidy_codegen_targets = $(shell $(bazel) query 'kind("cc_.*", @entrypoint_codegen//...)')
 tidy: tidy_shallow_query = attr("srcs", "(_tests[.]cpp|/benchmarks[:/]|bare_bones/tests/coredump_test_separate[.]cpp)", $(tidy_cc_query)) except //:performance_tests_bin
 tidy: tidy_production_targets = $(shell $(bazel) query '$(tidy_cc_query) except ($(tidy_shallow_query))')
 tidy: tidy_shallow_targets = $(shell $(bazel) query '$(tidy_shallow_query)')
@@ -46,7 +47,12 @@ tidy:
 	@status=0; \
 	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_production_targets) || status=$$?; \
 	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy_shallow --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_shallow_targets) || status=$$?; \
+	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy_codegen --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_codegen_targets) || status=$$?; \
 	exit $$status
+
+.PHONY: tidy-filter-test
+tidy-filter-test:
+	@python3 scripts/test_clang_tidy_filters.py --bazel '$(bazel)'
 
 # Generate the runtime source before Bazel discovers its source files.
 .PHONY: tidy-entrypoint
