@@ -11,7 +11,6 @@
 
 //#entrypoint.amd64_includes
 #elif PROMPP_PLATFORM_ARM64
-#include <asm/hwcap.h>
 #include <sys/auxv.h>
 
 //#entrypoint.arm64_includes

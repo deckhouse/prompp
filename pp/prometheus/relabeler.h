@@ -464,8 +464,9 @@ class PerShardRelabeler {
           throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d next_item_index: %d shard_id: %d", inner_serie.ls_id, lss.next_item_index(),
                                      shard_id_);
         }
-        builder_.reset(lss[inner_serie.ls_id]);
-        process_external_labels(builder_, external_labels_);
+        const auto& label_set = lss[inner_serie.ls_id];
+        builder_.reset(label_set);
+        process_external_labels(builder_, external_labels_, label_set);
 
         relabelStatus rstatus = stateless_relabeler_->relabeling_process(buf_, builder_);
         soft_validate(rstatus, builder_);
