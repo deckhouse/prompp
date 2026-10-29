@@ -651,6 +651,35 @@ TEST_F(InputTransitionRelabelingOnlyReadFixture, ShouldMarkSeriesAsActive) {
   EXPECT_TRUE(lss_copy.added_series().is_set(0U));
 }
 
+class OutputExternalLabelsFixture : public testing::Test {};
+
+TEST_F(OutputExternalLabelsFixture, PreserveSeriesLabelsBeforeRelabeling) {
+  // Arrange
+  QueryableEncodingBimap<BareBones::Vector> lss;
+  const auto ls_id = lss.find_or_emplace(LabelViewSet{{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}});
+  std::vector<GoLabel> external_labels{{GoString("cluster"), GoString("production")}, {GoString("job"), GoString("external-job")}};
+  SliceView<GoLabel> external_labels_view(external_labels.data(), external_labels.size(), external_labels.size());
+  RelabelConfig keep_job{.source_labels = {"job"}, .regex = "node", .action = rKeep};
+  RelabelConfig keep_cluster{.source_labels = {"cluster"}, .regex = "production", .action = rKeep};
+  StatelessRelabeler stateless_relabeler(std::vector{&keep_job, &keep_cluster});
+  PromPP::Prometheus::Relabel::PerShardRelabeler relabeler(external_labels_view, &stateless_relabeler, 1, 0);
+  PromPP::Prometheus::Relabel::Cache cache;
+  InnerSeries incoming;
+  incoming.emplace_back(Sample(10, 1), ls_id, false);
+  SliceView<InnerSeries> incoming_view(&incoming, 1, 1);
+  InnerSeries encoded;
+  SliceView<InnerSeries> encoded_view(&encoded, 1, 1);
+  RelabeledSeries relabeled;
+
+  // Act
+  relabeler.output_relabeling(lss, cache, &relabeled, incoming_view, encoded_view);
+
+  // Assert
+  ASSERT_EQ(1U, relabeled.size());
+  EXPECT_EQ((LabelViewSet{{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"cluster", "production"}, {"job", "node"}, {"zzz", "9"}}), relabeled.data()[0].ls);
+  EXPECT_EQ((BareBones::Vector{Sample(10, 1)}), relabeled.data()[0].samples);
+}
+
 class TargetLabelsFixture : public testing::Test {
  protected:
   static constexpr uint16_t kNumberOfShards = 2;
