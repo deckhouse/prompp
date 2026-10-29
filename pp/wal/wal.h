@@ -16,6 +16,7 @@
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/sparse_vector.h"
+#include "bare_bones/streams.h"
 #include "bare_bones/vector.h"
 
 #include "primitives/primitives.h"
@@ -42,9 +43,7 @@ Stream& write_sequence_record(Stream& out, const Sequence& sequence) {
   static_assert(Id == 1 || Id == 2);
   static_assert(std::same_as<Sequence, std::conditional_t<Id == 1, LabelIdSequence, TimestampSequence>>);
   assert(sequence.is_flushed());
-  const auto original = out.exceptions();
-  auto restore = std::experimental::scope_exit([&] { out.exceptions(original); });
-  out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+  const auto exception_guard = BareBones::scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
   out.put(1);
   out.put(Id);
   out << sequence.store();
@@ -63,10 +62,7 @@ Stream& read_sequence_record(Stream& in, SequenceStore& store) {
   if (version != 1) {
     throw BareBones::Exception(0xa506b0dd57836363, "Invalid EncodingSequence version %d got from input, only version 1 is supported", version);
   }
-  const auto original = in.exceptions();
-  // Restoring the exception mask can throw during unwinding and terminate.
-  auto restore = std::experimental::scope_exit([&] { in.exceptions(original); });
-  in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+  const auto exception_guard = BareBones::scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
   uint8_t id;
   in.read(reinterpret_cast<char*>(&id), sizeof(id));
   if (id != Id) {
@@ -255,8 +251,7 @@ class BasicEncoder {
       });
     }
 
-    auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-    stream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit);
 
     lz4stream_.set_stream(&stream);
 
@@ -691,8 +686,7 @@ class BasicDecoder {
       stream.read(v1_data, sizeof(v1_data));
     }
 
-    auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-    stream.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     std::istream& in = get_stream(stream);
 

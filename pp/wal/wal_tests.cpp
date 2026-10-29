@@ -498,6 +498,37 @@ TEST(WalSequenceRecordTest, ReadsTimestampsFromVersionOneFormat) {
   EXPECT_THAT(PromPP::WAL::TimestampSequence::View(store.view()), testing::ElementsAre(7));
 }
 
+TEST(WalSequenceRecordTest, WriteFailureRestoresMaskWithoutTerminating) {
+  // Arrange
+  PromPP::WAL::LabelIdSequence sequence;
+  sequence.push_back(7);
+  sequence.flush();
+  std::ospanstream output{std::span<char>{}};
+  output.exceptions(std::ios::badbit);
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::write_sequence_record<1>(output, sequence), std::ios_base::failure);
+
+  // Assert
+  EXPECT_EQ(std::ios::badbit, output.exceptions());
+  EXPECT_TRUE(output.bad());
+}
+
+TEST(WalSequenceRecordTest, ReadFailureRestoresMaskWithoutTerminating) {
+  // Arrange
+  std::stringstream input(std::string("\x01", 1));
+  input.exceptions(std::ios::failbit);
+  PromPP::WAL::SequenceStore store;
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::read_sequence_record<1>(input, store), std::ios_base::failure);
+
+  // Assert
+  EXPECT_EQ(std::ios::failbit, input.exceptions());
+  EXPECT_TRUE(input.fail());
+  EXPECT_TRUE(store.empty());
+}
+
 class WalSequenceValidationFixture : public testing::Test {
  protected:
   struct EncodedRun {

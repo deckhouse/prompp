@@ -752,9 +752,7 @@ class Sequence {
 
   template <OutputStream S>
   friend S& operator<<(S& out, const Sequence& seq) {
-    auto original_exceptions = out.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
     // write version
     out.put(1);
@@ -793,10 +791,7 @@ class Sequence {
       throw BareBones::Exception(0x0baacae87c11b49a, "Invalid Sequence version %d while reading from stream, only version 1 is supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    // Restoring the exception mask can throw during unwinding and terminate.
-    auto sg2 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read size
     in.read(reinterpret_cast<char*>(&seq.size_), sizeof(seq.size_));
