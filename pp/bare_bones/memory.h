@@ -306,19 +306,18 @@ class SharedPtr {
     if (non_atomic_is_unique()) [[likely]] {
       non_atomic_reallocate(new_size);
     } else {
-      const SharedPtr old(std::move(*this));
-
-      // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
-      non_atomic_reallocate(new_size);
-      set_items_count(old.items_count());
+      SharedPtr replacement;
+      replacement.non_atomic_reallocate(new_size);
+      replacement.set_items_count(items_count());
       if (old_size > 0) [[likely]] {
         PRAGMA_DIAGNOSTIC(push)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
         PRAGMA_DIAGNOSTIC_IGNORE(DIAGNOSTIC_STRINGOP_OVERREAD)
         PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_ARRAY_BOUNDS)
-        std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
+        std::memcpy(replacement.get(), get(), std::min(old_size, new_size) * sizeof(T));
         PRAGMA_DIAGNOSTIC(pop)
       }
+      std::swap(data_, replacement.data_);
     }
   }
 
