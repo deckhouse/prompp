@@ -1,6 +1,5 @@
 /* C++ code produced by gperf version 3.2.1 */
 /* Command-line: gperf -L C++ function_names.gperf  */
-/* After constexpr adaptation: python3 scripts/normalize_function_names_hash.py */
 /* Computed positions: -k'1-4,$' */
 #pragma once
 
