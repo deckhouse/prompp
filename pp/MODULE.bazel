@@ -12,25 +12,17 @@ module(
 
 # --- Bazel rule sets (from BCR) -----------------------------------------------
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
-bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_cc", version = "0.1.1")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
 
-# --- Tools not published to BCR (use git_override) ----------------------------
-# bazel_clang_tidy is only used by `make tidy` (clang-tidy aspect); it never
-# enters the production entrypoint build, so it is a dev-only dependency. This
-# lets closed-loop builds skip mirroring it via `--ignore_dev_dependency`.
-bazel_dep(name = "bazel_clang_tidy", dev_dependency = True)
-git_override(
-    module_name = "bazel_clang_tidy",
-    commit = "c4d35e0d0b838309358e57a2efed831780f85cd0",
-    patch_strip = 1,
-    patches = [
-        "//third_party/patches/bazel_clang_tidy:0001-clang-tidy-aspect-tweaks.patch",
-    ],
-    remote = "https://github.com/erenon/bazel_clang_tidy.git",
-)
+# Static analysis only; excluded from production builds with --ignore_dev_dependency.
+bazel_dep(name = "aspect_rules_lint", version = "2.9.1", dev_dependency = True)
 
+local_clang_tidy = use_repo_rule("//bazel/tidy:repositories.bzl", "local_clang_tidy")
+local_clang_tidy(name = "local_clang_tidy", dev_dependency = True)
+
+# --- Tools not published to BCR (use git_override) ----------------------------
 # Hedron's Compile Commands Extractor (dev-only).
 bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
 git_override(

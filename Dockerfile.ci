@@ -51,7 +51,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     rm -rf /var/lib/apt/lists/*
 
 # Bazel
-ARG BAZEL_VERSION=7.4.1
+ARG BAZEL_VERSION=7.7.1
 ARG BAZEL_ARCH
 RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-linux-${BAZEL_ARCH} && \
     chmod +x "/usr/local/bin/bazel"
