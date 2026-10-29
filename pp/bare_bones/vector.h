@@ -30,7 +30,8 @@ class GenericVector {
    * Original implementation (folly/FBVector) is not used because folly is too cumbersome to install.
    */
 
-  static_assert(IsTriviallyReallocatable<T>::value, "type parameter of this class should be trivially reallocatable");
+  static_assert(IsTriviallyReallocatable<T>::value || std::is_nothrow_move_constructible_v<T>,
+                "elements must support byte relocation or nonthrowing move construction");
 
  public:
   using iterator_category = std::contiguous_iterator_tag;
@@ -106,15 +107,19 @@ class GenericVector {
     const auto tail = end() - last;
     derived()->set_size(size() - count);
 
-    if constexpr (!IsTriviallyDestructible<T>::value) {
-      std::destroy_n(first, count);
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      std::memmove(first, last, tail * sizeof(T));
+    } else if constexpr (std::is_trivially_destructible_v<T> && std::is_nothrow_move_assignable_v<T>) {
+      std::move(last, last + tail, first);
+    } else {
+      if constexpr (!IsTriviallyDestructible<T>::value) {
+        std::destroy_n(first, count);
+      }
+      for (auto source = last, destination = first; source != last + tail; ++source, ++destination) {
+        std::construct_at(destination, std::move(*source));
+        std::destroy_at(source);
+      }
     }
-
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memmove(first, last, tail * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
 
     return first;
   }
@@ -150,11 +155,19 @@ class GenericVector {
     reserve(old_size + 1);
     const auto memory = data();
 
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memmove(memory + idx + 1, memory + idx, (old_size - idx) * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      std::memmove(memory + idx + 1, memory + idx, (old_size - idx) * sizeof(T));
+    } else if constexpr (std::is_trivially_destructible_v<T> && std::is_nothrow_move_assignable_v<T>) {
+      if (idx < old_size) {
+        std::construct_at(memory + old_size, std::move(memory[old_size - 1]));
+        std::move_backward(memory + idx, memory + old_size - 1, memory + old_size);
+      }
+    } else {
+      for (auto destination = old_size; destination > idx; --destination) {
+        std::construct_at(memory + destination, std::move(memory[destination - 1]));
+        std::destroy_at(memory + destination - 1);
+      }
+    }
 
     auto* inserted = std::construct_at(memory + idx, std::forward<Item>(item));
     derived()->set_size(old_size + 1);
@@ -300,7 +313,7 @@ class GenericVector {
       const auto current_size = size();
       auto memory = data();
 
-      if constexpr (IsZeroInitializable<T>::value) {
+      if constexpr (IsZeroInitializable<T>::value && IsTriviallyReallocatable<T>::value) {
         zero_memory(memory + current_size, new_size - current_size);
       } else {
         // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks

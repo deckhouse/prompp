@@ -130,6 +130,85 @@ TEST_F(BareBonesVectorFixture, GrowingCopyAssignmentPreservesNestedValues) {
   EXPECT_EQ(source, destination);
 }
 
+TEST_F(BareBonesVectorFixture, PairInsertionsPreserveBorrowedValues) {
+  // Arrange
+  using Pair = std::pair<std::string_view, std::string_view>;
+  Vector<Pair> values{{"a", "1"}, {"c", "3"}};
+  const std::array<Pair, 5> expected{{{"0", "0"}, {"a", "1"}, {"b", "2"}, {"c", "3"}, {"d", "4"}}};
+
+  // Act
+  values.insert(values.begin() + 1, Pair{"b", "2"});
+  values.insert(values.begin(), Pair{"0", "0"});
+  values.insert(values.end(), Pair{"d", "4"});
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(expected, values));
+}
+
+TEST_F(BareBonesVectorFixture, ResizeConstructsEmptyUniqueOwners) {
+  // Arrange
+  Vector<std::unique_ptr<uint32_t>> values;
+
+  // Act
+  values.resize(3);
+  values.reserve(values.capacity() + 1);
+  values.shrink_to_fit();
+
+  // Assert
+  ASSERT_EQ(3U, values.size());
+  EXPECT_EQ(nullptr, values[0]);
+  EXPECT_EQ(nullptr, values[1]);
+  EXPECT_EQ(nullptr, values[2]);
+}
+
+TEST_F(BareBonesVectorFixture, GrowthPreservesStandardVectorElements) {
+  // Arrange
+  Vector<std::vector<uint32_t>> values;
+  values.emplace_back(std::initializer_list<uint32_t>{1U, 2U});
+  const auto first_data = values[0].data();
+
+  // Act
+  values.resize(3);
+  values.reserve(values.capacity() + 1);
+  values.shrink_to_fit();
+
+  // Assert
+  ASSERT_EQ(3U, values.size());
+  EXPECT_EQ(first_data, values[0].data());
+  EXPECT_EQ((std::vector<uint32_t>{1U, 2U}), values[0]);
+  EXPECT_TRUE(values[1].empty());
+  EXPECT_TRUE(values[2].empty());
+}
+
+class VectorOwnershipFixture : public testing::Test {
+ protected:
+  struct Value {
+    int* destructions;
+    ~Value() { ++*destructions; }
+  };
+};
+
+TEST_F(VectorOwnershipFixture, GrowthAndEraseReleaseEachOwnedValueOnce) {
+  // Arrange
+  int destructions = 0;
+  Vector<std::unique_ptr<Value>> values;
+  values.emplace_back(std::make_unique<Value>(&destructions));
+  values.emplace_back(std::make_unique<Value>(&destructions));
+  values.emplace_back(std::make_unique<Value>(&destructions));
+  const auto surviving_value = values[1].get();
+
+  // Act
+  values.reserve(values.capacity() + 1);
+  values.erase(values.begin());
+
+  // Assert
+  EXPECT_EQ(1, destructions);
+  ASSERT_EQ(2U, values.size());
+  EXPECT_EQ(surviving_value, values[0].get());
+  values.clear();
+  EXPECT_EQ(3, destructions);
+}
+
 TEST_F(BareBonesVectorFixture, InitializerListConstructor) {
   // Arrange
 

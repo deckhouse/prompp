@@ -31,14 +31,8 @@ struct IsTriviallyReallocatable<std::pair<T1, T2>> : std::conjunction<IsTriviall
 template <class... Ts>
 struct IsTriviallyReallocatable<std::tuple<Ts...>> : std::conjunction<IsTriviallyReallocatable<Ts>...> {};
 
-template <class T>
-struct IsTriviallyReallocatable<std::vector<T>> : std::true_type {};
-
 template <class T, size_t N>
 struct IsTriviallyReallocatable<std::array<T, N>> : IsTriviallyReallocatable<T> {};
-
-template <class T>
-struct IsTriviallyReallocatable<std::unique_ptr<T>> : std::true_type {};
 
 // IsTriviallyCopyable
 

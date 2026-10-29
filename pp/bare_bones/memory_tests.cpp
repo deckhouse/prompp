@@ -179,6 +179,30 @@ TEST_F(MemoryWithItemCountFixture, CopyOperator) {
   EXPECT_TRUE(std::ranges::equal(memory2, memory_));
 }
 
+TEST(MemoryPairValues, CopyAssignmentPreservesCapacityAndLiveElements) {
+  // Arrange
+  using Pair = std::pair<std::string_view, std::string_view>;
+  Memory<MemoryControlBlockWithItemCount, Pair> source;
+  source.resize_to_fit_at_least(8);
+  std::construct_at(source.begin(), "first", "1");
+  std::construct_at(source.begin() + 1, "second", "2");
+  source.control_block().items_count = 2;
+  Memory<MemoryControlBlockWithItemCount, Pair> destination;
+  destination.resize_to_fit_at_least(3);
+  std::construct_at(destination.begin(), "old", "value");
+  destination.control_block().items_count = 1;
+
+  // Act
+  destination = source;
+
+  // Assert
+  EXPECT_EQ(source.size(), destination.size());
+  EXPECT_EQ(2U, destination.control_block().items_count);
+  EXPECT_NE(source.begin(), destination.begin());
+  EXPECT_EQ((Pair{"first", "1"}), destination.begin()[0]);
+  EXPECT_EQ((Pair{"second", "2"}), destination.begin()[1]);
+}
+
 class SharedPtrFixture : public ::testing::Test {
  protected:
   template <class T>

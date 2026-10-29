@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
+#include <cassert>
 #include <cstring>
 #include <limits>
 
@@ -40,7 +42,8 @@ class PreAllocationSizeCalculator {
 template <class Derived, class SizeType, class T, ReallocatorInterface Reallocator = DefaultReallocator>
 class GenericMemory {
  public:
-  static_assert(IsTriviallyReallocatable<T>::value, "type parameter of this class should be trivially reallocatable");
+  static_assert(IsTriviallyReallocatable<T>::value || std::is_nothrow_move_constructible_v<T>,
+                "elements must support byte relocation or nonthrowing move construction");
 
   using value_type = T;
   using iterator = T*;
@@ -55,6 +58,7 @@ class GenericMemory {
   }
 
   PROMPP_ALWAYS_INLINE void grow_to_fit_at_least_and_fill_with_zeros(SizeType needed_size) noexcept {
+    static_assert(IsTriviallyReallocatable<T>::value, "zero-filled capacity requires byte-relocatable elements");
     if (needed_size > size()) {
       const auto old_size = size();
       resize_to_fit_at_least(needed_size);
@@ -159,13 +163,35 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return control_block_.data; }
 
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    control_block_.data = static_cast<T*>(Reallocator::reallocate(static_cast<void*>(control_block_.data), new_size * sizeof(T)));
-    PRAGMA_DIAGNOSTIC(pop)
+    if constexpr (IsTriviallyReallocatable<T>::value) {
+      PRAGMA_DIAGNOSTIC(push)
+      PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+      control_block_.data = static_cast<T*>(Reallocator::reallocate(static_cast<void*>(control_block_.data), new_size * sizeof(T)));
+      PRAGMA_DIAGNOSTIC(pop)
 
-    if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
-      std::abort();
+      if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
+        std::abort();
+      }
+    } else {
+      static_assert(requires { control_block_.items_count; }, "object relocation requires a live element count");
+      assert(control_block_.items_count <= new_size);
+      if (new_size == control_block_.data_size) {
+        return;
+      }
+
+      T* replacement = nullptr;
+      if (new_size > 0) {
+        replacement = static_cast<T*>(Reallocator::reallocate(nullptr, new_size * sizeof(T)));
+        if (replacement == nullptr) [[unlikely]] {
+          std::abort();
+        }
+      }
+      if (control_block_.items_count > 0) {
+        std::uninitialized_move_n(control_block_.data, control_block_.items_count, replacement);
+        std::destroy_n(control_block_.data, control_block_.items_count);
+      }
+      Reallocator::free(static_cast<void*>(control_block_.data));
+      control_block_.data = replacement;
     }
 
     control_block_.data_size = new_size;
@@ -183,11 +209,16 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
 
     resize(control_block_.data_size);
 
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
+    } else {
+      static_assert(std::is_trivially_destructible_v<T>);
+      static_assert(requires { control_block_.items_count; }, "object copying requires a live element count");
+      assert(control_block_.items_count <= control_block_.data_size);
+      if (control_block_.items_count > 0) {
+        std::uninitialized_copy_n(o.control_block_.data, control_block_.items_count, control_block_.data);
+      }
+    }
   }
 };
 
