@@ -201,6 +201,8 @@ class AggregationIterator {
 PROMPP_ALWAYS_INLINE AggregationIterator create_aggregation_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,
                                                                      const SelectHints& select_hints,
                                                                      PromPP::Primitives::Timestamp downsampling_ms) {
+  // Decorators require rvalue references. A temporary view adds a copy before member construction.
+  // NOLINTBEGIN(performance-move-const-arg)
   if (downsampling_ms != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
     return AggregationIterator(std::in_place_type<AggregationIterator::DownsamplingIterator>, std::move(iterator), downsampling_ms);
   }
@@ -240,8 +242,9 @@ PROMPP_ALWAYS_INLINE AggregationIterator create_aggregation_iterator(::series_da
     case kChanges:
       return AggregationIterator(std::in_place_type<AggregationIterator::ChangesIterator>, std::move(iterator), select_hints.function_parameters);
 
+    // NOLINTEND(performance-move-const-arg)
     default:
-      return AggregationIterator(std::in_place_type<AggregationIterator::SeriesIterator>, std::move(iterator));
+      return AggregationIterator(std::in_place_type<AggregationIterator::SeriesIterator>, iterator);
   }
 }
 

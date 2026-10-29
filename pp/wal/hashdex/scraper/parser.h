@@ -8,6 +8,8 @@
 
 namespace PromPP::WAL::hashdex::scraper {
 
+// The C++/Go scraper result stores this error in a uint32_t field.
+// NOLINTNEXTLINE(performance-enum-size)
 enum class Error : uint32_t {
   kNoError = 0,
   kUnexpectedToken,

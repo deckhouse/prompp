@@ -1,5 +1,8 @@
 #include "wal_hashdex.h"
 
+#include <cstdint>
+#include <type_traits>
+
 #include "entrypoint/types/data_storage.h"
 #include "entrypoint/types/exception.h"
 #include "entrypoint/types/feature_flags.h"
@@ -9,6 +12,7 @@
 using PromPP::WAL::hashdex::scraper::OpenMetricsScraper;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;
 using ScraperError = PromPP::WAL::hashdex::scraper::Error;
+static_assert(std::is_same_v<std::underlying_type_t<ScraperError>, uint32_t>);
 
 struct GoMetadata {
   PromPP::Primitives::Go::String metric_name;

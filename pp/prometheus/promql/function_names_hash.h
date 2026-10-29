@@ -1,9 +1,11 @@
 /* C++ code produced by gperf version 3.2.1 */
 /* Command-line: gperf -L C++ function_names.gperf  */
+/* After constexpr adaptation: python3 scripts/normalize_function_names_hash.py */
 /* Computed positions: -k'1-4,$' */
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) && ('%' == 37) && ('&' == 38) && ('\'' == 39) && ('(' == 40) && (')' == 41) && ('*' == 42) && \
       ('+' == 43) && (',' == 44) && ('-' == 45) && ('.' == 46) && ('/' == 47) && ('0' == 48) && ('1' == 49) && ('2' == 50) && ('3' == 51) && ('4' == 52) &&  \
@@ -33,7 +35,7 @@ class FunctionNamesHash {
 };
 
 constexpr unsigned int FunctionNamesHash::hash(const char* str, size_t len) {
-  constexpr static unsigned short asso_values[] = {
+  constexpr static uint16_t asso_values[] = {
       314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314,
       314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 0,   0,   0,   314, 314, 314, 314, 314, 314, 314,
       314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314, 314,

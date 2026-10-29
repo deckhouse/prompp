@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <fstream>
+#include <limits>
 #include <span>
 
 #include <experimental/scope>
@@ -45,7 +47,9 @@ void deserialize(std::istream& stream, Vector& vector) {
 
   if (count > 0) [[likely]] {
     vector.resize(vector_size + count);
-    stream.read(reinterpret_cast<char*>(&vector[vector_size]), sizeof(uint32_t) * count);
+    static_assert(std::numeric_limits<std::streamsize>::max() / sizeof(uint32_t) >= std::numeric_limits<uint32_t>::max());
+    const auto byte_count = static_cast<std::streamsize>(sizeof(uint32_t)) * count;
+    stream.read(reinterpret_cast<char*>(&vector[vector_size]), byte_count);
   }
 }
 
