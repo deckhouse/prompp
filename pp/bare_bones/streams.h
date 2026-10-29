@@ -3,10 +3,14 @@
 #include <cassert>
 #include <concepts>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <ios>
 #include <ostream>
 #include <span>
 #include <string_view>
+
+#include <experimental/scope>
 
 namespace BareBones {
 
@@ -15,6 +19,22 @@ concept HiddenExceptions = requires(T x, std::ios_base::iostate e) {
   { x.exceptions() } -> std::convertible_to<std::ios_base::iostate>;
   x.exceptions(e);
 };
+
+// The stream must outlive the guard. Its setter must install the mask before throwing.
+// Setup errors propagate. Cleanup preserves the stream state and suppresses restoration errors.
+template <HiddenExceptions S>
+[[nodiscard]] auto scoped_stream_exceptions(S& stream, std::ios_base::iostate mask) {
+  const std::ios_base::iostate original_mask = stream.exceptions();
+  auto guard = std::experimental::scope_exit([&stream, original_mask]() noexcept {
+    try {
+      stream.exceptions(original_mask);
+    } catch (...) {
+      // Restoration must not replace an active exception or escape cleanup.
+    }
+  });
+  stream.exceptions(mask);
+  return guard;
+}
 
 template <typename T>
 concept InputStream = HiddenExceptions<T> && requires(T x, char c, char* s, size_t n) {
