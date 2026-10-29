@@ -1,5 +1,7 @@
 #pragma once
 
+#include <exception>
+
 #include "bare_bones/memory.h"
 #include "series_data/chunk/serialized_chunk.h"
 #include "series_data/data_storage.h"
@@ -354,9 +356,14 @@ class SerializedDataView {
 
     PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
                                                                                  chunk::SerializedChunkSpan::const_iterator chunk_iter) noexcept {
-      return Decoder::create_decode_iterator(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
-        return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
-      });
+      try {
+        return Decoder::create_decode_iterator(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+          return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+        });
+      } catch (...) {
+        // This noexcept iterator factory preserves termination on an invalid encoding.
+        std::terminate();
+      }
     }
   };
 
