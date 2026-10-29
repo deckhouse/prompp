@@ -372,15 +372,15 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
   MemoryType memory_;
 
   PROMPP_ALWAYS_INLINE void copy(const MemoryBasedVector& other) {
-    set_size(other.get_size());
-
     if constexpr (IsTriviallyCopyable<T>::value) {
       memory_ = other.memory_;
     } else {
-      memory_.grow_to_fit_at_least(get_size());
-      for (SizeType i = 0; i != get_size(); ++i) {
+      Base::clear();
+      memory_.grow_to_fit_at_least(other.get_size());
+      for (SizeType i = 0; i != other.get_size(); ++i) {
         std::construct_at(memory_ + i, other[i]);
       }
+      set_size(other.get_size());
     }
   }
 };

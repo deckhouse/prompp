@@ -89,6 +89,47 @@ TEST_F(BareBonesVectorAllocatedMemoryFixture, DereferencableWithAllocatedMemoryM
 
 class BareBonesVectorFixture : public testing::Test {};
 
+TEST_F(BareBonesVectorFixture, CopyAssignmentReleasesReplacedNestedElements) {
+  // Arrange
+  Vector<Vector<uint32_t>> source{{1U, 2U}};
+  Vector<Vector<uint32_t>> destination{{3U}, {4U, 5U}};
+
+  // Act
+  destination = source;
+  source[0][0] = 9U;
+
+  // Assert
+  ASSERT_EQ(1U, destination.size());
+  ASSERT_EQ(2U, destination[0].size());
+  EXPECT_EQ(1U, destination[0][0]);
+  EXPECT_EQ(2U, destination[0][1]);
+}
+
+TEST_F(BareBonesVectorFixture, EmptyCopyAssignmentReleasesNestedElements) {
+  // Arrange
+  Vector<Vector<uint32_t>> source;
+  Vector<Vector<uint32_t>> destination{{3U}, {4U, 5U}};
+
+  // Act
+  destination = source;
+
+  // Assert
+  EXPECT_TRUE(destination.empty());
+}
+
+TEST_F(BareBonesVectorFixture, GrowingCopyAssignmentPreservesNestedValues) {
+  // Arrange
+  Vector<Vector<uint32_t>> source{{1U}, {2U, 3U}, {4U}};
+  Vector<Vector<uint32_t>> destination{{5U, 6U}};
+
+  // Act
+  destination = source;
+
+  // Assert
+  ASSERT_EQ(3U, destination.size());
+  EXPECT_EQ(source, destination);
+}
+
 TEST_F(BareBonesVectorFixture, InitializerListConstructor) {
   // Arrange
 
