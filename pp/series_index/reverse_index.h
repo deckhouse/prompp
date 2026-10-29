@@ -11,102 +11,78 @@ static constexpr uint32_t kOptimalPreAllocationElementsCount = 8;
 template <class T>
 using SharedMemory = BareBones::SharedMemory<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
-class DeltaRLE {
+using PostingStore = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, SharedMemory, kOptimalPreAllocationElementsCount>;
+using PostingSequence = BareBones::RleSequence<BareBones::coding::Delta, PostingStore>;
+
+class SeriesIdSequenceSnapshot;
+
+class SeriesIdSequence {
+  friend class SeriesIdSequenceSnapshot;
+  [[no_unique_address]] PostingSequence sequence_{};
+  uint32_t count_{};
+
  public:
-  using DataSequence = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, SharedMemory, kOptimalPreAllocationElementsCount>;
-  using BaseDeltaRLE = BareBones::Encoding::DeltaRLE<DataSequence>;
-
-  class Encoder : public BaseDeltaRLE::Encoder {
-   public:
-    using value_type = DataSequence::value_type;
-
-    template <std::output_iterator<value_type> IteratorType>
-    PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
-      BaseDeltaRLE::Encoder::encode(val, i);
-      ++count_;
+  using value_type = uint32_t;
+  using Iterator = PostingSequence::Iterator;
+  using IteratorSentinel = PostingSequence::IteratorSentinel;
+  SeriesIdSequence() = default;
+  SeriesIdSequence(SeriesIdSequence&& source) noexcept : sequence_(std::move(source.sequence_)), count_(std::exchange(source.count_, 0)) {}
+  SeriesIdSequence& operator=(SeriesIdSequence&& source) noexcept {
+    if (this != &source) {
+      sequence_ = std::move(source.sequence_);
+      count_ = std::exchange(source.count_, 0);
     }
-
-    PROMPP_ALWAYS_INLINE void clear() noexcept {
-      BaseDeltaRLE::Encoder::clear();
-      count_ = 0;
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type count() const noexcept { return count_; }
-
-   private:
-    value_type count_{};
-  };
-
-  using Decoder = BaseDeltaRLE::Decoder;
-};
-
-class SeriesIdSequence : public BareBones::EncodedSequence<DeltaRLE> {
- public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
-};
-
-class SeriesIdSequenceSnapshot {
- public:
-  using value_type = DeltaRLE::DataSequence::value_type;
-
-  SeriesIdSequenceSnapshot() = default;
-  explicit SeriesIdSequenceSnapshot(const SeriesIdSequence& sequence) : encoder_(sequence.encoder()), memory_(sequence.data().buffer().ptr()) {}
-
-  SeriesIdSequenceSnapshot& operator=(const SeriesIdSequence& sequence) noexcept {
-    encoder_ = sequence.encoder();
-    memory_ = sequence.data().buffer().ptr();
     return *this;
   }
+  // Cardinality must fit uint32_t.
+  void push_back(uint32_t value) noexcept {
+    assert(count_ != std::numeric_limits<uint32_t>::max());
+    sequence_.push_back(value);
+    ++count_;
+  }
+  void clear() noexcept {
+    sequence_.clear();
+    count_ = 0;
+  }
+  [[nodiscard]] uint32_t count() const noexcept { return count_; }
+  [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
+  [[nodiscard]] auto view() const noexcept { return sequence_.view(); }
+  [[nodiscard]] auto progressions() const noexcept { return sequence_.progressions(); }
+  [[nodiscard]] Iterator begin() const noexcept { return sequence_.begin(); }
+  [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
+  [[nodiscard]] size_t allocated_memory() const noexcept { return sequence_.allocated_memory(); }
+};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
+// Iterators borrow this snapshot. Capture and traversal require writer exclusion.
+class SeriesIdSequenceSnapshot {
+  [[no_unique_address]] PostingSequence::Snapshot sequence_{};
+  uint32_t count_{};
 
-  class Iterator {
-   public:
-    using iterator_category = std::input_iterator_tag;
-    using value_type = SeriesIdSequenceSnapshot::value_type;
-    using difference_type = std::ptrdiff_t;
-
-    Iterator(const SharedMemory<uint8_t>::SharedPtr& memory, const DeltaRLE::Encoder& encoder)
-        : iterator_(DeltaRLE::DataSequence::decode_iterator(memory.get(), memory.items_count()), DeltaRLE::DataSequence::end(), &encoder),
-          count_(encoder.count()) {}
-
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
-      ++iterator_;
-      --count_;
-      return *this;
-    }
-
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
-      const auto it = *this;
-      ++*this;
-      return it;
-    }
-
-    PROMPP_ALWAYS_INLINE bool operator==(const SeriesIdSequence::IteratorSentinel&) const noexcept { return count_ == 0; }
-    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *iterator_; }
-
-   private:
-    SeriesIdSequence::Iterator iterator_;
-    uint32_t count_{};
-  };
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return {memory_, encoder_}; }
-  static PROMPP_ALWAYS_INLINE SeriesIdSequence::IteratorSentinel end() noexcept { return {}; }
-
- private:
-  DeltaRLE::Encoder encoder_;
-  SharedMemory<uint8_t>::SharedPtr memory_;
+ public:
+  using value_type = uint32_t;
+  using Iterator = PostingSequence::Iterator;
+  SeriesIdSequenceSnapshot() = default;
+  explicit SeriesIdSequenceSnapshot(const SeriesIdSequence& source) : sequence_(source.sequence_.snapshot()), count_(source.count_) {}
+  SeriesIdSequenceSnapshot& operator=(const SeriesIdSequence& source) noexcept {
+    sequence_ = source.sequence_.snapshot();
+    count_ = source.count_;
+    return *this;
+  }
+  [[nodiscard]] uint32_t count() const noexcept { return count_; }
+  [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
+  [[nodiscard]] auto view() const noexcept { return sequence_.view(); }
+  [[nodiscard]] auto progressions() const noexcept { return sequence_.progressions(); }
+  [[nodiscard]] auto begin() const noexcept { return sequence_.begin(); }
+  [[nodiscard]] static PostingSequence::IteratorSentinel end() noexcept { return {}; }
 };
 
 }  // namespace series_index
 
+// Neither type stores pointers into its own object.
 template <>
-struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequence> : std::true_type {};  // namespace BareBones
-
+struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequence> : std::true_type {};
 template <>
-struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequenceSnapshot> : std::true_type {};  // namespace BareBones
+struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequenceSnapshot> : std::true_type {};
 
 namespace series_index {
 

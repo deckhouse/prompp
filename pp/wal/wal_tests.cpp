@@ -1,4 +1,6 @@
-#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+#include <limits>
 
 #include <spanstream>
 #include <sstream>
@@ -440,6 +442,120 @@ TEST_F(CreateBasicEncoderFromBasicDecoderFixture, Test) {
   // Assert
   ASSERT_EQ((DecodedPoint{.sample = kThirdSample, .ls_id = 0}), third_point);
   ASSERT_EQ((DecodedPoint{.sample = kFourthSample, .ls_id = 1}), fourth_point);
+}
+
+TEST(WalSequenceRecordTest, WritesLabelIdsInVersionOneFormat) {
+  // Arrange
+  PromPP::WAL::LabelIdSequence sequence;
+  sequence.push_back(7);
+  sequence.flush();
+  std::stringstream output;
+  const std::string expected("\x01\x01\x01\x02\x00\x00\x00\x01\x07", 9);
+
+  // Act
+  PromPP::WAL::detail::write_sequence_record<1>(output, sequence);
+
+  // Assert
+  EXPECT_EQ(expected, output.str());
+}
+
+TEST(WalSequenceRecordTest, ReadsLabelIdsFromVersionOneFormat) {
+  // Arrange
+  std::stringstream input(std::string("\x01\x01\x01\x02\x00\x00\x00\x01\x07", 9));
+  PromPP::WAL::SequenceStore store;
+
+  // Act
+  PromPP::WAL::detail::read_sequence_record<1>(input, store);
+
+  // Assert
+  EXPECT_THAT(PromPP::WAL::LabelIdSequence::View(store.view()), testing::ElementsAre(7));
+}
+
+TEST(WalSequenceRecordTest, WritesTimestampsInVersionOneFormat) {
+  // Arrange
+  PromPP::WAL::TimestampSequence sequence;
+  sequence.push_back(7);
+  sequence.flush();
+  std::stringstream output;
+  const std::string expected("\x01\x02\x01\x02\x00\x00\x00\x01\x0e", 9);
+
+  // Act
+  PromPP::WAL::detail::write_sequence_record<2>(output, sequence);
+
+  // Assert
+  EXPECT_EQ(expected, output.str());
+}
+
+TEST(WalSequenceRecordTest, ReadsTimestampsFromVersionOneFormat) {
+  // Arrange
+  std::stringstream input(std::string("\x01\x02\x01\x02\x00\x00\x00\x01\x0e", 9));
+  PromPP::WAL::SequenceStore store;
+
+  // Act
+  PromPP::WAL::detail::read_sequence_record<2>(input, store);
+
+  // Assert
+  EXPECT_THAT(PromPP::WAL::TimestampSequence::View(store.view()), testing::ElementsAre(7));
+}
+
+class WalSequenceValidationFixture : public testing::Test {
+ protected:
+  struct EncodedRun {
+    uint32_t code;
+    uint32_t repeats;
+  };
+
+  PromPP::WAL::SequenceStore store_;
+  std::stringstream input_;
+
+  void write_run(EncodedRun run) { write_runs({&run, 1}); }
+
+  void write_runs(std::span<const EncodedRun> runs) {
+    PromPP::WAL::SequenceStore codes;
+    for (const auto& run : runs) {
+      codes.push_back(run.code);
+      codes.push_back(run.repeats);
+    }
+    // Keep WAL framing valid so only the run violates its contract.
+    input_.put(1);
+    input_.put(1);
+    input_ << codes;
+    input_.seekg(0);
+  }
+};
+
+TEST_F(WalSequenceValidationFixture, RejectsInvalidRunLengthBeforeIteration) {
+  // Arrange
+  write_run({.code = 1, .repeats = std::numeric_limits<uint32_t>::max()});
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::read_sequence_record<1>(input_, store_), BareBones::Exception);
+
+  // Assert
+  EXPECT_TRUE(store_.empty());
+}
+
+TEST_F(WalSequenceValidationFixture, RejectsDeltaRunOutsideValueDomain) {
+  // Arrange
+  write_run({.code = std::numeric_limits<uint32_t>::max(), .repeats = 1});
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::read_sequence_record<1>(input_, store_), BareBones::Exception);
+
+  // Assert
+  EXPECT_TRUE(store_.empty());
+}
+
+TEST_F(WalSequenceValidationFixture, RejectsAccumulatedDeltaOverflowAcrossRuns) {
+  // Arrange
+  const EncodedRun runs[]{{.code = 4294967295U, .repeats = 0}, {.code = 1, .repeats = 0}};
+  write_runs(runs);
+
+  // Act
+  EXPECT_THROW(PromPP::WAL::detail::read_sequence_record<1>(input_, store_), BareBones::Exception);
+
+  // Assert
+  EXPECT_TRUE(store_.empty());
 }
 
 }  // namespace
