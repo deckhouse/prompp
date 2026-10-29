@@ -98,7 +98,7 @@ func appendFrameV3(dst []byte, sr *SerializedRecord) ([]byte, error) {
 	}
 
 	frame := dst[start:]
-	frame[recordLengthOffsetV3] = uint8(payloadSize)
+	frame[recordLengthOffsetV3] = uint8(payloadSize) // #nosec G115 // bounded by maxRecordPayloadSizeV3
 	binary.LittleEndian.PutUint32(frame[recordChecksumOffsetV3:], checksumV3(frame))
 
 	return dst, nil
@@ -176,7 +176,7 @@ func NewDecoderV3() *DecoderV3 {
 
 // DecodeFrom decode [SerializedRecord] from [io.Reader]. Returns [io.EOF] if the reader has no more records,
 // if a zero version byte is reached and [io.ErrUnexpectedEOF] if the frame is incomplete.
-// Any zero version byte ends the journal; zero-byte corruption is not distinguished from a terminator yet.
+// The bounded file reader distinguishes a zero terminator from zero-byte corruption.
 func (d *DecoderV3) DecodeFrom(reader io.Reader, sr *SerializedRecord) error {
 	if _, err := io.ReadFull(reader, d.buffer[:1]); err != nil {
 		return err
