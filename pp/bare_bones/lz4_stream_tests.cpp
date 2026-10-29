@@ -1,11 +1,58 @@
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <sstream>
 
 #include "bare_bones/lz4_stream.h"
 
 namespace {
+
+class FailingOutputBuffer final : public std::stringbuf {
+ public:
+  bool reject_writes{};
+
+ protected:
+  std::streamsize xsputn(const char* data, std::streamsize size) override { return reject_writes ? 0 : std::stringbuf::xsputn(data, size); }
+};
+
+TEST(LZ4OStreamFailure, ExplicitClosePropagatesWriteFailure) {
+  // Arrange
+  FailingOutputBuffer buffer;
+  std::ostream stream{&buffer};
+  stream.exceptions(std::ios::badbit | std::ios::failbit);
+  BareBones::LZ4Stream::ostream compressed{&stream};
+  compressed << "pending data";
+  buffer.reject_writes = true;
+
+  // Act
+  // Assert
+  EXPECT_THROW(compressed.close(), std::ios_base::failure);
+
+  buffer.reject_writes = false;
+  stream.clear();
+  compressed.close();
+}
+
+TEST(LZ4OStreamFailure, AutomaticCloseTerminatesOnWriteFailure) {
+  // Arrange
+  // Act
+  // Assert
+  EXPECT_EXIT(
+      {
+        std::set_terminate([] { std::_Exit(73); });
+        FailingOutputBuffer buffer;
+        std::ostream stream{&buffer};
+        stream.exceptions(std::ios::badbit | std::ios::failbit);
+        {
+          BareBones::LZ4Stream::ostream compressed{&stream};
+          compressed << "pending data";
+          buffer.reject_writes = true;
+        }
+      },
+      testing::ExitedWithCode(73), "");
+}
 
 class LZ4OStreamSetStreamFixture : public testing::Test {};
 

@@ -43,6 +43,7 @@
 #include <array>
 #include <cassert>
 #include <cstring>
+#include <exception>
 #include <streambuf>
 #include <vector>
 
@@ -73,7 +74,14 @@ class basic_ostream final : public std::ostream {
   /**
    * @brief Destroys the LZ4 output stream. Calls close() if not already called.
    */
-  ~basic_ostream() override { close(); }
+  ~basic_ostream() override {
+    try {
+      close();
+    } catch (...) {
+      // Automatic close preserves the termination contract. Explicit close can report errors.
+      std::terminate();
+    }
+  }
 
   /**
    * @brief Flushes and writes LZ4 footer data to the LZ4 output stream.
@@ -105,7 +113,14 @@ class basic_ostream final : public std::ostream {
       write_header();
     }
 
-    ~output_buffer() override { close(); }
+    ~output_buffer() override {
+      try {
+        close();
+      } catch (...) {
+        // Stream buffers cannot propagate close failures from their destructor.
+        std::terminate();
+      }
+    }
 
     PROMPP_ALWAYS_INLINE void close() {
       if (closed_) {
