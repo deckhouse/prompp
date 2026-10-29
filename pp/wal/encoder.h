@@ -43,6 +43,8 @@ class GenericEncoder {
 
  public:
   template <class... Args>
+  // Construction failure is fatal. Keep noexcept without adding handler-driven member cleanup.
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   PROMPP_ALWAYS_INLINE explicit GenericEncoder(Args&&... args) noexcept : encoder_{std::forward<Args>(args)...} {}
 
   // add_wo_stalenans - add (without any stalenans) to encode incoming data(ShardedData) through C++ encoder.

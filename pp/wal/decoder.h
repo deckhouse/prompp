@@ -59,6 +59,8 @@ class GenericDecoder {
   Decoder decoder_;
 
  public:
+  // Construction failure is fatal. Keep noexcept without adding handler-driven member cleanup.
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   explicit PROMPP_ALWAYS_INLINE GenericDecoder(BasicEncoderVersion encoder_version) noexcept : decoder_(label_set_, encoder_version) {}
   explicit PROMPP_ALWAYS_INLINE GenericDecoder(LSS& lss, BasicEncoderVersion encoder_version) : label_set_{lss}, decoder_(label_set_, encoder_version) {}
 
