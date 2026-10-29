@@ -636,17 +636,17 @@ class StatelessRelabeler {
   }
 };
 
-// processExternalLabels merges externalLabels into ls. If ls contains
-// a label in externalLabels, the value in ls wins.
-template <class LabelsBuilder, class ExternalLabels>
-PROMPP_ALWAYS_INLINE void process_external_labels(LabelsBuilder& builder, const ExternalLabels& external_labels) {
+// Merge external labels without overwriting series labels. Both inputs must be sorted by name.
+// The builder must have been reset to source_label_set without subsequent modifications.
+template <class LabelsBuilder, class ExternalLabels, class SomeLabelSet>
+PROMPP_ALWAYS_INLINE void process_external_labels(LabelsBuilder& builder, const ExternalLabels& external_labels, const SomeLabelSet& source_label_set) {
   if (external_labels.size() == 0) {
     return;
   }
 
   std::size_t j{0};
   std::vector<size_t> indexes_for_set;
-  builder.range([&](const auto& lname, const auto&) PROMPP_LAMBDA_INLINE -> bool {
+  for (const auto& lname : source_label_set.names()) {
     for (; j < external_labels.size() && lname > external_labels[j].first; ++j) {
       indexes_for_set.emplace_back(j);
     }
@@ -654,8 +654,7 @@ PROMPP_ALWAYS_INLINE void process_external_labels(LabelsBuilder& builder, const 
     if (j < external_labels.size() && lname == external_labels[j].first) {
       j++;
     }
-    return true;
-  });
+  }
 
   for (auto index : indexes_for_set) {
     builder.set(external_labels[index].first, external_labels[index].second);
