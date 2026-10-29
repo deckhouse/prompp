@@ -1,11 +1,11 @@
 ## New part of make to replace r-scripts
 include scripts/bazel.mk
 
-all_files := $(shell git ls-files -co --exclude-standard)
-vendored := $(patsubst ./%,%,$(shell find . -path '*/vendor/*'))
-our_files := $(filter-out $(vendored),$(all_files))
-cc_files := $(patsubst ./%,%,$(shell find . -type f -regex '.*\.\(h\|hpp\|cpp\)' -a -not -path './third_party/*'))
-our_cc_files := $(filter $(cc_files),$(all_files))
+all_files = $(shell git ls-files -co --exclude-standard)
+vendored = $(patsubst ./%,%,$(shell find . -path '*/vendor/*'))
+our_files = $(filter-out $(vendored),$(all_files))
+cc_files = $(patsubst ./%,%,$(shell find . -type f -regex '.*\.\(h\|hpp\|cpp\)' -a -not -path './third_party/*'))
+our_cc_files = $(filter $(cc_files),$(all_files))
 
 .PHONY: help
 help: ## Show this message
@@ -15,29 +15,48 @@ help: ## Show this message
 build-entrypoint: ## Build entry point and copy artifacts to Go directory
 	$(MAKE) -C entrypoint clean install
 
+.SECONDEXPANSION:
+
 .PHONY: cyrillic
-cyrillic: $(our_files) ## Check there is no cyrillic symbols in code
+cyrillic: $$(our_files) ## Check there is no cyrillic symbols in code
 	@if LC_ALL=C.utf8 grep -I -H --color='auto' -P -n "\p{Cyrillic}" $^; then \
 		exit 1;\
 	fi
 
 .PHONY: format
-format: $(our_cc_files)
+format: $$(our_cc_files)
 	@clang-format --dry-run  --Werror $^
 
 .PHONY: reformat
-reformat: $(our_cc_files)
+reformat: $$(our_cc_files)
 	@clang-format -i $^
 
 .PHONY: tidy
-tidy: ## Check clang-tidy for all libraries code
+tidy: tidy-entrypoint tidy-bridge-header ## Check clang-tidy for all project C++ targets
 tidy: tidy_flags := --config=clang-tidy
-tidy: tidy_flags += --aspects @bazel_clang_tidy//clang_tidy:clang_tidy.bzl%clang_tidy_aspect
-tidy: tidy_flags += --@bazel_clang_tidy//:clang_tidy_config=//:clang_tidy_config
+tidy: tidy_flags += --@aspect_rules_lint//lint:fail_on_violation
 tidy: compilation_mode := fastbuild
-tidy: cc_targets := $(shell bazel query 'kind("cc_.*", //...)')
+# Select modes from existing source paths, including benchmark filegroups.
+# Keep the mixed legacy performance harness under full analysis.
+tidy: tidy_cc_query = kind("cc_.*", //...) except filter("^//(third_party|tools)(/|:)", //...)
+tidy: tidy_shallow_query = attr("srcs", "(_tests[.]cpp|/benchmarks[:/]|bare_bones/tests/coredump_test_separate[.]cpp)", $(tidy_cc_query)) except //:performance_tests_bin
+tidy: tidy_production_targets = $(shell $(bazel) query '$(tidy_cc_query) except ($(tidy_shallow_query))')
+tidy: tidy_shallow_targets = $(shell $(bazel) query '$(tidy_shallow_query)')
 tidy:
-	@$(bazel_build) $(tidy_flags) --output_groups=report --platform_suffix=tidy $(cc_targets)
+	@status=0; \
+	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_production_targets) || status=$$?; \
+	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy_shallow --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_shallow_targets) || status=$$?; \
+	exit $$status
+
+# Generate the runtime source before Bazel discovers its source files.
+.PHONY: tidy-entrypoint
+tidy-entrypoint:
+	@$(MAKE) -C entrypoint init/entrypoint.cpp
+
+# The installed C API header has no C++ translation unit in the Bazel graph.
+.PHONY: tidy-bridge-header
+tidy-bridge-header:
+	@clang-tidy --config-file=.clang-tidy go/cppbridge/entrypoint.h -- -x c++-header -std=c++23
 
 .PHONY: test
 test: ## Run all cpp tests
@@ -46,7 +65,7 @@ ifdef filter
 test: test_args := --test_arg=--gtest_filter=$(filter)
 endif
 else
-test: target := $(shell bazel query 'kind("cc_test.*", //...)')
+test: target = $(shell $(bazel) query 'kind("cc_test.*", //...)')
 endif
 test:
 	@$(bazel_test) $(test_args) --test_output=errors -- $(target)

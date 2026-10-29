@@ -166,8 +166,9 @@ class OutputDecoder : private BaseOutputDecoder {
 
     cache.reserve(wal_lss_.next_item_index());
     for (size_t ls_id = cache.size(); ls_id < wal_lss_.next_item_index(); ++ls_id) {
-      builder_.reset(wal_lss_[ls_id]);
-      Prometheus::Relabel::process_external_labels(builder_, external_labels_);
+      const auto& label_set = wal_lss_[ls_id];
+      builder_.reset(label_set);
+      Prometheus::Relabel::process_external_labels(builder_, external_labels_, label_set);
       Prometheus::Relabel::relabelStatus rstatus = stateless_relabeler_.relabeling_process(buf_, builder_);
       Prometheus::Relabel::soft_validate(rstatus, builder_);
 
