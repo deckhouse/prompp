@@ -208,9 +208,7 @@ class GenericVector {
 
   template <OutputStream S>
   friend S& operator<<(S& out, const GenericVector& vec) {
-    auto original_exceptions = out.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
     // write version
     out.put(1);
@@ -248,9 +246,7 @@ class GenericVector {
       throw Exception(0xe637da228c04829d, "Invalid vector format version %d while reading from stream, only version 1 is supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    auto sg2 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read size
     SizeType size_to_read;

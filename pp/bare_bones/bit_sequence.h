@@ -592,9 +592,7 @@ class BitSequence {
 
   template <OutputStream S>
   friend S& operator<<(S& out, const BitSequence& seq) {
-    auto original_exceptions = out.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
     // write version
     out.put(1);
@@ -630,9 +628,7 @@ class BitSequence {
       throw BareBones::Exception(0x0c91c5ebad288f61, "Invalid BitSequence version %d got from input, only version 1 is supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    auto sg2 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read size
     in.read(reinterpret_cast<char*>(&seq.size_), sizeof(seq.size_));
