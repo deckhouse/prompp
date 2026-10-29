@@ -873,7 +873,8 @@ class CompactSequence {
     uint32_t offset_{};
     uint32_t size_{};
     typename Codec::LengthAndMask length_and_mask_{};
-    uint8_t shift_{};
+    // Unconsumed two-bit codes from the current key byte.
+    uint8_t key_{};
     bool bounded_reads_{};
 
    public:
@@ -890,28 +891,30 @@ class CompactSequence {
           data_iterator_(data_iterator),
           size_(size),
           length_and_mask_(Codec::get_length_and_mask(size_ == 0 ? 0 : (*key_iterator_ & 0x03))),
-          bounded_reads_(bounded_reads) {}
+          bounded_reads_(bounded_reads) {
+      key_ = size_ == 0 ? 0 : *key_iterator_;
+    }
 
     PROMPP_ALWAYS_INLINE DecodeIterator& operator++() noexcept {
       assert(offset_ != size_);
 
       data_iterator_ += length_and_mask_.length;
 
-      if (++offset_ == size_) {
-        return *this;
-      }
-
-      if (offset_ % kPreAllocationElementsCount == 0) [[unlikely]] {
+      if (++offset_ % kPreAllocationElementsCount == 0) [[unlikely]] {
+        // Partial blocks retain all key bytes. A following block may not exist.
+        if (offset_ == size_) {
+          return *this;
+        }
         key_iterator_ = data_iterator_;
         data_iterator_ += kMaxKeySize;
-        shift_ = 0;
+        key_ = *key_iterator_;
+      } else if (offset_ % 4 == 0) {
+        key_ = *++key_iterator_;
       } else {
-        shift_ += 2;
-        key_iterator_ += (shift_ == 8);
-        shift_ %= 8;
+        key_ >>= 2;
       }
 
-      length_and_mask_ = Codec::get_length_and_mask((*key_iterator_ >> shift_) % 4);
+      length_and_mask_ = Codec::get_length_and_mask(key_ % 4);
       return *this;
     }
 
@@ -920,12 +923,29 @@ class CompactSequence {
       ++*this;
       return retval;
     }
-    PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept = default;
+    PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept {
+      // Append may change unused key bits. Cached length and mask are irrelevant at end.
+      return key_iterator_ == other.key_iterator_ && data_iterator_ == other.data_iterator_ && offset_ == other.offset_ && size_ == other.size_ &&
+             bounded_reads_ == other.bounded_reads_ && (offset_ == size_ || length_and_mask_ == other.length_and_mask_);
+    }
     PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return offset_ == size_; }
 
     PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
       if (bounded_reads_) {
-        // Serialized input does not require readable padding after its encoded bytes.
+        // Separate temporaries keep constant-width loads independent of the variable-length copy.
+        if (length_and_mask_.length == 0) {
+          return 0;
+        }
+        if (length_and_mask_.length == 1) {
+          value_type value{};
+          std::memcpy(&value, data_iterator_, 1);
+          return value & length_and_mask_.mask;
+        }
+        if (length_and_mask_.length == sizeof(value_type)) {
+          value_type value;
+          std::memcpy(&value, data_iterator_, sizeof(value_type));
+          return value & length_and_mask_.mask;
+        }
         value_type value{};
         std::memcpy(&value, data_iterator_, length_and_mask_.length);
         return value & length_and_mask_.mask;
