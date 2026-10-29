@@ -6,7 +6,6 @@
 #include <iostream>
 #include <span>
 #include <type_traits>
-#include <utility>
 
 #include "bare_bones/preprocess.h"
 #include "bare_bones/type_traits.h"
@@ -172,12 +171,7 @@ class BytesStream : public std::ostream {
       return count;
     }
 
-    pos_type seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode) override {
-      if (!std::in_range<off_type>(slice_->size())) [[unlikely]] {
-        return pos_type(static_cast<off_type>(-1));
-      }
-      return pos_type(static_cast<off_type>(slice_->size()));
-    }
+    pos_type seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode) override { return pos_type(static_cast<off_type>(slice_->size())); }
   };
 
   output_buffer buffer_;
