@@ -8,6 +8,7 @@
 #include <experimental/scope>
 
 #include "exception.h"
+#include "streams.h"
 
 namespace BareBones {
 
@@ -15,8 +16,7 @@ inline constinit uint8_t kSerializerVersion = 1;
 
 template <class T>
 void serialize(std::ostream& stream, std::span<T> items) {
-  auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-  stream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+  const auto exception_guard = scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit);
 
   stream.put(kSerializerVersion);
 
@@ -39,8 +39,7 @@ void deserialize(std::istream& stream, Vector& vector) {
     throw Exception(0xed3acf7e0d0327d2, "Invalid serializer version %d got from input stream, only version %d is supported", version, kSerializerVersion);
   }
 
-  auto sg2 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream] { stream.exceptions(original_exceptions); });
-  stream.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+  const auto exception_guard = scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
   uint32_t count{0};
   stream.read(reinterpret_cast<char*>(&count), sizeof(count));

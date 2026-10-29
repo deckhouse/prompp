@@ -191,9 +191,7 @@ class GenericDecodingTable {
 
     template <OutputStream S>
     void save(S& out, const storage_type& storage, const Checkpoint* from = nullptr) const {
-      auto original_exceptions = out.exceptions();
-      auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-      out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+      const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
       // write a version
       out.put(table_version_);
@@ -412,9 +410,7 @@ class GenericDecodingTable {
       throw BareBones::Exception(0x343b7bcc6814f2d5, "Invalid EncodingSequence version %d got from input stream, only versions 1 and 2 are supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read mode
     const auto mode = static_cast<SerializationMode>(in.get());
