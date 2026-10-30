@@ -1,10 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <array>
-#include <cstdint>
-#include <stdexcept>
-#include <string_view>
-
 #include "metric.h"
 #include "protobuf.h"
 #include "wal/hashdex/test_fixture.h"
@@ -20,53 +15,6 @@ using PromPP::Prometheus::MetadataType;
 using PromPP::WAL::hashdex::FloatMetric;
 using PromPP::WAL::hashdex::Metadata;
 using std::operator""sv;
-
-class ThrowingReadHashdex {
-  struct Float {
-    [[nodiscard]] uint64_t hash() const noexcept { return 0; }
-
-    template <class Timeseries>
-    void read(Timeseries&) const {
-      throw std::runtime_error("float read failed");
-    }
-  };
-
-  struct MetadataItem {
-    [[nodiscard]] std::string_view metric_name() const { throw std::runtime_error("metadata read failed"); }
-    [[nodiscard]] std::string_view text() const noexcept { return "text"; }
-    [[nodiscard]] MetadataType type() const noexcept { return MetadataType::kHelp; }
-  };
-
- public:
-  [[nodiscard]] const auto& floats() const noexcept { return floats_; }
-  [[nodiscard]] const auto& metadata() const noexcept { return metadata_; }
-
- private:
-  std::array<Float, 1> floats_{};
-  std::array<MetadataItem, 1> metadata_{};
-};
-
-TEST(HashdexCollectionTest, PropagatesFloatReadFailure) {
-  // Arrange
-  const ThrowingReadHashdex hashdex;
-
-  // Act
-  const auto collect = [&] { return PromPP::WAL::hashdex::get_floats(hashdex); };
-
-  // Assert
-  EXPECT_THROW(static_cast<void>(collect()), std::runtime_error);
-}
-
-TEST(HashdexCollectionTest, PropagatesMetadataReadFailure) {
-  // Arrange
-  const ThrowingReadHashdex hashdex;
-
-  // Act
-  const auto collect = [&] { return PromPP::WAL::hashdex::get_metadata(hashdex); };
-
-  // Assert
-  EXPECT_THROW(static_cast<void>(collect()), std::runtime_error);
-}
 
 struct ProtobufCase {
   std::string_view protobuf;

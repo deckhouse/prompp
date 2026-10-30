@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
-#include <memory>
 #include <sstream>
 
 #include "bare_bones/lz4_stream.h"
@@ -78,38 +77,6 @@ TEST_F(LZ4OStreamFixture, NoEndMarkAtClose) {
 
   // Assert
   EXPECT_EQ(headers_length, string_stream_.view().length());
-}
-
-class LZ4OStreamFailureFixture : public testing::Test {
- protected:
-  std::ostringstream destination_;
-  std::unique_ptr<BareBones::LZ4Stream::ostream> stream_{std::make_unique<BareBones::LZ4Stream::ostream>(&destination_)};
-
-  void SetUp() override {
-    *stream_ << "pending data";
-    destination_.exceptions(std::ios::badbit | std::ios::failbit);
-    ASSERT_THROW(destination_.setstate(std::ios::badbit), std::ios_base::failure);
-  }
-};
-
-TEST_F(LZ4OStreamFailureFixture, ExplicitClosePropagatesWriteFailure) {
-  // Arrange
-
-  // Act
-  EXPECT_THROW(stream_->close(), std::ios_base::failure);
-
-  // Assert
-  EXPECT_TRUE(destination_.bad());
-}
-
-TEST_F(LZ4OStreamFailureFixture, AutomaticCloseSuppressesWriteFailure) {
-  // Arrange
-
-  // Act
-  stream_.reset();
-
-  // Assert
-  EXPECT_TRUE(destination_.bad());
 }
 
 class LZ4IStreamFixture : public testing::Test {

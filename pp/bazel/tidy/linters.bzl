@@ -23,12 +23,3 @@ clang_tidy_shallow = _clang_tidy(args = [
     "--extra-arg=-Xclang",
     "--extra-arg=1",
 ])
-
-# This first-party module is external to the main Bazel workspace.
-# Its angle includes can retain system classification in the external toolchain.
-# Match its repository exactly and keep libclang extension repositories excluded.
-clang_tidy_codegen = _clang_tidy(args = [
-    "--header-filter=(^|/)external/entrypoint_codegen[~+]?/",
-    "--exclude-header-filter=^$",
-    "--system-headers",
-])

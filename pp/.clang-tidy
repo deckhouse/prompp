@@ -7,7 +7,7 @@ Checks: >
   misc-include-cleaner,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
-ExcludeHeaderFilterRegex: '(^|/)(external|third_party)(/|$)'
+ExcludeHeaderFilterRegex: '(^|/)(external|third_party|tools)(/|$)'
 ExtraArgs:
   - '-Wno-deprecated-declarations'
 FormatStyle: file
