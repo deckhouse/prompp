@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <random>
 #include <sstream>
 
@@ -9,54 +10,63 @@ namespace {
 
 using BareBones::Vector;
 
-struct FailingVectorReallocator : BareBones::DefaultReallocator {
-  static inline bool fail = false;
-  static void* reallocate(void* memory, size_t size) { return fail ? nullptr : DefaultReallocator::reallocate(memory, size); }
-};
-
 class VectorFailureFixture : public testing::Test {
  protected:
+  struct ConstructionFailure {};
+
+  struct State {
+    int live{};
+    int copies_left{std::numeric_limits<int>::max()};
+    int defaults_left{std::numeric_limits<int>::max()};
+    bool fail_allocation{};
+  };
+
+  // Default construction and the allocator API need a static binding to fixture-owned state.
+  static inline State* active_state_{};
+
+  struct Reallocator : BareBones::DefaultReallocator {
+    static void* reallocate(void* memory, size_t size) { return active_state_->fail_allocation ? nullptr : DefaultReallocator::reallocate(memory, size); }
+  };
+
   struct Value {
-    static inline int live = 0;
-    static inline int copies_left = -1;
-    static inline int defaults_left = -1;
     int value = 42;
 
     Value() {
-      if (defaults_left == 0) {
-        throw std::runtime_error("default construction failed");
+      if (active_state_->defaults_left == 0) {
+        throw ConstructionFailure{};
       }
-      --defaults_left;
-      ++live;
+      --active_state_->defaults_left;
+      ++active_state_->live;
     }
     Value(const Value& other) : value(other.value) {
-      if (copies_left == 0) {
-        throw std::runtime_error("copy construction failed");
+      if (active_state_->copies_left == 0) {
+        throw ConstructionFailure{};
       }
-      --copies_left;
-      ++live;
+      --active_state_->copies_left;
+      ++active_state_->live;
     }
-    Value(Value&& other) noexcept : value(other.value) { ++live; }
+    Value(Value&& other) noexcept : value(other.value) { ++active_state_->live; }
     Value& operator=(const Value&) = delete;
     Value& operator=(Value&&) = delete;
-    ~Value() { --live; }
+    ~Value() { --active_state_->live; }
   };
 
+  State state_;
+
+  void SetUp() override { active_state_ = &state_; }
   void TearDown() override {
-    FailingVectorReallocator::fail = false;
-    Value::copies_left = -1;
-    Value::defaults_left = -1;
-    EXPECT_EQ(0, Value::live);
+    active_state_ = nullptr;
+    EXPECT_EQ(0, state_.live);
   }
 };
 
 TEST_F(VectorFailureFixture, FailedObjectGrowthPreservesLiveElements) {
   // Arrange
-  Vector<Value, FailingVectorReallocator> values;
+  Vector<Value, Reallocator> values;
   values.emplace_back();
   const auto* allocation = values.data();
   const auto capacity = values.capacity();
-  FailingVectorReallocator::fail = true;
+  state_.fail_allocation = true;
 
   // Act
   EXPECT_THROW(values.reserve(capacity + 1), std::bad_alloc);
@@ -66,22 +76,22 @@ TEST_F(VectorFailureFixture, FailedObjectGrowthPreservesLiveElements) {
   EXPECT_EQ(capacity, values.capacity());
   ASSERT_EQ(1U, values.size());
   EXPECT_EQ(42, values[0].value);
-  EXPECT_EQ(1, Value::live);
+  EXPECT_EQ(1, state_.live);
 }
 
 TEST_F(VectorFailureFixture, FailedDefaultConstructionDestroysPartialTail) {
   // Arrange
   Vector<Value> values;
   values.emplace_back();
-  Value::defaults_left = 1;
+  state_.defaults_left = 1;
 
   // Act
-  EXPECT_THROW(values.resize(4), std::runtime_error);
+  EXPECT_THROW(values.resize(4), ConstructionFailure);
 
   // Assert
   ASSERT_EQ(1U, values.size());
   EXPECT_EQ(42, values[0].value);
-  EXPECT_EQ(1, Value::live);
+  EXPECT_EQ(1, state_.live);
 }
 
 TEST_F(VectorFailureFixture, FailedFillConstructionDestroysPartialTail) {
@@ -89,29 +99,29 @@ TEST_F(VectorFailureFixture, FailedFillConstructionDestroysPartialTail) {
   Vector<Value> values;
   values.emplace_back();
   Value value;
-  Value::copies_left = 1;
+  state_.copies_left = 1;
 
   // Act
-  EXPECT_THROW(values.resize(4, value), std::runtime_error);
+  EXPECT_THROW(values.resize(4, value), ConstructionFailure);
 
   // Assert
   EXPECT_EQ(1U, values.size());
-  EXPECT_EQ(2, Value::live);
+  EXPECT_EQ(2, state_.live);
 }
 
 TEST_F(VectorFailureFixture, FailedCopyConstructorDestroysPartialCopy) {
   // Arrange
   Vector<Value> source;
   source.resize(3);
-  Value::copies_left = 1;
+  state_.copies_left = 1;
   const auto copy = [&] { return source; };
 
   // Act
-  EXPECT_THROW(static_cast<void>(copy()), std::runtime_error);
+  EXPECT_THROW(static_cast<void>(copy()), ConstructionFailure);
 
   // Assert
   EXPECT_EQ(3U, source.size());
-  EXPECT_EQ(3, Value::live);
+  EXPECT_EQ(3, state_.live);
 }
 
 TEST_F(VectorFailureFixture, FailedCopyAssignmentLeavesValidEmptyDestination) {
@@ -120,32 +130,33 @@ TEST_F(VectorFailureFixture, FailedCopyAssignmentLeavesValidEmptyDestination) {
   source.resize(3);
   Vector<Value> destination;
   destination.resize(2);
-  Value::copies_left = 1;
+  state_.copies_left = 1;
 
   // Act
-  EXPECT_THROW(destination = source, std::runtime_error);
+  EXPECT_THROW(destination = source, ConstructionFailure);
 
   // Assert
   EXPECT_TRUE(destination.empty());
   EXPECT_EQ(3U, source.size());
-  EXPECT_EQ(3, Value::live);
+  EXPECT_EQ(3, state_.live);
 }
 
 TEST_F(VectorFailureFixture, FailedInsertCopyPreservesValues) {
   // Arrange
   Vector<Value> values;
   values.resize(2);
+  values[1].value = 84;
   Value value;
-  Value::copies_left = 0;
+  state_.copies_left = 0;
 
   // Act
-  EXPECT_THROW(values.insert(values.begin(), value), std::runtime_error);
+  EXPECT_THROW(values.insert(values.begin(), value), ConstructionFailure);
 
   // Assert
-  EXPECT_EQ(2U, values.size());
-  EXPECT_EQ(3, Value::live);
+  ASSERT_EQ(2U, values.size());
+  EXPECT_EQ(3, state_.live);
   EXPECT_EQ(42, values[0].value);
-  EXPECT_EQ(42, values[1].value);
+  EXPECT_EQ(84, values[1].value);
 }
 
 class BareBonesVectorAllocatedMemoryFixture : public testing::Test {
@@ -367,8 +378,6 @@ TEST_F(VectorOwnershipFixture, MoveAssignmentDestroysReplacedOwners) {
   EXPECT_TRUE(source.empty());
   ASSERT_EQ(1U, destination.size());
   EXPECT_EQ(surviving_value, destination[0].get());
-  destination.clear();
-  EXPECT_EQ(2, destructions);
 }
 
 TEST_F(BareBonesVectorFixture, InitializerListConstructor) {

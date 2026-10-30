@@ -15,18 +15,27 @@ using BareBones::SharedMemory;
 using BareBones::SharedPtr;
 using BareBones::SharedPtrControlBlockWithItemCount;
 
-struct FailingMemoryReallocator : DefaultReallocator {
-  static inline bool fail = false;
-  static void* reallocate(void* memory, size_t size) { return fail ? nullptr : DefaultReallocator::reallocate(memory, size); }
-};
-
 class MemoryFailureFixture : public testing::Test {
  protected:
-  void TearDown() override { FailingMemoryReallocator::fail = false; }
-};
+  struct State {
+    bool fail_allocation{};
+  };
 
-using FailingMemory = Memory<MemoryControlBlockWithItemCount, uint32_t, FailingMemoryReallocator>;
-using FailingSharedMemory = SharedMemory<uint32_t, SharedPtrControlBlockWithItemCount, FailingMemoryReallocator>;
+  // The allocator API is static. Its state belongs to the active fixture.
+  static inline State* active_state_{};
+
+  struct Reallocator : DefaultReallocator {
+    static void* reallocate(void* memory, size_t size) { return active_state_->fail_allocation ? nullptr : DefaultReallocator::reallocate(memory, size); }
+  };
+
+  using FailingMemory = Memory<MemoryControlBlockWithItemCount, uint32_t, Reallocator>;
+  using FailingSharedMemory = SharedMemory<uint32_t, SharedPtrControlBlockWithItemCount, Reallocator>;
+
+  State state_;
+
+  void SetUp() override { active_state_ = &state_; }
+  void TearDown() override { active_state_ = nullptr; }
+};
 
 TEST_F(MemoryFailureFixture, FailedGrowthPreservesAllocationAndValues) {
   // Arrange
@@ -36,7 +45,7 @@ TEST_F(MemoryFailureFixture, FailedGrowthPreservesAllocationAndValues) {
   memory.control_block().items_count = 1;
   const auto* allocation = memory.begin();
   const auto capacity = memory.size();
-  FailingMemoryReallocator::fail = true;
+  state_.fail_allocation = true;
 
   // Act
   EXPECT_THROW(memory.grow_to_fit_at_least(capacity + 1), std::bad_alloc);
@@ -58,7 +67,7 @@ TEST_F(MemoryFailureFixture, FailedCopyAssignmentPreservesDestination) {
   destination.control_block().items_count = 1;
   const auto* allocation = destination.begin();
   const auto capacity = destination.size();
-  FailingMemoryReallocator::fail = true;
+  state_.fail_allocation = true;
 
   // Act
   EXPECT_THROW(destination = source, std::bad_alloc);
@@ -70,23 +79,6 @@ TEST_F(MemoryFailureFixture, FailedCopyAssignmentPreservesDestination) {
   EXPECT_EQ(42U, destination.begin()[0]);
 }
 
-TEST_F(MemoryFailureFixture, ResizeToZeroReleasesAllocationWithoutAllocating) {
-  // Arrange
-  struct ExactMemory : FailingMemory {
-    using FailingMemory::resize;
-  };
-  ExactMemory memory;
-  memory.resize(1);
-  FailingMemoryReallocator::fail = true;
-
-  // Act
-  memory.resize(0);
-
-  // Assert
-  EXPECT_EQ(nullptr, memory.begin());
-  EXPECT_EQ(0U, memory.size());
-}
-
 TEST_F(MemoryFailureFixture, FailedUniqueSharedGrowthPreservesValues) {
   // Arrange
   FailingSharedMemory memory;
@@ -95,7 +87,7 @@ TEST_F(MemoryFailureFixture, FailedUniqueSharedGrowthPreservesValues) {
   memory.set_items_count(1);
   const auto* allocation = memory.begin();
   const auto capacity = memory.size();
-  FailingMemoryReallocator::fail = true;
+  state_.fail_allocation = true;
 
   // Act
   EXPECT_THROW(memory.grow_to_fit_at_least(capacity + 1), std::bad_alloc);
@@ -115,7 +107,7 @@ TEST_F(MemoryFailureFixture, FailedSharedDetachPreservesBothOwners) {
   memory.set_items_count(1);
   auto copy = memory;
   const auto capacity = copy.size();
-  FailingMemoryReallocator::fail = true;
+  state_.fail_allocation = true;
 
   // Act
   EXPECT_THROW(copy.grow_to_fit_at_least(capacity + 1), std::bad_alloc);

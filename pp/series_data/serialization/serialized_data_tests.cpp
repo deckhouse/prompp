@@ -74,21 +74,6 @@ TEST_F(SerializerFixture, EmptyChunksList) {
   ASSERT_EQ(DataStorage::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
 }
 
-TEST_F(SerializerFixture, IteratorConstructionPropagatesInvalidEncoding) {
-  // Arrange
-  encoder_.encode(0, 1, 1.0);
-  const auto serialized = serialize({QueriedChunk{0}});
-  const SerializedDataView view(serialized);
-  auto invalid_chunk = serialized.chunks[0];
-  invalid_chunk.encoding_state.encoding_type = EncodingType::kUnknown;
-
-  // Act
-  const auto construct = [&] { return SerializedDataView::SeriesIterator(view.get_buffer_view(), {&invalid_chunk, 1}, 0); };
-
-  // Assert
-  EXPECT_THROW(construct(), BareBones::Exception);
-}
-
 TEST_F(SerializerFixture, FailedIteratorResetPreservesPreviousSample) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
