@@ -13,30 +13,13 @@ import (
 	"github.com/prometheus/prometheus/util/stats"
 )
 
-const (
-	// expensiveQuerySamples is the inclusive threshold for engine sample work, not physical storage reads.
-	expensiveQuerySamples = 10_000_000
-	// expensiveQueryPeakSamples is the inclusive threshold for peak engine sample weight, not bytes.
-	expensiveQueryPeakSamples = 1_000_000
-	// expensiveQueryAmplificationSamples suppresses amplification diagnostics for small queries.
-	expensiveQueryAmplificationSamples = 100_000
-	// expensiveQueryAmplification is the inclusive ratio of engine work to returned sample weight.
-	expensiveQueryAmplification = 1000
-	// expensiveQueryEvaluation is the inclusive evaluation duration threshold, excluding the engine queue.
-	expensiveQueryEvaluation = time.Second
-	// expensiveQueryRangeEvaluation suppresses range-ratio diagnostics for short evaluations.
-	expensiveQueryRangeEvaluation = 100 * time.Millisecond
-	// expensiveQueryRangeRatio is the inclusive ratio of evaluation time to the requested time range.
-	expensiveQueryRangeRatio = 0.1
-)
-
 //
 // Engine
 //
 
 func (ng *Engine) logExpensiveQuery(ctx context.Context, q *query, result *Result) {
 	cost := newQueryCost(q, result)
-	reasons := cost.reasons()
+	reasons := cost.reasons(ng.expensiveQueryLogging)
 
 	if len(reasons) == 0 {
 		return
@@ -147,27 +130,31 @@ func newQueryCost(q *query, result *Result) queryCost {
 	return cost
 }
 
-func (c queryCost) reasons() []string {
+func (c queryCost) reasons(cfg *ExpensiveQueryLoggingConfig) []string {
 	var reasons []string
 
-	if c.totalSamples >= expensiveQuerySamples {
+	if cfg.HighSamples != nil && c.totalSamples >= int64(*cfg.HighSamples) {
 		reasons = append(reasons, "high_samples")
 	}
 
-	if c.peakSamples >= expensiveQueryPeakSamples {
+	if cfg.HighPeakSamples != nil && int64(c.peakSamples) >= int64(*cfg.HighPeakSamples) {
 		reasons = append(reasons, "high_peak_samples")
 	}
 
-	if c.totalSamples >= expensiveQueryAmplificationSamples && c.sampleAmplification >= expensiveQueryAmplification {
-		reasons = append(reasons, "sample_amplification")
+	if t := cfg.SampleAmplification; t != nil {
+		if c.totalSamples >= int64(t.MinSamples) && c.sampleAmplification >= t.Ratio {
+			reasons = append(reasons, "sample_amplification")
+		}
 	}
 
-	if c.evalSeconds >= expensiveQueryEvaluation.Seconds() {
+	if cfg.SlowEvaluation != nil && c.evalSeconds >= time.Duration(*cfg.SlowEvaluation).Seconds() {
 		reasons = append(reasons, "slow_evaluation")
 	}
 
-	if c.evalSeconds >= expensiveQueryRangeEvaluation.Seconds() && c.evalRangeRatio >= expensiveQueryRangeRatio {
-		reasons = append(reasons, "high_range_time_ratio")
+	if t := cfg.HighRangeTimeRatio; t != nil {
+		if c.rangeSeconds > 0 && c.evalSeconds >= time.Duration(t.MinEvaluation).Seconds() && c.evalRangeRatio >= t.Ratio {
+			reasons = append(reasons, "high_range_time_ratio")
+		}
 	}
 
 	return reasons

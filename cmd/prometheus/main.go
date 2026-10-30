@@ -183,7 +183,6 @@ type flagConfig struct {
 
 	labelReplaceCacheSize      int
 	labelReplaceRegexCacheSize int
-	expensiveQueryLogging      bool
 
 	featureList   []string
 	memlimitRatio float64
@@ -293,11 +292,6 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 // DisableBlockManagerStorage disables the storage of blocks in the block manager.
 func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
-}
-
-// EnableExpensiveQueryLogging enables cost diagnostics in the PromQL engine.
-func (c *flagConfig) EnableExpensiveQueryLogging() {
-	c.expensiveQueryLogging = true
 }
 
 // SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
@@ -1122,6 +1116,18 @@ func main() {
 	}
 
 	if !agentMode {
+		// PP_CHANGES.md: Load opt-in query diagnostics from the data directory at startup.
+		expensiveQueryConfigPath := filepath.Join(localStoragePath, "expensive_queries.yaml")
+		expensiveQueryConfig, errConfig := promql.LoadExpensiveQueryLoggingConfig(expensiveQueryConfigPath)
+		if errConfig != nil {
+			level.Error(logger).Log("msg", "Failed to load expensive query configuration", "err", errConfig)
+			os.Exit(2)
+		}
+
+		if expensiveQueryConfig != nil {
+			level.Info(logger).Log("msg", "Expensive query logging configured", "file", expensiveQueryConfigPath)
+		}
+
 		activeQueryTracker, errTracker := promql.NewActiveQueryTracker(
 			localStoragePath,
 			cfg.queryConcurrency,
@@ -1142,13 +1148,13 @@ func main() {
 			NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 			// EnableAtModifier and EnableNegativeOffset have to be
 			// always on for regular PromQL as of Prometheus v2.33.
-			EnableAtModifier:            true,
-			EnableNegativeOffset:        true,
-			EnablePerStepStats:          cfg.enablePerStepStats,
-			EnableDelayedNameRemoval:    cfg.promqlEnableDelayedNameRemoval,
-			LabelReplaceCacheSize:       cfg.labelReplaceCacheSize,
-			LabelReplaceRegexCacheSize:  cfg.labelReplaceRegexCacheSize,
-			EnableExpensiveQueryLogging: cfg.expensiveQueryLogging, // PP_CHANGES.md: Query diagnostics.
+			EnableAtModifier:           true,
+			EnableNegativeOffset:       true,
+			EnablePerStepStats:         cfg.enablePerStepStats,
+			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
+			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
+			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
+			ExpensiveQueryLogging:      expensiveQueryConfig, // PP_CHANGES.md: Query diagnostics.
 		}
 
 		queryEngine = promql.NewEngine(opts)

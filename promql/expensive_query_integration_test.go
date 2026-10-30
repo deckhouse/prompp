@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -102,6 +104,23 @@ func (s *ExpensiveQueryLoggingSuite) TestConcurrentQueriesHaveIndependentStatist
 	s.Require().ErrorIs(decoder.Decode(&extra), io.EOF)
 }
 
+func (s *ExpensiveQueryLoggingSuite) TestConfiguredReasonsOnly() {
+	// Given
+	engine := s.newEngineWithConfig("high_samples: 100000\n")
+	defer engine.Close()
+	query, err := engine.NewInstantQuery(context.Background(), s.storage, nil,
+		`max_over_time(metric[100001s])`, time.Unix(100_000, 0))
+	s.Require().NoError(err)
+	defer query.Close()
+
+	// When
+	result := query.Exec(context.Background())
+
+	// Then
+	s.Require().NoError(result.Err)
+	s.Equal("high_samples", s.record()["reasons"])
+}
+
 func (s *ExpensiveQueryLoggingSuite) TestDisabledByDefault() {
 	// Given
 	engine := promql.NewEngine(promql.EngineOpts{
@@ -179,11 +198,29 @@ func (s *ExpensiveQueryLoggingSuite) TestInstantQueryWithOriginAndQueryLogger() 
 	s.Equal(span.SpanID().String(), record["spanID"])
 	s.Equal(float64(100_000), record["total_samples"])
 	s.Equal(float64(1), record["returned_samples"])
-	s.Contains(record["patterns"], "aggregation,comparison_filter,regex_matcher,range_selector")
+	s.Equal("aggregation,comparison_filter,regex_matcher,range_selector", record["patterns"])
 	s.Greater(record["eval_seconds"], float64(0))
 	s.GreaterOrEqual(record["exec_seconds"], record["eval_seconds"])
 	s.Equal(float64(0), record["eval_range_ratio"])
 	s.Nil(query.Stats().Samples.TotalSamplesPerStep)
+}
+
+func (s *ExpensiveQueryLoggingSuite) TestRaisedThresholdSuppressesLogging() {
+	// Given
+	engine := s.newEngineWithConfig("sample_amplification: {min_samples: 100000, ratio: 100001}\n")
+	defer engine.Close()
+	query, err := engine.NewInstantQuery(context.Background(), s.storage, nil,
+		`max_over_time(metric[100001s])`, time.Unix(100_000, 0))
+	s.Require().NoError(err)
+	defer query.Close()
+
+	// When
+	result := query.Exec(context.Background())
+
+	// Then
+	s.Require().NoError(result.Err)
+	s.Equal(int64(100_000), query.Stats().Samples.TotalSamples)
+	s.Empty(s.logs.String())
 }
 
 func (s *ExpensiveQueryLoggingSuite) TestRangeQuery() {
@@ -231,10 +268,25 @@ func (s *ExpensiveQueryLoggingSuite) TestSubqueryKeepsOriginalPatterns() {
 }
 
 func (s *ExpensiveQueryLoggingSuite) newEngine(enabled bool) *promql.Engine {
+	var contents string
+	if enabled {
+		contents = "sample_amplification: {min_samples: 100000, ratio: 1000}\n"
+	}
+
+	return s.newEngineWithConfig(contents)
+}
+
+func (s *ExpensiveQueryLoggingSuite) newEngineWithConfig(contents string) *promql.Engine {
+	s.T().Helper()
+	filename := filepath.Join(s.T().TempDir(), "expensive_queries.yaml")
+	s.Require().NoError(os.WriteFile(filename, []byte(contents), 0o600))
+	cfg, err := promql.LoadExpensiveQueryLoggingConfig(filename)
+	s.Require().NoError(err)
+
 	return promql.NewEngine(promql.EngineOpts{
 		Logger: log.NewJSONLogger(log.NewSyncWriter(&s.logs)), MaxSamples: 2_000_000, Timeout: time.Minute,
-		EnableExpensiveQueryLogging: enabled,
-		LookbackDelta:               5 * time.Minute,
+		ExpensiveQueryLogging: cfg,
+		LookbackDelta:         5 * time.Minute,
 	})
 }
 

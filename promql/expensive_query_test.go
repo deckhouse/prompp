@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -38,18 +39,18 @@ func (s *QueryCostSuite) TestFailedExecutionLogsReachedThresholds() {
 	// Given
 	var output bytes.Buffer
 	engine := NewEngine(EngineOpts{
-		Logger: log.NewJSONLogger(&output), Timeout: time.Minute, EnableExpensiveQueryLogging: true,
+		Logger: log.NewJSONLogger(&output), Timeout: time.Minute, ExpensiveQueryLogging: expensiveQueryTestConfig(),
 		LookbackDelta: 5 * time.Minute,
 	})
 	defer engine.Close()
 	wantErr := errors.New("storage failed after processing samples")
-	q := engine.NewTestQuery(func(context.Context) error {
-		s.query.sampleStats.TotalSamples = 10_000_000
-		s.query.sampleStats.PeakSamples = 1_000_000
+	var q *query
+	q = engine.NewTestQuery(func(context.Context) error {
+		q.sampleStats.TotalSamples = 10_000_000
+		q.sampleStats.PeakSamples = 1_000_000
 
 		return wantErr
-	})
-	s.query = q.(*query)
+	}).(*query)
 
 	// When
 	result := q.Exec(context.Background())
@@ -74,7 +75,7 @@ func (s *QueryCostSuite) TestFailedResultHasNoAmplification() {
 
 	// Then
 	s.Zero(cost.sampleAmplification)
-	s.Empty(cost.reasons())
+	s.Empty(cost.reasons(expensiveQueryTestConfig()))
 }
 
 func (s *QueryCostSuite) TestInstantAndZeroRangeHaveNoTimeRatio() {
@@ -132,7 +133,7 @@ func (s *QueryCostSuite) TestQueueTimeDoesNotCountAsEvaluation() {
 
 	// Then
 	s.Zero(cost.evalSeconds)
-	s.Empty(cost.reasons())
+	s.Empty(cost.reasons(expensiveQueryTestConfig()))
 }
 
 func (s *QueryCostSuite) TestRangeRatioUsesRequestedRange() {
@@ -205,25 +206,43 @@ func (s *QueryCostSuite) TestThresholds() {
 		},
 		{name: "below evaluation threshold", cost: queryCost{evalSeconds: 0.999}},
 		{name: "evaluation threshold", cost: queryCost{evalSeconds: 1}, reasons: []string{"slow_evaluation"}},
-		{name: "short range evaluation", cost: queryCost{evalSeconds: 0.099, evalRangeRatio: 1}},
-		{name: "below range ratio", cost: queryCost{evalSeconds: 0.1, evalRangeRatio: 0.099}},
+		{name: "short range evaluation", cost: queryCost{rangeSeconds: 1, evalSeconds: 0.099, evalRangeRatio: 1}},
+		{name: "below range ratio", cost: queryCost{rangeSeconds: 1, evalSeconds: 0.1, evalRangeRatio: 0.099}},
 		{
-			name: "range threshold", cost: queryCost{evalSeconds: 0.1, evalRangeRatio: 0.1},
+			name: "range threshold", cost: queryCost{rangeSeconds: 1, evalSeconds: 0.1, evalRangeRatio: 0.1},
 			reasons: []string{"high_range_time_ratio"},
 		},
 		{name: "all reasons", cost: queryCost{
 			totalSamples: 10_000_000, peakSamples: 1_000_000,
-			sampleAmplification: 1000, evalSeconds: 1, evalRangeRatio: 0.1,
+			sampleAmplification: 1000, rangeSeconds: 10, evalSeconds: 1, evalRangeRatio: 0.1,
 		}, reasons: []string{
 			"high_samples", "high_peak_samples", "sample_amplification", "slow_evaluation", "high_range_time_ratio",
 		}},
 	} {
 		s.Run(tc.name, func() {
 			// When
-			reasons := tc.cost.reasons()
+			reasons := tc.cost.reasons(expensiveQueryTestConfig())
 
 			// Then
 			s.Equal(tc.reasons, reasons)
 		})
+	}
+}
+
+func expensiveQueryTestConfig() *ExpensiveQueryLoggingConfig {
+	highSamples := SampleCountThreshold(10_000_000)
+	highPeakSamples := SampleCountThreshold(1_000_000)
+	slowEvaluation := model.Duration(time.Second)
+
+	return &ExpensiveQueryLoggingConfig{
+		HighSamples:     &highSamples,
+		HighPeakSamples: &highPeakSamples,
+		SampleAmplification: &SampleAmplificationThreshold{
+			MinSamples: 100_000, Ratio: 1000,
+		},
+		SlowEvaluation: &slowEvaluation,
+		HighRangeTimeRatio: &RangeTimeRatioThreshold{
+			MinEvaluation: model.Duration(100 * time.Millisecond), Ratio: 0.1,
+		},
 	}
 }

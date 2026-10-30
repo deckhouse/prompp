@@ -50,9 +50,6 @@ type FlagConfig interface {
 	// DisableBlockManagerStorage disables the storage of blocks in the block manager.
 	DisableBlockManagerStorage()
 
-	// EnableExpensiveQueryLogging enables cost diagnostics in the PromQL engine.
-	EnableExpensiveQueryLogging()
-
 	// SetLabelReplaceCacheSize sets the capacity of the label_replace result cache
 	// (0 keeps the engine default, a negative value disables the cache).
 	SetLabelReplaceCacheSize(size int)
@@ -129,10 +126,6 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 	case "enable_query_stage_metrics":
 		querier.QueryStageMetricsEnabled = true
 		_ = level.Info(logger).Log(msgStr, "Query stage metrics are enabled.")
-
-	case "enable_expensive_query_logging":
-		cfg.EnableExpensiveQueryLogging()
-		_ = level.Info(logger).Log(msgStr, "Expensive query logging is enabled.")
 
 	case "disable_remote_write_http2":
 		remotewriter.HTTP2Enabled = false
