@@ -245,7 +245,14 @@ func (q *query) Exec(ctx context.Context) *Result {
 
 	// Exec query.
 	res, warnings, err := q.ng.exec(ctx, q)
-	return &Result{Err: err, Value: res, Warnings: warnings}
+	result := &Result{Err: err, Value: res, Warnings: warnings}
+
+	// PP_CHANGES.md: Diagnose query cost after execution timers have finished.
+	if q.ng.expensiveQueryLogging != nil {
+		q.ng.logExpensiveQuery(ctx, q, result)
+	}
+
+	return result
 }
 
 // contextDone returns an error if the context was canceled or timed out.
@@ -332,6 +339,10 @@ type EngineOpts struct {
 	// EnablePerStepStats if true allows for per-step stats to be computed on request. Disabled otherwise.
 	EnablePerStepStats bool
 
+	// ExpensiveQueryLogging configures query cost diagnostics. Nil disables diagnostics.
+	// PP_CHANGES.md: Opt-in expensive query diagnostics.
+	ExpensiveQueryLogging *ExpensiveQueryLoggingConfig
+
 	// EnableDelayedNameRemoval delays the removal of the __name__ label to the last step of the query evaluation.
 	// This is useful in certain scenarios where the __name__ label must be preserved or where applying a
 	// regex-matcher to the __name__ label may otherwise lead to duplicate labelset errors.
@@ -355,6 +366,8 @@ type Engine struct {
 	enablePerStepStats       bool
 	enableDelayedNameRemoval bool
 	labelReplaceCache        *labelReplaceCache
+	// PP_CHANGES.md: Opt-in expensive query diagnostics.
+	expensiveQueryLogging *ExpensiveQueryLoggingConfig
 }
 
 // NewEngine returns a new engine.
@@ -451,6 +464,10 @@ func NewEngine(opts EngineOpts) *Engine {
 		enableDelayedNameRemoval: opts.EnableDelayedNameRemoval,
 	}
 	ng.labelReplaceCache = cache
+	// PP_CHANGES.md: Query diagnostics.
+	if opts.ExpensiveQueryLogging.enabled() {
+		ng.expensiveQueryLogging = opts.ExpensiveQueryLogging
+	}
 
 	return ng
 }
