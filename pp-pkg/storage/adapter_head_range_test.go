@@ -15,12 +15,15 @@
 package storage
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 )
 
 // AdapterHeadRangeSuite reuses the Adapter harness of BatchStorageSuite to check
@@ -123,6 +126,41 @@ func (s *AdapterHeadRangeSuite) TestHeadIsQueriedForRangeOfLaterAppend() {
 
 	// Assert
 	s.False(headIsOutOfQueryRange(head, 9_000, 11_000))
+}
+
+// TestQuerierReadsActiveHeadForInstantAfterItsData mirrors the federation endpoint, which queries the
+// zero-length range [now, now]: the last sample of the active head is always older than now, and the
+// instant path must still return it.
+func (s *AdapterHeadRangeSuite) TestQuerierReadsActiveHeadForInstantAfterItsData() {
+	// Arrange
+	s.ingestAt(2_000)
+
+	// Act
+	q, err := s.adapter.Querier(3_000, 3_000)
+	s.Require().NoError(err)
+	seriesSet := q.Select(s.ctx, false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+
+	// Assert
+	s.Require().NoError(seriesSet.Err())
+	s.Equal([]storagetest.TimeSeries{{
+		Labels:  labels.FromStrings("__name__", "metric", "job", "abc"),
+		Samples: []cppbridge.Sample{{Timestamp: 2_000, Value: 1}},
+	}}, actual)
+	s.Require().NoError(q.Close())
+}
+
+func (s *AdapterHeadRangeSuite) TestQuerierSkipsActiveHeadForInstantBeforeItsData() {
+	// Arrange
+	s.ingestAt(2_000)
+
+	// Act
+	q, err := s.adapter.Querier(1_000, 1_000)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Zero(reflect.ValueOf(q).Elem().FieldByName("queriers").Len())
+	s.Require().NoError(q.Close())
 }
 
 // TestQuerierWithoutAnyHeadInRange covers the empty querier list. When no head can hold data for the
