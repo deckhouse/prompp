@@ -1,3 +1,5 @@
+#include <array>
+
 #include <gmock/gmock.h>
 
 #include "series_data/data_storage.h"
@@ -70,6 +72,54 @@ TEST_F(SerializerFixture, EmptyChunksList) {
   // Assert
   ASSERT_EQ(0U, serialized_view.get_chunks_view().size());
   ASSERT_EQ(DataStorage::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
+}
+
+TEST_F(SerializerFixture, IteratorConstructionPropagatesInvalidEncoding) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  const auto serialized = serialize({QueriedChunk{0}});
+  const SerializedDataView view(serialized);
+  auto invalid_chunk = serialized.chunks[0];
+  invalid_chunk.encoding_state.encoding_type = EncodingType::kUnknown;
+
+  // Act
+  const auto construct = [&] { return SerializedDataView::SeriesIterator(view.get_buffer_view(), {&invalid_chunk, 1}, 0); };
+
+  // Assert
+  EXPECT_THROW(construct(), BareBones::Exception);
+}
+
+TEST_F(SerializerFixture, FailedIteratorResetPreservesPreviousSample) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  const auto serialized = serialize({QueriedChunk{0}});
+  const SerializedDataView view(serialized);
+  auto iterator = view.create_series_iterator(0);
+  auto invalid_chunk = serialized.chunks[0];
+  invalid_chunk.encoding_state.encoding_type = EncodingType::kUnknown;
+
+  // Act
+  EXPECT_THROW(iterator.reset(view.get_buffer_view(), {&invalid_chunk, 1}, 0), BareBones::Exception);
+
+  // Assert
+  EXPECT_EQ(1, iterator->timestamp);
+  EXPECT_EQ(1.0, iterator->value);
+}
+
+TEST_F(SerializerFixture, FailedChunkAdvanceLeavesIteratorExhausted) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  const auto serialized = serialize({QueriedChunk{0}});
+  const SerializedDataView view(serialized);
+  std::array chunks{serialized.chunks[0], serialized.chunks[0]};
+  chunks[1].encoding_state.encoding_type = EncodingType::kUnknown;
+  SerializedDataView::SeriesIterator iterator(view.get_buffer_view(), chunks, 0);
+
+  // Act
+  EXPECT_THROW(++iterator, BareBones::Exception);
+
+  // Assert
+  EXPECT_TRUE(iterator == DecodeIteratorSentinel{});
 }
 
 TEST_F(SerializerFixture, TwoUint32ConstantChunkWithCommonTimestampStream) {
@@ -1111,7 +1161,7 @@ class SerializedDataIterSeekToFixture : public SerializerTrait, public testing::
  protected:
   SerializedData serialized_data_;
 
-  SerializedDataView::SeriesIterator create_iterator() noexcept {
+  SerializedDataView::SeriesIterator create_iterator() {
     serialized_data_ = serialize();
     SerializedDataView serialized_view(serialized_data_);
 
@@ -1261,7 +1311,7 @@ class SerializedDataIterSeekFixture : public SerializerTrait, public testing::Te
  protected:
   SerializedData serialized_data_;
 
-  SerializedDataView::SeriesIterator create_iterator() noexcept {
+  SerializedDataView::SeriesIterator create_iterator() {
     serialized_data_ = serialize();
     SerializedDataView serialized_view(serialized_data_);
 

@@ -79,6 +79,49 @@ TEST_F(LZ4OStreamFixture, NoEndMarkAtClose) {
   EXPECT_EQ(headers_length, string_stream_.view().length());
 }
 
+TEST(LZ4OStreamFailure, ExplicitCloseReportsWriteFailureAndRemainsClosed) {
+  // Arrange
+  std::ostringstream destination;
+  BareBones::LZ4Stream::ostream stream{&destination};
+  stream << "pending data";
+  destination.exceptions(std::ios::badbit | std::ios::failbit);
+  EXPECT_THROW(destination.setstate(std::ios::badbit), std::ios_base::failure);
+
+  // Act
+  EXPECT_THROW(stream.close(), std::ios_base::failure);
+
+  // Assert
+  EXPECT_NO_THROW(stream.close());
+}
+
+TEST(LZ4OStreamFailure, AutomaticCloseSuppressesWriteFailure) {
+  // Arrange
+  std::ostringstream destination;
+  auto stream = std::make_unique<BareBones::LZ4Stream::ostream>(&destination);
+  *stream << "pending data";
+  destination.exceptions(std::ios::badbit | std::ios::failbit);
+  EXPECT_THROW(destination.setstate(std::ios::badbit), std::ios_base::failure);
+
+  // Act
+  stream.reset();
+
+  // Assert
+  EXPECT_TRUE(destination.bad());
+}
+
+TEST(LZ4OStreamFailure, ConstructorReportsHeaderFailure) {
+  // Arrange
+  std::ostringstream destination;
+  destination.exceptions(std::ios::badbit | std::ios::failbit);
+  EXPECT_THROW(destination.setstate(std::ios::badbit), std::ios_base::failure);
+
+  // Act
+  const auto construct = [&] { BareBones::LZ4Stream::ostream stream{&destination}; };
+
+  // Assert
+  EXPECT_THROW(construct(), std::ios_base::failure);
+}
+
 class LZ4IStreamFixture : public testing::Test {
  protected:
   std::stringstream string_stream_;

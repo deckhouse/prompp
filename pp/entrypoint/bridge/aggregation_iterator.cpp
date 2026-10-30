@@ -1,5 +1,6 @@
 #include "aggregation_iterator.h"
 
+#include "entrypoint/types/exception.h"
 #include "entrypoint/types/serialization.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_aggregation_iterator_ctor(void* args) {
@@ -10,13 +11,15 @@ extern "C" void prompp_series_data_serialization_serialized_data_aggregation_ite
   };
 
   const auto in = static_cast<Arguments*>(args);
-  std::visit([in](auto& serialized_data) { std::construct_at(in->iterator, serialized_data.aggregation_iterator(in->chunk_ref)); }, *in->serialized_data);
+  entrypoint::types::invoke_without_error_result([&] {
+    std::visit([in](auto& serialized_data) { std::construct_at(in->iterator, serialized_data.aggregation_iterator(in->chunk_ref)); }, *in->serialized_data);
+  });
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_aggregation_iterator_next(void* iterator) {
   using series_data::decoder::DecodeIteratorSentinel;
 
-  ++(*static_cast<entrypoint::types::AggregationIterator*>(iterator));
+  entrypoint::types::invoke_without_error_result([&] { ++(*static_cast<entrypoint::types::AggregationIterator*>(iterator)); });
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_aggregation_iterator_reset(void* args) {
@@ -27,5 +30,6 @@ extern "C" void prompp_series_data_serialization_serialized_data_aggregation_ite
   };
 
   const Arguments* in = static_cast<Arguments*>(args);
-  std::visit([in](auto& serialized_data) { *in->iterator = serialized_data.aggregation_iterator(in->chunk_ref); }, *in->serialized_data);
+  entrypoint::types::invoke_without_error_result(
+      [&] { std::visit([in](auto& serialized_data) { *in->iterator = serialized_data.aggregation_iterator(in->chunk_ref); }, *in->serialized_data); });
 }

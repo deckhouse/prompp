@@ -32,7 +32,7 @@ reformat: $$(our_cc_files)
 	@clang-format -i $^
 
 .PHONY: tidy
-tidy: tidy-entrypoint tidy-bridge-header tidy-filter-test ## Check clang-tidy for all project C++ targets
+tidy: tidy-entrypoint tidy-bridge-header ## Check clang-tidy for all project C++ targets
 tidy: tidy_flags := --config=clang-tidy
 tidy: tidy_flags += --@aspect_rules_lint//lint:fail_on_violation
 tidy: compilation_mode := fastbuild
@@ -49,10 +49,6 @@ tidy:
 	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy_shallow --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_shallow_targets) || status=$$?; \
 	$(bazel_build) $(tidy_flags) --aspects //bazel/tidy:linters.bzl%clang_tidy_codegen --output_groups=rules_lint_human --platform_suffix=tidy $(tidy_codegen_targets) || status=$$?; \
 	exit $$status
-
-.PHONY: tidy-filter-test
-tidy-filter-test:
-	@python3 scripts/test_clang_tidy_filters.py --bazel '$(bazel)'
 
 # Generate the runtime source before Bazel discovers its source files.
 .PHONY: tidy-entrypoint

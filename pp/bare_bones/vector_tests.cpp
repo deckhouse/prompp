@@ -9,6 +9,145 @@ namespace {
 
 using BareBones::Vector;
 
+struct FailingVectorReallocator : BareBones::DefaultReallocator {
+  static inline bool fail = false;
+  static void* reallocate(void* memory, size_t size) { return fail ? nullptr : DefaultReallocator::reallocate(memory, size); }
+};
+
+class VectorFailureFixture : public testing::Test {
+ protected:
+  struct Value {
+    static inline int live = 0;
+    static inline int copies_left = -1;
+    static inline int defaults_left = -1;
+    int value = 42;
+
+    Value() {
+      if (defaults_left == 0) {
+        throw std::runtime_error("default construction failed");
+      }
+      --defaults_left;
+      ++live;
+    }
+    Value(const Value& other) : value(other.value) {
+      if (copies_left == 0) {
+        throw std::runtime_error("copy construction failed");
+      }
+      --copies_left;
+      ++live;
+    }
+    Value(Value&& other) noexcept : value(other.value) { ++live; }
+    Value& operator=(const Value&) = delete;
+    Value& operator=(Value&&) = delete;
+    ~Value() { --live; }
+  };
+
+  void TearDown() override {
+    FailingVectorReallocator::fail = false;
+    Value::copies_left = -1;
+    Value::defaults_left = -1;
+    EXPECT_EQ(0, Value::live);
+  }
+};
+
+TEST_F(VectorFailureFixture, FailedObjectGrowthPreservesLiveElements) {
+  // Arrange
+  Vector<Value, FailingVectorReallocator> values;
+  values.emplace_back();
+  const auto* allocation = values.data();
+  const auto capacity = values.capacity();
+  FailingVectorReallocator::fail = true;
+
+  // Act
+  EXPECT_THROW(values.reserve(capacity + 1), std::bad_alloc);
+
+  // Assert
+  EXPECT_EQ(allocation, values.data());
+  EXPECT_EQ(capacity, values.capacity());
+  ASSERT_EQ(1U, values.size());
+  EXPECT_EQ(42, values[0].value);
+  EXPECT_EQ(1, Value::live);
+}
+
+TEST_F(VectorFailureFixture, FailedDefaultConstructionDestroysPartialTail) {
+  // Arrange
+  Vector<Value> values;
+  values.emplace_back();
+  Value::defaults_left = 1;
+
+  // Act
+  EXPECT_THROW(values.resize(4), std::runtime_error);
+
+  // Assert
+  ASSERT_EQ(1U, values.size());
+  EXPECT_EQ(42, values[0].value);
+  EXPECT_EQ(1, Value::live);
+}
+
+TEST_F(VectorFailureFixture, FailedFillConstructionDestroysPartialTail) {
+  // Arrange
+  Vector<Value> values;
+  values.emplace_back();
+  Value value;
+  Value::copies_left = 1;
+
+  // Act
+  EXPECT_THROW(values.resize(4, value), std::runtime_error);
+
+  // Assert
+  EXPECT_EQ(1U, values.size());
+  EXPECT_EQ(2, Value::live);
+}
+
+TEST_F(VectorFailureFixture, FailedCopyConstructorDestroysPartialCopy) {
+  // Arrange
+  Vector<Value> source;
+  source.resize(3);
+  Value::copies_left = 1;
+  const auto copy = [&] { return source; };
+
+  // Act
+  EXPECT_THROW(static_cast<void>(copy()), std::runtime_error);
+
+  // Assert
+  EXPECT_EQ(3U, source.size());
+  EXPECT_EQ(3, Value::live);
+}
+
+TEST_F(VectorFailureFixture, FailedCopyAssignmentLeavesValidEmptyDestination) {
+  // Arrange
+  Vector<Value> source;
+  source.resize(3);
+  Vector<Value> destination;
+  destination.resize(2);
+  Value::copies_left = 1;
+
+  // Act
+  EXPECT_THROW(destination = source, std::runtime_error);
+
+  // Assert
+  EXPECT_TRUE(destination.empty());
+  EXPECT_EQ(3U, source.size());
+  EXPECT_EQ(3, Value::live);
+}
+
+TEST_F(VectorFailureFixture, FailedInsertCopyPreservesValues) {
+  // Arrange
+  Vector<Value> values;
+  values.resize(2);
+  Value value;
+  Value::copies_left = 0;
+
+  // Act
+  EXPECT_THROW(values.insert(values.begin(), value), std::runtime_error);
+
+  // Assert
+  EXPECT_EQ(2U, values.size());
+  EXPECT_EQ(3, Value::live);
+  EXPECT_EQ(42, values[0].value);
+  EXPECT_EQ(42, values[1].value);
+}
+
 class BareBonesVectorAllocatedMemoryFixture : public testing::Test {
  protected:
   struct Object {
@@ -207,6 +346,29 @@ TEST_F(VectorOwnershipFixture, GrowthAndEraseReleaseEachOwnedValueOnce) {
   EXPECT_EQ(surviving_value, values[0].get());
   values.clear();
   EXPECT_EQ(3, destructions);
+}
+
+TEST_F(VectorOwnershipFixture, MoveAssignmentDestroysReplacedOwners) {
+  // Arrange
+  int destructions = 0;
+  Vector<std::unique_ptr<Value>> source;
+  source.emplace_back(std::make_unique<Value>(&destructions));
+  Vector<std::unique_ptr<Value>> destination;
+  destination.emplace_back(std::make_unique<Value>(&destructions));
+  const auto* surviving_value = source[0].get();
+
+  // Act
+  destination = std::move(source);
+
+  // Assert
+  EXPECT_EQ(1, destructions);
+  // Move assignment guarantees an empty source that remains usable.
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_TRUE(source.empty());
+  ASSERT_EQ(1U, destination.size());
+  EXPECT_EQ(surviving_value, destination[0].get());
+  destination.clear();
+  EXPECT_EQ(2, destructions);
 }
 
 TEST_F(BareBonesVectorFixture, InitializerListConstructor) {

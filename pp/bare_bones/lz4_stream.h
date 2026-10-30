@@ -43,8 +43,9 @@
 #include <array>
 #include <cassert>
 #include <cstring>
-#include <exception>
 #include <streambuf>
+
+#include <experimental/scope>
 #include <vector>
 
 #include <lz4frame.h>
@@ -74,19 +75,13 @@ class basic_ostream final : public std::ostream {
   /**
    * @brief Destroys the LZ4 output stream. Calls close() if not already called.
    */
-  ~basic_ostream() override {
-    try {
-      close();
-    } catch (...) {
-      // Automatic close preserves the termination contract. Explicit close can report errors.
-      std::terminate();
-    }
-  }
+  ~basic_ostream() override = default;
 
   /**
    * @brief Flushes and writes LZ4 footer data to the LZ4 output stream.
    *
-   * After calling this function no more data should be written to the stream.
+   * After calling this function no more data should be written to the stream, including after a failure.
+   * Call close() explicitly to receive write errors. Automatic close suppresses them.
    */
   PROMPP_ALWAYS_INLINE void close() { buffer_.close(); }
 
@@ -110,15 +105,17 @@ class basic_ostream final : public std::ostream {
       if (const size_t ret = LZ4F_createCompressionContext(&ctx_, LZ4F_VERSION); LZ4F_isError(ret) != 0) {
         throw std::runtime_error(std::string("Failed to create LZ4 compression context: ") + LZ4F_getErrorName(ret));
       }
+      auto cleanup = std::experimental::scope_exit([this] { LZ4F_freeCompressionContext(ctx_); });
       write_header();
+      cleanup.release();
     }
 
     ~output_buffer() override {
       try {
         close();
       } catch (...) {
-        // Stream buffers cannot propagate close failures from their destructor.
-        std::terminate();
+        // Match standard file streams. Call close() explicitly to receive write errors.
+        return;
       }
     }
 
@@ -127,12 +124,14 @@ class basic_ostream final : public std::ostream {
         return;
       }
 
+      const auto cleanup = std::experimental::scope_exit([this] {
+        LZ4F_freeCompressionContext(ctx_);
+        ctx_ = nullptr;
+        closed_ = true;
+      });
       if (stream_ != nullptr) {
         sync();
       }
-
-      LZ4F_freeCompressionContext(ctx_);
-      closed_ = true;
     }
 
     PROMPP_ALWAYS_INLINE void set_stream(std::ostream* stream) {

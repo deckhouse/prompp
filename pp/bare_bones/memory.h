@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstring>
 #include <limits>
+#include <new>
 
 #include "allocator.h"
 #include "type_traits.h"
@@ -16,9 +17,9 @@ class PreAllocationSizeCalculator {
  public:
   static constexpr size_t kMinAllocationSize = 32;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t calculate(SizeType needed_size) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t calculate(SizeType needed_size) {
     if (needed_size > std::numeric_limits<uint32_t>::max()) [[unlikely]] {
-      std::abort();
+      throw std::bad_alloc();
     }
 
     if constexpr (sizeof(DataType) < 8) {
@@ -49,15 +50,15 @@ class GenericMemory {
   using iterator = T*;
   using const_iterator = const T*;
 
-  PROMPP_ALWAYS_INLINE void resize_to_fit_at_least(SizeType needed_size) noexcept { derived()->resize(get_allocation_size(needed_size)); }
+  PROMPP_ALWAYS_INLINE void resize_to_fit_at_least(SizeType needed_size) { derived()->resize(get_allocation_size(needed_size)); }
 
-  PROMPP_ALWAYS_INLINE void grow_to_fit_at_least(SizeType needed_size) noexcept {
+  PROMPP_ALWAYS_INLINE void grow_to_fit_at_least(SizeType needed_size) {
     if (needed_size > size()) {
       resize_to_fit_at_least(needed_size);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void grow_to_fit_at_least_and_fill_with_zeros(SizeType needed_size) noexcept {
+  PROMPP_ALWAYS_INLINE void grow_to_fit_at_least_and_fill_with_zeros(SizeType needed_size) {
     static_assert(IsTriviallyReallocatable<T>::value, "zero-filled capacity requires byte-relocatable elements");
     if (needed_size > size()) {
       const auto old_size = size();
@@ -85,7 +86,7 @@ class GenericMemory {
 
   GenericMemory() = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static SizeType get_allocation_size(SizeType needed_size) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static SizeType get_allocation_size(SizeType needed_size) {
     if constexpr (kIsUnitTestBuild || kIsBuildWithAsan) {
       // In unit tests or in build with asan we allocate only needed_size bytes. It helps us to debug memory access errors
       return needed_size;
@@ -130,11 +131,11 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
   using SizeType = typename ControlBlock<T>::SizeType;
 
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
-  PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
+  PROMPP_ALWAYS_INLINE Memory(const Memory& o) { copy(o); }
   PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
   PROMPP_ALWAYS_INLINE ~Memory() noexcept { Reallocator::free(static_cast<void*>(control_block_.data)); }
 
-  PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
+  PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) {
     if (this != &o) [[likely]] {
       copy(o);
     }
@@ -162,15 +163,19 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
   [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return control_block_.data; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return control_block_.data; }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
+  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) {
+    // The caller owns live objects. Shrinking must retain all of them for object relocation.
+    // Allocation failure leaves the pointer, capacity, and live objects unchanged.
     if constexpr (IsTriviallyReallocatable<T>::value) {
-      PRAGMA_DIAGNOSTIC(push)
-      PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-      control_block_.data = static_cast<T*>(Reallocator::reallocate(static_cast<void*>(control_block_.data), new_size * sizeof(T)));
-      PRAGMA_DIAGNOSTIC(pop)
-
-      if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
-        std::abort();
+      if (new_size == 0) {
+        Reallocator::free(static_cast<void*>(control_block_.data));
+        control_block_.data = nullptr;
+      } else {
+        auto* replacement = static_cast<T*>(Reallocator::reallocate(static_cast<void*>(control_block_.data), new_size * sizeof(T)));
+        if (replacement == nullptr) [[unlikely]] {
+          throw std::bad_alloc();
+        }
+        control_block_.data = replacement;
       }
     } else {
       static_assert(requires { control_block_.items_count; }, "object relocation requires a live element count");
@@ -183,7 +188,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
       if (new_size > 0) {
         replacement = static_cast<T*>(Reallocator::reallocate(nullptr, new_size * sizeof(T)));
         if (replacement == nullptr) [[unlikely]] {
-          std::abort();
+          throw std::bad_alloc();
         }
       }
       if (control_block_.items_count > 0) {
@@ -200,25 +205,37 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
  private:
   ControlBlock<T> control_block_;
 
-  PROMPP_ALWAYS_INLINE void copy(const Memory& o) noexcept {
+  PROMPP_ALWAYS_INLINE void copy(const Memory& o) {
     static_assert(IsTriviallyCopyable<T>::value, "it's not allowed to copy memory for non trivially copyable types");
 
-    T* data = control_block_.data;
-    control_block_ = o.control_block_;
-    control_block_.data = data;
-
-    resize(control_block_.data_size);
-
     if constexpr (std::is_trivially_copyable_v<T>) {
-      std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
+      resize(o.control_block_.data_size);
+      if (control_block_.data_size > 0) {
+        std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
+      }
     } else {
-      static_assert(std::is_trivially_destructible_v<T>);
+      static_assert(std::is_trivially_destructible_v<T> && std::is_nothrow_copy_constructible_v<T>);
       static_assert(requires { control_block_.items_count; }, "object copying requires a live element count");
-      assert(control_block_.items_count <= control_block_.data_size);
-      if (control_block_.items_count > 0) {
-        std::uninitialized_copy_n(o.control_block_.data, control_block_.items_count, control_block_.data);
+      assert(o.control_block_.items_count <= o.control_block_.data_size);
+      if constexpr (IsTriviallyReallocatable<T>::value) {
+        resize(o.control_block_.data_size);
+        if (o.control_block_.items_count > 0) {
+          std::uninitialized_copy_n(o.control_block_.data, o.control_block_.items_count, control_block_.data);
+        }
+      } else if (control_block_.data_size != o.control_block_.data_size) {
+        Memory replacement;
+        replacement.resize(o.control_block_.data_size);
+        if (o.control_block_.items_count > 0) {
+          std::uninitialized_copy_n(o.control_block_.data, o.control_block_.items_count, replacement.control_block_.data);
+        }
+        std::swap(control_block_, replacement.control_block_);
+      } else if (o.control_block_.items_count > 0) {
+        std::uninitialized_copy_n(o.control_block_.data, o.control_block_.items_count, control_block_.data);
       }
     }
+    auto* data = control_block_.data;
+    control_block_ = o.control_block_;
+    control_block_.data = data;
   }
 };
 
@@ -392,14 +409,14 @@ class SharedPtr {
  private:
   T* data_{nullptr};
 
-  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
+  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
     auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
     if (control_block == nullptr) [[unlikely]] {
-      std::abort();
+      throw std::bad_alloc();
     }
 
     if (data_ == nullptr) {
@@ -474,7 +491,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T, ControlBlockType, Real
   [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return data_.get(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_.get(); }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
+  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) {
     data_.reallocate(size_, new_size);
     size_ = new_size;
   }

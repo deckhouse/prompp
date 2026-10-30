@@ -39,11 +39,11 @@ class GenericVector {
   using iterator = T*;
   using const_iterator = const T*;
 
-  PROMPP_ALWAYS_INLINE void reserve(SizeType size) noexcept { derived()->memory().grow_to_fit_at_least(size); }
+  PROMPP_ALWAYS_INLINE void reserve(SizeType size) { derived()->memory().grow_to_fit_at_least(size); }
 
-  PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept { derived()->memory().resize_to_fit_at_least(size()); }
+  PROMPP_ALWAYS_INLINE void shrink_to_fit() { derived()->memory().resize_to_fit_at_least(size()); }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
+  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) {
     const auto current_size = size();
     if (new_size > current_size) {
       grow_storage(new_size);
@@ -54,7 +54,7 @@ class GenericVector {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) noexcept {
+  PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) {
     const auto current_size = size();
     if (new_size > current_size) {
       reserve(new_size);
@@ -138,7 +138,7 @@ class GenericVector {
   }
 
   template <class Item>
-  PROMPP_ALWAYS_INLINE void push_back(Item&& item) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back(Item&& item) {
     auto pos = size();
     reserve(pos + 1);
     std::construct_at(data() + pos, std::forward<Item>(item));
@@ -146,12 +146,13 @@ class GenericVector {
   }
 
   template <class Item>
-  PROMPP_ALWAYS_INLINE iterator insert(iterator pos, Item&& item) noexcept {
+  PROMPP_ALWAYS_INLINE iterator insert(iterator pos, Item&& item) {
     assert(pos >= data());
     assert(pos <= data() + size());
 
     const auto idx = pos - data();
     const auto old_size = size();
+    T value(std::forward<Item>(item));
     reserve(old_size + 1);
     const auto memory = data();
 
@@ -169,13 +170,13 @@ class GenericVector {
       }
     }
 
-    auto* inserted = std::construct_at(memory + idx, std::forward<Item>(item));
+    auto* inserted = std::construct_at(memory + idx, std::move(value));
     derived()->set_size(old_size + 1);
     return inserted;
   }
 
   template <class... Args>
-  PROMPP_ALWAYS_INLINE T& emplace_back(Args&&... args) noexcept {
+  PROMPP_ALWAYS_INLINE T& emplace_back(Args&&... args) {
     auto pos = size();
     reserve(pos + 1);
     auto& ref = *std::construct_at(data() + pos, std::forward<Args>(args)...);
@@ -185,7 +186,7 @@ class GenericVector {
 
   template <std::random_access_iterator IteratorType, class IteratorSentinelType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, T> && std::sentinel_for<IteratorSentinelType, IteratorType>
-  PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) {
     const auto pos = size();
     const auto size = std::distance(begin, end);
     reserve(pos + size);
@@ -289,10 +290,7 @@ class GenericVector {
   void initialize(std::initializer_list<T> values) {
     reserve(values.size());
 
-    auto item = data();
-    for (auto it = values.begin(); it != values.end(); ++it, ++item) {
-      std::construct_at(item, std::move(*it));
-    }
+    std::uninitialized_copy(values.begin(), values.end(), data());
 
     derived()->set_size(values.size());
   }
@@ -302,7 +300,7 @@ class GenericVector {
 
   GenericVector() = default;
 
-  PROMPP_ALWAYS_INLINE void grow_storage(SizeType new_size) noexcept {
+  PROMPP_ALWAYS_INLINE void grow_storage(SizeType new_size) {
     reserve(new_size);
 
     if constexpr (!std::is_trivial_v<T>) {
@@ -311,6 +309,8 @@ class GenericVector {
 
       if constexpr (IsZeroInitializable<T>::value && IsTriviallyReallocatable<T>::value) {
         zero_memory(memory + current_size, new_size - current_size);
+      } else if constexpr (!std::is_nothrow_default_constructible_v<T>) {
+        std::uninitialized_default_construct_n(memory + current_size, new_size - current_size);
       } else {
         // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
         memory += current_size;
@@ -344,6 +344,8 @@ class GenericVector {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
+// Elements use nonthrowing relocation. Element construction failures destroy the partial range.
+// Failed nontrivial copy assignment leaves an empty destination. Allocation failure during reserve preserves all elements.
 template <template <class> class MemoryControlBlock, class T, ReallocatorInterface Reallocator>
 class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBlock, T, Reallocator>, typename MemoryControlBlock<T>::SizeType, T> {
  public:
@@ -353,12 +355,18 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
 
   MemoryBasedVector() noexcept = default;
   MemoryBasedVector(MemoryBasedVector&& other) noexcept = default;
-  MemoryBasedVector(const MemoryBasedVector& other) noexcept { copy(other); }
+  MemoryBasedVector(const MemoryBasedVector& other) { copy(other); }
   MemoryBasedVector(std::initializer_list<T> values) { Base::initialize(values); }
   explicit MemoryBasedVector(SizeType size) { Base::resize(size); }
 
-  MemoryBasedVector& operator=(MemoryBasedVector&& o) noexcept = default;
-  MemoryBasedVector& operator=(const MemoryBasedVector& other) noexcept {
+  MemoryBasedVector& operator=(MemoryBasedVector&& other) noexcept {
+    if (this != &other) [[likely]] {
+      Base::clear();
+      memory_ = std::move(other.memory_);
+    }
+    return *this;
+  }
+  MemoryBasedVector& operator=(const MemoryBasedVector& other) {
     if (this != &other) [[likely]] {
       copy(other);
     }
@@ -386,9 +394,7 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
     } else {
       Base::clear();
       memory_.grow_to_fit_at_least(other.get_size());
-      for (SizeType i = 0; i != other.get_size(); ++i) {
-        std::construct_at(memory_ + i, other[i]);
-      }
+      std::uninitialized_copy_n(other.data(), other.get_size(), Base::data());
       set_size(other.get_size());
     }
   }

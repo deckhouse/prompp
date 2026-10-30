@@ -1,5 +1,6 @@
 #include "samples_iterator.h"
 
+#include "entrypoint/types/exception.h"
 #include "entrypoint/types/serialization.h"
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_ctor(void* args) {
@@ -10,13 +11,15 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   };
 
   const auto in = static_cast<Arguments*>(args);
-  std::visit([in](auto& serialized_data) { std::construct_at(in->iterator, serialized_data.samples_iterator(in->chunk_ref)); }, *in->serialized_data);
+  entrypoint::types::invoke_without_error_result([&] {
+    std::visit([in](auto& serialized_data) { std::construct_at(in->iterator, serialized_data.samples_iterator(in->chunk_ref)); }, *in->serialized_data);
+  });
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* iterator) {
   using series_data::decoder::DecodeIteratorSentinel;
 
-  ++(*static_cast<entrypoint::types::SamplesIterator*>(iterator));
+  entrypoint::types::invoke_without_error_result([&] { ++(*static_cast<entrypoint::types::SamplesIterator*>(iterator)); });
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_seek(void* args) {
@@ -28,7 +31,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   };
 
   const Arguments* in = static_cast<Arguments*>(args);
-  in->iterator->seek_to(in->target_timestamp);
+  entrypoint::types::invoke_without_error_result([&] { in->iterator->seek_to(in->target_timestamp); });
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_reset(void* args) {
@@ -39,5 +42,6 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   };
 
   const Arguments* in = static_cast<Arguments*>(args);
-  std::visit([in](auto& serialized_data) { *in->iterator = serialized_data.samples_iterator(in->chunk_ref); }, *in->serialized_data);
+  entrypoint::types::invoke_without_error_result(
+      [&] { std::visit([in](auto& serialized_data) { *in->iterator = serialized_data.samples_iterator(in->chunk_ref); }, *in->serialized_data); });
 }

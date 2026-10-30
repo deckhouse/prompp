@@ -15,6 +15,119 @@ using BareBones::SharedMemory;
 using BareBones::SharedPtr;
 using BareBones::SharedPtrControlBlockWithItemCount;
 
+struct FailingMemoryReallocator : DefaultReallocator {
+  static inline bool fail = false;
+  static void* reallocate(void* memory, size_t size) { return fail ? nullptr : DefaultReallocator::reallocate(memory, size); }
+};
+
+class MemoryFailureFixture : public testing::Test {
+ protected:
+  void TearDown() override { FailingMemoryReallocator::fail = false; }
+};
+
+using FailingMemory = Memory<MemoryControlBlockWithItemCount, uint32_t, FailingMemoryReallocator>;
+using FailingSharedMemory = SharedMemory<uint32_t, SharedPtrControlBlockWithItemCount, FailingMemoryReallocator>;
+
+TEST_F(MemoryFailureFixture, FailedGrowthPreservesAllocationAndValues) {
+  // Arrange
+  FailingMemory memory;
+  memory.resize_to_fit_at_least(2);
+  memory.begin()[0] = 42;
+  memory.control_block().items_count = 1;
+  const auto* allocation = memory.begin();
+  const auto capacity = memory.size();
+  FailingMemoryReallocator::fail = true;
+
+  // Act
+  EXPECT_THROW(memory.grow_to_fit_at_least(capacity + 1), std::bad_alloc);
+
+  // Assert
+  EXPECT_EQ(allocation, memory.begin());
+  EXPECT_EQ(capacity, memory.size());
+  EXPECT_EQ(1U, memory.control_block().items_count);
+  EXPECT_EQ(42U, memory.begin()[0]);
+}
+
+TEST_F(MemoryFailureFixture, FailedCopyAssignmentPreservesDestination) {
+  // Arrange
+  FailingMemory source;
+  source.resize_to_fit_at_least(5);
+  FailingMemory destination;
+  destination.resize_to_fit_at_least(1);
+  destination.begin()[0] = 42;
+  destination.control_block().items_count = 1;
+  const auto* allocation = destination.begin();
+  const auto capacity = destination.size();
+  FailingMemoryReallocator::fail = true;
+
+  // Act
+  EXPECT_THROW(destination = source, std::bad_alloc);
+
+  // Assert
+  EXPECT_EQ(allocation, destination.begin());
+  EXPECT_EQ(capacity, destination.size());
+  EXPECT_EQ(1U, destination.control_block().items_count);
+  EXPECT_EQ(42U, destination.begin()[0]);
+}
+
+TEST_F(MemoryFailureFixture, ResizeToZeroReleasesAllocationWithoutAllocating) {
+  // Arrange
+  struct ExactMemory : FailingMemory {
+    using FailingMemory::resize;
+  };
+  ExactMemory memory;
+  memory.resize(1);
+  FailingMemoryReallocator::fail = true;
+
+  // Act
+  memory.resize(0);
+
+  // Assert
+  EXPECT_EQ(nullptr, memory.begin());
+  EXPECT_EQ(0U, memory.size());
+}
+
+TEST_F(MemoryFailureFixture, FailedUniqueSharedGrowthPreservesValues) {
+  // Arrange
+  FailingSharedMemory memory;
+  memory.resize_to_fit_at_least(1);
+  memory.begin()[0] = 42;
+  memory.set_items_count(1);
+  const auto* allocation = memory.begin();
+  const auto capacity = memory.size();
+  FailingMemoryReallocator::fail = true;
+
+  // Act
+  EXPECT_THROW(memory.grow_to_fit_at_least(capacity + 1), std::bad_alloc);
+
+  // Assert
+  EXPECT_EQ(allocation, memory.begin());
+  EXPECT_EQ(capacity, memory.size());
+  EXPECT_EQ(1U, memory.items_count());
+  EXPECT_EQ(42U, memory.begin()[0]);
+}
+
+TEST_F(MemoryFailureFixture, FailedSharedDetachPreservesBothOwners) {
+  // Arrange
+  FailingSharedMemory memory;
+  memory.resize_to_fit_at_least(1);
+  memory.begin()[0] = 42;
+  memory.set_items_count(1);
+  auto copy = memory;
+  const auto capacity = copy.size();
+  FailingMemoryReallocator::fail = true;
+
+  // Act
+  EXPECT_THROW(copy.grow_to_fit_at_least(capacity + 1), std::bad_alloc);
+
+  // Assert
+  EXPECT_EQ(memory.begin(), copy.begin());
+  EXPECT_EQ(capacity, copy.size());
+  EXPECT_EQ(2U, memory.ptr().non_atomic_ref_count());
+  EXPECT_EQ(1U, copy.items_count());
+  EXPECT_EQ(42U, copy.begin()[0]);
+}
+
 struct GetAllocationSizeCase {
   uint32_t needed_size;
   uint32_t expected_size;
