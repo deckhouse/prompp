@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstdint>
+
 #include <string_view>
 
 namespace PromPP::Prometheus::textparse {
 
-enum class Token {
+enum class Token : int8_t {
   kInvalid = -1,
   kEOF = 0,
   kLinebreak,

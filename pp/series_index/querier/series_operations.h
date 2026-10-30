@@ -63,7 +63,7 @@ void group_series_by_label_names(const Lss& lss,
     const auto it = groups_set.lazy_emplace(values_ids, [&](const auto& ctor) {
       ctor(SetItem{.values_ids = std::move(values_ids), .group_index = static_cast<uint32_t>(groups.size())});
       groups.emplace_back();
-      values_ids.resize(label_name_ids.size());
+      values_ids = BareBones::Vector<uint32_t>(label_name_ids.size());
     });
     groups[it->group_index].emplace_back(series_id);
   }

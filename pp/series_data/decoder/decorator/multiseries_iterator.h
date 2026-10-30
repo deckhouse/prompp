@@ -69,8 +69,7 @@ class MultiSeriesIterator {
     sample_.timestamp = current_window.max;
   }
 
-  PROMPP_ALWAYS_INLINE void handle_samples(const PromPP::Primitives::TimeInterval& current_window,
-                                           const PromPP::Primitives::TimeInterval& next_window) noexcept {
+  PROMPP_ALWAYS_INLINE void handle_samples(const PromPP::Primitives::TimeInterval& current_window, const PromPP::Primitives::TimeInterval& next_window) {
     SampleHandler handler{sample_, current_window};
     for (auto it = iterators_.begin(); it != iterators_.end();) {
       auto& iterator = *it;
