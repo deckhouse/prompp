@@ -18,7 +18,7 @@ template <class T>
 void serialize(std::ostream& stream, std::span<T> items) {
   const auto exception_guard = scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit);
 
-  stream.put(kSerializerVersion);
+  stream.put(static_cast<char>(kSerializerVersion));
 
   const auto count = static_cast<uint32_t>(items.size());
   stream.write(reinterpret_cast<const char*>(&count), sizeof(count));

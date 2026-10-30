@@ -222,7 +222,7 @@ class LabelCodec {
     const uint8_t sz3 = push_and_encode(out, label_value_length);
     out += szm_[sz3];
 
-    *start = (sz2 << 4) | (sz3 << 6);
+    *start = static_cast<char>((sz2 << 4) | (sz3 << 6));
 
     return out;
   }
@@ -254,7 +254,7 @@ class LabelCodec {
     const uint8_t sz3 = push_and_encode(out, label_value_length);
     out += szm_[sz3];
 
-    *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
+    *start = static_cast<char>(sz0 | (sz1 << 2) | (sz2 << 4) | (sz3 << 6));
 
     return out;
   }
