@@ -1823,7 +1823,8 @@ func (r *Reader) postingsForLabelMatching(ctx context.Context, name string, matc
 func (r *Reader) postingsForLabelMatchingOffsets(
 	ctx context.Context, entries []postingOffset, match func(string) bool,
 ) Postings {
-	// Pack full-width offsets so sparse matches do not reserve space for unmatched values.
+	// Varint-encode matching offsets into a small stack buffer so small offset lists need no heap allocation
+	// and unmatched values reserve no space.
 	var offsetBuf [128]byte
 	offsets := offsetBuf[:0]
 	count := 0

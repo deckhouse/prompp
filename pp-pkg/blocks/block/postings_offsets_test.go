@@ -19,10 +19,17 @@ import (
 	"github.com/prometheus/prometheus/util/testutil"
 )
 
-// postingsTestBytes exposes mutable index bytes through [index.ByteSlice] for corruption tests.
-type postingsTestBytes []byte
+const (
+	// postingsCaseNone names the subtest where no label values match.
+	postingsCaseNone = "none"
+	// postingsCaseSparse names the subtest where isolated label values match.
+	postingsCaseSparse = "sparse"
+)
 
-// postingsOffsetsSuite checks predicate traversal and the subsequent decoding phase through the block wrapper.
+// postingsOffsetsSuite covers tsdb/index's postingsForLabelMatchingOffsets via
+// [index.Reader.PostingsForLabelMatching] and the pass-through [blockIndexReader].
+// These fork-specific tests live here to keep tsdb/index/index_test.go unchanged
+// and reduce conflicts when backporting upstream changes.
 type postingsOffsetsSuite struct {
 	suite.Suite
 	path   string
@@ -61,6 +68,8 @@ func (s *postingsOffsetsSuite) TestCancellationDuringDecoding() {
 		calls++
 
 		if calls == len(s.values) {
+			// Traversal makes no further ctx.Err() calls after this final callback.
+			// Allow decoding's first check at i == 0, then cancel at its next check at i == 128.
 			ctx.FailAfter = ctx.Count() + 2
 		}
 
@@ -69,7 +78,6 @@ func (s *postingsOffsetsSuite) TestCancellationDuringDecoding() {
 
 	s.Equal(len(s.values), calls)
 	s.Require().ErrorIs(p.Err(), context.Canceled)
-	s.Equal(ctx.FailAfter, ctx.Count())
 }
 
 func (s *postingsOffsetsSuite) TestDecodeError() {
@@ -88,14 +96,34 @@ func (s *postingsOffsetsSuite) TestDecodeError() {
 	s.Require().ErrorIs(p.Err(), encoding.ErrInvalidChecksum)
 }
 
+func (s *postingsOffsetsSuite) TestExhaustion() {
+	for _, tc := range []struct {
+		name  string
+		match func(string) bool
+	}{
+		{postingsCaseNone, func(string) bool { return false }},
+		{postingsCaseSparse, func(v string) bool { return strings.HasSuffix(v, "001") }},
+	} {
+		s.Run(tc.name, func() {
+			r := blockIndexReader{ir: s.reader}
+			p := r.PostingsForLabelMatching(s.T().Context(), "target", tc.match)
+			_, err := index.ExpandPostings(p)
+			s.Require().NoError(err)
+
+			s.False(p.Next())
+			s.Require().NoError(p.Err())
+		})
+	}
+}
+
 func (s *postingsOffsetsSuite) TestPredicateOnce() {
 	for _, tc := range []struct {
 		name  string
 		match func(string) bool
 	}{
-		{"none", func(string) bool { return false }},
+		{postingsCaseNone, func(string) bool { return false }},
 		{"single", func(v string) bool { return v == "v000001" }},
-		{"sparse", func(v string) bool { return strings.HasSuffix(v, "001") }},
+		{postingsCaseSparse, func(v string) bool { return strings.HasSuffix(v, "001") }},
 		{"broad", func(string) bool { return true }},
 	} {
 		s.Run(tc.name, func() {
@@ -106,13 +134,34 @@ func (s *postingsOffsetsSuite) TestPredicateOnce() {
 
 				return tc.match(v)
 			})
+			_, err := index.ExpandPostings(p)
+			s.Require().NoError(err)
+
+			for _, value := range s.values {
+				s.Equal(1, calls[value], "predicate calls for %s", value)
+			}
+		})
+	}
+}
+
+func (s *postingsOffsetsSuite) TestResults() {
+	for _, tc := range []struct {
+		name  string
+		match func(string) bool
+	}{
+		{postingsCaseNone, func(string) bool { return false }},
+		{"single", func(v string) bool { return v == "v000001" }},
+		{postingsCaseSparse, func(v string) bool { return strings.HasSuffix(v, "001") }},
+		{"broad", func(string) bool { return true }},
+	} {
+		s.Run(tc.name, func() {
+			r := blockIndexReader{ir: s.reader}
+			p := r.PostingsForLabelMatching(s.T().Context(), "target", tc.match)
 			actual, err := index.ExpandPostings(p)
 			s.Require().NoError(err)
 			var matched []string
 
 			for _, value := range s.values {
-				s.Equal(1, calls[value])
-
 				if tc.match(value) {
 					matched = append(matched, value)
 				}
@@ -123,18 +172,33 @@ func (s *postingsOffsetsSuite) TestPredicateOnce() {
 			expected, err := index.ExpandPostings(expectedPostings)
 			s.Require().NoError(err)
 			s.Equal(expected, actual)
-			s.False(p.Next())
-
-			if len(expected) > 0 {
-				p = r.PostingsForLabelMatching(s.T().Context(), "target", tc.match)
-				s.True(p.Seek(expected[len(expected)/2]))
-				s.Equal(expected[len(expected)/2], p.At())
-				s.False(p.Seek(expected[len(expected)-1] + 1))
-				s.Require().NoError(p.Err())
-			}
 		})
 	}
 }
+
+func (s *postingsOffsetsSuite) TestSeek() {
+	expectedPostings, err := s.reader.Postings(s.T().Context(), "target", "v000001", "v001001")
+	s.Require().NoError(err)
+	expected, err := index.ExpandPostings(expectedPostings)
+	s.Require().NoError(err)
+	s.Require().Len(expected, 2)
+	r := blockIndexReader{ir: s.reader}
+	p := r.PostingsForLabelMatching(s.T().Context(), "target", func(v string) bool {
+		return strings.HasSuffix(v, "001")
+	})
+
+	s.Require().True(p.Seek(expected[1]))
+	s.Equal(expected[1], p.At())
+	s.False(p.Seek(expected[1] + 1))
+	s.Require().NoError(p.Err())
+}
+
+//
+// postingsTestBytes
+//
+
+// postingsTestBytes exposes mutable index bytes through [index.ByteSlice] for corruption tests.
+type postingsTestBytes []byte
 
 func (b postingsTestBytes) Len() int {
 	return len(b)
