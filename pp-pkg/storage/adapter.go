@@ -324,7 +324,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	aTimeInterval := headTimeInterval(ahead)
-	if mint <= aTimeInterval.MaxT && maxt >= aTimeInterval.MinT {
+	if activeHeadIsInQueryRange(aTimeInterval, mint, maxt) {
 		queriers = append(
 			queriers,
 			querier.NewQuerier(
@@ -382,6 +382,21 @@ func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
 	timeInterval := headTimeInterval(head)
 
 	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
+}
+
+// activeHeadIsInQueryRange reports whether the active head can hold data for the [mint, maxt]
+// query range of a [storage.Querier].
+//
+// A zero-length range [t, t] selects the instant path, which reads the latest sample at or before t
+// rather than the samples inside the range. The active head therefore answers it whenever its data
+// starts at or before t, even though its last sample is older than t, as it always is for t = now.
+// Rotated heads keep the strict check.
+func activeHeadIsInQueryRange(timeInterval cppbridge.TimeInterval, mint, maxt int64) bool {
+	if mint == maxt {
+		return maxt >= timeInterval.MinT
+	}
+
+	return mint <= timeInterval.MaxT && maxt >= timeInterval.MinT
 }
 
 // headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
