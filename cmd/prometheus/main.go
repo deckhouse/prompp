@@ -157,6 +157,7 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 		})
 }
 
+// flagConfig holds startup settings for Prometheus and the Prom++ engine.
 type flagConfig struct {
 	configFile string
 
@@ -1120,12 +1121,24 @@ func main() {
 	}
 
 	if !agentMode {
-		activeQueryTracker, err := promql.NewActiveQueryTracker(
+		// PP_CHANGES.md: Load opt-in query diagnostics from the data directory at startup.
+		expensiveQueryConfigPath := filepath.Join(localStoragePath, "expensive_queries.yaml")
+		expensiveQueryConfig, errConfig := promql.LoadExpensiveQueryLoggingConfig(expensiveQueryConfigPath)
+		if errConfig != nil {
+			level.Error(logger).Log("msg", "Failed to load expensive query configuration", "err", errConfig)
+			os.Exit(2)
+		}
+
+		if expensiveQueryConfig != nil {
+			level.Info(logger).Log("msg", "Expensive query logging configured", "file", expensiveQueryConfigPath)
+		}
+
+		activeQueryTracker, errTracker := promql.NewActiveQueryTracker(
 			localStoragePath,
 			cfg.queryConcurrency,
 			log.With(logger, "component", "active query tracker"),
 		)
-		if err != nil {
+		if errTracker != nil {
 			level.Error(logger).Log("msg", "failed to initialize active query tracker", "err", err)
 			os.Exit(1)
 		}
@@ -1146,6 +1159,7 @@ func main() {
 			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
 			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
 			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
+			ExpensiveQueryLogging:      expensiveQueryConfig, // PP_CHANGES.md: Query diagnostics.
 		}
 
 		queryEngine = promql.NewEngine(opts)
