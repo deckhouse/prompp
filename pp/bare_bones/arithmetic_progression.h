@@ -58,25 +58,14 @@ class ArithmeticProgression : public std::ranges::view_interface<ArithmeticProgr
     friend constexpr Iterator operator+(Iterator it, difference_type n) noexcept { return it += n; }
     friend constexpr Iterator operator+(difference_type n, Iterator it) noexcept { return it += n; }
     friend constexpr Iterator operator-(Iterator it, difference_type n) noexcept { return it -= n; }
+    // Comparisons and distances require iterators from the same progression.
     friend constexpr difference_type operator-(const Iterator& a, const Iterator& b) noexcept { return a.position_ - b.position_; }
-    friend constexpr bool operator==(const Iterator&, const Iterator&) noexcept = default;
-    friend constexpr auto operator<=>(const Iterator& a, const Iterator& b) noexcept {
-      if (const auto order = a.origin() <=> b.origin(); order != 0) {
-        return order;
-      }
-      if (const auto order = a.step_ <=> b.step_; order != 0) {
-        return order;
-      }
-      return a.position_ <=> b.position_;
-    }
+    friend constexpr bool operator==(const Iterator& a, const Iterator& b) noexcept { return a.position_ == b.position_; }
+    friend constexpr auto operator<=>(const Iterator& a, const Iterator& b) noexcept { return a.position_ <=> b.position_; }
 
    private:
     // Unsigned arithmetic preserves negative steps modulo 2^32.
     static constexpr uint32_t advance(uint32_t value, uint32_t step, uint32_t positions = 1) noexcept { return value + step * positions; }
-
-    [[nodiscard]] constexpr uint32_t origin() const noexcept {
-      return advance(value_, static_cast<uint32_t>(step_), uint32_t{0} - static_cast<uint32_t>(position_));
-    }
 
     uint32_t value_{};
     int64_t step_{};

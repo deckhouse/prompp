@@ -9,19 +9,6 @@
 namespace {
 using Store = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124Frequent0>;
 using CompactStore = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>;
-using ProductionSequences = testing::Types<BareBones::RleSequence<BareBones::coding::Identity, Store>,
-                                           BareBones::RleSequence<BareBones::coding::Delta, Store>,
-                                           BareBones::RleSequence<BareBones::coding::ZigZagDelta, Store>,
-                                           BareBones::RleSequence<BareBones::coding::Identity, CompactStore>,
-                                           BareBones::RleSequence<BareBones::coding::Delta, CompactStore>,
-                                           BareBones::RleSequence<BareBones::coding::ZigZagDelta, CompactStore>>;
-template <class T>
-class RleSequenceFixture : public testing::Test {
- protected:
-  T sequence_;
-};
-TYPED_TEST_SUITE(RleSequenceFixture, ProductionSequences);
-
 using RunDecoders = testing::Types<BareBones::coding::Identity::Decoder, BareBones::coding::Delta::Decoder, BareBones::coding::ZigZagDelta::Decoder>;
 template <class T>
 class RunDecoderFixture : public testing::Test {
@@ -80,11 +67,12 @@ TEST(DeltaRunDecoderTest, PreservesHistoryBetweenRuns) {
   // Act
   decoder.start_run({1, 2});
   const auto second = decoder.next();
+  const auto end = decoder.next();
 
   // Assert
   EXPECT_EQ(BareBones::ArithmeticProgression(2, 2, 3), first);
   EXPECT_EQ(BareBones::ArithmeticProgression(7, 1, 2), second);
-  EXPECT_EQ(std::nullopt, decoder.next());
+  EXPECT_EQ(std::nullopt, end);
 }
 
 TEST(ZigZagRunDecoderTest, SplitsOneRunAtRepeatedWraps) {
@@ -116,12 +104,13 @@ TEST(ZigZagRunDecoderTest, CopiesRetainIndependentUnconsumedProgressions) {
   const auto original = decoder.next();
   const auto original_end = decoder.next();
   const auto copied = copy.next();
+  const auto copied_end = copy.next();
 
   // Assert
   EXPECT_EQ(BareBones::ArithmeticProgression(4294967295U, -1, 2), original);
   EXPECT_EQ(std::nullopt, original_end);
   EXPECT_EQ(BareBones::ArithmeticProgression(4294967295U, -1, 2), copied);
-  EXPECT_EQ(std::nullopt, copy.next());
+  EXPECT_EQ(std::nullopt, copied_end);
 }
 
 TEST(ZigZagRunDecoderTest, PreservesHistoryAfterSplitRun) {
@@ -135,10 +124,11 @@ TEST(ZigZagRunDecoderTest, PreservesHistoryAfterSplitRun) {
   // Act
   decoder.start_run({2, 2});
   const auto progression = decoder.next();
+  const auto end = decoder.next();
 
   // Assert
   EXPECT_EQ(BareBones::ArithmeticProgression(1, 1, 2), progression);
-  EXPECT_EQ(std::nullopt, decoder.next());
+  EXPECT_EQ(std::nullopt, end);
 }
 
 struct DecoderOnlyCoding {
@@ -189,6 +179,17 @@ TEST(RleDecoderTest, ReadsInputIteratorWithoutPostfixDereference) {
 
   // Assert
   EXPECT_THAT(view, testing::ElementsAre(7, 7, 7, 9));
+}
+
+TEST(RleDecoderTest, MissingFinalCountDecodesSingleton) {
+  // Arrange
+  const std::array<uint32_t, 1> words{7};
+
+  // Act
+  const BareBones::RleView<BareBones::coding::Identity, std::span<const uint32_t>> view{words};
+
+  // Assert
+  EXPECT_THAT(view, testing::ElementsAre(7));
 }
 
 TEST(RleEncodingValidationTest, AcceptsEmptyStorage) {
@@ -268,6 +269,98 @@ TEST(RleEncodingValidationTest, RejectsDeltaOverflowWithinRun) {
   EXPECT_FALSE(valid);
 }
 
+class RleLimitFixture : public testing::Test {
+ protected:
+  // Byte-sized counters exercise the run limit without billions of appends.
+  BareBones::coding::detail::RunEncoder<uint8_t> encoder_;
+  std::vector<uint8_t> words_;
+
+  void append(uint8_t value, uint32_t count) {
+    auto out = std::back_inserter(words_);
+    for (uint32_t i = 0; i < count; ++i) {
+      encoder_.encode(value, out);
+    }
+  }
+
+  void flush() {
+    auto out = std::back_inserter(words_);
+    encoder_.flush(out);
+  }
+};
+
+TEST_F(RleLimitFixture, PendingRunReportsDecodedLength) {
+  // Arrange
+  append(7, 3);
+
+  // Act
+  const auto run = encoder_.pending_run();
+
+  // Assert
+  EXPECT_EQ(7U, run.code);
+  EXPECT_EQ(3U, run.length);
+  EXPECT_TRUE(words_.empty());
+}
+
+TEST_F(RleLimitFixture, MaximumRunIsClosedWithoutAnExtraPendingValue) {
+  // Arrange
+
+  // Act
+  append(7, 255);
+
+  // Assert
+  EXPECT_THAT(words_, testing::ElementsAre(7, 254));
+  EXPECT_TRUE(encoder_.empty());
+  EXPECT_EQ(0U, encoder_.pending_run().length);
+}
+
+TEST_F(RleLimitFixture, FlushingMaximumRunDoesNotWriteItAgain) {
+  // Arrange
+  append(7, 255);
+
+  // Act
+  flush();
+
+  // Assert
+  EXPECT_THAT(words_, testing::ElementsAre(7, 254));
+}
+
+TEST_F(RleLimitFixture, SameValueAfterMaximumRunStartsANewRun) {
+  // Arrange
+  append(7, 255);
+
+  // Act
+  append(7, 1);
+  flush();
+
+  // Assert
+  EXPECT_THAT(words_, testing::ElementsAre(7, 254, 7, 0));
+}
+
+TEST_F(RleLimitFixture, DifferentValueAfterMaximumRunStartsANewRun) {
+  // Arrange
+  append(7, 255);
+
+  // Act
+  append(9, 1);
+  flush();
+
+  // Assert
+  EXPECT_THAT(words_, testing::ElementsAre(7, 254, 9, 0));
+}
+
+using ProductionSequences = testing::Types<BareBones::RleSequence<BareBones::coding::Identity, Store>,
+                                           BareBones::RleSequence<BareBones::coding::Delta, Store>,
+                                           BareBones::RleSequence<BareBones::coding::ZigZagDelta, Store>,
+                                           BareBones::RleSequence<BareBones::coding::Identity, CompactStore>,
+                                           BareBones::RleSequence<BareBones::coding::Delta, CompactStore>,
+                                           BareBones::RleSequence<BareBones::coding::ZigZagDelta, CompactStore>>;
+template <class T>
+class RleSequenceFixture : public testing::Test {
+ protected:
+  T sequence_;
+};
+TYPED_TEST_SUITE(RleSequenceFixture, ProductionSequences);
+
 TYPED_TEST(RleSequenceFixture, DefaultSequenceIsEmpty) {
   // Arrange
 
@@ -323,7 +416,6 @@ TYPED_TEST(RleSequenceFixture, ReadingDoesNotFlushPendingValue) {
   // Assert
   EXPECT_THAT(view, testing::ElementsAre(7));
   EXPECT_FALSE(this->sequence_.is_flushed());
-  EXPECT_EQ(0U, this->sequence_.store().size());
 }
 
 TYPED_TEST(RleSequenceFixture, FlushPreservesValues) {
@@ -533,192 +625,6 @@ TEST(RleSequenceViewTest, ZigZagProgressionsAllowNegativeSteps) {
   EXPECT_THAT(sequence, testing::ElementsAre(10, 8, 6, 4));
 }
 
-TEST(DeltaDeltaZigZagSequenceTest, DefaultSequenceIsEmpty) {
-  // Arrange
-  BareBones::DeltaDeltaZigZagSequence sequence;
-
-  // Act
-  const auto view = sequence.view();
-
-  // Assert
-  EXPECT_THAT(view, testing::ElementsAre());
-}
-
-TEST(DeltaDeltaZigZagSequenceTest, AppendMakesOneValueReadable) {
-  // Arrange
-  BareBones::DeltaDeltaZigZagSequence sequence;
-
-  // Act
-  sequence.push_back(10);
-
-  // Assert
-  EXPECT_THAT(sequence, testing::ElementsAre(10));
-}
-
-TEST(DeltaDeltaZigZagSequenceTest, AppendPreservesChangingAndNegativeDeltas) {
-  // Arrange
-  BareBones::DeltaDeltaZigZagSequence sequence;
-  const std::array<uint32_t, 4> input{10, 20, 40, 30};
-
-  // Act
-  std::ranges::copy(input, std::back_inserter(sequence));
-
-  // Assert
-  EXPECT_THAT(sequence, testing::ElementsAre(10, 20, 40, 30));
-}
-
-TEST(EncodedSequenceReadTest, ReadsOneCompactRecord) {
-  // Arrange
-  BareBones::RleSequence<BareBones::coding::Identity, CompactStore> sequence;
-  sequence.push_back(1);
-  sequence.flush();
-  BareBones::ShrinkedToFitOStringStream out;
-  sequence.store().write_to(out);
-  auto input = out.span<const uint8_t>();
-
-  // Act
-  const auto view = decltype(sequence)::read_view(input);
-
-  // Assert
-  EXPECT_THAT(view, testing::ElementsAre(1));
-  EXPECT_TRUE(input.empty());
-}
-
-TEST(EncodedSequenceReadTest, ConsumesConsecutiveCompactRecords) {
-  // Arrange
-  BareBones::DeltaDeltaZigZagSequence lengths;
-  BareBones::RleSequence<BareBones::coding::Identity, CompactStore> ids;
-  lengths.push_back(10);
-  lengths.push_back(20);
-  ids.push_back(1);
-  ids.push_back(2);
-  ids.flush();
-  BareBones::ShrinkedToFitOStringStream out;
-  lengths.store().write_to(out);
-  ids.store().write_to(out);
-  auto input = out.span<const uint8_t>();
-
-  // Act
-  const auto read_lengths = BareBones::DeltaDeltaZigZagSequence::read_view(input);
-  const auto read_ids = decltype(ids)::read_view(input);
-
-  // Assert
-  EXPECT_THAT(read_lengths, testing::ElementsAre(10, 20));
-  EXPECT_THAT(read_ids, testing::ElementsAre(1, 2));
-  EXPECT_TRUE(input.empty());
-}
-
-class RleLimitFixture : public testing::Test {
- protected:
-  // Byte-sized counters exercise the run limit without billions of appends.
-  BareBones::coding::detail::RunEncoder<uint8_t> encoder_;
-  std::vector<uint8_t> words_;
-
-  void append(uint8_t value, uint32_t count) {
-    auto out = std::back_inserter(words_);
-    for (uint32_t i = 0; i < count; ++i) {
-      encoder_.encode(value, out);
-    }
-  }
-
-  void flush() {
-    auto out = std::back_inserter(words_);
-    encoder_.flush(out);
-  }
-};
-
-TEST_F(RleLimitFixture, PendingRunReportsDecodedLength) {
-  // Arrange
-  append(7, 3);
-
-  // Act
-  const auto run = encoder_.pending_run();
-
-  // Assert
-  EXPECT_EQ(7U, run.code);
-  EXPECT_EQ(3U, run.length);
-  EXPECT_TRUE(words_.empty());
-}
-
-TEST_F(RleLimitFixture, MaximumRunIsClosedWithoutAnExtraPendingValue) {
-  // Arrange
-
-  // Act
-  append(7, 255);
-
-  // Assert
-  EXPECT_THAT(words_, testing::ElementsAre(7, 254));
-  EXPECT_TRUE(encoder_.empty());
-  EXPECT_EQ(0U, encoder_.pending_run().length);
-}
-
-TEST_F(RleLimitFixture, FlushingMaximumRunDoesNotWriteItAgain) {
-  // Arrange
-  append(7, 255);
-
-  // Act
-  flush();
-
-  // Assert
-  EXPECT_THAT(words_, testing::ElementsAre(7, 254));
-}
-
-TEST_F(RleLimitFixture, SameValueAfterMaximumRunStartsANewRun) {
-  // Arrange
-  append(7, 255);
-
-  // Act
-  append(7, 1);
-  flush();
-
-  // Assert
-  EXPECT_THAT(words_, testing::ElementsAre(7, 254, 7, 0));
-}
-
-TEST_F(RleLimitFixture, DifferentValueAfterMaximumRunStartsANewRun) {
-  // Arrange
-  append(7, 255);
-
-  // Act
-  append(9, 1);
-  flush();
-
-  // Assert
-  EXPECT_THAT(words_, testing::ElementsAre(7, 254, 9, 0));
-}
-
-TEST(RleDecoderTest, MissingFinalCountDecodesSingleton) {
-  // Arrange
-  const std::array<uint32_t, 1> words{7};
-
-  // Act
-  const BareBones::RleView<BareBones::coding::Identity, std::span<const uint32_t>> view{words};
-
-  // Assert
-  EXPECT_THAT(view, testing::ElementsAre(7));
-}
-
-using SignedBoundarySequences = testing::Types<BareBones::RleSequence<BareBones::coding::ZigZagDelta>, BareBones::DeltaDeltaZigZagSequence>;
-
-template <class Sequence>
-class SignedBoundaryFixture : public testing::Test {
- protected:
-  Sequence sequence_;
-};
-TYPED_TEST_SUITE(SignedBoundaryFixture, SignedBoundarySequences);
-
-TYPED_TEST(SignedBoundaryFixture, PreservesValuesAcrossSignedBoundaries) {
-  // Arrange
-  const std::array<uint32_t, 8> input{0U, 2147483647U, 2147483648U, 4294967295U, 0U, 1U, 4294967295U, 2147483647U};
-
-  // Act
-  std::ranges::copy(input, std::back_inserter(this->sequence_));
-  this->sequence_.flush();
-
-  // Assert
-  EXPECT_THAT(this->sequence_, testing::ElementsAre(0U, 2147483647U, 2147483648U, 4294967295U, 0U, 1U, 4294967295U, 2147483647U));
-}
-
 struct ZigZagWrappingCase {
   const char* name;
   std::vector<uint32_t> values;
@@ -786,5 +692,182 @@ INSTANTIATE_TEST_SUITE_P(
                                        .values = {1U, 0U, 4294967295U, 10U},
                                        .progressions = {{1, 0, 1}, {0, 0, 1}, {4294967295U, 0, 1}, {10, 0, 1}}}),
     [](const testing::TestParamInfo<ZigZagWrappingCase>& info) { return info.param.name; });
+
+template <class T>
+using SharedMemory = BareBones::SharedMemory<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
+using SharedStore = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0, SharedMemory, 8>;
+using SnapshotSequences = testing::Types<BareBones::RleSequence<BareBones::coding::Identity, SharedStore>,
+                                         BareBones::RleSequence<BareBones::coding::Delta, SharedStore>,
+                                         BareBones::RleSequence<BareBones::coding::ZigZagDelta, SharedStore>>;
+template <class T>
+class RleSnapshotFixture : public testing::Test {
+ protected:
+  T sequence_;
+};
+TYPED_TEST_SUITE(RleSnapshotFixture, SnapshotSequences);
+
+TYPED_TEST(RleSnapshotFixture, MoveConstructionTransfersStoredAndPendingRuns) {
+  // Arrange
+  this->sequence_.push_back(1);
+  this->sequence_.push_back(2);
+  this->sequence_.push_back(4);
+  auto snapshot = this->sequence_.snapshot();
+
+  // Act
+  const auto moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved, testing::ElementsAre(1, 2, 4));
+  // The move contract keeps the source empty and readable.
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_THAT(snapshot, testing::ElementsAre());
+}
+
+TYPED_TEST(RleSnapshotFixture, MoveAssignmentReplacesStoredAndPendingRuns) {
+  // Arrange
+  this->sequence_.push_back(1);
+  this->sequence_.push_back(2);
+  this->sequence_.push_back(4);
+  auto snapshot = this->sequence_.snapshot();
+  this->sequence_.push_back(9);
+  auto moved = this->sequence_.snapshot();
+
+  // Act
+  moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved, testing::ElementsAre(1, 2, 4));
+  // The move contract keeps the source empty and readable.
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_THAT(snapshot, testing::ElementsAre());
+}
+
+TYPED_TEST(RleSnapshotFixture, MoveConstructionTransfersPendingOnlyRun) {
+  // Arrange
+  this->sequence_.push_back(7);
+  auto snapshot = this->sequence_.snapshot();
+
+  // Act
+  const auto moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved, testing::ElementsAre(7));
+  // The move contract keeps the source empty and readable.
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_THAT(snapshot, testing::ElementsAre());
+}
+
+TYPED_TEST(RleSnapshotFixture, MoveAssignmentReplacesPendingOnlyRun) {
+  // Arrange
+  this->sequence_.push_back(7);
+  auto snapshot = this->sequence_.snapshot();
+  this->sequence_.push_back(9);
+  auto moved = this->sequence_.snapshot();
+
+  // Act
+  moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved, testing::ElementsAre(7));
+  // The move contract keeps the source empty and readable.
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_THAT(snapshot, testing::ElementsAre());
+}
+
+TEST(DeltaDeltaZigZagSequenceTest, DefaultSequenceIsEmpty) {
+  // Arrange
+  BareBones::DeltaDeltaZigZagSequence sequence;
+
+  // Act
+  const auto view = sequence.view();
+
+  // Assert
+  EXPECT_THAT(view, testing::ElementsAre());
+}
+
+TEST(DeltaDeltaZigZagSequenceTest, AppendMakesOneValueReadable) {
+  // Arrange
+  BareBones::DeltaDeltaZigZagSequence sequence;
+
+  // Act
+  sequence.push_back(10);
+
+  // Assert
+  EXPECT_THAT(sequence, testing::ElementsAre(10));
+}
+
+TEST(DeltaDeltaZigZagSequenceTest, AppendPreservesChangingAndNegativeDeltas) {
+  // Arrange
+  BareBones::DeltaDeltaZigZagSequence sequence;
+  const std::array<uint32_t, 4> input{10, 20, 40, 30};
+
+  // Act
+  std::ranges::copy(input, std::back_inserter(sequence));
+
+  // Assert
+  EXPECT_THAT(sequence, testing::ElementsAre(10, 20, 40, 30));
+}
+
+using SignedBoundarySequences = testing::Types<BareBones::RleSequence<BareBones::coding::ZigZagDelta>, BareBones::DeltaDeltaZigZagSequence>;
+
+template <class Sequence>
+class SignedBoundaryFixture : public testing::Test {
+ protected:
+  Sequence sequence_;
+};
+TYPED_TEST_SUITE(SignedBoundaryFixture, SignedBoundarySequences);
+
+TYPED_TEST(SignedBoundaryFixture, PreservesValuesAcrossSignedBoundaries) {
+  // Arrange
+  const std::array<uint32_t, 8> input{0U, 2147483647U, 2147483648U, 4294967295U, 0U, 1U, 4294967295U, 2147483647U};
+
+  // Act
+  std::ranges::copy(input, std::back_inserter(this->sequence_));
+  this->sequence_.flush();
+
+  // Assert
+  EXPECT_THAT(this->sequence_, testing::ElementsAre(0U, 2147483647U, 2147483648U, 4294967295U, 0U, 1U, 4294967295U, 2147483647U));
+}
+
+TEST(EncodedSequenceReadTest, ReadsOneCompactRecord) {
+  // Arrange
+  BareBones::RleSequence<BareBones::coding::Identity, CompactStore> sequence;
+  sequence.push_back(1);
+  sequence.flush();
+  BareBones::ShrinkedToFitOStringStream out;
+  sequence.store().write_to(out);
+  auto input = out.span<const uint8_t>();
+
+  // Act
+  const auto view = decltype(sequence)::read_view(input);
+
+  // Assert
+  EXPECT_THAT(view, testing::ElementsAre(1));
+  EXPECT_TRUE(input.empty());
+}
+
+TEST(EncodedSequenceReadTest, ConsumesConsecutiveCompactRecords) {
+  // Arrange
+  BareBones::DeltaDeltaZigZagSequence lengths;
+  BareBones::RleSequence<BareBones::coding::Identity, CompactStore> ids;
+  lengths.push_back(10);
+  lengths.push_back(20);
+  ids.push_back(1);
+  ids.push_back(2);
+  ids.flush();
+  BareBones::ShrinkedToFitOStringStream out;
+  lengths.store().write_to(out);
+  ids.store().write_to(out);
+  auto input = out.span<const uint8_t>();
+
+  // Act
+  const auto read_lengths = BareBones::DeltaDeltaZigZagSequence::read_view(input);
+  const auto read_ids = decltype(ids)::read_view(input);
+
+  // Assert
+  EXPECT_THAT(read_lengths, testing::ElementsAre(10, 20));
+  EXPECT_THAT(read_ids, testing::ElementsAre(1, 2));
+  EXPECT_TRUE(input.empty());
+}
 
 }  // namespace

@@ -41,6 +41,50 @@ TEST_F(SeriesIdSequenceSnapshotFixture, SnapshotCopiesValuesAndCount) {
   EXPECT_EQ(2U, snapshot.count());
 }
 
+TEST_F(SeriesIdSequenceSnapshotFixture, MoveConstructionTransfersValuesAndCount) {
+  // Arrange
+  sequence_.push_back(1);
+  sequence_.push_back(2);
+  sequence_.push_back(4);
+  SeriesIdSequenceSnapshot snapshot(sequence_);
+
+  // Act
+  const auto moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved, testing::ElementsAre(1, 2, 4));
+  EXPECT_EQ(3U, moved.count());
+  // The move contract keeps the source empty and readable.
+  // NOLINTBEGIN(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+  EXPECT_THAT(snapshot, testing::ElementsAre());
+  EXPECT_TRUE(snapshot.empty());
+  EXPECT_EQ(0U, snapshot.count());
+  // NOLINTEND(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+}
+
+TEST_F(SeriesIdSequenceSnapshotFixture, MoveAssignmentReplacesValuesAndCount) {
+  // Arrange
+  sequence_.push_back(1);
+  sequence_.push_back(2);
+  sequence_.push_back(4);
+  SeriesIdSequenceSnapshot snapshot(sequence_);
+  sequence_.push_back(9);
+  SeriesIdSequenceSnapshot moved(sequence_);
+
+  // Act
+  moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved, testing::ElementsAre(1, 2, 4));
+  EXPECT_EQ(3U, moved.count());
+  // The move contract keeps the source empty and readable.
+  // NOLINTBEGIN(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+  EXPECT_THAT(snapshot, testing::ElementsAre());
+  EXPECT_TRUE(snapshot.empty());
+  EXPECT_EQ(0U, snapshot.count());
+  // NOLINTEND(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+}
+
 TEST_F(SeriesIdSequenceSnapshotFixture, AppendDoesNotExtendSnapshot) {
   // Arrange
   sequence_.push_back(1);

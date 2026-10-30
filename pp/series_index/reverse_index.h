@@ -54,6 +54,7 @@ class SeriesIdSequence {
 };
 
 // Iterators borrow this snapshot. Capture and traversal require writer exclusion.
+// Moving leaves the source empty.
 class SeriesIdSequenceSnapshot {
   [[no_unique_address]] PostingSequence::Snapshot sequence_{};
   uint32_t count_{};
@@ -62,6 +63,16 @@ class SeriesIdSequenceSnapshot {
   using value_type = uint32_t;
   using Iterator = PostingSequence::Iterator;
   SeriesIdSequenceSnapshot() = default;
+  SeriesIdSequenceSnapshot(const SeriesIdSequenceSnapshot&) = default;
+  SeriesIdSequenceSnapshot& operator=(const SeriesIdSequenceSnapshot&) = default;
+  SeriesIdSequenceSnapshot(SeriesIdSequenceSnapshot&& other) noexcept : sequence_(std::move(other.sequence_)), count_(std::exchange(other.count_, 0)) {}
+  SeriesIdSequenceSnapshot& operator=(SeriesIdSequenceSnapshot&& other) noexcept {
+    if (this != &other) {
+      sequence_ = std::move(other.sequence_);
+      count_ = std::exchange(other.count_, 0);
+    }
+    return *this;
+  }
   explicit SeriesIdSequenceSnapshot(const SeriesIdSequence& source) : sequence_(source.sequence_.snapshot()), count_(source.count_) {}
   SeriesIdSequenceSnapshot& operator=(const SeriesIdSequence& source) noexcept {
     sequence_ = source.sequence_.snapshot();

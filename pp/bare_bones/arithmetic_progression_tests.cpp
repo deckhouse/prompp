@@ -165,32 +165,34 @@ TEST(ArithmeticProgressionTest, RandomNavigationRestoresTheSamePosition) {
   EXPECT_EQ(1, it - values.begin());
 }
 
-TEST(ArithmeticProgressionTest, EqualValuesFromDifferentOriginsRemainDistinctIterators) {
+TEST(ArithmeticProgressionTest, EqualValuesAtDifferentPositionsRemainDistinctIterators) {
   // Arrange
-  const auto first = ArithmeticProgression(1, 1, 3).begin() + 1;
-  const auto second = ArithmeticProgression(2, 1, 3).begin();
+  const ArithmeticProgression values(7, 0, 3);
+  const auto first = values.begin();
+  const auto second = first + 1;
 
   // Act
   const auto equal = first == second;
 
   // Assert
-  EXPECT_EQ(2U, *first);
-  EXPECT_EQ(2U, *second);
+  EXPECT_EQ(7U, *first);
+  EXPECT_EQ(7U, *second);
   EXPECT_FALSE(equal);
   EXPECT_LT(first, second);
 }
 
-TEST(ArithmeticProgressionTest, OrderingRetainsTheOriginBeforeTheCurrentValue) {
+TEST(ArithmeticProgressionTest, OrderingFollowsPositionForNegativeStep) {
   // Arrange
-  const auto first = ArithmeticProgression(1, 10, 3).begin() + 2;
-  const auto second = ArithmeticProgression(2, 1, 3).begin();
+  const ArithmeticProgression values(10, -2, 3);
+  const auto first = values.begin() + 1;
+  const auto second = values.begin() + 2;
 
   // Act
   const auto less = first < second;
 
   // Assert
-  EXPECT_EQ(21U, *first);
-  EXPECT_EQ(2U, *second);
+  EXPECT_EQ(8U, *first);
+  EXPECT_EQ(6U, *second);
   EXPECT_TRUE(less);
 }
 

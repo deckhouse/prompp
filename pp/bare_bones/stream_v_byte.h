@@ -958,12 +958,23 @@ class CompactSequence {
   [[nodiscard]] static View read_view(std::span<const uint8_t>& bytes) noexcept { return {create_read_iterator(bytes), end()}; }
 
   // Retains a fixed prefix. Iterators borrow its storage. Synchronize capture and traversal with writes.
+  // Moving leaves the source empty.
   class Snapshot {
     typename MemoryType<uint8_t>::SharedPtr memory_{};
     uint32_t size_{};
 
    public:
     Snapshot() = default;
+    Snapshot(const Snapshot&) = default;
+    Snapshot& operator=(const Snapshot&) = default;
+    Snapshot(Snapshot&& other) noexcept : memory_(std::move(other.memory_)), size_(std::exchange(other.size_, 0)) {}
+    Snapshot& operator=(Snapshot&& other) noexcept {
+      if (this != &other) {
+        memory_ = std::move(other.memory_);
+        size_ = std::exchange(other.size_, 0);
+      }
+      return *this;
+    }
     // Requires native padded storage containing at least size encoded values.
     Snapshot(typename MemoryType<uint8_t>::SharedPtr memory, uint32_t size) noexcept : memory_(std::move(memory)), size_(size) {}
     [[nodiscard]] View view() const noexcept { return {decode_iterator(memory_.get(), size_), end()}; }

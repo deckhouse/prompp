@@ -431,12 +431,23 @@ class RleSequence {
   [[nodiscard]] bool is_flushed() const noexcept { return run_.empty(); }
 
   // Iterators borrow this snapshot. Synchronize capture and traversal with writes to the source.
+  // Moving leaves the source empty.
   class Snapshot {
     [[no_unique_address]] typename Store::Snapshot store_{};
     EncodedRun tail_{};
 
    public:
     Snapshot() = default;
+    Snapshot(const Snapshot&) = default;
+    Snapshot& operator=(const Snapshot&) = default;
+    Snapshot(Snapshot&& other) noexcept : store_(std::move(other.store_)), tail_(std::exchange(other.tail_, {})) {}
+    Snapshot& operator=(Snapshot&& other) noexcept {
+      if (this != &other) {
+        store_ = std::move(other.store_);
+        tail_ = std::exchange(other.tail_, {});
+      }
+      return *this;
+    }
     Snapshot(typename Store::Snapshot store, EncodedRun tail) noexcept : store_(std::move(store)), tail_(tail) {}
     [[nodiscard]] auto view() const noexcept { return RleView<Coding, decltype(store_.view())>{store_.view(), tail_}; }
     [[nodiscard]] auto begin() const noexcept { return view().begin(); }

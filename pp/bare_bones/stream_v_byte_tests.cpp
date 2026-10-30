@@ -60,7 +60,12 @@ TYPED_TEST(StreamVByte64BitContainerFixture, PreservesValuesAtEncodingWidthBound
   EXPECT_TRUE(std::ranges::equal(k64BitBoundaryValues.begin(), k64BitBoundaryValues.end(), outcomes_b_i, outcomes_e_i));
 }
 
-class SequenceIotaFixture : public ::testing::TestWithParam<std::ranges::iota_view<uint32_t, uint32_t>> {
+struct IotaCase {
+  const char* name;
+  std::ranges::iota_view<uint32_t, uint32_t> values;
+};
+
+class SequenceIotaFixture : public ::testing::TestWithParam<IotaCase> {
  protected:
   Sequence<BareBones::StreamVByte::Codec0124, 4> sequence_;
 };
@@ -69,13 +74,13 @@ TEST_P(SequenceIotaFixture, PreservesValuesAcrossBlockBoundaries) {
   // Arrange
 
   // Act
-  std::ranges::copy(GetParam(), std::back_insert_iterator(sequence_));
+  std::ranges::copy(GetParam().values, std::back_insert_iterator(sequence_));
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(GetParam(), sequence_));
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, sequence_));
 }
 
-class CompactSequenceIotaFixture : public ::testing::TestWithParam<std::ranges::iota_view<uint32_t, uint32_t>> {
+class CompactSequenceIotaFixture : public ::testing::TestWithParam<IotaCase> {
  protected:
   CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
 };
@@ -84,22 +89,24 @@ TEST_P(CompactSequenceIotaFixture, PreservesValuesAcrossBlockBoundaries) {
   // Arrange
 
   // Act
-  std::ranges::copy(GetParam(), std::back_insert_iterator(sequence_));
+  std::ranges::copy(GetParam().values, std::back_insert_iterator(sequence_));
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(GetParam(), sequence_));
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, sequence_));
 }
 
-const auto kIotaCases = testing::Values(std::views::iota(0U, 0U),
-                                        std::views::iota(0U, 3U),
-                                        std::views::iota(0U, 4U),
-                                        std::views::iota(0U, 5U),
-                                        std::views::iota(0U, 8U),
-                                        std::views::iota(0U, 9U),
-                                        std::views::iota(std::numeric_limits<uint32_t>::max() - 4, std::numeric_limits<uint32_t>::max()));
+const auto kIotaCases = testing::Values(
+    IotaCase{.name = "Empty", .values = std::views::iota(0U, 0U)},
+    IotaCase{.name = "BeforeFirstBlock", .values = std::views::iota(0U, 3U)},
+    IotaCase{.name = "AtFirstBlock", .values = std::views::iota(0U, 4U)},
+    IotaCase{.name = "AfterFirstBlock", .values = std::views::iota(0U, 5U)},
+    IotaCase{.name = "AtSecondBlock", .values = std::views::iota(0U, 8U)},
+    IotaCase{.name = "AfterSecondBlock", .values = std::views::iota(0U, 9U)},
+    IotaCase{.name = "MaximumValues", .values = std::views::iota(std::numeric_limits<uint32_t>::max() - 4, std::numeric_limits<uint32_t>::max())});
 
-INSTANTIATE_TEST_SUITE_P(Cases, SequenceIotaFixture, kIotaCases);
-INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceIotaFixture, kIotaCases);
+const auto kIotaCaseName = [](const testing::TestParamInfo<IotaCase>& info) { return info.param.name; };
+INSTANTIATE_TEST_SUITE_P(Cases, SequenceIotaFixture, kIotaCases, kIotaCaseName);
+INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceIotaFixture, kIotaCases, kIotaCaseName);
 
 class ReadonlyCompactSequenceFixture : public testing::Test {
  protected:
@@ -127,6 +134,38 @@ TEST_F(ReadonlyCompactSequenceFixture, SnapshotPreservesValues) {
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(kValues, snapshot));
+}
+
+TEST_F(ReadonlyCompactSequenceFixture, MoveConstructionTransfersSnapshotValues) {
+  // Arrange
+  sequence_.push_back(7);
+  auto snapshot = sequence_.snapshot();
+
+  // Act
+  const auto moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved.view(), testing::ElementsAre(7));
+  // The move contract keeps the source empty and readable.
+  // NOLINTNEXTLINE(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+  EXPECT_THAT(snapshot.view(), testing::ElementsAre());
+}
+
+TEST_F(ReadonlyCompactSequenceFixture, MoveAssignmentReplacesSnapshotValues) {
+  // Arrange
+  sequence_.push_back(7);
+  auto snapshot = sequence_.snapshot();
+  sequence_.push_back(9);
+  auto moved = sequence_.snapshot();
+
+  // Act
+  moved = std::move(snapshot);
+
+  // Assert
+  EXPECT_THAT(moved.view(), testing::ElementsAre(7));
+  // The move contract keeps the source empty and readable.
+  // NOLINTNEXTLINE(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+  EXPECT_THAT(snapshot.view(), testing::ElementsAre());
 }
 
 TEST_F(ReadonlyCompactSequenceFixture, SnapshotIteratorsStayEqualAfterAppend) {
@@ -309,7 +348,7 @@ TEST_F(CompactSequenceEightValueBlockFixture, ReadsMixedWidthsAcrossKeyAndBlockB
   EXPECT_TRUE(bytes.empty());
 }
 
-class CompactSequenceCreateIteratorParamFixture : public ::testing::TestWithParam<std::ranges::iota_view<uint32_t, uint32_t>> {
+class CompactSequenceCreateIteratorParamFixture : public ::testing::TestWithParam<IotaCase> {
  protected:
   CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
   BareBones::ShrinkedToFitOStringStream stream_;
@@ -317,7 +356,7 @@ class CompactSequenceCreateIteratorParamFixture : public ::testing::TestWithPara
 
 TEST_P(CompactSequenceCreateIteratorParamFixture, ReadsValuesAndConsumesRecord) {
   // Arrange
-  std::ranges::copy(GetParam(), std::back_insert_iterator(sequence_));
+  std::ranges::copy(GetParam().values, std::back_insert_iterator(sequence_));
   sequence_.write_to(stream_);
   auto buffer = stream_.span<const uint8_t>();
 
@@ -325,11 +364,11 @@ TEST_P(CompactSequenceCreateIteratorParamFixture, ReadsValuesAndConsumesRecord) 
   const auto it = sequence_.create_read_iterator(buffer);
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(std::ranges::subrange(it, sequence_.end()), GetParam()));
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, std::ranges::subrange(it, sequence_.end())));
   EXPECT_TRUE(buffer.empty());
 }
 
-INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceCreateIteratorParamFixture, kIotaCases);
+INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceCreateIteratorParamFixture, kIotaCases, kIotaCaseName);
 
 template <class Codec>
 class StreamVByteSequenceValuesFixture : public testing::Test {
