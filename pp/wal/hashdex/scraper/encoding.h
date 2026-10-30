@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -35,7 +36,7 @@ class SampleCodec {
  public:
   static constexpr size_t kMaximumEncodingSize = sizeof(Primitives::Sample);
 
-  static char* encode(char* out, const LayoutMarker layout, Primitives::Sample sample) {
+  static std::byte* encode(std::byte* out, const LayoutMarker layout, Primitives::Sample sample) {
     using encoding::SampleValueType;
 
     const double val = sample.value();
@@ -59,11 +60,11 @@ class SampleCodec {
   }
 
   struct DecodeResult {
-    const char* next;
+    const std::byte* next;
     Primitives::Sample sample;
   };
 
-  static DecodeResult decode(const char* in, const LayoutMarker layout, int64_t default_ts) {
+  static DecodeResult decode(const std::byte* in, const LayoutMarker layout, int64_t default_ts) {
     using encoding::SampleValueType;
 
     DecodeResult result{};
@@ -134,7 +135,7 @@ class SampleCodec {
 
  private:
   template <typename T>
-  PROMPP_ALWAYS_INLINE static char* write_value(char* out, const T& val) noexcept {
+  PROMPP_ALWAYS_INLINE static std::byte* write_value(std::byte* out, const T& val) noexcept {
     std::memcpy(out, &val, sizeof(T));
     return out + sizeof(T);
   }
@@ -144,7 +145,7 @@ class LabelCodec {
  public:
   static constexpr size_t kMaximumEncodingSize = sizeof(uint8_t) + 4 * sizeof(uint32_t);
 
-  static char* encode(char* out, const MarkedLabel label) noexcept {
+  static std::byte* encode(std::byte* out, const MarkedLabel label) noexcept {
     if (label.name.offset == 0 && label.name.length == 0) [[likely]] {
       return encode_value_only(out, label.value.offset, label.value.length);
     }
@@ -157,12 +158,12 @@ class LabelCodec {
   }
 
   struct DecodeResult {
-    const char* next;
+    const std::byte* next;
     MarkedLabel label;
   };
 
   template <class LabelSet>
-  static PROMPP_ALWAYS_INLINE void decode_and_append(const char*& in, const char* base, LabelSet& label_set) noexcept {
+  static PROMPP_ALWAYS_INLINE void decode_and_append(const std::byte*& in, const char* base, LabelSet& label_set) noexcept {
     uint64_t chunk;
     std::memcpy(&chunk, in, sizeof(chunk));
     const auto layout = static_cast<uint8_t>(chunk);
@@ -189,7 +190,7 @@ class LabelCodec {
     }
   }
 
-  static DecodeResult decode(const char* in) noexcept {
+  static DecodeResult decode(const std::byte* in) noexcept {
     uint64_t chunk;
     std::memcpy(&chunk, in, sizeof(chunk));
     const auto layout = static_cast<uint8_t>(chunk);
@@ -198,7 +199,7 @@ class LabelCodec {
   }
 
  private:
-  static PROMPP_ALWAYS_INLINE DecodeResult decode_from_chunk(const char* in, const uint64_t chunk, const uint8_t layout) noexcept {
+  static PROMPP_ALWAYS_INLINE DecodeResult decode_from_chunk(const std::byte* in, const uint64_t chunk, const uint8_t layout) noexcept {
     if (layout == 0b01010101) [[likely]] {
       return decode_4_bytes(in, chunk);
     }
@@ -214,24 +215,24 @@ class LabelCodec {
     return decode_generic(++in, layout);
   }
 
-  static PROMPP_ALWAYS_INLINE char* encode_value_only(char* out, const uint32_t label_value_offset, const uint32_t label_value_length) noexcept {
-    char* start = out++;
+  static PROMPP_ALWAYS_INLINE std::byte* encode_value_only(std::byte* out, const uint32_t label_value_offset, const uint32_t label_value_length) noexcept {
+    std::byte* start = out++;
 
     const uint8_t sz2 = push_and_encode(out, label_value_offset);
     out += szm_[sz2];
     const uint8_t sz3 = push_and_encode(out, label_value_length);
     out += szm_[sz3];
 
-    *start = static_cast<char>((sz2 << 4) | (sz3 << 6));
+    *start = (std::byte{sz2} << 4) | (std::byte{sz3} << 6);
 
     return out;
   }
 
-  static PROMPP_ALWAYS_INLINE char* encode_4_bytes(char* out,
-                                                   const uint8_t label_name_offset,
-                                                   const uint8_t label_name_length,
-                                                   const uint8_t label_value_offset,
-                                                   const uint8_t label_value_length) noexcept {
+  static PROMPP_ALWAYS_INLINE std::byte* encode_4_bytes(std::byte* out,
+                                                        const uint8_t label_name_offset,
+                                                        const uint8_t label_name_length,
+                                                        const uint8_t label_value_offset,
+                                                        const uint8_t label_value_length) noexcept {
     const uint64_t chunk = static_cast<uint64_t>(0b01010101) | static_cast<uint64_t>(label_name_offset) << 8 | static_cast<uint64_t>(label_name_length) << 16 |
                            static_cast<uint64_t>(label_value_offset) << 24 | static_cast<uint64_t>(label_value_length) << 32;
 
@@ -239,12 +240,12 @@ class LabelCodec {
     return out + 5;
   }
 
-  static PROMPP_ALWAYS_INLINE char* encode_generic(char* out,
-                                                   const uint32_t label_name_offset,
-                                                   const uint32_t label_name_length,
-                                                   const uint32_t label_value_offset,
-                                                   const uint32_t label_value_length) noexcept {
-    char* start = out++;
+  static PROMPP_ALWAYS_INLINE std::byte* encode_generic(std::byte* out,
+                                                        const uint32_t label_name_offset,
+                                                        const uint32_t label_name_length,
+                                                        const uint32_t label_value_offset,
+                                                        const uint32_t label_value_length) noexcept {
+    std::byte* start = out++;
     const uint8_t sz0 = push_and_encode(out, label_name_offset);
     out += szm_[sz0];
     const uint8_t sz1 = push_and_encode(out, label_name_length);
@@ -254,12 +255,12 @@ class LabelCodec {
     const uint8_t sz3 = push_and_encode(out, label_value_length);
     out += szm_[sz3];
 
-    *start = static_cast<char>(sz0 | (sz1 << 2) | (sz2 << 4) | (sz3 << 6));
+    *start = std::byte{sz0} | (std::byte{sz1} << 2) | (std::byte{sz2} << 4) | (std::byte{sz3} << 6);
 
     return out;
   }
 
-  static PROMPP_ALWAYS_INLINE DecodeResult decode_4_bytes(const char* in, const uint64_t chunk) noexcept {
+  static PROMPP_ALWAYS_INLINE DecodeResult decode_4_bytes(const std::byte* in, const uint64_t chunk) noexcept {
     const auto name_off = static_cast<uint8_t>(chunk >> 8);
     const auto name_len = static_cast<uint8_t>(chunk >> 16);
     const auto value_off = static_cast<uint8_t>(chunk >> 24);
@@ -268,7 +269,7 @@ class LabelCodec {
     return DecodeResult{.next = in + 5, .label = {.name = {.offset = name_off, .length = name_len}, .value = {.offset = value_off, .length = value_len}}};
   }
 
-  static PROMPP_ALWAYS_INLINE DecodeResult decode_value_only(const char* in, uint64_t chunk, const uint8_t layout) noexcept {
+  static PROMPP_ALWAYS_INLINE DecodeResult decode_value_only(const std::byte* in, uint64_t chunk, const uint8_t layout) noexcept {
     const uint8_t sz2 = (layout >> 4) & 0b11;
     const uint8_t sz3 = (layout >> 6) & 0b11;
 
@@ -309,7 +310,7 @@ class LabelCodec {
     return DecodeResult{.next = in + used, .label = {.name = {.offset = 0, .length = 0}, .value = {.offset = value_off, .length = value_len}}};
   }
 
-  static PROMPP_ALWAYS_INLINE DecodeResult decode_generic(const char* in, const uint8_t layout) noexcept {
+  static PROMPP_ALWAYS_INLINE DecodeResult decode_generic(const std::byte* in, const uint8_t layout) noexcept {
     const uint8_t sz0 = layout & 0b11;
     const uint8_t sz1 = (layout >> 2) & 0b11;
     const uint8_t sz2 = (layout >> 4) & 0b11;
@@ -323,7 +324,7 @@ class LabelCodec {
     return DecodeResult{.next = in, .label = {.name = {.offset = name_off, .length = name_len}, .value = {.offset = value_off, .length = value_len}}};
   }
 
-  static PROMPP_ALWAYS_INLINE uint8_t push_and_encode(char* out, uint32_t v) noexcept {
+  static PROMPP_ALWAYS_INLINE uint8_t push_and_encode(std::byte* out, uint32_t v) noexcept {
     if (v == 0) [[unlikely]] {
       return 0b00;
     }
@@ -339,14 +340,14 @@ class LabelCodec {
   }
 
   template <typename T>
-  static PROMPP_ALWAYS_INLINE uint32_t read_val_typed(const char*& p) noexcept {
+  static PROMPP_ALWAYS_INLINE uint32_t read_val_typed(const std::byte*& p) noexcept {
     T v;
     std::memcpy(&v, p, sizeof(T));
     p += sizeof(T);
     return static_cast<uint32_t>(v);
   }
 
-  static PROMPP_ALWAYS_INLINE uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
+  static PROMPP_ALWAYS_INLINE uint32_t read_val_partial(const std::byte*& p, uint8_t sz) noexcept {
     switch (sz) {
       case 0b00: {
         return 0;
@@ -370,7 +371,7 @@ class LayoutCountCodec {
  public:
   static constexpr size_t kMaximumEncodingSize = sizeof(uint64_t);
 
-  static PROMPP_ALWAYS_INLINE char* encode(char* out, const LayoutMarker layout, const uint32_t count) noexcept {
+  static PROMPP_ALWAYS_INLINE std::byte* encode(std::byte* out, const LayoutMarker layout, const uint32_t count) noexcept {
     uint64_t chunk = 0;
     std::memcpy(&chunk, &layout, sizeof(layout));
     chunk |= static_cast<uint64_t>(count) << 8;
@@ -381,17 +382,17 @@ class LayoutCountCodec {
   }
 
   struct DecodeResult {
-    const char* next;
+    const std::byte* next;
     LayoutMarker layout;
     uint32_t count;
   };
 
-  static PROMPP_ALWAYS_INLINE DecodeResult decode(const char* in) noexcept {
+  static PROMPP_ALWAYS_INLINE DecodeResult decode(const std::byte* in) noexcept {
     LayoutMarker layout{};
     std::memcpy(&layout, in, sizeof(layout));
 
     if (layout.size_length_in_bytes() == sizeof(uint8_t)) [[likely]] {
-      return {in + sizeof(layout) + sizeof(uint8_t), layout, static_cast<uint32_t>(static_cast<uint8_t>(in[1]))};
+      return {in + sizeof(layout) + sizeof(uint8_t), layout, std::to_integer<uint32_t>(in[1])};
     }
 
     uint32_t labels_count = 0;
