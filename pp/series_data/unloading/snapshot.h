@@ -26,10 +26,9 @@ class SnapshotChunkView {
 
 class SnapshotWriter {
  private:
-  using EncodingChunkLengthSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+  using EncodingChunkLengthSequence = BareBones::DeltaDeltaZigZagSequence;
   using EncodingChunkIDSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+      BareBones::RleSequence<BareBones::coding::Identity, BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>;
 
  public:
   template <class Stream, class Chunks>
@@ -52,8 +51,8 @@ class SnapshotWriter {
     reserve_for_snapshot(stream, ls_id_bitmap, chunk_length_sequence, chunk_id_sequence, payload_byte_count);
 
     ls_id_bitmap.write_to(stream);
-    chunk_length_sequence.data().write_to(stream);
-    chunk_id_sequence.data().write_to(stream);
+    chunk_length_sequence.store().write_to(stream);
+    chunk_id_sequence.store().write_to(stream);
     write_chunk_payloads(stream, chunks);
     write_reader_padding(stream, payload_byte_count);
   }
@@ -67,8 +66,8 @@ class SnapshotWriter {
                                    uint32_t payload_byte_count) noexcept {
     if constexpr (BareBones::concepts::has_reserve<Stream>) {
       const uint32_t bitmap_byte_count = ls_id_bitmap.get_write_size();
-      const uint32_t chunk_length_byte_count = chunk_length_sequence.data().get_write_size();
-      const uint32_t chunk_id_byte_count = chunk_id_sequence.data().get_write_size();
+      const uint32_t chunk_length_byte_count = chunk_length_sequence.store().get_write_size();
+      const uint32_t chunk_id_byte_count = chunk_id_sequence.store().get_write_size();
       const uint32_t reader_padding_byte_count =
           payload_byte_count == 0 ? 0 : encoder::CompactBitSequence<BareBones::DefaultReallocator>::reserved_bytes_for_reader().size();
 
@@ -95,14 +94,13 @@ class SnapshotWriter {
 
 class SnapshotReader {
  public:
+  // Requires a complete snapshot from a compatible SnapshotWriter.
+  // The caller must preserve its bytes and verify storage integrity before this call.
   template <class Visitor>
   static void visit(std::span<const uint8_t> buffer, Visitor&& visitor) {
-    EncodingChunkLengthSequence::encoder_type length_encoder;
-    EncodingChunkIDSequence::encoder_type id_encoder;
-
     auto ls_id = BareBones::Bitset::create_read_iterator(buffer);
-    auto chunk_length = EncodingChunkLengthSequence::create_read_iterator(buffer, length_encoder);
-    auto chunk_id = EncodingChunkIDSequence::create_read_iterator(buffer, id_encoder);
+    auto chunk_length = EncodingChunkLengthSequence::read_view(buffer).begin();
+    auto chunk_id = EncodingChunkIDSequence::read_view(buffer).begin();
     const uint8_t* payload_begin = buffer.data();
 
     for (; ls_id != BareBones::Bitset::IteratorSentinel{}; ++ls_id, ++chunk_length, ++chunk_id) {
@@ -113,10 +111,9 @@ class SnapshotReader {
   }
 
  private:
-  using EncodingChunkLengthSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+  using EncodingChunkLengthSequence = BareBones::DeltaDeltaZigZagSequence;
   using EncodingChunkIDSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+      BareBones::RleSequence<BareBones::coding::Identity, BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>;
 };
 
 }  // namespace series_data::unloading

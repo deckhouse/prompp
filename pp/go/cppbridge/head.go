@@ -326,6 +326,8 @@ type UnloadedDataLoader struct {
 	ds     *DataStorage
 }
 
+// Load restores an intact snapshot from a compatible UnusedSeriesDataUnloader.CreateSnapshot.
+// Callers must check integrity before loading snapshot bytes from storage.
 func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 	seriesDataUnloadedDataLoaderLoad(loader.loader, snapshot, isLast)
 	runtime.KeepAlive(loader)
