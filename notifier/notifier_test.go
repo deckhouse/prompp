@@ -14,7 +14,6 @@
 package notifier
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -29,15 +28,16 @@ import (
 	"github.com/go-kit/log"
 	"github.com/prometheus/alertmanager/api/v2/models"
 	"github.com/prometheus/client_golang/prometheus"
+	prom_testutil "github.com/prometheus/client_golang/prometheus/testutil"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"gopkg.in/yaml.v2"
 
-	"github.com/prometheus/prometheus/discovery"
-
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/discovery"
+	_ "github.com/prometheus/prometheus/discovery/file"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
@@ -71,23 +71,6 @@ func TestPostPath(t *testing.T) {
 	for _, c := range cases {
 		require.Equal(t, c.out, postPath(c.in, config.AlertmanagerAPIVersionV1))
 	}
-}
-
-func TestHandlerNextBatch(t *testing.T) {
-	h := NewManager(&Options{}, nil)
-
-	for i := range make([]struct{}, 2*maxBatchSize+1) {
-		h.queue = append(h.queue, &Alert{
-			Labels: labels.FromStrings("alertname", strconv.Itoa(i)),
-		})
-	}
-
-	expected := append([]*Alert{}, h.queue...)
-
-	require.NoError(t, alertsEqual(expected[0:maxBatchSize], h.nextBatch()))
-	require.NoError(t, alertsEqual(expected[maxBatchSize:2*maxBatchSize], h.nextBatch()))
-	require.NoError(t, alertsEqual(expected[2*maxBatchSize:], h.nextBatch()))
-	require.Empty(t, h.queue, "Expected queue to be empty but got %d alerts", len(h.queue))
 }
 
 func alertsEqual(a, b []*Alert) error {
@@ -139,17 +122,20 @@ func newTestHTTPServerBuilder(expected *[]*Alert, errc chan<- error, u, p string
 
 func TestHandlerSendAll(t *testing.T) {
 	var (
-		errc             = make(chan error, 1)
-		expected         = make([]*Alert, 0, maxBatchSize)
-		status1, status2 atomic.Int32
+		errc                      = make(chan error, 1)
+		expected                  = make([]*Alert, 0, maxBatchSize)
+		status1, status2, status3 atomic.Int32
 	)
 	status1.Store(int32(http.StatusOK))
 	status2.Store(int32(http.StatusOK))
+	status3.Store(int32(http.StatusOK))
 
 	server1 := newTestHTTPServerBuilder(&expected, errc, "prometheus", "testing_password", &status1)
 	server2 := newTestHTTPServerBuilder(&expected, errc, "", "", &status2)
+	server3 := newTestHTTPServerBuilder(&expected, errc, "", "", &status3)
 	defer server1.Close()
 	defer server2.Close()
+	defer server3.Close()
 
 	h := NewManager(&Options{}, nil)
 
@@ -161,35 +147,66 @@ func TestHandlerSendAll(t *testing.T) {
 			},
 		}, "auth_alertmanager")
 
-	h.alertmanagers = make(map[string]*alertmanagerSet)
-
 	am1Cfg := config.DefaultAlertmanagerConfig
 	am1Cfg.Timeout = model.Duration(time.Second)
 
 	am2Cfg := config.DefaultAlertmanagerConfig
 	am2Cfg.Timeout = model.Duration(time.Second)
 
-	h.alertmanagers["1"] = &alertmanagerSet{
-		ams: []alertmanager{
-			alertmanagerMock{
-				urlf: func() string { return server1.URL },
+	am3Cfg := config.DefaultAlertmanagerConfig
+	am3Cfg.Timeout = model.Duration(time.Second)
+
+	opts := &Options{Do: do, QueueCapacity: 10_000}
+	logger := log.NewNopLogger()
+
+	h.alertmanagers = map[string]*alertmanagerSet{
+		"1": {
+			ams: []alertmanager{
+				alertmanagerMock{
+					urlf: func() string { return server1.URL },
+				},
 			},
+			cfg:    &am1Cfg,
+			client: authClient,
+			sendLoops: map[string]*sendLoop{
+				server1.URL: newSendLoop(server1.URL, authClient, &am1Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
 		},
-		cfg:    &am1Cfg,
-		client: authClient,
+		"2": {
+			ams: []alertmanager{
+				alertmanagerMock{
+					urlf: func() string { return server2.URL },
+				},
+				alertmanagerMock{
+					urlf: func() string { return server3.URL },
+				},
+			},
+			cfg: &am2Cfg,
+			sendLoops: map[string]*sendLoop{
+				server2.URL: newSendLoop(server2.URL, nil, &am2Cfg, opts, logger, h.metrics),
+				server3.URL: newSendLoop(server3.URL, nil, &am3Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
+		},
+		// Empty list of Alertmanager endpoints.
+		"3": {
+			ams:       []alertmanager{},
+			cfg:       &am3Cfg,
+			sendLoops: make(map[string]*sendLoop),
+			opts:      opts,
+			metrics:   h.metrics,
+			logger:    logger,
+		},
 	}
 
-	h.alertmanagers["2"] = &alertmanagerSet{
-		ams: []alertmanager{
-			alertmanagerMock{
-				urlf: func() string { return server2.URL },
-			},
-		},
-		cfg: &am2Cfg,
-	}
-
+	var alerts []*Alert
 	for i := range make([]struct{}, maxBatchSize) {
-		h.queue = append(h.queue, &Alert{
+		alerts = append(alerts, &Alert{
 			Labels: labels.FromStrings("alertname", strconv.Itoa(i)),
 		})
 		expected = append(expected, &Alert{
@@ -206,15 +223,48 @@ func TestHandlerSendAll(t *testing.T) {
 		}
 	}
 
-	require.True(t, h.sendAll(h.queue...), "all sends failed unexpectedly")
+	for _, ams := range h.alertmanagers {
+		ams.startSendLoops(ams.ams)
+	}
+	defer func() {
+		for _, ams := range h.alertmanagers {
+			ams.cleanSendLoops(ams.ams...)
+		}
+	}()
+
+	// All Alertmanagers are up.
+	h.Send(alerts...)
+	require.Eventually(t, func() bool {
+		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == maxBatchSize
+	}, 2*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
+	// The only Alertmanager of set 1 is down.
 	status1.Store(int32(http.StatusNotFound))
-	require.True(t, h.sendAll(h.queue...), "all sends failed unexpectedly")
+	h.Send(alerts...)
+	require.Eventually(t, func() bool {
+		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server1.URL)) == maxBatchSize
+	}, 2*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
+	status1.Store(int32(http.StatusOK))
+
+	// One of the two Alertmanagers of set 2 is down, the other one still gets the alerts.
 	status2.Store(int32(http.StatusInternalServerError))
-	require.False(t, h.sendAll(h.queue...), "all sends succeeded unexpectedly")
+	h.Send(alerts...)
+	require.Eventually(t, func() bool {
+		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server2.URL)) == maxBatchSize &&
+			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server3.URL)) == 3*maxBatchSize
+	}, 2*time.Second, 10*time.Millisecond)
+	checkNoErr()
+
+	// Both Alertmanagers of set 2 are down.
+	status3.Store(int32(http.StatusInternalServerError))
+	h.Send(alerts...)
+	require.Eventually(t, func() bool {
+		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server2.URL)) == 2*maxBatchSize &&
+			prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server3.URL)) == maxBatchSize
+	}, 3*time.Second, 10*time.Millisecond)
 	checkNoErr()
 }
 
@@ -225,20 +275,21 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 		expected2 = make([]*Alert, 0, maxBatchSize)
 		expected3 = make([]*Alert, 0)
 
-		statusOK atomic.Int32
+		status1, status2, status3 atomic.Int32
 	)
-	statusOK.Store(int32(http.StatusOK))
+	status1.Store(int32(http.StatusOK))
+	status2.Store(int32(http.StatusOK))
+	status3.Store(int32(http.StatusOK))
 
-	server1 := newTestHTTPServerBuilder(&expected1, errc, "", "", &statusOK)
-	server2 := newTestHTTPServerBuilder(&expected2, errc, "", "", &statusOK)
-	server3 := newTestHTTPServerBuilder(&expected3, errc, "", "", &statusOK)
+	server1 := newTestHTTPServerBuilder(&expected1, errc, "", "", &status1)
+	server2 := newTestHTTPServerBuilder(&expected2, errc, "", "", &status2)
+	server3 := newTestHTTPServerBuilder(&expected3, errc, "", "", &status3)
 
 	defer server1.Close()
 	defer server2.Close()
 	defer server3.Close()
 
 	h := NewManager(&Options{}, nil)
-	h.alertmanagers = make(map[string]*alertmanagerSet)
 
 	am1Cfg := config.DefaultAlertmanagerConfig
 	am1Cfg.Timeout = model.Duration(time.Second)
@@ -263,6 +314,9 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 		},
 	}
 
+	opts := &Options{Do: do, QueueCapacity: 10_000}
+	logger := log.NewNopLogger()
+
 	h.alertmanagers = map[string]*alertmanagerSet{
 		// Drop no alerts.
 		"1": {
@@ -272,6 +326,12 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 				},
 			},
 			cfg: &am1Cfg,
+			sendLoops: map[string]*sendLoop{
+				server1.URL: newSendLoop(server1.URL, nil, &am1Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
 		},
 		// Drop only alerts with the "alertnamedrop" label.
 		"2": {
@@ -281,6 +341,12 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 				},
 			},
 			cfg: &am2Cfg,
+			sendLoops: map[string]*sendLoop{
+				server2.URL: newSendLoop(server2.URL, nil, &am2Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
 		},
 		// Drop all alerts.
 		"3": {
@@ -290,16 +356,27 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 				},
 			},
 			cfg: &am3Cfg,
+			sendLoops: map[string]*sendLoop{
+				server3.URL: newSendLoop(server3.URL, nil, &am3Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
 		},
 		// Empty list of Alertmanager endpoints.
 		"4": {
-			ams: []alertmanager{},
-			cfg: &config.DefaultAlertmanagerConfig,
+			ams:       []alertmanager{},
+			cfg:       &config.DefaultAlertmanagerConfig,
+			sendLoops: make(map[string]*sendLoop),
+			opts:      opts,
+			metrics:   h.metrics,
+			logger:    logger,
 		},
 	}
 
+	var alerts []*Alert
 	for i := range make([]struct{}, maxBatchSize/2) {
-		h.queue = append(h.queue,
+		alerts = append(alerts,
 			&Alert{
 				Labels: labels.FromStrings("alertname", strconv.Itoa(i)),
 			},
@@ -330,42 +407,24 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 		}
 	}
 
-	require.True(t, h.sendAll(h.queue...), "all sends failed unexpectedly")
+	for _, ams := range h.alertmanagers {
+		ams.startSendLoops(ams.ams)
+	}
+	defer func() {
+		for _, ams := range h.alertmanagers {
+			ams.cleanSendLoops(ams.ams...)
+		}
+	}()
+
+	h.Send(alerts...)
+	require.Eventually(t, func() bool {
+		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == maxBatchSize &&
+			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server2.URL)) == maxBatchSize/2
+	}, 2*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
-	// Verify that individual locks are released.
-	for k := range h.alertmanagers {
-		h.alertmanagers[k].mtx.Lock()
-		h.alertmanagers[k].ams = nil
-		h.alertmanagers[k].mtx.Unlock()
-	}
-}
-
-func TestCustomDo(t *testing.T) {
-	const testURL = "http://testurl.com/"
-	const testBody = "testbody"
-
-	var received bool
-	h := NewManager(&Options{
-		Do: func(_ context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
-			received = true
-			body, err := io.ReadAll(req.Body)
-
-			require.NoError(t, err)
-
-			require.Equal(t, testBody, string(body))
-
-			require.Equal(t, testURL, req.URL.String())
-
-			return &http.Response{
-				Body: io.NopCloser(bytes.NewBuffer(nil)),
-			}, nil
-		},
-	}, nil)
-
-	h.sendOne(context.Background(), nil, testURL, []byte(testBody))
-
-	require.True(t, received, "Expected to receive an alert, but didn't")
+	// Set 3 drops all the alerts, so its Alertmanager is never contacted.
+	require.Zero(t, prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server3.URL)))
 }
 
 func TestExternalLabels(t *testing.T) {
@@ -383,6 +442,16 @@ func TestExternalLabels(t *testing.T) {
 		},
 	}, nil)
 
+	cfg := config.DefaultAlertmanagerConfig
+	h.alertmanagers = map[string]*alertmanagerSet{
+		"test": {
+			cfg: &cfg,
+			sendLoops: map[string]*sendLoop{
+				"test": newSendLoop("test", nil, &cfg, h.opts, log.NewNopLogger(), h.metrics),
+			},
+		},
+	}
+
 	// This alert should get the external label attached.
 	h.Send(&Alert{
 		Labels: labels.FromStrings("alertname", "test"),
@@ -399,7 +468,7 @@ func TestExternalLabels(t *testing.T) {
 		{Labels: labels.FromStrings("alertname", "externalrelabelthis", "a", "c")},
 	}
 
-	require.NoError(t, alertsEqual(expected, h.queue))
+	require.NoError(t, alertsEqual(expected, h.alertmanagers["test"].sendLoops["test"].queue))
 }
 
 func TestHandlerRelabel(t *testing.T) {
@@ -421,6 +490,16 @@ func TestHandlerRelabel(t *testing.T) {
 		},
 	}, nil)
 
+	cfg := config.DefaultAlertmanagerConfig
+	h.alertmanagers = map[string]*alertmanagerSet{
+		"test": {
+			cfg: &cfg,
+			sendLoops: map[string]*sendLoop{
+				"test": newSendLoop("test", nil, &cfg, h.opts, log.NewNopLogger(), h.metrics),
+			},
+		},
+	}
+
 	// This alert should be dropped due to the configuration
 	h.Send(&Alert{
 		Labels: labels.FromStrings("alertname", "drop"),
@@ -435,7 +514,7 @@ func TestHandlerRelabel(t *testing.T) {
 		{Labels: labels.FromStrings("alertname", "renamed")},
 	}
 
-	require.NoError(t, alertsEqual(expected, h.queue))
+	require.NoError(t, alertsEqual(expected, h.alertmanagers["test"].sendLoops["test"].queue))
 }
 
 func TestHandlerQueuing(t *testing.T) {
@@ -499,9 +578,19 @@ func TestHandlerQueuing(t *testing.T) {
 			},
 		},
 		cfg: &am1Cfg,
+		sendLoops: map[string]*sendLoop{
+			server.URL: newSendLoop(server.URL, nil, &am1Cfg, h.opts, log.NewNopLogger(), h.metrics),
+		},
+		opts:    h.opts,
+		metrics: h.metrics,
+		logger:  log.NewNopLogger(),
 	}
 	go h.Run(nil)
 	defer h.Stop()
+
+	for _, ams := range h.alertmanagers {
+		ams.startSendLoops(ams.ams)
+	}
 
 	var alerts []*Alert
 	for i := range make([]struct{}, 20*maxBatchSize) {
@@ -732,6 +821,7 @@ func TestHangingNotifier(t *testing.T) {
 	}))
 	faultyURL, err := url.Parse(faultyServer.URL)
 	require.NoError(t, err)
+	faultyURL.Path = "/api/v2/alerts"
 
 	// Set up a functional Alertmanager.
 	var functionalCalled atomic.Bool
@@ -740,6 +830,7 @@ func TestHangingNotifier(t *testing.T) {
 	}))
 	functionalURL, err := url.Parse(functionalServer.URL)
 	require.NoError(t, err)
+	functionalURL.Path = "/api/v2/alerts"
 
 	// Initialize the discovery manager
 	// This is relevant as the updates aren't sent continually in real life, but only each updatert.
@@ -780,7 +871,18 @@ func TestHangingNotifier(t *testing.T) {
 		},
 		cfg:     &amCfg,
 		metrics: notifier.metrics,
+		sendLoops: map[string]*sendLoop{
+			faultyURL.String():     newSendLoop(faultyURL.String(), nil, &amCfg, notifier.opts, log.NewNopLogger(), notifier.metrics),
+			functionalURL.String(): newSendLoop(functionalURL.String(), nil, &amCfg, notifier.opts, log.NewNopLogger(), notifier.metrics),
+		},
+		opts:   notifier.opts,
+		logger: log.NewNopLogger(),
 	}
+
+	for _, ams := range notifier.alertmanagers {
+		ams.startSendLoops(ams.ams)
+	}
+
 	go notifier.Run(sdManager.SyncCh())
 	defer notifier.Stop()
 
@@ -826,6 +928,10 @@ loop1:
 	}
 	require.NoError(t, sdManager.ApplyConfig(c))
 
+	// The faulty Alertmanager never answers, so its queue keeps the alerts that the
+	// notifier must not wait for before it applies the discovery changes.
+	require.NotEmpty(t, notifier.alertmanagers["config-0"].sendLoops[faultyURL.String()].queue)
+
 	// The notifier should not wait until the alerts queue is empty to apply the discovery changes
 	// A faulty Alertmanager could cause each alert sending cycle to take up to AlertmanagerConfig.Timeout
 	// The queue may never be emptied, as the arrival rate could be larger than the departure rate
@@ -839,13 +945,16 @@ loop2:
 		default:
 			// The faulty alertmanager was dropped.
 			if len(notifier.Alertmanagers()) == 1 {
-				// Prevent from TOCTOU.
-				require.Positive(t, notifier.queueLen())
 				break loop2
 			}
-			require.Positive(t, notifier.queueLen(), "The faulty alertmanager wasn't dropped before the alerts queue was emptied.")
 		}
 	}
+
+	// The send loop of the dropped Alertmanager is gone, the remaining one still runs.
+	notifier.alertmanagers["config-0"].mtx.RLock()
+	defer notifier.alertmanagers["config-0"].mtx.RUnlock()
+	require.NotContains(t, notifier.alertmanagers["config-0"].sendLoops, faultyURL.String())
+	require.Contains(t, notifier.alertmanagers["config-0"].sendLoops, functionalURL.String())
 }
 
 func TestStop_DrainingDisabled(t *testing.T) {
@@ -896,6 +1005,16 @@ func TestStop_DrainingDisabled(t *testing.T) {
 			},
 		},
 		cfg: &am1Cfg,
+		sendLoops: map[string]*sendLoop{
+			server.URL: newSendLoop(server.URL, nil, &am1Cfg, m.opts, log.NewNopLogger(), m.metrics),
+		},
+		opts:    m.opts,
+		metrics: m.metrics,
+		logger:  log.NewNopLogger(),
+	}
+
+	for _, ams := range m.alertmanagers {
+		ams.startSendLoops(ams.ams)
 	}
 
 	notificationManagerStopped := make(chan struct{})
@@ -982,6 +1101,16 @@ func TestStop_DrainingEnabled(t *testing.T) {
 			},
 		},
 		cfg: &am1Cfg,
+		sendLoops: map[string]*sendLoop{
+			server.URL: newSendLoop(server.URL, nil, &am1Cfg, m.opts, log.NewNopLogger(), m.metrics),
+		},
+		opts:    m.opts,
+		metrics: m.metrics,
+		logger:  log.NewNopLogger(),
+	}
+
+	for _, ams := range m.alertmanagers {
+		ams.startSendLoops(ams.ams)
 	}
 
 	notificationManagerStopped := make(chan struct{})
@@ -1016,4 +1145,371 @@ func TestStop_DrainingEnabled(t *testing.T) {
 	}
 
 	require.Equal(t, int64(2), alertsReceived.Load())
+}
+
+// TestQueuesDrainingOnApplyConfig ensures that when an alertmanagerSet disappears after an ApplyConfig(), its
+// sendLoops queues are drained only when DrainOnShutdown is set.
+func TestQueuesDrainingOnApplyConfig(t *testing.T) {
+	for _, drainOnShutdown := range []bool{false, true} {
+		t.Run(strconv.FormatBool(drainOnShutdown), func(t *testing.T) {
+			alertSent := make(chan struct{})
+
+			server := newImmediateAlertmanager(alertSent)
+			defer server.Close()
+
+			h := NewManager(&Options{}, nil)
+			h.alertmanagers = make(map[string]*alertmanagerSet)
+
+			amCfg := config.DefaultAlertmanagerConfig
+			amCfg.Timeout = model.Duration(time.Second)
+
+			opts := &Options{Do: do, QueueCapacity: 10, DrainOnShutdown: drainOnShutdown}
+			logger := log.NewNopLogger()
+
+			h.alertmanagers["1"] = &alertmanagerSet{
+				ams: []alertmanager{
+					alertmanagerMock{
+						urlf: func() string { return server.URL },
+					},
+				},
+				cfg: &amCfg,
+				sendLoops: map[string]*sendLoop{
+					server.URL: newSendLoop(server.URL, nil, &amCfg, opts, logger, h.metrics),
+				},
+				opts:    opts,
+				metrics: h.metrics,
+				logger:  logger,
+			}
+
+			// The send loops were not started, nothing will be sent.
+			h.Send(&Alert{Labels: labels.FromStrings("alertname", "foo")})
+
+			// Remove the alertmanagerSet.
+			require.NoError(t, h.ApplyConfig(&config.Config{}))
+
+			select {
+			case <-alertSent:
+				if !drainOnShutdown {
+					require.FailNow(t, "no alert should be sent")
+				}
+			case <-time.After(100 * time.Millisecond):
+				if drainOnShutdown {
+					require.FailNow(t, "alert wasn't received")
+				}
+			}
+		})
+	}
+}
+
+func TestApplyConfig(t *testing.T) {
+	targetURL := "alertmanager:9093"
+	targetGroup := &targetgroup.Group{
+		Targets: []model.LabelSet{
+			{
+				"__address__": model.LabelValue(targetURL),
+			},
+		},
+	}
+	alertmanagerURL := fmt.Sprintf("http://%s/api/v2/alerts", targetURL)
+
+	n := NewManager(&Options{}, nil)
+	cfg := &config.Config{}
+	s := `
+alerting:
+  alertmanagers:
+  - file_sd_configs:
+    - files:
+      - foo.json
+`
+	// 1. Ensure known alertmanagers are not dropped during ApplyConfig.
+	require.NoError(t, yaml.UnmarshalStrict([]byte(s), cfg))
+	require.Len(t, cfg.AlertingConfig.AlertmanagerConfigs, 1)
+
+	// First, apply the config and reload.
+	require.NoError(t, n.ApplyConfig(cfg))
+	tgs := map[string][]*targetgroup.Group{"config-0": {targetGroup}}
+	n.reload(tgs)
+	require.Len(t, n.Alertmanagers(), 1)
+	require.Equal(t, alertmanagerURL, n.Alertmanagers()[0].String())
+
+	// The send loop of the discovered alertmanager is running.
+	require.Contains(t, n.alertmanagers["config-0"].sendLoops, alertmanagerURL)
+	sendLoopBeforeReload := n.alertmanagers["config-0"].sendLoops[alertmanagerURL]
+
+	// Reapply the config.
+	require.NoError(t, n.ApplyConfig(cfg))
+	// Ensure the known alertmanagers are not dropped.
+	require.Len(t, n.Alertmanagers(), 1)
+	require.Equal(t, alertmanagerURL, n.Alertmanagers()[0].String())
+	// Ensure the send loop and its queue survived the reload.
+	require.Same(t, sendLoopBeforeReload, n.alertmanagers["config-0"].sendLoops[alertmanagerURL])
+
+	// 2. Ensure known alertmanagers are not dropped during ApplyConfig even when
+	// the config order changes.
+	s = `
+alerting:
+  alertmanagers:
+  - static_configs:
+  - file_sd_configs:
+    - files:
+      - foo.json
+`
+	require.NoError(t, yaml.UnmarshalStrict([]byte(s), cfg))
+	require.Len(t, cfg.AlertingConfig.AlertmanagerConfigs, 2)
+
+	require.NoError(t, n.ApplyConfig(cfg))
+	require.Len(t, n.Alertmanagers(), 1)
+	// Ensure no unnecessary alertmanagers are injected.
+	require.Empty(t, n.alertmanagers["config-0"].ams)
+	// Ensure the config order is taken into account.
+	ams := n.alertmanagers["config-1"].ams
+	require.Len(t, ams, 1)
+	require.Equal(t, alertmanagerURL, ams[0].url().String())
+
+	// 3. Ensure known alertmanagers are reused for new config with identical AlertmanagerConfig.
+	s = `
+alerting:
+  alertmanagers:
+  - file_sd_configs:
+    - files:
+      - foo.json
+  - file_sd_configs:
+    - files:
+      - foo.json
+`
+	require.NoError(t, yaml.UnmarshalStrict([]byte(s), cfg))
+	require.Len(t, cfg.AlertingConfig.AlertmanagerConfigs, 2)
+
+	require.NoError(t, n.ApplyConfig(cfg))
+	require.Len(t, n.Alertmanagers(), 2)
+	for cfgIdx := 0; cfgIdx < 2; cfgIdx++ {
+		ams := n.alertmanagers[fmt.Sprintf("config-%d", cfgIdx)].ams
+		require.Len(t, ams, 1)
+		require.Equal(t, alertmanagerURL, ams[0].url().String())
+	}
+
+	// 4. Ensure known alertmanagers are reused only for identical AlertmanagerConfig.
+	s = `
+alerting:
+  alertmanagers:
+  - file_sd_configs:
+    - files:
+      - foo.json
+    path_prefix: /bar
+  - file_sd_configs:
+    - files:
+      - foo.json
+    relabel_configs:
+    - source_labels: ['__address__']
+      regex: 'doesntmatter:1234'
+      action: drop
+`
+	require.NoError(t, yaml.UnmarshalStrict([]byte(s), cfg))
+	require.Len(t, cfg.AlertingConfig.AlertmanagerConfigs, 2)
+
+	require.NoError(t, n.ApplyConfig(cfg))
+	require.Empty(t, n.Alertmanagers())
+}
+
+// TestAlertsRelabelingIsIsolated ensures that alerts relabeling in one
+// alertmanagerSet doesn't affect the others.
+// See https://github.com/prometheus/prometheus/pull/17063.
+func TestAlertsRelabelingIsIsolated(t *testing.T) {
+	var (
+		errc      = make(chan error, 1)
+		expected1 = make([]*Alert, 0)
+		expected2 = make([]*Alert, 0)
+
+		status1, status2 atomic.Int32
+	)
+	status1.Store(int32(http.StatusOK))
+	status2.Store(int32(http.StatusOK))
+
+	server1 := newTestHTTPServerBuilder(&expected1, errc, "", "", &status1)
+	server2 := newTestHTTPServerBuilder(&expected2, errc, "", "", &status2)
+
+	defer server1.Close()
+	defer server2.Close()
+
+	h := NewManager(&Options{}, nil)
+
+	am1Cfg := config.DefaultAlertmanagerConfig
+	am1Cfg.Timeout = model.Duration(time.Second)
+	am1Cfg.AlertRelabelConfigs = []*relabel.Config{
+		{
+			SourceLabels: model.LabelNames{"alertname"},
+			Regex:        relabel.MustNewRegexp("(.*)"),
+			TargetLabel:  "parasite",
+			Action:       relabel.Replace,
+			Replacement:  "yes",
+		},
+	}
+
+	am2Cfg := config.DefaultAlertmanagerConfig
+	am2Cfg.Timeout = model.Duration(time.Second)
+
+	opts := &Options{Do: do, QueueCapacity: 10}
+	logger := log.NewNopLogger()
+
+	h.alertmanagers = map[string]*alertmanagerSet{
+		"am1": {
+			ams: []alertmanager{
+				alertmanagerMock{
+					urlf: func() string { return server1.URL },
+				},
+			},
+			cfg: &am1Cfg,
+			sendLoops: map[string]*sendLoop{
+				server1.URL: newSendLoop(server1.URL, nil, &am1Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
+		},
+		"am2": {
+			ams: []alertmanager{
+				alertmanagerMock{
+					urlf: func() string { return server2.URL },
+				},
+			},
+			cfg: &am2Cfg,
+			sendLoops: map[string]*sendLoop{
+				server2.URL: newSendLoop(server2.URL, nil, &am2Cfg, opts, logger, h.metrics),
+			},
+			opts:    opts,
+			metrics: h.metrics,
+			logger:  logger,
+		},
+	}
+
+	for _, ams := range h.alertmanagers {
+		ams.startSendLoops(ams.ams)
+	}
+	defer func() {
+		for _, ams := range h.alertmanagers {
+			ams.cleanSendLoops(ams.ams...)
+		}
+	}()
+
+	// am1 adds the parasite label, am2 must not see it.
+	expected1 = append(expected1, &Alert{
+		Labels: labels.FromStrings("alertname", "test", "parasite", "yes"),
+	})
+	expected2 = append(expected2, &Alert{
+		Labels: labels.FromStrings("alertname", "test"),
+	})
+
+	h.Send(&Alert{
+		Labels: labels.FromStrings("alertname", "test"),
+	})
+
+	require.Eventually(t, func() bool {
+		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == 1 &&
+			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server2.URL)) == 1
+	}, 2*time.Second, 10*time.Millisecond)
+
+	select {
+	case err := <-errc:
+		require.NoError(t, err)
+	default:
+	}
+}
+
+// TestNotifierQueueIndependentOfFailedAlertmanager is a regression test for
+// https://github.com/prometheus/prometheus/issues/7676.
+// The test creates a black hole alertmanager that never responds to any requests,
+// with an alertmanager_config.timeout set to a year. The alerts must still reach
+// the healthy alertmanager, and Send must not block.
+func TestNotifierQueueIndependentOfFailedAlertmanager(t *testing.T) {
+	stopBlackHole := make(chan struct{})
+	blackHoleAM := newBlackHoleAlertmanager(stopBlackHole)
+	defer func() {
+		close(stopBlackHole)
+		blackHoleAM.Close()
+	}()
+
+	doneAlertReceive := make(chan struct{})
+	immediateAM := newImmediateAlertmanager(doneAlertReceive)
+	defer immediateAM.Close()
+
+	h := NewManager(&Options{
+		Do:            do,
+		QueueCapacity: 10,
+	}, nil)
+
+	h.alertmanagers = make(map[string]*alertmanagerSet)
+
+	amCfg := config.DefaultAlertmanagerConfig
+	amCfg.Timeout = model.Duration(365 * 24 * time.Hour)
+
+	h.alertmanagers["1"] = &alertmanagerSet{
+		ams: []alertmanager{
+			alertmanagerMock{
+				urlf: func() string { return blackHoleAM.URL },
+			},
+		},
+		cfg:  &amCfg,
+		opts: h.opts,
+		sendLoops: map[string]*sendLoop{
+			blackHoleAM.URL: newSendLoop(blackHoleAM.URL, http.DefaultClient, &amCfg, h.opts, log.NewNopLogger(), h.metrics),
+		},
+		metrics: h.metrics,
+		logger:  log.NewNopLogger(),
+	}
+
+	h.alertmanagers["2"] = &alertmanagerSet{
+		ams: []alertmanager{
+			alertmanagerMock{
+				urlf: func() string { return immediateAM.URL },
+			},
+		},
+		cfg:  &amCfg,
+		opts: h.opts,
+		sendLoops: map[string]*sendLoop{
+			immediateAM.URL: newSendLoop(immediateAM.URL, http.DefaultClient, &amCfg, h.opts, log.NewNopLogger(), h.metrics),
+		},
+		metrics: h.metrics,
+		logger:  log.NewNopLogger(),
+	}
+
+	for _, ams := range h.alertmanagers {
+		ams.startSendLoops(ams.ams)
+	}
+
+	doneSend := make(chan struct{})
+	go func() {
+		h.Send(&Alert{
+			Labels: labels.FromStrings("alertname", "test"),
+		})
+		close(doneSend)
+	}()
+
+	select {
+	case <-doneAlertReceive:
+		// The happy case, the alert was received by the healthy alertmanager.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for the alert to be received by the healthy alertmanager")
+	}
+
+	select {
+	case <-doneSend:
+		// The happy case, Send returned.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for Send to return")
+	}
+}
+
+func newBlackHoleAlertmanager(stop <-chan struct{}) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Do nothing, wait to be canceled.
+		<-stop
+		w.WriteHeader(http.StatusOK)
+	}))
+}
+
+func newImmediateAlertmanager(done chan<- struct{}) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		close(done)
+	}))
 }
