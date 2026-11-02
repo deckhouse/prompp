@@ -211,6 +211,7 @@ func newAlertMetrics(r prometheus.Registerer, queueCap int, alertmanagersDiscove
 			m.latency,
 			m.errors,
 			m.sent,
+			m.successfullySent, // PP_CHANGES.md: add successfully send metric
 			m.dropped,
 			m.queueLength,
 			m.queueCapacity,

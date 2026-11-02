@@ -162,6 +162,35 @@ func TestNextBatchAlertsFromQueue(t *testing.T) {
 	require.Empty(t, s.nextBatch())
 }
 
+// TestMetricsAreRegistered ensures every alert metric reaches the registry.
+// PP_CHANGES.md: add successfully send metric
+func TestMetricsAreRegistered(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	metrics := newAlertMetrics(reg, 10, func() float64 { return 0 })
+
+	// A send loop initializes the per-Alertmanager metrics, which a vector only
+	// reports once it has children.
+	newSendLoop("http://foo.bar/", nil, &config.DefaultAlertmanagerConfig, &Options{QueueCapacity: 10}, log.NewNopLogger(), metrics)
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	names := make([]string, 0, len(families))
+	for _, f := range families {
+		names = append(names, f.GetName())
+	}
+
+	require.Subset(t, names, []string{
+		"prometheus_notifications_alertmanagers_discovered",
+		"prometheus_notifications_dropped_total",
+		"prometheus_notifications_errors_total",
+		"prometheus_notifications_queue_capacity",
+		"prometheus_notifications_queue_length",
+		"prometheus_notifications_sent_total",
+		"prometheus_notifications_successfully_sent_total",
+	})
+}
+
 // TestSendLoopMetricsCleanedOnStop ensures a restarted send loop for the same
 // Alertmanager does not conflict with the metrics of the stopped one.
 func TestSendLoopMetricsCleanedOnStop(t *testing.T) {
