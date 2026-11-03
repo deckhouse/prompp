@@ -1,6 +1,5 @@
 amd64_headers := $(patsubst %.h, init/%_amd64.h, $(headers))
 arm64_headers := $(patsubst %.h, init/%_arm64.h, $(headers))
-amd64_bindings := $(foreach flavor,$(amd64_escaped_flavors),init/entrypoint.amd64_$(flavor)_bindings)
 arm64_bindings := $(foreach flavor,$(arm64_escaped_flavors),init/entrypoint.arm64_$(flavor)_bindings)
 
 .PRECIOUS: init/entrypoint.cpp
@@ -8,7 +7,7 @@ init/entrypoint.cpp: ## Built runtime entrypoint with flavor determine init func
 init/entrypoint.cpp: init/entrypoint.amd64_includes | $(amd64_headers)
 init/entrypoint.cpp: init/entrypoint.arm64_includes | $(arm64_headers)
 init/entrypoint.cpp: init/entrypoint.function_pointers
-init/entrypoint.cpp: $(amd64_bindings)
+init/entrypoint.cpp: init/entrypoint.ifuncs
 init/entrypoint.cpp: $(arm64_bindings)
 init/entrypoint.cpp: entrypoint.cpp.template
 	@while IFS="" read -r p || [ -n "$$p" ]; do \
@@ -54,8 +53,12 @@ init/entrypoint.function_pointers: init/all.symbols
 		printf '}\n\n';\
 	done < $^ > $@
 
+.INTERMEDIATE: init/entrypoint.ifuncs
+init/entrypoint.ifuncs: init/all.symbols
+	@$(sed) 's/^void \([^ (]*\)(\(.*\));/DEFINE_IFUNC(\1, (\2));/' $^ > $@
+
 .INTERMEDIATE: init/entrypoint.%_bindings
-$(amd64_bindings) $(arm64_bindings): init/entrypoint.%_bindings: init/all.symbols
+$(arm64_bindings): init/entrypoint.%_bindings: init/all.symbols
 	@while IFS="" read -r p || [ -n "$$p" ]; do\
 		fn_name=$$(echo "$$p" | $(sed) 's/^void //;s/(.*);//');\
 		printf '    %s_ptr = &$*_%s;\n' "$$fn_name" "$$fn_name";\

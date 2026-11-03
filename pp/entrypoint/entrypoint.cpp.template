@@ -16,16 +16,12 @@
 //#entrypoint.arm64_includes
 #endif
 
-//#entrypoint.function_pointers
-
 #if PROMPP_PLATFORM_AMD64
 enum class arch_flavor : uint8_t { generic, nehalem, haswell };
 
-arch_flavor determine_arch_flavor() {
-  // initialize() may run before libgcc's CPU-detection constructor (it is also
-  // triggered by the malloc interposer), so __cpu_model can be uninitialized.
-  // Force detection explicitly, otherwise every __builtin_cpu_supports() returns
-  // 0 and we always fall back to the k8 bindings.
+static __attribute__((no_sanitize_address)) arch_flavor determine_arch_flavor() {
+  // IFUNC resolvers and the malloc interposer can run before libgcc's
+  // CPU-detection constructor.
   __builtin_cpu_init();
 
   if (!__builtin_cpu_supports("sse4.2"))
@@ -36,7 +32,27 @@ arch_flavor determine_arch_flavor() {
 
   return arch_flavor::haswell;
 }
+
+// Resolvers run during relocation, before the allocator and ASan initialization.
+#define DEFINE_IFUNC(name, args)                                                       \
+  extern "C" __attribute__((no_sanitize_address)) decltype(&amd64_k8_##name) resolve_##name() { \
+    switch (determine_arch_flavor()) {                                                  \
+      case arch_flavor::haswell:                                                       \
+        return &amd64_haswell_##name;                                                   \
+      case arch_flavor::nehalem:                                                       \
+        return &amd64_nehalem_##name;                                                   \
+      default:                                                                        \
+        return &amd64_k8_##name;                                                        \
+    }                                                                                 \
+  }                                                                                   \
+  extern "C" void name args __attribute__((ifunc("resolve_" #name)))
+
+//#entrypoint.ifuncs
+
+#undef DEFINE_IFUNC
 #elif PROMPP_PLATFORM_ARM64
+//#entrypoint.function_pointers
+
 enum class arch_flavor : uint8_t { generic, crc32 };
 
 arch_flavor determine_arch_flavor() {
@@ -139,17 +155,14 @@ static __attribute__((constructor)) void initialize() {
   switch (determine_arch_flavor()) {
 #if PROMPP_PLATFORM_AMD64
     case arch_flavor::haswell: {
-//#entrypoint.amd64_haswell_bindings
       SELECT_ARCH(amd64_haswell, "haswell");
       break;
     }
     case arch_flavor::nehalem: {
-//#entrypoint.amd64_nehalem_bindings
       SELECT_ARCH(amd64_nehalem, "nehalem");
       break;
     }
     default: {
-//#entrypoint.amd64_k8_bindings
       SELECT_ARCH(amd64_k8, "k8");
       break;
     }
