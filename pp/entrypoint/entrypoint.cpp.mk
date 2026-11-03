@@ -6,7 +6,7 @@ init/entrypoint.cpp: ## Built runtime entrypoint with flavor determine init func
 init/entrypoint.cpp: init/entrypoint.amd64_includes | $(amd64_headers)
 init/entrypoint.cpp: init/entrypoint.arm64_includes | $(arm64_headers)
 init/entrypoint.cpp: init/entrypoint.ifuncs
-init/entrypoint.cpp: entrypoint.cpp.template
+init/entrypoint.cpp: entrypoint.cpp.template entrypoint.cpp.mk
 	@while IFS="" read -r p || [ -n "$$p" ]; do \
 		case $$p in \
 		//#*) cat init/$$(echo "$$p" | $(sed) 's@^//#@@');; \
@@ -31,11 +31,12 @@ $(arm64_headers): init/%_arm64.h: %.h
 	@mkdir -p ${@D}
 	@$(call prefix_functions, arm64, $(arm64_escaped_flavors))
 
+# IFUNC resolvers use declarations from these headers through token pasting.
 .INTERMEDIATE: init/entrypoint.%_includes
 init/entrypoint.%_includes: $(headers)
 	@mkdir -p ${@D}
 	@for i in $(patsubst %.h, %, $^); do\
-		printf '#include "%s_%s.h"\n' "$$i" "$*";\
+		printf '#include "%s_%s.h" // IWYU pragma: keep\n' "$$i" "$*";\
 	done > $@
 
 .INTERMEDIATE: init/entrypoint.ifuncs

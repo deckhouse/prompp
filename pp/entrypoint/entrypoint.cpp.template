@@ -12,7 +12,6 @@
 
 //#entrypoint.amd64_includes
 #elif PROMPP_PLATFORM_ARM64
-#include <asm/hwcap.h>
 #include <sys/auxv.h>
 
 //#entrypoint.arm64_includes
@@ -51,7 +50,7 @@ static __attribute__((no_sanitize_address)) arch_flavor determine_arch_flavor() 
 #elif PROMPP_PLATFORM_ARM64
 enum class arch_flavor : uint8_t { generic, crc32 };
 
-static constexpr arch_flavor determine_arch_flavor(unsigned long hwcap) {
+static constexpr arch_flavor determine_arch_flavor(uint64_t hwcap) {
   return (hwcap & HWCAP_CRC32) != 0 ? arch_flavor::crc32 : arch_flavor::generic;
 }
 
@@ -60,12 +59,12 @@ static arch_flavor determine_arch_flavor() {
 }
 
 // The GNU AArch64 resolver ABI passes AT_HWCAP in the first argument.
-#define DEFINE_RESOLVER(name)                                                   \
-  extern "C" __attribute__((no_sanitize_address))                               \
-  auto resolve_##name(unsigned long hwcap) -> decltype(&arm64_armv8_a_##name) { \
-    return determine_arch_flavor(hwcap) == arch_flavor::crc32                   \
-               ? &arm64_armv8_a_crc_##name                                      \
-               : &arm64_armv8_a_##name;                                         \
+#define DEFINE_RESOLVER(name)                                              \
+  extern "C" __attribute__((no_sanitize_address))                          \
+  auto resolve_##name(uint64_t hwcap) -> decltype(&arm64_armv8_a_##name) { \
+    return determine_arch_flavor(hwcap) == arch_flavor::crc32              \
+               ? &arm64_armv8_a_crc_##name                                 \
+               : &arm64_armv8_a_##name;                                    \
   }
 #endif
 
