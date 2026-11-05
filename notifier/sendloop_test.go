@@ -163,7 +163,7 @@ func TestNextBatchAlertsFromQueue(t *testing.T) {
 }
 
 // TestMetricsAreRegistered ensures every alert metric reaches the registry.
-// PP_CHANGES.md: add successfully send metric
+// PP_CHANGES.md: add successfully send metric.
 func TestMetricsAreRegistered(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	metrics := newAlertMetrics(reg, 10, func() float64 { return 0 })

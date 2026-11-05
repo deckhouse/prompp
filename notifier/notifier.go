@@ -15,7 +15,7 @@ package notifier
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 // cryptographic strength is not required
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -614,7 +614,7 @@ func (s *alertmanagerSet) configHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	hash := md5.Sum(b)
+	hash := md5.Sum(b) // #nosec G401 // cryptographic strength is not required
 	return hex.EncodeToString(hash[:]), nil
 }
 
