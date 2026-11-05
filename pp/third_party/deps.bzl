@@ -84,9 +84,7 @@ def _third_party_deps_impl(_ctx):
         name = "lz4",
         build_file = Label("//third_party:lz4.BUILD"),
         patches = [
-            Label("//third_party/patches/lz4:0001-remove_visibility_attribute.patch"),
             Label("//third_party/patches/lz4:0002-add_allocated_memory.patch"),
-            Label("//third_party/patches/lz4:0003-fix_offsetof_calculation.patch"),
             Label("//third_party/patches/lz4:0004-svacer_fixes.patch"),
         ],
         sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b",
