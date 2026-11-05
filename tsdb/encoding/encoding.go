@@ -43,10 +43,10 @@ func (e *Encbuf) PutString(s string) { e.B = append(e.B, s...) }
 func (e *Encbuf) PutByte(c byte)     { e.B = append(e.B, c) }
 func (e *Encbuf) PutBytes(b []byte)  { e.B = append(e.B, b...) }
 
-func (e *Encbuf) PutBE32int(x int)      { e.PutBE32(uint32(x)) }
+func (e *Encbuf) PutBE32int(x int)      { e.PutBE32(uint32(x)) } // #nosec G115 // no overflow
 func (e *Encbuf) PutUvarint32(x uint32) { e.PutUvarint64(uint64(x)) }
-func (e *Encbuf) PutBE64int64(x int64)  { e.PutBE64(uint64(x)) }
-func (e *Encbuf) PutUvarint(x int)      { e.PutUvarint64(uint64(x)) }
+func (e *Encbuf) PutBE64int64(x int64)  { e.PutBE64(uint64(x)) }      // #nosec G115 // no overflow
+func (e *Encbuf) PutUvarint(x int)      { e.PutUvarint64(uint64(x)) } // #nosec G115 // no overflow
 
 func (e *Encbuf) PutBE32(x uint32) {
 	binary.BigEndian.PutUint32(e.C[:], x)
@@ -155,12 +155,12 @@ func NewDecbufUvarintAt(bs ByteSlice, off int, castagnoliTable *crc32.Table) Dec
 		return Decbuf{E: fmt.Errorf("invalid uvarint %d", n)}
 	}
 
-	if bs.Len() < off+n+int(l)+4 {
+	if bs.Len() < off+n+int(l)+4 { // #nosec G115 // no overflow
 		return Decbuf{E: ErrInvalidSize}
 	}
 
 	// Load bytes holding the contents plus a CRC32 checksum.
-	b = bs.Range(off+n, off+n+int(l)+4)
+	b = bs.Range(off+n, off+n+int(l)+4) // #nosec G115 // no overflow
 	dec := Decbuf{B: b[:len(b)-4]}
 
 	if dec.Crc32(castagnoliTable) != binary.BigEndian.Uint32(b[len(b)-4:]) {
@@ -177,10 +177,10 @@ func NewDecbufRaw(bs ByteSlice, length int) Decbuf {
 	return Decbuf{B: bs.Range(0, length)}
 }
 
-func (d *Decbuf) Uvarint() int      { return int(d.Uvarint64()) }
-func (d *Decbuf) Uvarint32() uint32 { return uint32(d.Uvarint64()) }
+func (d *Decbuf) Uvarint() int      { return int(d.Uvarint64()) }    // #nosec G115 // no overflow
+func (d *Decbuf) Uvarint32() uint32 { return uint32(d.Uvarint64()) } // #nosec G115 // no overflow
 func (d *Decbuf) Be32int() int      { return int(d.Be32()) }
-func (d *Decbuf) Be64int64() int64  { return int64(d.Be64()) }
+func (d *Decbuf) Be64int64() int64  { return int64(d.Be64()) } // #nosec G115 // no overflow
 
 // Crc32 returns a CRC32 checksum over the remaining bytes.
 func (d *Decbuf) Crc32(castagnoliTable *crc32.Table) uint32 {
@@ -206,7 +206,7 @@ func (d *Decbuf) UvarintBytes() []byte {
 	if d.E != nil {
 		return []byte{}
 	}
-	if len(d.B) < int(l) {
+	if len(d.B) < int(l) { // #nosec G115 // no overflow
 		d.E = ErrInvalidSize
 		return []byte{}
 	}

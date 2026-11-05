@@ -1,7 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <experimental/scope>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -16,6 +15,7 @@
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/sparse_vector.h"
+#include "bare_bones/streams.h"
 #include "bare_bones/vector.h"
 
 #include "primitives/primitives.h"
@@ -158,7 +158,9 @@ class BasicEncoder {
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
-    bool ts_delta_rle_is_worth_trying = segment_samples_.series_count() * 0.1 > (segment_samples_.samples_count() - segment_samples_.series_count());
+    const uint64_t samples = segment_samples_.samples_count();
+    const uint64_t series = segment_samples_.series_count();
+    bool ts_delta_rle_is_worth_trying = samples >= series && 10 * (samples - series) < series;
 
     ts_base_ = std::min(ts_base_, segment_samples_.earliest_sample());
 
@@ -199,8 +201,7 @@ class BasicEncoder {
       });
     }
 
-    auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-    stream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit);
 
     lz4stream_.set_stream(&stream);
 
@@ -633,8 +634,7 @@ class BasicDecoder {
       stream.read(v1_data, sizeof(v1_data));
     }
 
-    auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-    stream.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     std::istream& in = get_stream(stream);
 

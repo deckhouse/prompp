@@ -87,13 +87,16 @@ func (s *LabelSetSuite) TestLabelSet_With() {
 	)
 	s.Equal(
 		"__name__:example;container:~unknown;flags:empty;instance:instance;job:test;",
-		ls.With("flags", "empty").String())
+		ls.With("flags", "empty").String(),
+	)
 	s.Equal(
 		"__name__:example;container:service;flags:empty;instance:instance;job:test;",
-		ls.With("container", "service").String())
+		ls.With("container", "service").String(),
+	)
 	s.Equal(
 		"__name__:example;container:~unknown;flags:empty;image:added;instance:instance;job:test;",
-		ls.With("image", "added").String())
+		ls.With("image", "added").String(),
+	)
 }
 
 func (s *LabelSetSuite) TestLabelSet_WithPairs() {
@@ -111,7 +114,8 @@ func (s *LabelSetSuite) TestLabelSet_WithPairs() {
 	)
 	s.Equal(
 		"__name__:example;container:service;flags:empty;image:added;instance:instance;job:test;",
-		merged.String())
+		merged.String(),
+	)
 }
 
 func (s *LabelSetSuite) TestLabelSet_Merge() {
@@ -129,7 +133,8 @@ func (s *LabelSetSuite) TestLabelSet_Merge() {
 	))
 	s.Equal(
 		"__name__:example;container:service;flags:empty;image:added;instance:instance;job:test;",
-		merged.String())
+		merged.String(),
+	)
 }
 
 func (s *LabelSetSuite) TestLabelSet_Merge_empty() {
@@ -143,7 +148,8 @@ func (s *LabelSetSuite) TestLabelSet_Merge_empty() {
 	merged := ls.Merge(model.EmptyLabelSet())
 	s.Equal(
 		"__name__:example;container:~unknown;flags:empty;instance:instance;job:test;",
-		merged.String())
+		merged.String(),
+	)
 }
 
 func (s *LabelSetSuite) TestLabelSet_Split() {
@@ -289,7 +295,7 @@ func (s *LabelSetSuite) TestLabelSetSimpleBuilder_Get() {
 	}
 
 	s.Equal("~unknown", builder.Get("container"))
-	s.Equal("", builder.Get("container2"))
+	s.Empty(builder.Get("container2"))
 }
 
 func (s *LabelSetSuite) TestLabelSetSimpleBuilder_Has() {
@@ -344,7 +350,7 @@ func (s *LabelSetSuite) TestLabelSetSimpleBuilder_HasNotDuplicateLabelNames() {
 	}
 
 	dup, has := builder.HasDuplicateLabelNames()
-	s.Equal("", dup)
+	s.Empty(dup)
 	s.False(has)
 }
 
@@ -363,7 +369,7 @@ func (s *LabelSetSuite) TestLabelSetSimpleBuilder_HasNotDuplicateLabelNames_Set(
 	}
 
 	dup, has := builder.HasDuplicateLabelNames()
-	s.Equal("", dup)
+	s.Empty(dup)
 	s.False(has)
 }
 
@@ -386,7 +392,7 @@ func (s *LabelSetSuite) TestLabelSetSimpleBuilder_Reset() {
 	builder.Reset()
 
 	ls = builder.Build()
-	s.Equal("", ls.String())
+	s.Empty(ls.String())
 }
 
 func (s *LabelSetSuite) TestLabelSetSimpleBuilder_Sort() {

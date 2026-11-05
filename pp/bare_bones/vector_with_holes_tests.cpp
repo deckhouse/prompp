@@ -1,3 +1,6 @@
+#include <ranges>
+#include <vector>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -172,6 +175,54 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
 
   // Assert
   ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
+}
+
+TEST(VectorWithHolesTest, IteratorSkipsHoles) {
+  // Arrange
+  VectorWithHoles<ValueOnHeap<uint32_t>> vector;
+  vector.emplace_back(101U);
+  vector.emplace_back(102U);
+  vector.emplace_back(103U);
+  vector.emplace_back(104U);
+  vector.erase(0);
+  vector.erase(2);
+  const auto& const_vector = vector;
+
+  // Act
+  const auto visited = const_vector | std::views::transform([](const ValueOnHeap<uint32_t>& value) { return &value; }) | std::ranges::to<std::vector>();
+
+  // Assert
+  EXPECT_EQ((std::vector{&const_vector[1], &const_vector[3]}), visited);
+}
+
+TEST(VectorWithHolesTest, RangeDistanceSkipsHoles) {
+  // Arrange
+  VectorWithHoles<ValueOnHeap<uint32_t>> vector;
+  vector.emplace_back(101U);
+  vector.emplace_back(102U);
+  vector.emplace_back(103U);
+  vector.erase(1);
+  const auto& const_vector = vector;
+
+  // Act
+  const auto distance = std::ranges::distance(const_vector);
+
+  // Assert
+  EXPECT_EQ(2, distance);
+}
+
+TEST(VectorWithHolesTest, IteratorOfFullyErasedVectorIsEmpty) {
+  // Arrange
+  VectorWithHoles<ValueOnHeap<uint32_t>> vector;
+  vector.emplace_back(101U);
+  vector.erase(0);
+  const auto& const_vector = vector;
+
+  // Act
+  const auto is_empty = const_vector.begin() == const_vector.end();
+
+  // Assert
+  EXPECT_TRUE(is_empty);
 }
 
 TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {

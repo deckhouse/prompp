@@ -1,0 +1,25 @@
+# Aggregate parameters must preprocess nested calls and aggregations, including their parentheses.
+load 1m
+  foo{src="a"} _ 1
+  bar{id="a"} 3 3 3 3
+  bar{id="b"} 2 2 2 2
+  bar{id="c"} 1 1 1 1
+
+eval instant at 2m topk(scalar(count_values(("value"), foo)), foo)
+  foo{src="a"} 1
+
+eval range from 2m to 3m step 1m topk(scalar(count_values(("value"), foo)), foo)
+  foo{src="a"} 1 1
+
+eval instant at 2m topk(scalar(label_replace(foo, ("dst"), ("$1"), ("src"), ("(.*)"))), bar)
+  bar{id="a"} 3
+
+eval range from 2m to 3m step 1m topk(scalar(label_replace(foo, ("dst"), ("$1"), ("src"), ("(.*)"))), bar)
+  bar{id="a"} 3 3
+
+# The latest foo sample is at 1m: k must be 1, rather than the evaluation time divided by 60.
+eval instant at 2m topk(scalar(timestamp((foo))) / 60, bar)
+  bar{id="a"} 3
+
+eval range from 2m to 3m step 1m topk(scalar(timestamp((foo))) / 60, bar)
+  bar{id="a"} 3 3

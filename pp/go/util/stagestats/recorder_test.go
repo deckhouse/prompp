@@ -124,10 +124,13 @@ func (s *RecorderSuite) TestNilRecorderAccountsNothing() {
 	stripe.Observe(stageFirst, 10)
 	stripe.Since(stageFirst, stagestats.Now())
 	stripe.ObserveMax(stageFirst, slots, 0)
+	stripeLap := stripe.Start()
+	stripeLap.Mark(stageFirst)
 
 	// Assert
 	s.False(lap.Enabled())
 	s.False(stripe.Enabled())
+	s.False(stripeLap.Enabled())
 }
 
 func (s *RecorderSuite) TestNilLapIsDisabled() {
@@ -192,6 +195,25 @@ func (s *RecorderSuite) TestShardSlotsSinceConsecutiveSlots() {
 	// Assert
 	s.Equal(next-start, slots.Max(0))
 	s.Equal(end-next, slots.Max(1))
+}
+
+func (s *RecorderSuite) TestStripeStartsLap() {
+	// Arrange
+	lap := s.recorder.Stripe(3).Start()
+
+	// Act
+	lap.Mark(stageFirst)
+
+	// Assert
+	s.True(lap.Enabled())
+	s.Positive(s.durationSum())
+	s.Require().NoError(testutil.CollectAndCompare(s.recorder, strings.NewReader(`
+# HELP test_stage_executions_total Test pipeline. Total number of the stage executions.
+# TYPE test_stage_executions_total counter
+test_stage_executions_total{source="test",stage="first"} 1
+test_stage_executions_total{source="test",stage="second"} 0
+test_stage_executions_total{source="test",stage="third"} 0
+`), "test_stage_executions_total"))
 }
 
 func (s *RecorderSuite) TestNilShardSlotsDoNotReadClock() {

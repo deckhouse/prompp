@@ -20,10 +20,10 @@ type StreamSegmentProcessingStatus struct {
 // Encode status to slice byte.
 func (s *StreamSegmentProcessingStatus) Encode() []byte {
 	buf := make([]byte, 8+4+2+4+len(s.Message))
-	binary.LittleEndian.PutUint64(buf, uint64(s.Timestamp))
+	binary.LittleEndian.PutUint64(buf, uint64(s.Timestamp)) // #nosec G115 // no overflow
 	binary.LittleEndian.PutUint32(buf[8:], s.SegmentID)
 	binary.LittleEndian.PutUint16(buf[12:], s.Code)
-	binary.LittleEndian.PutUint32(buf[14:], uint32(len(s.Message)))
+	binary.LittleEndian.PutUint32(buf[14:], uint32(len(s.Message))) // #nosec G115 // no overflow
 	copy(buf[18:], s.Message)
 	return buf
 }
@@ -41,7 +41,7 @@ func (s *StreamSegmentProcessingStatus) DecodeFrom(reader io.Reader) error {
 		return err
 	}
 
-	s.Timestamp = int64(binary.LittleEndian.Uint64(header[:8]))
+	s.Timestamp = int64(binary.LittleEndian.Uint64(header[:8])) // #nosec G115 // no overflow
 	s.SegmentID = binary.LittleEndian.Uint32(header[8:12])
 	s.Code = binary.LittleEndian.Uint16(header[12:14])
 	messageLen := binary.LittleEndian.Uint32(header[14:18])

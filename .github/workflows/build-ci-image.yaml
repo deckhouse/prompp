@@ -79,11 +79,9 @@ jobs:
         include:
           - runner_name: fsn-dev-perftest-runner
             arch: amd64
-            GO_ARCH: amd64
             BAZEL_ARCH: x86_64
           - runner_name: fsn-dev-arm-runner
             arch: arm64
-            GO_ARCH: arm64
             BAZEL_ARCH: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
@@ -112,7 +110,6 @@ jobs:
           docker build -f Dockerfile.ci \
             -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.check-changes.outputs.tag_suffix }} \
             --build-arg BAZEL_ARCH=${{ matrix.BAZEL_ARCH }} \
-            --build-arg GO_ARCH=${{ matrix.GO_ARCH }} \
           .
 
       - name: Push Docker Image

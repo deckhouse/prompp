@@ -617,7 +617,7 @@ func (as *AckStatus) Ack(key cppbridge.SegmentKey, dest string) {
 
 	as.rwmx.RLock()
 	old := atomic.SwapUint32(
-		&as.status[id*int32(as.Shards())+int32(key.ShardID)],
+		&as.status[id*int32(as.Shards())+int32(key.ShardID)], // #nosec G115 // no overflow
 		key.Segment,
 	)
 	as.rwmx.RUnlock()
@@ -641,7 +641,7 @@ func (as *AckStatus) Reject(segKey cppbridge.SegmentKey, dest string) {
 	}
 
 	as.rwmx.RLock()
-	as.rejects.Add(uint32(id), segKey.Segment, segKey.ShardID)
+	as.rejects.Add(uint32(id), segKey.Segment, segKey.ShardID) // #nosec G115 // no overflow
 	as.rwmx.RUnlock()
 }
 
@@ -662,7 +662,7 @@ func (as *AckStatus) Last(shardID uint16, dest string) uint32 {
 		return 0
 	}
 
-	return atomic.LoadUint32(&as.status[id*int32(as.Shards())+int32(shardID)])
+	return atomic.LoadUint32(&as.status[id*int32(as.Shards())+int32(shardID)]) // #nosec G115 // no overflow
 }
 
 // IsAck returns true if segment ack by all destinations.

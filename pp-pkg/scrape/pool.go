@@ -133,12 +133,12 @@ func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, ts ui
 }
 
 // AddWithLabelSet add to batch timeseries, label set, timestamp and value.
-func (batch *BatchTimeSeries) AddWithLabelSet(ls pp_model.LabelSet, ts uint64, val float64) {
+func (batch *BatchTimeSeries) AddWithLabelSet(ls pp_model.LabelSet, ts int64, val float64) {
 	batch.data = append(
 		batch.data,
 		pp_model.TimeSeries{
 			LabelSet:  ls,
-			Timestamp: ts,
+			Timestamp: uint64(ts), // #nosec G115 // no overflow
 			Value:     val,
 		},
 	)

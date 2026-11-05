@@ -8,8 +8,7 @@
 		// Update the 'dockerFile' property if you aren't using the standard 'Dockerfile' filename.
 		"dockerfile": "../../Dockerfile.ci",
 		"args": {
-			"BAZEL_ARCH": "x86_64",
-			"GO_ARCH": "amd64"
+			"BAZEL_ARCH": "x86_64"
 		}
 	},
 	"mounts": [

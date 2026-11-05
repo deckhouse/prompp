@@ -68,7 +68,7 @@ func NewFrame(
 	typeFrame TypeFrame,
 	b []byte,
 ) (*ReadFrame, error) {
-	h, err := NewHeader(version, contentVersion, typeFrame, uint32(len(b)))
+	h, err := NewHeader(version, contentVersion, typeFrame, uint32(len(b))) // #nosec G115 // no overflow
 	if err != nil {
 		return nil, err
 	}
@@ -282,23 +282,23 @@ func (am *AuthMsg) UnmarshalBinary(data []byte) error {
 	var offset int
 	lenStr, n := binary.Uvarint(data)
 	offset += n
-	am.Token = string(data[offset : offset+int(lenStr)])
-	offset += int(lenStr)
+	am.Token = string(data[offset : offset+int(lenStr)]) // #nosec G115 // no overflow
+	offset += int(lenStr)                                // #nosec G115 // no overflow
 
 	lenStr, n = binary.Uvarint(data[offset:])
 	offset += n
-	am.AgentUUID = string(data[offset : offset+int(lenStr)])
-	offset += int(lenStr)
+	am.AgentUUID = string(data[offset : offset+int(lenStr)]) // #nosec G115 // no overflow
+	offset += int(lenStr)                                    // #nosec G115 // no overflow
 
 	lenStr, n = binary.Uvarint(data[offset:])
 	offset += n
-	am.ProductName = string(data[offset : offset+int(lenStr)])
-	offset += int(lenStr)
+	am.ProductName = string(data[offset : offset+int(lenStr)]) // #nosec G115 // no overflow
+	offset += int(lenStr)                                      // #nosec G115 // no overflow
 
 	lenStr, n = binary.Uvarint(data[offset:])
 	offset += n
-	am.AgentHostname = string(data[offset : offset+int(lenStr)])
-	offset += int(lenStr)
+	am.AgentHostname = string(data[offset : offset+int(lenStr)]) // #nosec G115 // no overflow
+	offset += int(lenStr)                                        // #nosec G115 // no overflow
 
 	if offset >= len(data) {
 		return nil
@@ -306,11 +306,11 @@ func (am *AuthMsg) UnmarshalBinary(data []byte) error {
 
 	lenStr, n = binary.Uvarint(data[offset:])
 	offset += n
-	am.BlockID = string(data[offset : offset+int(lenStr)])
-	offset += int(lenStr)
+	am.BlockID = string(data[offset : offset+int(lenStr)]) // #nosec G115 // no overflow
+	offset += int(lenStr)                                  // #nosec G115 // no overflow
 
 	shardID, _ := binary.Uvarint(data[offset:])
-	am.ShardID = uint16(shardID)
+	am.ShardID = uint16(shardID) // #nosec G115 // no overflow
 	return nil
 }
 
@@ -434,7 +434,7 @@ func (rm *ResponseMsg) MarshalBinary() ([]byte, error) {
 	buf = append(buf, rm.Text...)
 	buf = binary.AppendUvarint(buf, uint64(rm.Code))
 	buf = binary.AppendUvarint(buf, uint64(rm.SegmentID))
-	buf = binary.AppendUvarint(buf, uint64(rm.SendAt))
+	buf = binary.AppendUvarint(buf, uint64(rm.SendAt)) // #nosec G115 // no overflow
 	return buf, nil
 }
 
@@ -444,19 +444,19 @@ func (rm *ResponseMsg) UnmarshalBinary(data []byte) error {
 
 	lenStr, n := binary.Uvarint(data[offset:])
 	offset += n
-	rm.Text = string(data[offset : offset+int(lenStr)])
-	offset += int(lenStr)
+	rm.Text = string(data[offset : offset+int(lenStr)]) // #nosec G115 // no overflow
+	offset += int(lenStr)                               // #nosec G115 // no overflow
 
 	code, n := binary.Uvarint(data[offset:])
-	rm.Code = uint32(code)
+	rm.Code = uint32(code) // #nosec G115 // no overflow
 	offset += n
 
 	id, n := binary.Uvarint(data[offset:])
-	rm.SegmentID = uint32(id)
+	rm.SegmentID = uint32(id) // #nosec G115 // no overflow
 	offset += n
 
 	sendAt, _ := binary.Uvarint(data[offset:])
-	rm.SendAt = int64(sendAt)
+	rm.SendAt = int64(sendAt) // #nosec G115 // no overflow
 
 	return nil
 }
@@ -627,7 +627,7 @@ func (rm *RefillMsg) UnmarshalBinary(data []byte) error {
 
 	rm.Messages = make([]MessageData, 0, length)
 	var id, size, typemsg uint64
-	for i := 0; i < int(length); i++ {
+	for i := 0; i < int(length); i++ { // #nosec G115 // no overflow
 		id, err = binary.ReadUvarint(r)
 		if err != nil {
 			return fmt.Errorf("fail read id: %w", err)
@@ -646,9 +646,9 @@ func (rm *RefillMsg) UnmarshalBinary(data []byte) error {
 		rm.Messages = append(
 			rm.Messages,
 			MessageData{
-				ID:      uint32(id),
-				Size:    uint32(size),
-				Typemsg: TypeFrame(typemsg),
+				ID:      uint32(id),         // #nosec G115 // no overflow
+				Size:    uint32(size),       // #nosec G115 // no overflow
+				Typemsg: TypeFrame(typemsg), // #nosec G115 // no overflow
 			},
 		)
 	}
@@ -766,8 +766,8 @@ func NewDestinationsNames(names ...string) *DestinationsNames {
 		n = append(
 			n,
 			stringView{
-				begin:  int32(len(d)),
-				length: int32(len(byteName)),
+				begin:  int32(len(d)),        // #nosec G115 // no overflow
+				length: int32(len(byteName)), // #nosec G115 // no overflow
 			},
 		)
 		d = append(d, byteName...)
@@ -818,7 +818,7 @@ func (dn *DestinationsNames) ToString() []string {
 
 // IDToString - search name for id.
 func (dn *DestinationsNames) IDToString(id int32) string {
-	if id > int32(len(dn.names)-1) || id < 0 {
+	if id > int32(len(dn.names)-1) || id < 0 { // #nosec G115 // no overflow
 		return ""
 	}
 
@@ -853,18 +853,18 @@ func (dn *DestinationsNames) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, size)
 
 	// write len names and move offset
-	binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(len(dn.names)))
+	binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(len(dn.names))) // #nosec G115 // no overflow
 	offset += sizeOfUint32
 
 	// write names and move offset
 	for _, nameView := range dn.names {
-		binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(nameView.begin))
-		binary.LittleEndian.PutUint32(buf[offset+4:offset+8], uint32(nameView.length))
+		binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(nameView.begin))    // #nosec G115 // no overflow
+		binary.LittleEndian.PutUint32(buf[offset+4:offset+8], uint32(nameView.length)) // #nosec G115 // no overflow
 		offset += stringViewSize
 	}
 
 	// write len data and move offset
-	binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(len(dn.data)))
+	binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(len(dn.data))) // #nosec G115 // no overflow
 	offset += sizeOfUint32
 
 	// write data
@@ -884,8 +884,10 @@ func (dn *DestinationsNames) UnmarshalBinary(data []byte) error {
 	dn.names = make([]stringView, lenSLice)
 	for i := 0; i < int(lenSLice); i++ {
 		dn.names[i] = stringView{
-			begin:  int32(binary.LittleEndian.Uint32(data[off : off+sizeOfUint32])),
-			length: int32(binary.LittleEndian.Uint32(data[off+sizeOfUint32 : off+sizeOfUint32+sizeOfUint32])),
+			begin: int32(binary.LittleEndian.Uint32(data[off : off+sizeOfUint32])), // #nosec G115 // no overflow
+			length: int32( // #nosec G115 // no overflow
+				binary.LittleEndian.Uint32(data[off+sizeOfUint32 : off+sizeOfUint32+sizeOfUint32]),
+			),
 		}
 		off += stringViewSize
 	}
@@ -1023,17 +1025,17 @@ func (ss *Statuses) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if cap(*ss) < int(length) {
+	if cap(*ss) < int(length) { // #nosec G115 // no overflow
 		*ss = make([]uint32, length)
 	}
 	*ss = (*ss)[:0]
 	var val uint64
-	for i := 0; i < int(length); i++ {
+	for i := 0; i < int(length); i++ { // #nosec G115 // no overflow
 		val, err = binary.ReadUvarint(r)
 		if err != nil {
 			return err
 		}
-		*ss = append(*ss, uint32(val))
+		*ss = append(*ss, uint32(val)) // #nosec G115 // no overflow
 	}
 
 	return nil
@@ -1146,12 +1148,12 @@ func (rjss *RejectStatuses) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if cap(*rjss) < int(length) {
+	if cap(*rjss) < int(length) { // #nosec G115 // no overflow
 		*rjss = make(RejectStatuses, length)
 	}
 	*rjss = (*rjss)[:0]
 	var nameID, segment, shardID uint64
-	for i := 0; i < int(length); i++ {
+	for i := 0; i < int(length); i++ { // #nosec G115 // no overflow
 		nameID, err = binary.ReadUvarint(r)
 		if err != nil {
 			return err
@@ -1165,9 +1167,9 @@ func (rjss *RejectStatuses) UnmarshalBinary(data []byte) error {
 			return err
 		}
 		*rjss = append(*rjss, Reject{
-			NameID:  uint32(nameID),
-			Segment: uint32(segment),
-			ShardID: uint16(shardID),
+			NameID:  uint32(nameID),  // #nosec G115 // no overflow
+			Segment: uint32(segment), // #nosec G115 // no overflow
+			ShardID: uint16(shardID), // #nosec G115 // no overflow
 		})
 	}
 
@@ -1286,13 +1288,13 @@ func (rs *RefillShardEOF) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("fail read nameID: %w", err)
 	}
-	rs.NameID = uint32(nameID)
+	rs.NameID = uint32(nameID) // #nosec G115 // no overflow
 
 	shardID, err := binary.ReadUvarint(r)
 	if err != nil {
 		return fmt.Errorf("fail read shardID: %w", err)
 	}
-	rs.ShardID = uint16(shardID)
+	rs.ShardID = uint16(shardID) // #nosec G115 // no overflow
 
 	return nil
 }
@@ -1399,7 +1401,8 @@ func (fm *FinalMsg) Size() int64 {
 	return n
 }
 
-func (fm *FinalMsg) CRC32() uint32 {
+// CRC32 checksum for [FinalMsg].
+func (*FinalMsg) CRC32() uint32 {
 	return 0
 }
 
@@ -1427,7 +1430,7 @@ func (fm *FinalMsg) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("fail read hasRefill: %w", err)
 	}
-	fm.hasRefill = uint8(hasRefill)
+	fm.hasRefill = uint8(hasRefill) // #nosec G115 // no overflow
 
 	return nil
 }

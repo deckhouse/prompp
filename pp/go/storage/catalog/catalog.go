@@ -358,6 +358,14 @@ func (c *Catalog) setStatusWithTimeBounds(r *Record, status Status, mint, maxt i
 
 // compactIfNeeded compact [Catalog] if necessary.
 func (c *Catalog) compactIfNeeded() error {
+	if fl, ok := c.log.(*FileLog); ok {
+		if !fl.needsCompaction(c.maxLogFileSize) {
+			return nil
+		}
+
+		return c.compactLog()
+	}
+
 	if c.log.Size() < c.maxLogFileSize {
 		return nil
 	}

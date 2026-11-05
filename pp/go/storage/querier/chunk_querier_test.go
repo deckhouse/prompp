@@ -90,7 +90,7 @@ func (s *ChunkQuerierSuite) mustCreateHead(unloadDataStorageInterval time.Durati
 }
 
 func (s *ChunkQuerierSuite) appendTimeSeries(timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, timeSeries)
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, timeSeries)
 }
 
 func (s *ChunkQuerierSuite) createQuerier(selectHints *prom_storage.SelectHints) *ChunkQuerier {
@@ -99,7 +99,7 @@ func (s *ChunkQuerierSuite) createQuerier(selectHints *prom_storage.SelectHints)
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, selectHints.Start, selectHints.End, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, selectHints.Start, selectHints.End, nil, nil)
 	runtime.SetFinalizer(q, (*ChunkQuerier).Close)
 	return q
 }

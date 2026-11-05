@@ -52,6 +52,14 @@ type FlagConfig interface {
 
 	// EnableNewUI serves the Mantine-based web UI instead of the old React app.
 	EnableNewUI()
+
+	// SetLabelReplaceCacheSize sets the capacity of the label_replace result cache
+	// (0 keeps the engine default, a negative value disables the cache).
+	SetLabelReplaceCacheSize(size int)
+
+	// SetLabelReplaceRegexCacheSize sets the capacity of the label_replace compiled-regex cache
+	// (0 keeps the engine default, a negative value disables the cache).
+	SetLabelReplaceRegexCacheSize(size int)
 }
 
 // ReadPromPPFeatures reads the PROMPP_FEATURES environment variable
@@ -118,6 +126,10 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 		querier.InstantQueryFeature = false
 		_ = level.Info(logger).Log(msgStr, "Instant query feature is disabled.")
 
+	case "enable_query_stage_metrics":
+		querier.QueryStageMetricsEnabled = true
+		_ = level.Info(logger).Log(msgStr, "Query stage metrics are enabled.")
+
 	case "disable_remote_write_http2":
 		remotewriter.HTTP2Enabled = false
 		_ = level.Info(logger).Log(msgStr, "HTTP/2 for remote write is disabled.")
@@ -165,6 +177,12 @@ func applyFeature(logger log.Logger, cfg FlagConfig, cppFeatures *cppbridge.Feat
 		_ = level.Info(logger).Log(
 			msgStr, "Wal Writer V2 is enabled.",
 		)
+
+	case "label_replace_cache_size":
+		setLabelReplaceCacheSize(logger, cfg, fvalue)
+
+	case "label_replace_regex_cache_size":
+		setLabelReplaceRegexCacheSize(logger, cfg, fvalue)
 
 	default:
 		_ = level.Warn(logger).Log(msgStr, "Unknown PROMPP_FEATURES option.", "option", fname)
@@ -313,9 +331,17 @@ func setDisableCoredumps(logger log.Logger) {
 
 // setSelectFuncOptimization sets the select function optimization for the querier based on the provided feature value.
 func setSelectFuncOptimization(logger log.Logger, fvalue string) {
-	if err := querier.SetSelectFuncOptimize(strings.TrimSpace(fvalue)); err != nil {
+	fvalue = strings.TrimSpace(fvalue)
+	if fvalue == "" {
+		_ = level.Error(logger).Log(msgStr, "The select_func_optimization must specify an optimization type.")
+
+		return
+	}
+
+	if err := querier.SetSelectFuncOptimize(fvalue); err != nil {
+		querier.SetDefaultOptimizeType() // reset to default if error
 		_ = level.Error(logger).Log(
-			msgStr, "Error parsing select_func_optimization value",
+			msgStr, "Error parsing select_func_optimization value, reset to default.",
 			errStr, err,
 		)
 
@@ -325,6 +351,43 @@ func setSelectFuncOptimization(logger log.Logger, fvalue string) {
 	_ = level.Info(logger).Log(
 		msgStr, "Select function optimization is set.",
 		"optimization", fvalue,
+	)
+}
+
+// setLabelReplaceCacheSize sets the label_replace result cache capacity based on the provided feature value.
+func setLabelReplaceCacheSize(logger log.Logger, cfg FlagConfig, fvalue string) {
+	v, err := strconv.Atoi(strings.TrimSpace(fvalue))
+	if err != nil {
+		_ = level.Error(logger).Log(
+			msgStr, "Error parsing label_replace_cache_size value",
+			errStr, err,
+		)
+		return
+	}
+
+	cfg.SetLabelReplaceCacheSize(v)
+	_ = level.Info(logger).Log(
+		msgStr, "Label replace cache size is set.",
+		"size", v,
+	)
+}
+
+// setLabelReplaceRegexCacheSize sets the label_replace compiled-regex cache capacity
+// based on the provided feature value.
+func setLabelReplaceRegexCacheSize(logger log.Logger, cfg FlagConfig, fvalue string) {
+	v, err := strconv.Atoi(strings.TrimSpace(fvalue))
+	if err != nil {
+		_ = level.Error(logger).Log(
+			msgStr, "Error parsing label_replace_regex_cache_size value",
+			errStr, err,
+		)
+		return
+	}
+
+	cfg.SetLabelReplaceRegexCacheSize(v)
+	_ = level.Info(logger).Log(
+		msgStr, "Label replace regex cache size is set.",
+		"size", v,
 	)
 }
 
@@ -410,7 +473,8 @@ func normalizeFeatureValue(fname, fvalue string) string {
 
 		return normalizeIntValue(fvalue)
 
-	case "head_default_number_of_shards", "federation_split_families":
+	case "head_default_number_of_shards", "federation_split_families",
+		"label_replace_cache_size", "label_replace_regex_cache_size":
 		return normalizeIntValue(fvalue)
 
 	case "default_sample_age_limit":

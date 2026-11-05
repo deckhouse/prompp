@@ -403,7 +403,8 @@ func TestScrapePoolTargetLimit(t *testing.T) {
 
 	tgs := []*targetgroup.Group{}
 	for i := 0; i < 50; i++ {
-		tgs = append(tgs,
+		tgs = append(
+			tgs,
 			&targetgroup.Group{
 				Targets: []model.LabelSet{
 					{model.AddressLabel: model.LabelValue(fmt.Sprintf("127.0.0.1:%d", 9090+i))},
@@ -486,7 +487,8 @@ func TestScrapePoolTargetLimit(t *testing.T) {
 	validateIsRunning()
 	validateErrorMessage(false)
 
-	tgs = append(tgs,
+	tgs = append(
+		tgs,
 		&targetgroup.Group{
 			Targets: []model.LabelSet{
 				{model.AddressLabel: model.LabelValue("127.0.0.1:1090")},
@@ -509,11 +511,11 @@ func TestScrapePoolAppender(t *testing.T) {
 	app := &nopAppendable{}
 	sp, _ := newScrapePool(cfg, app, 0, nil, nil, &Options{}, newTestScrapeMetrics(t))
 
-	loop := sp.newLoop(scrapeLoopOptions{
+	sloop := sp.newLoop(scrapeLoopOptions{
 		target: &Target{},
 	})
-	appl, ok := loop.(*scrapeLoop)
-	require.True(t, ok, "Expected scrapeLoop but got %T", loop)
+	appl, ok := sloop.(*scrapeLoop)
+	require.True(t, ok, "Expected scrapeLoop but got %T", sloop)
 
 	wrapped := appender(appl.appender(context.Background()), 0, 0, histogram.ExponentialSchemaMax)
 
@@ -524,12 +526,12 @@ func TestScrapePoolAppender(t *testing.T) {
 	require.True(t, ok, "Expected base appender but got %T", tl.Appender)
 
 	sampleLimit := 100
-	loop = sp.newLoop(scrapeLoopOptions{
+	sloop = sp.newLoop(scrapeLoopOptions{
 		target:      &Target{},
 		sampleLimit: sampleLimit,
 	})
-	appl, ok = loop.(*scrapeLoop)
-	require.True(t, ok, "Expected scrapeLoop but got %T", loop)
+	appl, ok = sloop.(*scrapeLoop)
+	require.True(t, ok, "Expected scrapeLoop but got %T", sloop)
 
 	wrapped = appender(appl.appender(context.Background()), sampleLimit, 0, histogram.ExponentialSchemaMax)
 
@@ -662,7 +664,8 @@ func TestScrapePoolScrapeLoopsStarted(t *testing.T) {
 }
 
 func newBasicScrapeLoop(t testing.TB, ctx context.Context, scraper scraper, app func(ctx context.Context) storage.Appender, interval time.Duration) *scrapeLoop {
-	return newScrapeLoop(ctx,
+	return newScrapeLoop(
+		ctx,
 		scraper,
 		nil, nil,
 		nopMutator,
@@ -805,7 +808,8 @@ func TestScrapeLoopRun(t *testing.T) {
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sl := newScrapeLoop(ctx,
+	sl := newScrapeLoop(
+		ctx,
 		scraper,
 		nil, nil,
 		nopMutator,
@@ -851,7 +855,7 @@ func TestScrapeLoopRun(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "Cancellation during initial offset failed.")
 	case err := <-errc:
-		require.FailNow(t, "Unexpected error: %s", err)
+		require.FailNow(t, "Unexpected error", "%s", err)
 	}
 
 	// The provided timeout must cause cancellation of the context passed down to the
@@ -894,7 +898,7 @@ func TestScrapeLoopRun(t *testing.T) {
 	case <-signal:
 		// Loop terminated as expected.
 	case err := <-errc:
-		require.FailNow(t, "Unexpected error: %s", err)
+		require.FailNow(t, "Unexpected error", "%s", err)
 	case <-time.After(3 * time.Second):
 		require.FailNow(t, "Loop did not terminate on context cancellation")
 	}
@@ -950,7 +954,8 @@ func TestScrapeLoopMetadata(t *testing.T) {
 	defer close(signal)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sl := newScrapeLoop(ctx,
+	sl := newScrapeLoop(
+		ctx,
 		scraper,
 		nil, nil,
 		nopMutator,
@@ -1000,14 +1005,14 @@ test_metric 1
 	md, ok = cache.GetMetadata("test_metric_no_help")
 	require.True(t, ok, "expected metadata to be present")
 	require.Equal(t, model.MetricTypeGauge, md.Type, "unexpected metric type")
-	require.Equal(t, "", md.Help)
-	require.Equal(t, "", md.Unit)
+	require.Empty(t, md.Help)
+	require.Empty(t, md.Unit)
 
 	md, ok = cache.GetMetadata("test_metric_no_type")
 	require.True(t, ok, "expected metadata to be present")
 	require.Equal(t, model.MetricTypeUnknown, md.Type, "unexpected metric type")
 	require.Equal(t, "other help text", md.Help)
-	require.Equal(t, "", md.Unit)
+	require.Empty(t, md.Unit)
 }
 
 func simpleTestScrapeLoop(t testing.TB) (context.Context, *scrapeLoop) {
@@ -2353,7 +2358,8 @@ func TestScrapeLoopAppendGracefullyIfAmendOrOutOfOrderOrOutOfBounds(t *testing.T
 
 func TestScrapeLoopOutOfBoundsTimeError(t *testing.T) {
 	app := &collectResultAppender{}
-	sl := newBasicScrapeLoop(t, context.Background(), nil,
+	sl := newBasicScrapeLoop(
+		t, context.Background(), nil,
 		func(ctx context.Context) storage.Appender {
 			return &timeLimitAppender{
 				Appender: app,
@@ -3411,7 +3417,7 @@ test_summary_count 199
 			foundLeValues[v] = true
 		}
 
-		require.Equal(t, len(expectedValues), len(foundLeValues), "number of label values not as expected")
+		require.Len(t, foundLeValues, len(expectedValues), "number of label values not as expected")
 		for _, v := range expectedValues {
 			require.Contains(t, foundLeValues, v, "label value not found")
 		}
@@ -3443,7 +3449,7 @@ func TestScrapeLoopRunCreatesStaleMarkersOnFailedScrapeForTimestampedMetrics(t *
 
 		switch numScrapes {
 		case 1:
-			w.Write([]byte(fmt.Sprintf("metric_a 42 %d\n", time.Now().UnixNano()/int64(time.Millisecond))))
+			fmt.Fprintf(w, "metric_a 42 %d\n", time.Now().UnixNano()/int64(time.Millisecond))
 			return nil
 		case 5:
 			cancel()
@@ -3494,7 +3500,7 @@ func TestScrapeLoopCompression(t *testing.T) {
 
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				require.Equal(t, tc.acceptEncoding, r.Header.Get("Accept-Encoding"), "invalid value of the Accept-Encoding header")
-				fmt.Fprint(w, metricsText)
+				fmt.Fprint(w, string(metricsText))
 				close(scraped)
 			}))
 			defer ts.Close()
@@ -3808,8 +3814,8 @@ scrape_configs:
 
 	// Wait for the scrape loop to scrape the target.
 	require.Eventually(t, func() bool {
-		q, err := s.Querier(0, math.MaxInt64)
-		require.NoError(t, err)
+		q, errQuerier := s.Querier(0, math.MaxInt64)
+		require.NoError(t, errQuerier)
 		seriesS := q.Select(context.Background(), false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "testing_example_native_histogram"))
 		countSeries := 0
 		for seriesS.Next() {

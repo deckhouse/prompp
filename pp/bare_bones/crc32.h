@@ -108,9 +108,7 @@ class CRC32 {
 
   template <class OutputStream>
   friend OutputStream& operator<<(OutputStream& out, const CRC32& crc) {
-    auto original_exceptions = out.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
     // write version
     out.put(1);
@@ -139,9 +137,7 @@ class CRC32 {
       throw BareBones::Exception(0x9eeec7c6c1b5a5ed, "Invalid version %d for CRC32 container, only version 1 is supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    auto sg2 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read data
     in.read(reinterpret_cast<char*>(&crc.crc_), sizeof(crc.crc_));

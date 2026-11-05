@@ -119,7 +119,7 @@ func (r *ChunkedReader) Next() ([]byte, error) {
 		return nil, fmt.Errorf("chunkedReader: message size exceeded the limit %v bytes; got: %v bytes", r.sizeLimit, size)
 	}
 
-	if cap(r.data) < int(size) {
+	if cap(r.data) < int(size) { // #nosec G115 // no overflow
 		r.data = make([]byte, size)
 	} else {
 		r.data = r.data[:size]

@@ -339,8 +339,10 @@ func (p *PromParser) Next() (Entry, error) {
 				return EntryInvalid, fmt.Errorf("help text %q is not a valid utf8 string", p.text)
 			}
 		}
-		if t := p.nextToken(); t != tLinebreak {
-			return EntryInvalid, p.parseError("linebreak expected after metadata", t)
+		// Deliberately a separate variable: t still carries tHelp/tType and the
+		// switch below dispatches on it.
+		if tBreak := p.nextToken(); tBreak != tLinebreak {
+			return EntryInvalid, p.parseError("linebreak expected after metadata", tBreak)
 		}
 		switch t {
 		case tHelp:
@@ -350,7 +352,7 @@ func (p *PromParser) Next() (Entry, error) {
 		}
 	case tComment:
 		p.text = p.l.buf()
-		if t := p.nextToken(); t != tLinebreak {
+		if t = p.nextToken(); t != tLinebreak {
 			return EntryInvalid, p.parseError("linebreak expected after comment", t)
 		}
 		return EntryComment, nil
@@ -361,7 +363,7 @@ func (p *PromParser) Next() (Entry, error) {
 		if len(p.offsets) == 0 {
 			p.offsets = []int{-1, -1}
 		}
-		if err := p.parseLVals(); err != nil {
+		if err = p.parseLVals(); err != nil {
 			return EntryInvalid, err
 		}
 
@@ -373,7 +375,7 @@ func (p *PromParser) Next() (Entry, error) {
 		t2 := p.nextToken()
 		// If there's a brace, consume and parse the label values.
 		if t2 == tBraceOpen {
-			if err := p.parseLVals(); err != nil {
+			if err = p.parseLVals(); err != nil {
 				return EntryInvalid, err
 			}
 			p.series = p.l.b[p.start:p.l.i]
@@ -426,7 +428,7 @@ func (p *PromParser) parseLVals() error {
 		if t != tEqual {
 			return p.parseError("expected equal", t)
 		}
-		if t := p.nextToken(); t != tLValue {
+		if t = p.nextToken(); t != tLValue {
 			return p.parseError("expected label value", t)
 		}
 		if !utf8.Valid(p.l.buf()) {

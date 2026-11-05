@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <random>
+#include <sstream>
+
 #include "bare_bones/vector.h"
 
 namespace {
@@ -215,5 +218,58 @@ TEST_F(BareBonesVectorEraseFixture, EraseAllItems) {
   // Assert
   EXPECT_TRUE(vector_.empty());
 }
+
+struct VectorValuesCase {
+  const char* name;
+  std::vector<uint32_t> values;
+};
+
+class BareBonesVectorValuesFixture : public testing::TestWithParam<VectorValuesCase> {
+ protected:
+  [[nodiscard]] static std::vector<uint32_t> mixed_values() {
+    std::mt19937 generator(42);
+    std::vector<uint32_t> values(100);
+    std::ranges::generate(values, [&generator] { return generator(); });
+    return values;
+  }
+
+ public:
+  static auto cases() {
+    return testing::Values(VectorValuesCase{.name = "Empty", .values = {}}, VectorValuesCase{.name = "Zeros", .values = std::vector<uint32_t>(100, 0)},
+                           VectorValuesCase{.name = "MixedValues", .values = mixed_values()});
+  }
+};
+
+TEST_P(BareBonesVectorValuesFixture, PreservesInsertionOrder) {
+  // Arrange
+  Vector<uint32_t> actual;
+
+  // Act
+  std::ranges::copy(GetParam().values, std::back_inserter(actual));
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, actual));
+}
+
+TEST_P(BareBonesVectorValuesFixture, StreamRoundTripPreservesValuesAndSaveSize) {
+  // Arrange
+  Vector<uint32_t> source;
+  std::ranges::copy(GetParam().values, std::back_inserter(source));
+  Vector<uint32_t> restored;
+  std::stringstream stream;
+
+  // Act
+  stream << source;
+  stream >> restored;
+
+  // Assert
+  EXPECT_EQ(source.save_size(), stream.str().size());
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, restored));
+}
+
+INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
+                         BareBonesVectorValuesFixture,
+                         BareBonesVectorValuesFixture::cases(),
+                         [](const testing::TestParamInfo<VectorValuesCase>& info) { return info.param.name; });
 
 }  // namespace

@@ -186,7 +186,7 @@ func (d *Discovery) Refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 
 	var targetGroups []*targetgroup.Group
 
-	if err := json.Unmarshal(b, &targetGroups); err != nil {
+	if err = json.Unmarshal(b, &targetGroups); err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, err
 	}

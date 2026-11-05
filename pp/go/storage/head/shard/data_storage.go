@@ -86,13 +86,6 @@ func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	ds.locker.RUnlock()
 }
 
-// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-func (ds *DataStorage) QueryFirstTimestamps(ids []uint32, timestamps []int64) {
-	ds.locker.RLock()
-	ds.dataStorage.QueryFirstTimestamps(ids, timestamps)
-	ds.locker.RUnlock()
-}
-
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 // series in ids directly into the C-shared series slice (pointed to by series).
 func (ds *DataStorage) QueryStaleNaNSeries(ids []uint32, series uintptr) {

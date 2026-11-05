@@ -620,7 +620,7 @@ func Test_ExistingWAL_NextRef(t *testing.T) {
 	app := db.Appender(context.Background())
 	for i := 0; i < seriesCount; i++ {
 		lset := labels.FromStrings(model.MetricNameLabel, fmt.Sprintf("series_%d", i))
-		_, err := app.Append(0, lset, 0, 100)
+		_, err = app.Append(0, lset, 0, 100)
 		require.NoError(t, err)
 	}
 
@@ -629,7 +629,7 @@ func Test_ExistingWAL_NextRef(t *testing.T) {
 	// Append <histogramCount> series
 	for i := 0; i < histogramCount; i++ {
 		lset := labels.FromStrings(model.MetricNameLabel, fmt.Sprintf("histogram_%d", i))
-		_, err := app.AppendHistogram(0, lset, 0, histograms[i], nil)
+		_, err = app.AppendHistogram(0, lset, 0, histograms[i], nil)
 		require.NoError(t, err)
 	}
 	require.NoError(t, app.Commit())

@@ -38,7 +38,7 @@ func NewJSONFileLogger(s string) (*JSONFileLogger, error) {
 		return nil, nil
 	}
 
-	f, err := os.OpenFile(s, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666)
+	f, err := os.OpenFile(s, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666) // #nosec G304 G302 // it's meant to be that way
 	if err != nil {
 		return nil, fmt.Errorf("can't create json logger: %w", err)
 	}

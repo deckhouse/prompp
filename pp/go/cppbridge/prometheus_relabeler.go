@@ -375,19 +375,27 @@ func (sr *StatelessRelabeler) ResetTo(relabelingCfgs []*RelabelConfig) error {
 
 // InnerSeries - go wrapper for C-InnerSeries.
 //
-//	size - number of timeseries processed;
-//	data - pointer for vector with timeseries;
+//	size         - number of timeseries processed;
+//	data         - pointer for vector with timeseries;
+//	timeInterval - timestamp bounds of the collected samples, invalid while empty;
 type InnerSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
 	data CppBareBonesVector
 	//nolint:unused // for cpp-bridge, used in cpp
 	trackStaleNans CppRoaringBitset
+	timeInterval   TimeInterval
 }
 
 // Size - number of Timeseries.
 func (iss *InnerSeries) Size() uint64 {
 	return iss.size
+}
+
+// TimeInterval returns the timestamp bounds of the collected samples,
+// [NewInvalidTimeInterval] if there are none.
+func (iss *InnerSeries) TimeInterval() TimeInterval {
+	return iss.timeInterval
 }
 
 //

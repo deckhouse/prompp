@@ -150,13 +150,19 @@
      int open (const char* fn, const char* mode = "rb",
                const size_t offset = 0, size_t size_ = 0) {
        FILE* fp = std::fopen (fn, mode);
-@@ -431,6 +490,43 @@ namespace cedar {
+@@ -431,6 +490,49 @@ namespace cedar {
  #endif
        return 0;
      }
 +    template <class InputStream>
 +  friend InputStream& operator>>(InputStream& stream, da& trie) {
-+      auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream] { stream.exceptions(original_exceptions); });
++      auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() noexcept {
++        try {
++          stream.exceptions(original_exceptions);
++        } catch (...) {
++          // Restoration must not replace an active exception or escape cleanup.
++        }
++      });
 +      stream.exceptions(std::ios_base::failbit | std::ios_base::badbit | std::ios_base::eofbit);
 +
 +      int tail_length = 0;
@@ -194,7 +200,7 @@
  #ifndef USE_FAST_LOAD
      void restore () { // restore information to update
        if (! _block) _restore_block ();
-@@ -451,12 +547,12 @@ namespace cedar {
+@@ -451,12 +553,12 @@ namespace cedar {
      }
      const void* array () const { return _array; }
      void clear (const bool reuse = true) {
@@ -213,7 +219,7 @@
        _bheadF = _bheadC = _bheadO = _capacity = _size = _quota = _quota0 = 0;
        if (reuse) _initialize ();
        _no_delete = false;
-@@ -501,6 +597,16 @@ namespace cedar {
+@@ -501,6 +603,16 @@ namespace cedar {
        return begin (from = static_cast <size_t> (_array[from].base) ^ c, ++len);
      }
      npos_t tracking_node[NUM_TRACKING_NODES + 1];
@@ -230,7 +236,7 @@
    private:
      // currently disabled; implement these if you need
      da (const da&);
-@@ -570,7 +676,7 @@ namespace cedar {
+@@ -570,7 +682,7 @@ namespace cedar {
              if (n.check != static_cast <int> (from)) return CEDAR_NO_VALUE;
              return n.base;
            }
@@ -239,7 +245,7 @@
            if (_array[to].check != static_cast <int> (from)) return CEDAR_NO_PATH;
            ++pos;
            from = to;
-@@ -581,7 +687,7 @@ namespace cedar {
+@@ -581,7 +693,7 @@ namespace cedar {
        const size_t pos_orig = pos; // start position in reading _tail
        const char* const tail = &_tail[offset] - pos;
        if (pos < len) {
@@ -248,7 +254,7 @@
          if (const npos_t moved = pos - pos_orig) {
            from &= TAIL_OFFSET_MASK;
            from |= (offset + moved) << 32;
-@@ -713,8 +819,10 @@ namespace cedar {
+@@ -713,8 +825,10 @@ namespace cedar {
      // push label to from's child
      void _push_sibling (const npos_t from, const int base, const uchar label, const bool flag = true) {
        uchar* c = &_ninfo[from].child;
@@ -261,7 +267,7 @@
        _ninfo[base ^ label].sibling = *c, *c = label;
      }
      // pop label from from's child
-@@ -734,7 +842,7 @@ namespace cedar {
+@@ -734,7 +848,7 @@ namespace cedar {
        --p;
        if (! c)  { *++p = c; c = _ninfo[base ^ c].sibling; } // 0: terminal
        if (ORDERED)

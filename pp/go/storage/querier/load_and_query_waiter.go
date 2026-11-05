@@ -20,9 +20,10 @@ type LoadAndQueryWaiter[
 	TShard Shard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
-	waiter task.Waiter[shard.Task]
-	head   THead
-	locker sync.Mutex
+	waiter     task.Waiter[shard.Task]
+	head       THead
+	locker     sync.Mutex
+	hasQueries bool
 }
 
 // NewLoadAndQueryWaiter creates a new [LoadAndQueryWaiter].
@@ -42,6 +43,7 @@ func NewLoadAndQueryWaiter[
 // Add adds a querier to the load and query series data task.
 func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Add(s TShard, querier uintptr) {
 	l.locker.Lock()
+	l.hasQueries = true
 	l.waiter.Add(s.LoadAndQuerySeriesDataTask().Add(querier, func() shard.Task {
 		t := l.head.CreateTask(dsLoadAndQuerySeriesData, func(s TShard) error {
 			return s.LoadAndQuerySeriesData()
@@ -52,7 +54,14 @@ func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Add(s TSh
 	l.locker.Unlock()
 }
 
+// HasQueriesAfterPrimaryWait reports whether [LoadAndQueryWaiter.Add] was called, even if loading has completed.
+// Call only after waiting for the primary task, so that all concurrent Add calls have finished.
+func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) HasQueriesAfterPrimaryWait() bool {
+	return l.hasQueries
+}
+
 // Wait waits for the load and query series data task to complete.
+// Call only after the primary task has finished all calls to [LoadAndQueryWaiter.Add].
 func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Wait() error {
 	return l.waiter.Wait()
 }
