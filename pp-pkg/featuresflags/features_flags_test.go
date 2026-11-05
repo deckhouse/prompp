@@ -204,6 +204,9 @@ type noopFlagConfig struct{}
 // DisableBlockManagerStorage implements FlagConfig.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
 
+// EnableNewUI implements FlagConfig.
+func (noopFlagConfig) EnableNewUI() {}
+
 // SetLabelReplaceCacheSize implements FlagConfig.
 func (noopFlagConfig) SetLabelReplaceCacheSize(int) {}
 

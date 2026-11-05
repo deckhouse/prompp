@@ -294,6 +294,11 @@ func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
 }
 
+// EnableNewUI serves the Mantine-based web UI instead of the old React app.
+func (c *flagConfig) EnableNewUI() {
+	c.web.UseOldUI = false
+}
+
 // SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
 func (c *flagConfig) SetLabelReplaceCacheSize(size int) {
 	c.labelReplaceCacheSize = size
@@ -338,6 +343,7 @@ func main() {
 		web: web.Options{
 			Registerer: prometheus.DefaultRegisterer,
 			Gatherer:   prometheus.DefaultGatherer,
+			UseOldUI:   true, // PP_CHANGES.md: the new UI is opt-in until it covers what the old one does
 		},
 		promlogConfig:          promlog.Config{},
 		UseBlockManagerStorage: true,
