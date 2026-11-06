@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.18 / 2026-10-30
+
+### Fixes
+1. **External labels no longer overwrite existing series labels.** Merging external labels for remote write and WAL replay now preserves the series' own non-empty values, so output relabeling sees the original labels and does not unexpectedly drop or rename series (#552).
+2. **C++ stream errors no longer terminate the process during cleanup.** Restoring a stream's exception mask could throw while an I/O error was already being handled, causing termination. Stream cleanup now preserves the original error and stream state without throwing a second exception (#565).
+3. **Go updated to 1.26.10**, closing GO-2026-6809 (CVE-2026-111943) in `crypto/x509`: certificate verification now rejects known compromised intermediate certificates. Both the CI image and the werf build pin the new version.
+4. **Go network dependencies updated.** `golang.org/x/net` is updated to v0.62.0 together with the related `golang.org/x/*` dependencies, including security fixes (#567).
+5. **Federation reads the latest samples from the active head again.** Zero-length queries such as `/federate` requests no longer skip the active head merely because its newest sample predates the query time, fixing empty federation responses introduced by the head time-range optimization (#571).
+
+### Performance
+1. **Label matching on persisted blocks allocates less memory.** Matching postings offsets are collected compactly before allocating the exact number of iterators, reducing temporary allocations while building query results (#555).
+
 ## v0.8.17 / 2026-10-21
 
 ### Features

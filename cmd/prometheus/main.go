@@ -154,6 +154,7 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 		})
 }
 
+// flagConfig holds startup settings for Prometheus and the Prom++ engine.
 type flagConfig struct {
 	configFile string
 
@@ -293,6 +294,11 @@ func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
 }
 
+// EnableNewUI serves the Mantine-based web UI instead of the old React app.
+func (c *flagConfig) EnableNewUI() {
+	c.web.UseOldUI = false
+}
+
 // SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
 func (c *flagConfig) SetLabelReplaceCacheSize(size int) {
 	c.labelReplaceCacheSize = size
@@ -337,6 +343,7 @@ func main() {
 		web: web.Options{
 			Registerer: prometheus.DefaultRegisterer,
 			Gatherer:   prometheus.DefaultGatherer,
+			UseOldUI:   true, // PP_CHANGES.md: the new UI is opt-in until it covers what the old one does
 		},
 		promlogConfig:          promlog.Config{},
 		UseBlockManagerStorage: true,
@@ -1116,6 +1123,18 @@ func main() {
 	}
 
 	if !agentMode {
+		// PP_CHANGES.md: Load opt-in query diagnostics from the data directory at startup.
+		expensiveQueryConfigPath := filepath.Join(localStoragePath, "expensive_queries.yaml")
+		expensiveQueryConfig, errConfig := promql.LoadExpensiveQueryLoggingConfig(expensiveQueryConfigPath)
+		if errConfig != nil {
+			level.Error(logger).Log("msg", "Failed to load expensive query configuration", "err", errConfig)
+			os.Exit(2)
+		}
+
+		if expensiveQueryConfig != nil {
+			level.Info(logger).Log("msg", "Expensive query logging configured", "file", expensiveQueryConfigPath)
+		}
+
 		activeQueryTracker, errTracker := promql.NewActiveQueryTracker(
 			localStoragePath,
 			cfg.queryConcurrency,
@@ -1142,6 +1161,7 @@ func main() {
 			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
 			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
 			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
+			ExpensiveQueryLogging:      expensiveQueryConfig, // PP_CHANGES.md: Query diagnostics.
 		}
 
 		queryEngine = promql.NewEngine(opts)
