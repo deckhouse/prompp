@@ -1,7 +1,6 @@
 package block
 
 import (
-	"errors"
 	"strconv"
 	"time"
 
@@ -103,11 +102,7 @@ func NewWriter[TShard Shard](
 // Write writes blocks to disk from a shard.
 func (w *Writer[TShard]) Write(sd TShard, numberOfShards uint16) (writtenBlocks []WrittenBlock, err error) {
 	_ = sd.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
-		var writers blockWriters
-		writers, err = w.createWriters(sd, numberOfShards)
-		if err != nil {
-			return err
-		}
+		writers := w.createWriters(sd, numberOfShards)
 		defer func() {
 			if closeErr := writers.Close(); closeErr != nil {
 				logger.Warnf("Failed to close block writers: %v", closeErr)
@@ -127,7 +122,7 @@ func (w *Writer[TShard]) Write(sd TShard, numberOfShards uint16) (writtenBlocks 
 }
 
 // createWriters creates writers for the shard.
-func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockWriters, error) {
+func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWriters {
 	var writers blockWriters
 
 	timeInterval := sd.DataStorage().TimeInterval(true)
@@ -149,15 +144,10 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockW
 			continue
 		}
 
-		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels)
-		if err != nil {
-			return blockWriters{}, errors.Join(err, writers.Close())
-		}
-
-		writers.append(writer)
+		writers.append(w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels))
 	}
 
-	return writers, nil
+	return writers
 }
 
 func (w *Writer[TShard]) createWriter(
@@ -166,7 +156,7 @@ func (w *Writer[TShard]) createWriter(
 	lss *cppbridge.LabelSetStorage,
 	minT, maxT, downsamplingMs int64,
 	tLabels map[string]string,
-) (blockWriter, error) {
+) blockWriter {
 	var chunkIterator ChunkIterator
 	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
 		chunkIterator = NewChunkIterator(lss, LsIDBatchSize, ds, minT, maxT, downsamplingMs)
@@ -176,7 +166,7 @@ func (w *Writer[TShard]) createWriter(
 	return newBlockWriter(
 		dataDir,
 		w.maxBlockChunkSegmentSize,
-		NewIndexWriter(lss),
+		lss,
 		chunkIterator,
 		tLabels,
 	)

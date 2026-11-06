@@ -326,3 +326,25 @@ func (s *WriterSuite) TestSkipEmptyBlock() {
 	s.Require().NoError(err)
 	s.Len(blocks, 2)
 }
+
+func (s *WriterSuite) TestSkipManyEmptyBlocks() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds() * 1000, Value: 1},
+			},
+		},
+	})
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 2)
+	s.Equal(int64(0), blocks[0].Meta.MinTime)
+	s.Equal(blockDuration.Milliseconds()*1000, blocks[1].Meta.MinTime)
+}
