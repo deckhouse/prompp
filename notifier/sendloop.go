@@ -37,17 +37,18 @@ const maxBatchSize = 64
 type sendLoop struct {
 	alertmanagerURL string
 
-	cfg    *config.AlertmanagerConfig
-	client *http.Client
-	opts   *Options
+	opts    *Options
+	metrics *loopMetrics
 
-	metrics *alertMetrics
+	mtx     sync.RWMutex
+	cfg     *config.AlertmanagerConfig
+	client  *http.Client
+	queue   []*Alert
+	hasWork chan struct{}
 
-	mtx      sync.RWMutex
-	queue    []*Alert
-	hasWork  chan struct{}
 	stopped  chan struct{}
 	stopOnce sync.Once
+	done     chan struct{}
 
 	logger log.Logger
 }
@@ -60,24 +61,17 @@ func newSendLoop(
 	logger log.Logger,
 	metrics *alertMetrics,
 ) *sendLoop {
-	// This will initialize the Counters for the AM to 0.
-	metrics.dropped.WithLabelValues(alertmanagerURL)
-	metrics.errors.WithLabelValues(alertmanagerURL)
-	metrics.sent.WithLabelValues(alertmanagerURL)
-	// PP_CHANGES.md: add successfully send metric
-	metrics.successfullySent.WithLabelValues(alertmanagerURL)
-	metrics.queueLength.WithLabelValues(alertmanagerURL)
-
 	return &sendLoop{
 		alertmanagerURL: alertmanagerURL,
 		client:          client,
 		cfg:             cfg,
 		opts:            opts,
 		logger:          logger,
-		metrics:         metrics,
+		metrics:         metrics.acquire(alertmanagerURL),
 		queue:           make([]*Alert, 0, opts.QueueCapacity),
 		hasWork:         make(chan struct{}, 1),
 		stopped:         make(chan struct{}),
+		done:            make(chan struct{}),
 	}
 }
 
@@ -114,9 +108,9 @@ func (s *sendLoop) add(alerts ...*Alert) {
 	// Notify the sending goroutine that there are alerts to be processed.
 	s.notifyWork()
 
-	s.metrics.queueLength.WithLabelValues(s.alertmanagerURL).Set(float64(len(s.queue)))
+	s.metrics.setQueueLength(len(s.queue))
 	if dropped > 0 {
-		s.metrics.dropped.WithLabelValues(s.alertmanagerURL).Add(float64(dropped))
+		s.metrics.addDropped(dropped)
 	}
 }
 
@@ -131,28 +125,39 @@ func (s *sendLoop) notifyWork() {
 	}
 }
 
-// stop drains the queue if draining is enabled, then removes the metrics of
-// this Alertmanager. It is safe to call multiple times.
+// stop asks the send loop to shut down and returns immediately, so that a
+// caller holding a lock is never blocked on the network. The loop finishes the
+// batch it is sending, drains its queue if draining is enabled, then removes
+// its metrics and exits. Use wait to block until it has exited.
+// It is safe to call multiple times.
 func (s *sendLoop) stop() {
 	s.stopOnce.Do(func() {
 		level.Debug(s.logger).Log("msg", "Stopping send loop")
 		close(s.stopped)
-
-		if s.opts.DrainOnShutdown {
-			s.drainQueue()
-		} else if ql := s.queueLen(); ql > 0 {
-			level.Warn(s.logger).Log("msg", "Alert notification queue not drained on shutdown, dropping alerts", "count", ql)
-			s.metrics.dropped.WithLabelValues(s.alertmanagerURL).Add(float64(ql))
-		}
-
-		s.metrics.latency.DeleteLabelValues(s.alertmanagerURL)
-		s.metrics.sent.DeleteLabelValues(s.alertmanagerURL)
-		// PP_CHANGES.md: add successfully send metric
-		s.metrics.successfullySent.DeleteLabelValues(s.alertmanagerURL)
-		s.metrics.dropped.DeleteLabelValues(s.alertmanagerURL)
-		s.metrics.errors.DeleteLabelValues(s.alertmanagerURL)
-		s.metrics.queueLength.DeleteLabelValues(s.alertmanagerURL)
 	})
+}
+
+// wait blocks until the send loop has stopped sending. It only returns for a
+// loop that is running, so it must follow a call to stop.
+func (s *sendLoop) wait() {
+	<-s.done
+}
+
+// shutdown runs on the goroutine of the loop once it has been asked to stop and
+// is no longer sending a batch.
+func (s *sendLoop) shutdown() {
+	if s.opts.DrainOnShutdown {
+		level.Info(s.logger).Log("msg", "Draining any remaining notifications...")
+		s.drainQueue()
+		level.Info(s.logger).Log("msg", "Remaining notifications drained")
+	} else if ql := s.queueLen(); ql > 0 {
+		level.Warn(s.logger).Log("msg", "Alert notification queue not drained on shutdown, dropping alerts", "count", ql)
+		s.metrics.addDropped(ql)
+	}
+
+	// The series of this Alertmanager are only removed once no other send loop
+	// reports under the same URL.
+	s.metrics.release()
 }
 
 func (s *sendLoop) drainQueue() {
@@ -180,7 +185,7 @@ func (s *sendLoop) nextBatch() []*Alert {
 		alerts = append(make([]*Alert, 0, len(s.queue)), s.queue...)
 		s.queue = s.queue[:0]
 	}
-	s.metrics.queueLength.WithLabelValues(s.alertmanagerURL).Set(float64(len(s.queue)))
+	s.metrics.setQueueLength(len(s.queue))
 
 	return alerts
 }
@@ -189,22 +194,45 @@ func (s *sendLoop) sendOneBatch() {
 	alerts := s.nextBatch()
 
 	if !s.sendAll(alerts) {
-		s.metrics.dropped.WithLabelValues(s.alertmanagerURL).Add(float64(len(alerts)))
+		s.metrics.addDropped(len(alerts))
 	}
 }
 
+// reconfigure points the send loop at the client and the configuration of the
+// Alertmanager set that took it over on a reload, keeping the queued alerts.
+func (s *sendLoop) reconfigure(client *http.Client, cfg *config.AlertmanagerConfig) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	s.client = client
+	s.cfg = cfg
+}
+
+// target returns the client and the configuration to send the next batch with.
+func (s *sendLoop) target() (*http.Client, *config.AlertmanagerConfig) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	return s.client, s.cfg
+}
+
 // loop continuously consumes the notifications queue and sends alerts to
-// the Alertmanager.
+// the Alertmanager. It returns once the loop has been stopped and, if draining
+// is enabled, its queue has been drained.
 func (s *sendLoop) loop() {
+	defer close(s.done)
+
 	level.Debug(s.logger).Log("msg", "Starting send loop")
 	for {
 		// If we've been asked to stop, that takes priority over sending any further notifications.
 		select {
 		case <-s.stopped:
+			s.shutdown()
 			return
 		default:
 			select {
 			case <-s.stopped:
+				s.shutdown()
 				return
 			case <-s.hasWork:
 				s.sendOneBatch()
@@ -225,11 +253,13 @@ func (s *sendLoop) sendAll(alerts []*Alert) bool {
 		return true
 	}
 
+	client, cfg := s.target()
+
 	begin := time.Now()
 
 	var payload []byte
 	var err error
-	switch s.cfg.APIVersion {
+	switch cfg.APIVersion {
 	case config.AlertmanagerAPIVersionV1:
 		payload, err = json.Marshal(alerts)
 		if err != nil {
@@ -247,23 +277,28 @@ func (s *sendLoop) sendAll(alerts []*Alert) bool {
 
 	default:
 		level.Error(s.logger).Log(
-			"msg", fmt.Sprintf("Invalid Alertmanager API version '%v', expected one of '%v'", s.cfg.APIVersion, config.SupportedAlertmanagerAPIVersions),
+			"msg", fmt.Sprintf("Invalid Alertmanager API version '%v', expected one of '%v'", cfg.APIVersion, config.SupportedAlertmanagerAPIVersions),
 		)
 		return false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.cfg.Timeout))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout))
 	defer cancel()
 
-	if err := s.sendOne(ctx, s.client, s.alertmanagerURL, payload); err != nil {
+	err = s.sendOne(ctx, client, s.alertmanagerURL, payload)
+
+	// An attempt counts towards the latency and sent_total whatever its
+	// outcome, so that errors_total stays a share of the attempts.
+	// PP_CHANGES.md: add successfully send metric
+	s.metrics.observeLatency(time.Since(begin))
+	s.metrics.addSent(len(alerts))
+
+	if err != nil {
 		level.Error(s.logger).Log("msg", "Error sending alerts", "count", len(alerts), "err", err)
-		s.metrics.errors.WithLabelValues(s.alertmanagerURL).Add(float64(len(alerts)))
+		s.metrics.addErrors(len(alerts))
 		return false
 	}
-	s.metrics.latency.WithLabelValues(s.alertmanagerURL).Observe(time.Since(begin).Seconds())
-	s.metrics.sent.WithLabelValues(s.alertmanagerURL).Add(float64(len(alerts)))
-	// PP_CHANGES.md: add successfully send metric
-	s.metrics.successfullySent.WithLabelValues(s.alertmanagerURL).Add(float64(len(alerts)))
+	s.metrics.addSuccessfullySent(len(alerts))
 
 	return true
 }

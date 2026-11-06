@@ -113,6 +113,10 @@ type Manager struct {
 	stopOnce      *sync.Once
 	stopRequested chan struct{}
 
+	// loops counts the running send loops, the ones that are shutting down
+	// after a reload included, so that Run can wait for all of them.
+	loops sync.WaitGroup
+
 	alertmanagers map[string]*alertmanagerSet
 	logger        log.Logger
 }
@@ -130,6 +134,10 @@ type Options struct {
 }
 
 type alertMetrics struct {
+	// mtx guards loops and the aggregation of queueLength over them.
+	mtx   sync.Mutex
+	loops map[string][]*loopMetrics
+
 	latency                 *prometheus.SummaryVec
 	errors                  *prometheus.CounterVec
 	sent                    *prometheus.CounterVec
@@ -204,6 +212,7 @@ func newAlertMetrics(r prometheus.Registerer, queueCap int, alertmanagersDiscove
 		}, alertmanagersDiscovered),
 	}
 
+	m.loops = make(map[string][]*loopMetrics)
 	m.queueCapacity.Set(float64(queueCap))
 
 	if r != nil {
@@ -220,6 +229,116 @@ func newAlertMetrics(r prometheus.Registerer, queueCap int, alertmanagersDiscove
 	}
 
 	return m
+}
+
+// loopMetrics reports the metrics of a single send loop under the URL of its
+// Alertmanager. Several send loops can report under one URL, for instance when
+// two Alertmanager configurations differ only in their timeout and point at the
+// same endpoint. Their series are therefore shared: queue_length holds the
+// total length of their queues, and the series of a URL are only removed once
+// the last of those loops has stopped.
+type loopMetrics struct {
+	all *alertMetrics
+	url string
+
+	// queueLength of this loop alone, guarded by all.mtx.
+	queueLength int
+}
+
+// acquire starts reporting for one more send loop of the given Alertmanager,
+// initializing its series to 0.
+func (m *alertMetrics) acquire(url string) *loopMetrics {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	// This will initialize the Counters for the AM to 0.
+	m.errors.WithLabelValues(url)
+	m.sent.WithLabelValues(url)
+	// PP_CHANGES.md: add successfully send metric
+	m.successfullySent.WithLabelValues(url)
+	m.dropped.WithLabelValues(url)
+	m.queueLength.WithLabelValues(url)
+
+	lm := &loopMetrics{all: m, url: url}
+	m.loops[url] = append(m.loops[url], lm)
+
+	return lm
+}
+
+// release stops reporting for this send loop, removing the series of its
+// Alertmanager once no other send loop reports under the same URL.
+func (lm *loopMetrics) release() {
+	m := lm.all
+
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	loops := m.loops[lm.url]
+	for i, l := range loops {
+		if l == lm {
+			loops = append(loops[:i], loops[i+1:]...)
+			break
+		}
+	}
+
+	if len(loops) > 0 {
+		m.loops[lm.url] = loops
+		m.setQueueLength(lm.url)
+
+		return
+	}
+
+	delete(m.loops, lm.url)
+	m.latency.DeleteLabelValues(lm.url)
+	m.sent.DeleteLabelValues(lm.url)
+	// PP_CHANGES.md: add successfully send metric
+	m.successfullySent.DeleteLabelValues(lm.url)
+	m.dropped.DeleteLabelValues(lm.url)
+	m.errors.DeleteLabelValues(lm.url)
+	m.queueLength.DeleteLabelValues(lm.url)
+}
+
+// setQueueLength records the length of the queue of this send loop.
+func (lm *loopMetrics) setQueueLength(n int) {
+	m := lm.all
+
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	lm.queueLength = n
+	m.setQueueLength(lm.url)
+}
+
+// setQueueLength reports the total queue length of the send loops of one URL.
+// It expects the caller to hold mtx.
+func (m *alertMetrics) setQueueLength(url string) {
+	var total int
+	for _, l := range m.loops[url] {
+		total += l.queueLength
+	}
+	m.queueLength.WithLabelValues(url).Set(float64(total))
+}
+
+func (lm *loopMetrics) observeLatency(d time.Duration) {
+	lm.all.latency.WithLabelValues(lm.url).Observe(d.Seconds())
+}
+
+func (lm *loopMetrics) addSent(n int) {
+	lm.all.sent.WithLabelValues(lm.url).Add(float64(n))
+}
+
+// addSuccessfullySent counts the alerts the Alertmanager took.
+// PP_CHANGES.md: add successfully send metric.
+func (lm *loopMetrics) addSuccessfullySent(n int) {
+	lm.all.successfullySent.WithLabelValues(lm.url).Add(float64(n))
+}
+
+func (lm *loopMetrics) addErrors(n int) {
+	lm.all.errors.WithLabelValues(lm.url).Add(float64(n))
+}
+
+func (lm *loopMetrics) addDropped(n int) {
+	lm.all.dropped.WithLabelValues(lm.url).Add(float64(n))
 }
 
 func do(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
@@ -264,20 +383,26 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 	n.opts.ExternalLabels = conf.GlobalConfig.ExternalLabels
 	n.opts.RelabelConfigs = conf.AlertingConfig.AlertRelabelConfigs
 
-	amSets := make(map[string]*alertmanagerSet)
-	// configToAlertmanagers maps alertmanager sets for each unique AlertmanagerConfig,
-	// helping to avoid dropping known alertmanagers and re-use them without waiting for SD updates when applying the config.
-	configToAlertmanagers := make(map[string]*alertmanagerSet, len(n.alertmanagers))
+	// Index the known alertmanager sets by the hash of their configuration, so
+	// that a reload keeps the known alertmanagers and their queues instead of
+	// waiting for the next service discovery update. knownAmSets serves the
+	// alertmanagers of a config, which any number of sets of the new config can
+	// copy, while reusable hands over the send loops of a config, and with them
+	// the queued notifications, to at most one set of the new config.
+	knownAmSets := make(map[string]*alertmanagerSet, len(n.alertmanagers))
+	reusable := make(map[string][]*alertmanagerSet, len(n.alertmanagers))
 	for _, oldAmSet := range n.alertmanagers {
 		hash, err := oldAmSet.configHash()
 		if err != nil {
 			return err
 		}
-		configToAlertmanagers[hash] = oldAmSet
+		knownAmSets[hash] = oldAmSet
+		reusable[hash] = append(reusable[hash], oldAmSet)
 	}
 
+	amSets := make(map[string]*alertmanagerSet)
 	for k, cfg := range conf.AlertingConfig.AlertmanagerConfigs.ToMap() {
-		ams, err := newAlertmanagerSet(cfg, n.opts, n.logger, n.metrics)
+		ams, err := newAlertmanagerSet(cfg, n.opts, &n.loops, n.logger, n.metrics)
 		if err != nil {
 			return err
 		}
@@ -287,18 +412,24 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 			return err
 		}
 
-		if oldAmSet, ok := configToAlertmanagers[hash]; ok {
-			ams.ams = oldAmSet.ams
-			ams.droppedAms = oldAmSet.droppedAms
-			ams.sendLoops = oldAmSet.sendLoops
+		if oldAmSet, ok := knownAmSets[hash]; ok {
+			ams.inheritAlertmanagers(oldAmSet)
 		}
+		if oldAmSet := takeReusable(reusable, hash); oldAmSet != nil {
+			ams.takeSendLoops(oldAmSet)
+		}
+		// A set that took over no send loop, a second set of a duplicated
+		// config for instance, needs its own send loops for the alertmanagers
+		// it inherited.
+		ams.addSendLoops(ams.ams)
 
 		amSets[k] = ams
 	}
 
-	// Clean up the send loops of sets that don't exist in the new config.
-	for k, oldAmSet := range n.alertmanagers {
-		if _, exists := amSets[k]; !exists {
+	// Stop the send loops of the known sets that no new set took over,
+	// whatever their position in the previous config was.
+	for _, oldAmSets := range reusable {
+		for _, oldAmSet := range oldAmSets {
 			oldAmSet.mtx.Lock()
 			oldAmSet.cleanSendLoops(oldAmSet.ams...)
 			oldAmSet.mtx.Unlock()
@@ -308,6 +439,29 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 	n.alertmanagers = amSets
 
 	return nil
+}
+
+// takeReusable removes and returns the set of the previous config that fits the
+// given config hash best: the one carrying the most send loops, so that a
+// removed duplicate of a config never takes the queues of the duplicate that
+// stays. It returns nil once every set of that hash has been handed over.
+func takeReusable(reusable map[string][]*alertmanagerSet, hash string) *alertmanagerSet {
+	candidates := reusable[hash]
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	best := 0
+	for i, candidate := range candidates {
+		if len(candidate.sendLoops) > len(candidates[best].sendLoops) {
+			best = i
+		}
+	}
+
+	oldAmSet := candidates[best]
+	reusable[hash] = append(candidates[:best], candidates[best+1:]...)
+
+	return oldAmSet
 }
 
 // Run processes target updates continuously, returning once Stop has been called and
@@ -327,6 +481,11 @@ func (n *Manager) Run(tsets <-chan map[string][]*targetgroup.Group) {
 		ams.mtx.Unlock()
 	}
 	n.mtx.Unlock()
+
+	// Stopping a send loop only signals it, so wait here for the loops to
+	// finish the batch they are sending and to drain their queues. Waiting
+	// outside the lock keeps a shutting down Alertmanager from blocking Send.
+	n.loops.Wait()
 
 	level.Info(n.logger).Log("msg", "Notification manager stopped")
 }
@@ -525,6 +684,9 @@ type alertmanagerSet struct {
 	opts   *Options
 
 	metrics *alertMetrics
+	// loops is the wait group of the manager that owns this set. It is nil for
+	// a set that no manager owns, as in the tests of this package.
+	loops *sync.WaitGroup
 
 	mtx        sync.RWMutex
 	ams        []alertmanager
@@ -534,7 +696,7 @@ type alertmanagerSet struct {
 	logger log.Logger
 }
 
-func newAlertmanagerSet(cfg *config.AlertmanagerConfig, opts *Options, logger log.Logger, metrics *alertMetrics) (*alertmanagerSet, error) {
+func newAlertmanagerSet(cfg *config.AlertmanagerConfig, opts *Options, loops *sync.WaitGroup, logger log.Logger, metrics *alertMetrics) (*alertmanagerSet, error) {
 	client, err := config_util.NewClientFromConfig(cfg.HTTPClientConfig, "alertmanager")
 	if err != nil {
 		return nil, err
@@ -554,6 +716,7 @@ func newAlertmanagerSet(cfg *config.AlertmanagerConfig, opts *Options, logger lo
 		client:    client,
 		cfg:       cfg,
 		opts:      opts,
+		loops:     loops,
 		sendLoops: make(map[string]*sendLoop),
 		logger:    logger,
 		metrics:   metrics,
@@ -635,6 +798,52 @@ func (s *alertmanagerSet) send(alerts ...*Alert) {
 	}
 }
 
+// inheritAlertmanagers copies the alertmanagers discovered by a set of the
+// previous config that carries the same configuration, so that a reload does
+// not drop them while waiting for the next service discovery update.
+func (s *alertmanagerSet) inheritAlertmanagers(old *alertmanagerSet) {
+	old.mtx.RLock()
+	defer old.mtx.RUnlock()
+
+	s.ams = old.ams
+	s.droppedAms = old.droppedAms
+}
+
+// takeSendLoops takes over the send loops, and with them the queued
+// notifications, of a set of the previous config. The old set is left without
+// send loops, so that it cannot stop what it handed over.
+func (s *alertmanagerSet) takeSendLoops(old *alertmanagerSet) {
+	old.mtx.Lock()
+	defer old.mtx.Unlock()
+
+	s.sendLoops = old.sendLoops
+	old.sendLoops = make(map[string]*sendLoop)
+
+	// The config hash is taken over the marshalled config, where a secret is
+	// replaced by a placeholder, so two configs that differ only in their
+	// credentials share a hash. Point every send loop taken over at the client
+	// and the config of this set, so that a rotated credential is used.
+	for _, l := range s.sendLoops {
+		l.reconfigure(s.client, s.cfg)
+	}
+}
+
+// start runs the given send loop and registers it with the manager, so that
+// Run waits for the loop to drain its queue on shutdown.
+func (s *alertmanagerSet) start(l *sendLoop) {
+	if s.loops == nil {
+		go l.loop()
+
+		return
+	}
+
+	s.loops.Add(1)
+	go func() {
+		defer s.loops.Done()
+		l.loop()
+	}()
+}
+
 // addSendLoops creates and starts a send loop for newly discovered alertmanager.
 // This function expects the caller to acquire needed locks.
 func (s *alertmanagerSet) addSendLoops(ams []alertmanager) {
@@ -646,12 +855,15 @@ func (s *alertmanagerSet) addSendLoops(ams []alertmanager) {
 			continue
 		}
 		sendLoop := newSendLoop(us, s.client, s.cfg, s.opts, log.With(s.logger, "alertmanager", us), s.metrics)
-		go sendLoop.loop()
+		s.start(sendLoop)
 		s.sendLoops[us] = sendLoop
 	}
 }
 
-// cleanSendLoops stops and cleans the send loops for each removed alertmanager.
+// cleanSendLoops signals the send loops of the removed alertmanagers to stop
+// and drops them from the set. It does not wait for them: a loop drains its
+// queue on its own goroutine, so holding a lock here blocks neither Send nor a
+// target update.
 // This function expects the caller to acquire needed locks.
 func (s *alertmanagerSet) cleanSendLoops(ams ...alertmanager) {
 	for _, am := range ams {
@@ -671,7 +883,7 @@ func (s *alertmanagerSet) startSendLoops(ams []alertmanager) {
 		us := am.url().String()
 
 		if l, ok := s.sendLoops[us]; ok {
-			go l.loop()
+			s.start(l)
 			continue
 		}
 		panic(fmt.Sprintf("send loop not found for %s", us))

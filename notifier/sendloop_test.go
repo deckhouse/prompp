@@ -94,11 +94,11 @@ func TestAddAlertsToQueue(t *testing.T) {
 
 	// Add new alerts to the queue, expect 0 dropped.
 	s.add(alert3, alert4)
-	require.Zero(t, prom_testutil.ToFloat64(s.metrics.dropped.WithLabelValues(s.alertmanagerURL)))
+	require.Zero(t, prom_testutil.ToFloat64(s.metrics.all.dropped.WithLabelValues(s.alertmanagerURL)))
 
 	// Verify all new alerts were added to the queue.
 	require.Equal(t, []*Alert{alert1, alert2, alert3, alert4}, s.queue)
-	require.Equal(t, 4.0, prom_testutil.ToFloat64(s.metrics.queueLength.WithLabelValues(s.alertmanagerURL)))
+	require.Equal(t, 4.0, prom_testutil.ToFloat64(s.metrics.all.queueLength.WithLabelValues(s.alertmanagerURL)))
 }
 
 func TestAddAlertsToQueueExceedingCapacity(t *testing.T) {
@@ -113,7 +113,7 @@ func TestAddAlertsToQueueExceedingCapacity(t *testing.T) {
 
 	// Add new alerts to the queue, expect 1 dropped.
 	s.add(alert3, alert4)
-	require.Equal(t, 1.0, prom_testutil.ToFloat64(s.metrics.dropped.WithLabelValues(s.alertmanagerURL)))
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(s.metrics.all.dropped.WithLabelValues(s.alertmanagerURL)))
 
 	// The oldest alert was dropped in favor of the newer ones.
 	require.Equal(t, []*Alert{alert2, alert3, alert4}, s.queue)
@@ -133,7 +133,7 @@ func TestAddAlertsToQueueExceedingTotalCapacity(t *testing.T) {
 
 	// Add new alerts to the queue, expect 3 dropped: 1 from the new batch + 2 from the existing queued items.
 	s.add(alert3, alert4, alert5, alert6)
-	require.Equal(t, 3.0, prom_testutil.ToFloat64(s.metrics.dropped.WithLabelValues(s.alertmanagerURL)))
+	require.Equal(t, 3.0, prom_testutil.ToFloat64(s.metrics.all.dropped.WithLabelValues(s.alertmanagerURL)))
 
 	require.Equal(t, []*Alert{alert4, alert5, alert6}, s.queue)
 }
@@ -191,29 +191,178 @@ func TestMetricsAreRegistered(t *testing.T) {
 	})
 }
 
+// okDo answers every request with 200 OK, so that a send loop can run without
+// an Alertmanager.
+func okDo(_ context.Context, _ *http.Client, _ *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(bytes.NewReader(nil)),
+	}, nil
+}
+
+// runSendLoop starts the given send loop and returns a function that stops it
+// and waits for its shutdown, as the manager does.
+func runSendLoop(s *sendLoop) func() {
+	go s.loop()
+
+	return func() {
+		s.stop()
+		s.wait()
+	}
+}
+
+// seriesOf counts the series of the given Alertmanager in the registry.
+func seriesOf(t *testing.T, reg *prometheus.Registry, alertmanagerURL string) int {
+	t.Helper()
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	var series int
+	for _, f := range families {
+		for _, m := range f.GetMetric() {
+			for _, l := range m.GetLabel() {
+				if l.GetName() == alertmanagerLabel && l.GetValue() == alertmanagerURL {
+					series++
+				}
+			}
+		}
+	}
+
+	return series
+}
+
+// latencySampleCount returns how many requests the latency summary of the given
+// Alertmanager holds.
+func latencySampleCount(t *testing.T, reg *prometheus.Registry, alertmanagerURL string) uint64 {
+	t.Helper()
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	for _, f := range families {
+		if f.GetName() != "prometheus_notifications_latency_seconds" {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			for _, l := range m.GetLabel() {
+				if l.GetName() == alertmanagerLabel && l.GetValue() == alertmanagerURL {
+					return m.GetSummary().GetSampleCount()
+				}
+			}
+		}
+	}
+
+	return 0
+}
+
 // TestSendLoopMetricsCleanedOnStop ensures a restarted send loop for the same
 // Alertmanager does not conflict with the metrics of the stopped one.
 func TestSendLoopMetricsCleanedOnStop(t *testing.T) {
 	const alertmanagerURL = "http://alertmanager:9093"
 
 	// Use a single registry throughout the test - this is critical to catch registry conflicts.
-	metrics := newAlertMetrics(prometheus.NewRegistry(), 10, func() float64 { return 0 })
+	reg := prometheus.NewRegistry()
+	metrics := newAlertMetrics(reg, 10, func() float64 { return 0 })
 
-	opts := &Options{QueueCapacity: 10}
+	opts := &Options{QueueCapacity: 10, Do: okDo}
 
 	// Create the first sendLoop - this initializes the metrics with the alertmanager URL label.
 	sendLoop1 := newSendLoop(alertmanagerURL, nil, &config.DefaultAlertmanagerConfig, opts, log.NewNopLogger(), metrics)
+	stop1 := runSendLoop(sendLoop1)
 
 	require.Equal(t, 0.0, prom_testutil.ToFloat64(metrics.dropped.WithLabelValues(alertmanagerURL)))
 	require.Equal(t, 0.0, prom_testutil.ToFloat64(metrics.sent.WithLabelValues(alertmanagerURL)))
 
 	// Stop the sendLoop - this should clean up all the metrics.
-	sendLoop1.stop()
+	stop1()
+	require.Zero(t, seriesOf(t, reg, alertmanagerURL))
 
 	// Create a second sendLoop with the same URL - this should not panic or conflict.
 	sendLoop2 := newSendLoop(alertmanagerURL, nil, &config.DefaultAlertmanagerConfig, opts, log.NewNopLogger(), metrics)
-	defer sendLoop2.stop()
+	defer runSendLoop(sendLoop2)()
 
 	require.Equal(t, 0.0, prom_testutil.ToFloat64(metrics.dropped.WithLabelValues(alertmanagerURL)))
 	require.Equal(t, 0.0, prom_testutil.ToFloat64(metrics.sent.WithLabelValues(alertmanagerURL)))
+}
+
+// TestSendLoopMetricsSharedURL ensures the series of an Alertmanager survive as
+// long as a send loop reports under its URL, and that queue_length holds the
+// queues of all those loops. Two Alertmanager configurations that differ only in
+// a field the URL does not carry, their timeout for instance, share the series
+// of their common endpoint.
+func TestSendLoopMetricsSharedURL(t *testing.T) {
+	const alertmanagerURL = "http://alertmanager:9093"
+
+	reg := prometheus.NewRegistry()
+	metrics := newAlertMetrics(reg, 10, func() float64 { return 0 })
+
+	opts := &Options{QueueCapacity: 10, Do: okDo}
+
+	first := newSendLoop(alertmanagerURL, nil, &config.DefaultAlertmanagerConfig, opts, log.NewNopLogger(), metrics)
+	second := newSendLoop(alertmanagerURL, nil, &config.DefaultAlertmanagerConfig, opts, log.NewNopLogger(), metrics)
+
+	first.add(&Alert{Labels: labels.FromStrings("alertname", "first")})
+	second.add(
+		&Alert{Labels: labels.FromStrings("alertname", "second")},
+		&Alert{Labels: labels.FromStrings("alertname", "third")},
+	)
+
+	// queue_length holds the queues of both send loops.
+	require.Equal(t, 3.0, prom_testutil.ToFloat64(metrics.queueLength.WithLabelValues(alertmanagerURL)))
+
+	second.nextBatch()
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(metrics.queueLength.WithLabelValues(alertmanagerURL)))
+
+	second.metrics.addSent(2)
+
+	// Stopping one send loop keeps the series of the other one.
+	runSendLoop(second)()
+	require.Equal(t, 2.0, prom_testutil.ToFloat64(metrics.sent.WithLabelValues(alertmanagerURL)))
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(metrics.queueLength.WithLabelValues(alertmanagerURL)))
+
+	// The series are removed with the last send loop of the URL.
+	first.metrics.release()
+	require.Zero(t, seriesOf(t, reg, alertmanagerURL))
+}
+
+// TestSendLoopMetricsCountAttempts ensures a failed request counts towards
+// sent_total and the latency, as the error share compares errors_total with
+// them, while successfully_sent_total only counts what an Alertmanager took.
+// PP_CHANGES.md: add successfully send metric.
+func TestSendLoopMetricsCountAttempts(t *testing.T) {
+	const alertmanagerURL = "http://alertmanager:9093"
+
+	reg := prometheus.NewRegistry()
+	metrics := newAlertMetrics(reg, 10, func() float64 { return 0 })
+
+	status := http.StatusInternalServerError
+	opts := &Options{
+		QueueCapacity: 10,
+		Do: func(_ context.Context, _ *http.Client, _ *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: status,
+				Status:     strconv.Itoa(status),
+				Body:       io.NopCloser(bytes.NewReader(nil)),
+			}, nil
+		},
+	}
+
+	s := newSendLoop(alertmanagerURL, nil, &config.DefaultAlertmanagerConfig, opts, log.NewNopLogger(), metrics)
+	alerts := []*Alert{{Labels: labels.FromStrings("alertname", "test")}}
+
+	require.False(t, s.sendAll(alerts))
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(metrics.sent.WithLabelValues(alertmanagerURL)))
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(metrics.errors.WithLabelValues(alertmanagerURL)))
+	require.Equal(t, 0.0, prom_testutil.ToFloat64(metrics.successfullySent.WithLabelValues(alertmanagerURL)))
+
+	status = http.StatusOK
+	require.True(t, s.sendAll(alerts))
+	require.Equal(t, 2.0, prom_testutil.ToFloat64(metrics.sent.WithLabelValues(alertmanagerURL)))
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(metrics.errors.WithLabelValues(alertmanagerURL)))
+	require.Equal(t, 1.0, prom_testutil.ToFloat64(metrics.successfullySent.WithLabelValues(alertmanagerURL)))
+
+	// Both attempts are in the latency summary.
+	require.Equal(t, uint64(2), latencySampleCount(t, reg, alertmanagerURL))
 }
