@@ -380,6 +380,15 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 	n.mtx.Lock()
 	defer n.mtx.Unlock()
 
+	// Run stops the send loops of the current sets once a stop is requested, so
+	// a reload after that point would start loops that nothing stops, and its
+	// loops.Add would race with the loops.Wait of Run.
+	select {
+	case <-n.stopRequested:
+		return nil
+	default:
+	}
+
 	n.opts.ExternalLabels = conf.GlobalConfig.ExternalLabels
 	n.opts.RelabelConfigs = conf.AlertingConfig.AlertRelabelConfigs
 
@@ -400,8 +409,17 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 		reusable[hash] = append(reusable[hash], oldAmSet)
 	}
 
-	amSets := make(map[string]*alertmanagerSet)
-	for k, cfg := range conf.AlertingConfig.AlertmanagerConfigs.ToMap() {
+	// Phase one creates every set of the new config and may fail. It leaves the
+	// sets of the previous config untouched and starts no send loop, so that a
+	// rejected config leaves the notifications of the running config alone.
+	type pendingAmSet struct {
+		key  string
+		hash string
+		set  *alertmanagerSet
+	}
+	amCfgs := conf.AlertingConfig.AlertmanagerConfigs.ToMap()
+	pending := make([]pendingAmSet, 0, len(amCfgs))
+	for k, cfg := range amCfgs {
 		ams, err := newAlertmanagerSet(cfg, n.opts, &n.loops, n.logger, n.metrics)
 		if err != nil {
 			return err
@@ -412,18 +430,25 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 			return err
 		}
 
-		if oldAmSet, ok := knownAmSets[hash]; ok {
-			ams.inheritAlertmanagers(oldAmSet)
+		pending = append(pending, pendingAmSet{key: k, hash: hash, set: ams})
+	}
+
+	// Phase two cannot fail: it hands the alertmanagers and the queues of the
+	// previous config over to the new sets and starts the missing send loops.
+	amSets := make(map[string]*alertmanagerSet, len(pending))
+	for _, p := range pending {
+		if oldAmSet, ok := knownAmSets[p.hash]; ok {
+			p.set.inheritAlertmanagers(oldAmSet)
 		}
-		if oldAmSet := takeReusable(reusable, hash); oldAmSet != nil {
-			ams.takeSendLoops(oldAmSet)
+		if oldAmSet := takeReusable(reusable, p.hash); oldAmSet != nil {
+			p.set.takeSendLoops(oldAmSet)
 		}
 		// A set that took over no send loop, a second set of a duplicated
 		// config for instance, needs its own send loops for the alertmanagers
 		// it inherited.
-		ams.addSendLoops(ams.ams)
+		p.set.addSendLoops(p.set.ams)
 
-		amSets[k] = ams
+		amSets[p.key] = p.set
 	}
 
 	// Stop the send loops of the known sets that no new set took over,
@@ -783,8 +808,10 @@ func (s *alertmanagerSet) configHash() (string, error) {
 
 // send relabels the alerts for this set and queues them on every send loop.
 func (s *alertmanagerSet) send(alerts ...*Alert) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	// Only reads here: queueing on a send loop takes the lock of that loop, so
+	// concurrent Send calls do not serialize on the set.
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 
 	if len(s.cfg.AlertRelabelConfigs) > 0 {
 		alerts = relabelAlerts(s.cfg.AlertRelabelConfigs, labels.Labels{}, alerts)

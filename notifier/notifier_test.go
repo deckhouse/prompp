@@ -1731,6 +1731,97 @@ alerting:
 	})
 }
 
+// TestApplyConfigKeepsTheRunningConfigOnError ensures a rejected config leaves
+// the running one alone: the sets of the running config keep their send loops
+// and their queues, and no send loop of a discarded set is left running.
+func TestApplyConfigKeepsTheRunningConfigOnError(t *testing.T) {
+	received := make(chan string, 10)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		received <- r.URL.Path
+	}))
+	defer server.Close()
+
+	serverURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
+	targetGroup := &targetgroup.Group{
+		Targets: []model.LabelSet{{"__address__": model.LabelValue(serverURL.Host)}},
+	}
+
+	running := `
+alerting:
+  alertmanagers:
+  - path_prefix: /first
+    file_sd_configs:
+    - files:
+      - foo.json
+  - path_prefix: /second
+    file_sd_configs:
+    - files:
+      - foo.json
+`
+	// The third config fails to build, as its CA file does not exist. Which
+	// config ApplyConfig reaches first depends on the map order, so the state
+	// of every set of the running config is checked after every attempt.
+	rejected := running + `  - path_prefix: /third
+    tls_config:
+      ca_file: /nonexistent/ca.pem
+    file_sd_configs:
+    - files:
+      - foo.json
+`
+
+	n := NewManager(&Options{Do: do, QueueCapacity: 10}, nil)
+	require.NoError(t, n.ApplyConfig(alertmanagerConfigs(t, running)))
+	n.reload(map[string][]*targetgroup.Group{
+		"config-0": {targetGroup},
+		"config-1": {targetGroup},
+	})
+
+	runReturned := make(chan struct{})
+	go func() {
+		n.Run(nil)
+		close(runReturned)
+	}()
+
+	for i := range 20 {
+		require.Error(t, n.ApplyConfig(alertmanagerConfigs(t, rejected)), "attempt %d", i)
+
+		n.mtx.RLock()
+		require.Len(t, n.alertmanagers, 2, "attempt %d", i)
+		for key, ams := range n.alertmanagers {
+			ams.mtx.RLock()
+			loops := len(ams.sendLoops)
+			ams.mtx.RUnlock()
+			require.Equal(t, 1, loops, "set %s lost its send loop on attempt %d", key, i)
+		}
+		n.mtx.RUnlock()
+	}
+
+	// Both alertmanagers of the running config still receive notifications.
+	n.Send(&Alert{Labels: labels.FromStrings("alertname", "after-a-rejected-config")})
+	paths := make([]string, 0, 2)
+	for range 2 {
+		select {
+		case path := <-received:
+			paths = append(paths, path)
+		case <-time.After(10 * time.Second):
+			require.FailNow(t, "an alertmanager of the running config received no notification")
+		}
+	}
+	require.ElementsMatch(t, []string{"/first/api/v2/alerts", "/second/api/v2/alerts"}, paths)
+
+	// A send loop of a discarded set would keep Run from returning.
+	n.Stop()
+	select {
+	case <-runReturned:
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "Run did not return after Stop")
+	}
+}
+
 // TestApplyConfigUpdatesSendLoopClient ensures an inherited send loop sends with
 // the client of the new config. The config hash cannot tell two configs that
 // differ only in their credentials apart, as a secret marshals as a placeholder.
