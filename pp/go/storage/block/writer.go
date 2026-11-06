@@ -125,18 +125,19 @@ func (w *Writer[TShard]) Write(sd TShard, numberOfShards uint16) (writtenBlocks 
 func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWriters {
 	var writers blockWriters
 
-	timeInterval := sd.DataStorage().TimeInterval(true)
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
 	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
-	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
-	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
+
+	// Only quants with samples get a writer: a far-future or far-past sample widens the shard time
+	// interval to thousands of quants, and every writer recodes every batch of the shard.
+	var quantStarts []int64
+	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
+		quantStarts = ds.NonEmptyQuants(w.blockDurationMs)
+		return nil
+	})
+
+	for _, quantStart := range quantStarts {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
-		if minT < timeInterval.MinT {
-			minT = timeInterval.MinT
-		}
-		if maxT > timeInterval.MaxT {
-			maxT = timeInterval.MaxT
-		}
 
 		// Skip blocks whose whole time range is already beyond the retention
 		// period: they would be deleted on the next retention pass anyway.
