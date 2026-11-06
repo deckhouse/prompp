@@ -250,6 +250,48 @@ func (s *QuerierSuite) TestRangeQuery() {
 	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
+func (s *QuerierSuite) TestSeriesCount() {
+	// Arrange
+	s.appendTimeSeries([]storagetest.TimeSeries{
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{{Timestamp: 0, Value: 1}},
+		},
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test2"),
+			Samples: []cppbridge.Sample{{Timestamp: 0, Value: 10}},
+		},
+		{
+			Labels:  labels.FromStrings("__name__", "other", "job", "test"),
+			Samples: []cppbridge.Sample{{Timestamp: 0, Value: 100}},
+		},
+	})
+
+	q := querier.NewQuerier[*task.Generic[*shard.PerGoroutineShard],
+		*shard.DataStorage,
+		*shard.LSS,
+		*shard.PerGoroutineShard,
+		*storage.Head,
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
+	defer func() { _ = q.Close() }()
+	metric := labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric")
+	job := labels.MustNewMatcher(labels.MatchEqual, "job", "test")
+	missing := labels.MustNewMatcher(labels.MatchEqual, "__name__", "missing")
+
+	// Act
+	metricCount, metricErr := q.SeriesCount(s.context, metric)
+	jobCount, jobErr := q.SeriesCount(s.context, metric, job)
+	missingCount, missingErr := q.SeriesCount(s.context, missing)
+
+	// Assert
+	s.Require().NoError(metricErr)
+	s.Require().NoError(jobErr)
+	s.Require().NoError(missingErr)
+	s.Equal(2, metricCount)
+	s.Equal(1, jobCount)
+	s.Equal(0, missingCount)
+}
+
 func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	// Arrange
 	timeSeries := []storagetest.TimeSeries{
