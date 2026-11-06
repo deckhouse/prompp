@@ -58,6 +58,7 @@ type Writer[TShard Shard] struct {
 	blockDurationMs          int64
 	shardLabelsCtor          func(numberOfShards, shardID uint16) map[string]string
 	retentionPeriod          time.Duration
+	futurePeriod             time.Duration
 	clock                    clockwork.Clock
 	blockWriteDuration       *prometheus.GaugeVec
 }
@@ -67,11 +68,16 @@ type Writer[TShard Shard] struct {
 // retentionPeriod, when greater than zero, prevents creating blocks whose whole
 // time range is already older than the retention period: such blocks would be
 // deleted on the very next retention pass, so writing them is pointless work.
+//
+// futurePeriod, when greater than zero, prevents creating blocks whose MinTime is
+// later than now plus the future period: such samples come from a clock jump on
+// the source side, and they are dropped instead of being persisted.
 func NewWriter[TShard Shard](
 	dataDir string,
 	maxBlockChunkSegmentSize int64,
 	blockDuration time.Duration,
 	retentionPeriod time.Duration,
+	futurePeriod time.Duration,
 	clock clockwork.Clock,
 	registerer prometheus.Registerer,
 ) *Writer[TShard] {
@@ -90,6 +96,7 @@ func NewWriter[TShard Shard](
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
 		retentionPeriod:          retentionPeriod,
+		futurePeriod:             futurePeriod,
 		shardLabelsCtor:          shardLabelsCtor,
 		clock:                    clock,
 		blockWriteDuration: factory.NewGaugeVec(prometheus.GaugeOpts{
@@ -126,6 +133,7 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 	var writers blockWriters
 
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
+	futureCutoffMs, applyFuture := w.futureCutoffMs()
 	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
 
 	// Only quants with samples get a writer: a far-future or far-past sample widens the shard time
@@ -136,8 +144,14 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 		return nil
 	})
 
+	var skippedFutureQuants []int64
 	for _, quantStart := range quantStarts {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
+
+		if applyFuture && minT > futureCutoffMs {
+			skippedFutureQuants = append(skippedFutureQuants, minT)
+			continue
+		}
 
 		// Skip blocks whose whole time range is already beyond the retention
 		// period: they would be deleted on the next retention pass anyway.
@@ -146,6 +160,16 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 		}
 
 		writers.append(w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels))
+	}
+
+	if len(skippedFutureQuants) > 0 {
+		logger.Warnf(
+			"[BlockWriter]: shard %d: dropped samples of %d blocks later than %s, the first block starts at %s",
+			sd.ShardID(),
+			len(skippedFutureQuants),
+			time.UnixMilli(futureCutoffMs).UTC().Format(time.RFC3339),
+			time.UnixMilli(skippedFutureQuants[0]).UTC().Format(time.RFC3339),
+		)
 	}
 
 	return writers
@@ -183,6 +207,16 @@ func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
 	}
 
 	return w.clock.Now().Add(-w.retentionPeriod).UnixMilli(), true
+}
+
+// futureCutoffMs returns the max block MinTime (in unix milliseconds) that is
+// not in the future yet, and whether future filtering is enabled at all.
+func (w *Writer[TShard]) futureCutoffMs() (cutoffMs int64, apply bool) {
+	if w.futurePeriod <= 0 {
+		return 0, false
+	}
+
+	return w.clock.Now().Add(w.futurePeriod).UnixMilli(), true
 }
 
 // recodeAndWriteChunks recodes and writes chunks for the shard.

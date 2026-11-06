@@ -66,6 +66,7 @@ func (s *WriterSuite) SetupTest() {
 		block.DefaultChunkSegmentSize,
 		blockDuration,
 		0,
+		0,
 		clockwork.NewRealClock(),
 		prometheus.DefaultRegisterer,
 	)
@@ -347,4 +348,36 @@ func (s *WriterSuite) TestSkipManyEmptyBlocks() {
 	s.Require().Len(blocks, 2)
 	s.Equal(int64(0), blocks[0].Meta.MinTime)
 	s.Equal(blockDuration.Milliseconds()*1000, blocks[1].Meta.MinTime)
+}
+
+func (s *WriterSuite) TestSkipFutureBlocks() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds(), Value: 1},
+				{Timestamp: blockDuration.Milliseconds() * 2, Value: 2},
+			},
+		},
+	})
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		0,
+		blockDuration,
+		clockwork.NewFakeClockAt(time.UnixMilli(0)),
+		prometheus.DefaultRegisterer,
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 2)
+	s.Equal(int64(0), blocks[0].Meta.MinTime)
+	s.Equal(blockDuration.Milliseconds(), blocks[1].Meta.MinTime)
 }

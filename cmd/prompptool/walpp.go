@@ -88,6 +88,7 @@ func (cmd *cmdWALPPToBlock) Do(
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
+		0, // no future filtering: persist all samples regardless of the clock
 		clock,
 		registerer,
 	)
