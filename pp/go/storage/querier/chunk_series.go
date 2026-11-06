@@ -133,23 +133,25 @@ func (cs *ChunkSeries) Labels() labels.Labels {
 // ChunkSeriesChunksIterator
 //
 
-// ChunkSeriesChunksIterator iterator that iterates over chunks of the series, sorted by min time.
+// ChunkSeriesChunksIterator iterates over chunks sorted by min time.
+// Returned chunks remain valid after advancing or resetting the iterator.
 type ChunkSeriesChunksIterator struct {
 	idx           int
 	recodedChunks []cppbridge.RecodedChunk
-	xorChunk      *chunkenc.XORChunk
+	xorChunks     []chunkenc.XORChunk
 	meta          chunks.Meta
 }
 
 // NewChunkSeriesChunksIterator init new [ChunkSeriesChunksIterator].
 func NewChunkSeriesChunksIterator(recodedChunks []cppbridge.RecodedChunk) *ChunkSeriesChunksIterator {
-	return &ChunkSeriesChunksIterator{
-		recodedChunks: recodedChunks,
-		xorChunk:      chunkenc.NewXORChunk(),
-	}
+	ci := &ChunkSeriesChunksIterator{}
+	ci.ResetTo(recodedChunks)
+
+	return ci
 }
 
-// At returns the current meta.
+// At returns the current meta, whose chunk remains unchanged after [ChunkSeriesChunksIterator.Next]
+// and [ChunkSeriesChunksIterator.ResetTo].
 func (ci *ChunkSeriesChunksIterator) At() chunks.Meta {
 	return ci.meta
 }
@@ -167,17 +169,19 @@ func (ci *ChunkSeriesChunksIterator) Next() bool {
 
 	ci.meta.MinTime = ci.recodedChunks[ci.idx].MinT
 	ci.meta.MaxTime = ci.recodedChunks[ci.idx].MaxT
-	ci.xorChunk.Reset(ci.recodedChunks[ci.idx].ChunkData)
-	ci.meta.Chunk = ci.xorChunk
+	xorChunk := &ci.xorChunks[ci.idx]
+	xorChunk.Reset(ci.recodedChunks[ci.idx].ChunkData)
+	ci.meta.Chunk = xorChunk
 	ci.idx++
 
 	return true
 }
 
-// ResetTo reset [ChunkSeriesChunksIterator] to recodedChunks.
+// ResetTo starts a new traversal of recodedChunks without changing previously returned chunks.
 func (ci *ChunkSeriesChunksIterator) ResetTo(recodedChunks []cppbridge.RecodedChunk) {
 	ci.idx = 0
 	ci.recodedChunks = recodedChunks
+	ci.xorChunks = make([]chunkenc.XORChunk, len(recodedChunks))
 }
 
 //
