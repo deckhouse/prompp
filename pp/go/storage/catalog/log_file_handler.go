@@ -12,7 +12,7 @@ import (
 // FileHandler
 //
 
-// FileHandler handler for work with [os.File].
+// FileHandler tracks read and write positions in an [os.File], including fixed-size v3 journal bounds.
 type FileHandler struct {
 	file        *os.File
 	size        int
@@ -23,7 +23,10 @@ type FileHandler struct {
 	fixedSize    bool
 	journalStart int64
 	journalEnd   int64
-	appendErr    error
+	// activeUsed is the known used length of the active journal, excluding its terminator.
+	// Successful appends and opening scans advance it beyond the persisted header checkpoint.
+	activeUsed int64
+	appendErr  error
 }
 
 // NewFileHandler init new [FileHandler].
@@ -100,15 +103,11 @@ func (fh *FileHandler) Sync() error {
 	return fh.file.Sync()
 }
 
-// Write writes len(b) bytes to the [os.File].
+// Write appends p without syncing; the caller must use [FileHandler.Sync] at its durability boundary.
 func (fh *FileHandler) Write(p []byte) (n int, err error) {
 	n, err = fh.writeAt(p, fh.writeOffset)
 	if err != nil {
 		return 0, fmt.Errorf("write file: %w", err)
-	}
-
-	if err = fh.file.Sync(); err != nil {
-		return 0, fmt.Errorf("sync file: %w", err)
 	}
 
 	fh.size += n
@@ -116,8 +115,8 @@ func (fh *FileHandler) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// WriteFixed overwrites allocated bytes and syncs the file without advancing the write offset.
-// The caller advances the offset after a successful write.
+// WriteFixed overwrites allocated bytes without syncing or advancing the write offset.
+// The caller syncs the file and advances the offset after a successful write.
 func (fh *FileHandler) WriteFixed(p []byte) error {
 	if !fh.fixedSize {
 		return fmt.Errorf("write fixed: %s is not a fixed-size file", fh.file.Name())
@@ -125,10 +124,6 @@ func (fh *FileHandler) WriteFixed(p []byte) error {
 
 	if _, err := fh.writeAt(p, fh.writeOffset); err != nil {
 		return fmt.Errorf("write file: %w", err)
-	}
-
-	if err := fh.Sync(); err != nil {
-		return fmt.Errorf("sync file: %w", err)
 	}
 
 	return nil

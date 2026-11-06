@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -43,6 +42,8 @@ const (
 const fileMagicV3 = "HLG"
 
 var (
+	// ErrInvalidV3FileSize means the fixed-size log file version 3 has an unexpected length.
+	ErrInvalidV3FileSize = errors.New("invalid v3 file size")
 	// ErrInvalidV3Header the header slots of the log file version 3 are invalid.
 	ErrInvalidV3Header = errors.New("invalid v3 file header")
 	// ErrJournalFull means the next frame and its terminator do not fit in the active journal.
@@ -57,9 +58,60 @@ type fileHeaderV3 struct {
 	activeUsed  uint32
 }
 
+// rewriteV3 writes a zero-padded snapshot before committing the alternate header slot.
+// Until the header is durable, the previous active journal remains authoritative.
+func (fl *FileLog) rewriteV3(records []*SerializedRecord) error {
+	header, headerSlot, err := readFileHeaderV3(fl.file.file)
+	if err != nil {
+		return err
+	}
+
+	image, used, err := encodeJournalV3(records)
+	if err != nil {
+		return err
+	}
+
+	next := header.active ^ 1
+	if _, err = fl.file.writeAt(image, journalOffsetV3(next)); err != nil {
+		return fmt.Errorf("write inactive v3 journal: %w", err)
+	}
+
+	if err = fl.file.Sync(); err != nil {
+		return fmt.Errorf("sync inactive v3 journal: %w", err)
+	}
+
+	header.active = next
+	header.activeUsed = uint32(used) // #nosec G115 // bounded by journalSizeV3
+	header.generation++
+	slot := encodeFileHeaderV3(header)
+	if _, err = fl.file.writeAt(slot[:], int64(headerSlot^1)*fileHeaderSlotSizeV3); err != nil {
+		fl.file.appendErr = err
+		return fmt.Errorf("switch v3 journal: %w", err)
+	}
+
+	if err = fl.file.Sync(); err != nil {
+		fl.file.appendErr = err
+		return fmt.Errorf("sync v3 journal switch: %w", err)
+	}
+
+	fl.file.journalStart = journalOffsetV3(next)
+	fl.file.journalEnd = fl.file.journalStart + journalSizeV3
+	fl.file.readOffset = fl.file.journalStart
+	fl.file.writeOffset = fl.file.journalStart + int64(used)
+	fl.file.appendErr = nil
+	fl.file.activeUsed = int64(used)
+
+	return nil
+}
+
 // createV3FileHandler creates the fixed-size log file version 3 and returns a [FileHandler]
 // positioned at the beginning of the active journal.
-func createV3FileHandler(filePath string) (_ *FileHandler, err error) {
+// Initialization failures close and remove the file after it has been opened successfully.
+func createV3FileHandler(
+	filePath string,
+	preallocate func(*os.File) error,
+	syncDirectory func(string) error,
+) (_ *FileHandler, err error) {
 	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, err
@@ -67,48 +119,26 @@ func createV3FileHandler(filePath string) (_ *FileHandler, err error) {
 
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, fh.Close())
+			err = errors.Join(err, fh.Close(), os.Remove(filePath))
 		}
 	}()
 
-	if err = preallocateFile(fh.file, fileSizeV3); err != nil {
-		if !errors.Is(err, errPreallocUnsupported) {
-			return nil, fmt.Errorf("preallocate v3 file: %w", err)
-		}
-
-		if err = writeZeros(fh.file, fileSizeV3); err != nil {
-			return nil, fmt.Errorf("preallocate v3 file: %w", err)
-		}
-	}
-
-	if err = verifyPreallocatedSize(fh.file); err != nil {
+	if err = preallocate(fh.file); err != nil {
 		return nil, err
 	}
 
 	header := fileHeaderV3{generation: 1, journalSize: uint32(journalSizeV3)}
-	slot := encodeFileHeaderV3(header)
-	for i := uint8(0); i < fileHeaderSlotsCount; i++ {
-		if _, err = fh.file.WriteAt(slot[:], int64(i)*fileHeaderSlotSizeV3); err != nil {
-			return nil, fmt.Errorf("write v3 file header: %w", err)
-		}
+	if err = initializeV3File(fh, header); err != nil {
+		return nil, err
 	}
 
-	for i := uint8(0); i < fileHeaderSlotsCount; i++ {
-		if _, err = fh.file.WriteAt([]byte{recordVersionEndV3}, journalOffsetV3(i)); err != nil {
-			return nil, fmt.Errorf("write v3 journal terminator: %w", err)
-		}
-	}
-
-	if err = fh.Sync(); err != nil {
-		return nil, fmt.Errorf("sync v3 file: %w", err)
-	}
-
-	if err = syncDir(filepath.Dir(filePath)); err != nil {
+	if err = syncDirectory(filepath.Dir(filePath)); err != nil {
 		return nil, err
 	}
 
 	fh.size = fileSizeV3
 	fh.fixedSize = true
+	fh.activeUsed = int64(header.activeUsed)
 	fh.journalStart = journalOffsetV3(header.active)
 	fh.journalEnd = fh.journalStart + journalSizeV3
 	fh.readOffset = fh.journalStart
@@ -199,6 +229,51 @@ func encodeFileHeaderV3(header fileHeaderV3) [fileHeaderSlotSizeV3]byte {
 	return slot
 }
 
+// encodeJournalV3 builds a zero-padded journal image and returns its used length without the terminator.
+func encodeJournalV3(records []*SerializedRecord) (image []byte, used int, err error) {
+	image = make([]byte, 0, journalSizeV3)
+	for _, record := range records {
+		snapshot := *record
+		snapshot.fields = fullFields(&snapshot)
+		image, err = appendFrameV3(image, &snapshot)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		if len(image) >= journalSizeV3 {
+			return nil, 0, ErrJournalFull
+		}
+	}
+
+	used = len(image)
+	image = image[:journalSizeV3]
+	clear(image[used:])
+
+	return image, used, nil
+}
+
+// initializeV3File writes both header slots and empty journal terminators, then syncs the file.
+func initializeV3File(fh *FileHandler, header fileHeaderV3) error {
+	slot := encodeFileHeaderV3(header)
+	for i := range uint8(fileHeaderSlotsCount) {
+		if _, err := fh.file.WriteAt(slot[:], int64(i)*fileHeaderSlotSizeV3); err != nil {
+			return fmt.Errorf("write v3 file header: %w", err)
+		}
+	}
+
+	for i := range uint8(fileHeaderSlotsCount) {
+		if _, err := fh.file.WriteAt([]byte{recordVersionEndV3}, journalOffsetV3(i)); err != nil {
+			return fmt.Errorf("write v3 journal terminator: %w", err)
+		}
+	}
+
+	if err := fh.Sync(); err != nil {
+		return fmt.Errorf("sync v3 file: %w", err)
+	}
+
+	return nil
+}
+
 // journalOffsetV3 returns the offset of the journal with the given index in the log file version 3.
 func journalOffsetV3(index uint8) int64 {
 	return fileHeaderAreaSizeV3 + int64(index)*journalSizeV3
@@ -212,31 +287,45 @@ func openV3FileHandler(fh *FileHandler, header fileHeaderV3) error {
 	}
 
 	fh.fixedSize = true
+	fh.activeUsed = int64(header.activeUsed)
 	fh.journalStart = journalOffsetV3(header.active)
 	fh.journalEnd = fh.journalStart + journalSizeV3
 	fh.readOffset = fh.journalStart
 	fh.writeOffset = fh.journalStart
 
-	reader := bufio.NewReader(io.NewSectionReader(fh.file, fh.journalStart, journalSizeV3))
-	decoder := NewDecoderV3()
+	reader := recordReader{file: fh, minUsed: int64(header.activeUsed)}
 	for {
 		var record SerializedRecord
-		if err := decoder.DecodeFrom(reader, &record); err != nil {
+		if err := reader.Read(&record); err != nil {
+			fh.readOffset = fh.journalStart
 			if errors.Is(err, io.EOF) {
-				if fh.writeOffset < fh.journalEnd &&
-					fh.writeOffset-fh.journalStart >= int64(header.activeUsed) {
-					return nil
-				}
+				fh.activeUsed = fh.writeOffset - fh.journalStart
 
-				return fmt.Errorf("v3: premature journal end at %d: %w", fh.writeOffset, io.ErrUnexpectedEOF)
+				return nil
 			}
 
 			fh.appendErr = fmt.Errorf("v3: journal requires rewrite at %d: %w", fh.writeOffset, err)
+
 			return nil
 		}
 
-		fh.writeOffset += int64(recordHeaderSizeV3) + int64(decoder.buffer[recordLengthOffsetV3])
+		fh.writeOffset = fh.readOffset
 	}
+}
+
+// preallocateV3File allocates the fixed-size file, falls back to zero writes, and verifies its size.
+func preallocateV3File(f *os.File) error {
+	if err := preallocateFile(f, fileSizeV3); err != nil {
+		if !errors.Is(err, errPreallocUnsupported) {
+			return fmt.Errorf("preallocate v3 file: %w", err)
+		}
+
+		if err = writeZeros(f, fileSizeV3); err != nil {
+			return fmt.Errorf("preallocate v3 file: %w", err)
+		}
+	}
+
+	return verifyPreallocatedSize(f)
 }
 
 // readFileHeaderV3 reads both header slots of the log file version 3 and returns the valid slot
@@ -267,7 +356,6 @@ func syncDir(dirPath string) error {
 
 // tryOpenV3FileHandler recognizes fixed v3 before falling back to a legacy version header.
 // A complete v1/v2 version header takes precedence over magic bytes in record data.
-// Legacy v3 files are still produced by migration and compaction until journal switching is implemented.
 func tryOpenV3FileHandler(fh *FileHandler) (bool, error) {
 	var slots [fileHeaderSlotsCount * fileHeaderSlotSizeV3]byte
 	if _, err := fh.file.ReadAt(slots[:], 0); err != nil && !errors.Is(err, io.EOF) {
@@ -289,7 +377,7 @@ func tryOpenV3FileHandler(fh *FileHandler) (bool, error) {
 	magic0 := string(slot0[fileHeaderMagicOffsetV3 : fileHeaderMagicOffsetV3+len(fileMagicV3)])
 	magic1 := string(slot1[fileHeaderMagicOffsetV3 : fileHeaderMagicOffsetV3+len(fileMagicV3)])
 	if magic0 == fileMagicV3 || magic1 == fileMagicV3 ||
-		(slots[0] == byte(LogFileVersionV3) && fh.Size() == fileSizeV3) {
+		slots[0] == byte(LogFileVersionV3) {
 		return true, err
 	}
 
@@ -337,7 +425,7 @@ func verifyPreallocatedSize(f *os.File) error {
 	}
 
 	if info.Size() != fileSizeV3 {
-		return fmt.Errorf("preallocated file size: got %d, want %d", info.Size(), fileSizeV3)
+		return fmt.Errorf("%w: preallocated file size: got %d, want %d", ErrInvalidV3FileSize, info.Size(), fileSizeV3)
 	}
 
 	return nil

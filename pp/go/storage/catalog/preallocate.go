@@ -15,10 +15,7 @@ func writeZeros(f *os.File, size int64) error {
 
 	buf := make([]byte, chunkSize)
 	for offset := int64(0); offset < size; {
-		n := int64(chunkSize)
-		if size-offset < n {
-			n = size - offset
-		}
+		n := min(size-offset, int64(chunkSize))
 
 		if _, err := f.WriteAt(buf[:n], offset); err != nil {
 			return fmt.Errorf("write zeros: %w", err)
