@@ -30,7 +30,7 @@ template <class DataStorage>
       continue;
     }
 
-    // The interval max of a finalized chunk is the next chunk start, an upper bound of its last sample.
+    // The interval max of a finalized chunk is the next chunk start minus one, an upper bound of its last sample.
     const auto interval = series_data::Decoder::get_chunk_time_interval(chunk_data);
     if (const auto first_quant = quant_start(interval.min); first_quant == quant_start(interval.max)) [[likely]] {
       add_quant(first_quant);
