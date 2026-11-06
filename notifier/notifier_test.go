@@ -236,19 +236,37 @@ func TestHandlerSendAll(t *testing.T) {
 		}
 	}()
 
+	sent := func(server *httptest.Server) float64 {
+		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server.URL))
+	}
+	failed := func(server *httptest.Server) float64 {
+		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server.URL))
+	}
+
+	// Each Alertmanager has its own send loop, so every batch has to be
+	// accounted for before a server changes its answer: an earlier batch that
+	// is still queued would otherwise fail along with the current one.
+	// sent_total counts the attempts, which makes it the marker of a batch that
+	// a send loop is done with.
+	batchesDone := func(expected float64) func() bool {
+		return func() bool {
+			return sent(server1) == expected*maxBatchSize &&
+				sent(server2) == expected*maxBatchSize &&
+				sent(server3) == expected*maxBatchSize
+		}
+	}
+
 	// All Alertmanagers are up.
 	h.Send(alerts...)
-	require.Eventually(t, func() bool {
-		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == maxBatchSize
-	}, 10*time.Second, 10*time.Millisecond)
+	require.Eventually(t, batchesDone(1), 10*time.Second, 10*time.Millisecond)
+	require.Zero(t, failed(server1))
 	checkNoErr()
 
 	// The only Alertmanager of set 1 is down.
 	status1.Store(int32(http.StatusNotFound))
 	h.Send(alerts...)
-	require.Eventually(t, func() bool {
-		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server1.URL)) == maxBatchSize
-	}, 10*time.Second, 10*time.Millisecond)
+	require.Eventually(t, batchesDone(2), 10*time.Second, 10*time.Millisecond)
+	require.Equal(t, float64(maxBatchSize), failed(server1))
 	checkNoErr()
 
 	status1.Store(int32(http.StatusOK))
@@ -256,19 +274,17 @@ func TestHandlerSendAll(t *testing.T) {
 	// One of the two Alertmanagers of set 2 is down, the other one still gets the alerts.
 	status2.Store(int32(http.StatusInternalServerError))
 	h.Send(alerts...)
-	require.Eventually(t, func() bool {
-		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server2.URL)) == maxBatchSize &&
-			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server3.URL)) == 3*maxBatchSize
-	}, 10*time.Second, 10*time.Millisecond)
+	require.Eventually(t, batchesDone(3), 10*time.Second, 10*time.Millisecond)
+	require.Equal(t, float64(maxBatchSize), failed(server2))
+	require.Zero(t, failed(server3))
 	checkNoErr()
 
 	// Both Alertmanagers of set 2 are down.
 	status3.Store(int32(http.StatusInternalServerError))
 	h.Send(alerts...)
-	require.Eventually(t, func() bool {
-		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server2.URL)) == 2*maxBatchSize &&
-			prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server3.URL)) == maxBatchSize
-	}, 10*time.Second, 10*time.Millisecond)
+	require.Eventually(t, batchesDone(4), 10*time.Second, 10*time.Millisecond)
+	require.Equal(t, float64(2*maxBatchSize), failed(server2))
+	require.Equal(t, float64(maxBatchSize), failed(server3))
 	checkNoErr()
 }
 
