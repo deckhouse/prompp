@@ -29,10 +29,11 @@ import (
 var shardWalFilePattern = regexp.MustCompile(`^shard_(\d+)\.wal$`)
 
 type cmdPersistHead struct {
-	headPath       string
-	outputDir      string
-	blockDuration  model.Duration
-	numberOfShards uint16
+	headPath          string
+	outputDir         string
+	blockDuration     model.Duration
+	numberOfShards    uint16
+	keepFutureSamples bool
 }
 
 func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
@@ -48,6 +49,9 @@ func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
 
 	clause.Flag("number-of-shards", "Number of shards in the head. 0 means autodetect by shard_*.wal files.").
 		Default("0").Uint16Var(&cmd.numberOfShards)
+
+	clause.Flag("keep-future-samples", "Persist samples that start later than now plus the min block duration. Such blocks push all other blocks out of time retention.").
+		BoolVar(&cmd.keepFutureSamples)
 }
 
 // Do loads a single head directly by path (without consulting head.log) and writes TSDB blocks.
@@ -127,12 +131,17 @@ func (cmd *cmdPersistHead) Do(
 		}
 	}()
 
+	futurePeriod := time.Duration(cmd.blockDuration)
+	if cmd.keepFutureSamples {
+		futurePeriod = 0
+	}
+
 	bw := block.NewWriter[*shard.Shard](
 		outputDir,
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
-		0, // no future filtering: persist all samples regardless of the clock
+		futurePeriod,
 		clockwork.NewRealClock(),
 		registerer,
 	)

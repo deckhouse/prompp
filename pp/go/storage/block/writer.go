@@ -61,6 +61,7 @@ type Writer[TShard Shard] struct {
 	futurePeriod             time.Duration
 	clock                    clockwork.Clock
 	blockWriteDuration       *prometheus.GaugeVec
+	droppedFutureBlocks      *prometheus.CounterVec
 }
 
 // NewWriter creates a new [Writer].
@@ -103,6 +104,10 @@ func NewWriter[TShard Shard](
 			Name: "prompp_block_write_duration",
 			Help: "Block write duration in milliseconds.",
 		}, []string{"block_id"}),
+		droppedFutureBlocks: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "prompp_block_writer_dropped_future_blocks_total",
+			Help: "Number of blocks not written because they start later than now plus the future period.",
+		}, []string{"shard_id"}),
 	}
 }
 
@@ -163,6 +168,10 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 	}
 
 	if len(skippedFutureQuants) > 0 {
+		w.droppedFutureBlocks.WithLabelValues(
+			//revive:disable-next-line:add-constant // it's base 10
+			strconv.FormatUint(uint64(sd.ShardID()), 10),
+		).Add(float64(len(skippedFutureQuants)))
 		logger.Warnf(
 			"[BlockWriter]: shard %d: dropped samples of %d blocks later than %s, the first block starts at %s",
 			sd.ShardID(),

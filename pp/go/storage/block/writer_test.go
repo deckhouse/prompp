@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -362,6 +364,7 @@ func (s *WriterSuite) TestSkipFutureBlocks() {
 			},
 		},
 	})
+	registry := prometheus.NewRegistry()
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
@@ -369,7 +372,7 @@ func (s *WriterSuite) TestSkipFutureBlocks() {
 		0,
 		blockDuration,
 		clockwork.NewFakeClockAt(time.UnixMilli(0)),
-		prometheus.DefaultRegisterer,
+		registry,
 	)
 
 	// Act
@@ -380,4 +383,9 @@ func (s *WriterSuite) TestSkipFutureBlocks() {
 	s.Require().Len(blocks, 2)
 	s.Equal(int64(0), blocks[0].Meta.MinTime)
 	s.Equal(blockDuration.Milliseconds(), blocks[1].Meta.MinTime)
+	s.NoError(testutil.GatherAndCompare(registry, strings.NewReader(`
+# HELP prompp_block_writer_dropped_future_blocks_total Number of blocks not written because they start later than now plus the future period.
+# TYPE prompp_block_writer_dropped_future_blocks_total counter
+prompp_block_writer_dropped_future_blocks_total{shard_id="0"} 1
+`), "prompp_block_writer_dropped_future_blocks_total"))
 }
