@@ -54,8 +54,8 @@ func (css *ChunkSeriesSet) Next() bool {
 	}
 
 	seriesID := css.lastRecodedChunk.SeriesId
-	recodedChunks := make([]cppbridge.RecodedChunk, 1)
-	recodedChunks[0] = *css.lastRecodedChunk
+	seriesChunks := make([]chunkSeriesChunk, 1)
+	seriesChunks[0] = newChunkSeriesChunk(*css.lastRecodedChunk)
 
 	nextSeriesIDFound := false
 	for css.nextChunk() {
@@ -63,7 +63,7 @@ func (css *ChunkSeriesSet) Next() bool {
 			nextSeriesIDFound = true
 			break
 		}
-		recodedChunks = append(recodedChunks, *css.lastRecodedChunk)
+		seriesChunks = append(seriesChunks, newChunkSeriesChunk(*css.lastRecodedChunk))
 	}
 
 	if !nextSeriesIDFound && css.recoderIsExhausted {
@@ -71,8 +71,8 @@ func (css *ChunkSeriesSet) Next() bool {
 	}
 
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, seriesID),
-		recodedChunks: recodedChunks,
+		labelSet: labels.NewLabelsWithLSS(css.labelSetSnapshot, seriesID),
+		chunks:   seriesChunks,
 	}
 
 	return true
@@ -107,21 +107,37 @@ func (css *ChunkSeriesSet) nextChunk() bool {
 // ChunkSeries
 //
 
+// chunkSeriesChunk stores millisecond time bounds and an immutable XOR wrapper over an owned payload.
+type chunkSeriesChunk struct {
+	cppbridge.TimeInterval
+	chunk chunkenc.XORChunk
+}
+
+// newChunkSeriesChunk retains the existing Go-owned payload without copying it.
+func newChunkSeriesChunk(recodedChunk cppbridge.RecodedChunk) chunkSeriesChunk {
+	result := chunkSeriesChunk{TimeInterval: recodedChunk.TimeInterval}
+	result.chunk.Reset(recodedChunk.ChunkData)
+
+	return result
+}
+
 // ChunkSeries exposes a single time series and allows iterating over chunks.
 type ChunkSeries struct {
-	labelSet      labels.Labels
-	recodedChunks []cppbridge.RecodedChunk
+	labelSet labels.Labels
+	chunks   []chunkSeriesChunk
 }
 
 // Iterator returns an iterator that iterates over potentially overlapping
 // chunks of the series, sorted by min time.
 func (cs *ChunkSeries) Iterator(iterator chunks.Iterator) chunks.Iterator {
 	if ci, ok := iterator.(*ChunkSeriesChunksIterator); ok {
-		ci.ResetTo(cs.recodedChunks)
+		ci.idx = 0
+		ci.chunks = cs.chunks
+
 		return ci
 	}
 
-	return NewChunkSeriesChunksIterator(cs.recodedChunks)
+	return &ChunkSeriesChunksIterator{chunks: cs.chunks}
 }
 
 // Labels returns the complete set of labels. For series it means all labels identifying the series.
@@ -136,10 +152,9 @@ func (cs *ChunkSeries) Labels() labels.Labels {
 // ChunkSeriesChunksIterator iterates over chunks sorted by min time.
 // Returned chunks remain valid after advancing or resetting the iterator.
 type ChunkSeriesChunksIterator struct {
-	idx           int
-	recodedChunks []cppbridge.RecodedChunk
-	xorChunks     []chunkenc.XORChunk
-	meta          chunks.Meta
+	idx    int
+	chunks []chunkSeriesChunk
+	meta   chunks.Meta
 }
 
 // NewChunkSeriesChunksIterator init new [ChunkSeriesChunksIterator].
@@ -163,15 +178,14 @@ func (*ChunkSeriesChunksIterator) Err() error {
 
 // Next advances the iterator by one.
 func (ci *ChunkSeriesChunksIterator) Next() bool {
-	if ci.idx >= len(ci.recodedChunks) {
+	if ci.idx >= len(ci.chunks) {
 		return false
 	}
 
-	ci.meta.MinTime = ci.recodedChunks[ci.idx].MinT
-	ci.meta.MaxTime = ci.recodedChunks[ci.idx].MaxT
-	xorChunk := &ci.xorChunks[ci.idx]
-	xorChunk.Reset(ci.recodedChunks[ci.idx].ChunkData)
-	ci.meta.Chunk = xorChunk
+	chunk := &ci.chunks[ci.idx]
+	ci.meta.MinTime = chunk.MinT
+	ci.meta.MaxTime = chunk.MaxT
+	ci.meta.Chunk = &chunk.chunk
 	ci.idx++
 
 	return true
@@ -180,8 +194,11 @@ func (ci *ChunkSeriesChunksIterator) Next() bool {
 // ResetTo starts a new traversal of recodedChunks without changing previously returned chunks.
 func (ci *ChunkSeriesChunksIterator) ResetTo(recodedChunks []cppbridge.RecodedChunk) {
 	ci.idx = 0
-	ci.recodedChunks = recodedChunks
-	ci.xorChunks = make([]chunkenc.XORChunk, len(recodedChunks))
+	ci.chunks = make([]chunkSeriesChunk, len(recodedChunks))
+
+	for i, recodedChunk := range recodedChunks {
+		ci.chunks[i] = newChunkSeriesChunk(recodedChunk)
+	}
 }
 
 //

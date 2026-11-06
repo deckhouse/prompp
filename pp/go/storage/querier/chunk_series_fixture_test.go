@@ -35,6 +35,17 @@ func makeChunkSeriesTestChunk(t testing.TB, samples []chunkSeriesTestSample) cpp
 	}
 }
 
+// newChunkSeriesTestSeries builds a series with immutable wrappers over the fixture payloads.
+func newChunkSeriesTestSeries(recodedChunks []cppbridge.RecodedChunk) *ChunkSeries {
+	series := &ChunkSeries{chunks: make([]chunkSeriesChunk, len(recodedChunks))}
+
+	for i, recodedChunk := range recodedChunks {
+		series.chunks[i] = newChunkSeriesChunk(recodedChunk)
+	}
+
+	return series
+}
+
 // readChunkSeriesTestSamples decodes a real XOR chunk into timestamp/value pairs.
 func readChunkSeriesTestSamples(t testing.TB, chunk chunkenc.Chunk) []chunkSeriesTestSample {
 	t.Helper()

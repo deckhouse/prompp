@@ -111,7 +111,9 @@ func (s *ChunkSeriesRemoteReadSuite) checkStream(testCase chunkSeriesRemoteReadC
 		expectedChunks = append(expectedChunks, s.headSamples[i])
 	}
 
-	var series storage.ChunkSeries = &ChunkSeries{labelSet: s.labelSet, recodedChunks: recoded}
+	headSeries := newChunkSeriesTestSeries(recoded)
+	headSeries.labelSet = s.labelSet
+	var series storage.ChunkSeries = headSeries
 
 	if testCase.withBlock {
 		merger := storage.NewCompactingChunkSeriesMerger(storage.ChainedSeriesMerge)

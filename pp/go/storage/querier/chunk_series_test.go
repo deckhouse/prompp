@@ -53,7 +53,7 @@ func (s *ChunkSeriesChunksIteratorSuite) TestAtRetainsChunkAfterNext() {
 
 func (s *ChunkSeriesChunksIteratorSuite) TestIndependentIterators() {
 	// Arrange
-	series := &ChunkSeries{recodedChunks: s.recoded}
+	series := newChunkSeriesTestSeries(s.recoded)
 	first := series.Iterator(nil)
 	second := series.Iterator(nil)
 	s.Require().True(first.Next())
@@ -72,14 +72,12 @@ func (s *ChunkSeriesChunksIteratorSuite) TestIndependentIterators() {
 
 func (s *ChunkSeriesChunksIteratorSuite) TestIteratorReuseRetainsPreviousSeries() {
 	// Arrange
-	firstSeries := &ChunkSeries{recodedChunks: s.recoded}
+	firstSeries := newChunkSeriesTestSeries(s.recoded)
 	iterator := firstSeries.Iterator(nil)
 	s.Require().True(iterator.Next())
 	retained := iterator.At()
 	expected := []chunkSeriesTestSample{{timestamp: 100, value: 42}}
-	secondSeries := &ChunkSeries{
-		recodedChunks: []cppbridge.RecodedChunk{makeChunkSeriesTestChunk(s.T(), expected)},
-	}
+	secondSeries := newChunkSeriesTestSeries([]cppbridge.RecodedChunk{makeChunkSeriesTestChunk(s.T(), expected)})
 
 	// Act
 	reused := secondSeries.Iterator(iterator)
