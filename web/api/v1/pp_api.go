@@ -12,10 +12,22 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/handler/middleware"
+	"github.com/prometheus/prometheus/pp-pkg/querysplit"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
+
+// EnableRangeQuerySplit wraps the query engine of the API with the split of range queries by
+// block bounds. It does nothing if bounds is nil. The split works only for the requests with
+// [querysplit.Header].
+func (api *API) EnableRangeQuerySplit(bounds querysplit.BoundsFunc, opts querysplit.Options) {
+	if bounds == nil {
+		return
+	}
+
+	api.QueryEngine = querysplit.New(api.QueryEngine, bounds, opts)
+}
 
 // ApplyConfig updates the configs for opHandler and otlpWriteHandler.
 func (api *API) ApplyConfig(conf *config.Config) error {

@@ -67,6 +67,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"         // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/querysplit"                   // PP_CHANGES.md: split range queries by block bounds
 	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/rules"                        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                       // PP_CHANGES.md: rebuild on cpp
@@ -879,6 +880,7 @@ func main() {
 		tsdbHistorical   *tsdbHistoricalStorage
 		persistedStorage storage.Storage = localStorage
 		startTimeFn                      = localStorage.StartTime
+		blockBoundsFn    querysplit.BoundsFunc
 	)
 	if !agentMode {
 		// Storage is constructed eagerly here for both schemes. The historical
@@ -975,6 +977,7 @@ func main() {
 			}}
 			persistedStorage = bs
 			startTimeFn = bs.StartTime
+			blockBoundsFn = bs.BlockBounds
 		} else {
 			level.Info(logger).Log("msg", "Using pre-PR-377 historical TSDB storage scheme")
 			opts := cfg.tsdb.ToTSDBOptions()
@@ -986,6 +989,7 @@ func main() {
 			tsdbHistorical = &tsdbHistoricalStorage{db: db}
 			persistedStorage = tsdbHistorical
 			startTimeFn = tsdbHistorical.StartTime
+			blockBoundsFn = tsdbHistorical.BlockBounds
 			level.Info(logger).Log("msg", "TSDB storage started")
 			level.Debug(logger).Log(
 				"msg", "TSDB options",
@@ -1203,6 +1207,9 @@ func main() {
 	cfg.web.Storage = fanoutStorage
 	cfg.web.ExemplarStorage = localStorage
 	cfg.web.QueryEngine = queryEngine
+	// PP_CHANGES.md: split range queries by block bounds.
+	cfg.web.QueryRangeSplitBounds = blockBoundsFn
+	cfg.web.QueryRangeSplit = querysplit.Options{SeriesCount: adapter.HeadSeriesCount}
 	cfg.web.ScrapeManager = scrapeManager
 	cfg.web.RuleManager = ruleManager
 	cfg.web.Notifier = notifierManager
@@ -1896,6 +1903,22 @@ func (b *blockStorage) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
+// BlockBounds returns the sorted bounds of the loaded blocks without the downsampling blocks,
+// which the querier does not read.
+func (b *blockStorage) BlockBounds() []int64 {
+	blocks := b.m.Blocks()
+	bounds := make([]int64, 0, len(blocks)+1)
+	maxTime := int64(math.MinInt64)
+	for _, blk := range blocks {
+		if blk.IsDownsamplingBlock() {
+			continue
+		}
+		bounds = append(bounds, blk.Meta().MinTime)
+		maxTime = max(maxTime, blk.Meta().MaxTime)
+	}
+	return querysplit.BlockBounds(bounds, maxTime)
+}
+
 // tsdbHistoricalStorage adapts a tsdb.DB to serve persisted blocks as a
 // fanout secondary, while dropping appends so writes stay on the PP head path.
 type tsdbHistoricalStorage struct {
@@ -1923,6 +1946,18 @@ func (s *tsdbHistoricalStorage) StartTime() (int64, error) {
 		return blocks[0].Meta().MinTime, nil
 	}
 	return math.MaxInt64, nil
+}
+
+// BlockBounds returns the sorted bounds of the loaded blocks.
+func (s *tsdbHistoricalStorage) BlockBounds() []int64 {
+	blocks := s.db.Blocks()
+	bounds := make([]int64, 0, len(blocks)+1)
+	maxTime := int64(math.MinInt64)
+	for _, blk := range blocks {
+		bounds = append(bounds, blk.Meta().MinTime)
+		maxTime = max(maxTime, blk.Meta().MaxTime)
+	}
+	return querysplit.BlockBounds(bounds, maxTime)
 }
 
 // PP_CHANGES.md: rebuild on cpp

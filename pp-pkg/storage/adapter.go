@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/hatracker"
@@ -301,6 +302,21 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		aTimeInterval.MinT,
 		ar.activeQuerierMetrics,
 	), nil
+}
+
+// HeadSeriesCount returns the number of series in the active head that match the given label
+// matchers. It does not read the series data.
+func (ar *Adapter) HeadSeriesCount(ctx context.Context, matchers []*labels.Matcher) (int, error) {
+	ahead := ar.proxy.Get()
+	return querier.NewQuerier(
+		ahead,
+		querier.NewNoOpShardedDeduplicator,
+		0,
+		0,
+		ar.scrapeInterval.Load(),
+		headTimeInterval(ahead).MinT,
+		ar.activeQuerierMetrics,
+	).SeriesCount(ctx, matchers...)
 }
 
 // HeadStatus returns stats of Head.
