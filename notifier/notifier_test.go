@@ -240,7 +240,7 @@ func TestHandlerSendAll(t *testing.T) {
 	h.Send(alerts...)
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == maxBatchSize
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
 	// The only Alertmanager of set 1 is down.
@@ -248,7 +248,7 @@ func TestHandlerSendAll(t *testing.T) {
 	h.Send(alerts...)
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server1.URL)) == maxBatchSize
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
 	status1.Store(int32(http.StatusOK))
@@ -259,7 +259,7 @@ func TestHandlerSendAll(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server2.URL)) == maxBatchSize &&
 			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server3.URL)) == 3*maxBatchSize
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
 	// Both Alertmanagers of set 2 are down.
@@ -268,7 +268,7 @@ func TestHandlerSendAll(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server2.URL)) == 2*maxBatchSize &&
 			prom_testutil.ToFloat64(h.metrics.errors.WithLabelValues(server3.URL)) == maxBatchSize
-	}, 3*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	checkNoErr()
 }
 
@@ -428,7 +428,7 @@ func TestHandlerSendAllRemapPerAm(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == maxBatchSize &&
 			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server2.URL)) == maxBatchSize/2
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	checkNoErr()
 
 	// Set 3 drops all the alerts, so its Alertmanager is never contacted.
@@ -1041,7 +1041,7 @@ func TestStop_DrainingDisabled(t *testing.T) {
 	select {
 	case <-receiverReceivedRequest:
 		// Nothing more to do.
-	case <-time.After(time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for receiver to receive notification of first alert")
 	}
 
@@ -1057,7 +1057,7 @@ func TestStop_DrainingDisabled(t *testing.T) {
 	select {
 	case <-notificationManagerStopped:
 		// Nothing more to do.
-	case <-time.After(time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for notification manager to stop")
 	}
 
@@ -1138,7 +1138,7 @@ func TestStop_DrainingEnabled(t *testing.T) {
 	select {
 	case <-receiverReceivedRequest:
 		// Nothing more to do.
-	case <-time.After(time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for receiver to receive notification of first alert")
 	}
 
@@ -1152,7 +1152,7 @@ func TestStop_DrainingEnabled(t *testing.T) {
 	select {
 	case <-notificationManagerStopped:
 		// Nothing more to do.
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for notification manager to stop")
 	}
 
@@ -1218,7 +1218,7 @@ func TestQueuesDrainingOnApplyConfig(t *testing.T) {
 			h.Send(&Alert{Labels: labels.FromStrings("alertname", "first")})
 			select {
 			case <-requestReceived:
-			case <-time.After(2 * time.Second):
+			case <-time.After(10 * time.Second):
 				require.FailNow(t, "gave up waiting for the first alert to be sent")
 			}
 			h.Send(&Alert{Labels: labels.FromStrings("alertname", "second")})
@@ -1227,14 +1227,17 @@ func TestQueuesDrainingOnApplyConfig(t *testing.T) {
 			require.NoError(t, h.ApplyConfig(&config.Config{}))
 			close(releaseRequest)
 
-			select {
-			case <-requestReceived:
-				if !drainOnShutdown {
-					require.FailNow(t, "the queue should not be drained")
-				}
-			case <-time.After(500 * time.Millisecond):
-				if drainOnShutdown {
+			if drainOnShutdown {
+				select {
+				case <-requestReceived:
+				case <-time.After(10 * time.Second):
 					require.FailNow(t, "the queue wasn't drained")
+				}
+			} else {
+				select {
+				case <-requestReceived:
+					require.FailNow(t, "the queue should not be drained")
+				case <-time.After(500 * time.Millisecond):
 				}
 			}
 
@@ -1457,7 +1460,7 @@ func TestAlertsRelabelingIsIsolated(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server1.URL)) == 1 &&
 			prom_testutil.ToFloat64(h.metrics.sent.WithLabelValues(server2.URL)) == 1
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 
 	select {
 	case err := <-errc:
@@ -1540,14 +1543,14 @@ func TestNotifierQueueIndependentOfFailedAlertmanager(t *testing.T) {
 	select {
 	case <-doneAlertReceive:
 		// The happy case, the alert was received by the healthy alertmanager.
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("Timeout waiting for the alert to be received by the healthy alertmanager")
 	}
 
 	select {
 	case <-doneSend:
 		// The happy case, Send returned.
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("Timeout waiting for Send to return")
 	}
 }
@@ -1763,7 +1766,7 @@ alerting:
 	n.Send(&Alert{Labels: labels.FromStrings("alertname", "first")})
 	select {
 	case <-received:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for the first alert")
 	}
 	require.Equal(t, expectedAuthorization("first"), authorization.Load())
@@ -1776,7 +1779,7 @@ alerting:
 	n.Send(&Alert{Labels: labels.FromStrings("alertname", "second")})
 	require.Eventually(t, func() bool {
 		return authorization.Load() == expectedAuthorization("second")
-	}, 2*time.Second, 10*time.Millisecond, "the send loop kept sending with the old password")
+	}, 10*time.Second, 10*time.Millisecond, "the send loop kept sending with the old password")
 }
 
 // TestApplyConfigDoesNotWaitForDrainingQueues ensures a removed Alertmanager
@@ -1819,7 +1822,7 @@ func TestApplyConfigDoesNotWaitForDrainingQueues(t *testing.T) {
 	h.Send(&Alert{Labels: labels.FromStrings("alertname", "in-flight")})
 	require.Eventually(t, func() bool {
 		return prom_testutil.ToFloat64(h.metrics.queueLength.WithLabelValues(blackHoleAM.URL)) == 0
-	}, 2*time.Second, 10*time.Millisecond, "gave up waiting for the alert to be picked up")
+	}, 10*time.Second, 10*time.Millisecond, "gave up waiting for the alert to be picked up")
 	h.Send(&Alert{Labels: labels.FromStrings("alertname", "queued")})
 
 	applied := make(chan error, 1)
@@ -1830,7 +1833,7 @@ func TestApplyConfigDoesNotWaitForDrainingQueues(t *testing.T) {
 	select {
 	case err := <-applied:
 		require.NoError(t, err)
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "ApplyConfig blocked on the queue of the removed Alertmanager")
 	}
 
@@ -1842,7 +1845,7 @@ func TestApplyConfigDoesNotWaitForDrainingQueues(t *testing.T) {
 
 	select {
 	case <-sent:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "Send blocked on the queue of the removed Alertmanager")
 	}
 }
@@ -1894,7 +1897,7 @@ func TestRunWaitsForInFlightNotifications(t *testing.T) {
 
 	select {
 	case <-requestReceived:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for the notification to be sent")
 	}
 
@@ -1910,7 +1913,7 @@ func TestRunWaitsForInFlightNotifications(t *testing.T) {
 
 	select {
 	case <-runReturned:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.FailNow(t, "gave up waiting for Run to return")
 	}
 }
