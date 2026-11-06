@@ -372,7 +372,7 @@ class BasicEncoder {
   ///        It affects the forwarded `void add(const Timeseries&,...)` callback.
   ///         - The `with_hash_value` will forward the `add(timeseries, hash_value)` callback,
   ///         - The `without_hash_value` will forward the `add(timeseries)` only callback.
-  enum add_many_generator_callback_type {
+  enum add_many_generator_callback_type : uint8_t {
     with_hash_value,
     without_hash_value,
   };

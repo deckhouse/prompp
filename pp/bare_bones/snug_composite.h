@@ -290,6 +290,9 @@ class GenericDecodingTable {
   using checkpoint_type = Checkpoint;
   using delta_type = typename checkpoint_type::Delta;
 
+ private:
+  friend Derived;
+
   GenericDecodingTable() noexcept = default;
   explicit GenericDecodingTable(uint8_t version) noexcept : version_(version) {};
 
@@ -298,6 +301,7 @@ class GenericDecodingTable {
   explicit GenericDecodingTable(const GenericDecodingTable<AnotherDerived, AnotherFilament, AnotherVector>& other)
       : storage_(other.storage_), version_(other.version_) {}
 
+ public:
   GenericDecodingTable(const GenericDecodingTable& other) = delete;
 
   GenericDecodingTable& operator=(const GenericDecodingTable& other) noexcept
@@ -473,7 +477,12 @@ class DecodingTable : public GenericDecodingTable<DecodingTable<Filament, Vector
  public:
   using Base = GenericDecodingTable<DecodingTable, Filament, Vector>;
 
-  using Base::Base;
+  DecodingTable() noexcept = default;
+  explicit DecodingTable(uint8_t version) noexcept : Base(version) {}
+
+  template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
+    requires Base::kIsReadOnly
+  explicit DecodingTable(const GenericDecodingTable<AnotherDerived, AnotherFilament, AnotherVector>& other) : Base(other) {}
 };
 
 template <template <template <class> class> class Filament, template <class> class Vector>
@@ -619,8 +628,12 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
  public:
-  using Base::Base;
   EncodingBimap() noexcept = default;
+  explicit EncodingBimap(uint8_t version) noexcept : Base(version) {}
+
+  template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
+    requires Base::kIsReadOnly
+  explicit EncodingBimap(const GenericDecodingTable<AnotherDerived, AnotherFilament, AnotherVector>& other) : Base(other) {}
   EncodingBimap(const EncodingBimap& other) = delete;
   EncodingBimap(EncodingBimap&&) noexcept = delete;
   EncodingBimap& operator=(const EncodingBimap&) = delete;

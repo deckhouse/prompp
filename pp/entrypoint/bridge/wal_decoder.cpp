@@ -18,7 +18,8 @@ extern "C" void prompp_wal_decoder_ctor(void* args, void* res) {
 
   auto* in = reinterpret_cast<Arguments*>(args);
   Result* out = new (res) Result();
-  out->decoder = new PromPP::WAL::Decoder(static_cast<PromPP::WAL::BasicEncoderVersion>(in->encoder_version));
+  entrypoint::types::invoke_without_error_result(
+      [&] { out->decoder = new PromPP::WAL::Decoder(static_cast<PromPP::WAL::BasicEncoderVersion>(in->encoder_version)); });
 }
 
 extern "C" void prompp_wal_decoder_dtor(void* args) {

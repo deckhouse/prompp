@@ -20,7 +20,8 @@ class FinalizedChunkList {
 
     auto it = chunks_.before_begin();
     for (auto next_it = it;; it = next_it) {
-      if (++next_it == chunks_.end() || chunk_first_timestamp < get_finalized_chunk_first_timestamp(*next_it)) {
+      ++next_it;
+      if (next_it == chunks_.end() || chunk_first_timestamp < get_finalized_chunk_first_timestamp(*next_it)) {
         return *chunks_.emplace_after(it, chunk);
       }
     }

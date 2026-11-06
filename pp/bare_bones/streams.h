@@ -30,6 +30,7 @@ template <HiddenExceptions S>
       stream.exceptions(original_mask);
     } catch (...) {
       // Restoration must not replace an active exception or escape cleanup.
+      return;
     }
   });
   stream.exceptions(mask);

@@ -1,7 +1,7 @@
+#include <array>
 #include <ranges>
 #include <vector>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "bare_bones/vector_with_holes.h"
@@ -225,28 +225,53 @@ TEST(VectorWithHolesTest, IteratorOfFullyErasedVectorIsEmpty) {
   EXPECT_TRUE(is_empty);
 }
 
+struct DestroyCounts {
+  int with_argument{};
+  int without_argument{};
+  int last_argument{};
+  int destructors{};
+};
+
+class ObservedDestroy {
+ public:
+  explicit ObservedDestroy(DestroyCounts* counts) noexcept : counts_(counts) {}
+  ~ObservedDestroy() noexcept { ++counts_->destructors; }
+
+  void destroy(int argument) noexcept {
+    ++counts_->with_argument;
+    counts_->last_argument = argument;
+  }
+  void destroy() noexcept { ++counts_->without_argument; }
+
+ private:
+  DestroyCounts* counts_;
+};
+
 TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {
-  class MockDestroyBehavior {
-   public:
-    // NOLINTNEXTLINE(bugprone-exception-escape)
-    MOCK_METHOD(void, destroy, (int), ());
-    // NOLINTNEXTLINE(bugprone-exception-escape)
-    MOCK_METHOD(void, destroy, (), ());
-  };
-
   // Arrange
-  VectorWithHoles<MockDestroyBehavior> vector;
-  vector.emplace_back();
-  vector.emplace_back();
-
-  EXPECT_CALL(vector[0], destroy(42)).Times(testing::Exactly(1));
-  EXPECT_CALL(vector[1], destroy()).Times(testing::Exactly(1));
+  std::array<DestroyCounts, 3> counts{};
 
   // Act
-  vector.erase(0, 42);
-  vector.erase(1);
+  {
+    VectorWithHoles<ObservedDestroy> vector;
+    vector.emplace_back(&counts[0]);
+    vector.emplace_back(&counts[1]);
+    vector.emplace_back(&counts[2]);
+    vector.erase(0, 42);
+    vector.erase(1);
+  }
 
   // Assert
+  EXPECT_EQ(1, counts[0].with_argument);
+  EXPECT_EQ(42, counts[0].last_argument);
+  EXPECT_EQ(0, counts[0].without_argument);
+  EXPECT_EQ(1, counts[0].destructors);
+  EXPECT_EQ(0, counts[1].with_argument);
+  EXPECT_EQ(1, counts[1].without_argument);
+  EXPECT_EQ(1, counts[1].destructors);
+  EXPECT_EQ(0, counts[2].with_argument);
+  EXPECT_EQ(1, counts[2].without_argument);
+  EXPECT_EQ(1, counts[2].destructors);
 }
 
 }  // namespace

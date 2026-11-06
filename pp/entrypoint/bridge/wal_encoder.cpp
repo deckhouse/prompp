@@ -28,7 +28,7 @@ extern "C" void prompp_wal_encoder_ctor(void* args, void* res) {
 
   Arguments* in = reinterpret_cast<Arguments*>(args);
   Result* out = new (res) Result();
-  out->encoder = new PromPP::WAL::Encoder(in->shard_id, in->log_shards);
+  entrypoint::types::invoke_without_error_result([&] { out->encoder = new PromPP::WAL::Encoder(in->shard_id, in->log_shards); });
 }
 
 extern "C" void prompp_wal_encoder_dtor(void* args) {
@@ -231,7 +231,7 @@ extern "C" void prompp_wal_encoder_lightweight_ctor(void* args, void* res) {
 
   Arguments* in = reinterpret_cast<Arguments*>(args);
   Result* out = new (res) Result();
-  out->encoder = new PromPP::WAL::EncoderLightweight(in->shard_id, in->log_shards);
+  entrypoint::types::invoke_without_error_result([&] { out->encoder = new PromPP::WAL::EncoderLightweight(in->shard_id, in->log_shards); });
 }
 
 /**
