@@ -84,14 +84,12 @@ def _third_party_deps_impl(_ctx):
         name = "lz4",
         build_file = Label("//third_party:lz4.BUILD"),
         patches = [
-            Label("//third_party/patches/lz4:0001-remove_visibility_attribute.patch"),
             Label("//third_party/patches/lz4:0002-add_allocated_memory.patch"),
-            Label("//third_party/patches/lz4:0003-fix_offsetof_calculation.patch"),
             Label("//third_party/patches/lz4:0004-svacer_fixes.patch"),
         ],
-        sha256 = "658ba6191fa44c92280d4aa2c271b0f4fbc0e34d249578dd05e50e76d0e5efcc",
-        strip_prefix = "lz4-1.9.2",
-        url = "https://github.com/lz4/lz4/archive/v1.9.2.tar.gz",
+        sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b",
+        strip_prefix = "lz4-1.10.0",
+        url = "https://github.com/lz4/lz4/archive/v1.10.0.tar.gz",
     )
 
     http_archive(
