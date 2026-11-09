@@ -5,9 +5,10 @@
 #define PROMPP_PLATFORM_ARM64 1
 #endif
 
-#include <cstring>
-#if PROMPP_PLATFORM_AMD64
 #include <cstdint>
+#include <cstring>
+
+#if PROMPP_PLATFORM_AMD64
 
 //#entrypoint.amd64_includes
 #elif PROMPP_PLATFORM_ARM64
@@ -16,16 +17,12 @@
 //#entrypoint.arm64_includes
 #endif
 
-//#entrypoint.function_pointers
-
 #if PROMPP_PLATFORM_AMD64
 enum class arch_flavor : uint8_t { generic, nehalem, haswell };
 
-arch_flavor determine_arch_flavor() {
-  // initialize() may run before libgcc's CPU-detection constructor (it is also
-  // triggered by the malloc interposer), so __cpu_model can be uninitialized.
-  // Force detection explicitly, otherwise every __builtin_cpu_supports() returns
-  // 0 and we always fall back to the k8 bindings.
+static __attribute__((no_sanitize_address)) arch_flavor determine_arch_flavor() {
+  // IFUNC resolvers and the malloc interposer can run before libgcc's
+  // CPU-detection constructor.
   __builtin_cpu_init();
 
   if (!__builtin_cpu_supports("sse4.2"))
@@ -36,16 +33,50 @@ arch_flavor determine_arch_flavor() {
 
   return arch_flavor::haswell;
 }
+
+#define DEFINE_RESOLVER(name)                           \
+  extern "C" __attribute__((no_sanitize_address))       \
+  auto resolve_##name() -> decltype(&amd64_k8_##name) { \
+    switch (determine_arch_flavor()) {                  \
+      case arch_flavor::haswell:                        \
+        return &amd64_haswell_##name;                   \
+      case arch_flavor::nehalem:                        \
+        return &amd64_nehalem_##name;                   \
+      default:                                          \
+        return &amd64_k8_##name;                        \
+    }                                                   \
+  }
+
 #elif PROMPP_PLATFORM_ARM64
 enum class arch_flavor : uint8_t { generic, crc32 };
 
-arch_flavor determine_arch_flavor() {
-  if (getauxval(AT_HWCAP) & HWCAP_CRC32) {
-    return arch_flavor::crc32;
-  }
-  return arch_flavor::generic;
+static constexpr arch_flavor determine_arch_flavor(uint64_t hwcap) {
+  return (hwcap & HWCAP_CRC32) != 0 ? arch_flavor::crc32 : arch_flavor::generic;
 }
+
+static arch_flavor determine_arch_flavor() {
+  return determine_arch_flavor(getauxval(AT_HWCAP));
+}
+
+// The GNU AArch64 resolver ABI passes AT_HWCAP in the first argument.
+#define DEFINE_RESOLVER(name)                                              \
+  extern "C" __attribute__((no_sanitize_address))                          \
+  auto resolve_##name(uint64_t hwcap) -> decltype(&arm64_armv8_a_##name) { \
+    return determine_arch_flavor(hwcap) == arch_flavor::crc32              \
+               ? &arm64_armv8_a_crc_##name                                 \
+               : &arm64_armv8_a_##name;                                    \
+  }
 #endif
+
+// Resolvers run during relocation, before allocator and ASan initialization.
+#define DEFINE_IFUNC(name, args) \
+  DEFINE_RESOLVER(name)          \
+  extern "C" void name args __attribute__((ifunc("resolve_" #name)))
+
+//#entrypoint.ifuncs
+
+#undef DEFINE_IFUNC
+#undef DEFINE_RESOLVER
 
 const char* prompp_flavor = nullptr;
 extern "C" void prompp_get_flavor(void* res) {
@@ -139,28 +170,23 @@ static __attribute__((constructor)) void initialize() {
   switch (determine_arch_flavor()) {
 #if PROMPP_PLATFORM_AMD64
     case arch_flavor::haswell: {
-//#entrypoint.amd64_haswell_bindings
       SELECT_ARCH(amd64_haswell, "haswell");
       break;
     }
     case arch_flavor::nehalem: {
-//#entrypoint.amd64_nehalem_bindings
       SELECT_ARCH(amd64_nehalem, "nehalem");
       break;
     }
     default: {
-//#entrypoint.amd64_k8_bindings
       SELECT_ARCH(amd64_k8, "k8");
       break;
     }
 #elif PROMPP_PLATFORM_ARM64
     case arch_flavor::crc32: {
-//#entrypoint.arm64_armv8_a_crc_bindings
       SELECT_ARCH(arm64_armv8_a_crc, "armv8-a+crc");
       break;
     }
     default: {
-//#entrypoint.arm64_armv8_a_bindings
       SELECT_ARCH(arm64_armv8_a, "armv8-a");
       break;
     }
