@@ -30,11 +30,13 @@ func BenchmarkChunkSeriesChunksIterator(b *testing.B) {
 				recoded[i] = makeChunkSeriesTestChunk(b, samples)
 			}
 
+			series := newChunkSeriesTestSeries(recoded)
+
 			b.Run("new", func(b *testing.B) {
 				b.ReportAllocs()
 
 				for b.Loop() {
-					iterator := NewChunkSeriesChunksIterator(recoded)
+					iterator := series.Iterator(nil)
 
 					for iterator.Next() {
 						meta := iterator.At()
@@ -46,11 +48,11 @@ func BenchmarkChunkSeriesChunksIterator(b *testing.B) {
 			})
 
 			b.Run("reuse", func(b *testing.B) {
-				iterator := NewChunkSeriesChunksIterator(recoded)
+				iterator := series.Iterator(nil)
 				b.ReportAllocs()
 
 				for b.Loop() {
-					iterator.ResetTo(recoded)
+					iterator = series.Iterator(iterator)
 
 					for iterator.Next() {
 						meta := iterator.At()

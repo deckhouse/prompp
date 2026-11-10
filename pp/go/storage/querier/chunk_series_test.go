@@ -35,7 +35,8 @@ func (s *ChunkSeriesChunksIteratorSuite) SetupTest() {
 
 func (s *ChunkSeriesChunksIteratorSuite) TestAtRetainsChunkAfterNext() {
 	// Arrange
-	iterator := NewChunkSeriesChunksIterator(s.recoded)
+	series := newChunkSeriesTestSeries(s.recoded)
+	iterator := series.Iterator(nil)
 	s.Require().True(iterator.Next())
 	first := iterator.At()
 
@@ -92,7 +93,8 @@ func (s *ChunkSeriesChunksIteratorSuite) TestIteratorReuseRetainsPreviousSeries(
 
 func (s *ChunkSeriesChunksIteratorSuite) TestRepeatedAtReturnsCurrentChunk() {
 	// Arrange
-	iterator := NewChunkSeriesChunksIterator(s.recoded)
+	series := newChunkSeriesTestSeries(s.recoded)
+	iterator := series.Iterator(nil)
 	s.Require().True(iterator.Next())
 	first := iterator.At()
 
@@ -104,27 +106,10 @@ func (s *ChunkSeriesChunksIteratorSuite) TestRepeatedAtReturnsCurrentChunk() {
 	s.Equal(s.expected[0], readChunkSeriesTestSamples(s.T(), repeated.Chunk))
 }
 
-func (s *ChunkSeriesChunksIteratorSuite) TestResetToRetainsPreviousChunks() {
-	// Arrange
-	iterator := NewChunkSeriesChunksIterator(s.recoded)
-	s.Require().True(iterator.Next())
-	retained := iterator.At()
-	expected := []chunkSeriesTestSample{{timestamp: 100, value: 42}}
-	replacement := []cppbridge.RecodedChunk{makeChunkSeriesTestChunk(s.T(), expected)}
-
-	// Act
-	iterator.ResetTo(replacement)
-	advanced := iterator.Next()
-
-	// Assert
-	s.Require().True(advanced)
-	s.Equal(s.expected[0], readChunkSeriesTestSamples(s.T(), retained.Chunk))
-	s.Equal(expected, readChunkSeriesTestSamples(s.T(), iterator.At().Chunk))
-}
-
 func (s *ChunkSeriesChunksIteratorSuite) TestRetainedChunksAfterExhaustion() {
 	// Arrange
-	iterator := NewChunkSeriesChunksIterator(s.recoded)
+	series := newChunkSeriesTestSeries(s.recoded)
+	iterator := series.Iterator(nil)
 	var retained []chunks.Meta
 
 	// Act

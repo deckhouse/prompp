@@ -157,16 +157,8 @@ type ChunkSeriesChunksIterator struct {
 	meta   chunks.Meta
 }
 
-// NewChunkSeriesChunksIterator init new [ChunkSeriesChunksIterator].
-func NewChunkSeriesChunksIterator(recodedChunks []cppbridge.RecodedChunk) *ChunkSeriesChunksIterator {
-	ci := &ChunkSeriesChunksIterator{}
-	ci.ResetTo(recodedChunks)
-
-	return ci
-}
-
 // At returns the current meta, whose chunk remains unchanged after [ChunkSeriesChunksIterator.Next]
-// and [ChunkSeriesChunksIterator.ResetTo].
+// and reuse through [ChunkSeries.Iterator].
 func (ci *ChunkSeriesChunksIterator) At() chunks.Meta {
 	return ci.meta
 }
@@ -189,16 +181,6 @@ func (ci *ChunkSeriesChunksIterator) Next() bool {
 	ci.idx++
 
 	return true
-}
-
-// ResetTo starts a new traversal of recodedChunks without changing previously returned chunks.
-func (ci *ChunkSeriesChunksIterator) ResetTo(recodedChunks []cppbridge.RecodedChunk) {
-	ci.idx = 0
-	ci.chunks = make([]chunkSeriesChunk, len(recodedChunks))
-
-	for i, recodedChunk := range recodedChunks {
-		ci.chunks[i] = newChunkSeriesChunk(recodedChunk)
-	}
 }
 
 //
