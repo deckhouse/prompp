@@ -81,7 +81,7 @@ func BenchmarkChunkSeriesLifecycle(b *testing.B) {
 			query := dataStorage.Query(cppbridge.DataStorageQuery{
 				StartTimestampMs: interval.MinT,
 				EndTimestampMs:   interval.MaxT,
-				LabelSetIDs:      []uint32{0},
+				LabelSetIDs:      cppbridge.GoLabelSetIDs([]uint32{0}),
 			}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
 			require.Equal(b, cppbridge.DataStorageQueryStatusSuccess, query.Status)
 			newSet := func() *ChunkSeriesSet {
