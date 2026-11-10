@@ -1,10 +1,13 @@
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
+#include "bare_bones/compiler.h"
+
+// Suppress array-bounds diagnostics from the parallel_hashmap headers.
+PROMPP(diagnostic, push)
+PROMPP(diagnostic, ignore, array_bounds)
 #include <parallel_hashmap/btree.h>
 #include <parallel_hashmap/phmap.h>
-#pragma GCC diagnostic pop
+PROMPP(diagnostic, pop)
 
 #include <experimental/scope>
 
