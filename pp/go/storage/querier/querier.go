@@ -372,7 +372,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			start := slots.Start()
 			result := s.DataStorage().InstantQuery(
 				q.maxt,
-				lssQueryResult.IDs(),
+				lssQueryResult.LabelSetIDs(),
 				uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))), // #nosec G103 // it's meant to be that way
 			)
 			slots.Since(shardID, slotDataStorageQuery, start)
@@ -564,7 +564,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 			}
 
 			shard.DataStorage().QueryStaleNaNSeries(
-				res.IDs(),
+				res.LabelSetIDs(),
 				uintptr(unsafe.Pointer(unsafe.SliceData(staleNaNSeries[shardID]))), // #nosec G103 // it's safe to use
 			)
 
@@ -586,7 +586,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 
 			nameIDs := poolProvider.GetNameIDs(len(hints.Grouping))
 			shard.LSS().LabelNameToIDs(hints.Grouping, nameIDs)
-			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(res.IDs(), nameIDs)
+			seriesGroups[shardID] = shard.LSS().GroupSeriesByLabelNames(res.LabelSetIDs(), nameIDs)
 			poolProvider.PutNameIDs(nameIDs)
 
 			return nil
@@ -853,7 +853,7 @@ func queryDataStorage[
 				cppbridge.DataStorageQuery{
 					StartTimestampMs: mint,
 					EndTimestampMs:   maxt,
-					LabelSetIDs:      lssQueryResult.IDs(),
+					LabelSetIDs:      lssQueryResult.LabelSetIDs(),
 				},
 				cppbridge.NoDownsampling,
 				hints,

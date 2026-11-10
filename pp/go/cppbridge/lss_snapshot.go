@@ -95,10 +95,18 @@ type SeriesGroups struct {
 	Groups [][]uint32
 }
 
+// Group returns one group bound to these groups as its owner. The group ids live in
+// C-allocated memory freed by this object's finalizer, so they travel as LabelSetIDs.
+func (g *SeriesGroups) Group(i int) LabelSetIDs {
+	return LabelSetIDs{ids: g.Groups[i], owner: g}
+}
+
 // GroupSeriesByLabelNames group series by label names.
-func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *SeriesGroups {
+func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs LabelSetIDs, labelNameIDs []uint32) *SeriesGroups {
+	defer seriesIDs.keepAlive()
+
 	result := &SeriesGroups{
-		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),
+		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs.slice(), labelNameIDs),
 	}
 	runtime.SetFinalizer(result, func(result *SeriesGroups) {
 		primitivesGroupSeriesByLabelNamesFree(result.Groups)
@@ -213,9 +221,9 @@ func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
 	return r.matches[i], r.labelSetLengths[i]
 }
 
-// IDs return labels sets ids.
-func (r *LSSQueryResult) IDs() []uint32 {
-	return r.matches
+// LabelSetIDs returns the matched ids bound to this result as their owner.
+func (r *LSSQueryResult) LabelSetIDs() LabelSetIDs {
+	return LabelSetIDs{ids: r.matches, owner: r}
 }
 
 // LabelSetLengths return labels sets lengths.

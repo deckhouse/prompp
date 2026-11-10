@@ -94,7 +94,7 @@ func (s *SeriesSetTestSuite) query(
 	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
-		LabelSetIDs:      lssQueryResult.IDs(),
+		LabelSetIDs:      lssQueryResult.LabelSetIDs(),
 	}, downsamplingMs, hints)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
@@ -122,7 +122,7 @@ func (s *SeriesSetTestSuite) queryAggr(
 	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
-		LabelSetIDs:      lssQueryResult.IDs(),
+		LabelSetIDs:      lssQueryResult.LabelSetIDs(),
 	}, downsamplingMs, hints)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)

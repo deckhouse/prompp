@@ -50,7 +50,7 @@ func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []b
 // InstantQuery make instant query to data storage and fills samples in instant series.
 func (ds *DataStorage) InstantQuery(
 	targetTimestamp int64,
-	ids []uint32,
+	ids cppbridge.LabelSetIDs,
 	samples uintptr,
 ) cppbridge.DataStorageQueryResult {
 	ds.locker.RLock()
@@ -88,7 +88,7 @@ func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 // series in ids directly into the C-shared series slice (pointed to by series).
-func (ds *DataStorage) QueryStaleNaNSeries(ids []uint32, series uintptr) {
+func (ds *DataStorage) QueryStaleNaNSeries(ids cppbridge.LabelSetIDs, series uintptr) {
 	ds.locker.RLock()
 	ds.dataStorage.QueryStaleNaNSeries(ids, series)
 	ds.locker.RUnlock()

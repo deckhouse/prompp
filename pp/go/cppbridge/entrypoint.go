@@ -2196,14 +2196,14 @@ func getPromqlCppFunctions() []PromqlCppFunction {
 
 func seriesDataDataStorageQueryV2(
 	dataStorage uintptr,
-	query DataStorageQuery,
+	query dataStorageQueryABI,
 	serializedData *DataStorageSerializedData,
 	downsamplingMs int64,
 	selectHints unsafe.Pointer,
 ) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage    uintptr
-		query          DataStorageQuery
+		query          dataStorageQueryABI
 		downsamplingMs int64
 		selectHints    uintptr
 	}{dataStorage, query, downsamplingMs, uintptr(selectHints)}

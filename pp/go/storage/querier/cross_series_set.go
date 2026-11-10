@@ -221,7 +221,7 @@ func NewCrossChunkIterator(
 		seriesGroups:   seriesGroups,
 		chunkIterator: cppbridge.NewDataStorageSerializedDataMultiSeriesIterator(
 			serializedData,
-			seriesGroups.Groups[groupIndex],
+			seriesGroups.Group(groupIndex),
 		),
 		mint: mint,
 		maxt: maxt,
@@ -320,7 +320,7 @@ func (it *CrossChunkIterator) reset(
 	it.mint = mint
 	it.maxt = maxt
 	it.isInitialized = false
-	it.chunkIterator.Reset(serializedData, seriesGroups.Groups[groupIndex])
+	it.chunkIterator.Reset(serializedData, seriesGroups.Group(groupIndex))
 }
 
 //

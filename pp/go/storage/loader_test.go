@@ -215,7 +215,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   2,
-		LabelSetIDs:      []uint32{0},
+		LabelSetIDs:      cppbridge.GoLabelSetIDs([]uint32{0}),
 	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
 	err := loadedHead.Close()
 
@@ -267,7 +267,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   4,
-		LabelSetIDs:      []uint32{0},
+		LabelSetIDs:      cppbridge.GoLabelSetIDs([]uint32{0}),
 	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
 
 	err := loadedHead.Close()
@@ -713,7 +713,7 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   math.MaxInt64,
-		LabelSetIDs:      []uint32{0},
+		LabelSetIDs:      cppbridge.GoLabelSetIDs([]uint32{0}),
 	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
 	record, err := s.catalog.Get(loadedHead.ID())
 	s.Require().NoError(err)

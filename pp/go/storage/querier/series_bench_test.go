@@ -45,7 +45,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, d
 	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
-		LabelSetIDs:      lssQueryResult.IDs(),
+		LabelSetIDs:      lssQueryResult.LabelSetIDs(),
 	}, downsamplingMs, &storage.SelectHints{})
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)

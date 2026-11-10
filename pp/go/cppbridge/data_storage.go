@@ -127,15 +127,40 @@ func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *UnusedSeriesDataUnloade
 	return unloader
 }
 
+// DataStorageQuery is the query as callers state it. LabelSetIDs carries the owner of
+// the ids, so a C-allocated buffer cannot be freed while C++ reads it.
 type DataStorageQuery struct {
+	StartTimestampMs int64
+	EndTimestampMs   int64
+	LabelSetIDs      LabelSetIDs
+}
+
+// dataStorageQueryABI is the ABI counterpart: it is embedded verbatim into the bridge
+// args struct, so its layout must stay exactly what the C++ side reads — a 16-byte
+// TimeInterval followed by a 24-byte Go slice header. The asserts below fail to compile
+// if that drifts, which neither the compiler nor go vet would otherwise notice.
+type dataStorageQueryABI struct {
 	StartTimestampMs int64
 	EndTimestampMs   int64
 	LabelSetIDs      []uint32
 }
 
+const (
+	_ = uint(unsafe.Sizeof(dataStorageQueryABI{}) - 40)
+	_ = uint(40 - unsafe.Sizeof(dataStorageQueryABI{}))
+)
+
 func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selectHints unsafe.Pointer) DataStorageQueryResult {
+	defer query.LabelSetIDs.keepAlive()
+
+	abi := dataStorageQueryABI{
+		StartTimestampMs: query.StartTimestampMs,
+		EndTimestampMs:   query.EndTimestampMs,
+		LabelSetIDs:      query.LabelSetIDs.slice(),
+	}
+
 	sd := NewDataStorageSerializedData(ds)
-	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs, selectHints)
+	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, abi, sd, downsamplingMs, selectHints)
 	runtime.KeepAlive(selectHints)
 	return DataStorageQueryResult{
 		Querier:        querier,
@@ -146,16 +171,20 @@ func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selec
 
 // InstantQuery finds, for each series in labelSetIDs, the sample closest to (at or before) targetTimestamp
 // and writes it into the C-shared samples slice (pointed to by samples), in the same order as labelSetIDs.
-func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
-	r := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
+func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs LabelSetIDs, samples uintptr) DataStorageQueryResult {
+	defer labelSetIDs.keepAlive()
+
+	r := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs.slice(), targetTimestamp, samples)
 	runtime.KeepAlive(ds)
 	return r
 }
 
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 // series in seriesIDs directly into the C-shared series slice (pointed to by series).
-func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
-	seriesDataDataStorageQueryStaleNaNSeries(ds.dataStorage, seriesIDs, series)
+func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs LabelSetIDs, series uintptr) {
+	defer seriesIDs.keepAlive()
+
+	seriesDataDataStorageQueryStaleNaNSeries(ds.dataStorage, seriesIDs.slice(), series)
 	runtime.KeepAlive(ds)
 }
 

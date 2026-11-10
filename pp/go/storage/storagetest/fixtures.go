@@ -283,7 +283,7 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 
 	instantSeries := querier.NewInstantSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
-	dsQueryResult := ds.InstantQuery(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
+	dsQueryResult := ds.InstantQuery(targetTimestamp, lssQueryResult.LabelSetIDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}
@@ -348,7 +348,7 @@ func StaleNaNQuery(
 	series := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
 	ds.QueryStaleNaNSeries(
-		lssQueryResult.IDs(),
+		lssQueryResult.LabelSetIDs(),
 		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
 	)
 
