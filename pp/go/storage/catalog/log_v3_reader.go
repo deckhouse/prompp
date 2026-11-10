@@ -28,6 +28,7 @@ type recordReader struct {
 	file          *FileHandler
 	minUsed       int64
 	buffer        [maxRecordSizeV3]byte
+	remainder     []byte
 	lastReadValid bool
 }
 
@@ -76,7 +77,12 @@ func (r *recordReader) Read(sr *SerializedRecord) error {
 func (r *recordReader) resynchronize(offset int64, cause error) error {
 	fh := r.file
 	r.lastReadValid = false
-	rest := make([]byte, fh.journalEnd-offset)
+	size := fh.journalEnd - offset
+	if int64(cap(r.remainder)) < size {
+		r.remainder = make([]byte, size)
+	}
+
+	rest := r.remainder[:size]
 	if _, readErr := fh.file.ReadAt(rest, offset); readErr != nil {
 		return unexpectedEOF(readErr)
 	}

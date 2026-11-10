@@ -2,10 +2,14 @@ package catalog
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"testing"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/require"
 )
 
 func (s *V3FileTestSuite) TestV3Compact_AlternatesJournalsAndClearsTail() {
@@ -157,5 +161,44 @@ func (s *V3FileTestSuite) TestV3Read_ResynchronizesDamagedFrames() {
 			s.Equal(last.id, got.id)
 			s.Require().ErrorIs(s.fl.Read(&got), io.EOF)
 		})
+	}
+}
+
+func BenchmarkV3ReadResynchronizesDamagedFrames(b *testing.B) {
+	fl, err := NewFileLogV3(filepath.Join(b.TempDir(), "head.log"))
+	require.NoError(b, err)
+	b.Cleanup(func() { require.NoError(b, fl.Close()) })
+	frame, err := appendFrameV3(nil, &newAppendTestRecord(1, 100).SerializedRecord)
+	require.NoError(b, err)
+	damaged := append([]byte(nil), frame...)
+	damaged[recordChecksumOffsetV3] ^= 0xFF
+	image := make([]byte, journalSizeV3)
+	offset := 0
+
+	for _, next := range [][]byte{damaged, frame, damaged, frame} {
+		offset += copy(image[offset:], next)
+	}
+
+	require.NoError(b, fl.file.WriteFixed(image))
+	reader := recordReader{file: fl.file}
+	var record SerializedRecord
+	b.ReportAllocs()
+
+	for b.Loop() {
+		fl.file.readOffset = fl.file.journalStart
+
+		for range 2 {
+			if err := reader.Read(&record); !errors.Is(err, ErrRecordChecksumMismatch) {
+				b.Fatalf("expected damaged frame: %v", err)
+			}
+
+			if err := reader.Read(&record); err != nil {
+				b.Fatal(err)
+			}
+		}
+
+		if err := reader.Read(&record); !errors.Is(err, io.EOF) {
+			b.Fatalf("expected journal end: %v", err)
+		}
 	}
 }
