@@ -8,17 +8,66 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
-// deltaTestLog captures the latest write without retaining the caller's record pointer.
+// deltaTestLog copies each write and can interleave an in-memory update before returning.
 type deltaTestLog struct {
 	FileLog
-	last SerializedRecord
-	err  error
+	last    SerializedRecord
+	err     error
+	onWrite func()
 }
 
 func (l *deltaTestLog) Write(sr *SerializedRecord) error {
 	l.last = *sr
 
+	if l.onWrite != nil {
+		l.onWrite()
+	}
+
 	return l.err
+}
+
+func (s *V3FileTestSuite) TestV3Catalog_MutationsPreserveSegmentCountAdvancedDuringWrite() {
+	for _, mutation := range []struct {
+		name  string
+		apply func(*Catalog, string) error
+	}{
+		{name: "delete", apply: (*Catalog).Delete},
+		{
+			name: "mark corrupted",
+			apply: func(c *Catalog, id string) error {
+				_, err := c.SetCorrupted(id)
+
+				return err
+			},
+		},
+		{
+			name: "status and time bounds",
+			apply: func(c *Catalog, id string) error {
+				_, err := c.SetStatusWithTimeBounds(id, StatusRotated, 10, 20)
+
+				return err
+			},
+		},
+	} {
+		s.Run(mutation.name, func() {
+			// Arrange
+			log := &deltaTestLog{FileLog: *s.fl}
+			c, err := New(clockwork.NewFakeClock(), log, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil)
+			s.Require().NoError(err)
+			record, err := c.Create(4)
+			s.Require().NoError(err)
+			record.SetNumberOfSegments(42)
+			log.onWrite = func() { record.SetNumberOfSegments(43) }
+
+			// Act
+			err = mutation.apply(c, record.ID())
+
+			// Assert
+			s.Require().NoError(err)
+			s.Equal(uint32(42), log.last.numberOfSegments)
+			s.Equal(uint32(43), record.NumberOfSegments())
+		})
+	}
 }
 
 func (s *V3FileTestSuite) TestV3Catalog_WritesSmallDeltaWithoutMutatingOnFailure() {

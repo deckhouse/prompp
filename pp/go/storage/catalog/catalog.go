@@ -232,14 +232,11 @@ func (c *Catalog) Delete(id string) error {
 	changed := r.SerializedRecord
 	changed.deletedAt = c.clock.Now().UnixMilli()
 	changed.updatedAt = changed.deletedAt
-	changed.fields = diffFields(&r.SerializedRecord, &changed) | fieldUpdatedAt | fieldSegmentsCount
 
-	if err := c.log.Write(&changed); err != nil {
-		return fmt.Errorf(logWriteErr, err)
+	if err := c.persistRecordChanges(r, &changed); err != nil {
+		return err
 	}
 
-	c.logRecords++
-	applyRecordChanges(&r.SerializedRecord, &changed, changed.fields&^fieldSegmentsCount)
 	c.tombstones++
 	delete(c.records, r.id.String())
 
@@ -298,14 +295,10 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 	changed := r.SerializedRecord
 	changed.corrupted = true
 	changed.updatedAt = c.clock.Now().UnixMilli()
-	changed.fields = diffFields(&r.SerializedRecord, &changed) | fieldUpdatedAt | fieldSegmentsCount
 
-	if err = c.log.Write(&changed); err != nil {
-		return r, fmt.Errorf(logWriteErr, err)
+	if err = c.persistRecordChanges(r, &changed); err != nil {
+		return r, err
 	}
-
-	c.logRecords++
-	applyRecordChanges(&r.SerializedRecord, &changed, changed.fields&^fieldSegmentsCount)
 
 	c.corruptedHead.Inc()
 
@@ -471,6 +464,23 @@ func (c *Catalog) listWithFilter(filterFn func(record *Record) bool) []*Record {
 	return records
 }
 
+// persistRecordChanges writes a delta to [Log] before applying it to [Record].
+// The journal includes the copied segment count; memory excludes it because the WAL writer
+// may have advanced it since the copy was taken, independently of the catalog mutex.
+// See .wiki/openspec/changes/catalog-v3/design.md, the delta presence-mask decision.
+func (c *Catalog) persistRecordChanges(r *Record, changed *SerializedRecord) error {
+	changed.fields = diffFields(&r.SerializedRecord, changed) | fieldUpdatedAt | fieldSegmentsCount
+
+	if err := c.log.Write(changed); err != nil {
+		return fmt.Errorf(logWriteErr, err)
+	}
+
+	c.logRecords++
+	applyRecordChanges(&r.SerializedRecord, changed, changed.fields&^fieldSegmentsCount)
+
+	return nil
+}
+
 // persistStatusWithTimeBounds writes status and time bound changes to [Log] before updating [Record].
 func (c *Catalog) persistStatusWithTimeBounds(r *Record, status Status, mint, maxt int64) (_ *Record, err error) {
 	if r.status == status && r.mint == mint && r.maxt == maxt {
@@ -486,14 +496,10 @@ func (c *Catalog) persistStatusWithTimeBounds(r *Record, status Status, mint, ma
 	changed.mint = mint
 	changed.maxt = maxt
 	changed.updatedAt = c.clock.Now().UnixMilli()
-	changed.fields = diffFields(&r.SerializedRecord, &changed) | fieldUpdatedAt | fieldSegmentsCount
 
-	if err = c.log.Write(&changed); err != nil {
-		return r, fmt.Errorf(logWriteErr, err)
+	if err = c.persistRecordChanges(r, &changed); err != nil {
+		return r, err
 	}
-
-	c.logRecords++
-	applyRecordChanges(&r.SerializedRecord, &changed, changed.fields&^fieldSegmentsCount)
 
 	if status == StatusActive {
 		c.activeHeadCreatedAt.Set(float64(r.createdAt))
