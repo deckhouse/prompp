@@ -66,6 +66,9 @@ type Log interface {
 	// Size return current size of [FileHandler].
 	Size() int
 
+	// StrictRead reports whether errors other than [io.EOF] and [CorruptedRecordError] must abort loading.
+	StrictRead() bool
+
 	// Write [Record] to [FileLog].
 	Write(srecord *SerializedRecord) error
 }
@@ -604,7 +607,7 @@ func (c *Catalog) sync() error {
 				continue
 			}
 
-			if fl, ok := c.log.(*FileLog); ok && fl.version == LogFileVersionV3 {
+			if c.log.StrictRead() {
 				return err
 			}
 

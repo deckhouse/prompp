@@ -27,6 +27,9 @@ import (
 //			SizeFunc: func() int {
 //				panic("mock out the Size method")
 //			},
+//			StrictReadFunc: func() bool {
+//				panic("mock out the StrictRead method")
+//			},
 //			WriteFunc: func(srecord *catalog.SerializedRecord) error {
 //				panic("mock out the Write method")
 //			},
@@ -49,6 +52,9 @@ type LogMock struct {
 	// SizeFunc mocks the Size method.
 	SizeFunc func() int
 
+	// StrictReadFunc mocks the StrictRead method.
+	StrictReadFunc func() bool
+
 	// WriteFunc mocks the Write method.
 	WriteFunc func(srecord *catalog.SerializedRecord) error
 
@@ -68,6 +74,8 @@ type LogMock struct {
 		}
 		// Size holds details about calls to the Size method.
 		Size []struct{}
+		// StrictRead holds details about calls to the StrictRead method.
+		StrictRead []struct{}
 		// Write holds details about calls to the Write method.
 		Write []struct {
 			// Srecord is the srecord argument value.
@@ -78,6 +86,7 @@ type LogMock struct {
 	lockReWrite      sync.RWMutex
 	lockRead         sync.RWMutex
 	lockSize         sync.RWMutex
+	lockStrictRead   sync.RWMutex
 	lockWrite        sync.RWMutex
 }
 
@@ -190,6 +199,30 @@ func (mock *LogMock) SizeCalls() []struct{} {
 	mock.lockSize.RLock()
 	calls = mock.calls.Size
 	mock.lockSize.RUnlock()
+	return calls
+}
+
+// StrictRead calls StrictReadFunc.
+func (mock *LogMock) StrictRead() bool {
+	if mock.StrictReadFunc == nil {
+		panic("LogMock.StrictReadFunc: method is nil but Log.StrictRead was just called")
+	}
+	callInfo := struct{}{}
+	mock.lockStrictRead.Lock()
+	mock.calls.StrictRead = append(mock.calls.StrictRead, callInfo)
+	mock.lockStrictRead.Unlock()
+	return mock.StrictReadFunc()
+}
+
+// StrictReadCalls gets all the calls that were made to StrictRead.
+// Check the length with:
+//
+//	len(mockedLog.StrictReadCalls())
+func (mock *LogMock) StrictReadCalls() []struct{} {
+	var calls []struct{}
+	mock.lockStrictRead.RLock()
+	calls = mock.calls.StrictRead
+	mock.lockStrictRead.RUnlock()
 	return calls
 }
 

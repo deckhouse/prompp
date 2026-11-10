@@ -274,6 +274,7 @@ func (s *CatalogSuite) TestSeedReadsTwoRecords() {
 func (s *CatalogSuite) TestSyncReadError_CompactSucceeds() {
 	l := &LogMock{
 		NeedsRewriteFunc: func() bool { return false },
+		StrictReadFunc:   func() bool { return false },
 		ReadFunc:         func(*catalog.SerializedRecord) error { return errors.New("corrupt read") },
 		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
 	}
@@ -289,6 +290,7 @@ func (s *CatalogSuite) TestSyncReadError_CompactFails() {
 	expectedError := errors.New("rewrite failed")
 	l := &LogMock{
 		NeedsRewriteFunc: func() bool { return false },
+		StrictReadFunc:   func() bool { return false },
 		ReadFunc:         func(*catalog.SerializedRecord) error { return errors.New("corrupt read") },
 		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return expectedError },
 	}
@@ -296,6 +298,24 @@ func (s *CatalogSuite) TestSyncReadError_CompactFails() {
 	_, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
 	s.Require().ErrorIs(err, expectedError)
 	s.Require().ErrorContains(err, "failed to sync catalog")
+}
+
+func (s *CatalogSuite) TestSyncReadError_StrictLogFails() {
+	// Arrange
+	expectedError := io.ErrUnexpectedEOF
+	l := &LogMock{
+		NeedsRewriteFunc: func() bool { return true },
+		StrictReadFunc:   func() bool { return true },
+		ReadFunc:         func(*catalog.SerializedRecord) error { return expectedError },
+		ReWriteFunc:      func(...*catalog.SerializedRecord) error { return nil },
+	}
+
+	// Act
+	c, err := catalog.New(s.clock, l, s.gen, catalog.DefaultMaxLogFileSize, nil)
+
+	// Assert
+	s.Require().ErrorIs(err, expectedError)
+	s.Nil(c)
 }
 
 func (s *CatalogSuite) TestCreate_CompactWhenSizeAtThresholdThenWrite() {

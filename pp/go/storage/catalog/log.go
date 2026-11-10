@@ -179,6 +179,11 @@ func (fl *FileLog) Size() int {
 	return fl.file.Size()
 }
 
+// StrictRead reports whether the source format requires unrecoverable read errors to abort loading.
+func (fl *FileLog) StrictRead() bool {
+	return fl.isFixedV3()
+}
+
 // Write appends a [SerializedRecord] and syncs it before reporting success.
 func (fl *FileLog) Write(sr *SerializedRecord) error {
 	if fl.NeedsRewrite() {
