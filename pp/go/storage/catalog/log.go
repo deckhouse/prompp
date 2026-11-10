@@ -57,6 +57,8 @@ func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
 		return nil, err
 	}
 
+	logger.Errorf("unreadable log file: filepath=%s error=%v", sourceFilePath, err)
+
 	sourceErr := err
 	sourceFilePath = fmt.Sprintf("%s.compacted", filePath)
 	fl, err = openFileLog(filePath, sourceFilePath, targetVersion, syncDir)
@@ -67,6 +69,8 @@ func NewFileLog(filePath string, targetVersion uint64) (*FileLog, error) {
 	if !errors.Is(sourceErr, ErrUnreadableLogFile) || !errors.Is(err, ErrUnreadableLogFile) {
 		return nil, errors.Join(sourceErr, err)
 	}
+
+	logger.Errorf("unreadable log file: filepath=%s error=%v", sourceFilePath, err)
 
 	return newFileLogByVersion(filePath, targetVersion)
 }
