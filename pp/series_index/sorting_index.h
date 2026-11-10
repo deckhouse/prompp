@@ -60,8 +60,9 @@ class SortingIndexBuilder {
   }
 
   PROMPP_ALWAYS_INLINE void rebuild(uint32_t ls_id_bound) {
+    // A snapshot can share the current buffer, so the index is always rebuilt in a new one
+    index_.clear();
     if (ls_id_set_.empty()) {
-      index_.index.clear();
       return;
     }
 
