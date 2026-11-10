@@ -118,4 +118,41 @@ TEST_F(SortingIndexFixture, IndexSnapshot) {
   EXPECT_THAT(series_ids, testing::ElementsAre("a"_idx, "b"_idx, "c"_idx, "d"_idx));
 }
 
+TEST_F(SortingIndexFixture, RebuildDoesNotChangeSnapshot) {
+  // Arrange
+  SortingIndexBuilder<Set, SharedVector, kItems.size() + 1> index{set_};
+  set_.emplace(0);
+  set_.emplace(1);
+  set_.emplace(2);
+  set_.emplace(3);
+  index.build(static_cast<uint32_t>(kItems.size()));
+  const series_index::SortingIndex<SharedSpan> snapshot(index.index());
+  const std::vector<uint32_t> expected(snapshot.index.begin(), snapshot.index.end());
+  set_.erase("a"_idx);
+
+  // Act
+  index.rebuild(static_cast<uint32_t>(kItems.size()));
+
+  // Assert
+  EXPECT_THAT(snapshot.index, testing::ElementsAreArray(expected));
+  EXPECT_NE(snapshot.index.data(), index.index().index.data());
+}
+
+TEST_F(SortingIndexFixture, RebuildWithEmptySetDoesNotChangeSnapshot) {
+  // Arrange
+  SortingIndexBuilder<Set, SharedVector, kItems.size() + 1> index{set_};
+  set_.emplace(0);
+  set_.emplace(1);
+  index.build(2);
+  const series_index::SortingIndex<SharedSpan> snapshot(index.index());
+  set_.clear();
+
+  // Act
+  index.rebuild(2);
+
+  // Assert
+  EXPECT_EQ(snapshot.index.size(), 2U);
+  EXPECT_TRUE(index.empty());
+}
+
 }  // namespace

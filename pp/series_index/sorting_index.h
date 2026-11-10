@@ -60,8 +60,9 @@ class SortingIndexBuilder {
   }
 
   PROMPP(inline) void rebuild(uint32_t ls_id_bound) {
+    // A snapshot can share the current buffer. Rebuild the index in a new buffer.
+    index_.clear();
     if (ls_id_set_.empty()) {
-      index_.index.clear();
       return;
     }
 

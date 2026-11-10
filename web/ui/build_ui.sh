@@ -21,20 +21,29 @@ then
 fi
 
 buildOrder=(lezer-promql codemirror-promql)
+assetsDir="./static"
 
 function buildModule() {
   for module in "${buildOrder[@]}"; do
     echo "build ${module}"
-    npm run build -w "@prometheus-io/${module}"
+    pnpm --filter "@prometheus-io/${module}" run build
   done
 }
 
 function buildReactApp() {
   echo "build react-app"
-  npm run build -w @prometheus-io/app
-  rm -rf ./static/react
-  mkdir -p ./static
-  mv ./react-app/build ./static/react
+  (cd react-app && pnpm run build)
+  mkdir -p ${assetsDir}
+  rm -rf ${assetsDir}/react-app
+  mv ./react-app/build ${assetsDir}/react-app
+}
+
+function buildMantineUI() {
+  echo "build mantine-ui"
+  pnpm --filter @prometheus-io/mantine-ui run build
+  mkdir -p ${assetsDir}
+  rm -rf ${assetsDir}/mantine-ui
+  mv ./mantine-ui/dist ${assetsDir}/mantine-ui
 }
 
 for i in "$@"; do
@@ -42,12 +51,17 @@ for i in "$@"; do
   --all)
     buildModule
     buildReactApp
+    buildMantineUI
     shift
     ;;
   --build-module)
     buildModule
     shift
     ;;
+  --mantine-ui)
+    buildModule
+    buildMantineUI
+    shift
+    ;;
   esac
 done
-
