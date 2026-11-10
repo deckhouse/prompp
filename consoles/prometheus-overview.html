@@ -45,7 +45,7 @@
   </tr>
   <tr>
     <td>Notification Queue</td>
-    <td>{{ template "prom_query_drilldown" (args (printf "prometheus_notifications_queue_length{job='prometheus',instance='%s'}" .Params.instance) "" "humanize") }}</td>
+    <td>{{ template "prom_query_drilldown" (args (printf "max(prometheus_notifications_queue_length{job='prometheus',instance='%s'})" .Params.instance) "" "humanize") }}</td>
   </tr>
   <tr>
     <th colspan="2">HTTP Server</th>
