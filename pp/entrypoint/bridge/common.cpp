@@ -1,4 +1,5 @@
 #include "common.h"
+#include "annotations.hpp"
 #include "bare_bones/jemalloc.h"
 
 #if !JEMALLOC_AVAILABLE
@@ -7,21 +8,39 @@
 
 #include "primitives/go_slice.h"
 
-extern "C" void prompp_free_bytes(void* args) {
+/**
+ * @brief Free memory allocated for response as []byte
+ *
+ * @param args *[]byte
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_free_bytes(void* args) {
   using Slice = PromPP::Primitives::Go::Slice<char>;
+  using Arguments = Slice;
 
-  static_cast<Slice*>(args)->~Slice();
+  static_cast<Arguments*>(args)->~Slice();
 }
 
 extern "C" void je_jemalloc_constructor(void);
 
-extern "C" void prompp_jemalloc_init() {
+/**
+ * @brief Initialize jemalloc for the selected CPU implementation.
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_jemalloc_init() {
 #if JEMALLOC_AVAILABLE
   je_jemalloc_constructor();
 #endif
 }
 
-extern "C" void prompp_mem_info(void* res) {
+/**
+ * @brief Return allocator memory statistics.
+ *
+ * @param res {
+ *   in_use    int64 // active bytes
+ *   allocated int64 // allocated bytes
+ *   resident  int64 // resident bytes
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_mem_info(void* res) {
   struct Result {
     int64_t in_use;
     int64_t allocated;
@@ -47,7 +66,17 @@ extern "C" void prompp_mem_info(void* res) {
 #endif
 }
 
-extern "C" void prompp_dump_memory_profile([[maybe_unused]] void* args, void* res) {
+/**
+ * @brief Dump jemalloc memory profile to file
+ *
+ * @param args {
+ *     filename string
+ * }
+ * @param res {
+ *     error int32
+ * }
+ */
+extern "C" PROMPP(entrypoint, cgo) void prompp_dump_memory_profile([[maybe_unused]] void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::String filename;
   };

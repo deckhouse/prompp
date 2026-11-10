@@ -1,8 +1,19 @@
 #include "samples_iterator.h"
+#include "annotations.hpp"
 
 #include "entrypoint/types/serialization.h"
 
-extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_ctor(void* args) {
+/**
+ * @brief Create a samples iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     iterator       uintptr // pointer to caller-owned iterator storage.
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_samples_iterator_ctor(void* args) {
   struct Arguments {
     entrypoint::types::SamplesIterator* iterator;
     entrypoint::types::SerializedDataPtr serialized_data;
@@ -13,13 +24,30 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   std::visit([in](auto& serialized_data) { std::construct_at(in->iterator, serialized_data.samples_iterator(in->chunk_ref)); }, *in->serialized_data);
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* iterator) {
+/**
+ * @brief Advance samples iterator.
+ *
+ * @param args uintptr // pointer to samples iterator
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_samples_iterator_next(void* args) {
+  using Arguments = entrypoint::types::SamplesIterator;
+
   using series_data::decoder::DecodeIteratorSentinel;
 
-  ++(*static_cast<entrypoint::types::SamplesIterator*>(iterator));
+  ++(*static_cast<Arguments*>(args));
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_seek(void* args) {
+/**
+ * @brief Advance samples iterator until referenced sample is gte targetTimestamp.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to samples iterator
+ *     targetTimestamp int64 // target timestamp
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_samples_iterator_seek(void* args) {
   using series_data::decoder::DecodeIteratorSentinel;
 
   struct Arguments {
@@ -31,7 +59,16 @@ extern "C" void prompp_series_data_serialization_serialized_data_samples_iterato
   in->iterator->seek_to(in->target_timestamp);
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_samples_iterator_reset(void* args) {
+/**
+ * @brief Reset a samples iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to caller-owned iterator storage
+ *     serialized_data uintptr // pointer to serialized data
+ *     chunk_ref uint32 // inner chunk id
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_series_data_serialization_serialized_data_samples_iterator_reset(void* args) {
   struct Arguments {
     entrypoint::types::SamplesIterator* iterator;
     entrypoint::types::SerializedDataPtr serialized_data;

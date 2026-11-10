@@ -1,7 +1,15 @@
+#include "annotations.hpp"
 #include "entrypoint/types/lss.h"
 #include "wal/output_decoder.h"
 
-extern "C" void prompp_remote_write_message_list_dtor(void* args) {
+/**
+ * @brief Destroy the message list.
+ *
+ * @param args {
+ *     message_list []Message
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_remote_write_message_list_dtor(void* args) {
   struct Arguments {
     PromPP::Primitives::Go::Slice<PromPP::WAL::GoMessage> message_list;
   };
@@ -9,9 +17,24 @@ extern "C" void prompp_remote_write_message_list_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
+namespace {
+
 using MessageEncoder = PromPP::WAL::ProtobufEncoder;
 
-extern "C" void prompp_remote_write_message_encoders_ctor(void* args, void* res) {
+}  // namespace
+
+/**
+ * @brief Create the message encoder list.
+ *
+ * @param args {
+ *     encoders_count uint64
+ * }
+ *
+ * @param res {
+ *     encoders []MessageEncoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_remote_write_message_encoders_ctor(void* args, void* res) {
   struct Arguments {
     uint64_t encoders_count;
   };
@@ -24,7 +47,14 @@ extern "C" void prompp_remote_write_message_encoders_ctor(void* args, void* res)
   new (&out->encoders) PromPP::Primitives::Go::Slice<MessageEncoder>(static_cast<Arguments*>(args)->encoders_count);
 }
 
-extern "C" void prompp_remote_write_message_encoders_dtor(void* args) {
+/**
+ * @brief Destroy the message encoder list.
+ *
+ * @param args {
+ *     encoders []MessageEncoder
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_remote_write_message_encoders_dtor(void* args) {
   struct Arguments {
     PromPP::Primitives::Go::Slice<MessageEncoder> encoders;
   };
@@ -32,7 +62,19 @@ extern "C" void prompp_remote_write_message_encoders_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_remote_write_encode_message(void* args) {
+/**
+ * @brief Encode a remote write message.
+ *
+ * @param args {
+ *     encoder        *MessageEncoder
+ *     snapshot_list  []uintptr
+ *     message_index  uint64
+ *     messages_count uint64
+ *     messages       []Message
+ * }
+ *
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_remote_write_encode_message(void* args) {
   struct Arguments {
     MessageEncoder* encoder;
     PromPP::Primitives::Go::SliceView<entrypoint::types::SnapshotLSSVariantPtr> snapshot_list;

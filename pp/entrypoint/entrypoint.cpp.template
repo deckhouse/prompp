@@ -5,6 +5,8 @@
 #define PROMPP_PLATFORM_ARM64 1
 #endif
 
+#include "entrypoint/bridge/annotations.hpp"
+
 #include <cstdint>
 #include <cstring>
 
@@ -79,12 +81,17 @@ static arch_flavor determine_arch_flavor() {
 #undef DEFINE_RESOLVER
 
 const char* prompp_flavor = nullptr;
-extern "C" void prompp_get_flavor(void* res) {
-  using res_t = struct {
+/**
+ * @brief Return the selected CPU implementation name.
+ *
+ * @param res *string // receives a view of a name that remains valid for the process lifetime.
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_get_flavor(void* res) {
+  using Result = struct {
     const char* data;
     size_t len;
   };
-  res_t* out = reinterpret_cast<res_t*>(res);
+  Result* out = reinterpret_cast<Result*>(res);
   out->data = prompp_flavor;
   out->len = 0;
   if (prompp_flavor != nullptr) {
