@@ -86,7 +86,7 @@ func (s *V3FileTestSuite) TestReopenV3File_EmptyJournal() {
 	s.Require().Equal(journalOffsetV3(0), reopened.file.writeOffset)
 
 	emptyJournal := make([]byte, journalSizeV3)
-	for index := uint8(0); index < fileHeaderSlotsCount; index++ {
+	for index := range uint8(fileHeaderSlotsCount) {
 		journal := make([]byte, journalSizeV3)
 		_, err = reopened.file.file.ReadAt(journal, journalOffsetV3(index))
 		s.Require().NoError(err)

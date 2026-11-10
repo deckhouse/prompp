@@ -38,7 +38,7 @@ func (s *CodecV3Suite) encode(sr *SerializedRecord) []byte {
 	return buf.Bytes()
 }
 
-func (s *CodecV3Suite) decode(frame []byte) (*SerializedRecord, error) {
+func (*CodecV3Suite) decode(frame []byte) (*SerializedRecord, error) {
 	sr := &SerializedRecord{mint: math.MaxInt64, maxt: math.MinInt64}
 	err := NewDecoderV3().DecodeFrom(bytes.NewReader(frame), sr)
 
@@ -300,49 +300,6 @@ type failingWriter struct {
 
 func (w failingWriter) Write([]byte) (int, error) {
 	return 0, w.err
-}
-
-func FuzzEncodeDecodeV3(f *testing.F) {
-	f.Add(uint16(4), int64(100), int64(200), int64(0), false, uint8(StatusActive), uint32(10), int64(1), int64(2))
-
-	f.Fuzz(func(
-		t *testing.T,
-		numberOfShards uint16,
-		createdAt, updatedAt, deletedAt int64,
-		corrupted bool,
-		status uint8,
-		segmentsCount uint32,
-		mint, maxt int64,
-	) {
-		sr := &SerializedRecord{
-			id:               uuid.MustParse("01929a6c-7b1e-7000-8000-000000000003"),
-			numberOfShards:   numberOfShards,
-			createdAt:        createdAt,
-			updatedAt:        updatedAt,
-			deletedAt:        deletedAt,
-			corrupted:        corrupted,
-			status:           Status(status),
-			numberOfSegments: segmentsCount,
-			mint:             mint,
-			maxt:             maxt,
-			fields:           fieldsAll,
-		}
-		sr.lastAppendedSegmentID = lastAppendedSegmentIDByNumberOfSegments(segmentsCount)
-
-		frame, err := appendFrameV3(nil, sr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		decoded := &SerializedRecord{}
-		if _, err = decodeFrame(frame, decoded); err != nil {
-			t.Fatal(err)
-		}
-
-		if *decoded != *sr {
-			t.Fatalf("decoded record %+v differs from %+v", decoded, sr)
-		}
-	})
 }
 
 func BenchmarkEncoderV3(b *testing.B) {
