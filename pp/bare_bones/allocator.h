@@ -7,7 +7,7 @@
 #include "preprocess.h"
 
 #if JEMALLOC_AVAILABLE
-#include <jemalloc/jemalloc.h>
+#  include <jemalloc/jemalloc.h>
 #endif
 
 namespace BareBones {

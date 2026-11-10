@@ -177,9 +177,7 @@ class BytesStream : public std::ostream {
   output_buffer buffer_;
 };
 
-constexpr String operator""_gs(const char* value, size_t len) noexcept {
-  return String(std::string_view(value, len));
-}
+constexpr String operator""_gs(const char* value, size_t len) noexcept { return String(std::string_view(value, len)); }
 
 }  // namespace PromPP::Primitives::Go
 

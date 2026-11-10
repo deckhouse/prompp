@@ -24,9 +24,7 @@ struct GenericLengthAndMask {
   bool operator==(const GenericLengthAndMask& other) const noexcept = default;
 };
 
-PROMPP_ALWAYS_INLINE uint32_t keys_size(uint32_t size) noexcept {
-  return (size + 3) / 4;
-}
+PROMPP_ALWAYS_INLINE uint32_t keys_size(uint32_t size) noexcept { return (size + 3) / 4; }
 
 class Codec1234 {
  public:

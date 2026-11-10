@@ -7,9 +7,9 @@
 #include "allocator.h"
 
 #if JEMALLOC_AVAILABLE
-#include <jemalloc/jemalloc.h>
+#  include <jemalloc/jemalloc.h>
 
-#include <unistd.h>
+#  include <unistd.h>
 #endif
 
 namespace BareBones::jemalloc {

@@ -3,7 +3,7 @@
 #include "bare_bones/jemalloc.h"
 
 #if !JEMALLOC_AVAILABLE
-#include <malloc.h>
+#  include <malloc.h>
 #endif
 
 #include "primitives/go_slice.h"

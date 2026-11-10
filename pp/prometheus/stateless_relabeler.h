@@ -35,9 +35,7 @@ PROMPP_ALWAYS_INLINE bool label_name_is_valid(const std::string_view& name) {
 }
 
 // label_value_is_valid validate label value.
-PROMPP_ALWAYS_INLINE bool label_value_is_valid(const std::string_view& value) noexcept {
-  return simdutf::validate_utf8(value.data(), value.length());
-}
+PROMPP_ALWAYS_INLINE bool label_value_is_valid(const std::string_view& value) noexcept { return simdutf::validate_utf8(value.data(), value.length()); }
 
 // metric_name_value_is_valid validate value for metric name(__name__).
 PROMPP_ALWAYS_INLINE bool metric_name_value_is_valid(const std::string_view& value) {

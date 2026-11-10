@@ -17,9 +17,7 @@ PROMPP_ALWAYS_INLINE void write_byte(uint8_t* memory, uint8_t byt, uint8_t unfil
   *reinterpret_cast<uint16_t*>(memory) |= value;
 }
 
-PROMPP_ALWAYS_INLINE void write_single_bit(uint8_t* memory, uint8_t rest_of_bits_in_byte) noexcept {
-  *memory |= 0b1u << (rest_of_bits_in_byte - 1);
-}
+PROMPP_ALWAYS_INLINE void write_single_bit(uint8_t* memory, uint8_t rest_of_bits_in_byte) noexcept { *memory |= 0b1u << (rest_of_bits_in_byte - 1); }
 
 template <std::array kAllocationSizesTable>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, BareBones::AllocationSize>
