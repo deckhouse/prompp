@@ -260,6 +260,11 @@ func (fl *FileLog) needsCompaction(maxSize int) bool {
 
 // rewriteV2 adopts the replacement after rename and closes both files if syncing the directory fails.
 func (fl *FileLog) rewriteV2(srecords []*SerializedRecord, syncDirectory func(string) error) error {
+	_, decoder, err := codecsByVersion(fl.targetVersion)
+	if err != nil {
+		return fmt.Errorf("create replacement decoder: %w", err)
+	}
+
 	oldFile := fl.file
 	swapFilePath := fl.filePath + ".compacted"
 	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.targetVersion, fl.encoder, srecords...)
@@ -269,7 +274,7 @@ func (fl *FileLog) rewriteV2(srecords []*SerializedRecord, syncDirectory func(st
 
 	fl.file = newFile
 	fl.version = fl.targetVersion
-	_, fl.decoder, _ = codecsByVersion(fl.version)
+	fl.decoder = decoder
 	fl.migration = getMigration(fl.version, fl.version)
 	if err = oldFile.Close(); err != nil {
 		logger.Errorf("failed to close old file: %v", err)
