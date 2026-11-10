@@ -77,6 +77,7 @@ func (s *RemoteRead) ApplyConfig(conf *config.Config) error {
 		c, err := remote.NewReadClient(name, &remote.ClientConfig{
 			URL:              rrConf.URL,
 			Timeout:          rrConf.RemoteTimeout,
+			ChunkedReadLimit: rrConf.ChunkedReadLimit,
 			HTTPClientConfig: rrConf.HTTPClientConfig,
 			Headers:          rrConf.Headers,
 		})
