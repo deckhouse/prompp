@@ -65,7 +65,7 @@ func (s *V3FileTestSuite) TestV3Append_FullJournalSurvivesReopen() {
 
 	s.crashAndReopen()
 
-	s.Require().Nil(s.fl.file.appendErr)
+	s.Require().NoError(s.fl.file.appendErr)
 	s.Require().Equal(s.fl.file.journalEnd-1, s.fl.file.writeOffset)
 	s.Require().ErrorIs(s.fl.Write(&newAppendTestRecord(1, 100).SerializedRecord), ErrJournalFull)
 	s.requireV3FileSizeOnDisk(s.filePath)
@@ -85,8 +85,7 @@ func (s *V3FileTestSuite) TestV3Append_TornTailRequiresRewrite() {
 	s.Require().NoError(s.fl.Write(&first.SerializedRecord))
 	offset := s.fl.file.writeOffset
 	s.Require().NoError(s.fl.Write(&second.SerializedRecord))
-	_, err := s.fl.file.file.WriteAt([]byte{0xFF}, offset+int64(recordChecksumOffsetV3))
-	s.Require().NoError(err)
+	s.corruptRecordByte(s.fl, offset+int64(recordChecksumOffsetV3), 1)
 	s.crashAndReopen()
 	before, err := s.fl.file.file.Stat()
 	s.Require().NoError(err)
@@ -232,7 +231,28 @@ func (s *V3FileTestSuite) TestV3Header_UnexpectedFileSizeIsRejected() {
 	s.Require().Nil(fl)
 }
 
-func (s *V3FileTestSuite) TestV3Open_TerminatorBeforeCheckpointIsAnError() {
+func (s *V3FileTestSuite) TestV3Open_ScannedTailIsCorruptionWhenZeroed() {
+	first := newAppendTestRecord(1, 100)
+	s.Require().NoError(s.fl.Write(&first.SerializedRecord))
+	offset := s.fl.file.writeOffset
+	s.Require().NoError(s.fl.Write(&newAppendTestRecord(2, 200).SerializedRecord))
+	s.crashAndReopen()
+	header, _, err := readFileHeaderV3(s.fl.file.file)
+	s.Require().NoError(err)
+	s.Zero(header.activeUsed)
+	_, err = s.fl.file.file.WriteAt(make([]byte, s.fl.file.writeOffset-offset), offset)
+	s.Require().NoError(err)
+
+	var got SerializedRecord
+	s.Require().NoError(s.fl.Read(&got))
+	s.Equal(first.id, got.id)
+	var damaged *CorruptedRecordError
+	s.Require().ErrorAs(s.fl.Read(&got), &damaged)
+	s.Equal(offset, damaged.Offset)
+	s.Require().ErrorIs(s.fl.Read(&got), io.EOF)
+}
+
+func (s *V3FileTestSuite) TestV3Open_TerminatorBeforeCheckpointRequiresRecovery() {
 	s.Require().NoError(s.fl.Write(&newAppendTestRecord(1, 100).SerializedRecord))
 	s.Require().NoError(s.fl.Close())
 	f, err := os.OpenFile(s.filePath, os.O_RDWR, logFilePerm)
@@ -245,12 +265,17 @@ func (s *V3FileTestSuite) TestV3Open_TerminatorBeforeCheckpointIsAnError() {
 
 	fl, err := NewFileLogV3(s.filePath)
 
-	s.Require().ErrorIs(err, io.ErrUnexpectedEOF)
-	s.Require().NotErrorIs(err, io.EOF)
-	s.Require().Nil(fl)
+	s.Require().NoError(err)
+	s.fl = fl
+	var record SerializedRecord
+	s.Require().ErrorAs(fl.Read(&record), new(*CorruptedRecordError))
 	after, err := os.ReadFile(s.filePath)
 	s.Require().NoError(err)
-	s.Require().True(bytes.Equal(before, after), "opening must preserve the journal with a premature terminator")
+	s.Require().True(bytes.Equal(before, after), "opening must preserve the journal before catalog recovery")
+	fl.file.readOffset = fl.file.journalStart
+	_, err = New(clockwork.NewFakeClock(), fl, DefaultIDGenerator{}, DefaultMaxLogFileSize, nil)
+	s.Require().NoError(err)
+	s.Require().NoError(fl.Write(&newAppendTestRecord(2, 200).SerializedRecord))
 }
 
 func (s *V3FileTestSuite) TestV3Read_StopsAtJournalBoundary() {
@@ -272,6 +297,16 @@ func (s *V3FileTestSuite) TestV3WriteFixed_RejectsInvalidOffsets() {
 	}
 
 	s.requireV3FileSizeOnDisk(s.filePath)
+}
+
+// corruptRecordByte flips the selected bits at an absolute file offset to guarantee corruption.
+func (s *V3FileTestSuite) corruptRecordByte(fl *FileLog, offset int64, mask byte) {
+	var value [1]byte
+	_, err := fl.file.file.ReadAt(value[:], offset)
+	s.Require().NoError(err)
+	value[0] ^= mask
+	_, err = fl.file.file.WriteAt(value[:], offset)
+	s.Require().NoError(err)
 }
 
 func (s *V3FileTestSuite) crashAndReopen() {
