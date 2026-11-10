@@ -224,6 +224,9 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 		return ErrJournalFull
 	}
 
+	fl.file.pendingAppendEnd = max(fl.file.pendingAppendEnd, offset+int64(len(frame)))
+	frame = append(frame, make([]byte, fl.file.pendingAppendEnd-offset-int64(len(frame)))...)
+
 	if err = fl.file.WriteFixed(frame); err != nil {
 		return fmt.Errorf("v3: write record: %w", err)
 	}
@@ -233,6 +236,7 @@ func (fl *FileLog) appendV3(sr *SerializedRecord) error {
 	}
 
 	encoder.buffer = frame[:frameLen]
+	fl.file.pendingAppendEnd = 0
 	fl.file.writeOffset += int64(frameLen)
 	fl.file.activeUsed = fl.file.writeOffset - fl.file.journalStart
 

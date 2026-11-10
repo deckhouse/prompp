@@ -27,6 +27,8 @@ type FileHandler struct {
 	// Successful appends and opening scans advance it beyond the persisted header checkpoint.
 	activeUsed int64
 	appendErr  error
+	// pendingAppendEnd bounds bytes possibly written by failed appends, including their terminators.
+	pendingAppendEnd int64
 }
 
 // NewFileHandler init new [FileHandler].

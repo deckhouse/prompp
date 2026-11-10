@@ -4,6 +4,7 @@ package catalog
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -61,7 +62,35 @@ func (s *FileSyncSuite) TestFileLogWriteSyncFailureV2() {
 }
 
 func (s *FileSyncSuite) TestFileLogWriteSyncFailureV3() {
-	s.requireAppendSyncFailure(LogFileVersionV3)
+	// Arrange
+	path := filepath.Join(s.T().TempDir(), "head.log")
+	fl, err := NewFileLogV3(path)
+	s.Require().NoError(err)
+	s.T().Cleanup(func() { s.Require().NoError(fl.Close()) })
+	initial := newAppendTestRecord(1, 100)
+	s.Require().NoError(fl.Write(&initial.SerializedRecord))
+	offset, used := fl.file.writeOffset, fl.file.activeUsed
+	failed := newAppendTestRecord(2, 200)
+	s.requireV3AppendSyncFailure(fl, &failed.SerializedRecord)
+	failed.fields = fieldStatus | fieldUpdatedAt | fieldSegmentsCount
+	s.requireV3AppendSyncFailure(fl, &failed.SerializedRecord)
+	s.Equal(offset, fl.file.writeOffset)
+	s.Equal(used, fl.file.activeUsed)
+	retry := SerializedRecord{id: failed.id, fields: fieldStatus, status: StatusRotated}
+
+	// Act
+	s.Require().NoError(fl.Write(&retry))
+	s.Require().NoError(fl.Close())
+	fl, err = NewFileLogV3(path)
+	s.Require().NoError(err)
+
+	// Assert
+	var got SerializedRecord
+	s.Require().NoError(fl.Read(&got))
+	s.Equal(initial.SerializedRecord, got)
+	s.Require().NoError(fl.Read(&got))
+	s.Equal(retry, got)
+	s.Require().ErrorIs(fl.Read(&got), io.EOF)
 }
 
 func (s *FileSyncSuite) TestNewLegacyLogSyncFailureRemovesFile() {
@@ -96,20 +125,21 @@ func (s *FileSyncSuite) requireAppendSyncFailure(version uint64) {
 	s.Require().NoError(err)
 	fl := &FileLog{version: version, targetVersion: version, encoder: encoder, file: s.file}
 
-	if version == LogFileVersionV3 {
-		s.file.fixedSize = true
-		s.file.size = fileSizeV3
-		s.file.journalStart = fileHeaderAreaSizeV3
-		s.file.journalEnd = fileHeaderAreaSizeV3 + journalSizeV3
-		s.file.writeOffset = s.file.journalStart
-	}
-
 	err = fl.Write(&newAppendTestRecord(1, 100).SerializedRecord)
 
 	s.Require().ErrorIs(err, syscall.EINVAL)
+}
 
-	if version == LogFileVersionV3 {
-		s.Equal(s.file.journalStart, s.file.writeOffset)
-		s.Zero(s.file.activeUsed)
-	}
+// requireV3AppendSyncFailure stages the frame on disk and uses /dev/null to fail the same append's fsync.
+func (s *FileSyncSuite) requireV3AppendSyncFailure(fl *FileLog, record *SerializedRecord) {
+	s.T().Helper()
+	frame, err := appendFrameV3(nil, record)
+	s.Require().NoError(err)
+	s.Require().NoError(fl.file.WriteFixed(append(frame, recordVersionEndV3)))
+	file := fl.file.file
+	fl.file.file = s.file.file
+	err = fl.Write(record)
+	fl.file.file = file
+
+	s.Require().ErrorIs(err, syscall.EINVAL)
 }

@@ -34,6 +34,18 @@ const (
 	notFoundErr = "not found: %s"
 )
 
+const (
+	// metadataRestored keeps the head available after successful directory inspection.
+	metadataRestored metadataRecoveryOutcome = iota
+	// metadataDeferred preserves the head for recovery at the next startup.
+	metadataDeferred
+	// metadataForgotten removes the head whose directory no longer exists.
+	metadataForgotten
+)
+
+// metadataRecoveryOutcome determines whether a head stays available, awaits recovery, or is removed.
+type metadataRecoveryOutcome uint8
+
 //
 // Log
 //
@@ -510,20 +522,23 @@ func (c *Catalog) repairRecords(suspect map[uuid.UUID]struct{}, minUpdated map[u
 	for id, record := range c.records {
 		_, damaged := suspect[record.id]
 		if record.numberOfShards == 0 {
-			restored, err := c.restoreRecordMetadata(record, minUpdated[record.id])
-			if err != nil {
+			outcome, err := c.restoreRecordMetadata(record, minUpdated[record.id])
+			changed = true
+
+			switch outcome {
+			case metadataRestored:
+				damaged = true
+			case metadataDeferred:
 				logger.Warnf("deferring head metadata recovery until next startup: id=%s err=%v", id, err)
 				c.pendingRecords[id] = record
-			}
+				delete(c.records, id)
 
-			changed = true
-			if !restored {
+				continue
+			case metadataForgotten:
 				delete(c.records, id)
 
 				continue
 			}
-
-			damaged = true
 		}
 
 		if damaged && (record.status == StatusActive || record.status == StatusNew) {
@@ -537,24 +552,24 @@ func (c *Catalog) repairRecords(suspect map[uuid.UUID]struct{}, minUpdated map[u
 
 // restoreRecordMetadata fills missing shard and creation metadata for a head.
 // Heads without WAL shards are marked [StatusPersisted] for garbage collection.
-// It returns false for missing directories or unavailable inspection; errors defer recovery until the next startup.
-func (c *Catalog) restoreRecordMetadata(record *Record, fallback int64) (bool, error) {
+// Deferred recovery returns an error describing why inspection is unavailable.
+func (c *Catalog) restoreRecordMetadata(record *Record, fallback int64) (metadataRecoveryOutcome, error) {
 	id := record.id.String()
 	if !record.fields.has(fieldCreatedAt) {
 		record.createdAt = c.recoveredCreationTime(record.id, fallback)
 	}
 
 	if c.inspector == nil {
-		return false, fmt.Errorf("restore head %s: directory inspector is unavailable", id)
+		return metadataDeferred, fmt.Errorf("restore head %s: directory inspector is unavailable", id)
 	}
 
 	shards, err := c.inspector.NumberOfShards(id)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return metadataForgotten, nil
 	}
 
 	if err != nil {
-		return false, fmt.Errorf("inspect head %s: %w", id, err)
+		return metadataDeferred, fmt.Errorf("inspect head %s: %w", id, err)
 	}
 
 	record.numberOfShards = shards
@@ -562,7 +577,7 @@ func (c *Catalog) restoreRecordMetadata(record *Record, fallback int64) (bool, e
 		record.status = StatusPersisted
 	}
 
-	return true, nil
+	return metadataRestored, nil
 }
 
 // sync catalog with [Log].

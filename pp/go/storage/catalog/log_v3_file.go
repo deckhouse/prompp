@@ -100,6 +100,7 @@ func (fl *FileLog) rewriteV3(records []*SerializedRecord) error {
 	fl.file.writeOffset = fl.file.journalStart + int64(used)
 	fl.file.appendErr = nil
 	fl.file.activeUsed = int64(used)
+	fl.file.pendingAppendEnd = 0
 
 	return nil
 }
