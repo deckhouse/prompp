@@ -140,4 +140,31 @@ INSTANTIATE_TEST_SUITE_P(NonIntegerValue,
                          AscIntegerEncoderIsActualFixture,
                          testing::Values(IsActualCase{.values = {-1.0, 0.0}, .value = -1.1, .expected = false}));
 
+INSTANTIATE_TEST_SUITE_P(
+    IntegerRange,
+    AscIntegerEncoderCanBeEncodedFixture,
+    testing::Values(CanBeEncodedCase{.value1 = -0x1p63, .value1_count = 1, .value2 = 0.0, .value3 = 0.0, .expected = false},
+                    CanBeEncodedCase{.value1 = 0x1.fffffffffffffp62, .value1_count = 1, .value2 = -0x1p63, .value3 = -0x1p63, .expected = false},
+                    CanBeEncodedCase{.value1 = 0x1p63, .value1_count = 2, .value2 = STALE_NAN, .value3 = 0x1p63, .expected = false},
+                    CanBeEncodedCase{.value1 = -0x1p63, .value1_count = 1, .value2 = -0x1.fffffffffffffp62, .value3 = -0x1.ffffffffffffep62, .expected = true},
+                    CanBeEncodedCase{.value1 = -1.0, .value1_count = 1, .value2 = 2147483646.0, .value3 = 2147483646.0, .expected = true},
+                    CanBeEncodedCase{.value1 = -1.0, .value1_count = 1, .value2 = 2147483647.0, .value3 = 2147483647.0, .expected = false},
+                    CanBeEncodedCase{.value1 = -1.0, .value1_count = 1, .value2 = 0x1p-54, .value3 = 1.0, .expected = false},
+                    CanBeEncodedCase{.value1 = -1.0, .value1_count = 1, .value2 = -0x1p-54, .value3 = 1.0, .expected = false},
+                    CanBeEncodedCase{.value1 = 0x1.fffffffffffffp62, .value1_count = 1, .value2 = 0x1p63, .value3 = 0x1p63, .expected = false}));
+
+TEST(AscIntegerEncoderRangeTest, RejectsOverflowingAppendWithoutChangingLastValue) {
+  // Arrange
+  AscIntegerEncoder encoder(-0x1p63);
+  encoder.encode_second(-0x1p63);
+  series_data::EncodingState state{.encoding_type = series_data::EncodingType::kAscInteger, .has_last_stalenan = false};
+
+  // Act
+  const bool accepted = encoder.encode(state, 0.0);
+
+  // Assert
+  EXPECT_FALSE(accepted);
+  EXPECT_EQ(-0x1p63, encoder.last_value(state));
+}
+
 }  // namespace
