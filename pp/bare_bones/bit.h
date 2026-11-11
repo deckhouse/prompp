@@ -9,7 +9,7 @@
 #include "preprocess.h"
 
 #ifdef __x86_64__
-#include <x86intrin.h>
+#  include <x86intrin.h>
 #endif
 
 namespace BareBones::Bit {

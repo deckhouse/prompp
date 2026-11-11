@@ -13,9 +13,26 @@ native_binary(
 )
 
 cc_library(
+    name = "bare_bones_preprocessor",
+    hdrs = [
+        "bare_bones/compiler.h",
+        "bare_bones/macro.h",
+        "bare_bones/preprocess.h",
+    ],
+)
+
+cc_library(
     name = "bare_bones_headers",
-    hdrs = glob(["bare_bones/*.h"]),
+    hdrs = glob(
+        ["bare_bones/*.h"],
+        exclude = [
+            "bare_bones/compiler.h",
+            "bare_bones/macro.h",
+            "bare_bones/preprocess.h",
+        ],
+    ),
     deps = [
+        ":bare_bones_preprocessor",
         "@lz4",
         "@parallel_hashmap",
         "@xxHash",
@@ -262,10 +279,12 @@ cc_library(
     name = "entrypoint_init",
     srcs = glob(["entrypoint/init/*.cpp"]),
     hdrs = glob([
+        "entrypoint/bridge/annotations.hpp",
         "entrypoint/init/**/*.h",
         "entrypoint/init/**/*.hpp",
     ]),
     linkstatic = True,
+    deps = [":bare_bones_preprocessor"],
 )
 
 cc_static_library(

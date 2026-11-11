@@ -71,7 +71,7 @@ class MetricsPageControlBlock {
   PROMPP_ALWAYS_INLINE void detach() noexcept { ref_count_ = 0; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
  private:
   MetricsPageControlBlock* next_metrics_page_{};

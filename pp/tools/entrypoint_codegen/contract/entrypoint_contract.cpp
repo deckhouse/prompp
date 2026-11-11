@@ -87,13 +87,9 @@ void validate_fastcgo_function(diagnostics::DiagnosticSet& diagnostic_set, facts
 
 }  // namespace
 
-bool is_entrypoint_function_name(std::string_view name) {
-  return name.starts_with(kFunctionNamePrefix);
-}
+bool is_entrypoint_function_name(std::string_view name) { return name.starts_with(kFunctionNamePrefix); }
 
-bool is_void_pointer_type(std::string_view type) {
-  return type == "void *" || type == "void*";
-}
+bool is_void_pointer_type(std::string_view type) { return type == "void *" || type == "void*"; }
 
 facts::BridgeKind bridge_kind_for_annotation(std::string_view annotation) {
   using facts::BridgeKind;

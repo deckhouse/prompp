@@ -2,12 +2,12 @@
 
 #include <cstdint>
 #if __has_include(<spanstream>)  // sanity checks..
-#if __cplusplus <= 202002L
-#error "Please set -std="c++2b" or similar flag for C++23 for your compiler."
-#endif
-#include <spanstream>
+#  if __cplusplus <= 202002L
+#    error "Please set -std="c++2b" or similar flag for C++23 for your compiler."
+#  endif
+#  include <spanstream>
 #else
-#error "Your C++ Standard library doesn't implement the std::spanstream. Make sure that you use conformant Library (e.g., libstdc++ from GCC 12)"
+#  error "Your C++ Standard library doesn't implement the std::spanstream. Make sure that you use conformant Library (e.g., libstdc++ from GCC 12)"
 #endif
 
 #include "bare_bones/preprocess.h"

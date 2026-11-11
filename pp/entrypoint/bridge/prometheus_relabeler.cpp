@@ -1,4 +1,5 @@
 #include "prometheus_relabeler.h"
+#include "annotations.hpp"
 
 #include "entrypoint/types/exception.h"
 #include "entrypoint/types/hashdex.h"
@@ -6,6 +7,8 @@
 
 #include "primitives/go_slice.h"
 #include "prometheus/relabeler.h"
+
+namespace {
 
 using entrypoint::types::LssVariantPtr;
 using PromPP::Primitives::Go::SliceView;
@@ -23,7 +26,21 @@ using CachePtr = std::unique_ptr<Cache>;
 using StatelessRelabeler = PromPP::Prometheus::Relabel::StatelessRelabeler;
 using StatelessRelabelerPtr = std::unique_ptr<StatelessRelabeler>;
 
-extern "C" void prompp_prometheus_stateless_relabeler_ctor(void* args, void* res) {
+}  // namespace
+
+/**
+ * @brief Construct a new StatelessRelabeler.
+ *
+ * @param args {
+ *     go_rcfgs            []*Config // go slice with pointer RelabelConfig;
+ * }
+ *
+ * @param res {
+ *     stateless_relabeler uintptr   // pointer to constructed StatelessRelabeler;
+ *     error               []byte    // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_stateless_relabeler_ctor(void* args, void* res) {
   struct Arguments {
     SliceView<PromPP::Prometheus::Relabel::GORelabelConfig*> go_rcfgs;
   };
@@ -43,7 +60,14 @@ extern "C" void prompp_prometheus_stateless_relabeler_ctor(void* args, void* res
   }
 }
 
-extern "C" void prompp_prometheus_stateless_relabeler_dtor(void* args) {
+/**
+ * @brief Destroy StatelessRelabeler
+ *
+ * @param args {
+ *     stateless_relabeler uintptr // pointer of StatelessRelabeler;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_stateless_relabeler_dtor(void* args) {
   struct Arguments {
     StatelessRelabelerPtr stateless_relabeler;
   };
@@ -51,7 +75,19 @@ extern "C" void prompp_prometheus_stateless_relabeler_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_stateless_relabeler_reset_to(void* args, void* res) {
+/**
+ * @brief reset_to reset configs and replace on new converting go-config.
+ *
+ * @param args {
+ *     stateless_relabeler uintptr   // pointer to constructed StatelessRelabeler;
+ *     go_rcfgs            []*Config // go slice with pointer RelabelConfig;
+ * }
+ *
+ * @param res {
+ *     error               []byte    // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_stateless_relabeler_reset_to(void* args, void* res) {
   struct Arguments {
     StatelessRelabelerPtr stateless_relabeler;
     SliceView<PromPP::Prometheus::Relabel::GORelabelConfig*> go_rcfgs;
@@ -75,7 +111,14 @@ extern "C" void prompp_prometheus_stateless_relabeler_reset_to(void* args, void*
 // InnerSeries
 //
 
-extern "C" void prompp_prometheus_inner_series_ctor(void* args) {
+/**
+ * @brief initialize slice of InnerSeries
+ *
+ * @param args {
+ *     innerSeries []InnerSeries
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_inner_series_ctor(void* args) {
   struct Arguments {
     SliceView<InnerSeries> inner_series;
   };
@@ -84,7 +127,14 @@ extern "C" void prompp_prometheus_inner_series_ctor(void* args) {
   std::uninitialized_default_construct_n(inner_series.begin(), inner_series.size());
 }
 
-extern "C" void prompp_prometheus_inner_series_dtor(void* args) {
+/**
+ * @brief Destroy slice of InnerSeries
+ *
+ * @param args {
+ *      innerSeries []InnerSeries
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_inner_series_dtor(void* args) {
   struct Arguments {
     SliceView<InnerSeries> inner_series;
   };
@@ -93,7 +143,14 @@ extern "C" void prompp_prometheus_inner_series_dtor(void* args) {
   std::destroy_n(inner_series.begin(), inner_series.size());
 }
 
-extern "C" void prompp_prometheus_inner_series_reset(void* args) {
+/**
+ * @brief Reset slice of InnerSeries
+ *
+ * @param args {
+ *      innerSeries []InnerSeries
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_inner_series_reset(void* args) {
   struct Arguments {
     SliceView<InnerSeries> inner_series;
   };
@@ -108,7 +165,14 @@ extern "C" void prompp_prometheus_inner_series_reset(void* args) {
 // RelabeledSeries
 //
 
-extern "C" void prompp_prometheus_relabeled_series_ctor(void* args) {
+/**
+ * @brief initialize slice of RelabeledSeries
+ *
+ * @param args {
+ *     relabeledSeries []RelabeledSeries
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeled_series_ctor(void* args) {
   struct Arguments {
     SliceView<RelabeledSeries> relabeled_series;
   };
@@ -117,7 +181,14 @@ extern "C" void prompp_prometheus_relabeled_series_ctor(void* args) {
   std::uninitialized_default_construct_n(relabeled_series.begin(), relabeled_series.size());
 }
 
-extern "C" void prompp_prometheus_relabeled_series_dtor(void* args) {
+/**
+ * @brief Destroy slice of RelabeledSeries
+ *
+ * @param args {
+ *      relabeledSeries []RelabeledSeries
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeled_series_dtor(void* args) {
   struct Arguments {
     SliceView<RelabeledSeries> relabeled_series;
   };
@@ -126,7 +197,14 @@ extern "C" void prompp_prometheus_relabeled_series_dtor(void* args) {
   std::destroy_n(relabeled_series.begin(), relabeled_series.size());
 }
 
-extern "C" void prompp_prometheus_relabeled_series_reset(void* args) {
+/**
+ * @brief Reset slice of RelabeledSeries
+ *
+ * @param args {
+ *      relabeledSeries []RelabeledSeries
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeled_series_reset(void* args) {
   struct Arguments {
     SliceView<RelabeledSeries> relabeled_series;
   };
@@ -141,7 +219,14 @@ extern "C" void prompp_prometheus_relabeled_series_reset(void* args) {
 // RelabelerStateUpdate
 //
 
-extern "C" void prompp_prometheus_relabeler_state_update_ctor(void* args) {
+/**
+ * @brief Initialize slice of RelabelerStateUpdate.
+ *
+ * @param args {
+ *     relabeler_state_update []RelabelerStateUpdate
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeler_state_update_ctor(void* args) {
   struct Arguments {
     SliceView<RelabelerStateUpdate> relabeler_state_update;
   };
@@ -150,7 +235,14 @@ extern "C" void prompp_prometheus_relabeler_state_update_ctor(void* args) {
   std::uninitialized_default_construct_n(relabeler_state_update.begin(), relabeler_state_update.size());
 }
 
-extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
+/**
+ * @brief Destroy slice of RelabelerStateUpdate.
+ *
+ * @param args {
+ *      relabeler_state_update []RelabelerStateUpdate
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeler_state_update_dtor(void* args) {
   struct Arguments {
     SliceView<RelabelerStateUpdate> relabeler_state_update;
   };
@@ -159,7 +251,14 @@ extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
   std::destroy_n(relabeler_state_update.begin(), relabeler_state_update.size());
 }
 
-extern "C" void prompp_prometheus_relabeler_state_update_reset(void* args) {
+/**
+ * @brief Reset slice of RelabelerStateUpdate.
+ *
+ * @param args {
+ *      relabeler_state_update []RelabelerStateUpdate
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabeler_state_update_reset(void* args) {
   struct Arguments {
     SliceView<RelabelerStateUpdate> relabeler_state_update;
   };
@@ -174,10 +273,29 @@ extern "C" void prompp_prometheus_relabeler_state_update_reset(void* args) {
 // PerShardRelabeler
 //
 
+namespace {
+
 using PerShardRelabeler = PromPP::Prometheus::Relabel::PerShardRelabeler;
 using PerShardRelabelerPtr = std::unique_ptr<PerShardRelabeler>;
 
-extern "C" void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res) {
+}  // namespace
+
+/**
+ * @brief Construct a new PerShardRelabeler.
+ *
+ * @param args {
+ *     external_labels     []Label // slice with external labels;
+ *     stateless_relabeler uintptr // pointer to constructed stateless relabeler;
+ *     number_of_shards    uint16  // total number of shards
+ *     shard_id            uint16  // current shard id
+ * }
+ *
+ * @param res {
+ *     per_shard_relabeler uintptr // pointer to constructed PerShardRelabeler;
+ *     error               []byte  // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res) {
   struct Arguments {
     SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
     PromPP::Prometheus::Relabel::StatelessRelabeler* stateless_relabeler;
@@ -200,7 +318,14 @@ extern "C" void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res
   }
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_dtor(void* args) {
+/**
+ * @brief Destroy PerShardRelabeler.
+ *
+ * @param args {
+ *     per_shard_relabeler uintptr // pointer of PerShardRelabeler;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_shard_relabeler_dtor(void* args) {
   struct Arguments {
     PerShardRelabelerPtr per_shard_relabeler;
   };
@@ -208,10 +333,21 @@ extern "C" void prompp_prometheus_per_shard_relabeler_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
+namespace {
+
 using StaleNaNsState = PromPP::Prometheus::Relabel::StaleNaNsState;
 using StaleNaNsStatePtr = std::unique_ptr<StaleNaNsState>;
 
-extern "C" void prompp_prometheus_relabel_stale_nans_state_ctor(void* res) {
+}  // namespace
+
+/**
+ * @brief Create StaleNaNsState.
+ *
+ * @param res {
+ *     state uintptr // pointer to constructed StaleNaNsState;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabel_stale_nans_state_ctor(void* res) {
   struct Result {
     StaleNaNsStatePtr state;
   };
@@ -219,7 +355,14 @@ extern "C" void prompp_prometheus_relabel_stale_nans_state_ctor(void* res) {
   new (res) Result{.state = std::make_unique<StaleNaNsState>()};
 }
 
-extern "C" void prompp_prometheus_relabel_stale_nans_state_dtor(void* args) {
+/**
+ * @brief Destroy StaleNaNsState.
+ *
+ * @param args {
+ *      state uintptr // pointer to StaleNaNsState;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_relabel_stale_nans_state_dtor(void* args) {
   struct Arguments {
     StaleNaNsStatePtr state;
   };
@@ -227,7 +370,21 @@ extern "C" void prompp_prometheus_relabel_stale_nans_state_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_per_shard_single_relabeler_update_relabeler_state(void* args, void* res) {
+/**
+ * @brief add to cache relabled data(third stage).
+ *
+ * @param args {
+ *     relabeler_state_update *RelabelerStateUpdate // pointer to RelabelerStateUpdate;
+ *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
+ *     cache                  uintptr               // pointer to constructed Cache;
+ *     relabeled_shard_id     uint16                // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                  []byte  // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_shard_single_relabeler_update_relabeler_state(void* args, void* res) {
   struct Arguments {
     RelabelerStateUpdate* relabeler_state_update;
     PerShardRelabelerPtr per_shard_relabeler;
@@ -249,7 +406,22 @@ extern "C" void prompp_prometheus_per_shard_single_relabeler_update_relabeler_st
   }
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_output_relabeling(void* args, void* res) {
+/**
+ * @brief relabeling output series(fourth stage).
+ *
+ * @param args {
+ *     relabeled_series *RelabeledSeries // output series
+ *     incoming_inner_series []InnerSeries // incoming series
+ *     encoders_inner_series []InnerSeries // encoder output series
+ *     per_shard_relabeler uintptr // pointer to constructed per-shard relabeler
+ *     lss uintptr // pointer to label sets
+ *     cache uintptr // pointer to relabeler cache
+ * }
+ * @param res {
+ *     error                   []byte             // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_shard_relabeler_output_relabeling(void* args, void* res) {
   struct Arguments {
     RelabeledSeries* relabeled_series;
     SliceView<InnerSeries> incoming_inner_series;
@@ -274,7 +446,16 @@ extern "C" void prompp_prometheus_per_shard_relabeler_output_relabeling(void* ar
   }
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_reset_to(void* args) {
+/**
+ * @brief reset set new number_of_shards and external_labels.
+ *
+ * @param args {
+ *     external_labels     []Label // slice with external lables(pair string);
+ *     per_shard_relabeler uintptr // pointer to constructed per shard relabeler;
+ *     number_of_shards    uint16  // total shards count;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_shard_relabeler_reset_to(void* args) {
   struct Arguments {
     SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
     PerShardRelabelerPtr per_shard_relabeler;
@@ -290,7 +471,14 @@ extern "C" void prompp_prometheus_per_shard_relabeler_reset_to(void* args) {
 // Relabeler cache
 //
 
-extern "C" void prompp_prometheus_cache_ctor(void* res) {
+/**
+ * @brief Construct a new Cache.
+ *
+ * @param res {
+ *     cache               uintptr // pointer to constructed Cache;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_cache_ctor(void* res) {
   struct Result {
     CachePtr cache;
   };
@@ -298,7 +486,14 @@ extern "C" void prompp_prometheus_cache_ctor(void* res) {
   new (res) Result{.cache = std::make_unique<Cache>()};
 }
 
-extern "C" void prompp_prometheus_cache_dtor(void* args) {
+/**
+ * @brief Destroy Cache.
+ *
+ * @param args {
+ *     cache               uintptr // pointer to constructed Cache;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_cache_dtor(void* args) {
   struct Arguments {
     CachePtr cache;
   };
@@ -306,7 +501,18 @@ extern "C" void prompp_prometheus_cache_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_cache_allocated_memory(void* args, void* res) {
+/**
+ * @brief return size of allocated memory for caches.
+ *
+ * @param args {
+ *     cache               uintptr // pointer to constructed Cache;
+ * }
+ *
+ * @param res {
+ *     allocated_memory    uint64  // size of allocated memory for label sets;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_cache_allocated_memory(void* args, void* res) {
   struct Arguments {
     CachePtr cache;
   };
@@ -318,7 +524,20 @@ extern "C" void prompp_prometheus_cache_allocated_memory(void* args, void* res) 
   new (res) Result{.allocated_memory = in->cache->allocated_memory()};
 }
 
-extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
+/**
+ * @brief add to cache relabled data(third stage).
+ *
+ * @param args {
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     cache                         uintptr                 // pointer to constructed Cache;
+ *     relabeled_shard_id            uint16                  // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                         []byte                  // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_cache_update(void* args, void* res) {
   struct Arguments {
     SliceView<RelabelerStateUpdate> shards_relabeler_state_update;
     CachePtr cache;
@@ -349,10 +568,26 @@ extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
 // PerGoroutineRelabeler
 //
 
+namespace {
+
 using PerGoroutineRelabeler = PromPP::Prometheus::Relabel::PerGoroutineRelabeler<SliceView>;
 using PerGoroutineRelabelerPtr = std::unique_ptr<PerGoroutineRelabeler>;
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_ctor(void* args, void* res) {
+}  // namespace
+
+/**
+ * @brief Construct a new PerGoroutineRelabeler.
+ *
+ * @param args {
+ *     number_of_shards        uint16  // total shards count;
+ *     shard_id                uint16  // current shard id;
+ * }
+ *
+ * @param res {
+ *     per_goroutine_relabeler uintptr // pointer to constructed PerGoroutineRelabeler;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_ctor(void* args, void* res) {
   struct Arguments {
     uint16_t number_of_shards;
     uint16_t shard_id;
@@ -367,7 +602,14 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_ctor(void* args, void*
   out->per_goroutine_relabeler = std::make_unique<PerGoroutineRelabeler>(in->number_of_shards, in->shard_id);
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_dtor(void* args) {
+/**
+ * @brief Destroy PerGoroutineRelabeler.
+ *
+ * @param args {
+ *     per_goroutine_relabeler uintptr // pointer of PerGoroutineRelabeler;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_dtor(void* args) {
   struct Arguments {
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
   };
@@ -375,7 +617,30 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void* args, void* res) {
+/**
+ * @brief relabeling incomig hashdex(first stage).
+ *
+ * @param args {
+ *     shards_inner_series          []InnerSeries     // go slice with InnerSeries;
+ *     shards_relabeled_series      []RelabeledSeries // go slice with RelabeledSeries;
+ *     options                      RelabelerOptions   // object RelabelerOptions;
+ *     per_goroutine_relabeler      uintptr            // pointer to constructed per goroutine relabeler;
+ *     stateless_relabeler          uintptr            // pointer to constructed stateless relabeler;
+ *     hashdex                      uintptr            // pointer to filled hashdex;
+ *     cache                        uintptr            // pointer to constructed Cache;
+ *     input_lss                    uintptr            // pointer to constructed input label sets;
+ *     target_lss                   uintptr            // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added                uint32             // number of added samples;
+ *     series_added                 uint32             // number of added series;
+ *     series_drop                  uint32             // number of dropped series;
+ *     error                        []byte             // error string if thrown;
+ *     target_lss_has_reallocations bool               // true if target lss has reallocations
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     SliceView<RelabeledSeries> shards_relabeled_series;
@@ -418,7 +683,28 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void*
   out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache(void* args, void* res) {
+/**
+ * @brief relabeling incoming hashdex(first stage) from cache.
+ *
+ * @param args {
+ *     shards_inner_series     []InnerSeries   // go slice with InnerSeries;
+ *     options                 RelabelerOptions // object RelabelerOptions;
+ *     per_goroutine_relabeler uintptr          // pointer to constructed per goroutine relabeler;
+ *     hashdex                 uintptr          // pointer to filled hashdex;
+ *     cache                   uintptr          // pointer to constructed Cache;
+ *     input_lss               uintptr          // pointer to constructed input label sets;
+ *     target_lss              uintptr          // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32               // number of added samples;
+ *     series_added        uint32               // number of added series;
+ *     series_drop         uint32               // number of dropped series;
+ *     ok                  bool                 // true if all label set find in cache;
+ *     error               []byte               // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     PromPP::Prometheus::Relabel::RelabelerOptions options;
@@ -455,7 +741,31 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_
   }
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans(void* args, void* res) {
+/**
+ * @brief relabeling incoming hashdex(first stage) with state stalenans.
+ *
+ * @param args {
+ *     shards_inner_series          []InnerSeries     // go slice with InnerSeries;
+ *     shards_relabeled_series      []RelabeledSeries // go slice with RelabeledSeries;
+ *     options                      RelabelerOptions   // object RelabelerOptions;
+ *     per_goroutine_relabeler      uintptr            // pointer to constructed per goroutine relabeler;
+ *     stateless_relabeler          uintptr            // pointer to constructed stateless relabeler;
+ *     hashdex                      uintptr            // pointer to filled hashdex;
+ *     cache                        uintptr            // pointer to constructed Cache;
+ *     input_lss                    uintptr            // pointer to constructed input label sets;
+ *     target_lss                   uintptr            // pointer to constructed target label sets;
+ *     def_timestamp                int64              // timestamp for metrics and StaleNaNs
+ * }
+ *
+ * @param res {
+ *     samples_added                uint32             // number of added samples;
+ *     series_added                 uint32             // number of added series;
+ *     series_drop                  uint32             // number of dropped series;
+ *     error                        []byte             // error string if thrown;
+ *     target_lss_has_reallocations bool               // true if target lss has reallocations
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     SliceView<RelabeledSeries> shards_relabeled_series;
@@ -499,7 +809,29 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
   out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res) {
+/**
+ * @brief relabeling incomig hashdex(first stage) from cache with state stalenans.
+ *
+ * @param args {
+ *     shards_inner_series     []InnerSeries   // go slice with InnerSeries;
+ *     options                 RelabelerOptions // object RelabelerOptions;
+ *     per_goroutine_relabeler uintptr          // pointer to constructed per goroutine relabeler;
+ *     hashdex                 uintptr          // pointer to filled hashdex;
+ *     cache                   uintptr          // pointer to constructed Cache;
+ *     input_lss               uintptr          // pointer to constructed input label sets;
+ *     target_lss              uintptr          // pointer to constructed target label sets;
+ *     def_timestamp           int64            // timestamp for metrics and StaleNaNs
+ * }
+ *
+ * @param res {
+ *     samples_added           uint32           // number of added samples;
+ *     series_added            uint32           // number of added series;
+ *     series_drop             uint32           // number of dropped series;
+ *     ok                      bool             // true if all label set find in cache;
+ *     error                   []byte           // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     PromPP::Prometheus::Relabel::RelabelerOptions options;
@@ -537,7 +869,25 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
   }
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling(void* args, void* res) {
+/**
+ * @brief transparent relabeling incoming hashdex(first stage).
+ *
+ * @param args {
+ *     shards_inner_series          []InnerSeries     // go slice with InnerSeries;
+ *     per_goroutine_relabeler      uintptr            // pointer to constructed per goroutine relabeler;
+ *     hashdex                      uintptr            // pointer to filled hashdex;
+ *     target_lss                   uintptr            // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added                uint32             // number of added samples;
+ *     series_added                 uint32             // number of added series;
+ *     series_drop                  uint32             // number of dropped series;
+ *     error                        []byte             // error string if thrown;
+ *     target_lss_has_reallocations bool               // true if target lss has reallocations
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
@@ -570,7 +920,25 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
   out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read(void* args, void* res) {
+/**
+ * @brief transparent relabeling incomig hashdex(first stage) from cache.
+ *
+ * @param args {
+ *     shards_inner_series     []InnerSeries   // go slice with InnerSeries;
+ *     per_goroutine_relabeler uintptr          // pointer to constructed per goroutine relabeler;
+ *     hashdex                 uintptr          // pointer to filled hashdex;
+ *     target_lss              uintptr          // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32               // number of added samples;
+ *     series_added        uint32               // number of added series;
+ *     series_drop         uint32               // number of dropped series;
+ *     ok                  bool                 // true if all label set find in cache;
+ *     error               []byte               // error string if thrown;
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
@@ -602,7 +970,23 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
   }
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* args, void* res) {
+/**
+ * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
+ *
+ * @param args {
+ *     shards_inner_series           []InnerSeries          // go InnerSeries per source shard;
+ *     shards_relabeled_series       []RelabeledSeries      // go RelabeledSeries per source shard;
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_goroutine_relabeler       uintptr                 // pointer to constructed per goroutine relabeler;
+ *     target_lss                    uintptr                 // pointer to constructed label sets;
+ * }
+ *
+ * @param res {
+ *     error                         []byte                  // error string if thrown
+ *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* args, void* res) {
   struct Arguments {
     SliceView<InnerSeries> shards_inner_series;
     SliceView<RelabeledSeries> shards_relabeled_series;
@@ -638,7 +1022,16 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
   out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
 }
 
-extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
+/**
+ * @brief add stale nans to inner series if needed
+ *
+ * @param args {
+ *     inner_series      []InnerSeries // InnerSeries
+ *     stale_nan_state   uintptr        // pointer to source state
+ *     default_timestamp int64          // timestamp for stale_nan samples
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
   struct Arguments {
     SliceView<InnerSeries> inner_series;
     StaleNaNsStatePtr stale_nans_state;
@@ -649,7 +1042,15 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void*
   PerGoroutineRelabeler::track_stale_nans(in->inner_series, *in->stale_nans_state, in->default_timestamp);
 }
 
-extern "C" void prompp_remap_stale_nans_state(void* args) {
+/**
+ * @brief add stale nans to inner series if needed
+ *
+ * @param args {
+ *     stale_nan_state uintptr  // pointer to source state
+ *     ls_ids_mapping  uintptr  // pointer to dst_src_ls_ids_mapping
+ * }
+ */
+extern "C" PROMPP(entrypoint, fastcgo) void prompp_remap_stale_nans_state(void* args) {
   struct Arguments {
     StaleNaNsStatePtr stale_nans_state;
     entrypoint::types::LsIdsSlicePtr dst_src_ls_ids_mapping;

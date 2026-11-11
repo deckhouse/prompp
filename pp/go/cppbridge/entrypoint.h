@@ -18,7 +18,7 @@
 #pragma once
 
 #ifndef __cplusplus
-#include <stdbool.h>
+#  include <stdbool.h>
 #endif
 
 typedef struct {

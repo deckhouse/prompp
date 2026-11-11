@@ -11,9 +11,7 @@ namespace Encoding::Gorilla {
 
 constexpr double STALE_NAN = std::bit_cast<double>(0x7ff0000000000002ull);
 
-constexpr PROMPP_ALWAYS_INLINE bool isstalenan(double v) noexcept {
-  return std::bit_cast<uint64_t>(v) == 0x7ff0000000000002ull;
-}
+constexpr PROMPP_ALWAYS_INLINE bool isstalenan(double v) noexcept { return std::bit_cast<uint64_t>(v) == 0x7ff0000000000002ull; }
 
 template <class DeltaType = int64_t>
 struct PROMPP_ATTRIBUTE_PACKED TimestampEncoderState {

@@ -27,9 +27,7 @@ ParamNameAndRole add_param_name_and_role(CursorView cursor) {
   };
 }
 
-facts::BridgeKind bridge_kind_from_annotation_cursor(CursorView cursor) {
-  return contract::bridge_kind_for_annotation(cursor.spelling());
-}
+facts::BridgeKind bridge_kind_from_annotation_cursor(CursorView cursor) { return contract::bridge_kind_for_annotation(cursor.spelling()); }
 
 class FunctionExtractor {
  public:

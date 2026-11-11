@@ -46,7 +46,7 @@ class Storage {
   PROMPP_ALWAYS_INLINE void remove_unused_pages() { page_list_.remove_unused_pages(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(page_list_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
  private:
   MetricsPageList page_list_;
