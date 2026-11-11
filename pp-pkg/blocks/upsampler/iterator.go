@@ -46,9 +46,11 @@ type Iterator struct {
 	stepMS   uint32 // synthesis step and lower gap threshold: rangeMS / 2
 	maxGapMS uint32 // upper gap threshold: resolutionMS * maxGapResolutions
 
-	typeOfFunc  FuncKind // how the query function wants a gap filled
-	haveT1      bool     // t1/v1 already read from base, not yet yielded
-	initialized bool     // first call to Next/Seek
+	typeOfFunc    FuncKind // how the query function wants a gap filled
+	valueType     chunkenc.ValueType
+	nextValueType chunkenc.ValueType
+	haveT1        bool // t1/v1 already read from base, not yet yielded
+	initialized   bool // first call to Next/Seek
 }
 
 // NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps wider than
@@ -66,14 +68,14 @@ func (it *Iterator) At() (int64, float64) {
 	return it.t0, it.v0
 }
 
-// AtFloatHistogram returns nil — we don't synthesize histograms in v1.
-func (*Iterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
-	return 0, nil
+// AtFloatHistogram returns the current histogram from the underlying [chunkenc.Iterator].
+func (it *Iterator) AtFloatHistogram(h *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	return it.base.AtFloatHistogram(h)
 }
 
-// AtHistogram returns nil — we don't synthesize histograms in v1.
-func (*Iterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
-	return 0, nil
+// AtHistogram returns the current histogram from the underlying [chunkenc.Iterator].
+func (it *Iterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
+	return it.base.AtHistogram(h)
 }
 
 // AtT returns the current timestamp.
@@ -87,58 +89,29 @@ func (it *Iterator) Err() error {
 }
 
 // Next advances the iterator by one and returns the type of the value.
-// Implements the state machine:
-//  1. If synthetic samples remain, yield the next one.
-//  2. Else if a buffered real sample exists, yield it and advance anchor.
-//  3. Else read the next real sample from base and decide: synthesize or yield directly.
 func (it *Iterator) Next() chunkenc.ValueType {
-	// Step 1: yield synthetic sample if in progress.
+	if !it.haveT1 {
+		if !it.readNext() {
+			return chunkenc.ValNone
+		}
+
+		if it.initialized {
+			it.armSynthesis()
+		} else {
+			it.initialized = true
+		}
+	}
+
 	if it.nextSynthT > 0 && it.nextSynthT < it.t1 {
 		it.synthesizeAt(it.nextSynthT)
 		it.nextSynthT += int64(it.stepMS)
+
 		return chunkenc.ValFloat
 	}
 
-	// Step 2: yield buffered real sample if exists.
-	if it.haveT1 {
-		it.yieldT1()
-		return chunkenc.ValFloat
-	}
+	it.yieldT1()
 
-	// Step 3: read next sample from base.
-	valType := it.base.Next()
-	if valType == chunkenc.ValNone || it.base.Err() != nil {
-		return chunkenc.ValNone
-	}
-
-	t, v := it.base.At()
-
-	// On first real sample, just anchor t0.
-	if !it.initialized {
-		it.t0, it.v0 = t, v
-		it.initialized = true
-		return valType
-	}
-
-	it.t1, it.v1 = t, v
-
-	// Non-float samples (histograms): pass through without synthesis.
-	if valType != chunkenc.ValFloat {
-		it.t0, it.v0 = it.t1, it.v1
-		it.nextSynthT = 0
-		return valType
-	}
-
-	// Float samples: check gap and decide.
-	it.armSynthesis()
-	if it.nextSynthT > 0 {
-		it.haveT1 = true
-		return it.Next() // Yield first synthetic sample.
-	}
-
-	// Nothing to interpolate: yield t1 directly.
-	it.t0, it.v0 = it.t1, it.v1
-	return chunkenc.ValFloat
+	return it.valueType
 }
 
 // Reset resets the iterator to a clean state. Used by Series.Iterator()
@@ -153,14 +126,15 @@ func (it *Iterator) Reset(base chunkenc.Iterator, stepMS, maxGapMS uint32, typeO
 	it.t1 = 0
 	it.v0 = 0
 	it.v1 = 0
+	it.valueType = chunkenc.ValNone
+	it.nextValueType = chunkenc.ValNone
 	it.haveT1 = false
 	it.nextSynthT = 0
 	it.initialized = false
 }
 
 // Seek advances the iterator forward to the first sample with timestamp >= t.
-// Does NOT delegate to base.Seek() except on the very first call, because
-// chunkenc.Iterator doesn't provide a way to retrieve the sample before the
+// Does not delegate to base.Seek(), because [chunkenc.Iterator] cannot retrieve the sample before the
 // sought position, which we need to anchor (t0, v0) for interpolation.
 func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 	// First call: use Next() to initialize with proper anchor pair.
@@ -185,13 +159,10 @@ func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 
 	// if t1 not initialized, try to initialize
 	if !it.haveT1 {
-		valType := it.base.Next()
-		if valType == chunkenc.ValNone {
+		if !it.readNext() {
 			return chunkenc.ValNone
 		}
 
-		it.t1, it.v1 = it.base.At()
-		it.haveT1 = true
 		it.armSynthesis()
 	}
 
@@ -210,6 +181,11 @@ func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 // enough to be explained by decimation of the source. Otherwise synthesis is disarmed
 // and the pair is yielded as is.
 func (it *Iterator) armSynthesis() {
+	if it.valueType != chunkenc.ValFloat || it.nextValueType != chunkenc.ValFloat {
+		it.nextSynthT = 0
+		return
+	}
+
 	if gap := it.t1 - it.t0; gap <= int64(it.stepMS) || gap > int64(it.maxGapMS) {
 		it.nextSynthT = 0
 		return
@@ -218,22 +194,33 @@ func (it *Iterator) armSynthesis() {
 	it.nextSynthT = it.t0 + int64(it.stepMS)
 }
 
+func (it *Iterator) readNext() bool {
+	it.nextValueType = it.base.Next()
+	if it.nextValueType == chunkenc.ValNone || it.base.Err() != nil {
+		return false
+	}
+
+	if it.nextValueType == chunkenc.ValFloat {
+		it.t1, it.v1 = it.base.At()
+	} else {
+		it.t1 = it.base.AtT()
+		it.v1 = 0
+	}
+
+	it.haveT1 = true
+
+	return true
+}
+
 // seekAdvanceBase reads sequentially from base until we find target.
 func (it *Iterator) seekAdvanceBase(target int64) chunkenc.ValueType {
 	for {
-		valType := it.base.Next()
-		if valType == chunkenc.ValNone {
+		it.yieldT1()
+		if !it.readNext() {
 			return chunkenc.ValNone
 		}
 
-		t, v := it.base.At()
-
-		// Advance anchor.
-		it.t0, it.v0 = it.t1, it.v1
-		it.t1, it.v1 = t, v
-
-		if t > target {
-			it.haveT1 = true
+		if it.t1 >= target {
 			it.armSynthesis()
 			return it.seekWithinState(target)
 		}
@@ -245,7 +232,7 @@ func (it *Iterator) seekAdvanceBase(target int64) chunkenc.ValueType {
 func (it *Iterator) seekWithinState(target int64) chunkenc.ValueType {
 	// If target is at or before current t0, return t0.
 	if target <= it.t0 {
-		return chunkenc.ValFloat
+		return it.valueType
 	}
 
 	for {
@@ -268,7 +255,7 @@ func (it *Iterator) seekWithinState(target int64) chunkenc.ValueType {
 		// we have t0 < target <= t1. So t1 >= target is always true.
 		if it.haveT1 {
 			it.yieldT1()
-			return chunkenc.ValFloat
+			return it.valueType
 		}
 
 		// Unreachable: seekWithinState is only called with a buffered t1,
@@ -313,6 +300,7 @@ func (it *Iterator) synthesizeAt(t int64) {
 // yieldT1 moves the anchor onto the buffered real sample and drops synthesis state.
 func (it *Iterator) yieldT1() {
 	it.t0, it.v0 = it.t1, it.v1
+	it.valueType = it.nextValueType
 	it.haveT1 = false
 	it.nextSynthT = 0
 }
