@@ -1528,6 +1528,106 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 	runtime.KeepAlive(shardsRelabeledSeries)
 }
 
+func (s *PerGoroutineRelabelerSuite) TestRelabeling_InnerSeriesTimeInterval() {
+	// Arrange
+	shardsInnerSeries := s.relabelSamples([]prompb.Sample{
+		{Value: 0.1, Timestamp: 1000},
+		{Value: 0.2, Timestamp: 3000},
+		{Value: 0.3, Timestamp: 2000},
+	})
+
+	// Act
+	timeInterval := shardsInnerSeries.DataByShard(0)[0].TimeInterval()
+
+	// Assert
+	s.Equal(cppbridge.TimeInterval{MinT: 1000, MaxT: 3000}, timeInterval)
+
+	runtime.KeepAlive(shardsInnerSeries)
+}
+
+func (s *PerGoroutineRelabelerSuite) TestRelabeling_EmptyInnerSeriesHasInvalidTimeInterval() {
+	// Arrange
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+
+	// Act
+	timeInterval := shardsInnerSeries.DataByShard(0)[0].TimeInterval()
+
+	// Assert
+	s.Equal(cppbridge.NewInvalidTimeInterval(), timeInterval)
+
+	runtime.KeepAlive(shardsInnerSeries)
+}
+
+// TestRelabeling_DataStorageTimeIntervalFollowsAppend checks that an append widens the cached time
+// interval of the data storage. The first append is only there to make the cache valid: while it is
+// invalid, [cppbridge.DataStorage.TimeInterval] rescans the storage and would hide a cache left stale.
+func (s *PerGoroutineRelabelerSuite) TestRelabeling_DataStorageTimeIntervalFollowsAppend() {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	appended := s.relabelSamples([]prompb.Sample{
+		{Value: 0.1, Timestamp: 1000},
+		{Value: 0.2, Timestamp: 2000},
+	})
+	dataStorage.EncodeInnerSeriesSlice(appended.DataByShard(0))
+	s.Require().Equal(cppbridge.TimeInterval{MinT: 1000, MaxT: 2000}, dataStorage.TimeInterval(false))
+
+	// Act
+	appendedLater := s.relabelSamples([]prompb.Sample{{Value: 0.3, Timestamp: 5000}})
+	dataStorage.EncodeInnerSeriesSlice(appendedLater.DataByShard(0))
+
+	// Assert
+	s.Equal(cppbridge.TimeInterval{MinT: 1000, MaxT: 5000}, dataStorage.TimeInterval(false))
+	s.Equal(dataStorage.TimeInterval(true), dataStorage.TimeInterval(false))
+
+	runtime.KeepAlive(appended)
+	runtime.KeepAlive(appendedLater)
+}
+
+// relabelSamples relabels a single kept series carrying the given samples into inner series of shard 0.
+func (s *PerGoroutineRelabelerSuite) relabelSamples(samples []prompb.Sample) *cppbridge.ShardedInnerSeries {
+	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: samples,
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
+	s.Require().NoError(err)
+
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetRelabelerOptions(&s.options)
+	state.SetStatelessRelabeler(statelessRelabeler)
+	state.Reconfigure(0, s.numberOfShards, nil)
+
+	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
+	stats, _, err := pgr.Relabeling(
+		s.baseCtx,
+		s.inputLss,
+		s.targetLss,
+		state,
+		h,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
+	)
+	s.Require().NoError(err)
+	s.Require().Equal(uint32(len(samples)), stats.SamplesAdded)
+
+	runtime.KeepAlive(shardsRelabeledSeries)
+
+	return shardsInnerSeries
+}
+
 func (s *PerGoroutineRelabelerSuite) makeSnappyProtobufHashdex(
 	wr *prompb.WriteRequest,
 ) (cppbridge.ShardedData, error) {

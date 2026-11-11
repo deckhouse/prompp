@@ -1,5 +1,8 @@
 #pragma once
 
+#include <iterator>
+#include <ranges>
+
 #include "allocated_memory.h"
 #include "preprocess.h"
 #include "vector.h"
@@ -105,6 +108,56 @@ class VectorWithHoles {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return vector_.size(); }
 
+  // Skips holes; without the holes bitset finding them would cost a walk of the hole list per item.
+  class ConstIterator {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const T*;
+    using reference = const T&;
+
+    ConstIterator() = default;
+    PROMPP_ALWAYS_INLINE ConstIterator(const VectorWithHoles& vector, uint32_t index) noexcept : vector_(&vector), index_(index) { skip_holes(); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE reference operator*() const noexcept { return (*vector_)[index_]; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE pointer operator->() const noexcept { return &(*vector_)[index_]; }
+
+    PROMPP_ALWAYS_INLINE ConstIterator& operator++() noexcept {
+      ++index_;
+      skip_holes();
+      return *this;
+    }
+    PROMPP_ALWAYS_INLINE ConstIterator operator++(int) noexcept {
+      const ConstIterator retval = *this;
+      ++*this;
+      return retval;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const ConstIterator& other) const noexcept { return index_ == other.index_; }
+
+   private:
+    const VectorWithHoles* vector_{};
+    uint32_t index_{};
+
+    PROMPP_ALWAYS_INLINE void skip_holes() noexcept {
+      while (index_ < vector_->size() && vector_->is_hole(index_)) {
+        ++index_;
+      }
+    }
+  };
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ConstIterator begin() const noexcept
+    requires VectorWithHolesImpl::holes_need_bitset<T>
+  {
+    return ConstIterator(*this, 0);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ConstIterator end() const noexcept
+    requires VectorWithHolesImpl::holes_need_bitset<T>
+  {
+    return ConstIterator(*this, size());
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     size_t allocated_memory = vector_.capacity() * sizeof(Item);
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
@@ -186,3 +239,11 @@ class VectorWithHoles {
 };
 
 }  // namespace BareBones
+
+// VectorWithHoles::size() counts holes, while iteration skips them; disable sized-range fast paths.
+namespace std::ranges {
+
+template <class T, BareBones::ReallocatorInterface Reallocator>
+inline constexpr bool disable_sized_range<BareBones::VectorWithHoles<T, Reallocator>> = true;
+
+}  // namespace std::ranges

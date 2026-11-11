@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/prometheus/common/model"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
@@ -227,12 +228,127 @@ func (noopFlagConfig) DisableBlockManagerStorage() {}
 // SetDownsampling implements FlagConfig.
 func (noopFlagConfig) SetDownsampling(model.Duration) {}
 
+// downsamplingFlagConfig records the configured downsampling duration.
 type downsamplingFlagConfig struct {
 	noopFlagConfig
 
 	downsampling model.Duration
 }
 
+// SetDownsampling implements [FlagConfig].
 func (c *downsamplingFlagConfig) SetDownsampling(downsampling model.Duration) {
 	c.downsampling = downsampling
+}
+
+// EnableNewUI implements FlagConfig.
+func (noopFlagConfig) EnableNewUI() {}
+
+// SetLabelReplaceCacheSize implements FlagConfig.
+func (noopFlagConfig) SetLabelReplaceCacheSize(int) {}
+
+// SetLabelReplaceRegexCacheSize implements FlagConfig.
+func (noopFlagConfig) SetLabelReplaceRegexCacheSize(int) {}
+
+// recordingFlagConfig implements [FlagConfig] and records applied cache sizes.
+type recordingFlagConfig struct {
+	noopFlagConfig
+
+	labelReplaceCacheSize      int
+	labelReplaceRegexCacheSize int
+}
+
+// SetLabelReplaceCacheSize implements FlagConfig.
+func (c *recordingFlagConfig) SetLabelReplaceCacheSize(size int) {
+	c.labelReplaceCacheSize = size
+}
+
+// SetLabelReplaceRegexCacheSize implements FlagConfig.
+func (c *recordingFlagConfig) SetLabelReplaceRegexCacheSize(size int) {
+	c.labelReplaceRegexCacheSize = size
+}
+
+type LabelReplaceCacheSizeSuite struct {
+	suite.Suite
+
+	cfg *recordingFlagConfig
+}
+
+func TestLabelReplaceCacheSizeSuite(t *testing.T) {
+	suite.Run(t, new(LabelReplaceCacheSizeSuite))
+}
+
+func (s *LabelReplaceCacheSizeSuite) SetupTest() {
+	s.cfg = &recordingFlagConfig{}
+}
+
+func (s *LabelReplaceCacheSizeSuite) applyFeatures(features string) {
+	s.T().Setenv(featuresEnv, features)
+	ReadPromPPFeatures(log.NewNopLogger(), s.cfg, prometheus.NewRegistry())
+}
+
+func (s *LabelReplaceCacheSizeSuite) TestAbsentKeysKeepEngineDefaults() {
+	s.applyFeatures("")
+
+	s.Equal(0, s.cfg.labelReplaceCacheSize)
+	s.Equal(0, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func (s *LabelReplaceCacheSizeSuite) TestValidCapacityIsAppliedPerKey() {
+	s.applyFeatures("label_replace_cache_size=1024,label_replace_regex_cache_size=32")
+
+	s.Equal(1024, s.cfg.labelReplaceCacheSize)
+	s.Equal(32, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func (s *LabelReplaceCacheSizeSuite) TestZeroPassesThrough() {
+	s.applyFeatures("label_replace_cache_size=0,label_replace_regex_cache_size=0")
+
+	s.Equal(0, s.cfg.labelReplaceCacheSize)
+	s.Equal(0, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func (s *LabelReplaceCacheSizeSuite) TestNegativePassesThrough() {
+	s.applyFeatures("label_replace_cache_size=-1,label_replace_regex_cache_size=-8")
+
+	s.Equal(-1, s.cfg.labelReplaceCacheSize)
+	s.Equal(-8, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func (s *LabelReplaceCacheSizeSuite) TestInvalidValuesKeepPreviousValues() {
+	s.applyFeatures("label_replace_cache_size=16,label_replace_regex_cache_size=4")
+	s.applyFeatures("label_replace_cache_size=abc,label_replace_regex_cache_size=xyz")
+
+	s.Equal(16, s.cfg.labelReplaceCacheSize)
+	s.Equal(4, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func (s *LabelReplaceCacheSizeSuite) TestEmptyValueKeepsPreviousValues() {
+	s.applyFeatures("label_replace_cache_size=16,label_replace_regex_cache_size=4")
+	s.applyFeatures("label_replace_cache_size,label_replace_regex_cache_size")
+
+	s.Equal(16, s.cfg.labelReplaceCacheSize)
+	s.Equal(4, s.cfg.labelReplaceRegexCacheSize)
+}
+
+func TestQueryStageMetricsFeature(t *testing.T) {
+	previous := querier.QueryStageMetricsEnabled
+	t.Cleanup(func() { querier.QueryStageMetricsEnabled = previous })
+	t.Setenv(featuresDefaultEnv, "")
+
+	for _, tc := range []struct {
+		name     string
+		features string
+		enabled  bool
+	}{
+		{name: "disabled by default"},
+		{name: "enabled explicitly", features: "enable_query_stage_metrics", enabled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			querier.QueryStageMetricsEnabled = false
+			t.Setenv(featuresEnv, tc.features)
+			ReadPromPPFeatures(log.NewNopLogger(), noopFlagConfig{}, prometheus.NewRegistry())
+
+			require.Equal(t, tc.enabled, querier.QueryStageMetricsEnabled)
+		})
+	}
 }

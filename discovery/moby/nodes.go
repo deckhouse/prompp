@@ -76,7 +76,7 @@ func (d *Discovery) refreshNodes(ctx context.Context) ([]*targetgroup.Group, err
 			labels[model.LabelName(swarmLabelNodeLabelPrefix+ln)] = model.LabelValue(v)
 		}
 
-		addr := net.JoinHostPort(n.Status.Addr, strconv.FormatUint(uint64(d.port), 10))
+		addr := net.JoinHostPort(n.Status.Addr, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 		labels[model.AddressLabel] = model.LabelValue(addr)
 
 		tg.Targets = append(tg.Targets, labels)

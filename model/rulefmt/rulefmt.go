@@ -327,7 +327,7 @@ func Parse(content []byte) (*RuleGroups, []error) {
 
 // ParseFile reads and parses rules from a file.
 func ParseFile(file string) (*RuleGroups, []error) {
-	b, err := os.ReadFile(file)
+	b, err := os.ReadFile(file) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, []error{fmt.Errorf("%s: %w", file, err)}
 	}

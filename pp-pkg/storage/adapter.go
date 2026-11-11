@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sync/atomic"
-	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
@@ -21,9 +20,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/storage"
 )
-
-// defaultCacheCheckIntervalMs is the default cache check interval in milliseconds.
-const defaultCacheCheckIntervalMs = int64(5*time.Minute) / 1e6 // ns to ms
 
 //
 // downsampler
@@ -65,6 +61,7 @@ type Adapter struct {
 	mergeOutOfOrderChunks func()
 	scrapeInterval        atomic.Int64
 	opts                  *AdapterOptions
+
 	// stat
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
@@ -269,18 +266,28 @@ func (ar *Adapter) BatchStorage() storage.BatchStorage {
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	queriers = append(queriers, querier.NewChunkQuerier(
-		ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil,
-	))
+	if !headIsOutOfQueryRange(ahead, mint, maxt) {
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(
+				ahead, querier.NewNoOpShardedDeduplicator,
+				mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil, ar.activeQuerierMetrics,
+			),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
-		if ahead.ID() == head.ID() {
+		if ahead.ID() == head.ID() || headIsOutOfQueryRange(head, mint, maxt) {
 			continue
 		}
 
-		queriers = append(queriers, querier.NewChunkQuerier(
-			head, querier.NewNoOpShardedDeduplicator, mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil,
-		))
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(
+				head, querier.NewNoOpShardedDeduplicator,
+				mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil, ar.storageQuerierMetrics,
+			),
+		)
 	}
 
 	return storage.NewMergeChunkQuerier(nil, queriers, storage.NewConcatenatingChunkSeriesMerger()), nil
@@ -309,7 +316,7 @@ func (ar *Adapter) Close() error {
 // HeadQuerier returns [storage.Querier] from active head.
 func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 	ahead := ar.proxy.Get()
-	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
+	aTimeInterval := headTimeInterval(ahead)
 	return querier.NewQuerier(
 		ahead,
 		querier.NewNoOpShardedDeduplicator,
@@ -343,44 +350,52 @@ func (ar *Adapter) MergeOutOfOrderChunks() {
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
-	aTimeInterval := headTimeIntervalWithValidateCache(ahead, defaultCacheCheckIntervalMs)
-	queriers = append(queriers, querier.NewQuerier(
-		ahead,
-		querier.NewNoOpShardedDeduplicator,
-		mint,
-		maxt,
-		ar.scrapeInterval.Load(),
-		aTimeInterval.MinT,
-		ar.opts.RetentionMS,
-		ar.opts.DownsamplingMS,
-		ar.activeQuerierMetrics,
-	))
+	aTimeInterval := headTimeInterval(ahead)
+	if activeHeadIsInQueryRange(aTimeInterval, mint, maxt) {
+		queriers = append(
+			queriers,
+			querier.NewQuerier(
+				ahead,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.scrapeInterval.Load(),
+				aTimeInterval.MinT,
+				ar.opts.RetentionMS,
+				ar.opts.DownsamplingMS,
+				ar.activeQuerierMetrics,
+			),
+		)
+	}
 
 	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
 			continue
 		}
 
-		timeInterval := headTimeIntervalWithValidateCache(head, defaultCacheCheckIntervalMs)
-		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
+		timeInterval := headTimeInterval(head)
+		if mint > timeInterval.MaxT || maxt < timeInterval.MinT {
 			continue
 		}
 
-		queriers = append(queriers, querier.NewQuerierWithOutSelectFuncOptimize(
-			head,
-			querier.NewNoOpShardedDeduplicator,
-			mint,
-			maxt,
-			ar.scrapeInterval.Load(),
-			aTimeInterval.MinT,
-			ar.opts.RetentionMS,
-			ar.opts.DownsamplingMS,
-			ar.storageQuerierMetrics,
-		))
+		queriers = append(
+			queriers,
+			querier.NewQuerierWithOutSelectFuncOptimize(
+				head,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.scrapeInterval.Load(),
+				timeInterval.MinT,
+				ar.opts.RetentionMS,
+				ar.opts.DownsamplingMS,
+				ar.storageQuerierMetrics,
+			),
+		)
 	}
 
 	mq := querier.NewMultiQuerier(queriers, nil)
-	if ar.wouldDownsample(queriers[0]) {
+	if len(queriers) > 0 && ar.wouldDownsample(queriers[0]) {
 		return upsampler.NewResolutionQuerier(mq, ar.opts.DownsamplingMS), nil
 	}
 
@@ -403,11 +418,38 @@ func (*Adapter) wouldDownsample(hq storage.Querier) bool {
 	return downsamplerQuerier.WouldDownsample()
 }
 
-// headTimeIntervalWithValidateCache returns [cppbridge.TimeInterval] from [pp_storage.Head] with validate cache.
-func headTimeIntervalWithValidateCache(head *pp_storage.Head, cacheCheckIntervalMs int64) cppbridge.TimeInterval {
+// headIsOutOfQueryRange reports whether the [pp_storage.Head] holds no data for the [mint, maxt]
+// query range.
+//
+// headTimeInterval obtains the bounds of every shard whose cached interval is unknown, computing them
+// from the data storage, so the interval here is never a guess. An invalid interval therefore means the
+// head holds no data at all, and the comparison below puts such a head out of every query range.
+func headIsOutOfQueryRange(head *pp_storage.Head, mint, maxt int64) bool {
+	timeInterval := headTimeInterval(head)
+
+	return mint > timeInterval.MaxT || maxt < timeInterval.MinT
+}
+
+// activeHeadIsInQueryRange reports whether the active head can hold data for the [mint, maxt]
+// query range of a [storage.Querier].
+//
+// A zero-length range [t, t] selects the instant path, which reads the latest sample at or before t
+// rather than the samples inside the range. The active head therefore answers it whenever its data
+// starts at or before t, even though its last sample is older than t, as it always is for t = now.
+// Rotated heads keep the strict check.
+func activeHeadIsInQueryRange(timeInterval cppbridge.TimeInterval, mint, maxt int64) bool {
+	if mint == maxt {
+		return maxt >= timeInterval.MinT
+	}
+
+	return mint <= timeInterval.MaxT && maxt >= timeInterval.MinT
+}
+
+// headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
+func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for _, shard := range head.Shards() {
-		interval := shard.TimeIntervalWithValidateCache(cacheCheckIntervalMs)
+		interval := shard.TimeInterval(false)
 		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
 		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
 	}

@@ -67,7 +67,6 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/featuresflags"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 
-	// PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/localstorageobserver"
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"         // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                       // PP_CHANGES.md: rebuild on cpp
@@ -157,6 +156,7 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 		})
 }
 
+// flagConfig holds startup settings for Prometheus and the Prom++ engine.
 type flagConfig struct {
 	configFile string
 
@@ -183,7 +183,9 @@ type flagConfig struct {
 	HeadRetentionTimeout    model.Duration
 	UseBlockManagerStorage  bool
 
-	Downsampling model.Duration
+	Downsampling               model.Duration
+	labelReplaceCacheSize      int
+	labelReplaceRegexCacheSize int
 
 	featureList   []string
 	memlimitRatio float64
@@ -295,9 +297,24 @@ func (c *flagConfig) DisableBlockManagerStorage() {
 	c.UseBlockManagerStorage = false
 }
 
+// EnableNewUI serves the Mantine-based web UI instead of the old React app.
+func (c *flagConfig) EnableNewUI() {
+	c.web.UseOldUI = false
+}
+
 // SetDownsampling sets the downsampling duration for the flagConfig.
 func (c *flagConfig) SetDownsampling(downsampling model.Duration) {
 	c.Downsampling = downsampling
+}
+
+// SetLabelReplaceCacheSize sets the capacity of the label_replace result cache.
+func (c *flagConfig) SetLabelReplaceCacheSize(size int) {
+	c.labelReplaceCacheSize = size
+}
+
+// SetLabelReplaceRegexCacheSize sets the capacity of the label_replace compiled-regex cache.
+func (c *flagConfig) SetLabelReplaceRegexCacheSize(size int) {
+	c.labelReplaceRegexCacheSize = size
 }
 
 func main() {
@@ -334,6 +351,7 @@ func main() {
 		web: web.Options{
 			Registerer: prometheus.DefaultRegisterer,
 			Gatherer:   prometheus.DefaultGatherer,
+			UseOldUI:   true, // PP_CHANGES.md: the new UI is opt-in until it covers what the old one does
 		},
 		promlogConfig:          promlog.Config{},
 		UseBlockManagerStorage: true,
@@ -577,7 +595,7 @@ func main() {
 
 	_, err := a.Parse(os.Args[1:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing command line arguments: %w", err))
+		fmt.Fprintln(os.Stderr, fmt.Errorf("error parsing command line arguments: %w", err))
 		a.Usage(os.Args[1:])
 		os.Exit(2)
 	}
@@ -586,14 +604,14 @@ func main() {
 
 	featuresflags.ReadPromPPFeatures(logger, &cfg, prometheus.DefaultRegisterer)
 
-	if err := cfg.setFeatureListOptions(logger); err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing feature list: %w", err))
+	if err = cfg.setFeatureListOptions(logger); err != nil {
+		fmt.Fprintln(os.Stderr, fmt.Errorf("error parsing feature list: %w", err))
 		os.Exit(1)
 	}
 
 	if cfg.nameEscapingScheme != "" {
-		scheme, err := model.ToEscapingScheme(cfg.nameEscapingScheme)
-		if err != nil {
+		scheme, errEscaping := model.ToEscapingScheme(cfg.nameEscapingScheme)
+		if errEscaping != nil {
 			fmt.Fprintf(os.Stderr, `Invalid name escaping scheme: %q; Needs to be one of "values", "underscores", or "dots"`, cfg.nameEscapingScheme)
 			os.Exit(1)
 		}
@@ -646,7 +664,7 @@ func main() {
 		level.Error(logger).Log("msg", fmt.Sprintf("Error loading config (--config.file=%s)", cfg.configFile), "file", absPath, "err", err)
 		os.Exit(2)
 	}
-	if _, err := cfgFile.GetScrapeConfigs(); err != nil {
+	if _, err = cfgFile.GetScrapeConfigs(); err != nil {
 		absPath, pathErr := filepath.Abs(cfg.configFile)
 		if pathErr != nil {
 			absPath = cfg.configFile
@@ -711,9 +729,9 @@ func main() {
 
 		// Check for overflows. This limits our max retention to 100y.
 		if cfg.tsdb.RetentionDuration < 0 {
-			y, err := model.ParseDuration("100y")
-			if err != nil {
-				panic(err)
+			y, errParse := model.ParseDuration("100y")
+			if errParse != nil {
+				panic(errParse)
 			}
 			cfg.tsdb.RetentionDuration = y
 			level.Warn(logger).Log("msg", "Time retention value is too high. Limiting to: "+y.String())
@@ -721,9 +739,9 @@ func main() {
 
 		// Max block size settings.
 		if cfg.tsdb.MaxBlockDuration == 0 {
-			maxBlockDuration, err := model.ParseDuration("31d")
-			if err != nil {
-				panic(err)
+			maxBlockDuration, errParse := model.ParseDuration("31d")
+			if errParse != nil {
+				panic(errParse)
 			}
 			// When the time retention is set and not too big use to define the max block duration.
 			if cfg.tsdb.RetentionDuration != 0 && cfg.tsdb.RetentionDuration/10 < maxBlockDuration {
@@ -778,6 +796,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// #nosec G301 // this is meant to be that way
 	if err = os.MkdirAll(dataDir, 0o777); err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
@@ -796,6 +815,7 @@ func main() {
 		catalog.DefaultIDGenerator{},
 		int(catalogMaxLogFileSize),
 		prometheus.DefaultRegisterer,
+		catalog.WithHeadDirInspector(catalog.NewHeadDirInspector(dataDir)),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)
@@ -864,7 +884,7 @@ func main() {
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
-	if err := adapter.ApplyConfig(cfgFile); err != nil {
+	if err = adapter.ApplyConfig(cfgFile); err != nil {
 		level.Error(logger).Log("msg", "failed to apply config to adapter", "err", err)
 		os.Exit(1)
 	}
@@ -921,7 +941,7 @@ func main() {
 
 			chunkPool := chunkenc.NewPool()
 			compactCtx, compactCancel := context.WithCancel(context.Background())
-			blockCompactor, err := tcompactor.NewTCompactor(
+			blockCompactor, errCompactor := tcompactor.NewTCompactor(
 				compactCtx,
 				log.With(logger, "component", "tcompactor"),
 				localStoragePath,
@@ -934,8 +954,8 @@ func main() {
 					MaxBlockDuration: int64(time.Duration(cfg.tsdb.MaxBlockDuration) / time.Millisecond),
 				}, chunkPool, prometheus.DefaultRegisterer,
 			)
-			if err != nil {
-				level.Error(logger).Log("msg", "failed to create tcompactor", "err", err)
+			if errCompactor != nil {
+				level.Error(logger).Log("msg", "failed to create tcompactor", "err", errCompactor)
 				os.Exit(1)
 			}
 
@@ -949,7 +969,7 @@ func main() {
 				prometheus.DefaultRegisterer,
 			).BlocksToDelete
 
-			blockManager, err := manager.NewManager(
+			blockManager, errCompactor := manager.NewManager(
 				localStoragePath,
 				&manager.Options{
 					RetentionDuration:           retentionMS,
@@ -969,8 +989,8 @@ func main() {
 				log.With(logger, "component", "blockmanager"),
 				prometheus.DefaultRegisterer,
 			)
-			if err != nil {
-				level.Error(logger).Log("msg", "failed to initialize block manager", "err", err)
+			if errCompactor != nil {
+				level.Error(logger).Log("msg", "failed to initialize block manager", "err", errCompactor)
 				os.Exit(1)
 			}
 
@@ -988,9 +1008,9 @@ func main() {
 		} else {
 			level.Info(logger).Log("msg", "Using pre-PR-377 historical TSDB storage scheme")
 			opts := cfg.tsdb.ToTSDBOptions()
-			db, err := tsdb.Open(localStoragePath, logger, prometheus.DefaultRegisterer, &opts, localStorage.stats)
-			if err != nil {
-				level.Error(logger).Log("msg", "opening storage failed", "err", err)
+			db, errOpen := tsdb.Open(localStoragePath, logger, prometheus.DefaultRegisterer, &opts, localStorage.stats)
+			if errOpen != nil {
+				level.Error(logger).Log("msg", "opening storage failed", "err", errOpen)
 				os.Exit(1)
 			}
 			tsdbHistorical = &tsdbHistoricalStorage{db: db}
@@ -1112,13 +1132,13 @@ func main() {
 		l := func(format string, a ...interface{}) {
 			level.Info(logger).Log("component", "automaxprocs", "msg", fmt.Sprintf(strings.TrimPrefix(format, "maxprocs: "), a...))
 		}
-		if _, err := maxprocs.Set(maxprocs.Logger(l)); err != nil {
-			level.Warn(logger).Log("component", "automaxprocs", "msg", "Failed to set GOMAXPROCS automatically", "err", err)
+		if _, errSet := maxprocs.Set(maxprocs.Logger(l)); errSet != nil {
+			level.Warn(logger).Log("component", "automaxprocs", "msg", "Failed to set GOMAXPROCS automatically", "err", errSet)
 		}
 	}
 
 	if cfg.enableAutoGOMEMLIMIT {
-		if _, err := memlimit.SetGoMemLimitWithOpts(
+		if _, errSet := memlimit.SetGoMemLimitWithOpts(
 			memlimit.WithRatio(cfg.memlimitRatio),
 			memlimit.WithProvider(
 				memlimit.ApplyFallback(
@@ -1126,19 +1146,31 @@ func main() {
 					memlimit.FromSystem,
 				),
 			),
-		); err != nil {
-			level.Warn(logger).Log("component", "automemlimit", "msg", "Failed to set GOMEMLIMIT automatically", "err", err)
+		); errSet != nil {
+			level.Warn(logger).Log("component", "automemlimit", "msg", "Failed to set GOMEMLIMIT automatically", "err", errSet)
 		}
 	}
 
 	if !agentMode {
-		activeQueryTracker, err := promql.NewActiveQueryTracker(
+		// PP_CHANGES.md: Load opt-in query diagnostics from the data directory at startup.
+		expensiveQueryConfigPath := filepath.Join(localStoragePath, "expensive_queries.yaml")
+		expensiveQueryConfig, errConfig := promql.LoadExpensiveQueryLoggingConfig(expensiveQueryConfigPath)
+		if errConfig != nil {
+			level.Error(logger).Log("msg", "Failed to load expensive query configuration", "err", errConfig)
+			os.Exit(2)
+		}
+
+		if expensiveQueryConfig != nil {
+			level.Info(logger).Log("msg", "Expensive query logging configured", "file", expensiveQueryConfigPath)
+		}
+
+		activeQueryTracker, errTracker := promql.NewActiveQueryTracker(
 			localStoragePath,
 			cfg.queryConcurrency,
 			log.With(logger, "component", "active query tracker"),
 		)
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to initialize active query tracker", "err", err)
+		if errTracker != nil {
+			level.Error(logger).Log("msg", "failed to initialize active query tracker", "err", errTracker)
 			os.Exit(1)
 		}
 
@@ -1152,16 +1184,19 @@ func main() {
 			NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 			// EnableAtModifier and EnableNegativeOffset have to be
 			// always on for regular PromQL as of Prometheus v2.33.
-			EnableAtModifier:         true,
-			EnableNegativeOffset:     true,
-			EnablePerStepStats:       cfg.enablePerStepStats,
-			EnableDelayedNameRemoval: cfg.promqlEnableDelayedNameRemoval,
+			EnableAtModifier:           true,
+			EnableNegativeOffset:       true,
+			EnablePerStepStats:         cfg.enablePerStepStats,
+			EnableDelayedNameRemoval:   cfg.promqlEnableDelayedNameRemoval,
+			LabelReplaceCacheSize:      cfg.labelReplaceCacheSize,
+			LabelReplaceRegexCacheSize: cfg.labelReplaceRegexCacheSize,
+			ExpensiveQueryLogging:      expensiveQueryConfig, // PP_CHANGES.md: Query diagnostics.
 		}
 
 		queryEngine = promql.NewEngine(opts)
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
-		ruleManager, err = rules.NewManager(&rules.ManagerOptions{
+		ruleManager, errTracker = rules.NewManager(&rules.ManagerOptions{
 			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
 			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
 			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
@@ -1182,8 +1217,8 @@ func main() {
 				return ruleQueryOffset
 			},
 		})
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to create a rule manager", "err", err)
+		if errTracker != nil {
+			level.Error(logger).Log("msg", "failed to create a rule manager", "err", errTracker)
 			os.Exit(1)
 		}
 	}
@@ -1272,9 +1307,9 @@ func main() {
 					return nil
 				}
 
-				l, err := logging.NewJSONFileLogger(cfg.GlobalConfig.QueryLogFile)
-				if err != nil {
-					return err
+				l, errLogger := logging.NewJSONFileLogger(cfg.GlobalConfig.QueryLogFile)
+				if errLogger != nil {
+					return errLogger
 				}
 				queryEngine.SetQueryLogger(l)
 				return nil
@@ -1288,9 +1323,9 @@ func main() {
 			name: "scrape_sd",
 			reloader: func(cfg *config.Config) error {
 				c := make(map[string]discovery.Configs)
-				scfgs, err := cfg.GetScrapeConfigs()
-				if err != nil {
-					return err
+				scfgs, errCfg := cfg.GetScrapeConfigs()
+				if errCfg != nil {
+					return errCfg
 				}
 				for _, v := range scfgs {
 					c[v.JobName] = v.ServiceDiscoveryConfigs
@@ -1320,10 +1355,10 @@ func main() {
 				// Get all rule files matching the configuration paths.
 				var files []string
 				for _, pat := range cfg.RuleFiles {
-					fs, err := filepath.Glob(pat)
-					if err != nil {
+					fs, errGlob := filepath.Glob(pat)
+					if errGlob != nil {
 						// The only error can be a bad pattern.
-						return fmt.Errorf("error retrieving rule files for %s: %w", pat, err)
+						return fmt.Errorf("error retrieving rule files for %s: %w", pat, errGlob)
 					}
 					files = append(files, fs...)
 				}
@@ -1366,7 +1401,7 @@ func main() {
 	listeners, err := webHandler.Listeners()
 	if err != nil {
 		level.Error(logger).Log("msg", "Unable to start web listeners", "err", err)
-		if err := queryEngine.Close(); err != nil {
+		if err = queryEngine.Close(); err != nil {
 			level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
 		}
 		os.Exit(1)
@@ -2157,7 +2192,7 @@ func (s *readyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
 }
 
 // ErrNotReady is returned if the underlying scrape manager is not ready yet.
-var ErrNotReady = errors.New("Scrape manager not ready")
+var ErrNotReady = errors.New("scrape manager not ready")
 
 // ReadyScrapeManager allows a scrape manager to be retrieved. Even if it's set at a later point in time.
 type readyScrapeManager struct {

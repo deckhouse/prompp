@@ -103,7 +103,7 @@ func (s *ChunkQuerierSuite) createQuerier(selectHints *prom_storage.SelectHints)
 		s.head,
 		querier.NewNoOpShardedDeduplicator,
 		selectHints.Start, selectHints.End, 0, cppbridge.NoDownsampling,
-		nil,
+		nil, nil,
 	)
 	runtime.SetFinalizer(q, (*ChunkQuerier).Close)
 	return q

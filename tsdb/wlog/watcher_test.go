@@ -531,7 +531,7 @@ func TestReadCheckpointMultipleSegments(t *testing.T) {
 			err = os.Mkdir(checkpointDir, 0o777)
 			require.NoError(t, err)
 			for i := 0; i <= 4; i++ {
-				err := os.Rename(SegmentName(dir+"/wal", i), SegmentName(checkpointDir, i))
+				err = os.Rename(SegmentName(dir+"/wal", i), SegmentName(checkpointDir, i))
 				require.NoError(t, err)
 			}
 

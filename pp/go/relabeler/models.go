@@ -97,8 +97,8 @@ func (l *OpenHeadLimits) MarshalBinary() ([]byte, error) {
 	//revive:disable-next-line:add-constant sum 8+4+8
 	buf := make([]byte, 0, 20)
 
-	buf = binary.AppendUvarint(buf, uint64(l.MaxDuration))
-	buf = binary.AppendUvarint(buf, uint64(l.LastAddTimeout))
+	buf = binary.AppendUvarint(buf, uint64(l.MaxDuration))    // #nosec G115 // no overflow
+	buf = binary.AppendUvarint(buf, uint64(l.LastAddTimeout)) // #nosec G115 // no overflow
 	buf = binary.AppendUvarint(buf, uint64(l.MaxSamples))
 	return buf, nil
 }
@@ -108,15 +108,15 @@ func (l *OpenHeadLimits) UnmarshalBinary(data []byte) error {
 	var offset int
 
 	maxDuration, n := binary.Uvarint(data[offset:])
-	l.MaxDuration = time.Duration(maxDuration)
+	l.MaxDuration = time.Duration(maxDuration) // #nosec G115 // no overflow
 	offset += n
 
 	lastAddTimeout, n := binary.Uvarint(data[offset:])
-	l.LastAddTimeout = time.Duration(lastAddTimeout)
+	l.LastAddTimeout = time.Duration(lastAddTimeout) // #nosec G115 // no overflow
 	offset += n
 
 	maxSamples, _ := binary.Uvarint(data[offset:])
-	l.MaxSamples = uint32(maxSamples)
+	l.MaxSamples = uint32(maxSamples) // #nosec G115 // no overflow
 
 	return nil
 }
@@ -150,10 +150,10 @@ func (l *BlockLimits) MarshalBinary() ([]byte, error) {
 	//revive:disable-next-line:add-constant sum 3*8+1(BlockSizePercentThresholdForDownscaling max 100)
 	buf := make([]byte, 0, 25)
 
-	buf = binary.AppendUvarint(buf, uint64(l.DesiredBlockSizeBytes))
-	buf = binary.AppendUvarint(buf, uint64(l.BlockSizePercentThresholdForDownscaling))
-	buf = binary.AppendUvarint(buf, uint64(l.DesiredBlockFormationDuration))
-	buf = binary.AppendUvarint(buf, uint64(l.DelayAfterNotify))
+	buf = binary.AppendUvarint(buf, uint64(l.DesiredBlockSizeBytes))                   // #nosec G115 // no overflow
+	buf = binary.AppendUvarint(buf, uint64(l.BlockSizePercentThresholdForDownscaling)) // #nosec G115 // no overflow
+	buf = binary.AppendUvarint(buf, uint64(l.DesiredBlockFormationDuration))           // #nosec G115 // no overflow
+	buf = binary.AppendUvarint(buf, uint64(l.DelayAfterNotify))                        // #nosec G115 // no overflow
 	return buf, nil
 }
 
@@ -162,19 +162,19 @@ func (l *BlockLimits) UnmarshalBinary(data []byte) error {
 	var offset int
 
 	desiredBlockSizeBytes, n := binary.Uvarint(data[offset:])
-	l.DesiredBlockSizeBytes = int64(desiredBlockSizeBytes)
+	l.DesiredBlockSizeBytes = int64(desiredBlockSizeBytes) // #nosec G115 // no overflow
 	offset += n
 
 	blockSizePercentThresholdForDownscaling, n := binary.Uvarint(data[offset:])
-	l.BlockSizePercentThresholdForDownscaling = int64(blockSizePercentThresholdForDownscaling)
+	l.BlockSizePercentThresholdForDownscaling = int64(blockSizePercentThresholdForDownscaling) // #nosec G115
 	offset += n
 
 	desiredBlockFormationDuration, n := binary.Uvarint(data[offset:])
-	l.DesiredBlockFormationDuration = time.Duration(desiredBlockFormationDuration)
+	l.DesiredBlockFormationDuration = time.Duration(desiredBlockFormationDuration) // #nosec G115 // no overflow
 	offset += n
 
 	delayAfterNotify, _ := binary.Uvarint(data[offset:])
-	l.DelayAfterNotify = time.Duration(delayAfterNotify)
+	l.DelayAfterNotify = time.Duration(delayAfterNotify) // #nosec G115 // no overflow
 
 	return nil
 }
@@ -207,7 +207,7 @@ var _ Promise = (*SendPromise)(nil)
 func NewSendPromise(shardsNumber int) *SendPromise {
 	return &SendPromise{
 		done:    make(chan struct{}),
-		counter: int32(shardsNumber),
+		counter: int32(shardsNumber), // #nosec G115 // no overflow
 		refills: 0,
 	}
 }

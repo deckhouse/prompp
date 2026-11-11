@@ -596,7 +596,7 @@ func readDelimited(b []byte, mf *dto.MetricFamily) (n int, err error) {
 	if varIntLength == 0 || varIntLength > binary.MaxVarintLen32 {
 		return 0, errInvalidVarint
 	}
-	totalLength := varIntLength + int(messageLength)
+	totalLength := varIntLength + int(messageLength) // #nosec G115 // no overflow
 	if totalLength > len(b) {
 		return 0, fmt.Errorf("protobufparse: insufficient length of buffer, expected at least %d bytes, got %d bytes", totalLength, len(b))
 	}

@@ -66,8 +66,8 @@ func (s *TitleSuite) TestTitleV1Quick() {
 func (s *TitleSuite) TestTitleV1FrameAt() {
 	ctx := context.Background()
 	var (
-		snp     uint8     = 2
-		blockID uuid.UUID = uuid.New()
+		snp     uint8 = 2
+		blockID       = uuid.New()
 	)
 	wm, err := frames.NewTitleFrameV1(snp, blockID)
 	s.Require().NoError(err)
@@ -92,8 +92,8 @@ func (s *TitleSuite) TestTitleV1FrameAt() {
 func (s *TitleSuite) TestTitleV1Frame() {
 	ctx := context.Background()
 	var (
-		snp     uint8     = 2
-		blockID uuid.UUID = uuid.New()
+		snp     uint8 = 2
+		blockID       = uuid.New()
 	)
 	wm, err := frames.NewTitleFrameV1(snp, blockID)
 	s.Require().NoError(err)
@@ -148,9 +148,9 @@ func (s *TitleSuite) TestTitleV2Quick() {
 func (s *TitleSuite) TestTitleV2FrameAt() {
 	ctx := context.Background()
 	var (
-		snp             uint8     = 2
-		encodersVersion uint8     = 1
-		blockID         uuid.UUID = uuid.New()
+		snp             uint8 = 2
+		encodersVersion uint8 = 1
+		blockID               = uuid.New()
 	)
 	wm, err := frames.NewTitleFrameV2(snp, encodersVersion, blockID)
 	s.Require().NoError(err)
@@ -175,9 +175,9 @@ func (s *TitleSuite) TestTitleV2FrameAt() {
 func (s *TitleSuite) TestTitleV2Frame() {
 	ctx := context.Background()
 	var (
-		snp             uint8     = 2
-		encodersVersion uint8     = 1
-		blockID         uuid.UUID = uuid.New()
+		snp             uint8 = 2
+		encodersVersion uint8 = 1
+		blockID               = uuid.New()
 	)
 	wm, err := frames.NewTitleFrameV2(snp, encodersVersion, blockID)
 	s.Require().NoError(err)
@@ -204,8 +204,8 @@ func (s *TitleSuite) TestTitleV2Frame() {
 func (s *TitleSuite) TestTitleOldFrameAt() {
 	ctx := context.Background()
 	var (
-		snp     uint8     = 2
-		blockID uuid.UUID = uuid.New()
+		snp     uint8 = 2
+		blockID       = uuid.New()
 	)
 
 	body, err := frames.NewTitleV1(snp, blockID).MarshalBinary()
@@ -237,8 +237,8 @@ func (s *TitleSuite) TestTitleOldFrameAt() {
 func (s *TitleSuite) TestTitleOldFrame() {
 	ctx := context.Background()
 	var (
-		snp     uint8     = 2
-		blockID uuid.UUID = uuid.New()
+		snp     uint8 = 2
+		blockID       = uuid.New()
 	)
 
 	body, err := frames.NewTitleV1(snp, blockID).MarshalBinary()

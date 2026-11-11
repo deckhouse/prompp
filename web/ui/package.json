@@ -1,56 +1,29 @@
 {
   "name": "prometheus-io",
+  "description": "Monorepo for the Prometheus UI",
+  "version": "0.315.0",
   "private": true,
   "scripts": {
-    "build": "GENERATE_SOURCEMAP=false bash build_ui.sh --all",
+    "build": "bash build_ui.sh --all",
+    "build:mantine-ui": "bash build_ui.sh --mantine-ui",
     "build:module": "bash build_ui.sh --build-module",
-    "start": "npm run start -w react-app",
-    "test": "npm run test --workspace=module/codemirror-promql --workspace=module/lezer-promql",
-    "lint": "npm run lint --workspaces"
+    "start": "pnpm --filter @prometheus-io/mantine-ui run start",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint"
   },
   "workspaces": [
-    "react-app",
+    "mantine-ui",
     "module/*"
   ],
-  "engines": {
-    "npm": ">=7.0.0"
-  },
   "devDependencies": {
-    "@babel/runtime": "7.29.2",
-    "@rollup/plugin-node-resolve": "16.0.3",
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.14.9",
-    "body-parser": "1.20.6",
-    "bootstrap": "5.0.0",
-    "cookie": "0.7.2",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-config-react-app": "^7.0.1",
-    "eslint-plugin-prettier": "^4.2.1",
-    "express": "^4.21.2",
-    "form-data": "3.0.5",
-    "http-proxy-middleware": "3.0.7",
-    "jest-canvas-mock": "^2.5.2",
-    "jest-fetch-mock": "^3.0.3",
-    "micromatch": "4.0.8",
-    "nanoid": "3.3.18",
-    "on-headers": "1.1.0",
-    "path-to-regexp": "1.9.0",
-    "postcss": "8.5.23",
-    "prettier": "^2.8.8",
-    "react-scripts": "5.0.1",
-    "rollup": "2.80.0",
-    "send": "0.19.2",
-    "serialize-javascript": "7.0.5",
-    "serve-static": "^1.16.2",
-    "ts-jest": "^29.2.2",
-    "typescript": "^5.0.0",
-    "webpack": "5.106.2",
-    "webpack-dev-server": "5.2.6",
-    "ws": "8.21.0"
-  },
-  "version": "0.55.1",
-  "overrides": {
-    "nth-check": ">=2.0.1",
-    "moment": "^2.31.0"
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
+    "@typescript/native": "npm:typescript@^7.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "ts-jest": "^29.4.12",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "^8.0.0"
   }
 }

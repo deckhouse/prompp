@@ -288,6 +288,65 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	}, s.shards(loadedHead)[0].LSS().Target().GetLabelSets([]uint32{0}).LabelsSets())
 }
 
+// TestTimeIntervalAfterLoad checks that a loaded head reports the time interval of the restored data.
+func (s *HeadLoadSuite) TestTimeIntervalAfterLoad() {
+	// Arrange
+	s.createHeadWithRestorableSamples()
+
+	// Act
+	loadedHead := s.mustLoadHead(0)
+	timeInterval := services.HeadTimeInterval(loadedHead)
+
+	err := loadedHead.Close()
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(cppbridge.TimeInterval{MinT: 100, MaxT: 200}, timeInterval)
+}
+
+// TestTimeIntervalAfterAppendToLoadedHead checks that the time interval of a loaded head covers the
+// restored data as well as the appended data, without reading the interval in between. Restoring from
+// the wal does not maintain the cached interval of the data storage, so it is computed on load;
+// an append widens it instead of replacing it with the bounds of its own samples.
+func (s *HeadLoadSuite) TestTimeIntervalAfterAppendToLoadedHead() {
+	// Arrange
+	s.createHeadWithRestorableSamples()
+	loadedHead := s.mustLoadHead(0)
+
+	// Act
+	s.appendTimeSeries(loadedHead, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "wal_metric"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 300, Value: 3},
+			},
+		},
+	})
+	timeInterval := services.HeadTimeInterval(loadedHead)
+
+	err := loadedHead.Close()
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(cppbridge.TimeInterval{MinT: 100, MaxT: 300}, timeInterval)
+}
+
+// createHeadWithRestorableSamples writes a series spanning [100, 200] to a head and closes it,
+// leaving the wal to be restored by a load.
+func (s *HeadLoadSuite) createHeadWithRestorableSamples() {
+	sourceHead := s.mustCreateHead(0)
+	s.appendTimeSeries(sourceHead, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "wal_metric"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1},
+				{Timestamp: 200, Value: 2},
+			},
+		},
+	})
+	s.Require().NoError(sourceHead.Close())
+}
+
 func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)

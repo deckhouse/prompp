@@ -37,18 +37,13 @@ import (
 // SwitchFuncOptimizeSuite
 //
 
+// SwitchFuncOptimizeSuite checks mode and query-shape eligibility before the per-querier cost gate.
 type SwitchFuncOptimizeSuite struct {
 	suite.Suite
-
-	isPossibleToOptimize func() bool
 }
 
 func TestSwitchFuncOptimizeSuite(t *testing.T) {
 	suite.Run(t, new(SwitchFuncOptimizeSuite))
-}
-
-func (s *SwitchFuncOptimizeSuite) SetupSuite() {
-	s.isPossibleToOptimize = func() bool { return true }
 }
 
 func (s *SwitchFuncOptimizeSuite) TestNone() {
@@ -91,7 +86,7 @@ func (s *SwitchFuncOptimizeSuite) TestNone() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 0, cppbridge.NoDownsampling)
+		result := querier.SwitchFuncOptimize(test.hints, 0)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -136,7 +131,7 @@ func (s *SwitchFuncOptimizeSuite) TestDropPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 1, cppbridge.NoDownsampling)
+		result := querier.SwitchFuncOptimize(test.hints, 1)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -181,7 +176,7 @@ func (s *SwitchFuncOptimizeSuite) TestNewPoint() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 2, cppbridge.NoDownsampling)
+		result := querier.SwitchFuncOptimize(test.hints, 2)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -226,7 +221,7 @@ func (s *SwitchFuncOptimizeSuite) TestCrossSeries() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 4, cppbridge.NoDownsampling)
+		result := querier.SwitchFuncOptimize(test.hints, 4)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -271,7 +266,7 @@ func (s *SwitchFuncOptimizeSuite) TestAll() {
 	}
 
 	for _, test := range tests {
-		result := querier.SwitchFuncOptimize(test.hints, s.isPossibleToOptimize, 7, cppbridge.NoDownsampling)
+		result := querier.SwitchFuncOptimize(test.hints, 7)
 		s.Require().Equal(test.expected, result)
 	}
 }
@@ -457,13 +452,11 @@ func queryInstant(
 type querierOptimize struct {
 	noErrorFunc storagetest.NoErrorFunc
 
-	dataDir        string
-	head           *storage.Head
-	start          time.Time
-	end            time.Time
-	step           time.Duration
-	retentionMS    int64
-	downsamplingMS int64
+	dataDir string
+	head    *storage.Head
+	start   time.Time
+	end     time.Time
+	step    time.Duration
 
 	lookbackDelta time.Duration
 	queryOpts     promql.QueryOpts
@@ -484,7 +477,6 @@ func (s *querierOptimize) setup(
 	s.start = start
 	s.step = step
 	s.end = s.start.Add(s.step * time.Duration(countOfSteps))
-	s.retentionMS = 86400000
 
 	s.dataDir = filepath.Join(baseDir, "data")
 	s.noErrorFunc(os.MkdirAll(s.dataDir, os.ModeDir))
@@ -708,16 +700,15 @@ func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error
 		maxt,
 		s.step.Milliseconds(),
 		s.start.UnixMilli(),
-		s.retentionMS,
-		s.downsamplingMS,
+		0, cppbridge.NoDownsampling,
 		nil,
 	)
 	q.IsPossibleToOptimize = func(
 		[]*cppbridge.LSSQueryResult,
 		*prom_storage.SelectHints,
 		int64, int64,
-	) func() bool {
-		return func() bool { return true }
+	) bool {
+		return true
 	}
 
 	return q, nil

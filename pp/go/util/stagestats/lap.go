@@ -28,7 +28,7 @@ func (l *Lap) Mark(stage Stage) {
 	l.prev = now
 }
 
-// SinceMicroseconds returns the time elapsed since the start of the [Lap].
+// SinceMicroseconds returns the time elapsed since the start of the [Lap] in fractional microseconds.
 func (l *Lap) SinceMicroseconds() float64 {
 	return float64(Now()-l.start) / 1e3
 }

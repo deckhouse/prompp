@@ -26,8 +26,8 @@ type labelSetsForGroup struct {
 	groupID int
 }
 
-// builderPool builders pool for reuse in SeriesSet.
-var builderPool = sync.Pool{
+// crossBuilderPool builders pool for reuse in SeriesSet.
+var crossBuilderPool = sync.Pool{
 	New: func() any {
 		b := labels.NewScratchBuilder(5)
 		return &b
@@ -63,7 +63,7 @@ func NewCrossSeriesSet(
 	shardID uint16,
 ) *CrossSeriesSet {
 	labelsGroups := make([]labelSetsForGroup, 0, len(seriesGroups.Groups))
-	builder := builderPool.Get().(*labels.ScratchBuilder)
+	builder := crossBuilderPool.Get().(*labels.ScratchBuilder)
 	lvalue := fmt.Sprintf("%s__%d", headID, shardID)
 
 	// grouping must be sorted
@@ -84,7 +84,7 @@ func NewCrossSeriesSet(
 			groupID: i,
 		})
 	}
-	builderPool.Put(builder)
+	crossBuilderPool.Put(builder)
 	slices.SortFunc(labelsGroups, func(a, b labelSetsForGroup) int { return labels.Compare(a.ls, b.ls) })
 
 	return &CrossSeriesSet{
@@ -269,19 +269,17 @@ func (*CrossChunkIterator) Err() error {
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
 func (it *CrossChunkIterator) Next() chunkenc.ValueType {
+	if !it.chunkIterator.HasData() || it.AtT() > it.maxt {
+		return chunkenc.ValNone
+	}
+
 	if !it.isInitialized {
-		if !it.chunkIterator.HasData() {
-			return chunkenc.ValNone
-		}
 		it.isInitialized = true
 	} else {
 		it.chunkIterator.Next()
-		if !it.chunkIterator.HasData() {
-			return chunkenc.ValNone
-		}
 	}
 
-	if it.AtT() > it.maxt {
+	if !it.chunkIterator.HasData() || it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
 
@@ -292,15 +290,22 @@ func (it *CrossChunkIterator) Next() chunkenc.ValueType {
 // [chunkenc.Iterator] interface implementation.
 func (it *CrossChunkIterator) Seek(t int64) chunkenc.ValueType {
 	it.isInitialized = true
-	if t > it.AtT() {
-		return it.Next()
+	t = max(t, it.mint)
+
+	for it.chunkIterator.HasData() {
+		timestamp := it.AtT()
+		if timestamp > it.maxt {
+			return chunkenc.ValNone
+		}
+
+		if timestamp >= t {
+			return chunkenc.ValFloat
+		}
+
+		it.chunkIterator.Next()
 	}
 
-	if it.AtT() > it.maxt {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
+	return chunkenc.ValNone
 }
 
 // reset resets the iterator to the beginning of the serialized data.
@@ -356,7 +361,7 @@ func crossLabelSetCtor(
 			return errGroupingLabelsIsEnough
 		}
 
-		if l.Name > sortedGrouping[i] {
+		for l.Name > sortedGrouping[i] {
 			i++
 
 			if i >= len(sortedGrouping) {

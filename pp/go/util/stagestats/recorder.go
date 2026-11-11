@@ -129,13 +129,7 @@ func (r *Recorder) RandomStripe() Stripe {
 
 // Start starts a [Lap] on a randomly selected [Stripe]. A nil [Recorder] returns a no-op [Lap].
 func (r *Recorder) Start() Lap {
-	if r == nil {
-		return Lap{}
-	}
-
-	now := Now()
-
-	return Lap{stripe: r.RandomStripe(), start: now, prev: now}
+	return r.RandomStripe().Start()
 }
 
 // Stripe returns the [Stripe] selected by the hint. A nil [Recorder] returns a no-op [Stripe].

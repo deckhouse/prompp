@@ -362,6 +362,41 @@ TEST_F(SequenceDictionaryFixture, ReleaseOfLastReferenceFreesSequence) {
   EXPECT_EQ(0U, dictionary_.open_sequences_count());
 }
 
+TEST_F(SequenceDictionaryFixture, TimeBoundsOfEmptyDictionaryAreEmpty) {
+  // Arrange
+
+  // Act
+  const auto bounds = dictionary_.time_bounds();
+
+  // Assert
+  EXPECT_EQ(PromPP::Primitives::TimeInterval{}, bounds);
+}
+
+TEST_F(SequenceDictionaryFixture, TimeBoundsSpanOpenAndFinalizedSequences) {
+  // Arrange
+  [[maybe_unused]] const auto finalized = dictionary_.finalize(append(kInvalidSequenceId, {101, 102}));
+  [[maybe_unused]] const auto open = append(kInvalidSequenceId, {103, 105});
+
+  // Act
+  const auto bounds = dictionary_.time_bounds();
+
+  // Assert
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 101, .max = 105}), bounds);
+}
+
+TEST_F(SequenceDictionaryFixture, TimeBoundsSkipReleasedSequence) {
+  // Arrange
+  const auto released = append(kInvalidSequenceId, {101, 102});
+  [[maybe_unused]] const auto kept = append(kInvalidSequenceId, {103, 104});
+  dictionary_.release(released);
+
+  // Act
+  const auto bounds = dictionary_.time_bounds();
+
+  // Assert
+  EXPECT_EQ((PromPP::Primitives::TimeInterval{.min = 103, .max = 104}), bounds);
+}
+
 TEST_F(SequenceDictionaryFixture, RandomWorkloadReferencesEachContentOnce) {
   // Arrange
 

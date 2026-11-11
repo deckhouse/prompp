@@ -207,8 +207,8 @@ func TestReader_Live(t *testing.T) {
 			go func(i int) {
 				for _, rec := range testReaderCases[i].t {
 					rec := encodedRecord(rec.t, rec.b)
-					_, err := writeFd.Write(rec)
-					require.NoError(t, err)
+					_, errWrite := writeFd.Write(rec)
+					require.NoError(t, errWrite)
 					runtime.Gosched()
 				}
 				writeFd.Close()
@@ -255,7 +255,7 @@ func generateRandomEntries(w *WL, records chan []byte) error {
 			return err
 		}
 		rec := make([]byte, n.Int64())
-		if _, err := rand.Read(rec); err != nil {
+		if _, err = rand.Read(rec); err != nil {
 			return err
 		}
 
@@ -367,8 +367,8 @@ func TestReaderFuzz_Live(t *testing.T) {
 			input := make(chan []byte, fuzzLen/10) // buffering required as we sometimes batch WAL writes.
 			done := make(chan struct{})
 			go func() {
-				err := generateRandomEntries(w, input)
-				require.NoError(t, err)
+				errGenerate := generateRandomEntries(w, input)
+				require.NoError(t, errGenerate)
 				time.Sleep(100 * time.Millisecond)
 				close(done)
 			}()

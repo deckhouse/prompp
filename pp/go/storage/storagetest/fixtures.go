@@ -175,7 +175,7 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 
 		iterator := cppbridge.NewDataStorageSerializedDataSamplesIterator(serializedData, chunkRef)
 		for {
-			if !iterator.HasData() {
+			if !iterator.HasData() { //nolint:staticcheck // this is test
 				break
 			}
 

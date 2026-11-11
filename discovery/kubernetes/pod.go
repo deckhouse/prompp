@@ -294,7 +294,7 @@ func (p *Pod) buildPod(pod *apiv1.Pod) *targetgroup.Group {
 		}
 		// Otherwise create one target for each container/port combination.
 		for _, port := range c.Ports {
-			ports := strconv.FormatUint(uint64(port.ContainerPort), 10)
+			ports := strconv.FormatUint(uint64(port.ContainerPort), 10) // #nosec G115 // no overflow
 			addr := net.JoinHostPort(pod.Status.PodIP, ports)
 
 			tg.Targets = append(tg.Targets, model.LabelSet{

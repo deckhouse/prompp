@@ -120,7 +120,7 @@ func (s *BinaryBodySuite) TestBinaryBodyV2() {
 
 	s.Require().Equal(shardID, rbbv2.GetShardID())
 	s.Require().Equal(segmentID, rbbv2.GetSegmentID())
-	s.Require().EqualValues(wbbv2.Size(), rbbv2.Size())
+	s.Require().Equal(wbbv2.Size(), rbbv2.Size())
 	s.Require().Equal(data, string(rbbv2.Bytes()))
 }
 
@@ -192,6 +192,6 @@ func (s *BinaryBodySuite) TestBinaryWrapper() {
 
 	s.Require().Equal(shardID, bbv2.GetShardID())
 	s.Require().Equal(segmentID, bbv2.GetSegmentID())
-	s.Require().EqualValues(bbv2.Size(), bw.Size())
+	s.Require().Equal(bbv2.Size(), bw.Size())
 	s.Require().Equal(data, string(bbv2.Bytes()))
 }

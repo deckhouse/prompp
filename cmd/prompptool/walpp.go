@@ -67,7 +67,8 @@ func (cmd *cmdWALPPToBlock) Do(
 
 	level.Debug(logger).Log("msg", "read catalog log")
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, registerer)
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, registerer,
+		catalog.WithHeadDirInspector(catalog.NewHeadDirInspector(workingDir)))
 	if err != nil {
 		return fmt.Errorf("failed init head catalog: %w", err)
 	}
@@ -110,7 +111,7 @@ func (cmd *cmdWALPPToBlock) Do(
 
 		numberOfShards := h.NumberOfShards()
 		for shard := range h.RangeShards() {
-			if _, err := bw.Write(shard, numberOfShards); err != nil {
+			if _, err = bw.Write(shard, numberOfShards); err != nil {
 				_ = h.Close()
 				return fmt.Errorf(
 					"failed to write tsdb block [id: %s, dir: %s]: %w",

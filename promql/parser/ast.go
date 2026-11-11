@@ -321,7 +321,7 @@ func Walk(v Visitor, node Node, path []Node) error {
 	path = append(path, node)
 
 	for _, e := range Children(node) {
-		if err := Walk(v, e, path); err != nil {
+		if err = Walk(v, e, path); err != nil {
 			return err
 		}
 	}

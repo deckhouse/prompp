@@ -5,12 +5,11 @@ import (
 	"errors"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/util/annotations"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 const (
@@ -40,6 +39,7 @@ type ChunkQuerier[
 	retentionMS      int64
 	downsamplingMS   int64
 	closer           func() error
+	metrics          *Metrics
 }
 
 // NewChunkQuerier init new [ChunkQuerier].
@@ -54,6 +54,7 @@ func NewChunkQuerier[
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt, retentionMS, downsamplingMS int64,
 	closer func() error,
+	metrics *Metrics,
 ) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
 		head:             head,
@@ -63,6 +64,7 @@ func NewChunkQuerier[
 		retentionMS:      retentionMS,
 		downsamplingMS:   downsamplingMS,
 		closer:           closer,
+		metrics:          metrics,
 	}
 }
 
@@ -91,7 +93,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 		ctx,
 		q.head,
 		q.deduplicatorCtor,
-		nil,
+		q.metrics.startQuery(operationChunkLabelNames),
 		lssLabelNamesChunkQuerier,
 		hints,
 		matchers...,
@@ -114,7 +116,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 		name,
 		q.head,
 		q.deduplicatorCtor,
-		nil,
+		q.metrics.startQuery(operationChunkLabelValues),
 		lssLabelValuesChunkQuerier,
 		hints,
 		matchers...,
@@ -131,7 +133,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
-	release, err := q.head.AcquireQuery(ctx)
+	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSelectChunks)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
 			return &EmptyChunkSeriesSet{}
@@ -140,50 +142,42 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		logger.Warnf("[ChunkQuerier]: Select failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
-	defer release()
 
-	poolProvider := q.head.PoolProvider()
-	snapshots := poolProvider.GetSnapshots()
-	defer poolProvider.PutSnapshots(snapshots)
-	lssQueryResults := poolProvider.GetLSSQueryResults()
-	defer poolProvider.PutLSSQueryResults(lssQueryResults)
-	// The chunk series sets take the series id from the recoded chunks and do not
-	// reference the query result buffers, so they can be released on return.
-	defer closeLSSQueryResults(lssQueryResults)
+	defer resources.close()
 
-	if err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
+	stats := &resources.stats
+	poolProvider := resources.pool
+	err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, &resources)
+	if err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	shardedSerializedData := poolProvider.GetSerializedData()
-	defer poolProvider.PutSerializedData(shardedSerializedData)
-	queryDataStorage(
-		dsQueryChunkQuerier,
-		q.head,
-		lssQueryResults,
-		shardedSerializedData,
-		q.mint,
-		q.maxt,
-		q.getDownsamplingMs(),
-		hints,
-	)
+	resources.serializedData = poolProvider.GetSerializedData()
 
-	chunkSeriesSets := poolProvider.GetChunkSeriesSet()
-	defer poolProvider.PutChunkSeriesSet(chunkSeriesSets)
-	for shardID, serializedData := range shardedSerializedData {
+	t := queryDataStorage(
+		dsQueryChunkQuerier, q.head, resources.lssQueryResults, resources.serializedData,
+		q.mint, q.maxt, q.getDownsamplingMs(), hints, stats,
+	)
+	resources.addTask(t)
+
+	resources.chunkSeriesSets = poolProvider.GetChunkSeriesSet()
+	for shardID, serializedData := range resources.serializedData {
 		if serializedData == nil {
-			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
+			resources.chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}
 
-		chunkSeriesSets[shardID] = NewChunkSeriesSet(
-			snapshots[shardID],
+		resources.chunkSeriesSets[shardID] = NewChunkSeriesSet(
+			resources.snapshots[shardID],
 			cppbridge.NewSerializedChunkRecoder(serializedData, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
 	}
 
-	return NewMergeShardChunkSeriesSet(chunkSeriesSets)
+	result := NewMergeShardChunkSeriesSet(resources.chunkSeriesSets)
+	stats.lap.Mark(stageBuildResult)
+
+	return result
 }
 
 // getDownsamplingMs calculates the downsampling milliseconds based on the time range.

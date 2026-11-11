@@ -1778,21 +1778,18 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 	)
 }
 
-// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// primitivesLSSSetPendingShrinkBoundary uses cgo to set the pending shrink boundary
 // on LSS (switch to "fixed" state before snapshot and copy).
 // Attention: works only with QueryableEncodingBimap type of LSS.
 func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
-	args := struct {
-		lss            uintptr
-		shrinkBoundary uint32
-	}{lss, shrinkBoundary}
-
+	// Removing hidden series and rebuilding indexes can take hundreds of milliseconds.
+	// fastcgo would hold the P on the system stack and delay GC stop-the-world coordination.
+	// A regular cgo call lets the runtime reuse the P and coordinate GC without waiting for C++ to return.
+	// Only the stable C++-allocated LSS address and the scalar boundary cross the call;
+	// no Go memory is passed, so [runtime.Pinner] is unnecessary.
 	testGC()
 	start := time.Now()
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_set_pending_shrink_boundary,
-		uintptr(unsafe.Pointer(&args)),
-	)
+	C.prompp_primitives_lss_set_pending_shrink_boundary(C.uint64_t(lss), C.uint64_t(shrinkBoundary))
 	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 

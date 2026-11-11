@@ -5,18 +5,30 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 )
 
 //
 // FileHandler
 //
 
-// FileHandler handler for work with [os.File].
+// FileHandler tracks read and write positions in an [os.File], including fixed-size v3 journal bounds.
 type FileHandler struct {
 	file        *os.File
 	size        int
 	readOffset  int64
 	writeOffset int64
+	// fixedSize marks a preallocated fixed-size file (the log file version 3): writes only
+	// overwrite already allocated bytes and never change the accounted size.
+	fixedSize    bool
+	journalStart int64
+	journalEnd   int64
+	// activeUsed is the known used length of the active journal, excluding its terminator.
+	// Successful appends and opening scans advance it beyond the persisted header checkpoint.
+	activeUsed int64
+	appendErr  error
+	// pendingAppendEnd bounds bytes possibly written by failed appends, including their terminators.
+	pendingAppendEnd int64
 }
 
 // NewFileHandler init new [FileHandler].
@@ -60,6 +72,14 @@ func (fh *FileHandler) FileName() string {
 
 // Read reads len(b) bytes from the [os.File].
 func (fh *FileHandler) Read(p []byte) (n int, err error) {
+	if fh.fixedSize {
+		if fh.readOffset >= fh.journalEnd {
+			return 0, io.EOF
+		}
+
+		p = p[:min(int64(len(p)), fh.journalEnd-fh.readOffset)]
+	}
+
 	n, err = fh.file.ReadAt(p, fh.readOffset)
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
@@ -70,7 +90,7 @@ func (fh *FileHandler) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-// SetReadOffset set offset for read file.
+// SetReadOffset sets the read offset.
 func (fh *FileHandler) SetReadOffset(offset int64) {
 	fh.readOffset = offset
 }
@@ -85,18 +105,37 @@ func (fh *FileHandler) Sync() error {
 	return fh.file.Sync()
 }
 
-// Write writes len(b) bytes to the [os.File].
+// Write appends p without syncing; the caller must use [FileHandler.Sync] at its durability boundary.
 func (fh *FileHandler) Write(p []byte) (n int, err error) {
-	n, err = fh.file.WriteAt(p, fh.writeOffset)
+	n, err = fh.writeAt(p, fh.writeOffset)
 	if err != nil {
 		return 0, fmt.Errorf("write file: %w", err)
-	}
-
-	if err = fh.file.Sync(); err != nil {
-		return 0, fmt.Errorf("sync file: %w", err)
 	}
 
 	fh.size += n
 	fh.writeOffset += int64(n)
 	return n, nil
+}
+
+// WriteFixed overwrites allocated bytes without syncing or advancing the write offset.
+// The caller syncs the file and advances the offset after a successful write.
+func (fh *FileHandler) WriteFixed(p []byte) error {
+	if !fh.fixedSize {
+		return fmt.Errorf("write fixed: %s is not a fixed-size file", fh.file.Name())
+	}
+
+	if _, err := fh.writeAt(p, fh.writeOffset); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+
+	return nil
+}
+
+// writeAt refuses writes outside the allocated area of a fixed-size file.
+func (fh *FileHandler) writeAt(p []byte, off int64) (int, error) {
+	if fh.fixedSize && (off < 0 || off > int64(fh.size) || int64(len(p)) > int64(fh.size)-off) {
+		return 0, fmt.Errorf("write %d bytes at %d exceeds size %d: %w", len(p), off, fh.size, syscall.ENOSPC)
+	}
+
+	return fh.file.WriteAt(p, off)
 }

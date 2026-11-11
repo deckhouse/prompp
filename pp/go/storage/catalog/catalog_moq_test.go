@@ -4,8 +4,9 @@
 package catalog_test
 
 import (
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"sync"
+
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 )
 
 // LogMock is a mock implementation of catalog.Log.
@@ -14,6 +15,9 @@ import (
 //
 //		// make and configure a mocked catalog.Log
 //		mockedLog := &LogMock{
+//			NeedsRewriteFunc: func() bool {
+//				panic("mock out the NeedsRewrite method")
+//			},
 //			ReWriteFunc: func(srecords ...*catalog.SerializedRecord) error {
 //				panic("mock out the ReWrite method")
 //			},
@@ -22,6 +26,9 @@ import (
 //			},
 //			SizeFunc: func() int {
 //				panic("mock out the Size method")
+//			},
+//			StrictReadFunc: func() bool {
+//				panic("mock out the StrictRead method")
 //			},
 //			WriteFunc: func(srecord *catalog.SerializedRecord) error {
 //				panic("mock out the Write method")
@@ -33,6 +40,9 @@ import (
 //
 //	}
 type LogMock struct {
+	// NeedsRewriteFunc mocks the NeedsRewrite method.
+	NeedsRewriteFunc func() bool
+
 	// ReWriteFunc mocks the ReWrite method.
 	ReWriteFunc func(srecords ...*catalog.SerializedRecord) error
 
@@ -42,11 +52,16 @@ type LogMock struct {
 	// SizeFunc mocks the Size method.
 	SizeFunc func() int
 
+	// StrictReadFunc mocks the StrictRead method.
+	StrictReadFunc func() bool
+
 	// WriteFunc mocks the Write method.
 	WriteFunc func(srecord *catalog.SerializedRecord) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// NeedsRewrite holds details about calls to the NeedsRewrite method.
+		NeedsRewrite []struct{}
 		// ReWrite holds details about calls to the ReWrite method.
 		ReWrite []struct {
 			// Srecords is the srecords argument value.
@@ -58,18 +73,45 @@ type LogMock struct {
 			Sr *catalog.SerializedRecord
 		}
 		// Size holds details about calls to the Size method.
-		Size []struct {
-		}
+		Size []struct{}
+		// StrictRead holds details about calls to the StrictRead method.
+		StrictRead []struct{}
 		// Write holds details about calls to the Write method.
 		Write []struct {
 			// Srecord is the srecord argument value.
 			Srecord *catalog.SerializedRecord
 		}
 	}
-	lockReWrite sync.RWMutex
-	lockRead    sync.RWMutex
-	lockSize    sync.RWMutex
-	lockWrite   sync.RWMutex
+	lockNeedsRewrite sync.RWMutex
+	lockReWrite      sync.RWMutex
+	lockRead         sync.RWMutex
+	lockSize         sync.RWMutex
+	lockStrictRead   sync.RWMutex
+	lockWrite        sync.RWMutex
+}
+
+// NeedsRewrite calls NeedsRewriteFunc.
+func (mock *LogMock) NeedsRewrite() bool {
+	if mock.NeedsRewriteFunc == nil {
+		panic("LogMock.NeedsRewriteFunc: method is nil but Log.NeedsRewrite was just called")
+	}
+	callInfo := struct{}{}
+	mock.lockNeedsRewrite.Lock()
+	mock.calls.NeedsRewrite = append(mock.calls.NeedsRewrite, callInfo)
+	mock.lockNeedsRewrite.Unlock()
+	return mock.NeedsRewriteFunc()
+}
+
+// NeedsRewriteCalls gets all the calls that were made to NeedsRewrite.
+// Check the length with:
+//
+//	len(mockedLog.NeedsRewriteCalls())
+func (mock *LogMock) NeedsRewriteCalls() []struct{} {
+	var calls []struct{}
+	mock.lockNeedsRewrite.RLock()
+	calls = mock.calls.NeedsRewrite
+	mock.lockNeedsRewrite.RUnlock()
+	return calls
 }
 
 // ReWrite calls ReWriteFunc.
@@ -141,8 +183,7 @@ func (mock *LogMock) Size() int {
 	if mock.SizeFunc == nil {
 		panic("LogMock.SizeFunc: method is nil but Log.Size was just called")
 	}
-	callInfo := struct {
-	}{}
+	callInfo := struct{}{}
 	mock.lockSize.Lock()
 	mock.calls.Size = append(mock.calls.Size, callInfo)
 	mock.lockSize.Unlock()
@@ -153,13 +194,35 @@ func (mock *LogMock) Size() int {
 // Check the length with:
 //
 //	len(mockedLog.SizeCalls())
-func (mock *LogMock) SizeCalls() []struct {
-} {
-	var calls []struct {
-	}
+func (mock *LogMock) SizeCalls() []struct{} {
+	var calls []struct{}
 	mock.lockSize.RLock()
 	calls = mock.calls.Size
 	mock.lockSize.RUnlock()
+	return calls
+}
+
+// StrictRead calls StrictReadFunc.
+func (mock *LogMock) StrictRead() bool {
+	if mock.StrictReadFunc == nil {
+		panic("LogMock.StrictReadFunc: method is nil but Log.StrictRead was just called")
+	}
+	callInfo := struct{}{}
+	mock.lockStrictRead.Lock()
+	mock.calls.StrictRead = append(mock.calls.StrictRead, callInfo)
+	mock.lockStrictRead.Unlock()
+	return mock.StrictReadFunc()
+}
+
+// StrictReadCalls gets all the calls that were made to StrictRead.
+// Check the length with:
+//
+//	len(mockedLog.StrictReadCalls())
+func (mock *LogMock) StrictReadCalls() []struct{} {
+	var calls []struct{}
+	mock.lockStrictRead.RLock()
+	calls = mock.calls.StrictRead
+	mock.lockStrictRead.RUnlock()
 	return calls
 }
 

@@ -158,11 +158,12 @@ func NewDockerDiscovery(conf *DockerSDConfig, logger log.Logger, metrics discove
 	// unix, which are not supported by the HTTP client. Passing HTTP client
 	// options to the Docker client makes those non-HTTP requests fail.
 	if hostURL.Scheme == "http" || hostURL.Scheme == "https" {
-		rt, err := config.NewRoundTripperFromConfig(conf.HTTPClientConfig, "docker_sd")
-		if err != nil {
-			return nil, err
+		rt, errCfg := config.NewRoundTripperFromConfig(conf.HTTPClientConfig, "docker_sd")
+		if errCfg != nil {
+			return nil, errCfg
 		}
-		opts = append(opts,
+		opts = append(
+			opts,
 			client.WithHTTPClient(&http.Client{
 				Transport: rt,
 				Timeout:   time.Duration(conf.RefreshInterval),
@@ -332,7 +333,7 @@ func (d *DockerDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, er
 				// so they only end up here, not in the previous loop.
 				var addr string
 				if c.HostConfig.NetworkMode != "host" {
-					addr = net.JoinHostPort(ipAddr, strconv.FormatUint(uint64(d.port), 10))
+					addr = net.JoinHostPort(ipAddr, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 				} else {
 					addr = d.hostNetworkingHost
 				}

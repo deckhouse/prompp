@@ -267,14 +267,14 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
- * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ * @brief Set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
  *
- * @param args {
- *     lss                 uintptr  // pointer to source queryable lss;
- *     shrink_boundary      uint32  // boundary
- * }
+ * @param lss_ptr Address of an entrypoint::types::LssVariant containing QueryableEncodingBimap.
+ * @param shrink_boundary Pending shrink boundary (uint32_t value passed as uint64_t).
+ *
+ * @attention This binding is called through cgo.
  */
-void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+void prompp_primitives_lss_set_pending_shrink_boundary(uint64_t lss_ptr, uint64_t shrink_boundary);
 
 /**
  * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.

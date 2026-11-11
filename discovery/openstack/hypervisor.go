@@ -79,9 +79,9 @@ func (h *HypervisorDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group
 	// https://developer.openstack.org/api-ref/compute/#list-hypervisors-details
 	pagerHypervisors := hypervisors.List(client, nil)
 	err = pagerHypervisors.EachPage(func(page pagination.Page) (bool, error) {
-		hypervisorList, err := hypervisors.ExtractHypervisors(page)
-		if err != nil {
-			return false, fmt.Errorf("could not extract hypervisors: %w", err)
+		hypervisorList, errExtract := hypervisors.ExtractHypervisors(page)
+		if errExtract != nil {
+			return false, fmt.Errorf("could not extract hypervisors: %w", errExtract)
 		}
 		for _, hypervisor := range hypervisorList {
 			labels := model.LabelSet{}

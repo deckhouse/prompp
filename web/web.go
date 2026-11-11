@@ -66,8 +66,9 @@ import (
 	"github.com/prometheus/prometheus/web/ui"
 )
 
-// Paths that are handled by the React / Reach router that should all be served the main React app's index.html.
-var reactRouterPaths = []string{
+// Paths handled by the React router that should all serve the main React app's index.html,
+// no matter if agent mode is enabled or not.
+var oldUIReactRouterPaths = []string{
 	"/config",
 	"/flags",
 	"/service-discovery",
@@ -76,15 +77,31 @@ var reactRouterPaths = []string{
 	"/starting",
 }
 
+var newUIReactRouterPaths = []string{
+	"/config",
+	"/flags",
+	"/service-discovery",
+	"/alertmanager-discovery",
+	"/status",
+	"/targets",
+}
+
 // Paths that are handled by the React router when the Agent mode is set.
 var reactRouterAgentPaths = []string{
 	"/agent",
 }
 
 // Paths that are handled by the React router when the Agent mode is not set.
-var reactRouterServerPaths = []string{
+var oldUIReactRouterServerPaths = []string{
 	"/alerts",
 	"/graph",
+	"/rules",
+	"/tsdb-status",
+}
+
+var newUIReactRouterServerPaths = []string{
+	"/alerts",
+	"/query", // The old /graph redirects to /query on the server side.
 	"/rules",
 	"/tsdb-status",
 }
@@ -272,6 +289,7 @@ type Options struct {
 	EnableRemoteWriteReceiver  bool
 	EnableOTLPWriteReceiver    bool
 	IsAgent                    bool
+	UseOldUI                   bool
 	AppName                    string
 
 	AcceptRemoteWriteProtoMsgs []config.RemoteWriteProtoMsg
@@ -391,7 +409,10 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 		router = router.WithPrefix(o.RoutePrefix)
 	}
 
-	homePage := "/graph"
+	homePage := "/query"
+	if o.UseOldUI {
+		homePage = "/graph"
+	}
 	if o.IsAgent {
 		homePage = "/agent"
 	}
@@ -401,6 +422,17 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, path.Join(o.ExternalURL.Path, homePage), http.StatusFound)
 	})
+
+	if !o.UseOldUI {
+		router.Get("/graph", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, path.Join(o.ExternalURL.Path, "/query?"+r.URL.RawQuery), http.StatusFound)
+		})
+	}
+
+	reactAssetsRoot := "/static/mantine-ui"
+	if h.options.UseOldUI {
+		reactAssetsRoot = "/static/react-app"
+	}
 
 	// The console library examples at 'console_libraries/prom.lib' still depend on old asset files being served under `classic`.
 	router.Get("/classic/static/*filepath", func(w http.ResponseWriter, r *http.Request) {
@@ -419,7 +451,7 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 	router.Get("/consoles/*filepath", readyf(h.consoles))
 
 	serveReactApp := func(w http.ResponseWriter, r *http.Request) {
-		f, err := ui.Assets.Open("/static/react/index.html")
+		f, err := ui.Assets.Open(reactAssetsRoot + "/index.html")
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Error opening React index.html: %v", err)
@@ -436,10 +468,18 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 		replacedIdx = bytes.ReplaceAll(replacedIdx, []byte("TITLE_PLACEHOLDER"), []byte(h.options.PageTitle))
 		replacedIdx = bytes.ReplaceAll(replacedIdx, []byte("AGENT_MODE_PLACEHOLDER"), []byte(strconv.FormatBool(h.options.IsAgent)))
 		replacedIdx = bytes.ReplaceAll(replacedIdx, []byte("READY_PLACEHOLDER"), []byte(strconv.FormatBool(h.isReady())))
+		replacedIdx = bytes.ReplaceAll(replacedIdx, []byte("LOOKBACKDELTA_PLACEHOLDER"), []byte(model.Duration(h.options.LookbackDelta).String()))
 		w.Write(replacedIdx)
 	}
 
 	// Serve the React app.
+	reactRouterPaths := newUIReactRouterPaths
+	reactRouterServerPaths := newUIReactRouterServerPaths
+	if h.options.UseOldUI {
+		reactRouterPaths = oldUIReactRouterPaths
+		reactRouterServerPaths = oldUIReactRouterServerPaths
+	}
+
 	for _, p := range reactRouterPaths {
 		router.Get(p, serveReactApp)
 	}
@@ -456,8 +496,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 
 	// The favicon and manifest are bundled as part of the React app, but we want to serve
 	// them on the root.
-	for _, p := range []string{"/favicon.ico", "/manifest.json"} {
-		assetPath := "/static/react" + p
+	for _, p := range []string{"/favicon.svg", "/favicon.ico", "/manifest.json"} {
+		assetPath := reactAssetsRoot + p
 		router.Get(p, func(w http.ResponseWriter, r *http.Request) {
 			r.URL.Path = assetPath
 			fs := server.StaticFileServer(ui.Assets)
@@ -465,9 +505,13 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 		})
 	}
 
+	reactStaticAssetsDir := "/assets"
+	if h.options.UseOldUI {
+		reactStaticAssetsDir = "/static"
+	}
 	// Static files required by the React app.
-	router.Get("/static/*filepath", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = path.Join("/static/react/static", route.Param(r.Context(), "filepath"))
+	router.Get(reactStaticAssetsDir+"/*filepath", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = path.Join(reactAssetsRoot+reactStaticAssetsDir, route.Param(r.Context(), "filepath"))
 		fs := server.StaticFileServer(ui.Assets)
 		fs.ServeHTTP(w, r)
 	})
@@ -542,6 +586,7 @@ func (h *Handler) serveDebug(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if subpath == "/pprof" {
+		// #nosec G710 // relative path within this handler's own subtree, not attacker-controlled
 		http.Redirect(w, req, req.URL.Path+"/", http.StatusMovedPermanently)
 		return
 	}
@@ -591,14 +636,14 @@ func serveJemallocProfile(w http.ResponseWriter, req *http.Request) {
 	}
 	filename := tmpFile.Name()
 	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(filename) }()
+	defer func() { _ = os.Remove(filename) }() // #nosec G703 // it's meant to be that way
 
 	if !cppbridge.DumpMemoryProfile(filename) {
 		http.Error(w, "failed to dump jemalloc memory profile; ensure the process was started with MALLOC_CONF=\"prof:true\" and jemalloc profiling support", http.StatusInternalServerError)
 		return
 	}
 
-	f, err := os.Open(filename)
+	f, err := os.Open(filename) // #nosec G304 G703 // it's meant to be that way
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to open dumped profile: %s", err), http.StatusInternalServerError)
 		return

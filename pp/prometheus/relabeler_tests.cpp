@@ -17,6 +17,7 @@ using PromPP::Primitives::LabelSet;
 using PromPP::Primitives::LabelView;
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
+using PromPP::Primitives::TimeInterval;
 using PromPP::Primitives::Timestamp;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
@@ -133,6 +134,63 @@ INSTANTIATE_TEST_SUITE_P(LabelValueLengthLimitExceeded,
                          testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
                                                           .limits = MetricLimits{.label_value_length_limit = 3},
                                                           .expected = rsInvalid}));
+
+class InnerSeriesTimeIntervalFixture : public testing::Test {
+ protected:
+  static constexpr uint32_t kLsId = 0;
+
+  InnerSeries inner_series_;
+};
+
+TEST_F(InnerSeriesTimeIntervalFixture, EmptySeriesHasInvalidTimeInterval) {
+  // Act
+  const auto interval = inner_series_.time_interval();
+
+  // Assert
+  EXPECT_EQ(TimeInterval{}, interval);
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, SampleExtendsTimeInterval) {
+  // Act
+  inner_series_.emplace_back(Sample(1000, 0.1), kLsId, false);
+
+  // Assert
+  EXPECT_EQ((TimeInterval{.min = 1000, .max = 1000}), inner_series_.time_interval());
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, SamplesBatchExtendsTimeIntervalToItsBounds) {
+  // Arrange
+  const std::vector<Sample> samples{Sample(3000, 0.3), Sample(1000, 0.1), Sample(2000, 0.2)};
+
+  // Act
+  inner_series_.emplace_back(samples, kLsId, false);
+
+  // Assert
+  EXPECT_EQ((TimeInterval{.min = 1000, .max = 3000}), inner_series_.time_interval());
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, TimeIntervalSpansSamplesAddedByBothOverloads) {
+  // Arrange
+  const std::vector<Sample> samples{Sample(2000, 0.2), Sample(3000, 0.3)};
+  inner_series_.emplace_back(samples, kLsId, false);
+
+  // Act
+  inner_series_.emplace_back(Sample(1000, 0.1), kLsId, false);
+
+  // Assert
+  EXPECT_EQ((TimeInterval{.min = 1000, .max = 3000}), inner_series_.time_interval());
+}
+
+TEST_F(InnerSeriesTimeIntervalFixture, ResetInvalidatesTimeInterval) {
+  // Arrange
+  inner_series_.emplace_back(Sample(1000, 0.1), kLsId, false);
+
+  // Act
+  inner_series_.reset();
+
+  // Assert
+  EXPECT_EQ(TimeInterval{}, inner_series_.time_interval());
+}
 
 struct Stats {
   uint32_t samples_added{0};
@@ -591,6 +649,35 @@ TEST_F(InputTransitionRelabelingOnlyReadFixture, ShouldMarkSeriesAsActive) {
   EXPECT_TRUE(result);
   EXPECT_EQ((Stats{.samples_added = 1}), stats);
   EXPECT_TRUE(lss_copy.added_series().is_set(0U));
+}
+
+class OutputExternalLabelsFixture : public testing::Test {};
+
+TEST_F(OutputExternalLabelsFixture, PreserveSeriesLabelsBeforeRelabeling) {
+  // Arrange
+  QueryableEncodingBimap<BareBones::Vector> lss;
+  const auto ls_id = lss.find_or_emplace(LabelViewSet{{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}});
+  std::vector<GoLabel> external_labels{{GoString("cluster"), GoString("production")}, {GoString("job"), GoString("external-job")}};
+  SliceView<GoLabel> external_labels_view(external_labels.data(), external_labels.size(), external_labels.size());
+  RelabelConfig keep_job{.source_labels = {"job"}, .regex = "node", .action = rKeep};
+  RelabelConfig keep_cluster{.source_labels = {"cluster"}, .regex = "production", .action = rKeep};
+  StatelessRelabeler stateless_relabeler(std::vector{&keep_job, &keep_cluster});
+  PromPP::Prometheus::Relabel::PerShardRelabeler relabeler(external_labels_view, &stateless_relabeler, 1, 0);
+  PromPP::Prometheus::Relabel::Cache cache;
+  InnerSeries incoming;
+  incoming.emplace_back(Sample(10, 1), ls_id, false);
+  SliceView<InnerSeries> incoming_view(&incoming, 1, 1);
+  InnerSeries encoded;
+  SliceView<InnerSeries> encoded_view(&encoded, 1, 1);
+  RelabeledSeries relabeled;
+
+  // Act
+  relabeler.output_relabeling(lss, cache, &relabeled, incoming_view, encoded_view);
+
+  // Assert
+  ASSERT_EQ(1U, relabeled.size());
+  EXPECT_EQ((LabelViewSet{{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"cluster", "production"}, {"job", "node"}, {"zzz", "9"}}), relabeled.data()[0].ls);
+  EXPECT_EQ((BareBones::Vector{Sample(10, 1)}), relabeled.data()[0].samples);
 }
 
 class TargetLabelsFixture : public testing::Test {

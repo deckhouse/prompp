@@ -67,15 +67,15 @@ func (l *WALHashdexLimits) UnmarshalBinary(data []byte) error {
 	var offset int
 
 	maxLabelNameLength, n := binary.Uvarint(data[offset:])
-	l.MaxLabelNameLength = uint32(maxLabelNameLength)
+	l.MaxLabelNameLength = uint32(maxLabelNameLength) // #nosec G115 // no overflow
 	offset += n
 
 	maxLabelValueLength, n := binary.Uvarint(data[offset:])
-	l.MaxLabelValueLength = uint32(maxLabelValueLength)
+	l.MaxLabelValueLength = uint32(maxLabelValueLength) // #nosec G115 // no overflow
 	offset += n
 
 	maxLabelNamesPerTimeseries, n := binary.Uvarint(data[offset:])
-	l.MaxLabelNamesPerTimeseries = uint32(maxLabelNamesPerTimeseries)
+	l.MaxLabelNamesPerTimeseries = uint32(maxLabelNamesPerTimeseries) // #nosec G115 // no overflow
 	offset += n
 
 	maxTimeseriesCount, _ := binary.Uvarint(data[offset:])

@@ -114,7 +114,7 @@ func Load(s string, expandExternalLabels bool, logger log.Logger) (*Config, erro
 
 // LoadFile parses the given YAML file into a Config.
 func LoadFile(filename string, agentMode, expandExternalLabels bool, logger log.Logger) (*Config, error) {
-	content, err := os.ReadFile(filename)
+	content, err := os.ReadFile(filename) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,7 @@ func (c *Config) GetScrapeConfigs() ([]*ScrapeConfig, error) {
 		}
 		for _, filename := range fs {
 			cfg := ScrapeConfigs{}
-			content, err := os.ReadFile(filename)
+			content, err := os.ReadFile(filename) // #nosec G304 // it's meant to be that way
 			if err != nil {
 				return nil, fileErr(filename, err)
 			}

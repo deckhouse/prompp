@@ -181,7 +181,7 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 			vultrInstanceLabelServerStatus: model.LabelValue(instance.ServerStatus),
 		}
 
-		addr := net.JoinHostPort(instance.MainIP, strconv.FormatUint(uint64(d.port), 10))
+		addr := net.JoinHostPort(instance.MainIP, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 		labels[model.AddressLabel] = model.LabelValue(addr)
 
 		// We surround the separated list with the separator as well. This way regular expressions

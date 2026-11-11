@@ -974,11 +974,11 @@ func newReverseFloatBucketIterator(
 	r.spansIdx = len(r.spans) - 1
 	r.bucketsIdx = len(r.buckets) - 1
 	if r.spansIdx >= 0 {
-		r.idxInSpan = int32(r.spans[r.spansIdx].Length) - 1
+		r.idxInSpan = int32(r.spans[r.spansIdx].Length) - 1 // #nosec G115 // no overflow
 	}
 	r.currIdx = 0
 	for _, s := range r.spans {
-		r.currIdx += s.Offset + int32(s.Length)
+		r.currIdx += s.Offset + int32(s.Length) // #nosec G115 // no overflow
 	}
 
 	return r
@@ -1105,7 +1105,7 @@ func (i *reverseFloatBucketIterator) Next() bool {
 		// We have exhausted the current span and have to find a new
 		// one. We'll even handle pathologic spans of length 0.
 		i.spansIdx--
-		i.idxInSpan = int32(i.spans[i.spansIdx].Length) - 1
+		i.idxInSpan = int32(i.spans[i.spansIdx].Length) - 1 // #nosec G115 // no overflow
 		i.currIdx -= i.spans[i.spansIdx+1].Offset
 	}
 
@@ -1244,7 +1244,7 @@ func addBuckets(
 			}
 			deltaIndex = indexB - indexA
 			for {
-				remainingInSpan := int32(spansA[iSpan].Length) - iInSpan
+				remainingInSpan := int32(spansA[iSpan].Length) - iInSpan // #nosec G115 // no overflow
 				if deltaIndex < remainingInSpan {
 					// Bucket is in current span.
 					iBucket += int(deltaIndex)
@@ -1267,7 +1267,7 @@ func addBuckets(
 							spansA[iSpan].Offset--
 						}
 						iSpan--
-						iInSpan = int32(spansA[iSpan].Length)
+						iInSpan = int32(spansA[iSpan].Length) // #nosec G115 // no overflow
 						spansA[iSpan].Length++
 						goto nextLoop
 					case iSpan < len(spansA) && deltaIndex == spansA[iSpan].Offset-1:

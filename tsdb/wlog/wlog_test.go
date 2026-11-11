@@ -160,11 +160,11 @@ func TestWALRepair_ReadingError(t *testing.T) {
 
 			// Backfill segments from the most recent checkpoint onwards.
 			for i := first; i <= last; i++ {
-				s, err := OpenReadSegment(SegmentName(w.Dir(), i))
-				require.NoError(t, err)
+				s, errRead := OpenReadSegment(SegmentName(w.Dir(), i))
+				require.NoError(t, errRead)
 
 				sr := NewSegmentBufReader(s)
-				require.NoError(t, err)
+				require.NoError(t, errRead)
 				r := NewReader(sr)
 				for r.Next() {
 				}
@@ -228,7 +228,7 @@ func TestCorruptAndCarryOn(t *testing.T) {
 
 		for i := 0; i < 18; i++ {
 			buf := make([]byte, recordSize)
-			_, err := rand.Read(buf)
+			_, err = rand.Read(buf)
 			require.NoError(t, err)
 
 			err = w.Log(buf)
@@ -306,7 +306,7 @@ func TestCorruptAndCarryOn(t *testing.T) {
 
 		for i := 0; i < 5; i++ {
 			buf := make([]byte, recordSize)
-			_, err := rand.Read(buf)
+			_, err = rand.Read(buf)
 			require.NoError(t, err)
 
 			err = w.Log(buf)
@@ -455,7 +455,7 @@ func TestLogPartialWrite(t *testing.T) {
 			}
 
 			for i := 1; i <= testData.numRecords; i++ {
-				if err := w.Log(record); i == testData.faultyRecord {
+				if err = w.Log(record); i == testData.faultyRecord {
 					require.ErrorIs(t, io.ErrShortWrite, err)
 				} else {
 					require.NoError(t, err)

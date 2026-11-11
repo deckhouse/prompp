@@ -320,7 +320,7 @@ func FromStrings(ss ...string) Labels {
 	}
 	ls := make([]Label, 0, len(ss)/2)
 	for i := 0; i < len(ss); i += 2 {
-		ls = append(ls, Label{Name: ss[i], Value: ss[i+1]})
+		ls = append(ls, Label{Name: ss[i], Value: ss[i+1]}) // #nosec G602 // i+1 is always within extras bounds due
 	}
 
 	return New(ls...)
@@ -554,7 +554,7 @@ func encodeVarint(data []byte, offset int, v uint64) int {
 	offset -= sizeVarint(v)
 	base := offset
 	for v >= 1<<7 {
-		data[offset] = uint8(v&0x7f | 0x80)
+		data[offset] = uint8(v&0x7f | 0x80) // #nosec G115 // no overflow
 		v >>= 7
 		offset++
 	}
@@ -566,7 +566,7 @@ func encodeVarint(data []byte, offset int, v uint64) int {
 func encodeSize(data []byte, offset, v int) int {
 	if v < 1<<7 {
 		offset--
-		data[offset] = uint8(v)
+		data[offset] = uint8(v) // #nosec G115 // no overflow
 		return offset
 	}
 	return encodeVarint(data, offset, uint64(v))

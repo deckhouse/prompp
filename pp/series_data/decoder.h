@@ -428,18 +428,12 @@ class Decoder {
     }
   }
 
+  // Every open and finalized chunk keeps its timestamps in a sequence of the timestamp store, and series scraped together
+  // share one sequence, so walking the sequences visits far fewer items than walking the series. Samples of outdated
+  // chunks are not covered until they are merged.
   template <class DataStorage>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_time_interval(const DataStorage& storage) noexcept {
-    PromPP::Primitives::TimeInterval interval;
-
-    for (auto ls_id = 0U; ls_id < storage.open_chunks.size(); ++ls_id) {
-      if (auto& chunk = storage.open_chunks[ls_id]; !chunk.is_empty()) {
-        interval.min = std::min(interval.min, get_series_min_timestamp(storage, ls_id));
-        interval.max = std::max(interval.max, get_open_chunk_last_timestamp(storage, chunk));
-      }
-    }
-
-    return interval;
+    return storage.timestamp_store.time_bounds();
   }
 
  private:

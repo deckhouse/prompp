@@ -1,20 +1,15 @@
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 load("//:bazel/rules/cc_static_library.bzl", "cc_static_library")
 load("//:bazel/rules/entrypoint_codegen.bzl", "entrypoint_fact_checking")
 load("//:bazel/rules/march_variant.bzl", "march_variants")
 
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
-    name = "clang_tidy_config_default",
-    srcs = [
-        ".clang-tidy",
-    ],
-)
+exports_files([".clang-tidy"])
 
-label_flag(
-    name = "clang_tidy_config",
-    build_setting_default = ":clang_tidy_config_default",
-    visibility = ["//visibility:public"],
+native_binary(
+    name = "clang_tidy",
+    src = "@local_clang_tidy//:clang-tidy",
 )
 
 cc_library(
@@ -49,16 +44,6 @@ cc_test(
     deps = [
         ":bare_bones",
         "@gtest//:gtest_main",
-    ],
-)
-
-cc_binary(
-    name = "bare_bones_coredump_test",
-    srcs = [
-        "bare_bones/tests/coredump_test_separate.cpp",
-    ],
-    deps = [
-        ":bare_bones",
     ],
 )
 
@@ -371,10 +356,7 @@ cc_library(
 
 cc_library(
     name = "series_index",
-    hdrs = glob(
-        include = ["series_index/**/*.h"],
-        exclude = ["series_index/tests/**/*.h"],
-    ),
+    hdrs = glob(["series_index/**/*.h"]),
     deps = [
         ":bare_bones_headers",
         ":primitives",
@@ -387,10 +369,7 @@ cc_library(
 
 cc_test(
     name = "series_index_test",
-    srcs = glob([
-        "series_index/**/*_tests.cpp",
-        "series_index/tests/**/*.h",
-    ]),
+    srcs = glob(["series_index/**/*_tests.cpp"]),
     deps = [
         ":series_index",
         "@gtest//:gtest_main",
