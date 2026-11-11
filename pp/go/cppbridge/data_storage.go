@@ -2,18 +2,14 @@ package cppbridge
 
 import (
 	"runtime"
-	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
 type DataStorage struct {
-	dataStorage    uintptr
-	timeInterval   atomic.Pointer[TimeInterval]
-	lastUpdateTime atomic.Int64
-	m              sync.Mutex
+	dataStorage  uintptr
+	timeInterval atomic.Pointer[TimeInterval]
 }
 
 // NewDataStorage - constructor.
@@ -46,23 +42,6 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
 		ds.timeInterval.Store(&timeInterval)
 		runtime.KeepAlive(ds)
-	}
-
-	return *ds.timeInterval.Load()
-}
-
-// TimeIntervalWithValidateCache gets time interval from [DataStorage] with validate cache.
-func (ds *DataStorage) TimeIntervalWithValidateCache(cacheCheckIntervalMs int64) TimeInterval {
-	now := time.Now().UnixMilli()
-	if now-ds.lastUpdateTime.Load() > cacheCheckIntervalMs {
-		// slow path
-		ds.m.Lock()
-		if now-ds.lastUpdateTime.Load() > cacheCheckIntervalMs {
-			timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
-			ds.timeInterval.Store(&timeInterval)
-			ds.lastUpdateTime.Store(now)
-		}
-		ds.m.Unlock()
 	}
 
 	return *ds.timeInterval.Load()
