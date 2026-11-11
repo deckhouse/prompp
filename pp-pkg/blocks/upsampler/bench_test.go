@@ -14,72 +14,14 @@ import (
 // Iterator benchmarks
 //
 
-// BenchmarkIteratorSeekLinear measures the cost of frequent Seek operations on the linear path.
-// This tests the worst-case scenario where Seek() rescans from the start each time.
+// BenchmarkIteratorSeekLinear measures full forward passes through a wrapped XOR chunk.
 func BenchmarkIteratorSeekLinear(b *testing.B) {
-	// Create a large iterator with many samples
-	const numSamples = 10000
-	samples := make([]struct {
-		t int64
-		v float64
-	}, numSamples)
-	for i := range numSamples {
-		samples[i].t = int64(i * 1000) // Every 1 second
-		samples[i].v = float64(i)
-	}
-
-	baseIterator := newMockIterator(samples)
-	ls := labels.FromStrings("__name__", "bench_metric")
-	baseSeries := &mockSeries{
-		labels: ls,
-		iteratorFunc: func(chunkenc.Iterator) chunkenc.Iterator {
-			return baseIterator
-		},
-	}
-
-	baseSeriesSet := &mockSeriesSet{
-		atFunc: func() storage.Series {
-			return baseSeries
-		},
-	}
-
-	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000, upsampler.CounterFunc)
-	series := ss.At()
-
-	// Create upsampler iterator
-	it := series.Iterator(nil)
-
-	for i := 0; b.Loop(); i++ {
-		// Seek to different positions throughout the sample range
-		// This tests the cost of linear rescan in mockIterator.Seek()
-		target := int64((i % (numSamples - 1)) * 1000)
-		it.Seek(target)
-		// Force evaluation by reading a sample
-		it.At()
-	}
+	benchmarkIteratorSeek(b, true)
 }
 
-// BenchmarkIteratorSeekNoWrap measures Seek performance when wrapping is disabled.
-// This provides a baseline for comparison.
+// BenchmarkIteratorSeekNoWrap measures the same forward passes without interpolation.
 func BenchmarkIteratorSeekNoWrap(b *testing.B) {
-	const numSamples = 10000
-	samples := make([]struct {
-		t int64
-		v float64
-	}, numSamples)
-	for i := range numSamples {
-		samples[i].t = int64(i * 1000)
-		samples[i].v = float64(i)
-	}
-
-	baseIterator := newMockIterator(samples)
-
-	for i := 0; b.Loop(); i++ {
-		// Direct seek on base iterator (no wrapping)
-		target := int64((i % (numSamples - 1)) * 1000)
-		baseIterator.Seek(target)
-		baseIterator.At()
-	}
+	benchmarkIteratorSeek(b, false)
 }
 
 //
@@ -252,4 +194,59 @@ func BenchmarkQuerierSelectNoWrap(b *testing.B) {
 		}
 		_ = q.Close()
 	}
+}
+
+func benchmarkIteratorSeek(b *testing.B, wrapped bool) {
+	b.Helper()
+
+	const (
+		// numSamples is the number of real samples traversed by each benchmark operation.
+		numSamples = 10000
+		// sampleIntervalMS is the spacing between real samples.
+		sampleIntervalMS = 1000
+		// samplesPerSeek is the forward distance between consecutive seek targets.
+		samplesPerSeek = 10
+	)
+
+	c := chunkenc.NewXORChunk()
+	appender, err := c.Appender()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for i := range numSamples {
+		appender.Append(int64(i*sampleIntervalMS), float64(i))
+	}
+
+	targets := make([]int64, 0, numSamples/samplesPerSeek)
+	for i := samplesPerSeek; i < numSamples; i += samplesPerSeek {
+		targets = append(targets, int64(i*sampleIntervalMS))
+	}
+	targets = append(targets, int64((numSamples-1)*sampleIntervalMS))
+
+	base := c.Iterator(nil)
+	var interpolator upsampler.Iterator
+	b.ReportAllocs()
+
+	for b.Loop() {
+		b.StopTimer()
+		base = c.Iterator(base)
+		it := base
+		if wrapped {
+			interpolator.Reset(base, 30000, 120000, upsampler.CounterFunc)
+			it = &interpolator
+		}
+		b.StartTimer()
+
+		for _, target := range targets {
+			if it.Seek(target) != chunkenc.ValFloat {
+				b.Fatalf("Seek(%d) returned no float sample", target)
+			}
+			if timestamp, value := it.At(); timestamp != target || value != float64(target)/sampleIntervalMS {
+				b.Fatalf("Seek(%d) returned (%d, %g)", target, timestamp, value)
+			}
+		}
+	}
+
+	b.ReportMetric(float64(len(targets)), "seeks/op")
 }
