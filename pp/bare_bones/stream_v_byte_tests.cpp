@@ -262,4 +262,35 @@ INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
                          StreamVByte1234ValuesFixture::cases(),
                          [](const testing::TestParamInfo<SequenceValuesCase>& info) { return info.param.name; });
 
+class SequenceReadInvalidSizeFixture : public testing::TestWithParam<uint32_t> {
+ protected:
+  std::stringstream stream_;
+  Sequence<BareBones::StreamVByte::Codec1234> sequence_;
+
+  void SetUp() override {
+    const uint32_t size = GetParam();
+    stream_.put(1);
+    stream_.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    stream_.write("\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", 16);
+  }
+};
+
+TEST_P(SequenceReadInvalidSizeFixture, ThrowsWithoutReadingData) {
+  // Arrange
+
+  // Act
+  const auto read = [this] { stream_ >> sequence_; };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+  EXPECT_TRUE(sequence_.empty());
+  EXPECT_EQ(1 + sizeof(uint32_t), static_cast<size_t>(stream_.tellg()));
+}
+
+INSTANTIATE_TEST_SUITE_P(SizeAboveLimit,
+                         SequenceReadInvalidSizeFixture,
+                         testing::Values(std::numeric_limits<uint32_t>::max() - 1023,
+                                         std::numeric_limits<uint32_t>::max() - 1,
+                                         std::numeric_limits<uint32_t>::max()));
+
 }  // namespace

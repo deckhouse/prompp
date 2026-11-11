@@ -797,6 +797,11 @@ class BasicDecoder {
         throw BareBones::Exception(0x5352e912e73554c1, "Decoder %s got error after parsing LabelSets: there are more remaining timestamps data",
                                    uuids::to_string(uuid_).c_str());
       }
+
+      if (g_ts_bitseq_reader.overrun()) [[unlikely]] {
+        throw BareBones::Exception(0x9739e65800aa8654, "Decoder %s got error after parsing LabelSets: timestamps data was read past its end",
+                                   uuids::to_string(uuid_).c_str());
+      }
     }
 
     if (!g_v_bitseq_reader.eof()) [[unlikely]] {
@@ -804,6 +809,11 @@ class BasicDecoder {
                                  "Decoder %s got an error after processing segment LabelSets: segment ls_id values (%zd) and Decoder's values (%zd) counts "
                                  "mismatch, there are remaining values data",
                                  uuids::to_string(uuid_).c_str(), g_v_bitseq_reader.left(), segment_gorilla_v_bitseq_.size());
+    }
+
+    if (g_v_bitseq_reader.overrun()) [[unlikely]] {
+      throw BareBones::Exception(0x68eb54cfc323cd07, "Decoder %s got error after processing segment LabelSets: values data was read past its end",
+                                 uuids::to_string(uuid_).c_str());
     }
 
     if (ls_id_crc != segment_ls_id_crc_) [[unlikely]] {

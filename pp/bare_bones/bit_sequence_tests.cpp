@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <random>
+#include <sstream>
 
 #include <gtest/gtest.h>
 
@@ -608,5 +609,38 @@ TYPED_TEST(BitSequenceReaderFixture, read_bits_u64_2) {
   // Assert
   EXPECT_EQ(value, reader.read_bits_u64(BareBones::Bit::to_bits(sizeof(uint64_t))));
 }
+
+class BitSequenceReadInvalidSizeFixture : public testing::TestWithParam<size_t> {
+ protected:
+  std::stringstream stream_;
+  BareBones::BitSequence bitseq_;
+
+  void SetUp() override {
+    // a decoder reuses its BitSequence across segments, so the buffer is already allocated
+    bitseq_.push_back_u64(std::numeric_limits<uint64_t>::max());
+    bitseq_.clear();
+
+    const size_t size = GetParam();
+    stream_.put(1);
+    stream_.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    stream_.write("\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", 16);
+  }
+};
+
+TEST_P(BitSequenceReadInvalidSizeFixture, ThrowsWithoutReadingData) {
+  // Arrange
+
+  // Act
+  const auto read = [this] { stream_ >> bitseq_; };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+  EXPECT_TRUE(bitseq_.empty());
+  EXPECT_EQ(1 + sizeof(size_t), static_cast<size_t>(stream_.tellg()));
+}
+
+INSTANTIATE_TEST_SUITE_P(SizeAboveLimit,
+                         BitSequenceReadInvalidSizeFixture,
+                         testing::Values(BareBones::BitSequence::kMaxSizeInBits + 1, size_t{0x017fffffffffffff}, std::numeric_limits<size_t>::max()));
 
 }  // namespace

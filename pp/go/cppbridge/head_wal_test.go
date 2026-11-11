@@ -131,3 +131,53 @@ func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 }
+
+// corruptedHeadWalSegments are the crash inputs found by fuzzing HeadWalDecoder, named after their fuzz
+// corpus files. They are LZ4-compressed segments whose gorilla BitSequence sizes are far beyond the real data.
+var corruptedHeadWalSegments = []struct {
+	name    string
+	segment []byte
+}{
+	{
+		name:    "fb38859ff4d4e8bc",
+		segment: []byte("\x04\"M\x18@@\xc0-\x00\x00\x00\x13\x00\x01\x00\xa4\xdfO1\xa5\xb2\x02\xd3\x18\x01\x02\x12\x001\x01\x01\x01\a\x00\x16\xff\x01\x001\x7f\x01\x01\x1e\x00\x00\x10\x00\x05\x0e\x00P\x01\xff\xff\xff\xff"),
+	},
+	{
+		name:    "498bb794fad8a404",
+		segment: []byte("\x04\"M\x18@@\xc0-\x00\x00\x00\x13\x00\x01\x00\xa4\x9ac)$g\x03\xd3\x18\x01\x02\x12\x001\x01\x01\x01\a\x00\x16\xff\x01\x001\x7f\x01\x01\x1e\x00\x00\x10\x00\x05\x0e\x00P\x01\xff\xff\xff\xff"),
+	},
+}
+
+func TestHeadWalDecoder_DecodeCorruptedSegment(t *testing.T) {
+	for _, tc := range corruptedHeadWalSegments {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+			shardedInnerSeries := cppbridge.NewShardedInnerSeries(1)
+			innerSeries := shardedInnerSeries.DataByShard(0)
+
+			// Act
+			err := decoder.Decode(tc.segment, &innerSeries[0])
+			runtime.KeepAlive(shardedInnerSeries)
+
+			// Assert
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestHeadWalDecoder_DecodeToDataStorageCorruptedSegment(t *testing.T) {
+	for _, tc := range corruptedHeadWalSegments {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			dataStorage := cppbridge.NewDataStorage(false, false)
+			decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+
+			// Act
+			_, _, err := decoder.DecodeToDataStorage(tc.segment, dataStorage)
+
+			// Assert
+			require.Error(t, err)
+		})
+	}
+}
