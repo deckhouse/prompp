@@ -299,7 +299,7 @@ type Options struct {
 }
 
 // New initializes a new web Handler.
-// PP_CHANGES.md: rebuild on cpp
+// PP_CHANGES.md: rebuild on cpp.
 func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler {
 	if logger == nil {
 		logger = log.NewNopLogger()
