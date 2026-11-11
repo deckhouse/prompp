@@ -152,6 +152,66 @@ func (s *SeriesSetSuite) TestSeriesSetIteration() {
 	s.Equal(2, count)
 }
 
+func (s *SeriesSetSuite) TestSeriesSetMillisecondRangeNext() {
+	for _, tc := range []struct {
+		name       string
+		rangeMS    int64
+		timestamps []int64
+		values     []float64
+	}{
+		{name: "one_millisecond", rangeMS: 1, timestamps: []int64{100, 102}, values: []float64{10, 30}},
+		{name: "two_milliseconds", rangeMS: 2, timestamps: []int64{100, 101, 102}, values: []float64{10, 20, 30}},
+	} {
+		s.Run(tc.name, func() {
+			// Arrange
+			it := s.newRangeIterator(tc.rangeMS)
+
+			// Act
+			for i, timestamp := range tc.timestamps {
+				valueType := it.Next()
+
+				// Assert
+				s.Require().Equal(chunkenc.ValFloat, valueType)
+				t, v := it.At()
+				s.Require().Equal(timestamp, t)
+				s.Require().Equal(tc.values[i], v)
+			}
+
+			s.Require().Equal(chunkenc.ValNone, it.Next())
+			s.Require().NoError(it.Err())
+		})
+	}
+}
+
+func (s *SeriesSetSuite) TestSeriesSetOneMillisecondRangeSeek() {
+	for _, tc := range []struct {
+		name        string
+		initialized bool
+	}{
+		{name: "initial"},
+		{name: "after_next", initialized: true},
+	} {
+		s.Run(tc.name, func() {
+			// Arrange
+			it := s.newRangeIterator(1)
+			if tc.initialized {
+				s.Require().Equal(chunkenc.ValFloat, it.Next())
+			}
+
+			// Act
+			valueType := it.Seek(101)
+
+			// Assert
+			s.Require().Equal(chunkenc.ValFloat, valueType)
+			t, v := it.At()
+			s.Require().Equal(int64(102), t)
+			s.Require().Equal(float64(30), v)
+			s.Require().Equal(chunkenc.ValNone, it.Next())
+			s.Require().NoError(it.Err())
+		})
+	}
+}
+
 // TestSeriesSetParametersOverflowingThresholds tests that a range or a resolution too large
 // for the 32-bit gap thresholds disarms synthesis instead of wrapping around into a step that
 // means nothing: the samples pass through as they are.
@@ -185,4 +245,17 @@ func (s *SeriesSetSuite) TestSeriesSetParametersOverflowingThresholds() {
 	}
 
 	s.Require().Equal(samples, result)
+}
+
+func (s *SeriesSetSuite) newRangeIterator(rangeMS int64) chunkenc.Iterator {
+	c := chunkenc.NewXORChunk()
+	appender, err := c.Appender()
+	s.Require().NoError(err)
+	appender.Append(100, 10)
+	appender.Append(102, 30)
+
+	ss := upsampler.NewSeriesSet(newSingleSeriesSet(c.Iterator(nil)), rangeMS, 1, upsampler.CounterFunc)
+	s.Require().True(ss.Next())
+
+	return ss.At().Iterator(nil)
 }

@@ -56,6 +56,7 @@ type Iterator struct {
 // NewIterator wraps a base [chunkenc.Iterator] for interpolation of gaps wider than
 // stepMS and no wider than maxGapMS, both produced by [gapThresholds]. typeOfFunc picks
 // how a gap is filled, see [Iterator.synthesizeAt].
+// A zero stepMS disables synthesis.
 func NewIterator(base chunkenc.Iterator, stepMS, maxGapMS uint32, typeOfFunc FuncKind) *Iterator {
 	it := &Iterator{}
 	it.Reset(base, stepMS, maxGapMS, typeOfFunc)
@@ -181,7 +182,7 @@ func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 // enough to be explained by decimation of the source. Otherwise synthesis is disarmed
 // and the pair is yielded as is.
 func (it *Iterator) armSynthesis() {
-	if it.valueType != chunkenc.ValFloat || it.nextValueType != chunkenc.ValFloat {
+	if it.stepMS == 0 || it.valueType != chunkenc.ValFloat || it.nextValueType != chunkenc.ValFloat {
 		it.nextSynthT = 0
 		return
 	}
