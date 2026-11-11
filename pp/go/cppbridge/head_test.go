@@ -123,7 +123,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
-		LabelSetIDs:      []uint32{0, 1},
+		LabelSetIDs:      cppbridge.GoLabelSetIDs([]uint32{0, 1}),
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
@@ -223,7 +223,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	}
 	// Act
 
-	result := dataStorage.InstantQuery(targetTimestamp, seriesIDs, uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
+	result := dataStorage.InstantQuery(targetTimestamp, cppbridge.GoLabelSetIDs(seriesIDs), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 
 	// Assert
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
@@ -251,7 +251,7 @@ func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSS() {
 	series[0].timestamp = -1
 	series[1].timestamp = -1
 	s.dataStorage.QueryStaleNaNSeries(
-		[]uint32{id1, id0},
+		cppbridge.GoLabelSetIDs([]uint32{id1, id0}),
 		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
 	)
 
@@ -272,7 +272,7 @@ func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithEmptySeries() {
 	series[0].timestamp = -1
 	series[1].timestamp = -1
 	s.dataStorage.QueryStaleNaNSeries(
-		[]uint32{id1, id0},
+		cppbridge.GoLabelSetIDs([]uint32{id1, id0}),
 		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
 	)
 
@@ -293,7 +293,7 @@ func (s *HeadSuite) TestQueryStaleNaNSeriesRotatedLSSWithNonExistingSeries() {
 	series[0].timestamp = -1
 	series[1].timestamp = -1
 	s.dataStorage.QueryStaleNaNSeries(
-		[]uint32{id1, id0},
+		cppbridge.GoLabelSetIDs([]uint32{id1, id0}),
 		uintptr(unsafe.Pointer(unsafe.SliceData(series))), // #nosec G103 // it's meant to be that way
 	)
 
@@ -319,13 +319,15 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) SetupTest() {
 	s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "b").Build())
 }
 
-type createIteratorMethod = func(*cppbridge.DataStorageSerializedData, []uint32) cppbridge.DataStorageSerializedDataMultiSeriesIterator
+type createIteratorMethod = func(
+	*cppbridge.DataStorageSerializedData, cppbridge.LabelSetIDs,
+) cppbridge.DataStorageSerializedDataMultiSeriesIterator
 
 var (
 	createMultiSeriesIterator         = cppbridge.NewDataStorageSerializedDataMultiSeriesIterator
 	createAndResetMultiSeriesIterator = func(
 		serializedData *cppbridge.DataStorageSerializedData,
-		seriesIDs []uint32,
+		seriesIDs cppbridge.LabelSetIDs,
 	) cppbridge.DataStorageSerializedDataMultiSeriesIterator {
 		it := createMultiSeriesIterator(serializedData, seriesIDs)
 		for it.HasData() {
@@ -345,10 +347,10 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 	result := s.ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: hints.Start,
 		EndTimestampMs:   hints.End,
-		LabelSetIDs:      seriesToSerialize,
+		LabelSetIDs:      cppbridge.GoLabelSetIDs(seriesToSerialize),
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&hints))
 
-	it := createIterator(result.SerializedData, series)
+	it := createIterator(result.SerializedData, cppbridge.GoLabelSetIDs(series))
 	defer it.Close()
 
 	out := make([]cppbridge.Sample, 0)

@@ -61,7 +61,7 @@ func (s *LabelSetSnapshotSuite) TestGroupSeriesByLabelNames_ByJob() {
 	snap := s.lss.CreateLabelSetSnapshot()
 
 	// Act
-	groupedSeries := snap.GroupSeriesByLabelNames([]uint32{idA0, idA1, idB}, nameIDs)
+	groupedSeries := snap.GroupSeriesByLabelNames(cppbridge.GoLabelSetIDs([]uint32{idA0, idA1, idB}), nameIDs)
 
 	// Assert
 	s.Equal([][]uint32{{idA0, idA1}, {idB}}, groupedSeries.Groups)
@@ -83,7 +83,7 @@ func (s *LabelSetSnapshotSuite) TestGroupSeriesByLabelNames_ByJobAndInstance() {
 
 	// Act
 	groupedSeries := snap.GroupSeriesByLabelNames(
-		[]uint32{idSame0, idOther, idSame1},
+		cppbridge.GoLabelSetIDs([]uint32{idSame0, idOther, idSame1}),
 		[]uint32{jobID, instanceID},
 	)
 
@@ -99,7 +99,7 @@ func (s *LabelSetSnapshotSuite) TestGroupSeriesByLabelNames_UnknownLabelNameID()
 	snap := s.lss.CreateLabelSetSnapshot()
 
 	// Act
-	groupedSeries := snap.GroupSeriesByLabelNames([]uint32{id0, id1}, []uint32{math.MaxUint32})
+	groupedSeries := snap.GroupSeriesByLabelNames(cppbridge.GoLabelSetIDs([]uint32{id0, id1}), []uint32{math.MaxUint32})
 
 	// Assert
 	s.Equal([][]uint32{{id0, id1}}, groupedSeries.Groups)

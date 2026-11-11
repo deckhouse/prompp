@@ -302,9 +302,13 @@ type DataStorageSerializedDataMultiSeriesIterator struct {
 	cppInternalData [unsafe.Sizeof(CppSerializedDataMultiSeriesIterator{}) - unsafe.Sizeof(sampleControlBlock{})]byte
 }
 
-func NewDataStorageSerializedDataMultiSeriesIterator(serializedData *DataStorageSerializedData, seriesIDs []uint32) DataStorageSerializedDataMultiSeriesIterator {
+func NewDataStorageSerializedDataMultiSeriesIterator(
+	serializedData *DataStorageSerializedData, seriesIDs LabelSetIDs,
+) DataStorageSerializedDataMultiSeriesIterator {
+	defer seriesIDs.keepAlive()
+
 	it := DataStorageSerializedDataMultiSeriesIterator{}
-	seriesDataSerializedDataMultiSeriesIteratorCtor(&it, serializedData.serializedData, seriesIDs)
+	seriesDataSerializedDataMultiSeriesIteratorCtor(&it, serializedData.serializedData, seriesIDs.slice())
 	return it
 }
 
@@ -312,8 +316,12 @@ func (it *DataStorageSerializedDataMultiSeriesIterator) Next() {
 	seriesDataSerializedDataMultiSeriesIteratorNext(it)
 }
 
-func (it *DataStorageSerializedDataMultiSeriesIterator) Reset(serializedData *DataStorageSerializedData, seriesIDs []uint32) {
-	seriesDataSerializedDataMultiSeriesIteratorReset(it, serializedData.serializedData, seriesIDs)
+func (it *DataStorageSerializedDataMultiSeriesIterator) Reset(
+	serializedData *DataStorageSerializedData, seriesIDs LabelSetIDs,
+) {
+	defer seriesIDs.keepAlive()
+
+	seriesDataSerializedDataMultiSeriesIteratorReset(it, serializedData.serializedData, seriesIDs.slice())
 }
 
 func (it *DataStorageSerializedDataMultiSeriesIterator) Close() {

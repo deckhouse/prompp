@@ -239,10 +239,11 @@ func (s *QueryableLSSSuite) TestQuery() {
 		snapshot := s.lss.CreateLabelSetSnapshot()
 		queryResult := snapshot.Query(selector)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
-		s.Require().Len(queryResult.IDs(), 3)
-		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
-		s.Require().Equal(s.labelSetIDs[0], queryResult.IDs()[1])
-		s.Require().Equal(s.labelSetIDs[2], queryResult.IDs()[2])
+		s.Require().Equal(3, queryResult.Len())
+		for i, expected := range []uint32{s.labelSetIDs[1], s.labelSetIDs[0], s.labelSetIDs[2]} {
+			id, _ := queryResult.GetByIndex(i)
+			s.Require().Equal(expected, id)
+		}
 		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[0])
 		s.Require().Equal(uint16(1), queryResult.LabelSetLengths()[1])
 		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[2])
@@ -986,8 +987,9 @@ func (s *RotateLSSSuite) convertQueryResultToLabelSets(
 	res := snapshot.Query(selector)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, res.Status())
 
-	actualLabelSets := make([]cppbridge.Labels, 0, len(res.IDs()))
-	for _, lsid := range res.IDs() {
+	actualLabelSets := make([]cppbridge.Labels, 0, res.Len())
+	for i := range res.Len() {
+		lsid, _ := res.GetByIndex(i)
 		ls := cppbridge.Labels{}
 		snapshot.RangeLabelSet(lsid, func(l cppbridge.Label) error {
 			ls = append(ls, cppbridge.Label{

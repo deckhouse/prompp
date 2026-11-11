@@ -88,7 +88,7 @@ func (s *CrossSeriesSetSuite) query(
 	valueNotFoundTimestampValue := int64(0)
 	staleNaNSeries := querier.NewStaleNaNSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 	ds.QueryStaleNaNSeries(
-		lssQueryResult.IDs(),
+		lssQueryResult.LabelSetIDs(),
 		uintptr(unsafe.Pointer(unsafe.SliceData(staleNaNSeries))), // #nosec G103 // it's meant to be that way
 	)
 
@@ -101,12 +101,12 @@ func (s *CrossSeriesSetSuite) query(
 	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
-		LabelSetIDs:      lssQueryResult.IDs(),
+		LabelSetIDs:      lssQueryResult.LabelSetIDs(),
 	}, downsamplingMs, hints)
 
 	nameIDs := make([]uint32, len(hints.Grouping))
 	lss.LabelNameToIDs(hints.Grouping, nameIDs)
-	seriesGroups := lss.GroupSeriesByLabelNames(lssQueryResult.IDs(), nameIDs)
+	seriesGroups := lss.GroupSeriesByLabelNames(lssQueryResult.LabelSetIDs(), nameIDs)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 

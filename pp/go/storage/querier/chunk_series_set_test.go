@@ -44,7 +44,7 @@ func TestChunkSeriesSetRetainsSeriesAfterAdvancement(t *testing.T) {
 	query := dataStorage.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: interval.MinT,
 		EndTimestampMs:   interval.MaxT,
-		LabelSetIDs:      seriesIDs,
+		LabelSetIDs:      cppbridge.GoLabelSetIDs(seriesIDs),
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, query.Status)
 	recoder := cppbridge.NewSerializedChunkRecoder(query.SerializedData, interval)

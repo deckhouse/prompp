@@ -108,7 +108,9 @@ type statsDataStorage struct {
 	needLoad bool
 }
 
-func (d *statsDataStorage) InstantQuery(maxt int64, ids []uint32, samples uintptr) cppbridge.DataStorageQueryResult {
+func (d *statsDataStorage) InstantQuery(
+	maxt int64, ids cppbridge.LabelSetIDs, samples uintptr,
+) cppbridge.DataStorageQueryResult {
 	result := d.DataStorage.InstantQuery(maxt, ids, samples)
 
 	if d.needLoad {

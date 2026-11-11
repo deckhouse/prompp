@@ -45,7 +45,7 @@ type DataStorage interface {
 	// InstantQuery fills samples for instant query from data storage.
 	InstantQuery(
 		maxt int64,
-		ids []uint32,
+		ids cppbridge.LabelSetIDs,
 		samples uintptr,
 	) cppbridge.DataStorageQueryResult
 
@@ -58,7 +58,7 @@ type DataStorage interface {
 
 	// QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
 	// series in ids directly into the C-shared series slice (pointed to by series).
-	QueryStaleNaNSeries(ids []uint32, series uintptr)
+	QueryStaleNaNSeries(ids cppbridge.LabelSetIDs, series uintptr)
 
 	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.
 	WithRLock(fn func(ds *cppbridge.DataStorage) error) error
@@ -71,7 +71,7 @@ type DataStorage interface {
 // LSS the minimum required [LSS] implementation.
 type LSS interface {
 	// GroupSeriesByLabelNames group series by label names.
-	GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups
+	GroupSeriesByLabelNames(seriesIDs cppbridge.LabelSetIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups
 
 	// LabelNameToIDs get label name ids from lss.
 	LabelNameToIDs(names []string, namesIDs []uint32)

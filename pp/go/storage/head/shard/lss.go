@@ -86,7 +86,7 @@ func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) 
 }
 
 // GroupSeriesByLabelNames group series by label names.
-func (l *LSS) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups {
+func (l *LSS) GroupSeriesByLabelNames(seriesIDs cppbridge.LabelSetIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups {
 	l.locker.RLock()
 	snapshot := l.getSnapshot()
 	l.locker.RUnlock()
