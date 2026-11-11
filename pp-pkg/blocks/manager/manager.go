@@ -301,7 +301,7 @@ func (m *Manager) ChunkQuerier(mint, maxt int64) (_ storage.ChunkQuerier, err er
 		}
 	}()
 
-	needDownsampling := m.needDownsampling(maxt - mint)
+	needDownsampling := m.needDownsampling(mint)
 	for _, b := range m.blocks {
 		if m.skipBlock(b, mint, maxt, needDownsampling) {
 			continue

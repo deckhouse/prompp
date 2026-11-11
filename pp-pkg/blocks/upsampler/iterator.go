@@ -2,6 +2,7 @@ package upsampler
 
 import (
 	"github.com/prometheus/prometheus/model/histogram"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
@@ -183,6 +184,11 @@ func (it *Iterator) Seek(target int64) chunkenc.ValueType {
 // and the pair is yielded as is.
 func (it *Iterator) armSynthesis() {
 	if it.stepMS == 0 || it.valueType != chunkenc.ValFloat || it.nextValueType != chunkenc.ValFloat {
+		it.nextSynthT = 0
+		return
+	}
+
+	if value.IsStaleNaN(it.v0) || value.IsStaleNaN(it.v1) {
 		it.nextSynthT = 0
 		return
 	}
