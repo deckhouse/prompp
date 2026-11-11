@@ -41,7 +41,7 @@ git_override(
 
 # --- Toolchains ---------------------------------------------------------------
 # rules_foreign_cc under Bzlmod builds some helper tools from source by default.
-# That fails or misbehaves in our setup in two ways:
+# That fails or misbehaves in our setup in three ways:
 #
 # * pkg-config drags glib in and fails to configure in minimal Linux envs.
 # * GNU make inherits the project's C/C++ flags, so under `--config=asan`
@@ -49,13 +49,18 @@ git_override(
 #   LeakSanitizer then reports leaks from make's own allocations the moment
 #   CMake tries to run it during a compiler identification check, breaking the
 #   `rules_foreign_cc` configure step for `roaring` et al.
+# * Since 0.16, GNU m4 is built from source (`@m4` via `rules_cc_autoconf`) for
+#   every `configure_make`/`cmake` target. Under our `-Werror` GCC 16 toolchain
+#   that build fails (`-Wmaybe-uninitialized` in `<regex>`, gnulib vs glibc
+#   `signal.h` errors). autoconf in Dockerfile.ci already pulls m4 in.
 #
-# Both tools are installed in our CI image (see Dockerfile.ci) and devcontainer,
+# All three tools are installed in our CI image (see Dockerfile.ci) and devcontainer,
 # so we register the preinstalled toolchains here, before rules_foreign_cc
 # registers its built-from-source alternatives.
 register_toolchains(
     "@rules_foreign_cc//toolchains:preinstalled_make_toolchain",
     "@rules_foreign_cc//toolchains:preinstalled_pkgconfig_toolchain",
+    "@rules_foreign_cc//toolchains:preinstalled_m4_toolchain",
     "//bazel/toolchain:cc_toolchain_for_g++-16_toolchain_aarch64",
     "//bazel/toolchain:cc_toolchain_for_g++-16_toolchain_x86_64",
 )
