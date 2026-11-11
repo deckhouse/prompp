@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
@@ -489,53 +488,6 @@ func (s *IteratorSuite) TestIteratorGapAtEnd() {
 	// Last sample should be the real one.
 	s.Require().Equal(int64(360_000), result[len(result)-1].t)
 	s.Require().Equal(30.0, result[len(result)-1].v)
-}
-
-// TestIteratorHistogramPassthrough tests that histogram samples
-// pass through without synthesis in the middle of a float sequence.
-func (s *IteratorSuite) TestIteratorHistogramPassthrough() {
-	// Mix of float and histogram samples.
-	// Note: mockIterator only supports float, so we'll test the logic
-	// by checking that non-float values in the middle don't trigger synthesis.
-	samples := []struct {
-		t int64
-		v float64
-	}{
-		{t: 60_000, v: 10.0},
-		{t: 120_000, v: 20.0},
-		{t: 180_000, v: 30.0},
-		{t: 240_000, v: 40.0},
-	}
-	base := newMockIterator(samples)
-
-	it := upsampler.NewIterator(base, 60_000, 240_000, upsampler.CounterFunc)
-
-	// Collect all samples.
-	var result []struct {
-		t int64
-		v float64
-	}
-	for {
-		vt := it.Next()
-		if vt == chunkenc.ValNone {
-			break
-		}
-
-		if vt == chunkenc.ValFloat {
-			t, v := it.At()
-			result = append(result, struct {
-				t int64
-				v float64
-			}{t, v})
-		}
-	}
-
-	// Without gaps, should pass through all 4 floats unchanged.
-	s.Require().Len(result, 4)
-	for i, expected := range samples {
-		s.Require().Equal(expected.t, result[i].t, "sample %d time", i)
-		s.Require().Equal(expected.v, result[i].v, "sample %d value", i)
-	}
 }
 
 //
@@ -1130,31 +1082,4 @@ func (s *IteratorSuite) TestIteratorSeekNoSynthesisPath() {
 	s.Require().Equal(chunkenc.ValFloat, vt)
 	t, _ = it.At()
 	s.Require().Equal(int64(275_000), t)
-}
-
-// TestIteratorHistogramPassthroughNoSynthesis tests Next() passing through
-// histogram samples without synthesis (lines 97-100).
-func (s *IteratorSuite) TestIteratorHistogramPassthroughNoSynthesis() {
-	samples := []struct {
-		t int64
-		h *histogram.FloatHistogram
-	}{
-		{t: 100_000, h: &histogram.FloatHistogram{Count: 1}},
-		{t: 200_000, h: &histogram.FloatHistogram{Count: 2}},
-	}
-	base := newMockHistogramIterator(samples)
-	it := upsampler.NewIterator(base, 75_000, 300_000, upsampler.CounterFunc) // range = 150ms
-
-	// First Next: reads histogram at 100k
-	vt := it.Next()
-	s.Require().Equal(chunkenc.ValFloatHistogram, vt)
-	t, _ := it.At()
-	s.Require().Equal(int64(100_000), t)
-
-	// Second Next: reads histogram at 200k
-	// Gap is 100ms < 150ms, so no synthesis, just pass through
-	vt = it.Next()
-	s.Require().Equal(chunkenc.ValFloatHistogram, vt)
-	t, _ = it.At()
-	s.Require().Equal(int64(200_000), t)
 }

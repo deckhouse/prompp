@@ -32,7 +32,12 @@ func (s *HistogramIteratorSuite) SetupTest() {
 
 		for count := int64(1); count <= 3; count++ {
 			h := &histogram.Histogram{
-				Count: uint64(count), ZeroCount: uint64(count), ZeroThreshold: 1, Sum: float64(count) / 2,
+				Count:           uint64(count) * 2,
+				ZeroCount:       uint64(count),
+				ZeroThreshold:   1,
+				Sum:             float64(count) * 1.5,
+				PositiveSpans:   []histogram.Span{{Offset: 1, Length: 1}},
+				PositiveBuckets: []int64{count},
 			}
 
 			var replacement chunkenc.Chunk
@@ -158,7 +163,7 @@ func (s *HistogramIteratorSuite) TestSeekPreservesHistograms() {
 				t, h := it.AtFloatHistogram(nil)
 				s.Require().Equal(tc.want, t)
 				s.Require().NotNil(h)
-				s.Require().Equal(float64(tc.want)/100, h.Count)
+				s.Require().Equal(2*float64(tc.want)/100, h.Count)
 			})
 		}
 	}
