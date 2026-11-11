@@ -29,7 +29,7 @@ func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 		upsampler = NewIterator(nil, s.stepMS, s.maxGapMS, s.typeOfFunc)
 	}
 
-	baseIt := s.base.Iterator(nil)
+	baseIt := s.base.Iterator(upsampler.base)
 	upsampler.Reset(baseIt, s.stepMS, s.maxGapMS, s.typeOfFunc)
 
 	return upsampler

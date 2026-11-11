@@ -54,36 +54,62 @@ func (s *SeriesSuite) TestSeriesIteratorNewCreation() {
 }
 
 func (s *SeriesSuite) TestSeriesIteratorReuse() {
-	baseIterator := newMockIterator([]struct {
-		t int64
-		v float64
-	}{
-		{100, 1.0},
-		{200, 2.0},
-	})
-	baseSeries := &mockSeries{
-		labels: labels.FromStrings("__name__", "test_metric"),
-		iteratorFunc: func(chunkenc.Iterator) chunkenc.Iterator {
-			return baseIterator
+	// Arrange
+	c := chunkenc.NewXORChunk()
+	appender, err := c.Appender()
+	s.Require().NoError(err)
+	appender.Append(100, 1)
+	appender.Append(200, 2)
+
+	var baseIterators []chunkenc.Iterator
+	baseSeries := &storage.SeriesEntry{
+		SampleIteratorFn: func(reuse chunkenc.Iterator) chunkenc.Iterator {
+			actual := c.Iterator(reuse)
+			baseIterators = append(baseIterators, actual)
+
+			return actual
 		},
 	}
-
-	baseSeriesSet := &mockSeriesSet{
-		atFunc: func() storage.Series {
-			return baseSeries
-		},
+	baseSet := &mockSeriesSet{
+		atFunc: func() storage.Series { return baseSeries },
 	}
+	series := upsampler.NewSeriesSet(baseSet, 100, 100, upsampler.CounterFunc).At()
+	first := series.Iterator(nil)
+	s.Require().Equal(chunkenc.ValFloat, first.Seek(150))
+	s.Require().Equal(int64(150), first.AtT())
 
-	ss := upsampler.NewSeriesSet(baseSeriesSet, 60000, 60000, upsampler.CounterFunc)
-	series := ss.At()
+	// Act
+	reused := series.Iterator(first)
 
-	// Create first iterator
-	it1 := series.Iterator(nil)
-	s.NotNil(it1)
+	// Assert
+	s.Require().Same(first, reused)
+	s.Require().Len(baseIterators, 2)
+	s.Require().Same(baseIterators[0], baseIterators[1])
+	s.Require().Equal(chunkenc.ValFloat, reused.Next())
+	t, v := reused.At()
+	s.Require().Equal(int64(100), t)
+	s.Require().Equal(float64(1), v)
+}
 
-	// Reuse same iterator instance
-	it2 := series.Iterator(it1)
+// BenchmarkSeriesIteratorReuse measures wrapper and base iterator reuse over a real XOR chunk.
+func BenchmarkSeriesIteratorReuse(b *testing.B) {
+	c := chunkenc.NewXORChunk()
+	appender, err := c.Appender()
+	if err != nil {
+		b.Fatal(err)
+	}
+	appender.Append(100, 1)
+	appender.Append(200, 2)
 
-	// Should return the same iterator, just reset
-	s.Equal(it1, it2)
+	baseSeries := &storage.SeriesEntry{SampleIteratorFn: c.Iterator}
+	baseSet := &mockSeriesSet{
+		atFunc: func() storage.Series { return baseSeries },
+	}
+	series := upsampler.NewSeriesSet(baseSet, 100, 100, upsampler.CounterFunc).At()
+	it := series.Iterator(nil)
+	b.ReportAllocs()
+
+	for b.Loop() {
+		it = series.Iterator(it)
+	}
 }
