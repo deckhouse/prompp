@@ -119,4 +119,13 @@ INSTANTIATE_TEST_SUITE_P(Test,
                                          EncodeCase{.initial_value = std::numeric_limits<uint32_t>::max(), .value = STALE_NAN, .expected = true},
                                          EncodeCase{.initial_value = 1.0, .value = 1.0, .expected = false}));
 
+INSTANTIATE_TEST_SUITE_P(IntegerRange,
+                         Uint32ConstantEncoderCanBeEncodedFixture,
+                         testing::Values(CanBeEncodedCase{.value = 0x1p63, .expected = false},
+                                         CanBeEncodedCase{.value = std::numeric_limits<double>::max(), .expected = false},
+                                         CanBeEncodedCase{.value = std::numeric_limits<double>::infinity(), .expected = false},
+                                         CanBeEncodedCase{.value = -std::numeric_limits<double>::infinity(), .expected = false},
+                                         CanBeEncodedCase{.value = std::numeric_limits<double>::quiet_NaN(), .expected = false},
+                                         CanBeEncodedCase{.value = -0.0, .expected = true}));
+
 }  // namespace
