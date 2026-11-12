@@ -66,8 +66,8 @@ importers:
         specifier: ^0.9.0
         version: 0.9.1
       '@prometheus-io/codemirror-promql':
-        specifier: 0.55.1
-        version: 0.55.1(@codemirror/autocomplete@6.20.3)(@codemirror/language@6.13.1)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.6)(@codemirror/view@6.43.14)(@lezer/common@1.5.3)(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)
+        specifier: 0.315.1
+        version: 0.315.1(@codemirror/autocomplete@6.20.3)(@codemirror/language@6.13.1)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.6)(@codemirror/view@6.43.14)(@lezer/common@1.5.3)(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)
       bootstrap:
         specifier: ^4.6.2
         version: 4.6.2(jquery@3.7.1)(popper.js@1.16.1)
@@ -108,8 +108,8 @@ importers:
         specifier: ^17.0.2
         version: 17.0.2(react@17.0.2)
       react-i18next:
-        specifier: 15.4.1
-        version: 15.4.1(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2)
+        specifier: 15.7.4
+        version: 15.7.4(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2)(typescript@5.9.3)
       react-infinite-scroll-component:
         specifier: ^6.1.0
         version: 6.1.1(react@17.0.2)
@@ -1293,8 +1293,8 @@ packages:
       webpack-plugin-serve:
         optional: true
 
-  '@prometheus-io/codemirror-promql@0.55.1':
-    resolution: {integrity: sha512-FYTwdEG3YfdEC2Lyo3uOVh3ObyWP2UtIbTP0gmIcq51TjfYtRUcIDPlirn3CRps7unZag0fu2ZgbruwbzOhoNg==}
+  '@prometheus-io/codemirror-promql@0.315.1':
+    resolution: {integrity: sha512-6AHDpNu9dMJRoh/dRebcgcHV9gnTyTANgLxadjoIx0BMfq8gaAcUO3hLVHWfiHXIGtOlAMAgZW9THJvI/v58IQ==}
     engines: {node: '>=12.0.0'}
     peerDependencies:
       '@codemirror/autocomplete': ^6.4.0
@@ -1304,8 +1304,8 @@ packages:
       '@codemirror/view': ^6.4.0
       '@lezer/common': ^1.0.1
 
-  '@prometheus-io/lezer-promql@0.55.1':
-    resolution: {integrity: sha512-WDRk8gkxG76eI2gpm0JbWMUyfou8GEyo66GWEz8pXP94Clg2tFYoyBxv4XGDyPo5V52l8CPyQAUPQmSPVYpfJg==}
+  '@prometheus-io/lezer-promql@0.315.1':
+    resolution: {integrity: sha512-+D/FSMFCOBbErvkJ7rTw97RCewzEs3GcmlpmebM9a4NpfhOJQOwLVWw6Ea5sZq4phaxuE7OpYRosX5QuXdrqYw==}
     peerDependencies:
       '@lezer/highlight': ^1.1.2
       '@lezer/lr': ^1.2.3
@@ -4042,12 +4042,12 @@ packages:
   lower-case@2.0.2:
     resolution: {integrity: sha512-7fm3l3NAF9WfN6W3JOmf5drwpVqX78JtoGJ3A6W0a6ZnldM41w2fV5D490psKFTpMds8TJse/eHLFFsNHHjHgg==}
 
+  lru-cache@11.5.3:
+    resolution: {integrity: sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==}
+    engines: {node: 20 || >=22}
+
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
-
-  lru-cache@7.18.3:
-    resolution: {integrity: sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA==}
-    engines: {node: '>=12'}
 
   magic-string@0.25.9:
     resolution: {integrity: sha512-RmF0AsMzgt25qzqqLc1+MbHmhdx0ojF2Fvs4XnOqz2ZOBXzzkEwc/dJQZCYHAn7v1jbVOjAZfK8msRn4BxO4VQ==}
@@ -5047,17 +5047,20 @@ packages:
   react-error-overlay@6.1.0:
     resolution: {integrity: sha512-SN/U6Ytxf1QGkw/9ve5Y+NxBbZM6Ht95tuXNMKs8EJyFa/Vy/+Co3stop3KBHARfn/giv+Lj1uUnTfOJ3moFEQ==}
 
-  react-i18next@15.4.1:
-    resolution: {integrity: sha512-ahGab+IaSgZmNPYXdV1n+OYky95TGpFwnKRflX/16dY04DsYYKHtVLjeny7sBSCREEcoMbAgSkFiGLF5g5Oofw==}
+  react-i18next@15.7.4:
+    resolution: {integrity: sha512-nyU8iKNrI5uDJch0z9+Y5XEr34b0wkyYj3Rp+tfbahxtlswxSCjcUL9H0nqXo9IR3/t5Y5PKIA3fx3MfUyR9Xw==}
     peerDependencies:
-      i18next: '>= 23.2.3'
+      i18next: '>= 23.4.0'
       react: '>= 16.8.0'
       react-dom: '*'
       react-native: '*'
+      typescript: ^5
     peerDependenciesMeta:
       react-dom:
         optional: true
       react-native:
+        optional: true
+      typescript:
         optional: true
 
   react-infinite-scroll-component@6.1.1:
@@ -7621,7 +7624,7 @@ snapshots:
       type-fest: 0.21.3
       webpack-dev-server: 4.15.2(webpack@5.111.1(postcss@8.5.29))
 
-  '@prometheus-io/codemirror-promql@0.55.1(@codemirror/autocomplete@6.20.3)(@codemirror/language@6.13.1)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.6)(@codemirror/view@6.43.14)(@lezer/common@1.5.3)(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)':
+  '@prometheus-io/codemirror-promql@0.315.1(@codemirror/autocomplete@6.20.3)(@codemirror/language@6.13.1)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.6)(@codemirror/view@6.43.14)(@lezer/common@1.5.3)(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
       '@codemirror/language': 6.13.1
@@ -7629,13 +7632,13 @@ snapshots:
       '@codemirror/state': 6.7.6
       '@codemirror/view': 6.43.14
       '@lezer/common': 1.5.3
-      '@prometheus-io/lezer-promql': 0.55.1(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)
-      lru-cache: 7.18.3
+      '@prometheus-io/lezer-promql': 0.315.1(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)
+      lru-cache: 11.5.3
     transitivePeerDependencies:
       - '@lezer/highlight'
       - '@lezer/lr'
 
-  '@prometheus-io/lezer-promql@0.55.1(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)':
+  '@prometheus-io/lezer-promql@0.315.1(@lezer/highlight@1.2.5)(@lezer/lr@1.4.11)':
     dependencies:
       '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.11
@@ -11100,11 +11103,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  lru-cache@11.5.3: {}
+
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
-
-  lru-cache@7.18.3: {}
 
   magic-string@0.25.9:
     dependencies:
@@ -12058,7 +12061,7 @@ snapshots:
 
   react-error-overlay@6.1.0: {}
 
-  react-i18next@15.4.1(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2):
+  react-i18next@15.7.4(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2)(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 7.29.10
       html-parse-stringify: 3.1.0
@@ -12066,6 +12069,7 @@ snapshots:
       react: 17.0.2
     optionalDependencies:
       react-dom: 17.0.2(react@17.0.2)
+      typescript: 5.9.3
 
   react-infinite-scroll-component@6.1.1(react@17.0.2):
     dependencies:

@@ -1666,6 +1666,21 @@ void prompp_series_data_data_storage_ctor(void* args, void* res);
 void prompp_series_data_data_storage_time_interval(void* args, void* res);
 
 /**
+ * @brief Get the sorted start timestamps of the quantDuration-aligned quants that hold at least one sample
+ *
+ * @param args {
+ *     dataStorage   uintptr // pointer to constructed data storage
+ *     quantDuration int64   // quant duration in milliseconds
+ * }
+ *
+ * @param res {
+ *     quants []int64 // must be freed with prompp_free_bytes
+ * }
+ *
+ */
+void prompp_series_data_data_storage_non_empty_quants(void* args, void* res);
+
+/**
  * @brief Get queried series bitset memory size
  *
  * @param args {
