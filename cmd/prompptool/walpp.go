@@ -27,6 +27,7 @@ type cmdWALPPToBlock struct {
 	blockDuration        model.Duration
 	updateCatalog        bool
 	removeConvertedHeads bool
+	keepFutureSamples    bool
 }
 
 func registerCmdWALPPToBlock(cmd *cmdWALPPToBlock, clause *kingpin.CmdClause) {
@@ -42,6 +43,9 @@ func registerCmdWALPPToBlock(cmd *cmdWALPPToBlock, clause *kingpin.CmdClause) {
 		"remove-converted-heads",
 		"After conversion, delete all converted heads. Default true.",
 	).Default("true").Hidden().BoolVar(&cmd.removeConvertedHeads)
+
+	clause.Flag("keep-future-samples", "Persist samples that start later than now plus the min block duration. Such blocks push all other blocks out of time retention.").
+		BoolVar(&cmd.keepFutureSamples)
 }
 
 func (cmd *cmdWALPPToBlock) Do(
@@ -67,7 +71,8 @@ func (cmd *cmdWALPPToBlock) Do(
 
 	level.Debug(logger).Log("msg", "read catalog log")
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, registerer)
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, registerer,
+		catalog.WithHeadDirInspector(catalog.NewHeadDirInspector(workingDir)))
 	if err != nil {
 		return fmt.Errorf("failed init head catalog: %w", err)
 	}
@@ -83,11 +88,17 @@ func (cmd *cmdWALPPToBlock) Do(
 
 	level.Debug(logger).Log("msg", "catalog records", "len", len(headRecords))
 
+	futurePeriod := time.Duration(cmd.blockDuration)
+	if cmd.keepFutureSamples {
+		futurePeriod = 0
+	}
+
 	bw := block.NewWriter[*shard.Shard](
 		workingDir,
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
+		futurePeriod,
 		clock,
 		registerer,
 	)

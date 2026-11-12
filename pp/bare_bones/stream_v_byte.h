@@ -938,6 +938,8 @@ class CompactSequence {
     auto code = Codec::encode(val, data_iterator_);
     *key_iterator_ |= code << ((size() & 0x03) << 1);
 
+    // Publish size after encoding the value and patching its key. Readers decode up to their captured size.
+    // Appends preserve earlier key bits, and decoding masks bytes beyond each value.
     set_size(size() + 1);
 
     key_iterator_ += !(size() % 4);
