@@ -652,6 +652,7 @@ class BitSequence {
     if (size > kMaxSizeInBits) [[unlikely]] {
       throw BareBones::Exception(0x4d8324c9b10882cd, "Invalid BitSequence size %zu bits got from input, the maximum is %zu bits", size, kMaxSizeInBits);
     }
+    check_readable_bytes(in, Bit::to_ceil_bytes(size), "BitSequence");
     seq.size_ = size;
 
     // read data

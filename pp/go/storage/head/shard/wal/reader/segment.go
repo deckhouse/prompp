@@ -2,6 +2,7 @@ package reader
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -27,6 +28,13 @@ func getBuffer(size int) []byte {
 func putBuffer(buf []byte) {
 	buffers.Put(buf)
 }
+
+// MaxSegmentSize is the maximum size of an encoded head WAL segment. A larger size in the file means that the file
+// is damaged, so the reader returns ErrSegmentTooLarge instead of allocating a buffer for it.
+const MaxSegmentSize = 1 << 30
+
+// ErrSegmentTooLarge is returned when the size of a segment in the file exceeds MaxSegmentSize.
+var ErrSegmentTooLarge = errors.New("segment size exceeds the maximum")
 
 //
 // Segment
@@ -60,6 +68,9 @@ func (s *Segment) ReadFrom(r io.Reader) (int64, error) {
 	size, err := binary.ReadUvarint(br)
 	if err != nil {
 		return int64(br.readBytes), fmt.Errorf("failed to read segment size: %w", err)
+	}
+	if size > MaxSegmentSize {
+		return int64(br.readBytes), fmt.Errorf("segment size %d: %w", size, ErrSegmentTooLarge)
 	}
 
 	crc32HashU64, err := binary.ReadUvarint(br)
@@ -182,6 +193,9 @@ func (s *SegmentV2) readSegmentBody(br *ByteReader) (int64, error) {
 	size, err := binary.ReadUvarint(br)
 	if err != nil {
 		return int64(br.readBytes), fmt.Errorf("v2: failed to read segment size: %w", err)
+	}
+	if size > MaxSegmentSize {
+		return int64(br.readBytes), fmt.Errorf("v2: segment size %d: %w", size, ErrSegmentTooLarge)
 	}
 
 	crc32HashU64, err := binary.ReadUvarint(br)

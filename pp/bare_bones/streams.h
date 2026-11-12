@@ -6,11 +6,16 @@
 #include <cstdlib>
 #include <cstring>
 #include <ios>
+#include <limits>
 #include <ostream>
 #include <span>
+#include <spanstream>
 #include <string_view>
 
 #include <experimental/scope>
+
+#include "exception.h"
+#include "preprocess.h"
 
 namespace BareBones {
 
@@ -48,6 +53,32 @@ concept OutputStream = HiddenExceptions<T> && requires(T x, char c, char* s, siz
   x.put(c);
   x.write(s, n);
 };
+
+template <typename T>
+concept StreamWithReadableBytesHint = requires(const T& x) {
+  { x.readable_bytes_hint() } -> std::convertible_to<size_t>;
+};
+
+// Upper bound of the bytes that can still be read from the stream: exact for a span, the remaining budget for a stream that has
+// one, and no limit for any other stream. Deserializers check a size read from the stream against it before they allocate memory.
+template <class S>
+[[nodiscard]] PROMPP_ALWAYS_INLINE size_t readable_bytes_hint(S& in) noexcept {
+  if constexpr (StreamWithReadableBytesHint<S>) {
+    return in.readable_bytes_hint();
+  } else if constexpr (std::derived_from<S, std::ispanstream>) {
+    const auto available = in.rdbuf()->in_avail();
+    return available > 0 ? static_cast<size_t>(available) : 0;
+  } else {
+    return std::numeric_limits<size_t>::max();
+  }
+}
+
+template <class S>
+void check_readable_bytes(S& in, size_t bytes, const char* what) {
+  if (const auto readable = readable_bytes_hint(in); bytes > readable) [[unlikely]] {
+    throw Exception(0x7a058b8b3f6499e7, "Invalid %s size got from input: %zu bytes, but only %zu bytes can be read", what, bytes, readable);
+  }
+}
 
 class ShrinkedToFitOStringStream : public std::ostream {
  public:

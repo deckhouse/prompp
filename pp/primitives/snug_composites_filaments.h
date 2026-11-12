@@ -218,6 +218,7 @@ struct Symbol {
       const auto original_size = items_.size();
       if (table_version == 1) {
         // read items
+        BareBones::check_readable_bytes(in, sizeof(item_type) * size_t{items_size}, "filament items");
         items_.resize(original_size + items_size);
         in.read(reinterpret_cast<char*>(&items_[original_size]), sizeof(item_type) * items_size);
       }
@@ -231,6 +232,7 @@ struct Symbol {
 
       if (table_version == 2) {
         // read items
+        BareBones::check_readable_bytes(in, sizeof(item_type) * size_t{items_size}, "filament items");
         items_.resize(original_size + items_size);
         in.read(reinterpret_cast<char*>(&items_[original_size]), sizeof(item_type) * items_size);
       }
@@ -260,6 +262,7 @@ struct Symbol {
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
+      BareBones::check_readable_bytes(in, size_to_load, "filament data");
       data_.resize(data_.size() + size_to_load);
       in.read(data_.begin() + first_to_load_i, size_to_load);
 
@@ -641,6 +644,7 @@ struct LabelNameSet {
       const auto items_original_size = items_.size();
       if (table_version == 1) {
         // read items
+        BareBones::check_readable_bytes(in, sizeof(item_type) * size_t{items_size}, "filament items");
         items_.resize(items_original_size + items_size);
         in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
       }
@@ -654,6 +658,7 @@ struct LabelNameSet {
 
       if (table_version == 2) {
         // read items
+        BareBones::check_readable_bytes(in, sizeof(item_type) * size_t{items_size}, "filament items");
         items_.resize(items_original_size + items_size);
         in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
       }
@@ -685,6 +690,7 @@ struct LabelNameSet {
       // read data
       auto original_size = symbols_ids_sequences_.size();
       auto sg1 = std::experimental::scope_fail([&]() { symbols_ids_sequences_.resize(original_size); });
+      BareBones::check_readable_bytes(in, sizeof(symbols_ids_sequences_[first_to_load_i]) * size_t{size_to_load}, "filament symbols ids");
       symbols_ids_sequences_.resize(original_size + size_to_load);
       in.read(reinterpret_cast<char*>(&symbols_ids_sequences_[first_to_load_i]), sizeof(symbols_ids_sequences_[first_to_load_i]) * size_to_load);
 
@@ -1365,6 +1371,7 @@ struct LabelSet {
       const auto items_original_size = items_.size();
       if (table_version == 1) {
         // read items
+        BareBones::check_readable_bytes(in, sizeof(item_type) * size_t{items_size}, "filament items");
         items_.resize(items_original_size + items_size);
         in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
       }
@@ -1378,6 +1385,7 @@ struct LabelSet {
 
       if (table_version == 2) {
         // read items
+        BareBones::check_readable_bytes(in, sizeof(item_type) * size_t{items_size}, "filament items");
         items_.resize(items_original_size + items_size);
         in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
       }
@@ -1408,6 +1416,7 @@ struct LabelSet {
 
       // read data
       auto sg1 = std::experimental::scope_fail([original_size = symbols_ids_sequences_.size(), this] { symbols_ids_sequences_.resize(original_size); });
+      BareBones::check_readable_bytes(in, sizeof(symbols_ids_sequences_[first_to_load_i]) * size_t{size_to_load}, "filament symbols ids");
 
       symbols_ids_sequences_.reserve_and_write(size_to_load + sizeof(symbol_ids_codec_type::value_type), [&in, size_to_load](uint8_t* buffer, uint32_t) {
         in.read(reinterpret_cast<char*>(buffer), size_to_load * sizeof(symbols_ids_sequences_[first_to_load_i]));
@@ -1455,7 +1464,8 @@ struct LabelSet {
             throw BareBones::Exception(0x98d95ce3b05ec2b5, "Max symbol id (%lu) is greater than UINT32_MAX", size_will_be_at_least);
           }
 
-          symbols_tables_.resize(size_will_be_at_least);
+          // grow by one table: the count of tables comes from the stream, so it must not drive the allocation
+          symbols_tables_.resize(id + 1);
         }
 
         // read symbols table

@@ -43,12 +43,14 @@
 #include <array>
 #include <cassert>
 #include <cstring>
+#include <limits>
 #include <streambuf>
 #include <vector>
 
 #include <lz4frame.h>
 #include <lz4hc.h>
 
+#include "exception.h"
 #include "preprocess.h"
 
 namespace BareBones::LZ4Stream {
@@ -220,10 +222,14 @@ class basic_istream final : public std::istream {
    */
   explicit basic_istream(std::istream* stream) : std::istream(&buffer_), buffer_(stream) {}
 
+  // the budget of decompressed bytes is reset by every set_stream()
   PROMPP_ALWAYS_INLINE void set_stream(std::istream* stream) {
     buffer_.set_stream(stream);
     clear();
   }
+
+  PROMPP_ALWAYS_INLINE void set_max_decompressed_size(size_t size) noexcept { buffer_.set_max_decompressed_size(size); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t readable_bytes_hint() const noexcept { return buffer_.readable_bytes_hint(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
@@ -250,6 +256,11 @@ class basic_istream final : public std::istream {
 
       while (true) {
         if (const auto decompressed_size = decompress(); decompressed_size != 0) {
+          decompressed_total_ += decompressed_size;
+          if (decompressed_total_ > max_decompressed_size_) [[unlikely]] {
+            throw BareBones::Exception(0x33baea616942eb94, "LZ4 decompressed data exceeds the limit of %zu bytes", max_decompressed_size_);
+          }
+
           set_pointers(decompressed_size);
           return traits_type::to_int_type(*gptr());
         }
@@ -265,18 +276,31 @@ class basic_istream final : public std::istream {
 
     PROMPP_ALWAYS_INLINE void set_stream(std::istream* stream) noexcept {
       stream_ = stream;
+      decompressed_total_ = 0;
       set_pointers(0);
+    }
+
+    PROMPP_ALWAYS_INLINE void set_max_decompressed_size(size_t size) noexcept { max_decompressed_size_ = size; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t readable_bytes_hint() const noexcept {
+      // decompressed_total_ never exceeds max_decompressed_size_, underflow() throws before that
+      return max_decompressed_size_ - decompressed_total_ + static_cast<size_t>(egptr() - gptr());
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return LZ4F_allocated_memory(ctx_); }
 
    private:
+    // the largest block size of the LZ4 frame format (LZ4F_max4MB), a stored block is never larger than it
+    static constexpr uint32_t kMaxDataBlockSize = 4 << 20;
+
     std::array<char, DecompressedBufferSize> decompressed_buffer_;
     std::string src_buf_;
     std::string_view source_buffer_view_;
     std::array<char, LZ4F_HEADER_SIZE_MAX + LZ4F_BLOCK_HEADER_SIZE> data_block_header_{};
     std::istream* stream_;
     size_t data_block_count_{};
+    size_t decompressed_total_{};
+    size_t max_decompressed_size_{std::numeric_limits<size_t>::max()};
     LZ4F_decompressionContext_t ctx_{};
 
     PROMPP_ALWAYS_INLINE void set_pointers(size_t decompressed_size) {
@@ -315,7 +339,9 @@ class basic_istream final : public std::istream {
       }
 
       ++data_block_count_;
-      src_buf_.reserve(data_block_size);
+      if (src_buf_.size() < data_block_size) {
+        src_buf_.resize(data_block_size);
+      }
       memcpy(src_buf_.data(), &data_block_header_.front(), header_size);
 
       const auto read_size = data_block_size - header_size;
@@ -340,6 +366,10 @@ class basic_istream final : public std::istream {
       }
 
       data_block_size = unpack_data_block_size(data_block_size);
+      if (data_block_size > kMaxDataBlockSize) [[unlikely]] {
+        throw BareBones::Exception(0x4f2d25a36bf86981, "LZ4 data block size %u exceeds the maximum %u", data_block_size, kMaxDataBlockSize);
+      }
+
       header_size += LZ4F_BLOCK_HEADER_SIZE;
       return data_block_size + header_size;
     }

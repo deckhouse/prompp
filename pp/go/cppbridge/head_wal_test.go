@@ -181,3 +181,39 @@ func TestHeadWalDecoder_DecodeToDataStorageCorruptedSegment(t *testing.T) {
 		})
 	}
 }
+
+// overBudgetHeadWalSegment is a V3 segment with a stored LZ4 block. Its values BitSequence declares 1 GiB + 1 byte
+// of data, which is more than the decoder may decompress for one segment.
+const overBudgetHeadWalSegment = "04224d184040c0470000800000000000000000df4f31a5b202d318010200000000000000000101010000000001ffffffffffffffffffffff7f01010800000002000000ffffff7f01010000000001ffffffff"
+
+func TestHeadWalDecoder_DecodeToDataStorageOverBudgetSegment(t *testing.T) {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+	segment, err := hex.DecodeString(overBudgetHeadWalSegment)
+	require.NoError(t, err)
+
+	// Act
+	_, _, err = decoder.DecodeToDataStorage(segment, dataStorage)
+
+	// Assert
+	require.ErrorContains(t, err, "can be read")
+}
+
+// tooLargeBlockHeadWalSegment is the LZ4 frame header of a V3 segment followed by a stored block of 5 MiB, larger
+// than any LZ4 block.
+const tooLargeBlockHeadWalSegment = "04224d184040c0" + "00005080" + "0000000000000000"
+
+func TestHeadWalDecoder_DecodeToDataStorageTooLargeLZ4Block(t *testing.T) {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+	segment, err := hex.DecodeString(tooLargeBlockHeadWalSegment)
+	require.NoError(t, err)
+
+	// Act
+	_, _, err = decoder.DecodeToDataStorage(segment, dataStorage)
+
+	// Assert
+	require.ErrorContains(t, err, "LZ4 data block size")
+}

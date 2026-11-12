@@ -794,6 +794,7 @@ class Sequence {
       throw BareBones::Exception(0x65eff33dcf65d90e, "Invalid Sequence size %u got from input, the maximum is %u", size,
                                  std::numeric_limits<uint32_t>::max() - PreAllocationElementsCount);
     }
+    check_readable_bytes(in, keys_size(size), "Sequence keys");
     seq.size_ = size;
 
     auto new_size = seq.next_size(seq.size_);
@@ -809,6 +810,7 @@ class Sequence {
     }
 
     // read data
+    check_readable_bytes(in, actual_data_size, "Sequence data");
     seq.reserve_data(new_size, actual_data_size);
     in.read(reinterpret_cast<char*>(static_cast<uint8_t*>(seq.data_)), actual_data_size);
 

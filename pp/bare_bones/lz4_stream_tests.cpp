@@ -253,4 +253,97 @@ TEST_F(LZ4StreamUsageFixture, ReadTwoOfThreeDataBlocks) {
   EXPECT_EQ(third_data_block_offset, string_stream_.tellg());
 }
 
+class LZ4IStreamBudgetFixture : public testing::Test {
+ protected:
+  static constexpr size_t kBudget = 10;
+
+  std::stringstream string_stream_;
+  BareBones::LZ4Stream::ostream lz4ostream_{&string_stream_};
+  BareBones::LZ4Stream::istream lz4istream_{&string_stream_};
+  std::string decoded_ = std::string(kBudget + 1, '\0');
+
+  void SetUp() override {
+    lz4istream_.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    lz4istream_.set_max_decompressed_size(kBudget);
+  }
+};
+
+TEST_F(LZ4IStreamBudgetFixture, ReadWithinBudget) {
+  // Arrange
+  lz4ostream_ << std::string(kBudget, 'a') << std::flush;
+
+  // Act
+  lz4istream_.read(&decoded_[0], kBudget);
+
+  // Assert
+  EXPECT_EQ(std::string(kBudget, 'a'), decoded_.substr(0, kBudget));
+  EXPECT_EQ(0U, lz4istream_.readable_bytes_hint());
+}
+
+TEST_F(LZ4IStreamBudgetFixture, ReadableBytesHintDecreasesOnRead) {
+  // Arrange
+  lz4ostream_ << std::string(kBudget, 'a') << std::flush;
+
+  // Act
+  lz4istream_.read(&decoded_[0], 4);
+
+  // Assert
+  EXPECT_EQ(kBudget - 4, lz4istream_.readable_bytes_hint());
+}
+
+TEST_F(LZ4IStreamBudgetFixture, ThrowsWhenDecompressedDataExceedsBudget) {
+  // Arrange
+  lz4ostream_ << std::string(kBudget + 1, 'a') << std::flush;
+
+  // Act
+  const auto read = [this] { lz4istream_.read(&decoded_[0], 1); };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+}
+
+TEST_F(LZ4IStreamBudgetFixture, ResetsBudgetOnSetStream) {
+  // Arrange
+  std::stringstream string_stream2;
+  lz4ostream_ << std::string(kBudget, 'a') << std::flush;
+  lz4ostream_.set_stream(&string_stream2);
+  lz4ostream_ << std::string(kBudget, 'b') << std::flush;
+  lz4ostream_.set_stream(nullptr);
+  lz4istream_.read(&decoded_[0], kBudget);
+
+  // Act
+  lz4istream_.set_stream(&string_stream2);
+  lz4istream_.read(&decoded_[0], kBudget);
+
+  // Assert
+  EXPECT_EQ(std::string(kBudget, 'b'), decoded_.substr(0, kBudget));
+}
+
+class LZ4IStreamDataBlockSizeFixture : public testing::Test {
+ protected:
+  std::stringstream string_stream_;
+  BareBones::LZ4Stream::ostream lz4ostream_{&string_stream_};
+  BareBones::LZ4Stream::istream lz4istream_{&string_stream_};
+
+  void SetUp() override {
+    lz4istream_.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+
+    // an uncompressed data block of 5 MiB, larger than any LZ4 block
+    constexpr uint32_t kBlockSize = (5U << 20) | (1U << 31);
+    string_stream_.write(reinterpret_cast<const char*>(&kBlockSize), sizeof(kBlockSize));
+    string_stream_ << std::string(16, 'a');
+  }
+};
+
+TEST_F(LZ4IStreamDataBlockSizeFixture, ThrowsBeforeReadingDataBlock) {
+  // Arrange
+  char value{};
+
+  // Act
+  const auto read = [&] { lz4istream_.read(&value, 1); };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+}
+
 }  // namespace

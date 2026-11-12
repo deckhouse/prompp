@@ -622,7 +622,8 @@ class BasicDecoder {
     return uuid;
   }
 
-  void load_segment(std::istream& stream) {
+  template <class InputStream>
+  void load_segment(InputStream& stream) {
     assert(segment_gorilla_v_bitseq_.empty());
 
     // return successfully, if stream is empty
@@ -636,30 +637,14 @@ class BasicDecoder {
 
     const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
-    std::istream& in = get_stream(stream);
-
     try {
-      in.read(reinterpret_cast<char*>(&created_at_tsns_), sizeof(created_at_tsns_));
-      in.read(reinterpret_cast<char*>(&encoded_at_tsns_), sizeof(encoded_at_tsns_));
-
-      // read label sets
-      label_sets_.load(in);
-
-      // read ls ids
-      in >> segment_ls_id_delta_rle_seq_ >> segment_ls_id_crc_;
-
-      // read ts base
-      in.read(reinterpret_cast<char*>(&sample_decoder_.timestamp_base), sizeof(sample_decoder_.timestamp_base));
-
-      // read ts
-      if (in.get() == 0) {
-        in >> segment_ts_delta_rle_seq_ >> segment_sample_crc_.timestamp;
+      // the concrete stream type is kept, because deserializers check sizes from the stream against its readable bytes
+      if (encoder_version_ == BasicEncoderVersion::kV3) {
+        lz4stream_.set_stream(&stream);
+        load_segment_data(lz4stream_);
       } else {
-        in >> segment_gorilla_ts_bitseq_ >> segment_sample_crc_.timestamp;
+        load_segment_data(stream);
       }
-
-      // read values
-      in >> segment_gorilla_v_bitseq_ >> segment_sample_crc_.values;
     } catch (...) {
       clear_segment();
       invalidate();
@@ -670,17 +655,40 @@ class BasicDecoder {
     sample_decoder_.set_series_count(label_sets_.next_item_index());
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::istream& get_stream(std::istream& stream) noexcept {
-    if (encoder_version_ == BasicEncoderVersion::kV3) {
-      lz4stream_.set_stream(&stream);
-      return lz4stream_;
+  template <class InputStream>
+  void load_segment_data(InputStream& in) {
+    in.read(reinterpret_cast<char*>(&created_at_tsns_), sizeof(created_at_tsns_));
+    in.read(reinterpret_cast<char*>(&encoded_at_tsns_), sizeof(encoded_at_tsns_));
+
+    // read label sets
+    label_sets_.load(in);
+
+    // read ls ids
+    in >> segment_ls_id_delta_rle_seq_ >> segment_ls_id_crc_;
+
+    // read ts base
+    in.read(reinterpret_cast<char*>(&sample_decoder_.timestamp_base), sizeof(sample_decoder_.timestamp_base));
+
+    // read ts
+    if (in.get() == 0) {
+      in >> segment_ts_delta_rle_seq_ >> segment_sample_crc_.timestamp;
+    } else {
+      in >> segment_gorilla_ts_bitseq_ >> segment_sample_crc_.timestamp;
     }
 
-    return stream;
+    // read values
+    in >> segment_gorilla_v_bitseq_ >> segment_sample_crc_.values;
   }
 
  public:
-  BasicDecoder(LabelSetsTable& label_sets, BasicEncoderVersion encoder_version) : label_sets_(label_sets), encoder_version_(encoder_version) {}
+  // the decompressed size of a V3 segment, larger segments are rejected as damaged
+  static constexpr size_t kMaxSegmentDecompressedSize = size_t{1} << 30;
+
+  BasicDecoder(LabelSetsTable& label_sets, BasicEncoderVersion encoder_version) : label_sets_(label_sets), encoder_version_(encoder_version) {
+    lz4stream_.set_max_decompressed_size(kMaxSegmentDecompressedSize);
+    // the errors of the LZ4 stream (budget, damaged blocks) are thrown from underflow() and reach the caller only with badbit set
+    lz4stream_.exceptions(std::ios_base::badbit);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SampleDecoder& sample_decoder() const noexcept { return sample_decoder_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE SampleDecoder& sample_decoder() noexcept { return sample_decoder_; }

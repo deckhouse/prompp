@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <random>
+#include <spanstream>
 #include <sstream>
 
 #include <gtest/gtest.h>
@@ -642,5 +643,32 @@ TEST_P(BitSequenceReadInvalidSizeFixture, ThrowsWithoutReadingData) {
 INSTANTIATE_TEST_SUITE_P(SizeAboveLimit,
                          BitSequenceReadInvalidSizeFixture,
                          testing::Values(BareBones::BitSequence::kMaxSizeInBits + 1, size_t{0x017fffffffffffff}, std::numeric_limits<size_t>::max()));
+
+class BitSequenceReadSizeAboveStreamFixture : public testing::Test {
+ protected:
+  static constexpr size_t kDeclaredSizeInBits = 1024;
+
+  std::string data_;
+  BareBones::BitSequence bitseq_;
+
+  void SetUp() override {
+    data_.push_back(1);
+    data_.append(reinterpret_cast<const char*>(&kDeclaredSizeInBits), sizeof(kDeclaredSizeInBits));
+    data_.append(BareBones::Bit::to_bytes(kDeclaredSizeInBits) - 1, '\xff');
+  }
+};
+
+TEST_F(BitSequenceReadSizeAboveStreamFixture, ThrowsBeforeAllocation) {
+  // Arrange
+  std::ispanstream stream{data_};
+
+  // Act
+  const auto read = [&] { stream >> bitseq_; };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+  EXPECT_TRUE(bitseq_.empty());
+  EXPECT_EQ(0U, bitseq_.allocated_memory());
+}
 
 }  // namespace

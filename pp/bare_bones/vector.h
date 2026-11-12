@@ -266,6 +266,7 @@ class GenericVector {
     }
 
     // read data
+    check_readable_bytes(in, sizeof(T) * size_t{size_to_read}, "vector");
     vec.resize(size_to_read);
     in.read(reinterpret_cast<char*>(static_cast<T*>(vec.data())), sizeof(T) * size_to_read);
 
