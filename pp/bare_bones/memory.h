@@ -233,6 +233,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
         std::uninitialized_copy_n(o.control_block_.data, o.control_block_.items_count, control_block_.data);
       }
     }
+    // Copy the metadata, including the item count when present, and keep the destination buffer.
     auto* data = control_block_.data;
     control_block_ = o.control_block_;
     control_block_.data = data;
@@ -316,7 +317,7 @@ class SharedPtr {
  public:
   using ControlBlock = ControlBlockType;
 
-  static_assert(IsTriviallyReallocatable<T>::value);
+  static_assert(IsTriviallyReallocatable<T>::value, "shared storage requires byte-relocatable elements");
   static_assert(IsTriviallyDestructible<T>::value);
 
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
