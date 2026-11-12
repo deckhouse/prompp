@@ -108,8 +108,8 @@ importers:
         specifier: ^17.0.2
         version: 17.0.2(react@17.0.2)
       react-i18next:
-        specifier: 15.4.1
-        version: 15.4.1(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2)
+        specifier: 15.7.4
+        version: 15.7.4(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2)(typescript@5.9.3)
       react-infinite-scroll-component:
         specifier: ^6.1.0
         version: 6.1.1(react@17.0.2)
@@ -5047,17 +5047,20 @@ packages:
   react-error-overlay@6.1.0:
     resolution: {integrity: sha512-SN/U6Ytxf1QGkw/9ve5Y+NxBbZM6Ht95tuXNMKs8EJyFa/Vy/+Co3stop3KBHARfn/giv+Lj1uUnTfOJ3moFEQ==}
 
-  react-i18next@15.4.1:
-    resolution: {integrity: sha512-ahGab+IaSgZmNPYXdV1n+OYky95TGpFwnKRflX/16dY04DsYYKHtVLjeny7sBSCREEcoMbAgSkFiGLF5g5Oofw==}
+  react-i18next@15.7.4:
+    resolution: {integrity: sha512-nyU8iKNrI5uDJch0z9+Y5XEr34b0wkyYj3Rp+tfbahxtlswxSCjcUL9H0nqXo9IR3/t5Y5PKIA3fx3MfUyR9Xw==}
     peerDependencies:
-      i18next: '>= 23.2.3'
+      i18next: '>= 23.4.0'
       react: '>= 16.8.0'
       react-dom: '*'
       react-native: '*'
+      typescript: ^5
     peerDependenciesMeta:
       react-dom:
         optional: true
       react-native:
+        optional: true
+      typescript:
         optional: true
 
   react-infinite-scroll-component@6.1.1:
@@ -12058,7 +12061,7 @@ snapshots:
 
   react-error-overlay@6.1.0: {}
 
-  react-i18next@15.4.1(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2):
+  react-i18next@15.7.4(i18next@24.2.3(typescript@5.9.3))(react-dom@17.0.2(react@17.0.2))(react@17.0.2)(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 7.29.10
       html-parse-stringify: 3.1.0
@@ -12066,6 +12069,7 @@ snapshots:
       react: 17.0.2
     optionalDependencies:
       react-dom: 17.0.2(react@17.0.2)
+      typescript: 5.9.3
 
   react-infinite-scroll-component@6.1.1(react@17.0.2):
     dependencies:
