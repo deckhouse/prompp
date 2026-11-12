@@ -19,7 +19,8 @@ cmake(
     generate_args = [
         "-DTRACY_ENABLE=ON",
         "-DTRACY_VERBOSE=ON",
-        "-DTRACY_NO_EXIT=ON",
+        # Set TRACY_NO_EXIT=1 at runtime to wait for a collector during capture.
+        "-DTRACY_NO_EXIT=OFF",
         "-DTRACY_NO_VSYNC_CAPTURE=ON",
         "-DTRACY_LIBUNWIND_BACKTRACE=ON",
     ],
