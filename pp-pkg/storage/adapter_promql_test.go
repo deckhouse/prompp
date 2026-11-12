@@ -880,5 +880,59 @@ func (s *AdapterPromQLSuite) TestCPM_OffsetCollisionRace_FixedByQueryOffset() {
 		"with query_offset=1s race must already NOT fire: got %v", resWithMinOffset)
 }
 
+// TestInstantQuery_MixedSelectorOffsets pins down the per-selector time range
+// on the head querier. The engine computes one [mint, maxt] for the whole
+// query and passes the range of each selector in SelectHints.Start/End. A
+// selector with an offset or an @ modifier must be answered at its own End,
+// not at the query-wide maxt; otherwise the engine gets a sample outside the
+// selector's lookback window and drops it.
+//
+// Data: one sample per minute at t = 0..10 min, value = minute. Query at t = 10 min.
+func (s *AdapterPromQLSuite) TestInstantQuery_MixedSelectorOffsets() {
+	const stepMs = int64(60_000)
+
+	var points []scrapePoint
+	for minute := int64(0); minute <= 10; minute++ {
+		points = append(points, scrapePoint{
+			labels: []string{"__name__", "probe_metric", "job", "j"},
+			tMs:    minute * stepMs,
+			v:      float64(minute),
+		})
+	}
+	s.ingest(points)
+
+	at := model.Time(10 * stepMs).Time()
+
+	plain := s.queryAt(`probe_metric`, at)
+	s.Require().Len(plain, 1)
+	s.Require().Equal(float64(10), plain[0].F)
+
+	offsetOnly := s.queryAt(`probe_metric offset 5m`, at)
+	s.Require().Len(offsetOnly, 1)
+	s.Require().Equal(float64(5), offsetOnly[0].F)
+
+	// Mixed offsets: the whole query spans [4m, 10m], the right-hand selector
+	// must still be answered at End = 5m.
+	mixedOffset := s.queryAt(`probe_metric - probe_metric offset 5m`, at)
+	s.Require().Lenf(mixedOffset, 1, "mixed offsets must not be empty: got %v", mixedOffset)
+	s.Require().Equal(float64(5), mixedOffset[0].F)
+
+	// Mixed @ modifier: the right-hand selector is pinned to t = 300 s.
+	mixedAt := s.queryAt(`probe_metric - probe_metric @ 300`, at)
+	s.Require().Lenf(mixedAt, 1, "mixed @ modifier must not be empty: got %v", mixedAt)
+	s.Require().Equal(float64(5), mixedAt[0].F)
+
+	// Range selector with offset inside an instant query: the range path must
+	// honour the selector window [3m, 5m] rather than the query-wide range.
+	rangeOffset := s.queryAt(`max_over_time(probe_metric[2m] offset 5m)`, at)
+	s.Require().Lenf(rangeOffset, 1, "range selector with offset must not be empty: got %v", rangeOffset)
+	s.Require().Equal(float64(5), rangeOffset[0].F)
+
+	// Mixed: instant selector at 10m minus a range selector ending at 5m.
+	mixedRange := s.queryAt(`probe_metric - max_over_time(probe_metric[2m] offset 5m)`, at)
+	s.Require().Lenf(mixedRange, 1, "mixed range selector with offset must not be empty: got %v", mixedRange)
+	s.Require().Equal(float64(5), mixedRange[0].F)
+}
+
 // Static check that we still satisfy storage.Queryable (compile-time only).
 var _ storage.Queryable = (*Adapter)(nil)
