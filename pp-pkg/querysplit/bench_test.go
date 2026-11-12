@@ -62,7 +62,7 @@ func openBenchBlocks(b *testing.B) []*tsdb.Block {
 }
 
 func writeBenchBlocks(dir string) error {
-	rnd := rand.New(rand.NewPCG(1, 2)) //nolint:gosec // G404: benchmark data
+	rnd := rand.New(rand.NewPCG(1, 2))
 	counters := make([]float64, benchSeries)
 	lsets := make([]labels.Labels, 0, 2*benchSeries)
 	for i := range benchSeries {
