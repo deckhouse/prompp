@@ -2,7 +2,9 @@ package cppbridge
 
 import (
 	"runtime"
+	"slices"
 	"sync/atomic"
+	"unsafe"
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
@@ -26,6 +28,18 @@ func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	})
 
 	return ds
+}
+
+// NonEmptyQuants returns the sorted start timestamps of the quantDuration-aligned quants that hold at least
+// one sample, the unloaded and the outdated samples included.
+func (ds *DataStorage) NonEmptyQuants(quantDuration int64) []int64 {
+	cppQuants := seriesDataDataStorageNonEmptyQuants(ds.dataStorage, quantDuration)
+	runtime.KeepAlive(ds)
+
+	quants := slices.Clone(cppQuants)
+	freeBytes(*(*[]byte)(unsafe.Pointer(&cppQuants))) // #nosec G103 // it's meant to be that way
+
+	return quants
 }
 
 // TimeInterval returns the timestamp bounds of the stored data, [NewInvalidTimeInterval] if there is none.

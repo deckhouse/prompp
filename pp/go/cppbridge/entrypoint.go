@@ -2363,6 +2363,25 @@ func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
 	return res.interval
 }
 
+func seriesDataDataStorageNonEmptyQuants(dataStorage uintptr, quantDuration int64) []int64 {
+	args := struct {
+		dataStorage   uintptr
+		quantDuration int64
+	}{dataStorage, quantDuration}
+	res := struct {
+		quants []int64
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_non_empty_quants,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.quants
+}
+
 func seriesDataDataStorageQueriedSeriesBitsetSize(dataStorage uintptr) uint32 {
 	args := struct {
 		dataStorage uintptr

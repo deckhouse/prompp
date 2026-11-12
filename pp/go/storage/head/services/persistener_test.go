@@ -230,6 +230,7 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		block.DefaultChunkSegmentSize,
 		2*time.Hour,
 		0,
+		0,
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
@@ -269,6 +270,7 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		2*time.Hour,
+		0,
 		0,
 		s.clock,
 		prometheus.DefaultRegisterer,

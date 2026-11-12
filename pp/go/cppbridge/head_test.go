@@ -191,6 +191,31 @@ func (s *HeadSuite) TestTimeIntervalIsComputedWhenCacheIsUnknown() {
 	s.Equal(cppbridge.TimeInterval{MinT: 100, MaxT: 200}, timeInterval)
 }
 
+func (s *HeadSuite) TestNonEmptyQuants() {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	dataStorage.Encode(0, 1, 1.0)
+	dataStorage.Encode(0, 100_000, 1.0)
+	dataStorage.Encode(1, 150, 1.0)
+
+	// Act
+	quants := dataStorage.NonEmptyQuants(100)
+
+	// Assert
+	s.Equal([]int64{0, 100, 100_000}, quants)
+}
+
+func (s *HeadSuite) TestNonEmptyQuantsOfEmptyStorage() {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+
+	// Act
+	quants := dataStorage.NonEmptyQuants(100)
+
+	// Assert
+	s.Empty(quants)
+}
+
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewDataStorage(false, false)
