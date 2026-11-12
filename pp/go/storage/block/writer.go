@@ -70,9 +70,11 @@ type Writer[TShard Shard] struct {
 // time range is already older than the retention period: such blocks would be
 // deleted on the very next retention pass, so writing them is pointless work.
 //
-// futurePeriod, when greater than zero, prevents creating blocks whose MinTime is
-// later than now plus the future period: such samples come from a clock jump on
-// the source side, and they are dropped instead of being persisted.
+// futurePeriod, when greater than zero, drops the samples of quants that start
+// later than now plus the future period, rounded down to a quant boundary: such
+// samples come from a clock jump on the source side. The filter works on quants,
+// not on the block MinTime, so samples up to futurePeriod plus one block duration
+// ahead of now are kept.
 func NewWriter[TShard Shard](
 	dataDir string,
 	maxBlockChunkSegmentSize int64,
@@ -106,7 +108,8 @@ func NewWriter[TShard Shard](
 		}, []string{"block_id"}),
 		droppedFutureBlocks: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "prompp_block_writer_dropped_future_blocks_total",
-			Help: "Number of blocks not written because they start later than now plus the future period.",
+			Help: "Number of blocks not written because they start later than now plus the future period, " +
+				"rounded down to a block boundary.",
 		}, []string{"shard_id"}),
 	}
 }
@@ -224,14 +227,24 @@ func (w *Writer[TShard]) retentionCutoffMs() (cutoffMs int64, apply bool) {
 	return w.clock.Now().Add(-w.retentionPeriod).UnixMilli(), true
 }
 
-// futureCutoffMs returns the max block MinTime (in unix milliseconds) that is
-// not in the future yet, and whether future filtering is enabled at all.
+// futureCutoffMs returns the start (in unix milliseconds) of the last quant that
+// is not in the future yet, and whether future filtering is enabled at all.
 func (w *Writer[TShard]) futureCutoffMs() (cutoffMs int64, apply bool) {
 	if w.futurePeriod <= 0 {
 		return 0, false
 	}
 
-	return w.clock.Now().Add(w.futurePeriod).UnixMilli(), true
+	return quantStartMs(w.clock.Now().Add(w.futurePeriod).UnixMilli(), w.blockDurationMs), true
+}
+
+// quantStartMs returns the start of the quantDurationMs-aligned quant that holds timestampMs.
+func quantStartMs(timestampMs, quantDurationMs int64) int64 {
+	start := timestampMs - timestampMs%quantDurationMs
+	if start > timestampMs {
+		start -= quantDurationMs
+	}
+
+	return start
 }
 
 // recodeAndWriteChunks recodes and writes chunks for the shard.
