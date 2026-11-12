@@ -141,6 +141,12 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 	futureCutoffMs, applyFuture := w.futureCutoffMs()
 	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
 
+	// The last quant is clamped to the last sample, so that a quant with old samples only is skipped too.
+	var retentionMaxT int64
+	if applyRetention {
+		retentionMaxT = sd.DataStorage().TimeInterval(true).MaxT
+	}
+
 	// Only quants with samples get a writer: a far-future or far-past sample widens the shard time
 	// interval to thousands of quants, and every writer recodes every batch of the shard.
 	var quantStarts []int64
@@ -160,7 +166,7 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 
 		// Skip blocks whose whole time range is already beyond the retention
 		// period: they would be deleted on the next retention pass anyway.
-		if applyRetention && maxT <= retentionCutoffMs {
+		if applyRetention && min(maxT, retentionMaxT) <= retentionCutoffMs {
 			continue
 		}
 

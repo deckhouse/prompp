@@ -104,12 +104,16 @@ TEST_F(NonEmptyQuantsFixture, UnloadedSeriesWithOutdatedSample) {
   encoder_.encode(0, 1'001, 1.0);
   encoder_.encode(0, 1'002, 1.0);
   series_data::ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
-  encoder_.encode(0, 1'003, 1.0);
+  encoder_.encode(0, 1'003, 1.5);
+  encoder_.encode(0, 1'004, 2.25);
+  encoder_.encode(0, 1'005, 3.125);
+  encoder_.encode(0, 1'006, 4.0625);
 
   BareBones::ShrinkedToFitOStringStream snapshot;
   Unloader<> unloader{storage_};
   unloader.create_snapshot(snapshot);
   unloader.unload();
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
   encoder_.encode(0, 1, 1.0);
 
   // Act

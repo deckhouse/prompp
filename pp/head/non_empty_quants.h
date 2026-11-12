@@ -19,40 +19,38 @@ template <class DataStorage>
   };
 
   BareBones::Vector<int64_t> quants;
+  // Distinct quants are few, so a sorted insert costs less than a sort of the duplicates.
   const auto add_quant = [&quants](int64_t quant) PROMPP_LAMBDA_INLINE {
-    if (quants.empty() || quants.back() != quant) {
-      quants.emplace_back(quant);
+    if (const auto it = std::ranges::lower_bound(quants, quant); it == quants.end() || *it != quant) {
+      quants.insert(it, quant);
     }
   };
 
-  for (const auto& chunk_data : storage.chunks()) {
-    if (chunk_data.chunk().is_empty()) {
+  // Every timestamp of a live sequence belongs to a chunk, and a sequence shared by many series is read once.
+  for (const auto& sequence : storage.timestamp_store.sequences()) {
+    const auto first_quant = quant_start(series_data::encoder::timestamp::TimestampDecoder::decode_first(sequence.stream.reader()));
+    add_quant(first_quant);
+    if (first_quant == quant_start(sequence.last_timestamp)) [[likely]] {
       continue;
     }
 
-    // The interval max of a finalized chunk is the next chunk start minus one, an upper bound of its last sample.
-    const auto interval = series_data::Decoder::get_chunk_time_interval(chunk_data);
-    if (const auto first_quant = quant_start(interval.min); first_quant == quant_start(interval.max)) [[likely]] {
-      add_quant(first_quant);
-      continue;
-    }
-
-    const auto& timestamp_stream = storage.get_timestamp_stream(chunk_data.chunk().timestamp_id);
-    series_data::encoder::timestamp::TimestampDecoder decoder(timestamp_stream.reader());
-    for (auto i = timestamp_stream.count(); i != 0; --i) {
-      add_quant(quant_start(decoder.decode()));
+    series_data::encoder::timestamp::TimestampDecoder decoder(sequence.stream.reader());
+    auto previous_quant = first_quant;
+    for (auto i = sequence.stream.count(); i != 0; --i) {
+      if (const auto quant = quant_start(decoder.decode()); quant != previous_quant) {
+        add_quant(quant);
+        previous_quant = quant;
+      }
     }
   }
 
-  // Outdated samples of unloaded series are merged into their chunks only when the series is loaded for recoding.
+  // Outdated samples are not in the timestamp store until they are merged into chunks.
   for (const auto& [ls_id, chunk] : storage.outdated_chunks) {
     std::ranges::for_each(series_data::decoder::OutdatedDecodeIterator(chunk.samples_count(), chunk.stream().reader()),
                           series_data::decoder::DecodeIteratorSentinel{},
                           [&](const series_data::encoder::Sample& sample) PROMPP_LAMBDA_INLINE { add_quant(quant_start(sample.timestamp)); });
   }
 
-  std::ranges::sort(quants);
-  quants.erase(std::ranges::unique(quants).begin(), quants.end());
   return quants;
 }
 

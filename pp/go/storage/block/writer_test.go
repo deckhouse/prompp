@@ -330,6 +330,84 @@ func (s *WriterSuite) TestSkipEmptyBlock() {
 	s.Len(blocks, 2)
 }
 
+func (s *WriterSuite) TestCreateWritersOnlyForNonEmptyQuants() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds() * 1000, Value: 1},
+			},
+		},
+	})
+
+	// Act
+	count, err := s.blockWriter.CreatedWritersCount(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(2, count)
+}
+
+func (s *WriterSuite) TestSkipBlocksBeyondRetention() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: (10*time.Hour + 15*time.Minute).Milliseconds(), Value: 0},
+			},
+		},
+	})
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		time.Hour,
+		0,
+		clockwork.NewFakeClockAt(time.UnixMilli((11*time.Hour + 30*time.Minute).Milliseconds())),
+		prometheus.NewRegistry(),
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Empty(blocks)
+}
+
+func (s *WriterSuite) TestKeepBlockThatHoldsRetentionCutoff() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: (10*time.Hour + 15*time.Minute).Milliseconds(), Value: 0},
+				{Timestamp: (10*time.Hour + 45*time.Minute).Milliseconds(), Value: 1},
+			},
+		},
+	})
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		time.Hour,
+		0,
+		clockwork.NewFakeClockAt(time.UnixMilli((11*time.Hour + 30*time.Minute).Milliseconds())),
+		prometheus.NewRegistry(),
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 1)
+	s.Equal((10*time.Hour + 15*time.Minute).Milliseconds(), blocks[0].Meta.MinTime)
+}
+
 func (s *WriterSuite) TestSkipManyEmptyBlocks() {
 	// Arrange
 	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
