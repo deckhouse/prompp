@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <ranges>
 #include <utility>
 
 #include <experimental/scope>
@@ -680,19 +681,31 @@ class Sequence {
   PROMPP_ALWAYS_INLINE void reserve_for_next_elements() noexcept {
     const uint32_t new_size = next_size(size_);
     reserve_keys(new_size);
-    reserve_data(new_size, d_i_ - data_);
+    reserve_data(new_size, data_.empty() ? 0 : d_i_ - data_);
   }
 
  public:
   using iterator = DecodeIterator<Codec, Vector<const uint8_t>::iterator>;
   using const_iterator = DecodeIterator<Codec, Vector<const uint8_t>::iterator>;
   using sentinel = DecodeIteratorSentinel;
+  // Borrows storage. Mutation invalidates existing views.
+  using View = std::ranges::subrange<const_iterator, sentinel>;
+  [[nodiscard]] View view() const noexcept { return {begin(), end()}; }
 
   PROMPP_ALWAYS_INLINE Sequence() noexcept = default;
   Sequence(const Sequence&) = delete;
   Sequence& operator=(const Sequence&) = delete;
-  PROMPP_ALWAYS_INLINE Sequence(Sequence&&) noexcept = default;
-  PROMPP_ALWAYS_INLINE Sequence& operator=(Sequence&&) noexcept = default;
+  PROMPP_ALWAYS_INLINE Sequence(Sequence&& other) noexcept { *this = std::move(other); }
+  PROMPP_ALWAYS_INLINE Sequence& operator=(Sequence&& other) noexcept {
+    if (this != &other) {
+      size_ = std::exchange(other.size_, 0);
+      keys_ = std::move(other.keys_);
+      data_ = std::move(other.data_);
+      k_i_ = std::exchange(other.k_i_, nullptr);
+      d_i_ = std::exchange(other.d_i_, nullptr);
+    }
+    return *this;
+  }
 
   PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept {
     if ((size_ % PreAllocationElementsCount) == 0) {
@@ -734,7 +747,7 @@ class Sequence {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t save_size() const noexcept {
     // version is written and read by methods put() and get() and they write and read 1 byte
-    return 1 + sizeof(uint32_t) + keys_size(size_) + (d_i_ - data_);
+    return 1 + sizeof(uint32_t) + keys_size(size_) + (size_ == 0 ? 0 : d_i_ - data_);
   }
 
   template <OutputStream S>
@@ -834,6 +847,8 @@ PROMPP_ALWAYS_INLINE auto decoder(InnerIteratorType i, uint32_t size) noexcept {
   return std::pair(DecodeIterator<Codec, InnerIteratorType>(i, size), DecodeIteratorSentinel());
 }
 
+// The block size defines the serialized layout.
+// Readers and writers must use compatible codecs and the same block size.
 template <class Codec, template <class> class MemoryType = MemoryWithItemCount, uint32_t kPreAllocationElementsCount = 1024>
 class CompactSequence {
  public:
@@ -848,40 +863,53 @@ class CompactSequence {
   static constexpr bool kIsReadOnly = IsSharedSpan<MemoryType<uint8_t>>::value;
 
   class DecodeIterator {
-    const uint8_t* key_iterator_;
-    const uint8_t* data_iterator_;
+    const uint8_t* key_iterator_{};
+    const uint8_t* data_iterator_{};
     uint32_t offset_{};
-    uint32_t size_;
-    typename Codec::LengthAndMask length_and_mask_;
-    uint8_t shift_{};
+    uint32_t size_{};
+    typename Codec::LengthAndMask length_and_mask_{};
+    // Unconsumed two-bit codes from the current key byte.
+    uint8_t key_{};
+    bool bounded_reads_{};
 
    public:
     using iterator_category = std::input_iterator_tag;
     using value_type = typename Codec::value_type;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE DecodeIterator(const uint8_t* key_iterator, const uint8_t* data_iterator, uint32_t size) noexcept
+    DecodeIterator() = default;
+
+    // Requires complete key blocks and stable fields for size encoded values.
+    // Without bounded_reads, each value must permit a full-width codec load.
+    PROMPP_ALWAYS_INLINE DecodeIterator(const uint8_t* key_iterator, const uint8_t* data_iterator, uint32_t size, bool bounded_reads = false) noexcept
         : key_iterator_(key_iterator),
           data_iterator_(data_iterator),
           size_(size),
-          length_and_mask_(Codec::get_length_and_mask(size_ == 0 ? 0 : (*key_iterator_ & 0x03))) {}
+          length_and_mask_(Codec::get_length_and_mask(size_ == 0 ? 0 : (*key_iterator_ & 0x03))),
+          bounded_reads_(bounded_reads) {
+      key_ = size_ == 0 ? 0 : *key_iterator_;
+    }
 
     PROMPP_ALWAYS_INLINE DecodeIterator& operator++() noexcept {
-      assert(size_ != 0);
+      assert(offset_ != size_);
 
       data_iterator_ += length_and_mask_.length;
 
       if (++offset_ % kPreAllocationElementsCount == 0) [[unlikely]] {
+        // Partial blocks retain all key bytes. A following block may not exist.
+        if (offset_ == size_) {
+          return *this;
+        }
         key_iterator_ = data_iterator_;
         data_iterator_ += kMaxKeySize;
-        shift_ = 0;
+        key_ = *key_iterator_;
+      } else if (offset_ % 4 == 0) {
+        key_ = *++key_iterator_;
       } else {
-        shift_ += 2;
-        key_iterator_ += (shift_ == 8);
-        shift_ %= 8;
+        key_ >>= 2;
       }
 
-      length_and_mask_ = Codec::get_length_and_mask((*key_iterator_ >> shift_) % 4);
+      length_and_mask_ = Codec::get_length_and_mask(key_ % 4);
       return *this;
     }
 
@@ -890,15 +918,72 @@ class CompactSequence {
       ++*this;
       return retval;
     }
-    PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept = default;
+    PROMPP_ALWAYS_INLINE bool operator==(const DecodeIterator& other) const noexcept {
+      // Append may change unused key bits. Cached length and mask are irrelevant at end.
+      return key_iterator_ == other.key_iterator_ && data_iterator_ == other.data_iterator_ && offset_ == other.offset_ && size_ == other.size_ &&
+             bounded_reads_ == other.bounded_reads_ && (offset_ == size_ || length_and_mask_ == other.length_and_mask_);
+    }
     PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return offset_ == size_; }
 
-    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return Codec::decode(length_and_mask_, data_iterator_); }
+    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+      if (bounded_reads_) {
+        // Separate temporaries keep constant-width loads independent of the variable-length copy.
+        if (length_and_mask_.length == 0) {
+          return 0;
+        }
+        if (length_and_mask_.length == 1) {
+          value_type value{};
+          std::memcpy(&value, data_iterator_, 1);
+          return value & length_and_mask_.mask;
+        }
+        if (length_and_mask_.length == sizeof(value_type)) {
+          value_type value;
+          std::memcpy(&value, data_iterator_, sizeof(value_type));
+          return value & length_and_mask_.mask;
+        }
+        value_type value{};
+        std::memcpy(&value, data_iterator_, length_and_mask_.length);
+        return value & length_and_mask_.mask;
+      }
+      return Codec::decode(length_and_mask_, data_iterator_);
+    }
   };
 
   using iterator = DecodeIterator;
   using const_iterator = DecodeIterator;
   using sentinel = DecodeIteratorSentinel;
+  // Borrows storage. Mutation invalidates existing views.
+  using View = std::ranges::subrange<const_iterator, sentinel>;
+  [[nodiscard]] View view() const noexcept { return {begin(), end()}; }
+  [[nodiscard]] static View read_view(std::span<const uint8_t>& bytes) noexcept { return {create_read_iterator(bytes), end()}; }
+
+  // Retains a fixed prefix. Iterators borrow its storage. Synchronize capture and traversal with writes.
+  // Moving leaves the source empty.
+  class Snapshot {
+    typename MemoryType<uint8_t>::SharedPtr memory_{};
+    uint32_t size_{};
+
+   public:
+    Snapshot() = default;
+    Snapshot(const Snapshot&) = default;
+    Snapshot& operator=(const Snapshot&) = default;
+    Snapshot(Snapshot&& other) noexcept : memory_(std::move(other.memory_)), size_(std::exchange(other.size_, 0)) {}
+    Snapshot& operator=(Snapshot&& other) noexcept {
+      if (this != &other) {
+        memory_ = std::move(other.memory_);
+        size_ = std::exchange(other.size_, 0);
+      }
+      return *this;
+    }
+    // Requires native padded storage containing at least size encoded values.
+    Snapshot(typename MemoryType<uint8_t>::SharedPtr memory, uint32_t size) noexcept : memory_(std::move(memory)), size_(size) {}
+    [[nodiscard]] View view() const noexcept { return {decode_iterator(memory_.get(), size_), end()}; }
+  };
+  [[nodiscard]] Snapshot snapshot() const noexcept
+    requires IsSharedMemory<MemoryType<uint8_t>>::value
+  {
+    return {buffer_.ptr(), size()};
+  }
 
  private:
   using Memory = MemoryType<uint8_t>;
@@ -911,7 +996,7 @@ class CompactSequence {
   typename Memory::iterator data_iterator_ = nullptr;
 
   PROMPP_ALWAYS_INLINE void reserve_for_next_elements() noexcept {
-    const auto current_size = data_iterator_ - buffer_;
+    const auto current_size = buffer_.begin() == nullptr ? 0 : data_iterator_ - buffer_;
     buffer_.grow_to_fit_at_least_and_fill_with_zeros(current_size + kMaxKeySize + kMaxDataSize + kKeysAdditionalAllocationSizeForDecoder);
 
     key_iterator_ = buffer_ + current_size;
@@ -922,8 +1007,16 @@ class CompactSequence {
   CompactSequence() noexcept = default;
   CompactSequence(const CompactSequence&) = delete;
   CompactSequence& operator=(const CompactSequence&) = delete;
-  CompactSequence(CompactSequence&&) noexcept = default;
-  CompactSequence& operator=(CompactSequence&&) noexcept = default;
+  CompactSequence(CompactSequence&& other) noexcept { *this = std::move(other); }
+  CompactSequence& operator=(CompactSequence&& other) noexcept {
+    if (this != &other) {
+      buffer_ = std::move(other.buffer_);
+      key_iterator_ = std::exchange(other.key_iterator_, nullptr);
+      data_iterator_ = std::exchange(other.data_iterator_, nullptr);
+    }
+    return *this;
+  }
+  // Requires native storage with a compatible codec and the same encoded block size.
   template <class AnotherCompactSequence>
     requires kIsReadOnly
   explicit CompactSequence(const AnotherCompactSequence& other) noexcept : buffer_(other.buffer_), key_iterator_(nullptr), data_iterator_(nullptr) {}
@@ -946,6 +1039,14 @@ class CompactSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept {
+    if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
+      if (!buffer_.ptr().non_atomic_is_unique()) {
+        buffer_ = {};
+        key_iterator_ = nullptr;
+        data_iterator_ = nullptr;
+        return;
+      }
+    }
     if (size() != 0) [[likely]] {
       std::memset(buffer_, 0, kMaxKeySize);
       key_iterator_ = buffer_;
@@ -966,9 +1067,13 @@ class CompactSequence {
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
 
-  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept { return {memory, memory + kMaxKeySize, size}; }
+  // Requires native padded storage for size values.
+  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept {
+    return size == 0 ? DecodeIterator{nullptr, nullptr, 0} : DecodeIterator{memory, memory + kMaxKeySize, size};
+  }
 
   PROMPP_ALWAYS_INLINE DecodeIterator begin() const noexcept { return decode_iterator(buffer_.begin(), size()); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE static DecodeIteratorSentinel end() noexcept { return {}; }
 
   PROMPP_ALWAYS_INLINE const Memory& buffer() const noexcept { return buffer_; }
@@ -988,6 +1093,7 @@ class CompactSequence {
     stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
   }
 
+  // Validates external key and value extents without requiring codec padding.
   static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
     if (buffer.size() < 2 * sizeof(uint32_t)) [[unlikely]] {
       return DecodeIterator{nullptr, nullptr, 0};
@@ -1007,7 +1113,30 @@ class CompactSequence {
     const std::span compact_data(buffer.data(), buffer_size_in_bytes);
     buffer = buffer.subspan(buffer_size_in_bytes);
 
-    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count);
+    if (elements_count == 0) {
+      return DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    auto remaining = compact_data;
+    for (auto count = elements_count; count != 0;) {
+      if (remaining.size() < kMaxKeySize) {
+        return DecodeIterator{nullptr, nullptr, 0};
+      }
+      const auto block_count = std::min(count, kPreAllocationElementsCount);
+      const auto grouped_count = block_count & ~3U;
+      size_t data_size = Codec::decode_data_size(grouped_count, remaining.data());
+      for (auto i = grouped_count; i < block_count; ++i) {
+        data_size += Codec::get_length_and_mask((remaining[i / 4] >> ((i % 4) * 2)) & 3).length;
+      }
+      remaining = remaining.subspan(kMaxKeySize);
+      if (remaining.size() < data_size) {
+        return DecodeIterator{nullptr, nullptr, 0};
+      }
+      remaining = remaining.subspan(data_size);
+      count -= block_count;
+    }
+
+    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count, true);
   }
 
  private:
@@ -1020,6 +1149,9 @@ class CompactSequence {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Memory::SizeType size_in_bytes() const noexcept {
+    if (buffer_.begin() == nullptr) {
+      return 0;
+    }
     return std::min<typename Memory::SizeType>(data_iterator_ - buffer_ + sizeof(value_type) + kKeysAdditionalAllocationSizeForDecoder,
                                                buffer_.control_block().data_size);
   }
@@ -1029,6 +1161,9 @@ class CompactSequence {
 
 template <class C>
 struct IsTriviallyReallocatable<StreamVByte::Sequence<C>> : std::true_type {};
+
+template <class Codec, template <class> class MemoryType, uint32_t Count>
+struct IsTriviallyReallocatable<StreamVByte::CompactSequence<Codec, MemoryType, Count>> : IsTriviallyReallocatable<MemoryType<uint8_t>> {};
 
 template <class C>
 struct IsZeroInitializable<StreamVByte::Sequence<C>> : std::true_type {};

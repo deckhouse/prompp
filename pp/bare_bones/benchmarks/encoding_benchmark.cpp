@@ -8,7 +8,7 @@
 
 namespace {
 
-using BareBones::Encoding::DeltaRLE;
+using BareBones::coding::Delta;
 using BareBones::StreamVByte::Codec0124;
 using BareBones::StreamVByte::Sequence;
 
@@ -27,8 +27,8 @@ const BareBones::Vector<uint32_t>& values() {
   return values;
 }
 
-using EncodedSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
-using EncodedCompactSequence = BareBones::EncodedSequence<DeltaRLE<CompactSequence<Codec0124, 8>>>;
+using EncodedSequence = BareBones::RleSequence<Delta, Sequence<Codec0124, 8>>;
+using EncodedCompactSequence = BareBones::RleSequence<Delta, CompactSequence<Codec0124, 8>>;
 
 template <class EncodingSequence>
 void EncodingSequencePushBack(benchmark::State& state) {
@@ -60,6 +60,8 @@ void EncodingSequenceDecode(benchmark::State& state) {
   for (const auto value : kValues) {
     sequence.push_back(value);
   }
+
+  state.counters["Values"] = kValues.size();
 
   for ([[maybe_unused]] auto _ : state) {
     std::ranges::for_each(sequence, [](auto value) { benchmark::DoNotOptimize(value); });
