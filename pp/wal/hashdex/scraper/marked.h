@@ -122,6 +122,8 @@ class MarkupBuffer {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return buffer_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
+  PROMPP_ALWAYS_INLINE void clear() noexcept { buffer_.clear(); }
+
  protected:
   BareBones::Vector<MarkedT> buffer_;
 };
