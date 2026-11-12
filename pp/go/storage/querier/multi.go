@@ -144,7 +144,8 @@ func (q *MultiQuerier) Select(
 		wg.Add(1)
 		go func(index int, querier storage.Querier) {
 			defer wg.Done()
-			seriesSets[index] = querier.Select(ctx, sortSeries, hints, matchers...)
+			// storage.NewMergeSeriesSet requires sorted inputs, so the caller's flag is not forwarded.
+			seriesSets[index] = querier.Select(ctx, true, hints, matchers...)
 		}(index, querier)
 	}
 

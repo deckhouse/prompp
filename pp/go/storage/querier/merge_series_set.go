@@ -72,6 +72,25 @@ func NewMergeManyShardSeriesSets(ssets ...[]storage.SeriesSet) storage.SeriesSet
 	return s
 }
 
+// newShardSeriesSet combines the shard-local sets: a label-ordered merge when sortSeries is set,
+// otherwise a plain concatenation that skips the heap comparisons.
+func newShardSeriesSet(sets []storage.SeriesSet, sortSeries bool) storage.SeriesSet {
+	if sortSeries {
+		return NewMergeShardSeriesSet(sets)
+	}
+
+	return NewConcatShardSeriesSet(sets)
+}
+
+// newManyShardSeriesSets combines several groups of shard-local sets, see [newShardSeriesSet].
+func newManyShardSeriesSets(sortSeries bool, ssets ...[]storage.SeriesSet) storage.SeriesSet {
+	if sortSeries {
+		return NewMergeManyShardSeriesSets(ssets...)
+	}
+
+	return NewConcatManyShardSeriesSets(ssets...)
+}
+
 // At returns the current [storage.Series], implement [storage.SeriesSet] interface.
 func (s *mergeShardSeriesSet) At() storage.Series {
 	return s.currentSet.At()
@@ -139,6 +158,87 @@ func (h *seriesSetHeap) Push(x any) {
 
 // Swap swaps the elements with indices i and j.
 func (h seriesSetHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+//
+// concatShardSeriesSet
+//
+
+// concatShardSeriesSet iterates many [storage.SeriesSet] from different shards one after another.
+// It is used when the caller does not need the series sorted by labels, so no heap merge is required.
+type concatShardSeriesSet struct {
+	sets       []storage.SeriesSet
+	currentSet storage.SeriesSet
+}
+
+// NewConcatShardSeriesSet returns a implementation of [storage.SeriesSet]
+// that concatenates many local SeriesSets without ordering them by labels.
+// The implementation assumes only our shard-local sets are passed in:
+//   - always no nil sets;
+//   - always no Err()/Warnings() - because shards should not have any errors and warnings;
+//   - always no identical label sets across shards.
+//
+// The sets slice is copied, so a pooled buffer can be returned right after the call.
+func NewConcatShardSeriesSet(sets []storage.SeriesSet) storage.SeriesSet {
+	if len(sets) == 1 {
+		return sets[0]
+	}
+
+	return &concatShardSeriesSet{sets: append(make([]storage.SeriesSet, 0, len(sets)), sets...)}
+}
+
+// NewConcatManyShardSeriesSets concatenates several groups of shard-local sets, see [NewConcatShardSeriesSet].
+func NewConcatManyShardSeriesSets(ssets ...[]storage.SeriesSet) storage.SeriesSet {
+	if len(ssets) == 0 {
+		return emptySeriesSet
+	}
+
+	length := 0
+	for _, sets := range ssets {
+		length += len(sets)
+	}
+
+	s := &concatShardSeriesSet{sets: make([]storage.SeriesSet, 0, length)}
+	for _, sets := range ssets {
+		s.sets = append(s.sets, sets...)
+	}
+
+	return s
+}
+
+// At returns the current [storage.Series], implement [storage.SeriesSet] interface.
+func (s *concatShardSeriesSet) At() storage.Series {
+	return s.currentSet.At()
+}
+
+// Err returns the error of the current [SeriesSet], implement [storage.SeriesSet] interface.
+// Always returns nil, because shards should not have any errors.
+func (*concatShardSeriesSet) Err() error {
+	return nil
+}
+
+// Next advances the iterator by one and returns false if there are no more values,
+// implement [storage.SeriesSet] interface.
+func (s *concatShardSeriesSet) Next() bool {
+	for {
+		if s.currentSet != nil && s.currentSet.Next() {
+			return true
+		}
+
+		if len(s.sets) == 0 {
+			return false
+		}
+
+		s.currentSet = s.sets[0]
+		s.sets[0] = nil
+		s.sets = s.sets[1:]
+	}
+}
+
+// Warnings returns the warnings of the current SeriesSet, implement [storage.SeriesSet] interface.
+// Always returns empty(nil) [annotations.Annotations], because shards should not have any warnings.
+func (*concatShardSeriesSet) Warnings() annotations.Annotations {
+	return nil
+}
 
 //
 // mergeShardChunkSeriesSet

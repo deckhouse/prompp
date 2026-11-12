@@ -84,8 +84,9 @@ func (lss *LabelSetSnapshot) Serialize(lsID uint32) string {
 }
 
 // Query returns a LSSQueryResult that matches the given selector.
-func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
-	result := newLSSQueryResult(primitivesSnapshotQuery(lss.pointer, selector))
+// With sortSeries the ids are ordered by label sets; otherwise they stay in ascending series id order.
+func (lss *LabelSetSnapshot) Query(selector uintptr, sortSeries bool) *LSSQueryResult {
+	result := newLSSQueryResult(primitivesSnapshotQuery(lss.pointer, selector, sortSeries))
 	runtime.KeepAlive(lss)
 	return result
 }

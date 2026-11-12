@@ -1516,15 +1516,16 @@ func primitivesLSSReleaseLSIDSet(lss uintptr) {
 	)
 }
 
-func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
+func primitivesSnapshotQuery(snapshot uintptr, selector uintptr, sortSeries bool) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
 ) {
 	args := struct {
-		snapshot uintptr
-		selector uintptr
-	}{snapshot, selector}
+		snapshot   uintptr
+		selector   uintptr
+		sortSeries bool
+	}{snapshot, selector, sortSeries}
 
 	var res struct {
 		matches         []uint32
