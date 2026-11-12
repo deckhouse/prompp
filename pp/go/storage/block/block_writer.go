@@ -56,7 +56,7 @@ type blockWriter struct {
 
 func newBlockWriter(
 	dir string,
-	maxBlockChunkSegmentSize int64,
+	maxBlockChunkSegmentSize, downsamplingMs int64,
 	indexWriter IndexWriter,
 	chunkIterator ChunkIterator,
 	tLabels map[string]string,
@@ -84,9 +84,10 @@ func newBlockWriter(
 			},
 		},
 		Thanos: metadata.Thanos{
-			Version: metadata.ThanosVersion1,
-			Labels:  tLabels,
-			Source:  "pp_block_writer",
+			Version:    metadata.ThanosVersion1,
+			Labels:     tLabels,
+			Source:     "pp_block_writer",
+			Downsample: metadata.ThanosDownsample{Resolution: downsamplingMs},
 		},
 	}
 

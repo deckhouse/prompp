@@ -105,7 +105,7 @@ func (s *SelectFuncOptimizationSuite) selectAggregationAndCrossQueries() {
 }
 
 func (s *SelectFuncOptimizationSuite) selectWithHints(hints *storage.SelectHints) {
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 8, 1, 0, s.metrics)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 8, 1, 0, 0, cppbridge.NoDownsampling, s.metrics)
 	q.IsPossibleToOptimize = func(
 		[]*cppbridge.LSSQueryResult,
 		*storage.SelectHints,

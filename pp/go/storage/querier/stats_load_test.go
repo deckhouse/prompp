@@ -27,8 +27,8 @@ func (s *QuerierStatsSuite) TestRealDataStorageLoading() {
 				maxt = 5
 			}
 
-			q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, maxt, 1, 0, s.metrics)
-			cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+			q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, maxt, 1, 0, 0, cppbridge.NoDownsampling, s.metrics)
+			cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, 0, cppbridge.NoDownsampling, nil, s.metrics)
 
 			if operation == "select_chunks" {
 				result := cq.Select(context.Background(), false, s.hints, s.matchers...)

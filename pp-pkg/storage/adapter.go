@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/pp-pkg/blocks/upsampler"
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/hatracker"
@@ -19,6 +20,29 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/storage"
 )
+
+//
+// downsampler
+//
+
+// downsampler is an interface for types that know if downsampling would be applied.
+type downsampler interface {
+	// WouldDownsample reports whether the current query would apply downsampling.
+	WouldDownsample() bool
+}
+
+//
+// AdapterOptions
+//
+
+// AdapterOptions is the options for the Adapter.
+type AdapterOptions struct {
+	// RetentionMS is the retention time in milliseconds.
+	RetentionMS int64
+
+	// DownsamplingMS is the downsampling time in milliseconds.
+	DownsamplingMS int64
+}
 
 //
 // Adapter
@@ -36,6 +60,7 @@ type Adapter struct {
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
 	scrapeInterval        atomic.Int64
+	opts                  *AdapterOptions
 
 	// stat
 	activeQuerierMetrics  *querier.Metrics
@@ -50,6 +75,7 @@ func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
 	builder *pp_storage.Builder,
+	opts *AdapterOptions,
 	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {
@@ -61,6 +87,7 @@ func NewAdapter(
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		transparentState:      cppbridge.NewTransitionStateV2(),
 		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
+		opts:                  opts,
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
 		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		appendDuration: factory.NewHistogram(
@@ -243,7 +270,8 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 		queriers = append(
 			queriers,
 			querier.NewChunkQuerier(
-				ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics,
+				ahead, querier.NewNoOpShardedDeduplicator,
+				mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil, ar.activeQuerierMetrics,
 			),
 		)
 	}
@@ -256,16 +284,13 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 		queriers = append(
 			queriers,
 			querier.NewChunkQuerier(
-				head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics,
+				head, querier.NewNoOpShardedDeduplicator,
+				mint, maxt, ar.opts.RetentionMS, ar.opts.DownsamplingMS, nil, ar.storageQuerierMetrics,
 			),
 		)
 	}
 
-	return storage.NewMergeChunkQuerier(
-		nil,
-		queriers,
-		storage.NewConcatenatingChunkSeriesMerger(),
-	), nil
+	return storage.NewMergeChunkQuerier(nil, queriers, storage.NewConcatenatingChunkSeriesMerger()), nil
 }
 
 // ApplyConfig updates hashdex limits from the global config.
@@ -299,6 +324,8 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		maxt,
 		ar.scrapeInterval.Load(),
 		aTimeInterval.MinT,
+		ar.opts.RetentionMS,
+		ar.opts.DownsamplingMS,
 		ar.activeQuerierMetrics,
 	), nil
 }
@@ -334,6 +361,8 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				maxt,
 				ar.scrapeInterval.Load(),
 				aTimeInterval.MinT,
+				ar.opts.RetentionMS,
+				ar.opts.DownsamplingMS,
 				ar.activeQuerierMetrics,
 			),
 		)
@@ -358,18 +387,35 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				maxt,
 				ar.scrapeInterval.Load(),
 				timeInterval.MinT,
+				ar.opts.RetentionMS,
+				ar.opts.DownsamplingMS,
 				ar.storageQuerierMetrics,
 			),
 		)
 	}
 
-	return querier.NewMultiQuerier(queriers, nil), nil
+	mq := querier.NewMultiQuerier(queriers, nil)
+	if len(queriers) > 0 && ar.wouldDownsample(queriers[0]) {
+		return upsampler.NewResolutionQuerier(mq, ar.opts.DownsamplingMS), nil
+	}
+
+	return mq, nil
 }
 
 // StartTime returns the oldest timestamp stored in the storage.
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
+}
+
+// wouldDownsample reports whether the querier would apply its own query-time downsampling.
+func (*Adapter) wouldDownsample(hq storage.Querier) bool {
+	downsamplerQuerier, ok := hq.(downsampler)
+	if !ok {
+		return false
+	}
+
+	return downsamplerQuerier.WouldDownsample()
 }
 
 // headIsOutOfQueryRange reports whether the [pp_storage.Head] holds no data for the [mint, maxt]

@@ -1,13 +1,16 @@
 package featuresflags
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -98,7 +101,10 @@ func (s *DiffFeaturesSuite) TestIntValuesComparedByMeaning() {
 }
 
 func (s *DiffFeaturesSuite) TestDurationValuesComparedByMeaning() {
-	diff := diffFeatures(parseFeatures("default_sample_age_limit=60m"), parseFeatures("default_sample_age_limit=1h"))
+	diff := diffFeatures(
+		parseFeatures("default_sample_age_limit=60m,downsampling=60m"),
+		parseFeatures("default_sample_age_limit=1h,downsampling=1h"),
+	)
 
 	s.True(diff.isEmpty())
 }
@@ -182,6 +188,21 @@ func (s *FeaturesDefaultSuite) TestDiffersFromDefault() {
 	s.requireDifferFromDefault("1")
 }
 
+func (s *FeaturesDefaultSuite) TestDownsamplingAndSelectFuncOptimization() {
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+	s.setEnv("downsampling=60m,select_func_optimization=drop_point|new_point",
+		"select_func_optimization=drop_point|new_point,downsampling=1h")
+	cfg := &downsamplingFlagConfig{}
+	var logs bytes.Buffer
+
+	ReadPromPPFeatures(log.NewLogfmtLogger(&logs), cfg, s.registry)
+
+	s.Equal(model.Duration(time.Hour), cfg.downsampling)
+	s.Contains(logs.String(), "Select function optimization is set.")
+	s.NotContains(logs.String(), "Unknown PROMPP_FEATURES option.")
+	s.requireDifferFromDefault("0")
+}
+
 func (s *FeaturesDefaultSuite) TestEmptyFeaturesDiffersFromNonEmptyDefault() {
 	s.setEnv("", "unknown_a")
 
@@ -203,6 +224,21 @@ type noopFlagConfig struct{}
 
 // DisableBlockManagerStorage implements FlagConfig.
 func (noopFlagConfig) DisableBlockManagerStorage() {}
+
+// SetDownsampling implements FlagConfig.
+func (noopFlagConfig) SetDownsampling(model.Duration) {}
+
+// downsamplingFlagConfig records the configured downsampling duration.
+type downsamplingFlagConfig struct {
+	noopFlagConfig
+
+	downsampling model.Duration
+}
+
+// SetDownsampling implements [FlagConfig].
+func (c *downsamplingFlagConfig) SetDownsampling(downsampling model.Duration) {
+	c.downsampling = downsampling
+}
 
 // EnableNewUI implements FlagConfig.
 func (noopFlagConfig) EnableNewUI() {}

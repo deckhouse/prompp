@@ -57,6 +57,7 @@ type Writer[TShard Shard] struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
+	downsamplingMs           int64
 	shardLabelsCtor          func(numberOfShards, shardID uint16) map[string]string
 	retentionPeriod          time.Duration
 	clock                    clockwork.Clock
@@ -70,7 +71,7 @@ type Writer[TShard Shard] struct {
 // deleted on the very next retention pass, so writing them is pointless work.
 func NewWriter[TShard Shard](
 	dataDir string,
-	maxBlockChunkSegmentSize int64,
+	maxBlockChunkSegmentSize, downsamplingMs int64,
 	blockDuration time.Duration,
 	retentionPeriod time.Duration,
 	clock clockwork.Clock,
@@ -90,6 +91,7 @@ func NewWriter[TShard Shard](
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
+		downsamplingMs:           downsamplingMs,
 		retentionPeriod:          retentionPeriod,
 		shardLabelsCtor:          shardLabelsCtor,
 		clock:                    clock,
@@ -132,6 +134,7 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockW
 
 	timeInterval := sd.DataStorage().TimeInterval(true)
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
+	lss := sd.LSS().Target()
 	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
@@ -149,12 +152,23 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) (blockW
 			continue
 		}
 
-		writer, err := w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels)
+		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling, tLabels)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
 
 		writers.append(writer)
+
+		if w.downsamplingMs == cppbridge.NoDownsampling {
+			continue
+		}
+
+		downsamplingWriter, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, w.downsamplingMs, tLabels)
+		if err != nil {
+			return blockWriters{}, errors.Join(err, writers.Close())
+		}
+
+		writers.append(downsamplingWriter)
 	}
 
 	return writers, nil
@@ -176,6 +190,7 @@ func (w *Writer[TShard]) createWriter(
 	return newBlockWriter(
 		dataDir,
 		w.maxBlockChunkSegmentSize,
+		downsamplingMs,
 		NewIndexWriter(lss),
 		chunkIterator,
 		tLabels,

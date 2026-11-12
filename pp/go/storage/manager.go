@@ -71,6 +71,7 @@ var (
 type Options struct {
 	Seed                uint64
 	BlockDuration       time.Duration
+	Downsampling        time.Duration
 	CommitInterval      time.Duration
 	MaxRetentionPeriod  time.Duration
 	HeadRetentionPeriod time.Duration
@@ -291,6 +292,7 @@ func (m *Manager) initServices(
 				block.NewWriter[*shard.Shard](
 					o.DataDir,
 					block.DefaultChunkSegmentSize,
+					o.Downsampling.Milliseconds(),
 					o.BlockDuration,
 					o.MaxRetentionPeriod,
 					clock,
