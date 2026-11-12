@@ -612,7 +612,7 @@ struct LabelNameSet {
 
       const auto end = label_name_set.end();
       for (auto it = label_name_set.begin(); it != end; ++it) {
-        symbols_ids_sequences_.push_back(find_or_emplace_label_name(it, std::forward<Cache>(cache)));
+        symbols_ids_sequences_.push_back(find_or_emplace_label_name(it, cache));
         if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
           ++size;
         }
@@ -1279,7 +1279,7 @@ struct LabelSet {
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
       const uint32_t id = items_.size();
 
-      const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
+      const uint32_t lns_id = find_or_emplace_label_names_set(label_set, cache);
       const uint32_t pos = symbols_ids_sequences_.size() + shrinked_size_;
       symbols_tables_.resize(label_name_sets_table_.data_view().symbols().size());
 
@@ -1288,7 +1288,7 @@ struct LabelSet {
       auto size_before = symbols_ids_sequences_.size();
       auto i = BareBones::StreamVByte::back_inserter<symbol_ids_codec_type>(symbols_ids_sequences_, lns.size());
       for (auto it = label_set.begin(); it != label_set.end(); ++it) {
-        *i++ = find_or_emplace_symbol(lns_i.id(), it, std::forward<Cache>(cache));
+        *i++ = find_or_emplace_symbol(lns_i.id(), it, cache);
         ++lns_i;
       }
 

@@ -43,7 +43,7 @@ class GenericEncoder {
 
  public:
   template <class... Args>
-  PROMPP_ALWAYS_INLINE explicit GenericEncoder(Args&&... args) noexcept : encoder_{std::forward<Args>(args)...} {}
+  PROMPP_ALWAYS_INLINE explicit GenericEncoder(Args&&... args) : encoder_{std::forward<Args>(args)...} {}
 
   // add_wo_stalenans - add (without any stalenans) to encode incoming data(ShardedData) through C++ encoder.
   template <class Hashdex, class Stats>

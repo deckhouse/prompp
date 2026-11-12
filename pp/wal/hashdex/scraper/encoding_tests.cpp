@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -68,9 +69,9 @@ class SampleCodecFixture : public testing::TestWithParam<SampleCodecCase> {
   static constexpr size_t kBufSize = 64;
 
   SampleCodec::DecodeResult encode_and_decode(const LayoutMarker layout, Sample sample, int64_t default_ts = -1) {
-    buf_.fill(0);
-    char* start = buf_.data();
-    char* end = SampleCodec::encode(start, layout, sample);
+    buf_.fill(std::byte{});
+    std::byte* start = buf_.data();
+    std::byte* end = SampleCodec::encode(start, layout, sample);
 
     const auto res = SampleCodec::decode(start, layout, default_ts);
 
@@ -78,7 +79,7 @@ class SampleCodecFixture : public testing::TestWithParam<SampleCodecCase> {
     return res;
   }
 
-  std::array<char, kBufSize> buf_{};
+  std::array<std::byte, kBufSize> buf_{};
   const Timestamp default_ts_ = -1;
 };
 
@@ -113,13 +114,13 @@ INSTANTIATE_TEST_SUITE_P(SampleCodecTests,
 class LabelCodecFixture : public testing::Test {
  protected:
   static constexpr size_t kBufSize = 64;
-  std::array<char, kBufSize> buf_{};
+  std::array<std::byte, kBufSize> buf_{};
 
   LabelCodec::DecodeResult encode_and_decode(uint32_t name_off, uint32_t name_len, uint32_t value_off, uint32_t value_len) {
-    buf_.fill(0);
-    char* start = buf_.data();
-    char* end = LabelCodec::encode(start, PromPP::WAL::hashdex::scraper::MarkedLabel{.name = {.offset = name_off, .length = name_len},
-                                                                                     .value = {.offset = value_off, .length = value_len}});
+    buf_.fill(std::byte{});
+    std::byte* start = buf_.data();
+    std::byte* end = LabelCodec::encode(start, PromPP::WAL::hashdex::scraper::MarkedLabel{.name = {.offset = name_off, .length = name_len},
+                                                                                          .value = {.offset = value_off, .length = value_len}});
 
     const auto res = LabelCodec::decode(start);
 
@@ -130,13 +131,13 @@ class LabelCodecFixture : public testing::Test {
 
 TEST_F(LabelCodecFixture, FastPath_Layout01010101) {
   // Arrange
-  buf_.fill(0);
-  char* start = buf_.data();
-  start[0] = static_cast<char>(0b01010101);
-  start[1] = 10;
-  start[2] = 11;
-  start[3] = 12;
-  start[4] = 13;
+  buf_.fill(std::byte{});
+  std::byte* start = buf_.data();
+  start[0] = std::byte{0b01010101};
+  start[1] = std::byte{10};
+  start[2] = std::byte{11};
+  start[3] = std::byte{12};
+  start[4] = std::byte{13};
 
   // Act
   const auto res = LabelCodec::decode(buf_.data());
@@ -151,10 +152,10 @@ TEST_F(LabelCodecFixture, FastPath_Layout01010101) {
 
 TEST_F(LabelCodecFixture, SimplifiedPath_NameFieldsZero) {
   // Arrange
-  buf_.fill(0);
+  buf_.fill(std::byte{});
   uint8_t layout = 0b10010000;
-  buf_[0] = static_cast<char>(layout);
-  buf_[1] = 42;
+  buf_[0] = std::byte{layout};
+  buf_[1] = std::byte{42};
   uint16_t len = 1234;
   std::memcpy(buf_.data() + 2, &len, 2);
 

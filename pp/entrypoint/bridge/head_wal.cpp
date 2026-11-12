@@ -33,7 +33,7 @@ extern "C" void prompp_head_wal_encoder_ctor(void* args, void* res) {
 
   const auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
-  new (res) Result{.encoder = std::make_unique<Encoder>(lss, in->shard_id, in->log_shards)};
+  entrypoint::types::invoke_without_error_result([&] { new (res) Result{.encoder = std::make_unique<Encoder>(lss, in->shard_id, in->log_shards)}; });
 }
 
 extern "C" void prompp_head_wal_encoder_ctor_from_decoder(void* args, void* res) {
@@ -56,8 +56,13 @@ extern "C" void prompp_head_wal_encoder_ctor_from_decoder(void* args, void* res)
   }
 
   const auto& decoder = generic_decoder->decoder();
-  out->encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
-                                           decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1, decoder.sample_decoder().timestamp_base);
+  try {
+    out->encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
+                                             decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1, decoder.sample_decoder().timestamp_base);
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::types::handle_current_exception(err_stream);
+  }
 }
 
 extern "C" void prompp_head_wal_encoder_dtor(void* args) {
@@ -161,7 +166,7 @@ extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {
 
   const auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<entrypoint::types::QueryableEncodingBimap>(*in->lss);
-  new (res) Result{.decoder = std::make_unique<Decoder>(lss, in->encoder_version)};
+  entrypoint::types::invoke_without_error_result([&] { new (res) Result{.decoder = std::make_unique<Decoder>(lss, in->encoder_version)}; });
 }
 
 extern "C" void prompp_head_wal_decoder_dtor(void* args) {

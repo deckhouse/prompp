@@ -6,17 +6,14 @@ def _clang_tidy(args = []):
     return lint_clang_tidy_aspect(
         binary = Label("//:clang_tidy"),
         global_config = [Label("//:.clang-tidy")],
-        angle_includes_are_system = True,
+        angle_includes_are_system = False,
         rule_kinds = ["cc_binary", "cc_library", "cc_test"],
         args = args,
     )
 
 clang_tidy = _clang_tidy()
 
-# Keep shallow analysis, but defer newly exposed header diagnostics.
-# Source-file diagnostics and their failure policy remain enabled.
 clang_tidy_shallow = _clang_tidy(args = [
-    "--header-filter=^$",
     "--extra-arg=-Xclang",
     "--extra-arg=-analyzer-config",
     "--extra-arg=-Xclang",

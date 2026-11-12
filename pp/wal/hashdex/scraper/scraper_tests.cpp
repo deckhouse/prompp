@@ -39,8 +39,8 @@ class ScraperFixture : public ::testing::TestWithParam<ScraperCase> {
  protected:
   Scraper scraper_;
 
-  [[nodiscard]] std::vector<FloatMetric> get_floats() const noexcept { return PromPP::WAL::hashdex::get_floats(scraper_); }
-  [[nodiscard]] std::vector<Metadata> get_metadata() const noexcept { return PromPP::WAL::hashdex::get_metadata(scraper_); }
+  [[nodiscard]] std::vector<FloatMetric> get_floats() const { return PromPP::WAL::hashdex::get_floats(scraper_); }
+  [[nodiscard]] std::vector<Metadata> get_metadata() const { return PromPP::WAL::hashdex::get_metadata(scraper_); }
 };
 
 class PrometheusScraperFixture : public ScraperFixture<PrometheusScraper> {

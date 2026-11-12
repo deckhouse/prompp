@@ -59,7 +59,7 @@ class GenericDecoder {
   Decoder decoder_;
 
  public:
-  explicit PROMPP_ALWAYS_INLINE GenericDecoder(BasicEncoderVersion encoder_version) noexcept : decoder_(label_set_, encoder_version) {}
+  explicit PROMPP_ALWAYS_INLINE GenericDecoder(BasicEncoderVersion encoder_version) : decoder_(label_set_, encoder_version) {}
   explicit PROMPP_ALWAYS_INLINE GenericDecoder(LSS& lss, BasicEncoderVersion encoder_version) : label_set_{lss}, decoder_(label_set_, encoder_version) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Decoder& decoder() const noexcept { return decoder_; }

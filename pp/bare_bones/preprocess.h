@@ -17,7 +17,7 @@
 
 #ifdef __clang__
 #define DIAGNOSTIC_CLASS_MEMACCESS "-Wdynamic-class-memaccess"
-#define DIAGNOSTIC_STRINGOP_OVERREAD "-Wstringop-overread"
+#define DIAGNOSTIC_STRINGOP_OVERREAD
 #define DIAGNOSTIC_ARRAY_BOUNDS "-Warray-bounds"
 #define DIAGNOSTIC_MAYBE_UNINITIALIZED "-Wuninitialized"
 #define PRAGMA_DIAGNOSTIC(value) _Pragma(PROMPP_STRINGIFY(clang diagnostic value))
@@ -30,6 +30,8 @@
 #else
 #error #pragma diagnostic is not supported
 #endif
+
+#define PRAGMA_DIAGNOSTIC_IGNORE(...) __VA_OPT__(PRAGMA_DIAGNOSTIC(ignored __VA_ARGS__))
 
 #if __has_include(<gtest/gtest.h>)
 constexpr auto kIsUnitTestBuild = true;

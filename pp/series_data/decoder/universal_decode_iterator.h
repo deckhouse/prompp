@@ -11,6 +11,11 @@
 namespace series_data::decoder {
 
 class UniversalDecodeIterator {
+  template <class Iterator>
+  struct IteratorData : Iterator {
+    using Type = decltype(IteratorData::data_);
+  };
+
  public:
   enum class Type : uint8_t {
     kConstant = 0,
@@ -27,10 +32,8 @@ class UniversalDecodeIterator {
   PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_MAYBE_UNINITIALIZED)                                                                                                    \
   template <class... Args>                                                                                                                                     \
   explicit UniversalDecodeIterator(std::in_place_type_t<DecodeIterator>, Args&&... args) : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} { \
-    struct SampleIsFirstIteratorField : DecodeIterator {                                                                                                       \
-      static_assert(decoder::DecodeIteratorData<decltype(SampleIsFirstIteratorField::data_)>,                                                                  \
-                    #DecodeIterator "::data_ must comply with the DecodeIteratorData concept");                                                                \
-    };                                                                                                                                                         \
+    static_assert(decoder::DecodeIteratorData<typename IteratorData<DecodeIterator>::Type>,                                                                    \
+                  #DecodeIterator "::data_ must comply with the DecodeIteratorData concept");                                                                  \
   }                                                                                                                                                            \
   PRAGMA_DIAGNOSTIC(pop)
 
