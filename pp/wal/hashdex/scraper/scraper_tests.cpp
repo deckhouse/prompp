@@ -907,6 +907,38 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                            },
                                                                                            BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
+// A reused scraper must not expose the previous parse after a body is rejected as invalid UTF-8.
+template <class Scraper>
+class ScraperReuseFixture : public ::testing::Test {
+ protected:
+  Scraper scraper_;
+
+  void SetUp() override {
+    std::string previous = "# HELP metric help text\nmetric 1\n# EOF\n"s;
+    ASSERT_EQ(Error::kNoError, scraper_.parse(previous, kDefaultTimestamp));
+    ASSERT_EQ(1U, scraper_.floats().size());
+    ASSERT_EQ(1U, scraper_.metadata().size());
+  }
+};
+
+using ScraperTypes = ::testing::Types<PrometheusScraper, OpenMetricsScraper>;
+TYPED_TEST_SUITE(ScraperReuseFixture, ScraperTypes);
+
+TYPED_TEST(ScraperReuseFixture, InvalidUtf8DiscardsPreviousParse) {
+  // Arrange
+  std::string buffer = "metric{label=\"\xff\"} 1\n# EOF\n"s;
+
+  // Act
+  const auto result = this->scraper_.parse(buffer, kDefaultTimestamp);
+  const auto floats = PromPP::WAL::hashdex::get_floats(this->scraper_);
+  const auto metadata = PromPP::WAL::hashdex::get_metadata(this->scraper_);
+
+  // Assert
+  EXPECT_EQ(Error::kInvalidUtf8, result);
+  EXPECT_TRUE(floats.empty());
+  EXPECT_TRUE(metadata.empty());
+}
+
 // Builds a scrape buffer whose real `# TYPE`/metric lines sit past the 4 GiB mark, preceded by
 // filler comment lines that the scraper skips.
 std::string make_scrape_buffer_past_4gib() {

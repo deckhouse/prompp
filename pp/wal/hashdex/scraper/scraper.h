@@ -40,6 +40,9 @@ class Scraper {
   [[nodiscard]] Error parse_impl(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
     if constexpr (validation_mode == Utf8ValidationMode::kWholeInput) {
       if (!simdutf::validate_utf8(buffer.data(), buffer.size())) [[unlikely]] {
+        // The scraper may be reused, and the markup of the previous parse points into a buffer that the
+        // caller may already have released.
+        clear();
         return Error::kInvalidUtf8;
       }
     }
@@ -136,6 +139,12 @@ class Scraper {
 
  private:
   using Token = Prometheus::textparse::Token;
+
+  PROMPP_ALWAYS_INLINE void clear() noexcept {
+    metric_buffer_.clear();
+    metadata_buffer_.clear();
+    parser_.tokenizer().tokenize({});
+  }
 
   template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_metadata() {
