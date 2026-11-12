@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
+#include <ranges>
 #include <utility>
 
 #include "parallel_hashmap/phmap.h"
@@ -133,6 +134,19 @@ class SequenceDictionary {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& stream(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].stream; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t last_timestamp(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].encoder.timestamp(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count(SequenceId sequence_id) const noexcept { return sequences_[sequence_id].count; }
+
+  // A live sequence; its last timestamp needs no decoding.
+  struct SequenceView {
+    const BitSequenceWithItemsCount& stream;
+    int64_t last_timestamp;
+  };
+
+  // Live sequences; each one is listed once however many chunks share it.
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto sequences() const noexcept {
+    return sequences_ | std::views::transform([](const Sequence& sequence) PROMPP_LAMBDA_INLINE {
+             return SequenceView{.stream = sequence.stream, .last_timestamp = sequence.encoder.timestamp()};
+           });
+  }
 
   // Min of first and max of last timestamps over live sequences; each sequence counts once however many chunks share it.
   [[nodiscard]] PromPP::Primitives::TimeInterval time_bounds() const noexcept {
