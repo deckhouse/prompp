@@ -63,14 +63,24 @@ Token Tokenizer::next_impl() noexcept {
   token_ptr_ = cursor_ptr_;
 
   /*!re2c
+      // The input has no terminator and may end in the middle of a token. YYPEEK returns the
+      // sentinel 0 past the end of the input and `re2c:eof = 0` makes the lexer check the real
+      // end of the input only when it reads the sentinel, so a byte past `limit_ptr_` is never
+      // dereferenced. A token cut by the end of the input falls back to the longest match or to
+      // the empty rule of its condition. `re2c:eof` is not compatible with `--bit-vectors` and
+      // `--computed-gotos-relative`, see README.md for the generation command.
+      re2c:api = custom;
       re2c:api:style = free-form;
       re2c:define:YYCTYPE = "unsigned char";
-      re2c:define:YYCURSOR = cursor_ptr_;
-      re2c:define:YYLIMIT = limit_ptr_;
-      re2c:define:YYMARKER = marker_ptr_;
-      re2c:define:YYFILL = "{if (limit_ptr_ == cursor_ptr_) { return Token::kEOF; } }";
+      re2c:define:YYPEEK = "(cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0)";
+      re2c:define:YYSKIP = "++cursor_ptr_;";
+      re2c:define:YYBACKUP = "marker_ptr_ = cursor_ptr_;";
+      re2c:define:YYRESTORE = "cursor_ptr_ = marker_ptr_;";
+      re2c:define:YYLESSTHAN = "(limit_ptr_ - cursor_ptr_ < @@)";
       re2c:define:YYGETCONDITION = "condition_";
       re2c:define:YYSETCONDITION = "condition_ = @@;";
+      re2c:yyfill:enable = 0;
+      re2c:eof = 0;
 
       DIGIT = [0-9];
       LETTER = [a-zA-Z_];
@@ -106,7 +116,7 @@ Token Tokenizer::next_impl() noexcept {
         return Token::kEOFWord;
       }
       <comment>"" => init {
-        return Token::kInvalid;
+        return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid;
       }
       <meta_name> METRIC_NAME SPACE => meta_text_with_leading_spaces {
         --cursor_ptr_;
@@ -185,7 +195,7 @@ Token Tokenizer::next_impl() noexcept {
       }
 
       <label_value, exemplar_label_value, exemplar_labels, value, exemplar_value, timestamp, exemplar_timestamp, labels, init, meta_name>"" {
-        return Token::kInvalid;
+        return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid;
       }
   */
 }

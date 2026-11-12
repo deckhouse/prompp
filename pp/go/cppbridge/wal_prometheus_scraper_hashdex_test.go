@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -152,4 +153,54 @@ func (s *PrometheusScraperHashdexSuite) TestParseEmptyInput() {
 	s.Require().NoError(err)
 	s.Equal([]cppbridge.WALScraperHashdexMetadata(nil), actualMetadata)
 	s.Equal(uint32(0), scraped)
+}
+
+// parseWithTrailingBytes parses body from a backing array whose spare capacity is filled with
+// trailing, so a read past the end of the body sees a known byte.
+func (s *PrometheusScraperHashdexSuite) parseWithTrailingBytes(body string, trailing byte) (uint32, error) {
+	backing := make([]byte, len(body), len(body)+64)
+	copy(backing, body)
+	spare := backing[len(body):cap(backing)]
+	for i := range spare {
+		spare[i] = trailing
+	}
+
+	hashdex := cppbridge.NewPrometheusScraperHashdex()
+	scraped, err := hashdex.Parse(backing[:len(body):len(body)], -1)
+	runtime.KeepAlive(hashdex)
+
+	return scraped, err
+}
+
+func (s *PrometheusScraperHashdexSuite) TestParseTruncatedBodyDoesNotDependOnTrailingBytes() {
+	// Arrange
+	const body = "#1010101010101010\n# TYPE"
+
+	// Act
+	scrapedZero, errZero := s.parseWithTrailingBytes(body, 0)
+	scrapedSpace, errSpace := s.parseWithTrailingBytes(body, ' ')
+	scrapedNewline, errNewline := s.parseWithTrailingBytes(body, '\n')
+	scrapedLetter, errLetter := s.parseWithTrailingBytes(body, 'x')
+
+	// Assert
+	s.Require().NoError(errZero)
+	s.Require().NoError(errSpace)
+	s.Require().NoError(errNewline)
+	s.Require().NoError(errLetter)
+	s.Equal(uint32(0), scrapedZero)
+	s.Equal(uint32(0), scrapedSpace)
+	s.Equal(uint32(0), scrapedNewline)
+	s.Equal(uint32(0), scrapedLetter)
+}
+
+func (s *PrometheusScraperHashdexSuite) TestParseLastLineWithoutNewline() {
+	// Arrange
+	const body = "metric 1 2"
+
+	// Act
+	scraped, err := s.parseWithTrailingBytes(body, 'x')
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(uint32(1), scraped)
 }
