@@ -121,6 +121,17 @@ func (s *SegmentSuite) TestCutSegment() {
 	s.Require().ErrorIs(err, io.ErrUnexpectedEOF)
 }
 
+func (s *SegmentSuite) TestSegmentTooLarge() {
+	toWrite := binary.AppendUvarint(nil, reader.MaxSegmentSize+1)
+	toWrite = binary.AppendUvarint(toWrite, 0)
+	toWrite = append(toWrite, 0)
+
+	segment := reader.NewSegment()
+	_, err := segment.ReadFrom(bytes.NewReader(toWrite))
+	s.Require().ErrorIs(err, reader.ErrSegmentTooLarge)
+	s.Require().Zero(segment.Length())
+}
+
 //
 // SegmentV2Suite
 //
@@ -282,4 +293,16 @@ func (s *SegmentV2Suite) TestReadIDAndBody() {
 	s.Require().Equal(len(data), segment.Length())
 	s.Require().Equal(segmentSamples, segment.Samples())
 	s.Require().Equal(data, segment.Bytes())
+}
+
+func (s *SegmentV2Suite) TestSegmentTooLarge() {
+	toWrite := []byte{0}
+	toWrite = binary.AppendUvarint(toWrite, reader.MaxSegmentSize+1)
+	toWrite = binary.AppendUvarint(toWrite, 0)
+	toWrite = append(toWrite, 0)
+
+	segment := reader.NewSegmentV2()
+	_, err := segment.ReadFrom(bytes.NewReader(toWrite))
+	s.Require().ErrorIs(err, reader.ErrSegmentTooLarge)
+	s.Require().Zero(segment.Length())
 }

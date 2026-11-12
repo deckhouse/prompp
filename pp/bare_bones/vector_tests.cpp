@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <random>
+#include <spanstream>
 #include <sstream>
 
 #include "bare_bones/vector.h"
@@ -271,5 +272,31 @@ INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
                          BareBonesVectorValuesFixture,
                          BareBonesVectorValuesFixture::cases(),
                          [](const testing::TestParamInfo<VectorValuesCase>& info) { return info.param.name; });
+
+class BareBonesVectorReadInvalidSizeFixture : public testing::Test {
+ protected:
+  static constexpr uint32_t kDeclaredSize = 4;
+
+  std::string data_;
+  Vector<uint32_t> vector_;
+
+  void SetUp() override {
+    data_.push_back(1);
+    data_.append(reinterpret_cast<const char*>(&kDeclaredSize), sizeof(kDeclaredSize));
+    data_.append(sizeof(uint32_t) * kDeclaredSize - 1, '\0');
+  }
+};
+
+TEST_F(BareBonesVectorReadInvalidSizeFixture, ThrowsWhenSizeExceedsStream) {
+  // Arrange
+  std::ispanstream stream{data_};
+
+  // Act
+  const auto read = [&] { stream >> vector_; };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+  EXPECT_TRUE(vector_.empty());
+}
 
 }  // namespace

@@ -781,12 +781,21 @@ class Sequence {
     const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read size
-    in.read(reinterpret_cast<char*>(&seq.size_), sizeof(seq.size_));
+    uint32_t size;
+    in.read(reinterpret_cast<char*>(&size), sizeof(size));
 
     // read is completed, if there are no items
-    if (!seq.size_) {
+    if (!size) {
       return in;
     }
+
+    // next_size() wraps around for larger sizes; size_ stays 0 here, because clear() expects allocated keys for a non-empty sequence
+    if (size > std::numeric_limits<uint32_t>::max() - PreAllocationElementsCount) [[unlikely]] {
+      throw BareBones::Exception(0x65eff33dcf65d90e, "Invalid Sequence size %u got from input, the maximum is %u", size,
+                                 std::numeric_limits<uint32_t>::max() - PreAllocationElementsCount);
+    }
+    check_readable_bytes(in, keys_size(size), "Sequence keys");
+    seq.size_ = size;
 
     auto new_size = seq.next_size(seq.size_);
 
@@ -801,6 +810,7 @@ class Sequence {
     }
 
     // read data
+    check_readable_bytes(in, actual_data_size, "Sequence data");
     seq.reserve_data(new_size, actual_data_size);
     in.read(reinterpret_cast<char*>(static_cast<uint8_t*>(seq.data_)), actual_data_size);
 

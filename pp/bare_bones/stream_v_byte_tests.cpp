@@ -1,5 +1,6 @@
 #include <iterator>
 #include <random>
+#include <spanstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -261,5 +262,63 @@ INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
                          StreamVByte1234ValuesFixture,
                          StreamVByte1234ValuesFixture::cases(),
                          [](const testing::TestParamInfo<SequenceValuesCase>& info) { return info.param.name; });
+
+class SequenceReadInvalidSizeFixture : public testing::TestWithParam<uint32_t> {
+ protected:
+  std::stringstream stream_;
+  Sequence<BareBones::StreamVByte::Codec1234> sequence_;
+
+  void SetUp() override {
+    const uint32_t size = GetParam();
+    stream_.put(1);
+    stream_.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    stream_.write("\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", 16);
+  }
+};
+
+TEST_P(SequenceReadInvalidSizeFixture, ThrowsWithoutReadingData) {
+  // Arrange
+
+  // Act
+  const auto read = [this] { stream_ >> sequence_; };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+  EXPECT_TRUE(sequence_.empty());
+  EXPECT_EQ(1 + sizeof(uint32_t), static_cast<size_t>(stream_.tellg()));
+}
+
+INSTANTIATE_TEST_SUITE_P(SizeAboveLimit,
+                         SequenceReadInvalidSizeFixture,
+                         testing::Values(std::numeric_limits<uint32_t>::max() - 1023,
+                                         std::numeric_limits<uint32_t>::max() - 1,
+                                         std::numeric_limits<uint32_t>::max()));
+
+class SequenceReadSizeAboveStreamFixture : public testing::Test {
+ protected:
+  static constexpr uint32_t kDeclaredSize = 1024;
+
+  std::string data_;
+  Sequence<BareBones::StreamVByte::Codec1234> sequence_;
+
+  void SetUp() override {
+    data_.push_back(1);
+    data_.append(reinterpret_cast<const char*>(&kDeclaredSize), sizeof(kDeclaredSize));
+    data_.append(16, '\xff');
+  }
+};
+
+TEST_F(SequenceReadSizeAboveStreamFixture, ThrowsBeforeAllocation) {
+  // Arrange
+  std::ispanstream stream{data_};
+
+  // Act
+  const auto read = [&] { stream >> sequence_; };
+
+  // Assert
+  EXPECT_THROW(read(), BareBones::Exception);
+  EXPECT_TRUE(sequence_.empty());
+  EXPECT_EQ(0U, sequence_.allocated_memory());
+}
 
 }  // namespace

@@ -67,8 +67,8 @@ class BitSequenceReader {
   }
 
   PROMPP_ALWAYS_INLINE void ff(uint64_t size) noexcept {
-    // it is sufficient to check range only here, because it is not allowed to read more than 28 bytes ahead of
-    // i_ before calling ff and function reserve_enough_memory always reserve extra 28 bytes on the tail
+    // it is sufficient to check range only here, because it is not allowed to read ahead of i_ further than the tail
+    // that the owning sequence always reserves (12 bytes for BitSequence, 9 bytes for CompactBitSequence)
     assert(i_ + size <= size_);
 
     i_ += size;
@@ -76,7 +76,9 @@ class BitSequenceReader {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t left() const noexcept { return i_ <= size_ ? size_ - i_ : 0; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool eof() const noexcept { return i_ == size_; }
+  // a damaged stream can make a decoder step move i_ past size_, so eof() must not rely on an exact match
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool eof() const noexcept { return i_ >= size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool overrun() const noexcept { return i_ > size_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t position() const noexcept { return i_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t consume_bits_u32(uint8_t size) noexcept {
@@ -450,6 +452,8 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
 };
 
 class BitSequence {
+  static constexpr size_t kTailReservedBytes = 12;
+
   size_t size_ = 0;
 
   size_t max_size_for_current_data_size_ = 0;
@@ -462,9 +466,11 @@ class BitSequence {
   }
 
   PROMPP_ALWAYS_INLINE void reserve_memory(size_t bits_count) noexcept {
+    assert(bits_count <= kMaxSizeInBits);
+
     // always reserve at least 12 extra bytes at the tail, because read/write can touch up to 12 bytes
-    data_.grow_to_fit_at_least_and_fill_with_zeros((bits_count + 12 * 8 + 7) >> 3);
-    max_size_for_current_data_size_ = (data_.size() << 3) - 12 * 8;
+    data_.grow_to_fit_at_least_and_fill_with_zeros(static_cast<uint32_t>(Bit::to_ceil_bytes(bits_count) + kTailReservedBytes));
+    max_size_for_current_data_size_ = Bit::to_bits(static_cast<size_t>(data_.size()) - kTailReservedBytes);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t unfilled_bits_count() const noexcept { return 8 - (size_ % 8); }
@@ -478,6 +484,9 @@ class BitSequence {
   }
 
  public:
+  // the largest size whose data and reserved tail fit into Memory with 32-bit size
+  static constexpr size_t kMaxSizeInBits = Bit::to_bits(size_t{std::numeric_limits<uint32_t>::max()} - kTailReservedBytes);
+
   BitSequence() = default;
   BitSequence(const BitSequence&) = default;
   BitSequence(BitSequence&&) noexcept = default;
@@ -631,12 +640,20 @@ class BitSequence {
     const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read size
-    in.read(reinterpret_cast<char*>(&seq.size_), sizeof(seq.size_));
+    size_t size;
+    in.read(reinterpret_cast<char*>(&size), sizeof(size));
 
     // read is completed, if there are no items
-    if (!seq.size_) {
+    if (!size) {
       return in;
     }
+
+    // size_ stays 0 here, because clear() zeroes size_in_bytes() of an already allocated buffer
+    if (size > kMaxSizeInBits) [[unlikely]] {
+      throw BareBones::Exception(0x4d8324c9b10882cd, "Invalid BitSequence size %zu bits got from input, the maximum is %zu bits", size, kMaxSizeInBits);
+    }
+    check_readable_bytes(in, Bit::to_ceil_bytes(size), "BitSequence");
+    seq.size_ = size;
 
     // read data
     seq.reserve_enough_memory_if_needed();

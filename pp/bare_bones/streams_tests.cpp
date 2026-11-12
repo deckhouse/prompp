@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <spanstream>
 #include <sstream>
 
 namespace {
@@ -237,5 +238,59 @@ INSTANTIATE_TEST_SUITE_P(OriginalMasks,
                                          StreamExceptionMaskCase{.name = "Eof", .mask = std::ios_base::eofbit},
                                          StreamExceptionMaskCase{.name = "All", .mask = kReadExceptions}),
                          [](const auto& info) { return info.param.name; });
+
+class ReadableBytesHintFixture : public testing::Test {
+ protected:
+  static constexpr std::string_view kData = "abcdef";
+
+  std::ispanstream span_stream_{kData};
+  std::istringstream string_stream_{std::string(kData)};
+  char buffer_[2]{};
+
+  void SetUp() override {
+    span_stream_.read(buffer_, sizeof(buffer_));
+    string_stream_.read(buffer_, sizeof(buffer_));
+  }
+};
+
+TEST_F(ReadableBytesHintFixture, SpanStreamReportsRemainingBytes) {
+  // Arrange
+
+  // Act
+  const auto hint = BareBones::readable_bytes_hint(span_stream_);
+
+  // Assert
+  EXPECT_EQ(kData.size() - sizeof(buffer_), hint);
+}
+
+TEST_F(ReadableBytesHintFixture, OtherStreamHasNoLimit) {
+  // Arrange
+
+  // Act
+  const auto hint = BareBones::readable_bytes_hint(string_stream_);
+
+  // Assert
+  EXPECT_EQ(std::numeric_limits<size_t>::max(), hint);
+}
+
+TEST_F(ReadableBytesHintFixture, CheckAcceptsRemainingBytes) {
+  // Arrange
+
+  // Act
+  const auto check = [this] { BareBones::check_readable_bytes(span_stream_, kData.size() - sizeof(buffer_), "test"); };
+
+  // Assert
+  EXPECT_NO_THROW(check());
+}
+
+TEST_F(ReadableBytesHintFixture, CheckRejectsMoreThanRemainingBytes) {
+  // Arrange
+
+  // Act
+  const auto check = [this] { BareBones::check_readable_bytes(span_stream_, kData.size() - sizeof(buffer_) + 1, "test"); };
+
+  // Assert
+  EXPECT_THROW(check(), BareBones::Exception);
+}
 
 }  // namespace

@@ -131,3 +131,89 @@ func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 }
+
+// corruptedHeadWalSegments are the crash inputs found by fuzzing HeadWalDecoder, named after their fuzz
+// corpus files. They are LZ4-compressed segments whose gorilla BitSequence sizes are far beyond the real data.
+var corruptedHeadWalSegments = []struct {
+	name    string
+	segment []byte
+}{
+	{
+		name:    "fb38859ff4d4e8bc",
+		segment: []byte("\x04\"M\x18@@\xc0-\x00\x00\x00\x13\x00\x01\x00\xa4\xdfO1\xa5\xb2\x02\xd3\x18\x01\x02\x12\x001\x01\x01\x01\a\x00\x16\xff\x01\x001\x7f\x01\x01\x1e\x00\x00\x10\x00\x05\x0e\x00P\x01\xff\xff\xff\xff"),
+	},
+	{
+		name:    "498bb794fad8a404",
+		segment: []byte("\x04\"M\x18@@\xc0-\x00\x00\x00\x13\x00\x01\x00\xa4\x9ac)$g\x03\xd3\x18\x01\x02\x12\x001\x01\x01\x01\a\x00\x16\xff\x01\x001\x7f\x01\x01\x1e\x00\x00\x10\x00\x05\x0e\x00P\x01\xff\xff\xff\xff"),
+	},
+}
+
+func TestHeadWalDecoder_DecodeCorruptedSegment(t *testing.T) {
+	for _, tc := range corruptedHeadWalSegments {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+			shardedInnerSeries := cppbridge.NewShardedInnerSeries(1)
+			innerSeries := shardedInnerSeries.DataByShard(0)
+
+			// Act
+			err := decoder.Decode(tc.segment, &innerSeries[0])
+			runtime.KeepAlive(shardedInnerSeries)
+
+			// Assert
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestHeadWalDecoder_DecodeToDataStorageCorruptedSegment(t *testing.T) {
+	for _, tc := range corruptedHeadWalSegments {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			dataStorage := cppbridge.NewDataStorage(false, false)
+			decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+
+			// Act
+			_, _, err := decoder.DecodeToDataStorage(tc.segment, dataStorage)
+
+			// Assert
+			require.Error(t, err)
+		})
+	}
+}
+
+// overBudgetHeadWalSegment is a V3 segment with a stored LZ4 block. Its values BitSequence declares 1 GiB + 1 byte
+// of data, which is more than the decoder may decompress for one segment.
+const overBudgetHeadWalSegment = "04224d184040c0470000800000000000000000df4f31a5b202d318010200000000000000000101010000000001ffffffffffffffffffffff7f01010800000002000000ffffff7f01010000000001ffffffff"
+
+func TestHeadWalDecoder_DecodeToDataStorageOverBudgetSegment(t *testing.T) {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+	segment, err := hex.DecodeString(overBudgetHeadWalSegment)
+	require.NoError(t, err)
+
+	// Act
+	_, _, err = decoder.DecodeToDataStorage(segment, dataStorage)
+
+	// Assert
+	require.ErrorContains(t, err, "can be read")
+}
+
+// tooLargeBlockHeadWalSegment is the LZ4 frame header of a V3 segment followed by a stored block of 5 MiB, larger
+// than any LZ4 block.
+const tooLargeBlockHeadWalSegment = "04224d184040c0" + "00005080" + "0000000000000000"
+
+func TestHeadWalDecoder_DecodeToDataStorageTooLargeLZ4Block(t *testing.T) {
+	// Arrange
+	dataStorage := cppbridge.NewDataStorage(false, false)
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion())
+	segment, err := hex.DecodeString(tooLargeBlockHeadWalSegment)
+	require.NoError(t, err)
+
+	// Act
+	_, _, err = decoder.DecodeToDataStorage(segment, dataStorage)
+
+	// Assert
+	require.ErrorContains(t, err, "LZ4 data block size")
+}
