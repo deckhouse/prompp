@@ -53,7 +53,7 @@ func (s *DefaultOptimizationGateSuite) TestCrossSeriesWithNonPositiveScrapeInter
 		Name: "job", Value: "test", MatcherType: model.MatcherTypeExactMatch,
 	}})
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
-	result := lss.CreateLabelSetSnapshot().Query(selector)
+	result := lss.CreateLabelSetSnapshot().Query(selector, true)
 	s.T().Cleanup(result.Close)
 	s.Require().Equal(querier.DefaultCountOfSeriesToOptimize+3, result.Len())
 	results := []*cppbridge.LSSQueryResult{result}

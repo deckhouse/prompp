@@ -142,7 +142,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 
 	stats := &resources.stats
 	poolProvider := resources.pool
-	err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, &resources)
+	err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, true, &resources)
 	if err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)

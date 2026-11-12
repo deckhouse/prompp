@@ -77,7 +77,7 @@ func (s *AggrSeriesSetSuite) query(
 		return &querier.AggrSeriesSet{}
 	}
 
-	lssQueryResult := snapshot.Query(selector)
+	lssQueryResult := snapshot.Query(selector, true)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.AggrSeriesSet{}
 	}
