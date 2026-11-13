@@ -76,6 +76,8 @@ const (
 	operationChunkLabelNames
 	// operationChunkLabelValues identifies [ChunkQuerier.LabelValues].
 	operationChunkLabelValues
+	// operationSeriesCount identifies [Querier.SeriesCount].
+	operationSeriesCount
 	// operationCount sizes the per-operation recorder arrays and is not a query operation.
 	operationCount
 )
@@ -119,6 +121,7 @@ var operationNames = [operationCount]string{
 	operationSelectChunks:     "select_chunks",
 	operationChunkLabelNames:  "chunk_label_names",
 	operationChunkLabelValues: "chunk_label_values",
+	operationSeriesCount:      "series_count",
 }
 
 // queryOperation indexes the fixed set of instrumented query operations.
@@ -170,7 +173,8 @@ func newQueryRecorders(r prometheus.Registerer, source string, operation queryOp
 	stages := metadataStageNames[:]
 	shardStages := metadataShardStageNames[:]
 
-	if operation == operationSelectInstant || operation == operationSelectRange || operation == operationSelectChunks {
+	if operation == operationSelectInstant || operation == operationSelectRange || operation == operationSelectChunks ||
+		operation == operationSeriesCount {
 		stages = stageNames[:]
 		shardStages = shardStageNames[:]
 	}
