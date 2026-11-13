@@ -1,19 +1,41 @@
 package cppbridge
 
 // #cgo CFLAGS: -I.
-// #cgo LDFLAGS: -L.
-// #cgo asan LDFLAGS: -fsanitize=address
 // #cgo asan CFLAGS: -fsanitize=address
-// #cgo arm64,!asan,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
-// #cgo arm64,!asan,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
-// #cgo arm64,asan,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
-// #cgo arm64,asan,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo amd64,!asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt.a -l:amd64_k8_entrypoint_aio_prefixed_opt.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt.a -l:amd64_haswell_entrypoint_aio_prefixed_opt.a
-// #cgo amd64,!asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
-// #cgo amd64,asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
-// #cgo amd64,asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++exp
-// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
+// #cgo LDFLAGS: -L${SRCDIR}
+// #cgo asan LDFLAGS: -fsanitize=address
+// #cgo arm64,!asan,!dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_opt.a
+// #cgo arm64,!asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!asan,dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_dbg.a
+// #cgo arm64,!asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,!asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,asan,!dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_opt_asan.a
+// #cgo arm64,asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_dbg_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_opt.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_dbg.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_opt_asan.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_dbg_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -Wl,--push-state -Wl,-Bstatic -lunwind
+// #cgo !static LDFLAGS: -Wl,--pop-state -llzma -lstdc++exp
+// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++
+// #cgo static LDFLAGS: -lstdc++ -lm -lgcc_eh -lunwind -llzma -lstdc++exp
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 
