@@ -52,7 +52,7 @@ jobs:
           echo "Tagging ${TAG} as latest"
 
       - name: Login to registry
-        uses: docker/login-action@v2.1.0
+        uses: docker/login-action@v2.2.0
         with:
           username: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
           password: ${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}
