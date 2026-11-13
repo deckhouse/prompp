@@ -28,7 +28,7 @@ class PostingsWriter {
   // resume with another call while has_more_data() is true. The byte bound is checked only between
   // whole postings: the all-series posting and hot label values are atomic and can overshoot it.
   void write_postings(uint32_t max_batch_size = kUnlimitedBatchSize) {
-    auto const is_batch_filled = [this, max_batch_size] PROMPP_LAMBDA_INLINE { return writer_.size() >= max_batch_size; };
+    auto const is_batch_filled = [this, max_batch_size] PROMPP(lambda_inline) { return writer_.size() >= max_batch_size; };
 
     if (entries_ == 0) [[unlikely]] {
       write_posting_with_all_series();
@@ -58,7 +58,7 @@ class PostingsWriter {
     });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return trie_index_iterator_ != lss_.trie_index().end(); }
+  [[nodiscard]] PROMPP(inline) bool has_more_data() const noexcept { return trie_index_iterator_ != lss_.trie_index().end(); }
 
  private:
   const Lss& lss_;
@@ -146,7 +146,7 @@ class PostingsWriter {
     std::ranges::sort(series_reference_list_);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& get_series_ids_sequence(uint32_t name_id, uint32_t value_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence& get_series_ids_sequence(uint32_t name_id, uint32_t value_id) const noexcept {
     const auto* series_id_sequence = lss_.reverse_index().get(name_id, value_id);
     assert(series_id_sequence != nullptr);
     return *series_id_sequence;

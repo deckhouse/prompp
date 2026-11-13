@@ -3,7 +3,7 @@
 #include "bare_bones/jemalloc.h"
 #include "metrics_page.h"
 
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
 
 namespace metrics {
 
@@ -20,4 +20,4 @@ struct JemallocMetrics final : MetricsPage<JemallocMetrics> {
 
 }  // namespace metrics
 
-#endif  // JEMALLOC_AVAILABLE
+#endif  // PROMPP(feature, jemalloc)

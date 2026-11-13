@@ -33,7 +33,7 @@ class Unloader {
     unloaded_chunks_.clear();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) Storage& storage() noexcept { return storage_; }
 
  private:
   struct ChunkSize {

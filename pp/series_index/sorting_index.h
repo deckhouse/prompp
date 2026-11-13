@@ -20,24 +20,24 @@ struct SortingIndex {
     requires(kIsReadOnly)
   explicit SortingIndex(const SortingIndex<OtherVector>& other) : index(other.index) {}
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept
+  PROMPP(inline) void clear() noexcept
     requires(!kIsReadOnly)
   {
     index = Vector<uint32_t>{};
   }
 
   template <class Iterator>
-  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) const noexcept {
-    std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return index[a] < index[b]; });
+  PROMPP(inline) void sort(Iterator begin, Iterator end) const noexcept {
+    std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP(lambda_inline) { return index[a] < index[b]; });
   }
 
   template <class Container>
-  PROMPP_ALWAYS_INLINE void sort(Container& container) const noexcept {
+  PROMPP(inline) void sort(Container& container) const noexcept {
     sort(container.begin(), container.end());
   }
 
-  PROMPP_ALWAYS_INLINE auto get_comparator() const noexcept {
-    return [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return index[a] < index[b]; };
+  PROMPP(inline) auto get_comparator() const noexcept {
+    return [this](uint32_t a, uint32_t b) PROMPP(lambda_inline) { return index[a] < index[b]; };
   }
 
   Vector<uint32_t> index;
@@ -50,17 +50,17 @@ class SortingIndexBuilder {
 
   explicit SortingIndexBuilder(const Set& ls_id_set) : ls_id_set_(ls_id_set) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return index_.index.empty(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return index_.index.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return index_.index.empty(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return index_.index.allocated_memory(); }
 
-  PROMPP_ALWAYS_INLINE void build(uint32_t ls_id_bound) {
+  PROMPP(inline) void build(uint32_t ls_id_bound) {
     if (empty()) {
       rebuild(ls_id_bound);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void rebuild(uint32_t ls_id_bound) {
-    // A snapshot can share the current buffer, so the index is always rebuilt in a new one
+  PROMPP(inline) void rebuild(uint32_t ls_id_bound) {
+    // A snapshot can share the current buffer. Rebuild the index in a new buffer.
     index_.clear();
     if (ls_id_set_.empty()) {
       return;
@@ -78,7 +78,7 @@ class SortingIndexBuilder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
+  PROMPP(inline) void update(typename Set::const_iterator ls_id_iterator) {
     if (empty()) {
       return;
     }
@@ -96,18 +96,18 @@ class SortingIndexBuilder {
   }
 
   template <class Iterator>
-  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end, uint32_t ls_id_bound) noexcept {
+  PROMPP(inline) void sort(Iterator begin, Iterator end, uint32_t ls_id_bound) noexcept {
     build(ls_id_bound);
     index_.sort(begin, end);
   }
 
-  PROMPP_ALWAYS_INLINE const Index& index() const noexcept { return index_; }
+  PROMPP(inline) const Index& index() const noexcept { return index_; }
 
  private:
   const Set& ls_id_set_;
   Index index_;
 
-  PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
+  PROMPP(inline) uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {
       return index_.index[static_cast<uint32_t>(*--ls_id_iterator)];
     }
@@ -115,7 +115,7 @@ class SortingIndexBuilder {
     return 0;
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t get_next(typename Set::const_iterator ls_id_iterator) const noexcept {
+  PROMPP(inline) uint32_t get_next(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (++ls_id_iterator != ls_id_set_.end()) {
       return index_.index[static_cast<uint32_t>(*ls_id_iterator)];
     }

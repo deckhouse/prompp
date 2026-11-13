@@ -113,8 +113,8 @@ class SeriesReverseIndexFixture : public testing::Test {
     uint32_t label_name_id;
     uint32_t label_value_id;
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return label_name_id; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return label_value_id; }
+    [[nodiscard]] PROMPP(inline) uint32_t name_id() const noexcept { return label_name_id; }
+    [[nodiscard]] PROMPP(inline) uint32_t value_id() const noexcept { return label_value_id; }
   };
 
   SeriesReverseIndex index_;

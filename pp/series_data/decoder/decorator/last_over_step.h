@@ -8,7 +8,7 @@ class LastOverStep {
  public:
   explicit LastOverStep(encoder::Sample& sample, const PromPP::Primitives::TimeInterval& interval) : sample_(sample), interval_(interval) {}
 
-  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp, double value) noexcept {
+  PROMPP(inline) void operator()(PromPP::Primitives::Timestamp, double value) noexcept {
     sample_.value = value;
     has_value_ = true;
   }

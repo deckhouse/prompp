@@ -18,11 +18,11 @@ enum class ValueType : uint8_t {
 };
 
 template <class DeltaType>
-class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
+class PROMPP(packed) ZigZagTimestampEncoder
     : public BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<BareBones::Encoding::Gorilla::TimestampEncoderState<DeltaType>, kDodSignificantLengths> {
  public:
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_delta_of_delta_with_stale_nan(double timestamp, BitSequence& stream) {
+  PROMPP(inline) void encode_delta_of_delta_with_stale_nan(double timestamp, BitSequence& stream) {
     if (BareBones::Encoding::Gorilla::isstalenan(timestamp)) [[unlikely]] {
       stream.push_back_bits_u32(kStaleNanMarkBits, kStaleNanMark);
     } else {
@@ -39,7 +39,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE static void encode_delta_of_delta_with_stale_nan(uint64_t ts_dod_zigzag, BitSequence& stream) {
+  static PROMPP(inline) void encode_delta_of_delta_with_stale_nan(uint64_t ts_dod_zigzag, BitSequence& stream) {
     if (ts_dod_zigzag == 0) {
       stream.push_back_single_zero_bit();
     } else {
@@ -59,16 +59,16 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE static void write_switch_to_values_gorilla_mark(BitSequence& stream) {
+  static PROMPP(inline) void write_switch_to_values_gorilla_mark(BitSequence& stream) {
     stream.push_back_bits_u32(kSwitchToValuesGorillaMarkBits, kSwitchToValuesGorillaMark);
   }
 };
 
-class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encoding::Gorilla::ZigZagTimestampDecoder<kDodSignificantLengths> {
+class PROMPP(packed) ZigZagTimestampDecoder : public BareBones::Encoding::Gorilla::ZigZagTimestampDecoder<kDodSignificantLengths> {
  public:
   using BareBones::Encoding::Gorilla::ZigZagTimestampDecoder<kDodSignificantLengths>::decode;
 
-  PROMPP_ALWAYS_INLINE ValueType decode_delta_of_delta_with_stale_nan(BareBones::BitSequenceReader& reader) {
+  PROMPP(inline) ValueType decode_delta_of_delta_with_stale_nan(BareBones::BitSequenceReader& reader) {
     if (const uint32_t buf = reader.read_u32(); buf & 0b1) {
       uint64_t dod_zigzag;
 

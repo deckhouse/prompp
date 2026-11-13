@@ -18,7 +18,7 @@ class HeartbeatMetricsInserter {
 
   explicit HeartbeatMetricsInserter(const Data& data) : data_(data) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool need_insert_metrics() const noexcept { return !data_.hostname.empty(); }
+  [[nodiscard]] PROMPP(inline) bool need_insert_metrics() const noexcept { return !data_.hostname.empty(); }
 
   template <class TimeseriesInserter>
   void insert(std::chrono::system_clock::time_point now, std::chrono::nanoseconds sent_at, TimeseriesInserter&& insert_timeseries) {
@@ -40,10 +40,10 @@ class HeartbeatMetricsInserter {
   const Data data_;
   Primitives::TimeseriesSemiview timeseries_;
 
-  PROMPP_ALWAYS_INLINE Primitives::TimeseriesSemiview& create_timeseries(std::string_view name,
-                                                                         std::string_view job,
-                                                                         std::chrono::milliseconds timestamp,
-                                                                         std::chrono::nanoseconds value) {
+  PROMPP(inline) Primitives::TimeseriesSemiview& create_timeseries(std::string_view name,
+                                                                            std::string_view job,
+                                                                            std::chrono::milliseconds timestamp,
+                                                                            std::chrono::nanoseconds value) {
     timeseries_.clear();
 
     timeseries_.label_set().add(std::initializer_list<Primitives::LabelView>{

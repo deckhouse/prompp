@@ -19,9 +19,9 @@ class ValueOnHeap {
     value_ = nullptr;
   }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const uint32_t value) const noexcept { return value == *value_; }
+  PROMPP(inline) bool operator==(const uint32_t value) const noexcept { return value == *value_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return sizeof(T); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return sizeof(T); }
 
  private:
   const T* value_;

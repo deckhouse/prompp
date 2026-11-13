@@ -8,7 +8,7 @@ class LastOverTime {
  public:
   explicit LastOverTime(encoder::Sample& sample, const PromPP::Primitives::TimeInterval&) : sample_(sample) {}
 
-  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
+  PROMPP(inline) void operator()(PromPP::Primitives::Timestamp timestamp, double value) const noexcept {
     sample_.value = value;
     sample_.timestamp = timestamp;
   }

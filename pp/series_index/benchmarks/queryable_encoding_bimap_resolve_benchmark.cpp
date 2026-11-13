@@ -116,17 +116,17 @@ static void run_resolve_loop(const Lss& lss, benchmark::State& state) {
 }
 
 void ResolveNoShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   run_resolve_loop(get_lss_no_shrink(), state);
 }
 
 void ResolveAfterShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   run_resolve_loop(get_lss_after_shrink(), state);
 }
 
 void ResolveFixedState(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   run_resolve_loop(get_lss_fixed_state(), state);
 }
 

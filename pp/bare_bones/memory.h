@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "allocator.h"
+#include "preprocess.h"
 #include "type_traits.h"
 
 namespace BareBones {
@@ -14,7 +15,7 @@ class PreAllocationSizeCalculator {
  public:
   static constexpr size_t kMinAllocationSize = 32;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t calculate(SizeType needed_size) noexcept {
+  [[nodiscard]] static PROMPP(inline) uint32_t calculate(SizeType needed_size) noexcept {
     if (needed_size > std::numeric_limits<uint32_t>::max()) [[unlikely]] {
       std::abort();
     }
@@ -46,15 +47,15 @@ class GenericMemory {
   using iterator = T*;
   using const_iterator = const T*;
 
-  PROMPP_ALWAYS_INLINE void resize_to_fit_at_least(SizeType needed_size) noexcept { derived()->resize(get_allocation_size(needed_size)); }
+  PROMPP(inline) void resize_to_fit_at_least(SizeType needed_size) noexcept { derived()->resize(get_allocation_size(needed_size)); }
 
-  PROMPP_ALWAYS_INLINE void grow_to_fit_at_least(SizeType needed_size) noexcept {
+  PROMPP(inline) void grow_to_fit_at_least(SizeType needed_size) noexcept {
     if (needed_size > size()) {
       resize_to_fit_at_least(needed_size);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void grow_to_fit_at_least_and_fill_with_zeros(SizeType needed_size) noexcept {
+  PROMPP(inline) void grow_to_fit_at_least_and_fill_with_zeros(SizeType needed_size) noexcept {
     if (needed_size > size()) {
       const auto old_size = size();
       resize_to_fit_at_least(needed_size);
@@ -62,23 +63,23 @@ class GenericMemory {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return derived()->get_size(); }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return size() == 0; }
+  [[nodiscard]] PROMPP(inline) SizeType size() const noexcept { return derived()->get_size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* begin() const noexcept { return derived()->data(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T* begin() noexcept { return derived()->data(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return derived()->data() + size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T* end() noexcept { return derived()->data() + size(); }
-
-  // NOLINTNEXTLINE(google-explicit-constructor)
-  [[nodiscard]] PROMPP_ALWAYS_INLINE operator const T*() const noexcept { return begin(); }
+  [[nodiscard]] PROMPP(inline) const T* begin() const noexcept { return derived()->data(); }
+  [[nodiscard]] PROMPP(inline) T* begin() noexcept { return derived()->data(); }
+  [[nodiscard]] PROMPP(inline) const T* end() const noexcept { return derived()->data() + size(); }
+  [[nodiscard]] PROMPP(inline) T* end() noexcept { return derived()->data() + size(); }
 
   // NOLINTNEXTLINE(google-explicit-constructor)
-  [[nodiscard]] PROMPP_ALWAYS_INLINE operator T*() noexcept { return begin(); }
+  [[nodiscard]] PROMPP(inline) operator const T*() const noexcept { return begin(); }
+
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  [[nodiscard]] PROMPP(inline) operator T*() noexcept { return begin(); }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static SizeType get_allocation_size(SizeType needed_size) noexcept {
-    if constexpr (kIsUnitTestBuild || kIsBuildWithAsan) {
+  [[nodiscard]] static PROMPP(inline) SizeType get_allocation_size(SizeType needed_size) noexcept {
+    if constexpr (PROMPP(test) || PROMPP(asan)) {
       // In unit tests or in build with asan we allocate only needed_size bytes. It helps us to debug memory access errors
       return needed_size;
     } else {
@@ -86,8 +87,8 @@ class GenericMemory {
     }
   }
 
-  PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
-  PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
+  PROMPP(inline) Derived* derived() noexcept { return static_cast<Derived*>(this); }
+  PROMPP(inline) const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
 template <template <class> class ControlBlock, class T>
@@ -121,12 +122,12 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
  public:
   using SizeType = typename ControlBlock<T>::SizeType;
 
-  PROMPP_ALWAYS_INLINE Memory() noexcept = default;
-  PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
-  PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
-  PROMPP_ALWAYS_INLINE ~Memory() noexcept { Reallocator::free(control_block_.data); }
+  PROMPP(inline) Memory() noexcept = default;
+  PROMPP(inline) Memory(const Memory& o) noexcept { copy(o); }
+  PROMPP(inline) Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
+  PROMPP(inline) ~Memory() noexcept { Reallocator::free(control_block_.data); }
 
-  PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
+  PROMPP(inline) Memory& operator=(const Memory& o) noexcept {
     if (this != &o) [[likely]] {
       copy(o);
     }
@@ -134,7 +135,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE Memory& operator=(Memory&& o) noexcept {
+  PROMPP(inline) Memory& operator=(Memory&& o) noexcept {
     if (this != &o) [[likely]] {
       Reallocator::free(control_block_.data);
       control_block_ = std::exchange(o.control_block_, {});
@@ -143,22 +144,22 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto& control_block() noexcept { return control_block_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& control_block() const noexcept { return control_block_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return control_block_.data_size * sizeof(T); }
+  [[nodiscard]] PROMPP(inline) auto& control_block() noexcept { return control_block_; }
+  [[nodiscard]] PROMPP(inline) const auto& control_block() const noexcept { return control_block_; }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return control_block_.data_size * sizeof(T); }
 
  protected:
   friend class GenericMemory<Memory, SizeType, T, Reallocator>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return control_block_.data_size; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return control_block_.data; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return control_block_.data; }
+  [[nodiscard]] PROMPP(inline) SizeType get_size() const noexcept { return control_block_.data_size; }
+  [[nodiscard]] PROMPP(inline) T* data() noexcept { return control_block_.data; }
+  [[nodiscard]] PROMPP(inline) const T* data() const noexcept { return control_block_.data; }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+  PROMPP(inline) void resize(SizeType new_size) noexcept {
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, class_memaccess)
     control_block_.data = static_cast<T*>(Reallocator::reallocate(control_block_.data, new_size * sizeof(T)));
-    PRAGMA_DIAGNOSTIC(pop)
+    PROMPP(diagnostic, pop)
 
     if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
       std::abort();
@@ -170,7 +171,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
  private:
   ControlBlock<T> control_block_;
 
-  PROMPP_ALWAYS_INLINE void copy(const Memory& o) noexcept {
+  PROMPP(inline) void copy(const Memory& o) noexcept {
     static_assert(IsTriviallyCopyable<T>::value, "it's not allowed to copy memory for non trivially copyable types");
 
     T* data = control_block_.data;
@@ -179,11 +180,11 @@ class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typena
 
     resize(control_block_.data_size);
 
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, class_memaccess)
     // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
     std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
+    PROMPP(diagnostic, pop)
   }
 };
 
@@ -206,12 +207,12 @@ class SharedPtrControlBlockWithItemCount {
   using ItemCounter = uint32_t;
   using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter items_count() const noexcept { return items_count_; }
-  PROMPP_ALWAYS_INLINE void set_items_count(ItemCounter count) noexcept { items_count_ = count; }
+  [[nodiscard]] PROMPP(inline) ItemCounter items_count() const noexcept { return items_count_; }
+  PROMPP(inline) void set_items_count(ItemCounter count) noexcept { items_count_ = count; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+  [[nodiscard]] PROMPP(inline) RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
 
  private:
   RefCounter ref_count_{1};
@@ -226,12 +227,12 @@ class AtomicSharedPtrControlBlockWithItemCount {
   using ItemCounter = uint32_t;
   using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter items_count() const noexcept { return items_count_.load(std::memory_order_acquire); }
-  PROMPP_ALWAYS_INLINE void set_items_count(ItemCounter count) noexcept { items_count_.store(count, std::memory_order_release); }
+  [[nodiscard]] PROMPP(inline) ItemCounter items_count() const noexcept { return items_count_.load(std::memory_order_acquire); }
+  PROMPP(inline) void set_items_count(ItemCounter count) noexcept { items_count_.store(count, std::memory_order_release); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+  [[nodiscard]] PROMPP(inline) RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
 
  private:
   RefCounter ref_count_{1};
@@ -246,12 +247,12 @@ class SharedPtrControlBlock {
   using ItemCounter = uint32_t;
   using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static ItemCounter items_count() noexcept { return 0; }
-  PROMPP_ALWAYS_INLINE static void set_items_count(ItemCounter) noexcept {}
+  [[nodiscard]] static PROMPP(inline) ItemCounter items_count() noexcept { return 0; }
+  static PROMPP(inline) void set_items_count(ItemCounter) noexcept {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+  [[nodiscard]] PROMPP(inline) RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
 
  private:
   RefCounter ref_count_{1};
@@ -270,16 +271,16 @@ class SharedPtr {
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
 
   SharedPtr() = default;
-  PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size, ControlBlock::ItemCounter items_count) : data_(nullptr) {
+  PROMPP(inline) SharedPtr(uint32_t size, ControlBlock::ItemCounter items_count) : data_(nullptr) {
     non_atomic_reallocate(size);
     set_items_count(items_count);
   }
-  PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
-  PROMPP_ALWAYS_INLINE SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
+  PROMPP(inline) SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
+  PROMPP(inline) SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
-  PROMPP_ALWAYS_INLINE ~SharedPtr() { dec_ref_counter(); }
+  PROMPP(inline) ~SharedPtr() { dec_ref_counter(); }
 
-  PROMPP_ALWAYS_INLINE SharedPtr& operator=(const SharedPtr& other) noexcept {
+  PROMPP(inline) SharedPtr& operator=(const SharedPtr& other) noexcept {
     if (this != &other) [[likely]] {
       dec_ref_counter();
       data_ = other.data_;
@@ -289,7 +290,7 @@ class SharedPtr {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE SharedPtr& operator=(SharedPtr&& other) noexcept {
+  PROMPP(inline) SharedPtr& operator=(SharedPtr&& other) noexcept {
     if (this != &other) [[likely]] {
       dec_ref_counter();
       data_ = std::exchange(other.data_, nullptr);
@@ -298,7 +299,7 @@ class SharedPtr {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE void reallocate(uint32_t old_size, uint32_t new_size) {
+  PROMPP(inline) void reallocate(uint32_t old_size, uint32_t new_size) {
     if (non_atomic_is_unique()) [[likely]] {
       non_atomic_reallocate(new_size);
     } else {
@@ -308,17 +309,17 @@ class SharedPtr {
       non_atomic_reallocate(new_size);
       set_items_count(old.items_count());
       if (old_size > 0) [[likely]] {
-        PRAGMA_DIAGNOSTIC(push)
-        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_STRINGOP_OVERREAD)
-        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_ARRAY_BOUNDS)
+        PROMPP(diagnostic, push)
+        PROMPP(diagnostic, ignore, class_memaccess)
+        PROMPP(diagnostic, ignore, stringop_overread)
+        PROMPP(diagnostic, ignore, array_bounds)
         std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
-        PRAGMA_DIAGNOSTIC(pop)
+        PROMPP(diagnostic, pop)
       }
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock::RefCounter non_atomic_ref_count() const noexcept {
+  [[nodiscard]] PROMPP(inline) ControlBlock::RefCounter non_atomic_ref_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
       return block->ref_count();
     }
@@ -326,7 +327,7 @@ class SharedPtr {
     return 0;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool non_atomic_is_unique() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool non_atomic_is_unique() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
       return block->ref_count() == 1;
     }
@@ -334,7 +335,7 @@ class SharedPtr {
     return true;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock::ItemCounter items_count() const noexcept {
+  [[nodiscard]] PROMPP(inline) ControlBlock::ItemCounter items_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
       return block->items_count();
     }
@@ -342,15 +343,15 @@ class SharedPtr {
     return 0;
   }
 
-  PROMPP_ALWAYS_INLINE void set_items_count(ControlBlock::ItemCounter count) noexcept {
+  PROMPP(inline) void set_items_count(ControlBlock::ItemCounter count) noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
       block->set_items_count(count);
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T* get() const noexcept { return data_; }
+  [[nodiscard]] PROMPP(inline) T* get() const noexcept { return data_; }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     dec_ref_counter();
     data_ = nullptr;
   }
@@ -358,11 +359,11 @@ class SharedPtr {
  private:
   T* data_{nullptr};
 
-  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+  PROMPP(inline) void non_atomic_reallocate(uint32_t size) noexcept {
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, class_memaccess)
     auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
-    PRAGMA_DIAGNOSTIC(pop)
+    PROMPP(diagnostic, pop)
 
     if (control_block == nullptr) [[unlikely]] {
       std::abort();
@@ -375,13 +376,13 @@ class SharedPtr {
     data_ = reinterpret_cast<T*>(control_block + 1);
   }
 
-  PROMPP_ALWAYS_INLINE void inc_ref_counter() noexcept {
+  PROMPP(inline) void inc_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
       ++block->atomic_ref_count();
     }
   }
 
-  PROMPP_ALWAYS_INLINE void dec_ref_counter() noexcept {
+  PROMPP(inline) void dec_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
       if (block->ref_count() == 1) [[likely]] {
         destroy();
@@ -393,15 +394,15 @@ class SharedPtr {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void destroy() noexcept {
+  PROMPP(inline) void destroy() noexcept {
     Reallocator::free(raw_memory());
     data_ = nullptr;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock* control_block() noexcept { return static_cast<ControlBlock*>(raw_memory()); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const ControlBlock* control_block() const noexcept { return static_cast<ControlBlock*>(raw_memory()); }
+  [[nodiscard]] PROMPP(inline) ControlBlock* control_block() noexcept { return static_cast<ControlBlock*>(raw_memory()); }
+  [[nodiscard]] PROMPP(inline) const ControlBlock* control_block() const noexcept { return static_cast<ControlBlock*>(raw_memory()); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE void* raw_memory() const noexcept { return data_ == nullptr ? nullptr : reinterpret_cast<ControlBlock*>(data_) - 1; }
+  [[nodiscard]] PROMPP(inline) void* raw_memory() const noexcept { return data_ == nullptr ? nullptr : reinterpret_cast<ControlBlock*>(data_) - 1; }
 };
 
 template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
@@ -415,7 +416,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T, ControlBlockType, Real
   SharedMemory(SharedMemory&& other) noexcept : data_(std::move(other.data_)), size_(std::exchange(other.size_, 0)) {}
 
   SharedMemory& operator=(const SharedMemory&) = default;
-  PROMPP_ALWAYS_INLINE SharedMemory& operator=(SharedMemory&& other) noexcept {
+  PROMPP(inline) SharedMemory& operator=(SharedMemory&& other) noexcept {
     if (this != &other) [[likely]] {
       data_ = std::move(other.data_);
       size_ = std::exchange(other.size_, 0);
@@ -424,23 +425,23 @@ class SharedMemory : public GenericMemory<SharedMemory<T, ControlBlockType, Real
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr::ControlBlock::ItemCounter items_count() const noexcept { return data_.items_count(); }
-  PROMPP_ALWAYS_INLINE void set_items_count(SharedPtr::ControlBlock::ItemCounter count) noexcept { data_.set_items_count(count); }
+  [[nodiscard]] PROMPP(inline) SharedPtr::ControlBlock::ItemCounter items_count() const noexcept { return data_.items_count(); }
+  PROMPP(inline) void set_items_count(SharedPtr::ControlBlock::ItemCounter count) noexcept { data_.set_items_count(count); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
     return size_ * sizeof(T) + (data_.get() != nullptr ? sizeof(SharedPtr::kControlBlockSize) : 0);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedPtr& ptr() const noexcept { return data_; }
+  [[nodiscard]] PROMPP(inline) const SharedPtr& ptr() const noexcept { return data_; }
 
  protected:
   friend class GenericMemory<SharedMemory, SizeType, T>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return size_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return data_.get(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_.get(); }
+  [[nodiscard]] PROMPP(inline) SizeType get_size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP(inline) T* data() noexcept { return data_.get(); }
+  [[nodiscard]] PROMPP(inline) const T* data() const noexcept { return data_.get(); }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
+  PROMPP(inline) void resize(SizeType new_size) noexcept {
     data_.reallocate(size_, new_size);
     size_ = new_size;
   }

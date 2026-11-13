@@ -52,7 +52,7 @@ TEST_P(LabelNamesQuerierFixture, TestQuery) {
   std::vector<std::string_view> names;
 
   // Act
-  const auto status = querier_.query(GetParam().label_matchers, [&names](std::string_view name) PROMPP_LAMBDA_INLINE { names.emplace_back(name); });
+  const auto status = querier_.query(GetParam().label_matchers, [&names](std::string_view name) PROMPP(lambda_inline) { names.emplace_back(name); });
 
   // Assert
   EXPECT_EQ(GetParam().expected_status, status);

@@ -21,7 +21,7 @@ template <BareBones::ReallocatorInterface Reallocator>
 using CompactBitSequence = BareBones::CompactBitSequence<kAllocationSizesTable, Reallocator>;
 
 template <class Buffer>
-[[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader bit_sequence_reader(const Buffer& buffer) noexcept {
+[[nodiscard]] PROMPP(inline) BareBones::BitSequenceReader bit_sequence_reader(const Buffer& buffer) noexcept {
   BareBones::BitSequenceReader reader{reinterpret_cast<const uint8_t*>(buffer.data()), BareBones::Bit::to_bits(buffer.size())};
   reader.ff(BareBones::Bit::to_bits(sizeof(uint8_t)));
   return reader;
@@ -30,26 +30,26 @@ template <class Buffer>
 struct DoNotInitializeTag {};
 
 template <BareBones::ReallocatorInterface Reallocator>
-struct PROMPP_ATTRIBUTE_PACKED BitSequenceWithItemsCount {
+struct PROMPP(packed) BitSequenceWithItemsCount {
   CompactBitSequence<Reallocator> stream;
 
   BitSequenceWithItemsCount() { stream.push_back_bits_u32(BareBones::Bit::to_bits(sizeof(uint8_t)), 1U); }
   explicit BitSequenceWithItemsCount(DoNotInitializeTag) noexcept {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count() const noexcept { return *stream.raw_bytes(); }
-  PROMPP_ALWAYS_INLINE uint8_t inc_count() noexcept { return (*stream.raw_bytes())++; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return reader(stream); }
+  [[nodiscard]] PROMPP(inline) uint8_t count() const noexcept { return *stream.raw_bytes(); }
+  PROMPP(inline) uint8_t inc_count() noexcept { return (*stream.raw_bytes())++; }
+  [[nodiscard]] PROMPP(inline) BareBones::BitSequenceReader reader() const noexcept { return reader(stream); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::BitSequenceReader reader(const CompactBitSequence<Reallocator>& stream) noexcept {
+  [[nodiscard]] static PROMPP(inline) BareBones::BitSequenceReader reader(const CompactBitSequence<Reallocator>& stream) noexcept {
     return reader(stream.bytes());
   }
 
   template <class Buffer>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::BitSequenceReader reader(const Buffer& buffer) noexcept {
+  [[nodiscard]] static PROMPP(inline) BareBones::BitSequenceReader reader(const Buffer& buffer) noexcept {
     return bit_sequence_reader(buffer);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return stream.allocated_memory(); }
 };
 
 }  // namespace series_data::encoder

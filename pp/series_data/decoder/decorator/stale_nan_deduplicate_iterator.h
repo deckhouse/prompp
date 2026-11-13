@@ -12,17 +12,17 @@ class StaleNanDeduplicateIterator {
 
   StaleNanDeduplicateIterator(DecodeIterator&& iterator, DecodeIteratorSentinel&& end) : iterator_(std::move(iterator)), iterator_end_(std::move(end)) {}
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return *iterator_; }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.operator->(); }
+  PROMPP(inline) const encoder::Sample& operator*() const noexcept { return *iterator_; }
+  PROMPP(inline) const encoder::Sample* operator->() const noexcept { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == iterator_end_; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == iterator_end_; }
 
-  PROMPP_ALWAYS_INLINE StaleNanDeduplicateIterator& operator++() noexcept {
+  PROMPP(inline) StaleNanDeduplicateIterator& operator++() noexcept {
     advance_to_next_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE StaleNanDeduplicateIterator operator++(int) noexcept {
+  PROMPP(inline) StaleNanDeduplicateIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
@@ -32,7 +32,7 @@ class StaleNanDeduplicateIterator {
   DecodeIterator iterator_;
   [[no_unique_address]] DecodeIteratorSentinel iterator_end_;
 
-  PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
+  PROMPP(inline) void advance_to_next_sample() noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[unlikely]] {
       skip_stale_nans();
     } else {
@@ -40,7 +40,7 @@ class StaleNanDeduplicateIterator {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void skip_stale_nans() noexcept {
+  PROMPP(inline) void skip_stale_nans() noexcept {
     while (++iterator_ != iterator_end_) {
       if (!BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) {
         break;

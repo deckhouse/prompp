@@ -26,7 +26,7 @@ const DataStorage& get_data_storage_for_benchmark() {
 }
 
 void ChunkRecoder(benchmark::State& state, PromPP::Primitives::Timestamp downsampling) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& storage = get_data_storage_for_benchmark();
 
   const auto time_interval = series_data::Decoder::get_time_interval(storage);
@@ -47,9 +47,7 @@ void ChunkRecoder(benchmark::State& state, PromPP::Primitives::Timestamp downsam
   }
 }
 
-void ChunkRecoder(benchmark::State& state) {
-  ChunkRecoder(state, series_data::decoder::decorator::kNoDownsampling);
-}
+void ChunkRecoder(benchmark::State& state) { ChunkRecoder(state, series_data::decoder::decorator::kNoDownsampling); }
 
 void ChunkRecoderWithDownsampling(benchmark::State& state) {
   constexpr PromPP::Primitives::Timestamp kDownsampling5Minutes = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::minutes(5)).count();

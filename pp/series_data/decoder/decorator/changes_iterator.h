@@ -15,23 +15,23 @@ class ChangesIterator {
     seek_to_first_sample();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
-  PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
+  [[nodiscard]] PROMPP(inline) const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
+  PROMPP(inline) void set_interval(const PromPP::Primitives::TimeInterval& interval) {
     interval_ = interval;
     seek_to_first_sample();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
+  PROMPP(inline) const encoder::Sample& operator*() const { return iterator_.operator*(); }
+  PROMPP(inline) const encoder::Sample* operator->() const { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return iterator_->timestamp == kInvalidTimestamp; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const { return iterator_->timestamp == kInvalidTimestamp; }
 
-  PROMPP_ALWAYS_INLINE ChangesIterator& operator++() {
+  PROMPP(inline) ChangesIterator& operator++() {
     seek_to_next_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE ChangesIterator operator++(int) {
+  PROMPP(inline) ChangesIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;
@@ -61,7 +61,7 @@ class ChangesIterator {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
+  PROMPP(inline) void seek_to_next_sample() {
     bool has_changes{};
     double previous_value = iterator_->value;
 

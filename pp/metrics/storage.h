@@ -18,10 +18,10 @@ class Storage {
 
     explicit Iterator(const MetricsPageList& storage) : page_iterator_(storage.begin()), metric_iterator_(*page_iterator_) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return metric_iterator_.operator*(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator->() const noexcept { return metric_iterator_.operator->(); }
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return metric_iterator_.operator*(); }
+    [[nodiscard]] PROMPP(inline) value_type operator->() const noexcept { return metric_iterator_.operator->(); }
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       if (++metric_iterator_ == MetricsPageControlBlock::end()) [[likely]] {
         metric_iterator_ = MetricsPageControlBlock::Iterator(*++page_iterator_);
       }
@@ -29,24 +29,24 @@ class Storage {
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return page_iterator_ == MetricsPageList::end(); }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return page_iterator_ == MetricsPageList::end(); }
 
    private:
     MetricsPageList::Iterator page_iterator_;
     MetricsPageControlBlock::Iterator metric_iterator_;
   };
 
-  PROMPP_ALWAYS_INLINE void add(MetricsPageControlBlock* page) { page_list_.add(page); }
-  PROMPP_ALWAYS_INLINE void remove_unused_pages() { page_list_.remove_unused_pages(); }
+  PROMPP(inline) void add(MetricsPageControlBlock* page) { page_list_.add(page); }
+  PROMPP(inline) void remove_unused_pages() { page_list_.remove_unused_pages(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(page_list_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP(inline) Iterator begin() const noexcept { return Iterator(page_list_); }
+  [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
  private:
   MetricsPageList page_list_;

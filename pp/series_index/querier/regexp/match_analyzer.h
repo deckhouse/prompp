@@ -32,7 +32,7 @@ class RegexpMatchAnalyzer {
     return analyze_sub_regexp(regexp);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int skip_begin_text_anchor(re2::Regexp* regexp) noexcept {
+  [[nodiscard]] static PROMPP(inline) int skip_begin_text_anchor(re2::Regexp* regexp) noexcept {
     int i = 0;
     while (i < regexp->nsub() && regexp->sub()[i]->op() == re2::RegexpOp::kRegexpBeginText) {
       ++i;
@@ -41,7 +41,7 @@ class RegexpMatchAnalyzer {
     return i;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int skip_end_text_anchor(re2::Regexp* regexp, int start) noexcept {
+  [[nodiscard]] static PROMPP(inline) int skip_end_text_anchor(re2::Regexp* regexp, int start) noexcept {
     int i = regexp->nsub() - 1;
     while (i > start && regexp->sub()[i]->op() == re2::RegexpOp::kRegexpEndText) {
       --i;
@@ -50,7 +50,7 @@ class RegexpMatchAnalyzer {
   }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static re2::Regexp* get_significant_sub_regexp(re2::Regexp* regexp) noexcept {
+  [[nodiscard]] static PROMPP(inline) re2::Regexp* get_significant_sub_regexp(re2::Regexp* regexp) noexcept {
     if (const auto i = skip_begin_text_anchor(regexp); i == skip_end_text_anchor(regexp, i)) {
       // NOLINTNEXTLINE(clang-analyzer-security.ArrayBound)
       return regexp->sub()[i];
@@ -79,10 +79,10 @@ class RegexpMatchAnalyzer {
     return Status::kPartialMatch;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static bool is_anything_match(re2::Regexp* regexp) noexcept {
+  [[nodiscard]] static PROMPP(inline) bool is_anything_match(re2::Regexp* regexp) noexcept {
     return regexp->op() == re2::RegexpOp::kRegexpStar && regexp->sub()[0]->op() == re2::RegexpOp::kRegexpAnyChar;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static bool is_all_match(re2::Regexp* regexp) noexcept {
+  [[nodiscard]] static PROMPP(inline) bool is_all_match(re2::Regexp* regexp) noexcept {
     return regexp->op() == re2::RegexpOp::kRegexpPlus && regexp->sub()[0]->op() == re2::RegexpOp::kRegexpAnyChar;
   }
 

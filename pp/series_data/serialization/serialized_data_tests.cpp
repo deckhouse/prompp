@@ -31,7 +31,7 @@ class SerializerTrait {
   Encoder<> encoder_{storage_};
   DataSerializer<> serializer_{storage_};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
+  [[nodiscard]] static PROMPP(inline) SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
     EXPECT_EQ(series_id, data.next_series().first);
 
     SampleList result;
@@ -39,19 +39,19 @@ class SerializerTrait {
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_chunk_by_id(const SerializedDataView& data, uint32_t series_chunk_id) {
+  [[nodiscard]] static PROMPP(inline) SampleList decode_chunk_by_id(const SerializedDataView& data, uint32_t series_chunk_id) {
     SampleList result;
     std::ranges::copy(data.create_series_iterator(series_chunk_id), DecodeIteratorSentinel{}, std::back_insert_iterator(result));
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SerializedData serialize(const QueriedChunkList& queried_chunks) noexcept {
+  [[nodiscard]] PROMPP(inline) SerializedData serialize(const QueriedChunkList& queried_chunks) noexcept {
     auto data = serializer_.serialize(queried_chunks);
     storage_.reset();
     return data;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SerializedData serialize() noexcept {
+  [[nodiscard]] PROMPP(inline) SerializedData serialize() noexcept {
     auto data = serializer_.serialize();
     storage_.reset();
     return data;

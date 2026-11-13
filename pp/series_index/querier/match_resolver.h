@@ -19,13 +19,13 @@ concept MatchResolverInterface = requires(const Resolver resolver) {
 
 class ValueMatchIdResolver {
  public:
-  PROMPP_ALWAYS_INLINE static uint32_t operator()(uint32_t id) noexcept { return id; }
+  static PROMPP(inline) uint32_t operator()(uint32_t id) noexcept { return id; }
 };
 
 class MatchIdResolver {
  public:
-  PROMPP_ALWAYS_INLINE static uint32_t resolve_name(uint32_t id) noexcept { return id; }
-  PROMPP_ALWAYS_INLINE static ValueMatchIdResolver value_resolver(uint32_t) noexcept { return {}; }
+  static PROMPP(inline) uint32_t resolve_name(uint32_t id) noexcept { return id; }
+  static PROMPP(inline) ValueMatchIdResolver value_resolver(uint32_t) noexcept { return {}; }
 };
 
 static_assert(ValueMatchResolverInterface<ValueMatchIdResolver>);

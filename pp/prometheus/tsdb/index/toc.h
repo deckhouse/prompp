@@ -5,7 +5,7 @@
 
 namespace PromPP::Prometheus::tsdb::index {
 
-struct PROMPP_ATTRIBUTE_PACKED Toc {
+struct PROMPP(packed) Toc {
   using Reference = uint64_t;
 
   Reference symbols{};

@@ -22,7 +22,7 @@ struct StepRangeWindowCalculator {
   using Timestamp = PromPP::Primitives::Timestamp;
   using TimeInterval = PromPP::Primitives::TimeInterval;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static TimeInterval initial_window(const WindowFunctionParameters& parameters) noexcept {
+  [[nodiscard]] static PROMPP(inline) TimeInterval initial_window(const WindowFunctionParameters& parameters) noexcept {
     TimeInterval result{.min = parameters.interval.min + 1};
 
     if (parameters.step == 0) {
@@ -36,7 +36,8 @@ struct StepRangeWindowCalculator {
     return result;
   }
 
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE TimeInterval next_window(const TimeInterval& current_window, const WindowFunctionParameters& parameters) noexcept {
+  [[nodiscard]] static PROMPP(inline) TimeInterval next_window(const TimeInterval& current_window,
+                                                                       const WindowFunctionParameters& parameters) noexcept {
     TimeInterval interval{};
     if (has_gap_between_windows(parameters)) {
       interval.min = current_window.min + parameters.step;
@@ -51,7 +52,7 @@ struct StepRangeWindowCalculator {
   }
 
  private:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static Timestamp next_interval_boundary(Timestamp start, const WindowFunctionParameters& parameters) noexcept {
+  [[nodiscard]] static PROMPP(inline) Timestamp next_interval_boundary(Timestamp start, const WindowFunctionParameters& parameters) noexcept {
     if (parameters.step != 0 && (parameters.range % parameters.step) == 0) {
       return start + parameters.step;
     }
@@ -65,16 +66,16 @@ struct StepRangeWindowCalculator {
     return std::min(next_aligned_boundary(start, eval_start, parameters.step), next_aligned_boundary(start, eval_start - remainder, parameters.step));
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static bool has_gap_between_windows(const WindowFunctionParameters& parameters) noexcept {
+  [[nodiscard]] static PROMPP(inline) bool has_gap_between_windows(const WindowFunctionParameters& parameters) noexcept {
     return parameters.range > 0 && parameters.range < parameters.step;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static Timestamp next_aligned_boundary(Timestamp start, Timestamp anchor, Timestamp step) noexcept {
+  [[nodiscard]] static PROMPP(inline) Timestamp next_aligned_boundary(Timestamp start, Timestamp anchor, Timestamp step) noexcept {
     const auto quotient = floor_div(start - anchor, step) + 1;
     return anchor + quotient * step;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static Timestamp floor_div(Timestamp numerator, Timestamp denominator) noexcept {
+  [[nodiscard]] static PROMPP(inline) Timestamp floor_div(Timestamp numerator, Timestamp denominator) noexcept {
     auto quotient = numerator / denominator;
     if (numerator % denominator < 0) {
       --quotient;
@@ -90,11 +91,12 @@ struct StepLookbackDeltaWindowCalculator {
   using Timestamp = PromPP::Primitives::Timestamp;
   using TimeInterval = PromPP::Primitives::TimeInterval;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static TimeInterval initial_window(const WindowFunctionParameters& parameters) noexcept {
+  [[nodiscard]] static PROMPP(inline) TimeInterval initial_window(const WindowFunctionParameters& parameters) noexcept {
     return {.min = parameters.interval.min + 1, .max = std::min(parameters.interval.min + parameters.lookback_delta, parameters.interval.max)};
   }
 
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE TimeInterval next_window(const TimeInterval& current_window, const WindowFunctionParameters& parameters) noexcept {
+  [[nodiscard]] static PROMPP(inline) TimeInterval next_window(const TimeInterval& current_window,
+                                                                       const WindowFunctionParameters& parameters) noexcept {
     return {.min = current_window.max + 1, .max = std::min(current_window.max + parameters.step, parameters.interval.max)};
   }
 };

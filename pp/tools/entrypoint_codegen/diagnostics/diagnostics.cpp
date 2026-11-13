@@ -4,25 +4,15 @@
 
 namespace epgen::diagnostics {
 
-bool SeverityCounts::has_errors() const noexcept {
-  return errors != 0;
-}
+bool SeverityCounts::has_errors() const noexcept { return errors != 0; }
 
-void DiagnosticSet::add(Diagnostic diagnostic) {
-  diagnostics_.push_back(std::move(diagnostic));
-}
+void DiagnosticSet::add(Diagnostic diagnostic) { diagnostics_.push_back(std::move(diagnostic)); }
 
-std::span<const Diagnostic> DiagnosticSet::diagnostics() const noexcept {
-  return diagnostics_;
-}
+std::span<const Diagnostic> DiagnosticSet::diagnostics() const noexcept { return diagnostics_; }
 
-uint32_t DiagnosticSet::count() const noexcept {
-  return static_cast<uint32_t>(diagnostics_.size());
-}
+uint32_t DiagnosticSet::count() const noexcept { return static_cast<uint32_t>(diagnostics_.size()); }
 
-bool DiagnosticSet::empty() const noexcept {
-  return diagnostics_.empty();
-}
+bool DiagnosticSet::empty() const noexcept { return diagnostics_.empty(); }
 
 SeverityCounts count_by_severity(const DiagnosticSet& diagnostic_set) {
   SeverityCounts counts;

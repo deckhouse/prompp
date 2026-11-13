@@ -8,7 +8,7 @@ class SumOfElements {
  public:
   explicit SumOfElements(encoder::Sample& sum, const PromPP::Primitives::TimeInterval& interval) : sum_(sum), interval_(interval) {}
 
-  PROMPP_ALWAYS_INLINE void operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
+  PROMPP(inline) void operator()(PromPP::Primitives::Timestamp timestamp, double value) noexcept {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
       sum_.value = 0.0;
     }
@@ -32,7 +32,7 @@ class SumOfElements {
   const PromPP::Primitives::TimeInterval& interval_;
   double c_{};
 
-  PROMPP_ALWAYS_INLINE void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
+  PROMPP(inline) void kahan_sum_inc(double inc, double& sum, double& c) noexcept {
     const auto t = sum + inc;
     if (std::isinf(t)) {
       c = 0;

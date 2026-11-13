@@ -25,14 +25,14 @@ class MatchesMerger {
 
  private:
   [[no_unique_address]] struct IteratorGreaterByValue {
-    PROMPP_ALWAYS_INLINE bool operator()(const SeriesIdSequenceSnapshot::Iterator& lhs, const SeriesIdSequenceSnapshot::Iterator& rhs) const noexcept {
+    PROMPP(inline) bool operator()(const SeriesIdSequenceSnapshot::Iterator& lhs, const SeriesIdSequenceSnapshot::Iterator& rhs) const noexcept {
       return *lhs > *rhs;
     }
   } greater_;
 
   std::vector<SeriesIdSequenceSnapshot::Iterator> merge_iterators_;
 
-  PROMPP_ALWAYS_INLINE void make_heap(const Selector<SeriesIdSequenceSnapshot>::Matcher::Matches& matches) {
+  PROMPP(inline) void make_heap(const Selector<SeriesIdSequenceSnapshot>::Matcher::Matches& matches) {
     merge_iterators_.reserve(matches.size());
     for (const auto& label_value_match : matches) {
       if (!label_value_match.empty()) {
@@ -43,7 +43,7 @@ class MatchesMerger {
     std::ranges::make_heap(merge_iterators_, greater_);
   }
 
-  PROMPP_ALWAYS_INLINE const uint32_t* merge(uint32_t* memory) {
+  PROMPP(inline) const uint32_t* merge(uint32_t* memory) {
     uint32_t previous_series_id = PromPP::Primitives::kInvalidLabelSetID;
     while (!merge_iterators_.empty()) {
       if (const auto value = *merge_iterators_.front(); value != previous_series_id) {
@@ -62,7 +62,7 @@ class MatchesMerger {
     return memory;
   }
 
-  PROMPP_ALWAYS_INLINE void sift_down_root() noexcept {
+  PROMPP(inline) void sift_down_root() noexcept {
     const size_t size = merge_iterators_.size();
     for (size_t parent = 0;;) {
       size_t child = 2 * parent + 1;
@@ -87,7 +87,7 @@ class MatchesMerger {
 class SetIntersecter {
  public:
   template <class Set2>
-  PROMPP_ALWAYS_INLINE static SeriesIdSpan intersect(SeriesIdSpan set1, const Set2& set2) {
+  static PROMPP(inline) SeriesIdSpan intersect(SeriesIdSpan set1, const Set2& set2) {
     return {set1.begin(), std::ranges::set_intersection(set1, set2, set1.begin()).out};
   }
 };
@@ -95,7 +95,7 @@ class SetIntersecter {
 class SetSubstractor {
  public:
   template <class Set2>
-  PROMPP_ALWAYS_INLINE static SeriesIdSpan substract(SeriesIdSpan set1, const Set2& set2) {
+  static PROMPP(inline) SeriesIdSpan substract(SeriesIdSpan set1, const Set2& set2) {
     return {set1.begin(), std::ranges::set_difference(set1, set2, set1.begin()).out};
   }
 };

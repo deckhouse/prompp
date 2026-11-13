@@ -21,27 +21,27 @@ void group_series_by_label_names(const Lss& lss,
 
   class HashCalculator {
    public:
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored "-Wunused-local-typedefs")
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, unused_local_typedefs)
     using is_transparent = void;
-    PRAGMA_DIAGNOSTIC(pop)
+    PROMPP(diagnostic, pop)
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const SetItem& key) const noexcept { return BareBones::XXHash3::hash(std::span(key.values_ids)); }
+    [[nodiscard]] PROMPP(inline) size_t operator()(const SetItem& key) const noexcept { return BareBones::XXHash3::hash(std::span(key.values_ids)); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t operator()(const BareBones::Vector<uint32_t>& values_ids) const noexcept {
+    [[nodiscard]] PROMPP(inline) size_t operator()(const BareBones::Vector<uint32_t>& values_ids) const noexcept {
       return BareBones::XXHash3::hash(std::span(values_ids));
     }
   };
 
   class EqualTo {
    public:
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored "-Wunused-local-typedefs")
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, unused_local_typedefs)
     using is_transparent = void;
-    PRAGMA_DIAGNOSTIC(pop)
+    PROMPP(diagnostic, pop)
 
-    PROMPP_ALWAYS_INLINE bool operator()(const SetItem& a, const SetItem& b) const noexcept { return a.values_ids == b.values_ids; }
-    PROMPP_ALWAYS_INLINE bool operator()(const SetItem& a, const BareBones::Vector<uint32_t>& b) const noexcept { return a.values_ids == b; }
+    PROMPP(inline) bool operator()(const SetItem& a, const SetItem& b) const noexcept { return a.values_ids == b.values_ids; }
+    PROMPP(inline) bool operator()(const SetItem& a, const BareBones::Vector<uint32_t>& b) const noexcept { return a.values_ids == b; }
   };
 
   static constexpr auto kInvalidLabelValueId = std::numeric_limits<uint32_t>::max();

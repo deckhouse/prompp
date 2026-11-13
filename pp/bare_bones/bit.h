@@ -6,18 +6,19 @@
 #include <climits>
 #include <cstdint>
 
+#include "arch.h"
 #include "preprocess.h"
 
-#ifdef __x86_64__
-#include <x86intrin.h>
+#if PROMPP(arch, amd64)
+#  include <x86intrin.h>
 #endif
 
 namespace BareBones::Bit {
 
 static_assert(std::endian::native == std::endian::little, "big endian arch is not yet supported");
 
-PROMPP_ALWAYS_INLINE uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) noexcept {
-#ifdef __BMI__
+PROMPP(inline) uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) noexcept {
+#if PROMPP(isa, x86_bmi)
   return _bextr_u32(src, start, len);
 #else
   assert(start < 32);
@@ -26,8 +27,8 @@ PROMPP_ALWAYS_INLINE uint32_t bextr(uint32_t src, uint32_t start, uint32_t len) 
 #endif
 }
 
-PROMPP_ALWAYS_INLINE uint64_t bextr(uint64_t src, uint32_t start, uint32_t len) noexcept {
-#ifdef __BMI__
+PROMPP(inline) uint64_t bextr(uint64_t src, uint32_t start, uint32_t len) noexcept {
+#if PROMPP(isa, x86_bmi)
   return _bextr_u64(src, start, len);
 #else
   assert(start < 64);
@@ -49,12 +50,12 @@ PROMPP_ALWAYS_INLINE uint64_t bextr(uint64_t src, uint32_t start, uint32_t len) 
 constexpr uint8_t kByteBits = CHAR_BIT;
 
 template <class T>
-PROMPP_ALWAYS_INLINE constexpr T to_bits(T bytes) noexcept {
+PROMPP(inline) constexpr T to_bits(T bytes) noexcept {
   return bytes * kByteBits;
 }
 
 template <class T>
-PROMPP_ALWAYS_INLINE constexpr T to_bytes(T bits) noexcept {
+PROMPP(inline) constexpr T to_bytes(T bits) noexcept {
   return bits / kByteBits;
 }
 
@@ -84,7 +85,7 @@ constexpr T byte_width(T x) noexcept {
 }
 
 template <class T>
-PROMPP_ALWAYS_INLINE constexpr T be(T value) noexcept {
+PROMPP(inline) constexpr T be(T value) noexcept {
   if constexpr (std::endian::native == std::endian::little) {
     return std::byteswap(value);
   } else {
@@ -93,7 +94,7 @@ PROMPP_ALWAYS_INLINE constexpr T be(T value) noexcept {
 }
 
 template <class T>
-PROMPP_ALWAYS_INLINE constexpr T be_to_native(T value) noexcept {
+PROMPP(inline) constexpr T be_to_native(T value) noexcept {
   if constexpr (std::endian::native == std::endian::little) {
     return std::byteswap(value);
   } else {

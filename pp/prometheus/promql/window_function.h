@@ -60,9 +60,7 @@ constexpr std::array kFunctions = {
     Function{.name = "max", .type = FunctionType::kCrossSeriesSynthesizing},
 };
 
-constexpr uint32_t function_name_hash(std::string_view str) {
-  return FunctionNamesHash::hash(str.data(), str.length());
-}
+constexpr uint32_t function_name_hash(std::string_view str) { return FunctionNamesHash::hash(str.data(), str.length()); }
 
 [[nodiscard]] constexpr WindowFunction window_function_from_string(std::string_view name) noexcept {
   if (name.empty()) {

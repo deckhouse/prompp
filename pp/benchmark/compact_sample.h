@@ -12,11 +12,11 @@ namespace benchmark {
 inline const auto& get_compact_samples() {
   static PromPP::Primitives::Timestamp timestamp_offset;
 
-  class PROMPP_ATTRIBUTE_PACKED CompactSample {
+  class PROMPP(packed) CompactSample {
    public:
-    [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Sample::value_type value() const noexcept { return value_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp timestamp() const noexcept { return timestamp_ + timestamp_offset; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::LabelSetID series_id() const noexcept { return series_id_; }
+    [[nodiscard]] PROMPP(inline) PromPP::Primitives::Sample::value_type value() const noexcept { return value_; }
+    [[nodiscard]] PROMPP(inline) PromPP::Primitives::Timestamp timestamp() const noexcept { return timestamp_ + timestamp_offset; }
+    [[nodiscard]] PROMPP(inline) PromPP::Primitives::LabelSetID series_id() const noexcept { return series_id_; }
 
    private:
     PromPP::Primitives::Sample::value_type value_{};

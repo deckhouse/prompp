@@ -85,7 +85,7 @@ class AggregationIterator {
 #undef DEFINE_CONSTRUCTOR
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) const {
+  PROMPP(inline) decltype(auto) visit(Visitor&& visitor) const {
     switch (type_) {
       case Type::kSeries: {
         return std::forward<Visitor>(visitor)(iterator_.series);
@@ -142,24 +142,25 @@ class AggregationIterator {
   }
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) {
-    return const_cast<const AggregationIterator*>(this)->visit(
-        [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
+  PROMPP(inline) decltype(auto) visit(Visitor&& visitor) {
+    return const_cast<const AggregationIterator*>(this)->visit([&]<typename Iterator>(const Iterator& iterator) PROMPP(lambda_inline) {
+      return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator));
+    });
   }
 
-  PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample& operator*() const {
-    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto& { return *iterator; });
+  PROMPP(inline) const ::series_data::encoder::Sample& operator*() const {
+    return visit([](const auto& iterator) PROMPP(lambda_inline) -> const auto& { return *iterator; });
   }
-  PROMPP_ALWAYS_INLINE const ::series_data::encoder::Sample* operator->() const {
-    return visit([](const auto& iterator) PROMPP_LAMBDA_INLINE -> const auto* { return iterator.operator->(); });
-  }
-
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const {
-    return visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; });
+  PROMPP(inline) const ::series_data::encoder::Sample* operator->() const {
+    return visit([](const auto& iterator) PROMPP(lambda_inline) -> const auto* { return iterator.operator->(); });
   }
 
-  PROMPP_ALWAYS_INLINE AggregationIterator& operator++() {
-    visit([]<typename Iterator>(Iterator& iterator) PROMPP_LAMBDA_INLINE {
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel& sentinel) const {
+    return visit([&sentinel](const auto& iterator) PROMPP(lambda_inline) { return iterator == sentinel; });
+  }
+
+  PROMPP(inline) AggregationIterator& operator++() {
+    visit([]<typename Iterator>(Iterator& iterator) PROMPP(lambda_inline) {
       ++iterator;
 
       if constexpr (invalidatable<Iterator>) {
@@ -171,13 +172,13 @@ class AggregationIterator {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE AggregationIterator operator++(int) {
+  PROMPP(inline) AggregationIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
+  [[nodiscard]] PROMPP(inline) Type type() const noexcept { return type_; }
 
  private:
   union {
@@ -198,9 +199,9 @@ class AggregationIterator {
   Type type_;
 };
 
-PROMPP_ALWAYS_INLINE AggregationIterator create_aggregation_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,
-                                                                     const SelectHints& select_hints,
-                                                                     PromPP::Primitives::Timestamp downsampling_ms) {
+PROMPP(inline) AggregationIterator create_aggregation_iterator(::series_data::serialization::SerializedDataView::SeriesIterator&& iterator,
+                                                                        const SelectHints& select_hints,
+                                                                        PromPP::Primitives::Timestamp downsampling_ms) {
   if (downsampling_ms != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
     return AggregationIterator(std::in_place_type<AggregationIterator::DownsamplingIterator>, std::move(iterator), downsampling_ms);
   }

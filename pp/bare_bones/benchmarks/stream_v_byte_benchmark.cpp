@@ -24,7 +24,7 @@ using CompactSequence = BareBones::StreamVByte::CompactSequence<BareBones::Strea
 
 template <class Sequence>
 void SequencePushBack(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto kValuesCount = values_count();
 
   for ([[maybe_unused]] auto _ : state) {
@@ -45,7 +45,7 @@ void SequencePushBack(benchmark::State& state) {
 
 template <class Sequence>
 void SequenceDecode(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto kValuesCount = values_count();
 
   Sequence sequence;

@@ -50,7 +50,7 @@ class OutdatedChunkMergerTrait {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void encode_outdated(std::initializer_list<EncodeSample> samples) { encode(samples); }
+  PROMPP(inline) void encode_outdated(std::initializer_list<EncodeSample> samples) { encode(samples); }
 };
 
 class OutdatedChunkMergerInOpenConstantChunkFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>,

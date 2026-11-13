@@ -111,21 +111,21 @@ struct Symbol {
 
         explicit iterator_type(const storage_type& storage) noexcept : storage_ptr_(&storage), sentinel_id_(storage_ptr_->get_sentinel_id()) {}
 
-        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+        PROMPP(inline) iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+        PROMPP(inline) iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
+        PROMPP(inline) bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP(inline) bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
         [[nodiscard]] uint32_t id() const noexcept { return id_; }
         [[nodiscard]] uint32_t sentinel_id() const noexcept { return sentinel_id_; }
@@ -136,12 +136,12 @@ struct Symbol {
         uint32_t sentinel_id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
+      [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return iterator_type{*storage_ptr}; }
+      [[nodiscard]] static PROMPP(inline) auto end() noexcept { return BareBones::iterator::kSentinel; }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return storage_ptr->count(); }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
+      [[nodiscard]] PROMPP(inline) composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
     };
 
     using view_type = symbols_view;
@@ -151,34 +151,34 @@ struct Symbol {
       requires kIsReadOnly
     explicit storage_type(const AnotherStorageType& other) : read_view_{other.data_.data(), other.items_.data()}, data_{other.data_}, items_{other.items_} {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
+    [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(data_.size() <= max_ui32);
       return max_ui32 - static_cast<uint32_t>(data_.size());
     }
 
     template <class AnotherStorageType>
-    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP(inline) void reserve(const AnotherStorageType& other) noexcept {
       items_.reserve(other.items_.size());
       data_.reserve(other.data_.size());
       sync_read_view();
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP(inline) composite_type composite(uint32_t id) const noexcept {
       const auto item = items_[id];
       return std::string_view(data_.data() + item.pos, item.length);
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const read_view_type& read_view() const noexcept { return read_view_; }
+    [[nodiscard]] PROMPP(inline) const read_view_type& read_view() const noexcept { return read_view_; }
 
-    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept {
+    PROMPP(inline) void reserve(uint32_t count) noexcept {
       items_.reserve(count);
       sync_read_view();
     }
 
-    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+    PROMPP(inline) bool is_valid(uint32_t id) const noexcept {
       const auto item = items_[id];
       return item.pos + item.length <= data_.size();
     }
@@ -189,11 +189,11 @@ struct Symbol {
       }
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(data_) + BareBones::mem::allocated_memory(items_);
     }
 
-    PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
+    PROMPP(inline) uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items_.size());
       const auto data_size = static_cast<uint32_t>(data_.size());
       data_.push_back(str.begin(), str.end());
@@ -202,10 +202,10 @@ struct Symbol {
       return id;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+    [[nodiscard]] PROMPP(inline) checkpoint_type checkpoint() const noexcept {
       return {static_cast<uint32_t>(data_.size()), static_cast<uint32_t>(items_.size())};
     }
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+    PROMPP(inline) void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.data_size <= data_.size());
       assert(checkpoint.items_size <= items_.size());
       data_.resize(checkpoint.data_size);
@@ -267,15 +267,15 @@ struct Symbol {
       return std::views::iota(original_size, items_.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP(inline) view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
-    PROMPP_ALWAYS_INLINE void sync_read_view() noexcept {
+    PROMPP(inline) void sync_read_view() noexcept {
       read_view_.data = data_.data();
       read_view_.items = items_.data();
     }
 
-    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+    PROMPP(inline) uint32_t get_sentinel_id() const noexcept {
       if constexpr (kIsReadOnly) {
         uint32_t id = items_.size();
         while (id > 0 && !is_valid(id - 1)) {
@@ -344,22 +344,22 @@ struct LabelNameSetComposite {
     iterator_type(const uint32_t* ids_current, const BareBones::SnugComposite::SymbolTableView* symbol_table_view) noexcept
         : ids_current_{ids_current}, symbol_table_view_{symbol_table_view} {}
 
-    PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+    PROMPP(inline) iterator_type& operator++() noexcept {
       ++ids_current_;
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+    PROMPP(inline) iterator_type operator++(int) noexcept {
       const iterator_type retval = *this;
       ++(*this);
       return retval;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return ids_current_ == other.ids_current_; }
+    PROMPP(inline) bool operator==(const iterator_type& other) const noexcept { return ids_current_ == other.ids_current_; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return (*symbol_table_view_)[*ids_current_]; }
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return (*symbol_table_view_)[*ids_current_]; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *ids_current_; }
+    [[nodiscard]] PROMPP(inline) uint32_t id() const noexcept { return *ids_current_; }
 
    private:
     const uint32_t* ids_current_ = nullptr;
@@ -370,18 +370,18 @@ struct LabelNameSetComposite {
   LabelNameSetComposite(const uint32_t* ids_begin, uint32_t size, const BareBones::SnugComposite::SymbolTableView* symbol_table_view) noexcept
       : ids_begin_{ids_begin}, size_{size}, symbol_table_view_{symbol_table_view} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept { return iterator_type{ids_begin_, symbol_table_view_}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept { return iterator_type{ids_begin_ + size_, symbol_table_view_}; }
+  [[nodiscard]] PROMPP(inline) iterator_type begin() const noexcept { return iterator_type{ids_begin_, symbol_table_view_}; }
+  [[nodiscard]] PROMPP(inline) iterator_type end() const noexcept { return iterator_type{ids_begin_ + size_, symbol_table_view_}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return size_; }
 
   template <class T>
-  PROMPP_ALWAYS_INLINE bool operator==(const T& other) const noexcept {
+  PROMPP(inline) bool operator==(const T& other) const noexcept {
     return std::ranges::equal(begin(), end(), other.begin(), other.end());
   }
 
   template <class T>
-  PROMPP_ALWAYS_INLINE bool operator<(const T& other) const noexcept {
+  PROMPP(inline) bool operator<(const T& other) const noexcept {
     return std::ranges::lexicographical_compare(begin(), end(), other.begin(), other.end());
   }
 
@@ -510,21 +510,21 @@ struct LabelNameSet {
         explicit iterator_type(const storage_type* storage_ptr, uint32_t id) noexcept
             : storage_ptr_(storage_ptr), id_{id}, sentinel_id_{storage_ptr->get_sentinel_id()} {}
 
-        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+        PROMPP(inline) iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+        PROMPP(inline) iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
+        PROMPP(inline) bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
+        [[nodiscard]] PROMPP(inline) uint32_t id() const noexcept { return id_; }
 
        private:
         const storage_type* storage_ptr_;
@@ -532,12 +532,12 @@ struct LabelNameSet {
         uint32_t sentinel_id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
+      [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
+      [[nodiscard]] static PROMPP(inline) auto end() noexcept { return BareBones::iterator::kSentinel; }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return storage_ptr->count(); }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table_.data_view(); }
+      [[nodiscard]] PROMPP(inline) symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table_.data_view(); }
     };
 
     using view_type = label_name_set_view;
@@ -548,9 +548,9 @@ struct LabelNameSet {
     explicit storage_type(const AnotherStorageType& other)
         : symbols_table_{other.symbols_table_}, symbols_ids_sequences_{other.symbols_ids_sequences_}, items_{other.items_} {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
+    [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(symbols_ids_sequences_.size() <= max_ui32);
 
@@ -559,21 +559,21 @@ struct LabelNameSet {
     }
 
     template <class AnotherStorageType>
-    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP(inline) void reserve(const AnotherStorageType& other) noexcept {
       symbols_table_.reserve(other.symbols_table_);
       symbols_ids_sequences_.reserve(other.symbols_ids_sequences_.size());
       items_.reserve(other.items_.size());
     }
 
-    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
+    PROMPP(inline) void reserve(uint32_t count) noexcept { items_.reserve(count); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP(inline) composite_type composite(uint32_t id) const noexcept {
       const auto item = items_[id];
       const uint32_t* ids_begin = symbols_ids_sequences_.data() + item.pos;
       return composite_type(ids_begin, item.size, &symbols_table_.symbol_table_read_view());
     }
 
-    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+    PROMPP(inline) bool is_valid(uint32_t id) const noexcept {
       const auto item = items_[id];
       return static_cast<uint64_t>(item.pos) + item.size <= symbols_ids_sequences_.size();
     }
@@ -593,13 +593,13 @@ struct LabelNameSet {
       }
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(symbols_table_) + BareBones::mem::allocated_memory(symbols_ids_sequences_) +
              BareBones::mem::allocated_memory(items_);
     }
 
     template <class OtherLabelNameSet, class Cache = NoCache>
-    PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
+    PROMPP(inline) uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
       const auto id = static_cast<uint32_t>(items_.size());
 
       auto pos = static_cast<uint32_t>(symbols_ids_sequences_.size());
@@ -623,11 +623,11 @@ struct LabelNameSet {
       return id;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+    [[nodiscard]] PROMPP(inline) checkpoint_type checkpoint() const noexcept {
       return {symbols_table_.checkpoint(), static_cast<uint32_t>(items_.size()), static_cast<uint32_t>(symbols_ids_sequences_.size())};
     }
 
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+    PROMPP(inline) void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.symbols_ids_size <= symbols_ids_sequences_.size());
       assert(checkpoint.items_size <= items_.size());
 
@@ -694,13 +694,13 @@ struct LabelNameSet {
       return std::views::iota(items_original_size, items_.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP(inline) view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
     template <template <template <class> class> class, template <class> class>
     friend struct LabelNameSet;
 
-    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+    PROMPP(inline) uint32_t get_sentinel_id() const noexcept {
       if constexpr (kIsReadOnly) {
         uint32_t id = items_.size();
         while (id > 0 && !is_valid(id - 1)) {
@@ -718,7 +718,7 @@ struct LabelNameSet {
     Vector<item_type> items_;
 
     template <class LabelNameIterator, class Cache>
-    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
+    PROMPP(inline) uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, symbols_table_type, decltype(*label_name)>) {
         symbols_table_.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
       }
@@ -741,34 +741,34 @@ struct LabelSetComposite {
     using value_type = LabelSetComposite::value_type;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE iterator_type() = default;
-    PROMPP_ALWAYS_INLINE iterator_type(const void* symbols_tables_base,
-                                       size_t stride,
-                                       LabelNameSetComposite::iterator_type names_it,
-                                       values_iterator_type values_it) noexcept
+    PROMPP(inline) iterator_type() = default;
+    PROMPP(inline) iterator_type(const void* symbols_tables_base,
+                                          size_t stride,
+                                          LabelNameSetComposite::iterator_type names_it,
+                                          values_iterator_type values_it) noexcept
         : symbols_tables_base_(symbols_tables_base), stride_(stride), names_it_(names_it), values_it_(values_it) {}
 
-    PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+    PROMPP(inline) iterator_type& operator++() noexcept {
       ++names_it_;
       ++values_it_;
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+    PROMPP(inline) iterator_type operator++(int) noexcept {
       const iterator_type retval = *this;
       ++(*this);
       return retval;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return values_it_ == other.values_it_; }
+    PROMPP(inline) bool operator==(const iterator_type& other) const noexcept { return values_it_ == other.values_it_; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept {
       const auto* layout = reinterpret_cast<const SymbolTableView*>(static_cast<const char*>(symbols_tables_base_) + names_it_.id() * stride_);
       return {*names_it_, (*layout)[*values_it_]};
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return names_it_.id(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *values_it_; }
+    [[nodiscard]] PROMPP(inline) uint32_t name_id() const noexcept { return names_it_.id(); }
+    [[nodiscard]] PROMPP(inline) uint32_t value_id() const noexcept { return *values_it_; }
 
    private:
     const void* symbols_tables_base_ = nullptr;
@@ -778,40 +778,40 @@ struct LabelSetComposite {
   };
 
   LabelSetComposite() = default;
-  PROMPP_ALWAYS_INLINE LabelSetComposite(const void* symbols_tables_base,
-                                         size_t stride,
-                                         LabelNameSetComposite label_name_set,
-                                         const uint8_t* values_stream_begin,
-                                         uint32_t name_set_id) noexcept
+  PROMPP(inline) LabelSetComposite(const void* symbols_tables_base,
+                                            size_t stride,
+                                            LabelNameSetComposite label_name_set,
+                                            const uint8_t* values_stream_begin,
+                                            uint32_t name_set_id) noexcept
       : symbols_tables_base_{symbols_tables_base},
         stride_{stride},
         label_name_set_{label_name_set},
         values_stream_begin_{values_stream_begin},
         name_set_id_{name_set_id} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelNameSetComposite& names() const noexcept { return label_name_set_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return label_name_set_.size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return name_set_id_; }
+  [[nodiscard]] PROMPP(inline) const LabelNameSetComposite& names() const noexcept { return label_name_set_; }
+  [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return label_name_set_.size(); }
+  [[nodiscard]] PROMPP(inline) uint32_t id() const noexcept { return name_set_id_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept {
+  [[nodiscard]] PROMPP(inline) iterator_type begin() const noexcept {
     const auto values = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(values_stream_begin_, label_name_set_.size());
     return iterator_type(symbols_tables_base_, stride_, label_name_set_.begin(), values.first);
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept {
+  [[nodiscard]] PROMPP(inline) iterator_type end() const noexcept {
     return iterator_type(symbols_tables_base_, stride_, label_name_set_.end(), values_iterator_type());
   }
 
   template <class T>
-  PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
+  PROMPP(inline) bool operator==(const T& b) const noexcept {
     return std::ranges::equal(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a == b; });
   }
 
   template <class T>
-  PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
+  PROMPP(inline) bool operator<(const T& b) const noexcept {
     return std::ranges::lexicographical_compare(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a < b; });
   }
 
-  PROMPP_ALWAYS_INLINE friend size_t hash_value(const LabelSetComposite& ls) noexcept { return hash::hash_of_label_set(ls); }
+  friend PROMPP(inline) size_t hash_value(const LabelSetComposite& ls) noexcept { return hash::hash_of_label_set(ls); }
 
  private:
   const void* symbols_tables_base_ = nullptr;
@@ -1024,7 +1024,7 @@ struct LabelSet {
           get_values_range();
         }
 
-        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+        PROMPP(inline) iterator_type& operator++() noexcept {
           ++value_it_;
           if (value_it_ == BareBones::iterator::kSentinel) {
             ++key_it_;
@@ -1033,24 +1033,24 @@ struct LabelSet {
           return *this;
         }
 
-        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+        PROMPP(inline) iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const = default;
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept {
+        PROMPP(inline) bool operator==(const iterator_type& other) const = default;
+        PROMPP(inline) bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept {
           return keys_exhausted() && value_it_ == BareBones::iterator::kSentinel;
         }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *value_it_; }
+        [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return *value_it_; }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t key_id() const noexcept { return key_it_.id(); }
-        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return value_it_.id(); }
+        [[nodiscard]] PROMPP(inline) uint32_t key_id() const noexcept { return key_it_.id(); }
+        [[nodiscard]] PROMPP(inline) uint32_t value_id() const noexcept { return value_it_.id(); }
 
        private:
-        [[nodiscard]] PROMPP_ALWAYS_INLINE bool keys_exhausted() const noexcept { return key_it_.id() >= sentinel_key_id_; }
+        [[nodiscard]] PROMPP(inline) bool keys_exhausted() const noexcept { return key_it_.id() >= sentinel_key_id_; }
 
         void get_values_range() noexcept {
           value_it_ = {};
@@ -1068,13 +1068,13 @@ struct LabelSet {
         uint32_t sentinel_key_id_{};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+      [[nodiscard]] PROMPP(inline) auto begin() const noexcept {
         return iterator_type{storage_ptr->symbols_tables_, storage_ptr->symbols_tables_.size(),
                              storage_ptr->label_name_sets_table_.data_view().symbols().begin()};
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
+      [[nodiscard]] static PROMPP(inline) auto end() noexcept { return BareBones::iterator::kSentinel; }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
+      [[nodiscard]] PROMPP(inline) size_t size() const noexcept {
         size_t total_size = 0;
         auto key_it = storage_ptr->label_name_sets_table_.data_view().symbols().begin();
         for (const auto key_sentinel_id = std::min(key_it.sentinel_id(), storage_ptr->symbols_tables_.size()); key_it.id() < key_sentinel_id; ++key_it) {
@@ -1098,20 +1098,20 @@ struct LabelSet {
         iterator_type() = default;
         explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id}, sentinel_id_{storage.get_sentinel_id()} {}
 
-        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+        PROMPP(inline) iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+        PROMPP(inline) iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
+        PROMPP(inline) bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == sentinel_id_; }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
         [[nodiscard]] uint32_t id() const noexcept { return id_; }
 
@@ -1121,23 +1121,23 @@ struct LabelSet {
         uint32_t sentinel_id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return BareBones::iterator::kSentinel; }
+      [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] static PROMPP(inline) auto end() noexcept { return BareBones::iterator::kSentinel; }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return storage_ptr->count(); }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
+      [[nodiscard]] PROMPP(inline) label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
         return storage_ptr->label_name_sets_table_.data_view();
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table_.data_view().symbols(); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::values_symbols_view_type values(uint32_t key_id) const noexcept {
+      [[nodiscard]] PROMPP(inline) keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table_.data_view().symbols(); }
+      [[nodiscard]] PROMPP(inline) values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
+      [[nodiscard]] PROMPP(inline) values_view_type::values_symbols_view_type values(uint32_t key_id) const noexcept {
         return storage_ptr->symbols_tables_[key_id].data_view();
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::iterator_type::value_type key_symbol(uint32_t key_id) const noexcept { return keys()[key_id]; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::iterator_type::value_type value_symbol(uint32_t key_id, uint32_t value_id) const noexcept {
+      [[nodiscard]] PROMPP(inline) values_view_type::iterator_type::value_type key_symbol(uint32_t key_id) const noexcept { return keys()[key_id]; }
+      [[nodiscard]] PROMPP(inline) values_view_type::iterator_type::value_type value_symbol(uint32_t key_id, uint32_t value_id) const noexcept {
         return values(key_id)[value_id];
       }
     };
@@ -1182,9 +1182,9 @@ struct LabelSet {
       });
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
+    [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
 
       assert(symbols_ids_sequences_.size() <= max_ui32);
@@ -1201,23 +1201,23 @@ struct LabelSet {
     }
 
     template <class AnotherStorageType>
-    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP(inline) void reserve(const AnotherStorageType& other) noexcept {
       symbols_ids_sequences_.reserve(other.symbols_ids_sequences_.size());
       symbols_tables_.reserve(other.symbols_tables_.size());
       label_name_sets_table_.reserve(other.label_name_sets_table_);
       items_.reserve(other.items_.size());
     }
 
-    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
+    PROMPP(inline) void reserve(uint32_t count) noexcept { items_.reserve(count); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP(inline) composite_type composite(uint32_t id) const noexcept {
       const auto [lns_id, pos] = items_[id];
       auto lns = label_name_sets_table_[lns_id];
       const uint8_t* values_stream_begin = symbols_ids_sequences_.data() + (pos - shrinked_size_);
       return LabelSetComposite(&symbols_tables_[0], sizeof(symbols_tables_[0]), lns, values_stream_begin, lns_id);
     }
 
-    PROMPP_ALWAYS_INLINE bool is_valid(uint32_t id) const noexcept {
+    PROMPP(inline) bool is_valid(uint32_t id) const noexcept {
       const auto [lns_id, pos] = items_[id];
 
       if (lns_id >= label_name_sets_table_.items_count()) {
@@ -1270,13 +1270,13 @@ struct LabelSet {
       }
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(symbols_tables_) + BareBones::mem::allocated_memory(symbols_ids_sequences_) +
              BareBones::mem::allocated_memory(label_name_sets_table_) + BareBones::mem::allocated_memory(items_);
     }
 
     template <class OtherLabelSet, class Cache = NoCache>
-    PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
+    PROMPP(inline) uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
       const uint32_t id = items_.size();
 
       const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
@@ -1330,7 +1330,7 @@ struct LabelSet {
       items_ = std::move(new_items);
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+    [[nodiscard]] PROMPP(inline) checkpoint_type checkpoint() const noexcept {
       auto checkpoint = checkpoint_type{label_name_sets_table_.checkpoint(),
                                         {},
                                         next_item_index_,
@@ -1345,7 +1345,7 @@ struct LabelSet {
       return checkpoint;
     }
 
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+    PROMPP(inline) void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.size_ <= symbols_ids_sequences_.size());
       symbols_ids_sequences_.resize(checkpoint.size_);
 
@@ -1467,13 +1467,13 @@ struct LabelSet {
       return std::views::iota(items_original_size, items_.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP(inline) view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
     template <template <template <class> class> class, template <template <class> class> class, template <class> class>
     friend struct LabelSet;
 
-    PROMPP_ALWAYS_INLINE uint32_t get_sentinel_id() const noexcept {
+    PROMPP(inline) uint32_t get_sentinel_id() const noexcept {
       if constexpr (kIsReadOnly) {
         uint32_t id = items_.size();
         while (id > 0 && !is_valid(id - 1)) {
@@ -1494,7 +1494,7 @@ struct LabelSet {
     Vector<item_type> items_;
 
     template <class LabelSet, class Cache>
-    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
+    PROMPP(inline) uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(label_name_sets_table_), decltype(label_set.names())>) {
         return label_name_sets_table_.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
       }
@@ -1503,7 +1503,7 @@ struct LabelSet {
     }
 
     template <class LabelIterator, class Cache>
-    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+    PROMPP(inline) uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(symbols_tables_[0]), decltype((*label).second)>) {
         const auto name_id = label.name_id();
         return symbols_tables_[lns_id].find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);

@@ -53,7 +53,7 @@ struct CopyPartsTimings {
   std::chrono::nanoseconds build_ls_id_hashset{};
   std::chrono::nanoseconds build_reverse_index{};
 
-  PROMPP_ALWAYS_INLINE std::chrono::nanoseconds total() const noexcept {
+  PROMPP(inline) std::chrono::nanoseconds total() const noexcept {
     return copy_added_series + copy_ls_id_set + build_trie_index + build_ls_id_hashset + build_reverse_index;
   }
 };
@@ -61,7 +61,7 @@ struct CopyPartsTimings {
 std::vector<CopyPartsTimings> copy_parts_timings;
 
 void CopyAllStepsWithTiming(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 

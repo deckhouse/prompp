@@ -58,7 +58,7 @@ struct FindOrEmplaceResult {
 };
 
 template <class Lss>
-PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set) {
+PROMPP(inline) FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set) {
   if constexpr (Lss::kIsReadOnly) {
     throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
   } else {
@@ -161,7 +161,7 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
   std::visit(
       [&out](const auto& snapshot) {
         std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
-                               [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
+                               [&snapshot](const auto ls_id) PROMPP(lambda_inline) { return static_cast<uint16_t>(snapshot[ls_id].size()); });
       },
       snapshot_variant);
 }
@@ -188,9 +188,7 @@ extern "C" void prompp_primitives_group_series_by_label_names_result_free(void* 
   static_cast<GroupSeriesByLabelNamesResult*>(args)->~GroupSeriesByLabelNamesResult();
 }
 
-extern "C" void prompp_primitives_lss_query_result_free(void* args) {
-  static_cast<LssQueryResult*>(args)->~LssQueryResult();
-}
+extern "C" void prompp_primitives_lss_query_result_free(void* args) { static_cast<LssQueryResult*>(args)->~LssQueryResult(); }
 
 void prompp_primitives_lss_get_label_sets(void* args, void* res) {
   using PromPP::Primitives::Go::Label;
@@ -218,8 +216,9 @@ void prompp_primitives_lss_get_label_sets(void* args, void* res) {
             auto in_label_set = lss[ls_id];
             auto& out_label_set = out->label_sets[i];
             out_label_set.reserve(in_label_set.size());
-            std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
-                                   [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
+            std::ranges::transform(in_label_set, std::back_inserter(out_label_set), [](const auto& label) PROMPP(lambda_inline) {
+              return Label({.name = String{label.first}, .value = String{label.second}});
+            });
           }
         }
       },
@@ -251,7 +250,7 @@ extern "C" void prompp_primitives_lss_query_label_names(void* args, void* res) {
   const auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
   out->status = static_cast<uint32_t>(LabelNamesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
-      in->label_matchers, [out](std::string_view name) PROMPP_LAMBDA_INLINE { out->names.emplace_back(name); }));
+      in->label_matchers, [out](std::string_view name) PROMPP(lambda_inline) { out->names.emplace_back(name); }));
 }
 
 extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) {
@@ -271,7 +270,7 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
   auto out = new (res) Result();
   out->status = static_cast<uint32_t>(LabelValuesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
       static_cast<std::string_view>(in->label_name), in->label_matchers,
-      [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
+      [out](std::string_view value) PROMPP(lambda_inline) { out->values.emplace_back(value); }));
 }
 
 extern "C" void prompp_primitives_lss_get_label_name_ids(void* args, void* res) {

@@ -32,7 +32,7 @@ using EncodedCompactSequence = BareBones::EncodedSequence<DeltaRLE<CompactSequen
 
 template <class EncodingSequence>
 void EncodingSequencePushBack(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& kValues = values();
 
   for ([[maybe_unused]] auto _ : state) {
@@ -53,7 +53,7 @@ void EncodingSequencePushBack(benchmark::State& state) {
 
 template <class EncodingSequence>
 void EncodingSequenceDecode(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& kValues = values();
 
   EncodingSequence sequence;

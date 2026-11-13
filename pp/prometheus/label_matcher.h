@@ -17,7 +17,7 @@ enum class MatcherType : uint8_t {
   kUnknown,
 };
 
-[[nodiscard]] PROMPP_ALWAYS_INLINE MatcherType MatcherTypeFromInt(int32_t type) noexcept {
+[[nodiscard]] PROMPP(inline) MatcherType MatcherTypeFromInt(int32_t type) noexcept {
   if (type < static_cast<int32_t>(MatcherType::kExactMatch) || type >= static_cast<int32_t>(MatcherType::kUnknown)) {
     return MatcherType::kUnknown;
   }
@@ -31,11 +31,11 @@ struct LabelMatcherTrait {
   StringType value{};
   MatcherType type{MatcherType::kUnknown};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept { return !name.empty() && !value.empty() && type != MatcherType::kUnknown; }
+  [[nodiscard]] PROMPP(inline) bool is_valid() const noexcept { return !name.empty() && !value.empty() && type != MatcherType::kUnknown; }
 
-  PROMPP_ALWAYS_INLINE void invalidate() noexcept { type = MatcherType::kUnknown; }
+  PROMPP(inline) void invalidate() noexcept { type = MatcherType::kUnknown; }
 
-  PROMPP_ALWAYS_INLINE void set_default_protobuf_values() noexcept { type = MatcherType::kExactMatch; }
+  PROMPP(inline) void set_default_protobuf_values() noexcept { type = MatcherType::kExactMatch; }
 
   auto operator<=>(const LabelMatcherTrait&) const noexcept = default;
 };

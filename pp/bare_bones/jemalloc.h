@@ -6,23 +6,23 @@
 
 #include "allocator.h"
 
-#if JEMALLOC_AVAILABLE
-#include <jemalloc/jemalloc.h>
+#if PROMPP(feature, jemalloc)
+#  include <jemalloc/jemalloc.h>
 
-#include <unistd.h>
+#  include <unistd.h>
 #endif
 
 namespace BareBones::jemalloc {
 
-PROMPP_ALWAYS_INLINE void refresh_stats() noexcept {
-#if JEMALLOC_AVAILABLE
+PROMPP(inline) void refresh_stats() noexcept {
+#if PROMPP(feature, jemalloc)
   uint64_t epoch = 1;
   size_t sz = sizeof(epoch);
   mallctl("epoch", &epoch, &sz, &epoch, sz);
 #endif
 }
 
-#if JEMALLOC_AVAILABLE
+#if PROMPP(feature, jemalloc)
 
 inline const auto kPageSize = sysconf(_SC_PAGESIZE);
 
@@ -70,13 +70,13 @@ template <class Object>
 struct ArenaReallocator {
   thread_local static ArenaIndex thread_arena_index;
 
-  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept {
+  static PROMPP(inline) size_t allocation_size(size_t needed_size) noexcept {
     return nallocx(needed_size, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE);
   }
 
-  PROMPP_ALWAYS_INLINE static void* allocate(size_t size) { return mallocx(size, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE); }
+  static PROMPP(inline) void* allocate(size_t size) { return mallocx(size, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE); }
 
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) {
+  static PROMPP(inline) void* reallocate(void* memory, size_t size) {
     if (memory == nullptr) [[unlikely]] {
       return mallocx(size, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE);
     }
@@ -84,13 +84,13 @@ struct ArenaReallocator {
     return rallocx(memory, size, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE);
   }
 
-  PROMPP_ALWAYS_INLINE static void free(void* memory) {
+  static PROMPP(inline) void free(void* memory) {
     if (memory != nullptr) [[likely]] {
       return dallocx(memory, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE);
     }
   }
 
-  PROMPP_ALWAYS_INLINE static size_t arena_allocated_memory(ArenaIndex arena_index) noexcept {
+  static PROMPP(inline) size_t arena_allocated_memory(ArenaIndex arena_index) noexcept {
     refresh_stats();
 
     size_t pages{};
@@ -100,7 +100,7 @@ struct ArenaReallocator {
     return pages * kPageSize;
   }
 
-  PROMPP_ALWAYS_INLINE static ArenaIndex create_arena() noexcept {
+  static PROMPP(inline) ArenaIndex create_arena() noexcept {
     auto arena_index = FreeArenas::get();
     if (arena_index == kInvalidArenaIndex) {
       size_t size = sizeof(arena_index);
@@ -110,14 +110,14 @@ struct ArenaReallocator {
     return arena_index;
   }
 
-  PROMPP_ALWAYS_INLINE static void release_arena(ArenaIndex arena_index) noexcept {
+  static PROMPP(inline) void release_arena(ArenaIndex arena_index) noexcept {
     const auto bytes_at_release = arena_allocated_memory(arena_index);
     mallctl(create_command("arena.%u.reset", arena_index).data(), nullptr, nullptr, nullptr, 0);
     mallctl(create_command("arena.%u.purge", arena_index).data(), nullptr, nullptr, nullptr, 0);
     FreeArenas::add(arena_index, bytes_at_release);
   }
 
-  PROMPP_ALWAYS_INLINE static auto thread_arena_guard(ArenaIndex arena_index) noexcept {
+  static PROMPP(inline) auto thread_arena_guard(ArenaIndex arena_index) noexcept {
     class Guard {
      public:
       explicit Guard(ArenaIndex arena_index) noexcept : previous_arena_index_{std::exchange(thread_arena_index, arena_index)} {}
@@ -131,7 +131,7 @@ struct ArenaReallocator {
   }
 
  private:
-  PROMPP_ALWAYS_INLINE static auto create_command(const char* command, ArenaIndex arena_index) noexcept {
+  static PROMPP(inline) auto create_command(const char* command, ArenaIndex arena_index) noexcept {
     std::array<char, 64> buffer;
     snprintf(buffer.data(), buffer.size(), command, arena_index);
     return buffer;

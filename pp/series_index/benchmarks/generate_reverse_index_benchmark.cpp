@@ -17,8 +17,8 @@ struct Label {
   uint32_t name_id_;
   uint32_t value_id_;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return value_id_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return name_id_; }
+  [[nodiscard]] PROMPP(inline) uint32_t value_id() const noexcept { return value_id_; }
+  [[nodiscard]] PROMPP(inline) uint32_t name_id() const noexcept { return name_id_; }
 };
 
 std::string get_lss_file() {
@@ -52,7 +52,7 @@ BareBones::Vector<Label> get_labels() {
 }
 
 void GenerateReverseIndex(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   static const auto& labels = get_labels();
   static size_t allocated_memory = 0;
 

@@ -14,7 +14,7 @@ class Querier {
   explicit Querier(Storage& storage) : storage_(storage) {}
 
   template <typename Query>
-  PROMPP_ALWAYS_INLINE const QueriedChunkList& query(const Query& query) noexcept {
+  PROMPP(inline) const QueriedChunkList& query(const Query& query) noexcept {
     chunks_.clear();
 
     for (auto& ls_id : query.label_set_ids) {
@@ -31,10 +31,10 @@ class Querier {
     return chunks_;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const QueriedChunkList& chunks() const noexcept { return chunks_; }
+  [[nodiscard]] PROMPP(inline) const QueriedChunkList& chunks() const noexcept { return chunks_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Storage& get_storage() const noexcept { return storage_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& get_storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) const Storage& get_storage() const noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) Storage& get_storage() noexcept { return storage_; }
   [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
   [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
@@ -45,7 +45,7 @@ class Querier {
   QueriedChunkList chunks_;
   BareBones::Bitset series_to_load_;
 
-  PROMPP_ALWAYS_INLINE void query_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
+  PROMPP(inline) void query_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     query_finalized_chunks(ls_id, time_interval);
     query_opened_chunks(ls_id, time_interval);
   }

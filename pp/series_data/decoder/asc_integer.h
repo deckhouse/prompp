@@ -25,20 +25,20 @@ class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIter
     }
   }
 
-  PROMPP_ALWAYS_INLINE AscIntegerDecodeIterator& operator++() noexcept {
+  PROMPP(inline) AscIntegerDecodeIterator& operator++() noexcept {
     if (decode()) [[likely]] {
       update_sample();
     }
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE AscIntegerDecodeIterator operator++(int) noexcept {
+  PROMPP(inline) AscIntegerDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+  [[nodiscard]] PROMPP(inline) double decoded_value() const noexcept {
     if (data_.value_type == encoder::ValueType::kStaleNan) [[unlikely]] {
       return BareBones::Encoding::Gorilla::STALE_NAN;
     }
@@ -66,7 +66,7 @@ class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIter
  private:
   friend DecodeIteratorTrait;
 
-  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+  PROMPP(inline) bool decode() noexcept {
     if (try_decode_timestamp()) [[likely]] {
       decode_value();
       return true;
@@ -75,9 +75,9 @@ class AscIntegerDecodeIterator : public DecodeIteratorTrait<AscIntegerDecodeIter
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void decode_value() noexcept { data_.value_type = data_.decoder.decode(data_.reader, data_.gorilla_state); }
+  PROMPP(inline) void decode_value() noexcept { data_.value_type = data_.decoder.decode(data_.reader, data_.gorilla_state); }
 
-  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+  PROMPP(inline) void update_sample() noexcept {
     data_.sample.timestamp = decoded_timestamp();
     data_.sample.value = decoded_value();
   }

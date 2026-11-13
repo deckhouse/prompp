@@ -15,13 +15,13 @@ class QueriedSeries {
     kOther,
   };
 
-  PROMPP_ALWAYS_INLINE void set_series_count(uint32_t count) {
+  PROMPP(inline) void set_series_count(uint32_t count) {
     for (auto& queried_series : queried_series_) {
       queried_series.resize(count);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void reserve(uint32_t series_count) {
+  PROMPP(inline) void reserve(uint32_t series_count) {
     for (auto& queried_series : queried_series_) {
       queried_series.reserve(series_count);
     }
@@ -34,9 +34,9 @@ class QueriedSeries {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count(Source source) const noexcept { return queried_series_[static_cast<uint8_t>(source)].popcount(); }
+  [[nodiscard]] PROMPP(inline) uint32_t count(Source source) const noexcept { return queried_series_[static_cast<uint8_t>(source)].popcount(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return queried_series_[0].allocated_memory() * queried_series_.size(); }
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept { return queried_series_[0].allocated_memory() * queried_series_.size(); }
 
  private:
   std::array<BareBones::Bitset, 3> queried_series_;
