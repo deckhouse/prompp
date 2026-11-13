@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.19 / 2026-11-12
+
+### Fixes
+1. **Heads with distant timestamp outliers no longer exhaust memory when written to disk.** Block writers are created only for intervals that contain samples, and block files are opened only when needed. Blocks starting too far in the future are skipped by default to prevent them from pushing valid history out of retention; `prompptool` can preserve them with `--keep-future-samples` (#584).
+2. **Remote read preserves chunk contents and respects response frame limits.** Returned chunks remain valid after the iterator advances or is reused, and remote-read clients now apply the configured `chunked_read_limit` (#583).
+3. **Concurrent queries keep a consistent series order during index rebuilds.** Rebuilding the sorting index no longer changes the data retained by an ongoing query, including when the rebuilt index becomes empty (#587).
+4. **Go updated to 1.26.11.** Both the CI image and the werf build include the fix for GO-2026-6859, an HTTP/1 server crash caused by a header race involving `MaxBytesReader`.
+5. **Dependency security updates.** Updated `github.com/klauspost/compress` to v1.20.2 (#581), `golang.org/x/crypto` to v0.59.0 with compatible `golang.org/x/*` dependencies, and the web UI packages `sanitize-html` to 2.18.1 (#576) and `follow-redirects` to 1.16.3. The production npm audit reports no known vulnerabilities. The AWS S3 Crypto advisories GO-2022-0646 and GO-2022-0635 remain inapplicable: Prom++ uses the AWS SDK only for service discovery, and its VEX records this exclusion.
+
+### Enhancements
+1. **Head catalog recovery and format migration are safer.** Damaged v3 records can be recovered without discarding healthy heads, unavailable head metadata is retained for recovery at the next startup, and compaction and migration preserve a durable catalog snapshot. Remote write skips heads without WAL shards (#554).
+2. **A slow Alertmanager no longer delays notifications to healthy instances.** Each Alertmanager has its own queue and send loop; unchanged configurations retain their queues across reloads. `prometheus_notifications_dropped_total` and `prometheus_notifications_queue_length` now have an `alertmanager` label, and `prometheus_notifications_successfully_sent_total` is exported (#572).
+
 ## v0.8.18 / 2026-10-30
 
 ### Fixes

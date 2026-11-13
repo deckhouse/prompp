@@ -4,14 +4,12 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 )
 
@@ -82,7 +80,7 @@ func BenchmarkChunkSeriesLifecycle(b *testing.B) {
 				StartTimestampMs: interval.MinT,
 				EndTimestampMs:   interval.MaxT,
 				LabelSetIDs:      []uint32{0},
-			}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
+			})
 			require.Equal(b, cppbridge.DataStorageQueryStatusSuccess, query.Status)
 			newSet := func() *ChunkSeriesSet {
 				recoder := cppbridge.NewSerializedChunkRecoder(query.SerializedData, interval)
