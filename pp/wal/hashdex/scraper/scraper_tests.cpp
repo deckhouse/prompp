@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <memory>
 #include <optional>
+#include <span>
 
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
@@ -176,7 +179,7 @@ INSTANTIATE_TEST_SUITE_P(
                     ScraperCase{.buffer = "go_gc_duration_seconds_count \n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "go_gc_duration_seconds_count\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "go_gc_duration_seconds_count", .result = Error::kUnexpectedToken, .floats = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kInvalidValue, .floats = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "{\"a\"\n}\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "{} 1\n", .result = Error::kNoMetricName, .floats = {}},
                     ScraperCase{.buffer = "{\"\xff\"\n}\n", .result = Error::kInvalidUtf8, .floats = {}},
@@ -906,6 +909,91 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                                {"mount_point", "D:\\"},
                                                                                            },
                                                                                            BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
+
+// The body ends in the middle of a token, or its last line has no trailing newline. The body is
+// copied into a heap buffer of the exact size, without a terminator, so that a read past the end
+// is reported by ASan and the result cannot depend on the bytes after the buffer.
+template <class Scraper>
+class TruncatedBufferScraperFixture : public ScraperFixture<Scraper> {
+ protected:
+  std::unique_ptr<char[]> buffer_;
+  std::span<char> span_;
+
+  void SetUp() override {
+    calculate_labelset_hash(const_cast<ScraperCase&>(this->GetParam()).floats);
+
+    const auto body = this->GetParam().buffer;
+    buffer_ = std::make_unique_for_overwrite<char[]>(body.size());
+    std::ranges::copy(body, buffer_.get());
+    span_ = {buffer_.get(), body.size()};
+  }
+};
+
+class PrometheusScraperTruncatedBufferFixture : public TruncatedBufferScraperFixture<PrometheusScraper> {};
+
+TEST_P(PrometheusScraperTruncatedBufferFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = scraper_.parse(span_, kDefaultTimestamp);
+  const auto floats = get_floats();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().floats, floats);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TruncatedBuffer,
+    PrometheusScraperTruncatedBufferFixture,
+    testing::Values(ScraperCase{.buffer = "#1010101010101010\n# TYPE", .result = Error::kNoError},
+                    ScraperCase{.buffer = "# TYPE metric",
+                                .result = Error::kNoError,
+                                .metadata = {Metadata{.metric_name = "metric", .text = "", .type = MetadataType::kType}}},
+                    ScraperCase{.buffer = "metric ", .result = Error::kUnexpectedToken},
+                    ScraperCase{.buffer = "metric{a=\"b", .result = Error::kUnexpectedToken},
+                    ScraperCase{
+                        .buffer = "metric 1",
+                        .result = Error::kNoError,
+                        .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "metric"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                    ScraperCase{.buffer = "metric 1 2",
+                                .result = Error::kNoError,
+                                .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "metric"}}, BareBones::Vector<Sample>{Sample{2, 1}}}}}}));
+
+class OpenMetricsScraperTruncatedBufferFixture : public TruncatedBufferScraperFixture<OpenMetricsScraper> {};
+
+TEST_P(OpenMetricsScraperTruncatedBufferFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = scraper_.parse(span_, kDefaultTimestamp);
+  const auto floats = get_floats();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().floats, floats);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+INSTANTIATE_TEST_SUITE_P(TruncatedBuffer,
+                         OpenMetricsScraperTruncatedBufferFixture,
+                         testing::Values(ScraperCase{.buffer = "#1010101010101010\n# TYPE", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "# TYPE", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "# TYPE metric", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "metric ", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "metric 1 ", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "metric 1 # ", .result = Error::kInvalidTimestamp},
+                                         ScraperCase{.buffer = "metric 1\n# EOF",
+                                                     .result = Error::kNoError,
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "metric"}},
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                         ScraperCase{.buffer = "metric 1 # {a=\"b\"} 2\n# EOF",
+                                                     .result = Error::kNoError,
+                                                     .floats = {FloatMetric{.timeseries = {LabelViewSet{{"__name__", "metric"}},
+                                                                                           BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}}));
 
 // Builds a scrape buffer whose real `# TYPE`/metric lines sit past the 4 GiB mark, preceded by
 // filler comment lines that the scraper skips.

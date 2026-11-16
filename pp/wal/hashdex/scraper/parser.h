@@ -50,9 +50,7 @@ class PrometheusParser {
   [[nodiscard]] PROMPP_ALWAYS_INLINE Tokenizer& tokenizer() noexcept { return tokenizer_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Tokenizer& tokenizer() const noexcept { return tokenizer_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_value_token() const noexcept {
-    return tokenizer_.token() == Token::kValue || (tokenizer_.token() == Token::kEOF && !tokenizer_.token_str().empty());
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_value_token() const noexcept { return tokenizer_.token() == Token::kValue; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Error validate_parse_result() const noexcept {
     return tokenizer_.token_str().empty() ? Error::kNoError : Error::kUnexpectedToken;
   }
@@ -79,9 +77,7 @@ class PrometheusParser {
 
   Tokenizer tokenizer_;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_timestamp_token() const noexcept {
-    return tokenizer_.token() == Token::kTimestamp || (tokenizer_.token() == Token::kEOF && !tokenizer_.token_str().empty());
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_timestamp_token() const noexcept { return tokenizer_.token() == Token::kTimestamp; }
 };
 
 class OpenMetricsParser {

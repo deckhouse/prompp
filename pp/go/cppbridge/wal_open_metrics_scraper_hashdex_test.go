@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -100,4 +101,50 @@ foo_total 17.0 1520879607.789 # {id="counter-test"} 5`
 	s.Require().NoError(err)
 	s.Equal(uint32(24), scraped)
 	s.Equal(expectedMetadata, actualMetadata)
+}
+
+// parseWithTrailingBytes parses body from a backing array whose spare capacity is filled with
+// trailing, so a read past the end of the body sees a known byte.
+func (s *OpenMetricsScraperHashdexSuite) parseWithTrailingBytes(body string, trailing byte) (uint32, error) {
+	backing := make([]byte, len(body), len(body)+64)
+	copy(backing, body)
+	spare := backing[len(body):cap(backing)]
+	for i := range spare {
+		spare[i] = trailing
+	}
+
+	hashdex := cppbridge.NewOpenMetricsScraperHashdex()
+	scraped, err := hashdex.Parse(backing[:len(body):len(body)], -1)
+	runtime.KeepAlive(hashdex)
+
+	return scraped, err
+}
+
+func (s *OpenMetricsScraperHashdexSuite) TestParseTruncatedBodyDoesNotDependOnTrailingBytes() {
+	// Arrange
+	const body = "metric 1\n# TYPE"
+
+	// Act
+	_, errZero := s.parseWithTrailingBytes(body, 0)
+	_, errSpace := s.parseWithTrailingBytes(body, ' ')
+	_, errNewline := s.parseWithTrailingBytes(body, '\n')
+	_, errLetter := s.parseWithTrailingBytes(body, 'x')
+
+	// Assert
+	s.Require().ErrorIs(errZero, cppbridge.ErrScraperParseUnexpectedToken)
+	s.Require().ErrorIs(errSpace, cppbridge.ErrScraperParseUnexpectedToken)
+	s.Require().ErrorIs(errNewline, cppbridge.ErrScraperParseUnexpectedToken)
+	s.Require().ErrorIs(errLetter, cppbridge.ErrScraperParseUnexpectedToken)
+}
+
+func (s *OpenMetricsScraperHashdexSuite) TestParseEOFWordWithoutNewline() {
+	// Arrange
+	const body = "metric 1\n# EOF"
+
+	// Act
+	scraped, err := s.parseWithTrailingBytes(body, 'x')
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(uint32(1), scraped)
 }

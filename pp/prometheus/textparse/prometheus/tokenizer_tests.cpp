@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <memory>
 #include <vector>
 
+#include "bare_bones/algorithm.h"
 #include "tokenizer.h"
 
 namespace {
@@ -277,5 +280,106 @@ INSTANTIATE_TEST_SUITE_P(Label,
                                                                          "\n",
                                                                  .token = TokenType::kInvalid},
                                                        }}));
+
+// The body ends in the middle of a token: the tokenizer must stop at the end of the buffer
+// without reading past it. The input is copied into a heap buffer of the exact size, so a
+// read past the end is reported by ASan.
+class PrometheusTokenizerTruncatedInputFixture : public ::testing::TestWithParam<TokenizerCase> {
+ protected:
+  std::unique_ptr<char[]> buffer_;
+
+  std::vector<Token> tokenize(std::string_view str) {
+    std::vector<Token> tokens;
+
+    buffer_ = std::make_unique_for_overwrite<char[]>(str.size());
+    std::ranges::copy(str, buffer_.get());
+
+    Tokenizer tokenizer({buffer_.get(), str.size()});
+    while (!BareBones::is_in(tokenizer.next(), TokenType::kEOF, TokenType::kInvalid)) {
+      tokens.emplace_back(Token{.text = tokenizer.token_str(), .token = tokenizer.token()});
+    }
+    tokens.emplace_back(Token{.text = tokenizer.token_str(), .token = tokenizer.token()});
+
+    return tokens;
+  }
+};
+
+TEST_P(PrometheusTokenizerTruncatedInputFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto tokens = tokenize(GetParam().str);
+
+  // Assert
+  EXPECT_EQ(GetParam().tokens, tokens);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TruncatedComment,
+    PrometheusTokenizerTruncatedInputFixture,
+    testing::Values(
+        TokenizerCase{.str = "#", .tokens = {Token{.text = "", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "# ", .tokens = {Token{.text = "", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "# T", .tokens = {Token{.text = "T", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "# TYP", .tokens = {Token{.text = "TYP", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "# HEL", .tokens = {Token{.text = "HEL", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "# TYPE", .tokens = {Token{.text = "TYPE", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "# comment", .tokens = {Token{.text = "comment", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}},
+        TokenizerCase{.str = "#1010101010101010\n# TYPE",
+                      .tokens = {Token{.text = "1010101010101010", .token = TokenType::kComment}, Token{.text = "\n", .token = TokenType::kLinebreak},
+                                 Token{.text = "TYPE", .token = TokenType::kComment}, Token{.text = "", .token = TokenType::kEOF}}}));
+INSTANTIATE_TEST_SUITE_P(
+    TruncatedMeta,
+    PrometheusTokenizerTruncatedInputFixture,
+    testing::Values(TokenizerCase{.str = "# TYPE ", .tokens = {Token{.text = "TYPE ", .token = TokenType::kType}, Token{.text = "", .token = TokenType::kEOF}}},
+                    TokenizerCase{.str = "# TYPE metric",
+                                  .tokens = {Token{.text = "TYPE ", .token = TokenType::kType}, Token{.text = "metric", .token = TokenType::kMetricName},
+                                             Token{.text = "", .token = TokenType::kText}, Token{.text = "", .token = TokenType::kEOF}}},
+                    TokenizerCase{.str = "# HELP metric text",
+                                  .tokens = {Token{.text = "HELP ", .token = TokenType::kHelp}, Token{.text = "metric", .token = TokenType::kMetricName},
+                                             Token{.text = "text", .token = TokenType::kText}, Token{.text = "", .token = TokenType::kEOF}}}));
+INSTANTIATE_TEST_SUITE_P(
+    TruncatedSample,
+    PrometheusTokenizerTruncatedInputFixture,
+    testing::Values(TokenizerCase{.str = "metric",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = "", .token = TokenType::kEOF}}},
+                    TokenizerCase{.str = "metric ",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = " ", .token = TokenType::kWhitespace},
+                                             Token{.text = "", .token = TokenType::kEOF}}},
+                    TokenizerCase{.str = "metric 1",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = " ", .token = TokenType::kWhitespace},
+                                             Token{.text = "1", .token = TokenType::kValue}, Token{.text = "", .token = TokenType::kEOF}}},
+                    TokenizerCase{.str = "metric 1 2",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = " ", .token = TokenType::kWhitespace},
+                                             Token{.text = "1", .token = TokenType::kValue}, Token{.text = " ", .token = TokenType::kWhitespace},
+                                             Token{.text = "2", .token = TokenType::kTimestamp}, Token{.text = "", .token = TokenType::kEOF}}}));
+INSTANTIATE_TEST_SUITE_P(
+    TruncatedLabels,
+    PrometheusTokenizerTruncatedInputFixture,
+    testing::Values(TokenizerCase{.str = "metric{a=",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = "{", .token = TokenType::kBraceOpen},
+                                             Token{.text = "a", .token = TokenType::kLabelName}, Token{.text = "=", .token = TokenType::kEqual},
+                                             Token{.text = "", .token = TokenType::kEOF}}},
+                    TokenizerCase{.str = "metric{a=\"b",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = "{", .token = TokenType::kBraceOpen},
+                                             Token{.text = "a", .token = TokenType::kLabelName}, Token{.text = "=", .token = TokenType::kEqual},
+                                             Token{.text = "\"b", .token = TokenType::kInvalid}}},
+                    TokenizerCase{.str = "metric{a=\"b\"}",
+                                  .tokens = {Token{.text = "metric", .token = TokenType::kMetricName}, Token{.text = "{", .token = TokenType::kBraceOpen},
+                                             Token{.text = "a", .token = TokenType::kLabelName}, Token{.text = "=", .token = TokenType::kEqual},
+                                             Token{.text = "\"b\"", .token = TokenType::kLabelValue}, Token{.text = "}", .token = TokenType::kBraceClose},
+                                             Token{.text = "", .token = TokenType::kEOF}}}));
+
+INSTANTIATE_TEST_SUITE_P(EmbeddedNull,
+                         PrometheusTokenizerTruncatedInputFixture,
+                         testing::Values(TokenizerCase{.str = "metric 1\x00"
+                                                              "2",
+                                                       .tokens = {Token{.text = "metric", .token = TokenType::kMetricName},
+                                                                  Token{.text = " ", .token = TokenType::kWhitespace},
+                                                                  Token{.text = "1\x00"
+                                                                                "2",
+                                                                        .token = TokenType::kValue},
+                                                                  Token{.text = "", .token = TokenType::kEOF}}},
+                                         TokenizerCase{.str = "\x00metric 1", .tokens = {Token{.text = "\x00", .token = TokenType::kEOF}}}));
 
 }  // namespace
