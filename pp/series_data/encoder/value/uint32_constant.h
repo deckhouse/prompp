@@ -14,7 +14,7 @@ class PROMPP_ATTRIBUTE_PACKED Uint32ConstantEncoder {
   explicit Uint32ConstantEncoder(double value) : value_(uint32_value(value)) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static bool can_be_encoded(double value) noexcept {
-    return is_positive_int(value) && value <= static_cast<double>(std::numeric_limits<uint32_t>::max());
+    return is_in_bounds(value, 0.0, std::numeric_limits<uint32_t>::max()) && static_cast<double>(static_cast<uint32_t>(value)) == value;
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_actual(const EncodingState& state, double value) const noexcept {
     return is_values_strictly_equal(value, last_value(state));
