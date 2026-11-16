@@ -2,6 +2,7 @@ package querier_test
 
 import (
 	"math"
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -80,7 +81,7 @@ func (s *CrossSeriesSetSuite) query(
 		return &querier.CrossSeriesSet{}
 	}
 
-	lssQueryResult := snapshot.Query(selector)
+	lssQueryResult := snapshot.Query(selector, true)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.CrossSeriesSet{}
 	}
@@ -107,6 +108,8 @@ func (s *CrossSeriesSetSuite) query(
 	nameIDs := make([]uint32, len(hints.Grouping))
 	lss.LabelNameToIDs(hints.Grouping, nameIDs)
 	seriesGroups := lss.GroupSeriesByLabelNames(lssQueryResult.IDs(), nameIDs)
+	// the ids are C-allocated and freed by the finalizer, keep the result alive across the cgo call
+	runtime.KeepAlive(lssQueryResult)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 
