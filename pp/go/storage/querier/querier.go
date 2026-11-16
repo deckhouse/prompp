@@ -316,15 +316,32 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
+// selectorTimeRange narrows the querier range to the range of one selector.
+// The PromQL engine opens one querier over the union of all selectors of a query
+// and passes the range of each selector in hints.Start and hints.End. A selector
+// with an offset or an @ modifier must be answered at its own End, otherwise the
+// engine gets a sample outside the selector's lookback window and drops it.
+// Hints without a range (nil or zero Start and End) keep the querier range.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectorTimeRange(
+	hints *storage.SelectHints,
+) (mint, maxt int64) {
+	if hints == nil || (hints.Start == 0 && hints.End == 0) {
+		return q.mint, q.maxt
+	}
+
+	return max(q.mint, hints.Start), min(q.maxt, hints.End)
+}
+
 // selectInstant returns a instant set of series that matches the given label matchers.
 //
 //revive:disable-next-line:function-length long but readable.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	ctx context.Context,
 	_ bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
+	mint, maxt := q.selectorTimeRange(hints)
 	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSelectInstant)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
@@ -346,8 +363,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	}
 
 	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
-	if q.mint <= valueNotFoundTimestampValue {
-		valueNotFoundTimestampValue = q.mint - 1
+	if mint <= valueNotFoundTimestampValue {
+		valueNotFoundTimestampValue = mint - 1
 	}
 
 	resources.seriesSets = poolProvider.GetSeriesSet()
@@ -371,7 +388,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 			start := slots.Start()
 			result := s.DataStorage().InstantQuery(
-				q.maxt,
+				maxt,
 				lssQueryResult.IDs(),
 				uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))), // #nosec G103 // it's meant to be that way
 			)
@@ -442,6 +459,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	mint, maxt := q.selectorTimeRange(hints)
 	hints = SwitchFuncOptimize(hints, q.queryOptimize)
 
 	if hints != emptySelectHints &&
@@ -451,7 +469,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 	resources.serializedData = poolProvider.GetSerializedData()
 	t := queryDataStorage(
-		dsQueryRangeQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, stats,
+		dsQueryRangeQuerier, q.head, resources.lssQueryResults, resources.serializedData, mint, maxt, hints, stats,
 	)
 	resources.addTask(t)
 
@@ -462,20 +480,20 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	case isCrossSeriesFunc(hints):
 		optimizationType = "cross_series"
 		result = q.makeCrossSeriesSet(
-			resources.lssQueryResults, resources.snapshots, resources.serializedData, hints,
+			resources.lssQueryResults, resources.snapshots, resources.serializedData, hints, mint, maxt,
 		)
 
 	case isAggregationSeriesFunc(hints):
 		optimizationType = "aggregation"
 		resources.seriesSets = poolProvider.GetSeriesSet()
 		result = q.makeAggrSeriesSet(
-			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets,
+			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets, mint, maxt,
 		)
 
 	default:
 		resources.seriesSets = poolProvider.GetSeriesSet()
 		result = q.makeSeriesSet(
-			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets,
+			resources.lssQueryResults, resources.snapshots, resources.serializedData, resources.seriesSets, mint, maxt,
 		)
 	}
 
@@ -489,11 +507,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 }
 
 // makeAggrSeriesSet fills the caller-owned shard buffer and builds a merged set without retaining the buffer.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
+func (*Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	seriesSets []storage.SeriesSet,
+	mint, maxt int64,
 ) storage.SeriesSet {
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
@@ -501,8 +520,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
 				snapshots[shardID],
 				serializedData,
 				lssQueryResults[shardID],
-				q.mint,
-				q.maxt,
+				mint,
+				maxt,
 			)
 			continue
 		}
@@ -514,17 +533,18 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeAggrSeriesSet(
 }
 
 // makeSeriesSet fills the caller-owned shard buffer and builds a merged set without retaining the buffer.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
+func (*Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	seriesSets []storage.SeriesSet,
+	mint, maxt int64,
 ) storage.SeriesSet {
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
 			seriesSets[shardID] = NewSeriesSet(
-				q.mint,
-				q.maxt,
+				mint,
+				maxt,
 				lssQueryResults[shardID],
 				snapshots[shardID],
 				serializedData,
@@ -544,6 +564,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	snapshots []*cppbridge.LabelSetSnapshot,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	hints *storage.SelectHints,
+	mint, maxt int64,
 ) storage.SeriesSet {
 	staleNaNSeries := make([][]StaleNaNSeries, len(lssQueryResults))
 	for i := range staleNaNSeries {
@@ -618,8 +639,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 			serializedData,
 			snapshots[shardID],
 			seriesGroups[shardID],
-			q.mint,
-			q.maxt,
+			mint,
+			maxt,
 			hints.Grouping,
 			q.head.ID(),
 			uint16(shardID), // #nosec G115 // no overflow
