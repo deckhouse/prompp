@@ -179,7 +179,7 @@ class CompactSequencePublicationFixture : public testing::TestWithParam<CompactS
   }
 
  private:
-  inline static CompactSequencePublicationFixture* fixture_{};
+  static inline CompactSequencePublicationFixture* fixture_{};
 
   void SetUp() override { fixture_ = this; }
   void TearDown() override { fixture_ = nullptr; }

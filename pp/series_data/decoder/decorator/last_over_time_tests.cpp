@@ -53,9 +53,7 @@ class GenericLastOverTimeFixture : public ::testing::TestWithParam<LastOverTimeI
 
 using LastOverTimeFixture = GenericLastOverTimeFixture<LastOverTimeIterator<>>;
 
-TEST_P(LastOverTimeFixture, Test) {
-  test();
-}
+TEST_P(LastOverTimeFixture, Test) { test(); }
 
 INSTANTIATE_TEST_SUITE_P(
     OneSample,
@@ -107,9 +105,7 @@ INSTANTIATE_TEST_SUITE_P(TimeInterval,
 
 using LastOverTimeWithStaleNansFixture = GenericLastOverTimeFixture<LastOverTimeWithStaleNansIterator<>>;
 
-TEST_P(LastOverTimeWithStaleNansFixture, Test) {
-  test();
-}
+TEST_P(LastOverTimeWithStaleNansFixture, Test) { test(); }
 
 INSTANTIATE_TEST_SUITE_P(
     OneSample,

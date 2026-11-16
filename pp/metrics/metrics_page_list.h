@@ -18,22 +18,22 @@ class MetricsPageList {
 
     explicit Iterator(MetricsPageControlBlock* metrics_page) : metrics_page_(metrics_page) { advance_to_used_metrics_page(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return metrics_page_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator->() const noexcept { return metrics_page_; }
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return metrics_page_; }
+    [[nodiscard]] PROMPP(inline) value_type operator->() const noexcept { return metrics_page_; }
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       metrics_page_ = metrics_page_->next_metrics_page();
       advance_to_used_metrics_page();
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return metrics_page_ == nullptr; }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return metrics_page_ == nullptr; }
 
    private:
     MetricsPageControlBlock* metrics_page_;
@@ -85,8 +85,8 @@ class MetricsPageList {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(next_metrics_page_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP(inline) Iterator begin() const noexcept { return Iterator(next_metrics_page_); }
+  [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
  private:
   std::atomic<MetricsPageControlBlock*> next_metrics_page_{};

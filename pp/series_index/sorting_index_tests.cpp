@@ -3,10 +3,10 @@
 #include "bare_bones/vector.h"
 #include "series_index/sorting_index.h"
 
-PRAGMA_DIAGNOSTIC(push)
-PRAGMA_DIAGNOSTIC(ignored "-Warray-bounds")
+PROMPP(diagnostic, push)
+PROMPP(diagnostic, ignore, array_bounds)
 #include <parallel_hashmap/btree.h>
-PRAGMA_DIAGNOSTIC(pop)
+PROMPP(diagnostic, pop)
 
 namespace {
 
@@ -19,7 +19,7 @@ class SortingIndexFixture : public testing::Test {
 
  protected:
   struct LessComparator {
-    PROMPP_ALWAYS_INLINE static bool operator()(uint32_t a, uint32_t b) noexcept { return kItems[a] < kItems[b]; }
+    static PROMPP(inline) bool operator()(uint32_t a, uint32_t b) noexcept { return kItems[a] < kItems[b]; }
   };
   using Set = phmap::btree_set<uint32_t, LessComparator>;
 

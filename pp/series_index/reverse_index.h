@@ -21,17 +21,17 @@ class DeltaRLE {
     using value_type = DataSequence::value_type;
 
     template <std::output_iterator<value_type> IteratorType>
-    PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
+    PROMPP(inline) void encode(value_type val, IteratorType& i) noexcept {
       BaseDeltaRLE::Encoder::encode(val, i);
       ++count_;
     }
 
-    PROMPP_ALWAYS_INLINE void clear() noexcept {
+    PROMPP(inline) void clear() noexcept {
       BaseDeltaRLE::Encoder::clear();
       count_ = 0;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type count() const noexcept { return count_; }
+    [[nodiscard]] PROMPP(inline) value_type count() const noexcept { return count_; }
 
    private:
     value_type count_{};
@@ -42,8 +42,8 @@ class DeltaRLE {
 
 class SeriesIdSequence : public BareBones::EncodedSequence<DeltaRLE> {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
+  [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return encoder_.count(); }
+  [[nodiscard]] PROMPP(inline) uint32_t empty() const noexcept { return encoder_.count() == 0; }
 };
 
 class SeriesIdSequenceSnapshot {
@@ -59,8 +59,8 @@ class SeriesIdSequenceSnapshot {
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
+  [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return encoder_.count(); }
+  [[nodiscard]] PROMPP(inline) uint32_t empty() const noexcept { return encoder_.count() == 0; }
 
   class Iterator {
    public:
@@ -72,28 +72,28 @@ class SeriesIdSequenceSnapshot {
         : iterator_(DeltaRLE::DataSequence::decode_iterator(memory.get(), memory.items_count()), DeltaRLE::DataSequence::end(), &encoder),
           count_(encoder.count()) {}
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       ++iterator_;
       --count_;
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const SeriesIdSequence::IteratorSentinel&) const noexcept { return count_ == 0; }
-    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *iterator_; }
+    PROMPP(inline) bool operator==(const SeriesIdSequence::IteratorSentinel&) const noexcept { return count_ == 0; }
+    PROMPP(inline) value_type operator*() const noexcept { return *iterator_; }
 
    private:
     SeriesIdSequence::Iterator iterator_;
     uint32_t count_{};
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return {memory_, encoder_}; }
-  static PROMPP_ALWAYS_INLINE SeriesIdSequence::IteratorSentinel end() noexcept { return {}; }
+  [[nodiscard]] PROMPP(inline) Iterator begin() const noexcept { return {memory_, encoder_}; }
+  static PROMPP(inline) SeriesIdSequence::IteratorSentinel end() noexcept { return {}; }
 
  private:
   DeltaRLE::Encoder encoder_;
@@ -112,7 +112,7 @@ namespace series_index {
 
 class LabelReverseIndex {
  public:
-  PROMPP_ALWAYS_INLINE void add(uint32_t label_value_id, uint32_t series_id) {
+  PROMPP(inline) void add(uint32_t label_value_id, uint32_t series_id) {
     if (!exists(label_value_id)) {
       series_by_value_.resize(label_value_id + 1);
     }
@@ -121,18 +121,18 @@ class LabelReverseIndex {
     all_series_.push_back(series_id);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool exists(uint32_t label_value_id) const noexcept { return label_value_id < series_by_value_.size(); }
+  [[nodiscard]] PROMPP(inline) bool exists(uint32_t label_value_id) const noexcept { return label_value_id < series_by_value_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_value_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence* get(uint32_t label_value_id) const noexcept {
     return exists(label_value_id) ? &series_by_value_[label_value_id] : nullptr;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& get_existing(uint32_t label_value_id) const noexcept { return series_by_value_[label_value_id]; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get_all() const noexcept { return &all_series_; }
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence& get_existing(uint32_t label_value_id) const noexcept { return series_by_value_[label_value_id]; }
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence* get_all() const noexcept { return &all_series_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<SeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
+  [[nodiscard]] PROMPP(inline) const BareBones::Vector<SeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return series_by_value_.size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return all_series_.allocated_memory() + series_by_value_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return series_by_value_.size(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return all_series_.allocated_memory() + series_by_value_.allocated_memory(); }
 
  private:
   SeriesIdSequence all_series_{};
@@ -149,7 +149,7 @@ namespace series_index {
 class SeriesReverseIndex {
  public:
   template <class Label>
-  PROMPP_ALWAYS_INLINE void add(const Label& label, uint32_t series_id) {
+  PROMPP(inline) void add(const Label& label, uint32_t series_id) {
     if (!exists(label.name_id())) {
       labels_by_name_.resize(label.name_id() + 1);
     }
@@ -157,26 +157,26 @@ class SeriesReverseIndex {
     labels_by_name_[label.name_id()].add(label.value_id(), series_id);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool exists(uint32_t label_name_id) const noexcept { return label_name_id < labels_by_name_.size(); }
+  [[nodiscard]] PROMPP(inline) bool exists(uint32_t label_name_id) const noexcept { return label_name_id < labels_by_name_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id) const {
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence* get(uint32_t label_name_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get_all() : nullptr;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& get_existing(uint32_t label_name_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence& get_existing(uint32_t label_name_id) const noexcept {
     return *labels_by_name_[label_name_id].get_all();
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
+  [[nodiscard]] PROMPP(inline) const SeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get(label_value_id) : nullptr;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<LabelReverseIndex>& labels_by_name() const noexcept { return labels_by_name_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t names_count() const noexcept { return labels_by_name_.size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t values_count(uint32_t label_name_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) const BareBones::Vector<LabelReverseIndex>& labels_by_name() const noexcept { return labels_by_name_; }
+  [[nodiscard]] PROMPP(inline) uint32_t names_count() const noexcept { return labels_by_name_.size(); }
+  [[nodiscard]] PROMPP(inline) uint32_t values_count(uint32_t label_name_id) const noexcept {
     return exists(label_name_id) ? labels_by_name_[label_name_id].count() : 0;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return labels_by_name_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return labels_by_name_.allocated_memory(); }
 
-  PROMPP_ALWAYS_INLINE void reserve(uint32_t size) noexcept { labels_by_name_.reserve(size); }
+  PROMPP(inline) void reserve(uint32_t size) noexcept { labels_by_name_.reserve(size); }
 
  private:
   BareBones::Vector<LabelReverseIndex> labels_by_name_;

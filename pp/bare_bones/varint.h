@@ -14,7 +14,7 @@ class VarInt {
  public:
   static constexpr size_t kMaxVarIntLength = 10;
 
-  PROMPP_ALWAYS_INLINE static size_t write(uint8_t* data, int64_t value) noexcept {
+  static PROMPP(inline) size_t write(uint8_t* data, int64_t value) noexcept {
     auto uint_value = std::bit_cast<uint64_t>(value) << 1;
     if (value < 0) {
       uint_value = ~uint_value;
@@ -23,7 +23,7 @@ class VarInt {
     return write(data, uint_value);
   }
 
-  PROMPP_ALWAYS_INLINE static size_t write(uint8_t* data, uint64_t value) noexcept {
+  static PROMPP(inline) size_t write(uint8_t* data, uint64_t value) noexcept {
     auto p = data;
     while (value >= 128) {
       *p++ = 0x80 | (value & 0x7f);
@@ -33,7 +33,7 @@ class VarInt {
     return p - data;
   }
 
-  PROMPP_ALWAYS_INLINE static int64_t read(BitSequenceReader& reader) {
+  static PROMPP(inline) int64_t read(BitSequenceReader& reader) {
     auto value = read_uint(reader);
     auto result = std::bit_cast<int64_t>(value >> 1);
     if ((value & 1) != 0) {
@@ -43,7 +43,7 @@ class VarInt {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE static uint64_t read_uint(BitSequenceReader& reader) {
+  static PROMPP(inline) uint64_t read_uint(BitSequenceReader& reader) {
     uint64_t result = 0;
     uint8_t shift = 0;
 
@@ -60,7 +60,7 @@ class VarInt {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE static size_t length(uint64_t value) noexcept {
+  static PROMPP(inline) size_t length(uint64_t value) noexcept {
     return value < (1ULL << 7)    ? 1
            : value < (1ULL << 14) ? 2
            : value < (1ULL << 21) ? 3

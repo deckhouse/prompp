@@ -23,8 +23,8 @@ class UniversalDecodeIterator {
   DECODE_ITERATOR_TYPE_TRAITS();
 
 #define DEFINE_CONSTRUCTOR(DecodeIterator, field, type)                                                                                                        \
-  PRAGMA_DIAGNOSTIC(push)                                                                                                                                      \
-  PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_MAYBE_UNINITIALIZED)                                                                                                    \
+  PROMPP(diagnostic, push)                                                                                                                                     \
+  PROMPP(diagnostic, ignore, maybe_uninitialized)                                                                                                              \
   template <class... Args>                                                                                                                                     \
   explicit UniversalDecodeIterator(std::in_place_type_t<DecodeIterator>, Args&&... args) : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} { \
     struct SampleIsFirstIteratorField : DecodeIterator {                                                                                                       \
@@ -32,21 +32,22 @@ class UniversalDecodeIterator {
                     #DecodeIterator "::data_ must comply with the DecodeIteratorData concept");                                                                \
     };                                                                                                                                                         \
   }                                                                                                                                                            \
-  PRAGMA_DIAGNOSTIC(pop)
+  PROMPP(diagnostic, pop)
 
   DEFINE_CONSTRUCTOR(ConstantDecodeIterator, constant, kConstant)
   DEFINE_CONSTRUCTOR(TwoDoubleConstantDecodeIterator, two_double_constant, kTwoDoubleConstant)
   DEFINE_CONSTRUCTOR(AscIntegerDecodeIterator, asc_int, kAscInteger)
   DEFINE_CONSTRUCTOR(AscIntegerThenValuesGorillaDecodeIterator, asc_int_then_values, kAscIntegerThenValuesGorilla)
   DEFINE_CONSTRUCTOR(ValuesGorillaDecodeIterator, values_gorilla, kValuesGorilla)
-
 #undef DEFINE_CONSTRUCTOR
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return iterator_.constant.operator*(); }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.constant.operator->(); }
+  PROMPP(inline) const encoder::Sample& operator*() const noexcept {
+    return iterator_.constant.operator*();
+  }
+  PROMPP(inline) const encoder::Sample* operator->() const noexcept { return iterator_.constant.operator->(); }
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) const noexcept {
+  PROMPP(inline) decltype(auto) visit(Visitor&& visitor) const noexcept {
     switch (type_) {
       case Type::kConstant: {
         return std::forward<Visitor>(visitor)(iterator_.constant);
@@ -71,40 +72,41 @@ class UniversalDecodeIterator {
   }
 
   template <class Visitor>
-  PROMPP_ALWAYS_INLINE decltype(auto) visit(Visitor&& visitor) noexcept {
-    return const_cast<const UniversalDecodeIterator*>(this)->visit(
-        [&]<typename Iterator>(const Iterator& iterator) PROMPP_LAMBDA_INLINE { return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator)); });
+  PROMPP(inline) decltype(auto) visit(Visitor&& visitor) noexcept {
+    return const_cast<const UniversalDecodeIterator*>(this)->visit([&]<typename Iterator>(const Iterator& iterator) PROMPP(lambda_inline) {
+      return std::forward<Visitor>(visitor)(const_cast<Iterator&>(iterator));
+    });
   }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel& sentinel) const noexcept {
-    return visit([&sentinel](const auto& iterator) PROMPP_LAMBDA_INLINE { return iterator == sentinel; });
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel& sentinel) const noexcept {
+    return visit([&sentinel](const auto& iterator) PROMPP(lambda_inline) { return iterator == sentinel; });
   }
 
-  PROMPP_ALWAYS_INLINE UniversalDecodeIterator& operator++() noexcept {
-    visit([](auto& iterator) PROMPP_LAMBDA_INLINE { ++iterator; });
+  PROMPP(inline) UniversalDecodeIterator& operator++() noexcept {
+    visit([](auto& iterator) PROMPP(lambda_inline) { ++iterator; });
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE UniversalDecodeIterator operator++(int) noexcept {
+  PROMPP(inline) UniversalDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
   template <SeekKind Kind, class SeekHandler>
-  PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
-    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.template seek<Kind>(std::forward<SeekHandler>(handler)); });
+  PROMPP(inline) void seek(SeekHandler&& handler) {
+    visit([&](auto& iterator) PROMPP(lambda_inline) { iterator.template seek<Kind>(std::forward<SeekHandler>(handler)); });
   }
 
-  PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
-    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek_to(timestamp); });
+  PROMPP(inline) void seek_to(PromPP::Primitives::Timestamp timestamp) {
+    visit([&](auto& iterator) PROMPP(lambda_inline) { iterator.seek_to(timestamp); });
   }
 
-  PROMPP_ALWAYS_INLINE void invalidate_sample() {
-    visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate_sample(); });
+  PROMPP(inline) void invalidate_sample() {
+    visit([&](auto& iterator) PROMPP(lambda_inline) { iterator.invalidate_sample(); });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
+  [[nodiscard]] PROMPP(inline) Type type() const noexcept { return type_; }
 
  private:
   union {
