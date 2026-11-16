@@ -78,7 +78,7 @@ func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start,
 		return &querier.SeriesSet{}
 	}
 
-	lssQueryResult := snapshot.Query(selector)
+	lssQueryResult := snapshot.Query(selector, true)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.SeriesSet{}
 	}

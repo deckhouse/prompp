@@ -273,7 +273,7 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		return &querier.InstantSeriesSet{}, nil
 	}
 
-	lssQueryResult := snapshot.Query(selector)
+	lssQueryResult := snapshot.Query(selector, true)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.InstantSeriesSet{}, nil
 	}
@@ -337,7 +337,7 @@ func StaleNaNQuery(
 		return &querier.StaleNaNSeriesSet{}, nil
 	}
 
-	lssQueryResult := snapshot.Query(selector)
+	lssQueryResult := snapshot.Query(selector, true)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.StaleNaNSeriesSet{}, nil
 	}

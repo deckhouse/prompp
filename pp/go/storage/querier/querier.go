@@ -160,7 +160,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 //revive:disable-next-line:function-length long but readable.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	ctx context.Context,
-	_ bool,
+	sortSeries bool,
 	_ *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
@@ -178,7 +178,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 	stats := &resources.stats
 	poolProvider := resources.pool
-	err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, &resources)
+	err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, sortSeries, &resources)
 	if err != nil {
 		logger.Warnf("[QUERIER]: failed to instant: %s", err)
 		return storage.ErrSeriesSet(err)
@@ -248,7 +248,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		stats.lap.Mark(stageDataLoadWait)
 	}
 
-	result := NewMergeShardSeriesSet(resources.seriesSets)
+	result := newShardSeriesSet(resources.seriesSets, sortSeries)
 	stats.lap.Mark(stageBuildResult)
 
 	return result
@@ -257,7 +257,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 // selectRange returns a range set of series that matches the given label matchers.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
-	_ bool,
+	sortSeries bool,
 	_ *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
@@ -275,7 +275,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 	stats := &resources.stats
 	poolProvider := resources.pool
-	err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, &resources)
+	err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, sortSeries, &resources)
 	if err != nil {
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
 		return storage.ErrSeriesSet(err)
@@ -302,7 +302,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		resources.seriesSets[shardID] = &SeriesSet{}
 	}
 
-	result := NewMergeShardSeriesSet(resources.seriesSets)
+	result := newShardSeriesSet(resources.seriesSets, sortSeries)
 	stats.lap.Mark(stageBuildResult)
 
 	return result
@@ -552,6 +552,7 @@ func closeLSSQueryResults(lssQueryResults []*cppbridge.LSSQueryResult) {
 }
 
 // queryLss fills snapshots and LSS results and registers every buffer and task before using them.
+// With sortSeries the matched ids of every shard are ordered by labels; otherwise the C++ sort is skipped.
 //
 //revive:disable-next-line:cyclomatic but readable.
 //revive:disable-next-line:function-length long but readable.
@@ -565,6 +566,7 @@ func queryLss[
 	taskName string,
 	head THead,
 	matchers []*labels.Matcher,
+	sortSeries bool,
 	resources *queryResources[TTask, TShard],
 ) error {
 	stats := &resources.stats
@@ -611,7 +613,7 @@ func queryLss[
 			continue
 		}
 
-		lssQueryResult := snapshots[shardID].Query(selector)
+		lssQueryResult := snapshots[shardID].Query(selector, sortSeries)
 		switch lssQueryResult.Status() {
 		case cppbridge.LSSQueryStatusMatch:
 			resources.lssQueryResults[shardID] = lssQueryResult

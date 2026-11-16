@@ -140,6 +140,7 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
   struct Arguments {
     SnapshotLSSVariantPtr snapshot;
     SelectorPtr selector;
+    bool sort_series;
   };
   struct Result {
     PromPP::Primitives::Go::Slice<uint32_t> matches;
@@ -151,7 +152,9 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
   auto& snapshot_variant = *in->snapshot;
   auto query_result = Querier{}.query(*in->selector);
   in->selector.reset();
-  std::visit([&query_result](const auto& snapshot) { snapshot.sorting_index().sort(query_result.series_ids); }, snapshot_variant);
+  if (in->sort_series) {
+    std::visit([&query_result](const auto& snapshot) { snapshot.sorting_index().sort(query_result.series_ids); }, snapshot_variant);
+  }
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
