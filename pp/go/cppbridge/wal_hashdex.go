@@ -328,6 +328,7 @@ func NewPrometheusScraperHashdex() *WALPrometheusScraperHashdex {
 func (h *WALPrometheusScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walPrometheusScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
+	runtime.KeepAlive(h)
 	return scraped, errorFromCode(errorCode)
 }
 
@@ -341,6 +342,7 @@ func (h *WALPrometheusScraperHashdex) RangeMetadata(f func(metadata WALScraperHa
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }
@@ -384,6 +386,7 @@ func NewOpenMetricsScraperHashdex() *WALOpenMetricsScraperHashdex {
 func (h *WALOpenMetricsScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walOpenMetricsScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
+	runtime.KeepAlive(h)
 	return scraped, errorFromCode(errorCode)
 }
 
@@ -397,6 +400,7 @@ func (h *WALOpenMetricsScraperHashdex) RangeMetadata(f func(metadata WALScraperH
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }
