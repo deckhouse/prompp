@@ -11,7 +11,7 @@ namespace series_data::serialization {
 
 class Deserializer {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static bool is_valid_buffer(std::span<const uint8_t> buffer) noexcept {
+  [[nodiscard]] PROMPP(inline) static bool is_valid_buffer(std::span<const uint8_t> buffer) noexcept {
     if (buffer.size() < sizeof(uint32_t)) {
       return false;
     }
@@ -19,7 +19,7 @@ class Deserializer {
     const auto chunks_count = *reinterpret_cast<const uint32_t*>(buffer.data());
     return buffer.size() >= sizeof(uint32_t) + chunks_count * sizeof(chunk::SerializedChunk);
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static chunk::SerializedChunkSpan get_chunks(std::span<const uint8_t> buffer) noexcept {
+  [[nodiscard]] PROMPP(inline) static chunk::SerializedChunkSpan get_chunks(std::span<const uint8_t> buffer) noexcept {
     uint32_t chunks_count = *reinterpret_cast<const uint32_t*>(buffer.data());
     return {reinterpret_cast<const chunk::SerializedChunk*>(buffer.data() + sizeof(uint32_t)), chunks_count};
   }
@@ -42,14 +42,14 @@ class Deserializer {
 
   explicit Deserializer(std::span<const uint8_t> buffer) : buffer_(buffer) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept { return is_valid_buffer(buffer_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks() const noexcept { return get_chunks(buffer_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator create_decode_iterator(const chunk::SerializedChunk& chunk) const {
+  [[nodiscard]] PROMPP(inline) bool is_valid() const noexcept { return is_valid_buffer(buffer_); }
+  [[nodiscard]] PROMPP(inline) chunk::SerializedChunkSpan get_chunks() const noexcept { return get_chunks(buffer_); }
+  [[nodiscard]] PROMPP(inline) decoder::UniversalDecodeIterator create_decode_iterator(const chunk::SerializedChunk& chunk) const {
     return create_decode_iterator(buffer_, chunk);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkIterator begin() const noexcept { return chunk::SerializedChunkIterator(buffer_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+  [[nodiscard]] PROMPP(inline) chunk::SerializedChunkIterator begin() const noexcept { return chunk::SerializedChunkIterator(buffer_); }
+  [[nodiscard]] PROMPP(inline) static IteratorSentinel end() noexcept { return {}; }
 
  private:
   const std::span<const uint8_t> buffer_;

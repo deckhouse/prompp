@@ -79,7 +79,7 @@ const Lss& get_lss_after_shrink() {
 }
 
 void IndexWriteContextNoShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& lss = get_lss_no_shrink();
   for ([[maybe_unused]] auto _ : state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss};
@@ -89,7 +89,7 @@ void IndexWriteContextNoShrink(benchmark::State& state) {
 }
 
 void IndexWriteContextAfterShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& lss = get_lss_after_shrink();
   for ([[maybe_unused]] auto _ : state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss};

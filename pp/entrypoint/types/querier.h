@@ -106,7 +106,7 @@ class BasicRangeQuerierWithArgumentsWrapperV2 {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void query_finalize() const noexcept { serialize_chunks(); }
+  PROMPP(inline) void query_finalize() const noexcept { serialize_chunks(); }
 
   [[nodiscard]] const BareBones::Bitset& series_to_load() const noexcept { return querier_.get_series_to_load(); }
   [[nodiscard]] bool need_loading() const noexcept { return querier_.need_loading(); }
@@ -117,7 +117,7 @@ class BasicRangeQuerierWithArgumentsWrapperV2 {
   const Query* query_;
   SerializedDataPtr* serialized_data_;
 
-  PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept {
+  PROMPP(inline) void serialize_chunks() const noexcept {
     std::construct_at(serialized_data_,
                       std::make_unique<SerializedDataVariant>(std::in_place_type<SerializedDataGo<DataStorage>>, querier_.get_storage(), querier_.chunks()));
   }

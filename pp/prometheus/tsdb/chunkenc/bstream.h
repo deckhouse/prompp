@@ -4,7 +4,7 @@
 
 namespace PromPP::Prometheus::tsdb::chunkenc {
 
-PROMPP_ALWAYS_INLINE void write_bits(uint8_t* memory, uint64_t value, uint8_t nbits, uint8_t rest_of_bits_in_byte) noexcept {
+PROMPP(inline) void write_bits(uint8_t* memory, uint64_t value, uint8_t nbits, uint8_t rest_of_bits_in_byte) noexcept {
   value <<= BareBones::Bit::kUint64Bits - nbits;
   // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   *memory++ |= static_cast<uint8_t>(value >> (BareBones::Bit::kUint64Bits - rest_of_bits_in_byte));
@@ -12,37 +12,35 @@ PROMPP_ALWAYS_INLINE void write_bits(uint8_t* memory, uint64_t value, uint8_t nb
   *reinterpret_cast<uint64_t*>(memory) |= BareBones::Bit::be(value);
 }
 
-PROMPP_ALWAYS_INLINE void write_byte(uint8_t* memory, uint8_t byt, uint8_t unfilled_bits_in_byte, uint8_t rest_of_bits_in_byte) noexcept {
+PROMPP(inline) void write_byte(uint8_t* memory, uint8_t byt, uint8_t unfilled_bits_in_byte, uint8_t rest_of_bits_in_byte) noexcept {
   const uint16_t value = ((byt << rest_of_bits_in_byte) << 8) | byt >> unfilled_bits_in_byte;
   *reinterpret_cast<uint16_t*>(memory) |= value;
 }
 
-PROMPP_ALWAYS_INLINE void write_single_bit(uint8_t* memory, uint8_t rest_of_bits_in_byte) noexcept {
-  *memory |= 0b1u << (rest_of_bits_in_byte - 1);
-}
+PROMPP(inline) void write_single_bit(uint8_t* memory, uint8_t rest_of_bits_in_byte) noexcept { *memory |= 0b1u << (rest_of_bits_in_byte - 1); }
 
 template <std::array kAllocationSizesTable>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, BareBones::AllocationSize>
 class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, BareBones::Bit::to_bits(sizeof(uint64_t) + 1)> {
  public:
-  PROMPP_ALWAYS_INLINE void write_bits(uint64_t value, uint8_t nbits) noexcept {
+  PROMPP(inline) void write_bits(uint64_t value, uint8_t nbits) noexcept {
     reserve_enough_memory_if_needed(nbits);
     chunkenc::write_bits(Base::template unfilled_memory<uint8_t>(), value, nbits, rest_of_bits_in_byte());
     size_in_bits_ += nbits;
   }
 
-  PROMPP_ALWAYS_INLINE void write_byte(uint8_t byt) noexcept {
+  PROMPP(inline) void write_byte(uint8_t byt) noexcept {
     reserve_enough_memory_if_needed();
     chunkenc::write_byte(Base::template unfilled_memory<uint8_t>(), byt, unfilled_bits_in_byte(), rest_of_bits_in_byte());
     size_in_bits_ += BareBones::Bit::kByteBits;
   }
 
-  PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept {
+  PROMPP(inline) void write_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
     ++size_in_bits_;
   }
 
-  PROMPP_ALWAYS_INLINE void write_single_bit() noexcept {
+  PROMPP(inline) void write_single_bit() noexcept {
     reserve_enough_memory_if_needed();
     chunkenc::write_single_bit(Base::template unfilled_memory<uint8_t>(), rest_of_bits_in_byte());
     ++size_in_bits_;
@@ -59,7 +57,7 @@ class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, 
   using Base::unfilled_bits_in_byte;
   using Base::unfilled_memory;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t rest_of_bits_in_byte() const noexcept { return kByteBits - unfilled_bits_in_byte(); }
+  [[nodiscard]] PROMPP(inline) uint8_t rest_of_bits_in_byte() const noexcept { return kByteBits - unfilled_bits_in_byte(); }
 };
 
 template <std::array kAllocationSizesTable>
@@ -68,19 +66,19 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
  public:
   explicit FixedSizeBStream(uint32_t bits) { reserve_enough_memory_if_needed(bits); }
 
-  PROMPP_ALWAYS_INLINE void write_bits(uint64_t value, uint8_t nbits) noexcept {
+  PROMPP(inline) void write_bits(uint64_t value, uint8_t nbits) noexcept {
     chunkenc::write_bits(Base::template unfilled_memory<uint8_t>(), value, nbits, rest_of_bits_in_byte());
     size_in_bits_ += nbits;
   }
 
-  PROMPP_ALWAYS_INLINE void write_byte(uint8_t byt) noexcept {
+  PROMPP(inline) void write_byte(uint8_t byt) noexcept {
     chunkenc::write_byte(Base::template unfilled_memory<uint8_t>(), byt, unfilled_bits_in_byte(), rest_of_bits_in_byte());
     size_in_bits_ += BareBones::Bit::kByteBits;
   }
 
-  PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept { ++size_in_bits_; }
+  PROMPP(inline) void write_zero_bit() noexcept { ++size_in_bits_; }
 
-  PROMPP_ALWAYS_INLINE void write_single_bit() noexcept {
+  PROMPP(inline) void write_single_bit() noexcept {
     chunkenc::write_single_bit(Base::template unfilled_memory<uint8_t>(), rest_of_bits_in_byte());
     ++size_in_bits_;
   }
@@ -96,7 +94,7 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
   using Base::unfilled_bits_in_byte;
   using Base::unfilled_memory;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t rest_of_bits_in_byte() const noexcept { return kByteBits - unfilled_bits_in_byte(); }
+  [[nodiscard]] PROMPP(inline) uint8_t rest_of_bits_in_byte() const noexcept { return kByteBits - unfilled_bits_in_byte(); }
 };
 
 }  // namespace PromPP::Prometheus::tsdb::chunkenc

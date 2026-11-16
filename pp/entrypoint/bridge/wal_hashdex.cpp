@@ -93,9 +93,7 @@ extern "C" void prompp_wal_protobuf_hashdex_snappy_presharding(void* args, void*
   }
 }
 
-extern "C" void prompp_wal_protobuf_hashdex_get_metadata(void* args, void* res) {
-  get_metadata<PromPP::WAL::hashdex::Protobuf>(args, res);
-}
+extern "C" void prompp_wal_protobuf_hashdex_get_metadata(void* args, void* res) { get_metadata<PromPP::WAL::hashdex::Protobuf>(args, res); }
 
 //
 // GoModelHashdex
@@ -141,7 +139,7 @@ extern "C" void prompp_wal_go_model_hashdex_presharding(void* args, void* res) {
 }
 
 template <size_t hashdex_type>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_ctor(void* res) {
+PROMPP(inline) void scraper_hashdex_ctor(void* res) {
   struct Result {
     HashdexVariant* hashdex;
   };
@@ -150,7 +148,7 @@ PROMPP_ALWAYS_INLINE void scraper_hashdex_ctor(void* res) {
 }
 
 template <class Scraper>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
+PROMPP(inline) void scraper_hashdex_parse(void* args, void* res) {
   struct Arguments {
     HashdexVariant* hashdex;
     PromPP::Primitives::Go::SliceView<char> buffer;
@@ -174,33 +172,21 @@ PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
 }
 
 template <class Scraper>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_get_metadata(void* args, void* res) {
+PROMPP(inline) void scraper_hashdex_get_metadata(void* args, void* res) {
   get_metadata<Scraper>(args, res);
 }
 
-extern "C" void prompp_wal_prometheus_scraper_hashdex_ctor(void* res) {
-  scraper_hashdex_ctor<HashdexType::kPrometheusScraper>(res);
-}
+extern "C" void prompp_wal_prometheus_scraper_hashdex_ctor(void* res) { scraper_hashdex_ctor<HashdexType::kPrometheusScraper>(res); }
 
-extern "C" void prompp_wal_prometheus_scraper_hashdex_parse(void* args, void* res) {
-  scraper_hashdex_parse<PrometheusScraper>(args, res);
-}
+extern "C" void prompp_wal_prometheus_scraper_hashdex_parse(void* args, void* res) { scraper_hashdex_parse<PrometheusScraper>(args, res); }
 
-extern "C" void prompp_wal_prometheus_scraper_hashdex_get_metadata(void* args, void* res) {
-  scraper_hashdex_get_metadata<PrometheusScraper>(args, res);
-}
+extern "C" void prompp_wal_prometheus_scraper_hashdex_get_metadata(void* args, void* res) { scraper_hashdex_get_metadata<PrometheusScraper>(args, res); }
 
-extern "C" void prompp_wal_open_metrics_scraper_hashdex_ctor(void* res) {
-  scraper_hashdex_ctor<HashdexType::kOpenMetricsScraper>(res);
-}
+extern "C" void prompp_wal_open_metrics_scraper_hashdex_ctor(void* res) { scraper_hashdex_ctor<HashdexType::kOpenMetricsScraper>(res); }
 
-extern "C" void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* res) {
-  scraper_hashdex_parse<OpenMetricsScraper>(args, res);
-}
+extern "C" void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* res) { scraper_hashdex_parse<OpenMetricsScraper>(args, res); }
 
-extern "C" void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res) {
-  scraper_hashdex_get_metadata<OpenMetricsScraper>(args, res);
-}
+extern "C" void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res) { scraper_hashdex_get_metadata<OpenMetricsScraper>(args, res); }
 
 extern "C" void prompp_wal_go_head_hashdex_ctor(void* res) {
   struct Result {

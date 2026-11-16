@@ -22,7 +22,7 @@ std::string get_file_content() {
 };
 
 void Parser(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto str = get_file_content();
 
   PrometheusParser parser;
@@ -36,7 +36,7 @@ void Parser(benchmark::State& state) {
 }
 
 void ScraperParse(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto str = get_file_content();
 
   std::string tmp_str;
@@ -58,7 +58,7 @@ void ScraperParse(benchmark::State& state) {
 }
 
 void ScraperParseValidateUtfPerToken(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto str = get_file_content();
 
   std::string tmp_str;
@@ -80,7 +80,7 @@ void ScraperParseValidateUtfPerToken(benchmark::State& state) {
 }
 
 void ScraperRead(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   auto str = get_file_content();
 
   PrometheusScraper scraper;

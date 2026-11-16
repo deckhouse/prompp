@@ -44,18 +44,18 @@ struct LabelSet {
 
     explicit PairsIterator(const LabelSet* label_set) : label_set_(label_set), iterator_(label_set->pairs.begin()) {}
 
-    PROMPP_ALWAYS_INLINE Derived& operator++() noexcept {
+    PROMPP(inline) Derived& operator++() noexcept {
       ++iterator_;
       return *static_cast<Derived*>(this);
     }
 
-    PROMPP_ALWAYS_INLINE Derived operator++(int) noexcept {
+    PROMPP(inline) Derived operator++(int) noexcept {
       auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return iterator_ == label_set_->pairs.end(); }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return iterator_ == label_set_->pairs.end(); }
 
    protected:
     const LabelSet* label_set_;
@@ -71,7 +71,7 @@ struct LabelSet {
     using pointer = value_type*;
     using reference = value_type&;
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept {
       return {{label_set_->data.data() + iterator_->name.begin, iterator_->name.length},
               {label_set_->data.data() + iterator_->value.begin, iterator_->value.length}};
     }
@@ -87,17 +87,17 @@ struct LabelSet {
       using pointer = value_type*;
       using reference = value_type&;
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+      [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept {
         return {label_set_->data.data() + iterator_->name.begin, iterator_->name.length};
       }
     };
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return label_set->pairs.size(); }
+    [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return label_set->pairs.size(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return NamesIterator(label_set); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return NamesIterator(label_set); }
+    [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
-    PROMPP_ALWAYS_INLINE friend size_t hash_value(const Names& label_set_names) noexcept { return hash::hash_of_string_list(label_set_names); }
+    friend PROMPP(inline) size_t hash_value(const Names& label_set_names) noexcept { return hash::hash_of_string_list(label_set_names); }
 
     const LabelSet* label_set;
   };
@@ -105,14 +105,14 @@ struct LabelSet {
   SliceView<char> data;
   SliceView<LabelView> pairs;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+  [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return Iterator(this); }
+  [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return pairs.size(); }
+  [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return pairs.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto names() const noexcept { return Names{.label_set = this}; }
+  [[nodiscard]] PROMPP(inline) auto names() const noexcept { return Names{.label_set = this}; }
 
-  PROMPP_ALWAYS_INLINE friend size_t hash_value(const LabelSet& label_set) noexcept { return hash::hash_of_label_set(label_set); }
+  friend PROMPP(inline) size_t hash_value(const LabelSet& label_set) noexcept { return hash::hash_of_label_set(label_set); }
 };
 
 template <class LabelSet, template <class> class AddContainer, template <class> class DelContainer>
@@ -163,7 +163,7 @@ class LabelSetBuilder {
     DelIterator del_iterator_;
     DelIterator del_end_iterator_;
 
-    PROMPP_ALWAYS_INLINE void next_with_label() noexcept {
+    PROMPP(inline) void next_with_label() noexcept {
       if (add_iterator_ != add_end_iterator_) {
         next_with_label_and_add();
       } else {
@@ -171,7 +171,7 @@ class LabelSetBuilder {
       }
     }
 
-    PROMPP_ALWAYS_INLINE void next_with_label_and_add() noexcept {
+    PROMPP(inline) void next_with_label_and_add() noexcept {
       const auto cmp_result = (*label_iterator_).first <=> static_cast<std::string_view>(add_iterator_->name);
 
       if (std::is_lt(cmp_result)) {
@@ -185,7 +185,7 @@ class LabelSetBuilder {
     }
 
     template <class Iterator>
-    PROMPP_ALWAYS_INLINE void set_label(Iterator& iterator) {
+    PROMPP(inline) void set_label(Iterator& iterator) {
       const auto& label = *iterator;
 
       if (const auto name_view = static_cast<std::string_view>(label.first); !is_deleted(name_view)) {
@@ -196,7 +196,7 @@ class LabelSetBuilder {
       ++iterator;
     }
 
-    PROMPP_ALWAYS_INLINE bool is_deleted(std::string_view name) noexcept {
+    PROMPP(inline) bool is_deleted(std::string_view name) noexcept {
       while (del_iterator_ != del_end_iterator_) {
         if (const auto cmp_result = static_cast<std::string_view>(*del_iterator_) <=> name; std::is_lt(cmp_result)) {
           ++del_iterator_;
@@ -223,12 +223,12 @@ class LabelSetBuilder {
 
     const value_type& operator*() const { return this->label_; }
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       this->next();
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const auto result = *this;
       ++*this;
       return result;
@@ -246,12 +246,12 @@ class LabelSetBuilder {
 
     const value_type& operator*() const { return this->label_.first; }
 
-    PROMPP_ALWAYS_INLINE NamesIterator& operator++() noexcept {
+    PROMPP(inline) NamesIterator& operator++() noexcept {
       this->next();
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE NamesIterator operator++(int) noexcept {
+    PROMPP(inline) NamesIterator operator++(int) noexcept {
       const auto result = *this;
       ++*this;
       return result;
@@ -262,13 +262,13 @@ class LabelSetBuilder {
    public:
     explicit Names(const LabelSetBuilder& label_set_builder) : label_set_builder_(label_set_builder) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept {
       return NamesIterator<decltype(label_set_builder_.label_set_.begin()), decltype(label_set_builder_.label_set_.end()),
                            decltype(label_set_builder_.add_.begin()), decltype(label_set_builder_.del_.begin())>(label_set_builder_);
     }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE friend size_t hash_value(const Names& names) noexcept { return hash::hash_of_string_list(names); }
+    [[nodiscard]] friend PROMPP(inline) size_t hash_value(const Names& names) noexcept { return hash::hash_of_string_list(names); }
 
    private:
     const LabelSetBuilder& label_set_builder_;
@@ -276,14 +276,14 @@ class LabelSetBuilder {
 
   LabelSetBuilder(const LabelSet& label_set, const AddContainer<Label>& add, const DelContainer<String>& del) : label_set_(label_set), add_(add), del_(del) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+  [[nodiscard]] PROMPP(inline) auto begin() const noexcept {
     return Iterator<decltype(label_set_.begin()), decltype(label_set_.end()), decltype(add_.begin()), decltype(del_.begin())>(*this);
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+  [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE friend size_t hash_value(const LabelSetBuilder& label_set) noexcept { return hash::hash_of_label_set(label_set); }
+  [[nodiscard]] friend PROMPP(inline) size_t hash_value(const LabelSetBuilder& label_set) noexcept { return hash::hash_of_label_set(label_set); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Names names() const noexcept { return Names{*this}; }
+  [[nodiscard]] PROMPP(inline) Names names() const noexcept { return Names{*this}; }
 
  private:
   const LabelSet& label_set_;

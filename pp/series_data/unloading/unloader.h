@@ -36,7 +36,7 @@ class Unloader {
     unloaded_chunks_.clear();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) Storage& storage() noexcept { return storage_; }
 
  private:
   struct ChunkSize {
@@ -130,7 +130,7 @@ class Unloader {
     ++sequences.ls_id_count;
   }
 
-  PROMPP_ALWAYS_INLINE static uint32_t calculate_stream_reserve_size(const BareBones::Bitset& ls_id_bitmap,
+  PROMPP(inline) static uint32_t calculate_stream_reserve_size(const BareBones::Bitset& ls_id_bitmap,
                                                                      const EncodingChunkLengthSequence& chunk_length_sequence,
                                                                      const EncodingChunkIDSequence& chunk_id_sequence,
                                                                      uint32_t total_bitseqs_size) noexcept {
@@ -144,7 +144,7 @@ class Unloader {
     return reserved_stream_size;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_unloadable_ls_id_size() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t get_unloadable_ls_id_size() const noexcept {
     if (storage_.queried_series_bitmap.empty()) {
       return storage_.open_chunks.size();
     }
@@ -158,7 +158,7 @@ class Unloader {
     return 0;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_id(uint32_t ls_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t get_open_chunk_id(uint32_t ls_id) const noexcept {
     if (const auto it = storage_.finalized_chunks.find(ls_id); it != storage_.finalized_chunks.end()) {
       return it->second.count();
     }

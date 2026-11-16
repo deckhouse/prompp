@@ -20,11 +20,11 @@ class SerializedDataGo {
   explicit SerializedDataGo(const DataStorage& storage, const series_data::querier::QueriedChunkList& queried_chunks)
       : data_{series_data::serialization::DataSerializer<DataStorage>{storage}.serialize(queried_chunks)} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_buffer_view() const noexcept { return data_view_.get_buffer_view(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_chunks_view() const noexcept { return data_view_.get_chunks_view(); }
+  [[nodiscard]] PROMPP(inline) auto get_buffer_view() const noexcept { return data_view_.get_buffer_view(); }
+  [[nodiscard]] PROMPP(inline) auto get_chunks_view() const noexcept { return data_view_.get_chunks_view(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto next() noexcept { return data_view_.next_series(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto iterator(uint32_t chunk_id) const noexcept { return data_view_.create_series_iterator(chunk_id); }
+  [[nodiscard]] PROMPP(inline) auto next() noexcept { return data_view_.next_series(); }
+  [[nodiscard]] PROMPP(inline) auto iterator(uint32_t chunk_id) const noexcept { return data_view_.create_series_iterator(chunk_id); }
 
  private:
   SerializedData data_;

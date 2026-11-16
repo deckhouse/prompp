@@ -9,7 +9,7 @@
 
 namespace entrypoint::types {
 
-PROMPP_ALWAYS_INLINE void handle_current_exception(std::ostream& out, const std::source_location location = std::source_location::current()) {
+PROMPP(inline) void handle_current_exception(std::ostream& out, const std::source_location location = std::source_location::current()) {
   out << location.function_name() << ": ";
 
   try {

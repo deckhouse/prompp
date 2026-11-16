@@ -9,13 +9,13 @@ namespace PromPP::WAL::hashdex {
 
 class GoModel : public Prometheus::hashdex::Abstract {
  public:
-  PROMPP_ALWAYS_INLINE GoModel() = default;
-  explicit PROMPP_ALWAYS_INLINE GoModel(const Prometheus::hashdex::Limits& limits) noexcept : limits_(limits) {}
+  PROMPP(inline) GoModel() = default;
+  explicit PROMPP(inline) GoModel(const Prometheus::hashdex::Limits& limits) noexcept : limits_(limits) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return metrics_.size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Prometheus::hashdex::Limits& limits() const noexcept { return limits_; }
+  [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return metrics_.size(); }
+  [[nodiscard]] PROMPP(inline) const Prometheus::hashdex::Limits& limits() const noexcept { return limits_; }
 
-  PROMPP_ALWAYS_INLINE void presharding(const Primitives::Go::SliceView<Primitives::Go::TimeSeries>& go_timeseries) {
+  PROMPP(inline) void presharding(const Primitives::Go::SliceView<Primitives::Go::TimeSeries>& go_timeseries) {
     if (limits_.max_timeseries_count && std::size(go_timeseries) > limits_.max_timeseries_count) [[unlikely]] {
       throw BareBones::Exception(0x1806e61dde4a3d6f, "Timeseries limit exceeded");
     }
@@ -42,11 +42,11 @@ class GoModel : public Prometheus::hashdex::Abstract {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return std::begin(metrics_); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return std::end(metrics_); }
+  [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return std::begin(metrics_); }
+  [[nodiscard]] PROMPP(inline) auto end() const noexcept { return std::end(metrics_); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return metrics_; }
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
+  [[nodiscard]] PROMPP(inline) const auto& metrics() const noexcept { return metrics_; }
+  [[nodiscard]] static PROMPP(inline) auto metadata() noexcept {
     struct Stub {};
     return Stub{};
   }
@@ -57,12 +57,12 @@ class GoModel : public Prometheus::hashdex::Abstract {
     const Primitives::Go::TimeSeries& go_time_series_;
 
    public:
-    PROMPP_ALWAYS_INLINE Item(size_t hash, const Primitives::Go::TimeSeries& go_time_series) : hash_(hash), go_time_series_(go_time_series) {}
+    PROMPP(inline) Item(size_t hash, const Primitives::Go::TimeSeries& go_time_series) : hash_(hash), go_time_series_(go_time_series) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+    [[nodiscard]] PROMPP(inline) size_t hash() const { return hash_; }
 
     template <class Timeseries>
-    PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
+    PROMPP(inline) void read(Timeseries& timeseries) const {
       Primitives::Go::read_timeseries(go_time_series_, timeseries);
     }
   };

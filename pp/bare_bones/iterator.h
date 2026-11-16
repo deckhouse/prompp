@@ -37,20 +37,20 @@ class BatchIterator {
   using pointer = value_type*;
   using reference = value_type&;
 
-  PROMPP_ALWAYS_INLINE BatchIterator(Iterator iterator, uint32_t batch_size) noexcept : iterator_(std::move(iterator)), batch_size_(batch_size) {
+  PROMPP(inline) BatchIterator(Iterator iterator, uint32_t batch_size) noexcept : iterator_(std::move(iterator)), batch_size_(batch_size) {
     assert(batch_size > 0);
   }
 
   [[nodiscard]] uint32_t batch_size() const noexcept { return batch_size_; }
   void next_batch() { processed_ = 0; }
 
-  PROMPP_ALWAYS_INLINE BatchIterator& operator++() noexcept {
+  PROMPP(inline) BatchIterator& operator++() noexcept {
     ++processed_;
     ++iterator_;
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE BatchIterator operator++(int) noexcept {
+  PROMPP(inline) BatchIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
@@ -61,7 +61,7 @@ class BatchIterator {
   auto operator->() const noexcept { return iterator_.operator->(); }
   auto operator->() noexcept { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel& end) const noexcept { return processed_ == batch_size_ || iterator_ == end; }
+  PROMPP(inline) bool operator==(const IteratorSentinel& end) const noexcept { return processed_ == batch_size_ || iterator_ == end; }
 
  private:
   Iterator iterator_;

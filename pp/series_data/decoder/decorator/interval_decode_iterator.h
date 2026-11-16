@@ -20,17 +20,17 @@ class IntervalDecodeIterator {
     }
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return sample_; }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return &sample_; }
+  PROMPP(inline) const encoder::Sample& operator*() const noexcept { return sample_; }
+  PROMPP(inline) const encoder::Sample* operator->() const noexcept { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == iterator_end_ && sample_.timestamp == kNoSample; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == iterator_end_ && sample_.timestamp == kNoSample; }
 
-  PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator++() noexcept {
+  PROMPP(inline) IntervalDecodeIterator& operator++() noexcept {
     advance_to_next_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE IntervalDecodeIterator operator++(int) noexcept {
+  PROMPP(inline) IntervalDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
@@ -47,12 +47,12 @@ class IntervalDecodeIterator {
   Timestamp timestamp_{};
   encoder::Sample sample_{.timestamp = kNoSample};
 
-  PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
+  PROMPP(inline) static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
     const auto result = timestamp + step - 1;
     return result - result % step;
   }
 
-  PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
+  PROMPP(inline) void advance_to_next_sample() noexcept {
     if (iterator_ == iterator_end_) [[unlikely]] {
       sample_.timestamp = kNoSample;
       return;
@@ -65,7 +65,7 @@ class IntervalDecodeIterator {
     } while (!in_lookback_interval(sample_.timestamp, previous_timestamp) && iterator_ != iterator_end_);
   }
 
-  PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {
+  PROMPP(inline) void advance_to_last_sample_in_interval() noexcept {
     for (; iterator_ != iterator_end_ && timestamp_ >= iterator_->timestamp; ++iterator_) {
       if (in_lookback_interval(iterator_->timestamp, timestamp_)) [[likely]] {
         decode_sample();
@@ -73,11 +73,11 @@ class IntervalDecodeIterator {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool in_lookback_interval(Timestamp timestamp, Timestamp deadline) const noexcept {
+  [[nodiscard]] PROMPP(inline) bool in_lookback_interval(Timestamp timestamp, Timestamp deadline) const noexcept {
     return deadline <= lookback_ + timestamp;
   }
 
-  PROMPP_ALWAYS_INLINE void decode_sample() noexcept {
+  PROMPP(inline) void decode_sample() noexcept {
     if (!BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[likely]] {
       sample_ = *iterator_;
     } else {
