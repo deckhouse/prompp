@@ -1,0 +1,34 @@
+# A fixed subquery remains a range argument when another function argument varies by step.
+load 1m
+  foo{id="a"} 2 2 2 2 2
+
+eval instant at 2m quantile_over_time(time() / 240, foo[2m:1m] @ 120)
+  {id="a"} 2
+
+eval range from 2m to 4m step 1m quantile_over_time(time() / 240, foo[2m:1m] @ 120)
+  {id="a"} 2 2 2
+
+eval instant at 2m predict_linear(foo[2m:1m] @ 120, time())
+  {id="a"} 2
+
+eval range from 2m to 4m step 1m predict_linear(foo[2m:1m] @ 120, time())
+  {id="a"} 2 2 2
+
+eval range from 2m to 4m step 1m quantile_over_time(time() / 240, (foo[2m:1m] @ start()))
+  {id="a"} 2 2 2
+
+eval range from 2m to 4m step 1m predict_linear((foo[2m:1m] @ end()), time())
+  {id="a"} 2 2 2
+
+eval range from 2m to 4m step 1m quantile_over_time(time() / 240, foo[2m:1m] offset 1m @ 180)
+  {id="a"} 2 2 2
+
+eval range from 2m to 4m step 1m quantile_over_time(time() / 240, (foo @ 60)[2m:1m] @ 120)
+  {id="a"} 2 2 2
+
+# Direct matrix selectors and calls with only invariant arguments remain valid.
+eval range from 2m to 4m step 1m quantile_over_time(time() / 240, foo[2m] @ 120)
+  {id="a"} 2 2 2
+
+eval range from 2m to 4m step 1m sum_over_time(foo[2m:1m] @ 120)
+  {id="a"} 4 4 4

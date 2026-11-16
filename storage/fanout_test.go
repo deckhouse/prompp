@@ -92,7 +92,7 @@ func TestFanout_SelectSorted(t *testing.T) {
 			series := seriesSet.At()
 			seriesLabels := series.Labels()
 			labelsResult = seriesLabels
-			iterator := series.Iterator(iterator)
+			iterator = series.Iterator(iterator)
 			for iterator.Next() == chunkenc.ValFloat {
 				timestamp, value := iterator.At()
 				result[timestamp] = value
@@ -119,7 +119,7 @@ func TestFanout_SelectSorted(t *testing.T) {
 			series := seriesSet.At()
 			seriesLabels := series.Labels()
 			labelsResult = seriesLabels
-			iterator := series.Iterator(iterator)
+			iterator = series.Iterator(iterator)
 			for iterator.Next() == chunkenc.ValFloat {
 				timestamp, value := iterator.At()
 				result[timestamp] = value

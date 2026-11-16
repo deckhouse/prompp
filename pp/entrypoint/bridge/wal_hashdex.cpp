@@ -5,7 +5,6 @@
 #include "entrypoint/types/feature_flags.h"
 #include "entrypoint/types/hashdex.h"
 #include "primitives/go_slice.h"
-#include "wal/decoder.h"
 
 using PromPP::WAL::hashdex::scraper::OpenMetricsScraper;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;
@@ -83,7 +82,7 @@ extern "C" void prompp_wal_protobuf_hashdex_snappy_presharding(void* args, void*
 
   try {
     auto& hashdex = std::get<PromPP::WAL::hashdex::Protobuf>(*in->hashdex_variant);
-    hashdex.snappy_presharding(static_cast<std::string_view>(in->compressed_protobuf));
+    hashdex.snappy_presharding(static_cast<std::string_view>(in->compressed_protobuf), entrypoint::types::feature_flags().features().skip_no_samples_series);
     auto cluster = hashdex.cluster();
     out->cluster.reset_to(cluster.data(), cluster.size());
     auto replica = hashdex.replica();
@@ -94,9 +93,7 @@ extern "C" void prompp_wal_protobuf_hashdex_snappy_presharding(void* args, void*
   }
 }
 
-extern "C" void prompp_wal_protobuf_hashdex_get_metadata(void* args, void* res) {
-  get_metadata<PromPP::WAL::hashdex::Protobuf>(args, res);
-}
+extern "C" void prompp_wal_protobuf_hashdex_get_metadata(void* args, void* res) { get_metadata<PromPP::WAL::hashdex::Protobuf>(args, res); }
 
 //
 // GoModelHashdex
@@ -142,7 +139,7 @@ extern "C" void prompp_wal_go_model_hashdex_presharding(void* args, void* res) {
 }
 
 template <size_t hashdex_type>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_ctor(void* res) {
+PROMPP(inline) void scraper_hashdex_ctor(void* res) {
   struct Result {
     HashdexVariant* hashdex;
   };
@@ -151,7 +148,7 @@ PROMPP_ALWAYS_INLINE void scraper_hashdex_ctor(void* res) {
 }
 
 template <class Scraper>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
+PROMPP(inline) void scraper_hashdex_parse(void* args, void* res) {
   struct Arguments {
     HashdexVariant* hashdex;
     PromPP::Primitives::Go::SliceView<char> buffer;
@@ -175,33 +172,21 @@ PROMPP_ALWAYS_INLINE void scraper_hashdex_parse(void* args, void* res) {
 }
 
 template <class Scraper>
-PROMPP_ALWAYS_INLINE void scraper_hashdex_get_metadata(void* args, void* res) {
+PROMPP(inline) void scraper_hashdex_get_metadata(void* args, void* res) {
   get_metadata<Scraper>(args, res);
 }
 
-extern "C" void prompp_wal_prometheus_scraper_hashdex_ctor(void* res) {
-  scraper_hashdex_ctor<HashdexType::kPrometheusScraper>(res);
-}
+extern "C" void prompp_wal_prometheus_scraper_hashdex_ctor(void* res) { scraper_hashdex_ctor<HashdexType::kPrometheusScraper>(res); }
 
-extern "C" void prompp_wal_prometheus_scraper_hashdex_parse(void* args, void* res) {
-  scraper_hashdex_parse<PrometheusScraper>(args, res);
-}
+extern "C" void prompp_wal_prometheus_scraper_hashdex_parse(void* args, void* res) { scraper_hashdex_parse<PrometheusScraper>(args, res); }
 
-extern "C" void prompp_wal_prometheus_scraper_hashdex_get_metadata(void* args, void* res) {
-  scraper_hashdex_get_metadata<PrometheusScraper>(args, res);
-}
+extern "C" void prompp_wal_prometheus_scraper_hashdex_get_metadata(void* args, void* res) { scraper_hashdex_get_metadata<PrometheusScraper>(args, res); }
 
-extern "C" void prompp_wal_open_metrics_scraper_hashdex_ctor(void* res) {
-  scraper_hashdex_ctor<HashdexType::kOpenMetricsScraper>(res);
-}
+extern "C" void prompp_wal_open_metrics_scraper_hashdex_ctor(void* res) { scraper_hashdex_ctor<HashdexType::kOpenMetricsScraper>(res); }
 
-extern "C" void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* res) {
-  scraper_hashdex_parse<OpenMetricsScraper>(args, res);
-}
+extern "C" void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* res) { scraper_hashdex_parse<OpenMetricsScraper>(args, res); }
 
-extern "C" void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res) {
-  scraper_hashdex_get_metadata<OpenMetricsScraper>(args, res);
-}
+extern "C" void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res) { scraper_hashdex_get_metadata<OpenMetricsScraper>(args, res); }
 
 extern "C" void prompp_wal_go_head_hashdex_ctor(void* res) {
   struct Result {

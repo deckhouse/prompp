@@ -2,7 +2,8 @@
 #define Sizeof_StdVector 24
 #define Sizeof_BareBonesVector 16
 #define Sizeof_RoaringBitset 40
-#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+#define Sizeof_TimeInterval 16
+#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset + Sizeof_TimeInterval)
 #define Sizeof_GoLabels 16
 
 #define Sizeof_SerializedDataSamplesIterator 152

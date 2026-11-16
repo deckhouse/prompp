@@ -832,6 +832,58 @@ func (s *DataSourceRotatedSuite) TestNextV2() {
 	s.Require().Empty(segments)
 }
 
+func (s *DataSourceRotatedSuite) TestNextV2DifferentNumberOfSegmentsInShards() {
+	// Arrange
+	dataDir := s.T().TempDir()
+	// segments are written to shards in turn, so shard 0 gets one segment more than shard 1
+	numberOfSegments := uint32(11)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+	rec := remotewritertest.MakeRecord(numberOfShards)
+
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		baseCtx,
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(0, uint64(numberOfSegments)),
+		rec,
+	)
+	s.Require().NoError(err)
+
+	dataSource, err := newDataSourceRotated(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		true,
+		s.clock,
+		CorruptMarkerFn(func(string) error { return nil }),
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+	s.Require().NoError(dataSource.Init(baseCtx, 0))
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+
+	// Act
+	segmentIDs := make([]uint32, 0, numberOfSegments)
+	for range numberOfSegments {
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+		s.Require().Len(segments, 1)
+		segmentIDs = append(segmentIDs, segments[0].ID)
+	}
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+
+	// Assert
+	s.Equal([]uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, segmentIDs)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Empty(segments)
+}
+
 func (s *DataSourceRotatedSuite) TestRestoreReadV1() {
 	dataDir := s.T().TempDir()
 	shardFilePaths := []string{

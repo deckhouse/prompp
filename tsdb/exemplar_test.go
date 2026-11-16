@@ -230,7 +230,7 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 	l := labels.FromStrings(lName, lValue)
 
 	for i := 0; int64(i) < lenEs; i++ {
-		err := es.AddExemplar(l, exemplar.Exemplar{
+		err = es.AddExemplar(l, exemplar.Exemplar{
 			Labels: labels.FromStrings("trace_id", strconv.Itoa(i)),
 			Value:  0.1,
 			Ts:     int64(101 + i),

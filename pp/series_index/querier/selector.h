@@ -45,19 +45,19 @@ struct Matcher {
 
   auto operator<=>(const Matcher&) const noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return matches.empty(); }
+  [[nodiscard]] PROMPP(inline) bool is_empty() const noexcept { return matches.empty(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_positive() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool is_positive() const noexcept {
     using enum PromPP::Prometheus::MatcherType;
     return type == kExactMatch || type == kRegexpMatch;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_negative() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool is_negative() const noexcept {
     using enum PromPP::Prometheus::MatcherType;
     return type == kExactNotMatch || type == kRegexpNotMatch;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unknown() const noexcept { return type == PromPP::Prometheus::MatcherType::kUnknown; }
+  [[nodiscard]] PROMPP(inline) bool is_unknown() const noexcept { return type == PromPP::Prometheus::MatcherType::kUnknown; }
 
-  PROMPP_ALWAYS_INLINE void convert_to_negative() noexcept {
+  PROMPP(inline) void convert_to_negative() noexcept {
     using enum PromPP::Prometheus::MatcherType;
 
     if (type == kExactMatch) {
@@ -67,7 +67,7 @@ struct Matcher {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void convert_to_positive() noexcept {
+  PROMPP(inline) void convert_to_positive() noexcept {
     using enum PromPP::Prometheus::MatcherType;
 
     if (type == kExactNotMatch) {
@@ -77,7 +77,7 @@ struct Matcher {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void invert() noexcept {
+  PROMPP(inline) void invert() noexcept {
     if (is_positive()) {
       convert_to_negative();
     } else if (is_negative()) {
@@ -103,9 +103,9 @@ struct Selector {
 
   bool operator<=>(const Selector&) const noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return matchers.empty(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool have_positive_matchers() const noexcept {
-    return std::ranges::any_of(matchers, [](const Matcher& matcher) PROMPP_LAMBDA_INLINE { return matcher.is_positive(); });
+  [[nodiscard]] PROMPP(inline) bool is_empty() const noexcept { return matchers.empty(); }
+  [[nodiscard]] PROMPP(inline) bool have_positive_matchers() const noexcept {
+    return std::ranges::any_of(matchers, [](const Matcher& matcher) PROMPP(lambda_inline) { return matcher.is_positive(); });
   }
 };
 

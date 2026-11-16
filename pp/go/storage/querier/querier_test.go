@@ -2,13 +2,16 @@ package querier_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -42,6 +45,9 @@ type QuerierSuite struct {
 	dataDir string
 	context context.Context
 	head    *storage.Head
+
+	hints          *prom_storage.SelectHints
+	scrapeInterval int64
 }
 
 func TestQuerierSuite(t *testing.T) {
@@ -52,6 +58,12 @@ func (s *QuerierSuite) SetupTest() {
 	s.dataDir = s.createDataDirectory()
 	s.context = context.Background()
 	s.head = s.mustCreateHead(1)
+	s.hints = &prom_storage.SelectHints{
+		Start: 0,
+		End:   200,
+		Range: 100,
+	}
+	s.scrapeInterval = 1
 }
 
 func (s *QuerierSuite) createDataDirectory() string {
@@ -89,7 +101,121 @@ func (s *QuerierSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *
 }
 
 func (s *QuerierSuite) appendTimeSeries(timeSeries []storagetest.TimeSeries) {
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, timeSeries)
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, timeSeries)
+}
+
+func (s *QuerierSuite) TestOptimizationPredicateIsPerQuerier() {
+	s.Require().NoError(querier.SetSelectFuncOptimize("all"))
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{{Timestamp: 0, Value: 1}},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	metrics := querier.NewMetrics(prometheus.NewRegistry(), querier.QueryableStorageSource)
+	newQuerier := func() *Querier {
+		q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, metrics)
+		s.T().Cleanup(func() { s.Require().NoError(q.Close()) })
+
+		return q
+	}
+	defaultQuerier := newQuerier()
+	forcedQuerier := newQuerier()
+	forcedQuerier.IsPossibleToOptimize = func(
+		[]*cppbridge.LSSQueryResult,
+		*prom_storage.SelectHints,
+		int64, int64,
+	) bool {
+		return true
+	}
+	freshQuerier := newQuerier()
+
+	hints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1, Func: "sum"}
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric")
+	forcedSeries := forcedQuerier.Select(s.context, false, hints, matcher)
+	s.NotEmpty(storagetest.TimeSeriesFromSeriesSet(forcedSeries, true))
+	s.Require().NoError(forcedSeries.Err())
+
+	defaultSeries := defaultQuerier.Select(s.context, false, hints, matcher)
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(defaultSeries, true))
+	s.Require().NoError(defaultSeries.Err())
+
+	freshSeries := freshQuerier.Select(s.context, false, hints, matcher)
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(freshSeries, true))
+	s.Require().NoError(freshSeries.Err())
+
+	s.Equal(float64(1), testutil.ToFloat64(metrics.OptimizationType.WithLabelValues("cross_series")))
+	s.Equal(float64(2), testutil.ToFloat64(metrics.OptimizationType.WithLabelValues("none")))
+}
+
+func (s *QuerierSuite) TestOptimizationPredicateSkippedForIneligibleQueries() {
+	s.T().Cleanup(querier.SetDefaultOptimizeType)
+	s.appendTimeSeries([]storagetest.TimeSeries{{
+		Labels:  labels.FromStrings("__name__", "metric", "job", "test"),
+		Samples: []cppbridge.Sample{{Timestamp: 0, Value: 1}},
+	}})
+
+	cases := []struct {
+		name         string
+		optimization string
+		hints        *prom_storage.SelectHints
+	}{
+		{
+			name:         "disabled",
+			optimization: "none",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "sum"},
+		},
+		{name: "nil_hints", optimization: "all"},
+		{
+			name:         "unsupported_function",
+			optimization: "all",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "avg_over_time", Range: 1},
+		},
+		{
+			name:         "subquery",
+			optimization: "all",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "max_over_time", Range: 1, IsSubquery: true},
+		},
+		{
+			name:         "without_grouping",
+			optimization: "all",
+			hints:        &prom_storage.SelectHints{Step: 1, Func: "sum", Grouping: []string{"job"}},
+		},
+		{
+			name:         "reserved_grouping_label",
+			optimization: "all",
+			hints: &prom_storage.SelectHints{
+				Step: 1, Func: "sum", By: true, Grouping: []string{"__head__shard_id"},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			s.Require().NoError(querier.SetSelectFuncOptimize(c.optimization))
+			q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 1, 0, nil)
+			calls := 0
+			q.IsPossibleToOptimize = func(
+				[]*cppbridge.LSSQueryResult,
+				*prom_storage.SelectHints,
+				int64, int64,
+			) bool {
+				calls++
+
+				return true
+			}
+
+			seriesSet := q.Select(s.context, false, c.hints, labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric"))
+			s.NotEmpty(storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+			s.Require().NoError(seriesSet.Err())
+			s.Zero(calls)
+			s.Require().NoError(q.Close())
+		})
+	}
 }
 
 func (s *QuerierSuite) TestRangeQuery() {
@@ -115,7 +241,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -143,7 +269,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
@@ -196,7 +322,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -234,7 +360,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -287,7 +413,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -331,7 +457,7 @@ func (s *QuerierSuite) TestLabelNames() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -344,6 +470,47 @@ func (s *QuerierSuite) TestLabelNames() {
 	// Assert
 	s.Equal([]string{"__name__", "job0"}, names)
 	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestSelectSortSeriesFlag() {
+	// Arrange
+	const numSeries = 64
+	timeSeries := make([]storagetest.TimeSeries, 0, numSeries)
+	for i := range numSeries {
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels:  labels.FromStrings("__name__", "metric", "instance", fmt.Sprintf("host%02d", numSeries-i)),
+			Samples: []cppbridge.Sample{{Timestamp: 1, Value: float64(i)}},
+		})
+	}
+	s.appendTimeSeries(timeSeries)
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric")
+	isSorted := func(series []storagetest.TimeSeries) bool {
+		return slices.IsSortedFunc(series, func(a, b storagetest.TimeSeries) int { return labels.Compare(a.Labels, b.Labels) })
+	}
+	selectSeries := func(sortSeries bool, hints *prom_storage.SelectHints) []storagetest.TimeSeries {
+		q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+		defer func() { _ = q.Close() }()
+		return storagetest.TimeSeriesFromSeriesSet(q.Select(s.context, sortSeries, hints, matcher), true)
+	}
+	rangeHints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1}
+	instantHints := &prom_storage.SelectHints{Start: 2, End: 2}
+
+	// Act
+	sortedRange := selectSeries(true, rangeHints)
+	unsortedRange := selectSeries(false, rangeHints)
+	sortedInstant := selectSeries(true, instantHints)
+	unsortedInstant := selectSeries(false, instantHints)
+
+	// Assert
+	s.Require().Len(sortedRange, numSeries)
+	s.Require().True(isSorted(sortedRange))
+	// the series are appended in descending label order, so the unsorted path must not look sorted
+	s.Require().False(isSorted(unsortedRange))
+	s.Require().ElementsMatch(sortedRange, unsortedRange)
+	s.Require().Len(sortedInstant, numSeries)
+	s.Require().True(isSorted(sortedInstant))
+	s.Require().False(isSorted(unsortedInstant))
+	s.Require().ElementsMatch(sortedInstant, unsortedInstant)
 }
 
 func (s *QuerierSuite) TestLabelNamesWithLimit() {
@@ -364,7 +531,7 @@ func (s *QuerierSuite) TestLabelNamesWithLimit() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -397,7 +564,7 @@ func (s *QuerierSuite) TestLabelNamesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
 	s.Require().NoError(err)
@@ -430,7 +597,7 @@ func (s *QuerierSuite) TestLabelValues() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
@@ -463,7 +630,7 @@ func (s *QuerierSuite) TestLabelValuesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
 	s.Require().NoError(err)
@@ -496,7 +663,7 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)

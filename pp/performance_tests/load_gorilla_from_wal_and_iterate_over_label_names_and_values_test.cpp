@@ -2,8 +2,6 @@
 
 #include <chrono>
 
-#include "bare_bones/lz4_stream.h"
-#include "primitives/primitives.h"
 #include "wal/wal.h"
 
 #include "log.h"

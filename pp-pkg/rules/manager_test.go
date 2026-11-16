@@ -186,7 +186,7 @@ func TestAlertingRule(t *testing.T) {
 		for i := range test.result {
 			test.result[i].T = timestamp.FromTime(evalTime)
 		}
-		require.Equal(t, len(test.result), len(filteredRes), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
+		require.Len(t, filteredRes, len(test.result), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
 
 		sort.Slice(filteredRes, func(i, j int) bool {
 			return labels.Compare(filteredRes[i].Metric, filteredRes[j].Metric) < 0
@@ -194,7 +194,7 @@ func TestAlertingRule(t *testing.T) {
 		prom_testutil.RequireEqual(t, test.result, filteredRes)
 
 		for _, aa := range rule.ActiveAlerts() {
-			require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+			require.Empty(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 		}
 	}
 }
@@ -202,12 +202,12 @@ func TestAlertingRule(t *testing.T) {
 func TestForStateAddSamples(t *testing.T) {
 	for _, queryOffset := range []time.Duration{0, time.Minute} {
 		t.Run(fmt.Sprintf("queryOffset %s", queryOffset.String()), func(t *testing.T) {
-			storage := promqltest.LoadedStorage(t, `
+			stor := promqltest.LoadedStorage(t, `
 		load 5m
 			http_requests{job="app-server", instance="0", group="canary", severity="overwrite-me"}	75 85  95 105 105  95  85
 			http_requests{job="app-server", instance="1", group="canary", severity="overwrite-me"}	80 90 100 110 120 130 140
 	`)
-			t.Cleanup(func() { storage.Close() })
+			t.Cleanup(func() { stor.Close() })
 
 			expr, err := parser.ParseExpr(`http_requests{group="canary", job="app-server"} < 100`)
 			require.NoError(t, err)
@@ -319,7 +319,7 @@ func TestForStateAddSamples(t *testing.T) {
 					forState = float64(value.StaleNaN)
 				}
 
-				res, err := rule.Eval(context.TODO(), queryOffset, evalTime, EngineQueryFunc(ng, storage), nil, 0)
+				res, err := rule.Eval(context.TODO(), queryOffset, evalTime, EngineQueryFunc(ng, stor), nil, 0)
 				require.NoError(t, err)
 
 				var filteredRes promql.Vector // After removing 'ALERTS' samples.
@@ -339,7 +339,7 @@ func TestForStateAddSamples(t *testing.T) {
 						test.result[i].F = forState
 					}
 				}
-				require.Equal(t, len(test.result), len(filteredRes), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
+				require.Len(t, filteredRes, len(test.result), "%d. Number of samples in expected and actual output don't match (%d vs. %d)", i, len(test.result), len(res))
 
 				sort.Slice(filteredRes, func(i, j int) bool {
 					return labels.Compare(filteredRes[i].Metric, filteredRes[j].Metric) < 0
@@ -347,7 +347,7 @@ func TestForStateAddSamples(t *testing.T) {
 				prom_testutil.RequireEqual(t, test.result, filteredRes)
 
 				for _, aa := range rule.ActiveAlerts() {
-					require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+					require.Empty(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 				}
 			}
 		})
@@ -511,7 +511,7 @@ func TestForStateRestore(t *testing.T) {
 
 					got := newRule.ActiveAlerts()
 					for _, aa := range got {
-						require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+						require.Empty(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 					}
 					sort.Slice(got, func(i, j int) bool {
 						return labels.Compare(got[i].Labels, got[j].Labels) < 0
@@ -535,7 +535,7 @@ func TestForStateRestore(t *testing.T) {
 						}
 					default:
 						exp := tt.expectedAlerts
-						require.Equal(t, len(exp), len(got))
+						require.Len(t, got, len(exp))
 						sortAlerts(exp)
 						sortAlerts(got)
 						for i, e := range exp {
@@ -2337,7 +2337,7 @@ func TestBoundedRuleEvalConcurrency(t *testing.T) {
 	wg.Wait()
 
 	// Synchronous queries also count towards inflight, so at most we can have maxConcurrency+$groupCount inflight evaluations.
-	require.EqualValues(t, maxInflight.Load()+int32(groupCount), int32(maxConcurrency))
+	require.Equal(t, maxInflight.Load()+int32(groupCount), int32(maxConcurrency))
 }
 
 func TestUpdateWhenStopped(t *testing.T) {

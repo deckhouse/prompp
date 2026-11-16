@@ -40,7 +40,7 @@ func CreateBlock(series []storage.Series, dir string, chunkRange int64, logger l
 		return "", err
 	}
 	defer func() {
-		if err := w.Close(); err != nil {
+		if err = w.Close(); err != nil {
 			logger.Log("err closing blockwriter", err.Error())
 		}
 	}()

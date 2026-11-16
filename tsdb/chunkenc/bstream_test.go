@@ -14,6 +14,7 @@
 package chunkenc
 
 import (
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -71,4 +72,13 @@ func TestBstreamReader(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(v), actual, "v=%d", v)
 	}
+}
+
+func TestBstreamReaderTruncatedRead(t *testing.T) {
+	reader := newBReader([]byte{0xff, 0xff})
+	_, err := reader.readBits(4)
+	require.NoError(t, err)
+
+	_, err = reader.readBits(13)
+	require.ErrorIs(t, err, io.EOF)
 }

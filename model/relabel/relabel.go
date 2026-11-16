@@ -14,7 +14,7 @@
 package relabel
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 // cryptographic strength is not required
 	"encoding/binary"
 	"fmt"
 	"strconv"
@@ -297,7 +297,7 @@ func relabel(cfg *Config, lb *labels.Builder) (keep bool) {
 	case Uppercase:
 		lb.Set(cfg.TargetLabel, strings.ToUpper(val))
 	case HashMod:
-		hash := md5.Sum([]byte(val))
+		hash := md5.Sum([]byte(val)) // #nosec G401 // cryptographic strength is not required
 		// Use only the last 8 bytes of the hash to give the same result as earlier versions of this code.
 		mod := binary.BigEndian.Uint64(hash[8:]) % cfg.Modulus
 		lb.Set(cfg.TargetLabel, strconv.FormatUint(mod, 10))

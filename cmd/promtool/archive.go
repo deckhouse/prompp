@@ -30,7 +30,7 @@ type tarGzFileWriter struct {
 }
 
 func newTarGzFileWriter(archiveName string) (*tarGzFileWriter, error) {
-	file, err := os.Create(archiveName)
+	file, err := os.Create(archiveName) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, fmt.Errorf("error creating archive %q: %w", archiveName, err)
 	}

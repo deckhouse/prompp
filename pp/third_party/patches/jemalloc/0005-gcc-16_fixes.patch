@@ -5,7 +5,7 @@
  
  	if (ptr == nullptr && !nothrow)
 -		std::__throw_bad_alloc();
-+		std::bad_alloc();
++		throw std::bad_alloc();
  	return ptr;
  }
  

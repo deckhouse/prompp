@@ -30,14 +30,14 @@ func NewOutputRelabelingPromise(destinationGroups *relabeler.DestinationGroups, 
 		dgOutputInnerSeries:     make([][][]*cppbridge.InnerSeries, groups),
 		dgOutputRelabeledSeries: make([][]*cppbridge.RelabeledSeries, groups),
 		errors:                  make([]error, groups),
-		shardDone:               numberOfShards * uint16(groups),
+		shardDone:               numberOfShards * uint16(groups), // #nosec G115 // no overflow
 	}
 
 	for i := range p.dgOutputInnerSeries {
 		// each destination group can have a different number of shards
 		length := 1 << (*destinationGroups)[i].ShardsNumberPower()
 		p.dgOutputInnerSeries[i] = make([][]*cppbridge.InnerSeries, length)
-		p.shardDone += uint16(length)
+		p.shardDone += uint16(length) // #nosec G115 // no overflow
 		for j := range p.dgOutputInnerSeries[i] {
 			p.dgOutputInnerSeries[i][j] = make([]*cppbridge.InnerSeries, 0, numberOfShards)
 		}

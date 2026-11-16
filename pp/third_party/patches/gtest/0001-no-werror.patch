@@ -1,9 +1,9 @@
 --- BUILD.bazel
 +++ BUILD.bazel
-@@ -101,7 +101,7 @@ cc_library(
-     copts = select({
+@@ -124,7 +124,7 @@
          ":qnx": [],
          ":windows": [],
+         ":emscripten_without_threads": [],
 -        "//conditions:default": ["-pthread"],
 +        "//conditions:default": ["-pthread", "-Wno-error"],
      }),

@@ -2,7 +2,8 @@
 #define Sizeof_StdVector 24
 #define Sizeof_BareBonesVector 16
 #define Sizeof_RoaringBitset 40
-#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+#define Sizeof_TimeInterval 16
+#define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset + Sizeof_TimeInterval)
 #define Sizeof_GoLabels 16
 
 #define Sizeof_SerializedDataSamplesIterator 152
@@ -17,11 +18,12 @@
 #pragma once
 
 #ifndef __cplusplus
-#include <stdbool.h>
+#  include <stdbool.h>
 #endif
 
 typedef struct {
   bool scraper_validate_utf_per_token;
+  bool skip_no_samples_series;
 } PromppFeatures;
 #ifdef __cplusplus
 extern "C" {
@@ -186,6 +188,8 @@ void prompp_get_head_status_data_storage(void* args, void* res);
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /**
  * @brief Construct a new Head WAL encoder
  *
@@ -250,16 +254,32 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
 void prompp_head_wal_encoder_finalize(void* args, void* res);
 
 /**
- * @brief Exclusive upper bound of series item indices written to WAL.
+ * @brief Flush segment. Same as prompp_head_wal_encoder_finalize, but intended for long-running finalization
+ * (e.g. the first segment of a new head right after all added series were copied into its LSS).
+ *
+ * @param encoder_ptr pointer to constructed encoder;
+ * @param res pointer to result struct {
+ *     segment            []byte  // segment content
+ *     error              []byte  // error string if thrown
+ *     samples            uint32  // number of samples in segment
+ * }
+ *
+ * @attention This binding used as a CGO call!!!
+ *
+ */
+void prompp_head_wal_encoder_long_finalize(uint64_t encoder_ptr, uint64_t res);
+
+/**
+ * @brief Series id sentinel written to WAL.
  *
  * @param args {
  *     encoder uintptr // pointer to constructed encoder
  * }
  * @param res {
- *     max_written_item_index uint32
+ *     written_series_id_sentinel uint32
  * }
  */
-void prompp_head_wal_encoder_max_written_item_index(void* args, void* res);
+void prompp_head_wal_encoder_written_series_id_sentinel(void* args, void* res);
 
 /**
  * @brief Construct a new Head WAL Decoder
@@ -966,14 +986,14 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
- * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ * @brief Set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
  *
- * @param args {
- *     lss                 uintptr  // pointer to source queryable lss;
- *     shrink_boundary      uint32  // boundary
- * }
+ * @param lss_ptr Address of an entrypoint::types::LssVariant containing QueryableEncodingBimap.
+ * @param shrink_boundary Pending shrink boundary (uint32_t value passed as uint64_t).
+ *
+ * @attention This binding is called through cgo.
  */
-void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+void prompp_primitives_lss_set_pending_shrink_boundary(uint64_t lss_ptr, uint64_t shrink_boundary);
 
 /**
  * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
@@ -995,6 +1015,29 @@ void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
  *
  */
 void prompp_primitives_free_ls_ids_mapping(void* args);
+
+/**
+ * @brief Release the label set -> ls id hash set of queryable lss.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After release lss can't find or add label sets, so it's allowed only for read-only lss.
+ */
+void prompp_primitives_lss_release_hash_set(void* args);
+
+/**
+ * @brief Release the sorted ls id set and the label set -> ls id hash set of queryable lss, sorting index is built beforehand.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After release lss can't find or add label sets and ls id set is empty, so it's allowed only for read-only lss
+ * after chunk recoding and data loading are done.
+ */
+void prompp_primitives_lss_release_ls_id_set(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -1623,6 +1666,21 @@ void prompp_series_data_data_storage_ctor(void* args, void* res);
 void prompp_series_data_data_storage_time_interval(void* args, void* res);
 
 /**
+ * @brief Get the sorted start timestamps of the quantDuration-aligned quants that hold at least one sample
+ *
+ * @param args {
+ *     dataStorage   uintptr // pointer to constructed data storage
+ *     quantDuration int64   // quant duration in milliseconds
+ * }
+ *
+ * @param res {
+ *     quants []int64 // must be freed with prompp_free_bytes
+ * }
+ *
+ */
+void prompp_series_data_data_storage_non_empty_quants(void* args, void* res);
+
+/**
  * @brief Get queried series bitset memory size
  *
  * @param args {
@@ -1748,19 +1806,6 @@ void prompp_series_data_serialized_data_dtor(void* args);
  * }
  */
 void prompp_series_data_data_storage_instant_query(void* args, void* res);
-
-/**
- * @brief Get the first sample timestamp per series
- *
- * @param args {
- *        dataStorage uintptr  // pointer to constructed data storage
- *        seriesIds   []uint32 // series ids
- * }
- * @param res {
- *        timestamps []int64  // same length as seriesIds; filled from storage
- * }
- */
-void prompp_series_data_data_storage_query_first_timestamps(void* args, void* res);
 
 /**
  * @brief Fill stalenan series (first sample timestamp + series id) per series id.

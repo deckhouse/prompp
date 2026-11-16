@@ -1,21 +1,44 @@
 package cppbridge
 
 // #cgo CFLAGS: -I.
-// #cgo LDFLAGS: -L.
-// #cgo asan LDFLAGS: -fsanitize=address
 // #cgo asan CFLAGS: -fsanitize=address
-// #cgo arm64,!asan,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
-// #cgo arm64,!asan,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
-// #cgo arm64,asan,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
-// #cgo arm64,asan,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo amd64,!asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt.a -l:amd64_k8_entrypoint_aio_prefixed_opt.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt.a -l:amd64_haswell_entrypoint_aio_prefixed_opt.a
-// #cgo amd64,!asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
-// #cgo amd64,asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
-// #cgo amd64,asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++exp
-// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++exp.a
+// #cgo LDFLAGS: -L${SRCDIR}
+// #cgo asan LDFLAGS: -fsanitize=address
+// #cgo arm64,!asan,!dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_opt.a
+// #cgo arm64,!asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!asan,dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_dbg.a
+// #cgo arm64,!asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,!asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,asan,!dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_opt_asan.a
+// #cgo arm64,asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,asan,!dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: ${SRCDIR}/arm64_entrypoint_init_aio_dbg_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: ${SRCDIR}/arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_opt.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,!dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_dbg.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,!asan,dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_opt_asan.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,!dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_entrypoint_init_aio_dbg_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_k8_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: ${SRCDIR}/amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -Wl,--push-state -Wl,-Bstatic -lunwind
+// #cgo !static LDFLAGS: -Wl,--pop-state -llzma -lstdc++exp
+// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++
+// #cgo static LDFLAGS: -lstdc++ -lm -lgcc_eh -lunwind -llzma -lstdc++exp
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
+
 import (
 	"runtime"
 	"time"
@@ -421,6 +444,11 @@ type FeatureFlags struct {
 // DisableScraperFullUTF8 selects legacy per-token UTF-8 validation.
 func (f *FeatureFlags) DisableScraperFullUTF8() {
 	f.features.scraper_validate_utf_per_token = true
+}
+
+// SkipNoSamplesSeries hashdex skip no samples series.
+func (f *FeatureFlags) SkipNoSamplesSeries() {
+	f.features.skip_no_samples_series = true
 }
 
 // InitializeFeatureFlags configures C++ features once at startup.
@@ -1479,15 +1507,47 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-func primitivesSnapshotQuery(snapshot uintptr, selector uintptr) (
+// primitivesLSSReleaseHashSet releases label set -> ls id hash set of lss.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func primitivesLSSReleaseHashSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_hash_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// primitivesLSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func primitivesLSSReleaseLSIDSet(lss uintptr) {
+	args := struct {
+		lss uintptr
+	}{lss}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_release_ls_id_set,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func primitivesSnapshotQuery(snapshot uintptr, selector uintptr, sortSeries bool) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
 ) {
 	args := struct {
-		snapshot uintptr
-		selector uintptr
-	}{snapshot, selector}
+		snapshot   uintptr
+		selector   uintptr
+		sortSeries bool
+	}{snapshot, selector, sortSeries}
 
 	var res struct {
 		matches         []uint32
@@ -1614,7 +1674,7 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
-func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
+func primitivesLSSGetLabelNameIDs(lss uintptr, names []string, nameIDs []uint32) {
 	args := struct {
 		lss   uintptr
 		names []string
@@ -1622,7 +1682,7 @@ func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 
 	res := struct {
 		outIDs []uint32
-	}{make([]uint32, len(names))}
+	}{nameIDs}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -1630,8 +1690,6 @@ func primitivesLSSGetLabelNameIDs(lss uintptr, names []string) []uint32 {
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.outIDs
 }
 
 func primitivesLSSCreateSnapshotLSS(lss uintptr) uintptr {
@@ -1743,21 +1801,18 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 	)
 }
 
-// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// primitivesLSSSetPendingShrinkBoundary uses cgo to set the pending shrink boundary
 // on LSS (switch to "fixed" state before snapshot and copy).
 // Attention: works only with QueryableEncodingBimap type of LSS.
 func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
-	args := struct {
-		lss            uintptr
-		shrinkBoundary uint32
-	}{lss, shrinkBoundary}
-
+	// Removing hidden series and rebuilding indexes can take hundreds of milliseconds.
+	// fastcgo would hold the P on the system stack and delay GC stop-the-world coordination.
+	// A regular cgo call lets the runtime reuse the P and coordinate GC without waiting for C++ to return.
+	// Only the stable C++-allocated LSS address and the scalar boundary cross the call;
+	// no Go memory is passed, so [runtime.Pinner] is unnecessary.
 	testGC()
 	start := time.Now()
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_set_pending_shrink_boundary,
-		uintptr(unsafe.Pointer(&args)),
-	)
+	C.prompp_primitives_lss_set_pending_shrink_boundary(C.uint64_t(lss), C.uint64_t(shrinkBoundary))
 	lssSetPendingShrinkBoundaryDurationMax.set(float64(time.Since(start).Nanoseconds()))
 }
 
@@ -2216,23 +2271,6 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	return res
 }
 
-func seriesDataDataStorageQueryFirstTimestamps(dataStorage uintptr, seriesIDs []uint32, timestamps []int64) {
-	args := struct {
-		dataStorage uintptr
-		seriesIDs   []uint32
-	}{dataStorage, seriesIDs}
-	res := struct {
-		timestamps []int64
-	}{timestamps}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_query_first_timestamps,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-}
-
 func seriesDataDataStorageQueryStaleNaNSeries(dataStorage uintptr, seriesIDs []uint32, series uintptr) {
 	args := struct {
 		dataStorage uintptr
@@ -2467,6 +2505,25 @@ func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
 	)
 
 	return res.interval
+}
+
+func seriesDataDataStorageNonEmptyQuants(dataStorage uintptr, quantDuration int64) []int64 {
+	args := struct {
+		dataStorage   uintptr
+		quantDuration int64
+	}{dataStorage, quantDuration}
+	res := struct {
+		quants []int64
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_non_empty_quants,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.quants
 }
 
 func seriesDataDataStorageQueriedSeriesBitsetSize(dataStorage uintptr) uint32 {
@@ -3255,8 +3312,35 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
-// headWalEncoderMaxWrittenItemIndex returns max item index written to WAL.
-func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
+// headWalEncoderLongFinalize - finalize the encoded data in the C++ encoder to Segment.
+// Unlike [headWalEncoderFinalize] it uses a regular CGO call instead of fastcgo, so a long-running
+// finalization (e.g. after copying all added series into a new head) does not block the Go scheduler and GC.
+func headWalEncoderLongFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
+	res := &struct {
+		segment   []byte
+		exception []byte
+		samples   uint32
+	}{}
+
+	// res is passed as an integer: its []byte fields make go vet (cgocall) reject unsafe.Pointer,
+	// although they are nil at call time and C++ fills them with C-allocated memory only.
+	// An address hidden in an integer is not adjusted if the goroutine stack is moved before
+	// the call enters C (e.g. a stack shrink on preemption in the _Cfunc_ wrapper prologue),
+	// so res is pinned: this moves it to the heap and keeps its address stable.
+	var pinner runtime.Pinner
+	pinner.Pin(res)
+	defer pinner.Unpin()
+
+	start := time.Now()
+	testGC()
+	C.prompp_head_wal_encoder_long_finalize(C.uint64_t(encoder), C.uint64_t(uintptr(unsafe.Pointer(res))))
+	headWalEncoderLongFinalizeDurationMax.set(float64(time.Since(start).Nanoseconds()))
+
+	return res.samples, res.segment, handleException(res.exception)
+}
+
+// headWalEncoderWrittenSeriesIDSentinel returns max item index written to WAL.
+func headWalEncoderWrittenSeriesIDSentinel(encoder uintptr) uint32 {
 	args := struct {
 		encoder uintptr
 	}{encoder}
@@ -3266,7 +3350,7 @@ func headWalEncoderMaxWrittenItemIndex(encoder uintptr) uint32 {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_head_wal_encoder_max_written_item_index,
+		C.prompp_head_wal_encoder_written_series_id_sentinel,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

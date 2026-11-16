@@ -235,8 +235,8 @@ func TestAlertingRuleLabelsUpdate(t *testing.T) {
 		t.Logf("case %d", i)
 		evalTime := baseTime.Add(time.Duration(i) * time.Minute)
 		result[0].T = timestamp.FromTime(evalTime)
-		res, err := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
-		require.NoError(t, err)
+		res, errEval := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
+		require.NoError(t, errEval)
 
 		var filteredRes promql.Vector // After removing 'ALERTS_FOR_STATE' samples.
 		for _, smpl := range res {
@@ -803,8 +803,8 @@ func TestKeepFiringFor(t *testing.T) {
 	`)
 	t.Cleanup(func() { storage.Close() })
 
-	expr, err := parser.ParseExpr(`http_requests > 50`)
-	require.NoError(t, err)
+	expr, errParser := parser.ParseExpr(`http_requests > 50`)
+	require.NoError(t, errParser)
 
 	rule := NewAlertingRule(
 		"HTTPRequestRateHigh",
@@ -902,8 +902,8 @@ func TestKeepFiringFor(t *testing.T) {
 		testutil.RequireEqual(t, result, filteredRes)
 	}
 	evalTime := baseTime.Add(time.Duration(len(results)) * time.Minute)
-	res, err := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
-	require.NoError(t, err)
+	res, errParser := rule.Eval(context.TODO(), 0, evalTime, EngineQueryFunc(ng, storage), nil, 0)
+	require.NoError(t, errParser)
 	require.Empty(t, res)
 }
 

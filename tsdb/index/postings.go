@@ -415,6 +415,41 @@ func (p *MemPostings) PostingsForLabelMatching(ctx context.Context, name string,
 	return Merge(ctx, its...)
 }
 
+// PostingsForAllLabelValues returns the sorted union of postings for all values of name.
+func (p *MemPostings) PostingsForAllLabelValues(ctx context.Context, name string) Postings {
+	// PP_CHANGES.md: Honor cancellation before and during the locked traversal.
+	if err := ctx.Err(); err != nil {
+		return ErrPostings(err)
+	}
+
+	p.mtx.RLock()
+
+	e := p.m[name]
+	its := make([]Postings, 0, len(e))
+	lps := make([]ListPostings, len(e))
+	i := 0
+	for _, refs := range e {
+		if i%checkContextEveryNIterations == 0 {
+			if err := ctx.Err(); err != nil {
+				p.mtx.RUnlock()
+
+				return ErrPostings(err)
+			}
+		}
+
+		if len(refs) > 0 {
+			lps[i] = ListPostings{list: refs}
+			its = append(its, &lps[i])
+		}
+		i++
+	}
+
+	// Let the mutex go before merging.
+	p.mtx.RUnlock()
+
+	return Merge(ctx, its...)
+}
+
 // labelValues returns a slice of label values for the given label name.
 // It will take the read lock.
 func (p *MemPostings) labelValues(name string) []string {
@@ -510,59 +545,78 @@ func Intersect(its ...Postings) Postings {
 	return newIntersectPostings(its...)
 }
 
+// intersectPostings advances ordered [Postings] to their next common series reference.
 type intersectPostings struct {
-	arr []Postings
-	cur storage.SeriesRef
+	postings []Postings
+	current  storage.SeriesRef // The last matched series reference.
 }
 
 func newIntersectPostings(its ...Postings) *intersectPostings {
-	return &intersectPostings{arr: its}
+	return &intersectPostings{postings: its}
 }
 
 func (it *intersectPostings) At() storage.SeriesRef {
-	return it.cur
-}
-
-func (it *intersectPostings) doNext() bool {
-Loop:
-	for {
-		for _, p := range it.arr {
-			if !p.Seek(it.cur) {
-				return false
-			}
-			if p.At() > it.cur {
-				it.cur = p.At()
-				continue Loop
-			}
-		}
-		return true
-	}
-}
-
-func (it *intersectPostings) Next() bool {
-	for _, p := range it.arr {
-		if !p.Next() {
-			return false
-		}
-		if p.At() > it.cur {
-			it.cur = p.At()
-		}
-	}
-	return it.doNext()
-}
-
-func (it *intersectPostings) Seek(id storage.SeriesRef) bool {
-	it.cur = id
-	return it.doNext()
+	return it.current
 }
 
 func (it *intersectPostings) Err() error {
-	for _, p := range it.arr {
+	for _, p := range it.postings {
 		if p.Err() != nil {
 			return p.Err()
 		}
 	}
+
 	return nil
+}
+
+func (it *intersectPostings) Next() bool {
+	// Advance the first input and use its value as the target to match.
+	if !it.postings[0].Next() {
+		return false
+	}
+	target := it.postings[0].At()
+	allEqual := true
+
+	for _, p := range it.postings[1:] {
+		if !p.Next() {
+			return false
+		}
+		at := p.At()
+		if at > target {
+			target = at
+			allEqual = false
+		} else if at < target {
+			allEqual = false
+		}
+	}
+
+	if allEqual {
+		it.current = target
+		return true
+	}
+
+	return it.Seek(target)
+}
+
+func (it *intersectPostings) Seek(target storage.SeriesRef) bool {
+	for {
+		allEqual := true
+		for _, p := range it.postings {
+			if !p.Seek(target) {
+				return false
+			}
+			if p.At() > target {
+				target = p.At()
+				allEqual = false
+			}
+		}
+
+		// All inputs now point to the same series.
+		if allEqual {
+			it.current = target
+			return true
+		}
+	}
 }
 
 // Merge returns a new iterator over the union of the input iterators.
@@ -801,7 +855,7 @@ func (it *bigEndianPostings) Seek(x storage.SeriesRef) bool {
 	num := len(it.list) / 4
 	// Do binary search between current position and end.
 	i := sort.Search(num, func(i int) bool {
-		return binary.BigEndian.Uint32(it.list[i*4:]) >= uint32(x)
+		return binary.BigEndian.Uint32(it.list[i*4:]) >= uint32(x) // #nosec G115 // no overflow
 	})
 	if i < num {
 		j := i * 4

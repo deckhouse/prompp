@@ -12,6 +12,7 @@ template <EncoderInterface Encoder>
 class OutdatedChunkMerger {
  public:
   using OutdatedChunk = Encoder::DataStorage::OutdatedChunk;
+  using FinalizedChunkList = Encoder::DataStorage::FinalizedChunkList;
 
   explicit OutdatedChunkMerger(Encoder& encoder) : encoder_(encoder) {}
 
@@ -64,15 +65,15 @@ class OutdatedChunkMerger {
 
     EncodeIterator(Encoder& encoder, chunk::DataChunk& chunk, uint32_t ls_id) : encoder_(&encoder), chunk_(&chunk), ls_id_(ls_id) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator& operator*() noexcept { return *this; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator& operator=(const encoder::Sample& sample) noexcept {
+    [[nodiscard]] PROMPP(inline) EncodeIterator& operator*() noexcept { return *this; }
+    [[nodiscard]] PROMPP(inline) EncodeIterator& operator=(const encoder::Sample& sample) noexcept {
       encoder_->encode(ls_id_, sample.timestamp, sample.value, *chunk_);
       return *this;
     }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator& operator++() noexcept { return *this; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator operator++(int) noexcept { return *this; }
+    [[nodiscard]] PROMPP(inline) EncodeIterator& operator++() noexcept { return *this; }
+    [[nodiscard]] PROMPP(inline) EncodeIterator operator++(int) noexcept { return *this; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return false; }
+    [[nodiscard]] PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return false; }
 
    private:
     Encoder* encoder_;
@@ -93,19 +94,19 @@ class OutdatedChunkMerger {
 
     const encoder::Sample& operator*() const noexcept { return **iterator_; }
 
-    PROMPP_ALWAYS_INLINE OutdatedSampleIterator& operator++() noexcept {
+    PROMPP(inline) OutdatedSampleIterator& operator++() noexcept {
       skip_non_unique_samples();
       ++*iterator_;
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE OutdatedSampleIterator operator++(int) noexcept {
+    PROMPP(inline) OutdatedSampleIterator operator++(int) noexcept {
       auto result = *this;
       this->operator++();
       return result;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept {
+    [[nodiscard]] PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept {
       return *iterator_ == end_ || (*iterator_)->timestamp >= max_timestamp_;
     }
 
@@ -131,7 +132,7 @@ class OutdatedChunkMerger {
     return samples;
   }
 
-  void merge_outdated_samples_in_finalized_chunks(uint32_t ls_id, const chunk::FinalizedChunkList& finalized_chunks, SamplesSpan& samples) {
+  void merge_outdated_samples_in_finalized_chunks(uint32_t ls_id, const FinalizedChunkList& finalized_chunks, SamplesSpan& samples) {
     for (auto it = finalized_chunks.begin(), next_it = std::next(it); it != finalized_chunks.end(); ++next_it) {
       if (samples.empty()) {
         return;
@@ -211,11 +212,6 @@ class OutdatedChunkMerger {
 
       case kValuesGorilla: {
         merge_outdated_samples<kValuesGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
-        break;
-      }
-
-      case kGorilla: {
-        merge_outdated_samples<kGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
         break;
       }
     }

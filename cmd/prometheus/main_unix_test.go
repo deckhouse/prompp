@@ -55,7 +55,7 @@ Loop:
 	for x := 0; x < 10; x++ {
 		// error=nil means prometheus has started, so we can send the interrupt
 		// signal and wait for the graceful shutdown.
-		if _, err := http.Get(url); err == nil {
+		if _, err = http.Get(url); err == nil {
 			startedOk = true
 			prom.Process.Signal(os.Interrupt)
 			select {

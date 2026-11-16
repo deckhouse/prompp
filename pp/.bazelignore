@@ -5,3 +5,7 @@ bazel-pp
 bazel-out
 bazel-testlogs
 bazel-external
+
+# Standalone Bzlmod module consumed through @entrypoint_codegen via local_path_override.
+# Keep it out of root //... package discovery.
+tools/entrypoint_codegen

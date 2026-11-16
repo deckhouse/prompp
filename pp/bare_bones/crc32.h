@@ -5,31 +5,34 @@
 #include <cstdint>
 #include <fstream>
 
-#ifdef __x86_64__
-#include <x86intrin.h>
+#include "arch.h"
+
+#if PROMPP(arch, amd64)
+#  include <x86intrin.h>
 #endif
-#ifdef __ARM_FEATURE_CRC32
-#include <arm_acle.h>
+#if PROMPP(isa, arm_crc32)
+#  include <arm_acle.h>
 #endif
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
-#include "bare_bones/exception.h"
-#include "bare_bones/streams.h"
-#include "bare_bones/type_traits.h"
+#include "exception.h"
+#include "preprocess.h"
+#include "streams.h"
+#include "type_traits.h"
 
 namespace BareBones {
 class CRC32 {
   uint32_t crc_ = 0;
 
-#if defined(__SSE4_2__)
-  inline __attribute__((always_inline)) void compute(uint32_t data) noexcept { crc_ = _mm_crc32_u32(crc_, data); }
+#if PROMPP(isa, x86_sse42)
+  PROMPP(inline) void compute(uint32_t data) noexcept { crc_ = _mm_crc32_u32(crc_, data); }
 
-  inline __attribute__((always_inline)) void compute(uint64_t data) noexcept { crc_ = _mm_crc32_u64(crc_, data); }
-#elif defined(__ARM_FEATURE_CRC32)
-  inline __attribute__((always_inline)) void compute(uint32_t data) noexcept { crc_ = __crc32cw(crc_, data); }
+  PROMPP(inline) void compute(uint64_t data) noexcept { crc_ = _mm_crc32_u64(crc_, data); }
+#elif PROMPP(isa, arm_crc32)
+  PROMPP(inline) void compute(uint32_t data) noexcept { crc_ = __crc32cw(crc_, data); }
 
-  inline __attribute__((always_inline)) void compute(uint64_t data) noexcept { crc_ = __crc32cd(crc_, data); }
+  PROMPP(inline) void compute(uint64_t data) noexcept { crc_ = __crc32cd(crc_, data); }
 #else
   static constexpr auto generate_lut() noexcept {
     std::array<std::array<uint32_t, 256>, 8> lut{};
@@ -59,14 +62,14 @@ class CRC32 {
     return lut;
   }
 
-  inline __attribute__((always_inline)) void compute(uint32_t data) noexcept {
+  PROMPP(inline) void compute(uint32_t data) noexcept {
     static constexpr auto lut = generate_lut();
 
     uint32_t one = data ^ crc_;
     crc_ = lut[0][one >> 24 & 0xFF] ^ lut[1][(one >> 16) & 0xFF] ^ lut[2][(one >> 8) & 0xFF] ^ lut[3][one & 0xFF];
   }
 
-  inline __attribute__((always_inline)) void compute(uint64_t data) noexcept {
+  PROMPP(inline) void compute(uint64_t data) noexcept {
     static constexpr auto lut = generate_lut();
 
     const uint32_t data_one = static_cast<uint32_t>(data) ^ crc_;
@@ -79,23 +82,23 @@ class CRC32 {
  public:
   bool operator==(const CRC32& o) const noexcept { return crc_ == o.crc_; }
 
-  inline __attribute__((always_inline)) explicit operator uint32_t() const noexcept { return ~crc_; }
+  explicit PROMPP(inline) operator uint32_t() const noexcept { return ~crc_; }
 
-  inline __attribute__((always_inline)) void clear() noexcept { crc_ = 0; }
+  PROMPP(inline) void clear() noexcept { crc_ = 0; }
 
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, uint32_t data) noexcept {
+  friend PROMPP(inline) CRC32& operator<<(CRC32& crc, uint32_t data) noexcept {
     crc.compute(data);
     return crc;
   }
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, uint64_t data) noexcept {
+  friend PROMPP(inline) CRC32& operator<<(CRC32& crc, uint64_t data) noexcept {
     crc.compute(data);
     return crc;
   }
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, int64_t data) noexcept {
+  friend PROMPP(inline) CRC32& operator<<(CRC32& crc, int64_t data) noexcept {
     crc.compute(std::bit_cast<uint64_t>(data));
     return crc;
   }
-  inline __attribute__((always_inline)) friend CRC32& operator<<(CRC32& crc, double data) noexcept {
+  friend PROMPP(inline) CRC32& operator<<(CRC32& crc, double data) noexcept {
     crc.compute(std::bit_cast<uint64_t>(data));
     return crc;
   }
@@ -107,9 +110,7 @@ class CRC32 {
 
   template <class OutputStream>
   friend OutputStream& operator<<(OutputStream& out, const CRC32& crc) {
-    auto original_exceptions = out.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
     // write version
     out.put(1);
@@ -138,9 +139,7 @@ class CRC32 {
       throw BareBones::Exception(0x9eeec7c6c1b5a5ed, "Invalid version %d for CRC32 container, only version 1 is supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    auto sg2 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read data
     in.read(reinterpret_cast<char*>(&crc.crc_), sizeof(crc.crc_));

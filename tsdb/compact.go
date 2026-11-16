@@ -415,7 +415,12 @@ func splitByRange(ds []dirMeta, tr int64) [][]dirMeta {
 
 // CompactBlockMetas merges many block metas into one, combining its source blocks together
 // and adjusting compaction level. Min/Max time of result block meta covers all input blocks.
+// Returns nil if no block metas are given.
 func CompactBlockMetas(uid ulid.ULID, blocks ...*BlockMeta) *BlockMeta {
+	if len(blocks) == 0 {
+		return nil
+	}
+
 	res := &BlockMeta{
 		ULID: uid,
 	}
@@ -522,13 +527,18 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)
+	// All input blocks may have been skipped as corrupted above (or no dirs were given at all),
+	// leaving metas empty. There is nothing to compact.
+	if meta == nil {
+		return nil, nil
+	}
 	err := c.write(dest, meta, blockPopulator, blocks...)
 	if err == nil {
 		if meta.Stats.NumSamples == 0 {
 			for _, b := range bs {
 				b.meta.Compaction.Deletable = true
-				n, err := writeMetaFile(c.logger, b.dir, &b.meta)
-				if err != nil {
+				n, errWrite := writeMetaFile(c.logger, b.dir, &b.meta)
+				if errWrite != nil {
 					level.Error(c.logger).Log(
 						"msg", "Failed to write 'Deletable' to meta file after compaction",
 						"ulid", b.meta.ULID,
@@ -645,8 +655,8 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		err = tsdb_errors.NewMulti(err, tsdb_errors.CloseAll(closers)).Err()
 
 		// RemoveAll returns no error when tmp doesn't exist so it is safe to always run it.
-		if err := os.RemoveAll(tmp); err != nil {
-			level.Error(c.logger).Log("msg", "removed tmp folder after failed compaction", "err", err.Error())
+		if errRemoveAll := os.RemoveAll(tmp); errRemoveAll != nil {
+			level.Error(c.logger).Log("msg", "removed tmp folder after failed compaction", "err", errRemoveAll.Error())
 		}
 		c.metrics.Ran.Inc()
 		c.metrics.Duration.Observe(time.Since(t).Seconds())
@@ -656,7 +666,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		return err
 	}
 
-	if err = os.MkdirAll(tmp, 0o777); err != nil {
+	if err = os.MkdirAll(tmp, 0o777); err != nil { //nolint:gosec // this is meant to be that way
 		return err
 	}
 
@@ -685,7 +695,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 	}
 	closers = append(closers, indexw)
 
-	if err := blockPopulator.PopulateBlock(c.ctx, c.metrics, c.logger, c.chunkPool, c.mergeFunc, blocks, meta, indexw, chunkw, AllSortedPostings); err != nil {
+	if err = blockPopulator.PopulateBlock(c.ctx, c.metrics, c.logger, c.chunkPool, c.mergeFunc, blocks, meta, indexw, chunkw, AllSortedPostings); err != nil {
 		return fmt.Errorf("populate block: %w", err)
 	}
 
@@ -718,7 +728,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 	}
 
 	// Create an empty tombstones file.
-	if _, err := tombstones.WriteFile(c.logger, tmp, tombstones.NewMemTombstones()); err != nil {
+	if _, err = tombstones.WriteFile(c.logger, tmp, tombstones.NewMemTombstones()); err != nil {
 		return fmt.Errorf("write new tombstones file: %w", err)
 	}
 
@@ -732,7 +742,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		}
 	}()
 
-	if err := df.Sync(); err != nil {
+	if err = df.Sync(); err != nil {
 		return fmt.Errorf("sync temporary dir file: %w", err)
 	}
 
@@ -898,7 +908,7 @@ func (c DefaultBlockPopulator) PopulateBlock(ctx context.Context, metrics *Compa
 		meta.Stats.NumChunks += uint64(len(chks))
 		meta.Stats.NumSeries++
 		for _, chk := range chks {
-			meta.Stats.NumSamples += uint64(chk.Chunk.NumSamples())
+			meta.Stats.NumSamples += uint64(chk.Chunk.NumSamples()) // #nosec G115 // no overflow
 		}
 
 		for _, chk := range chks {

@@ -19,8 +19,8 @@ class CompactSamplesList {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_single() const noexcept { return type_ == Type::kSingle; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_plural() const noexcept { return type_ == Type::kPlural; }
+  [[nodiscard]] PROMPP(inline) bool is_single() const noexcept { return type_ == Type::kSingle; }
+  [[nodiscard]] PROMPP(inline) bool is_plural() const noexcept { return type_ == Type::kPlural; }
 
   void add(const Primitives::Sample& sample) {
     if (type_ == Type::kNone) [[likely]] {
@@ -38,19 +38,20 @@ class CompactSamplesList {
       if (auto& plural = sample_.plural; plural.back().timestamp() <= sample.timestamp()) [[likely]] {
         plural.emplace_back(sample);
       } else {
-        const auto it = std::ranges::lower_bound(
-            plural, sample, [](const Primitives::Sample& a, const Primitives::Sample& b) PROMPP_LAMBDA_INLINE { return a.timestamp() <= b.timestamp(); });
+        const auto it = std::ranges::lower_bound(plural, sample, [](const Primitives::Sample& a, const Primitives::Sample& b) PROMPP(lambda_inline) {
+          return a.timestamp() <= b.timestamp();
+        });
         plural.insert(it, sample);
       }
     }
   }
 
-  [[nodiscard]] PROMPP_LAMBDA_INLINE const Primitives::Sample& sample() const noexcept {
+  [[nodiscard]] PROMPP(lambda_inline) const Primitives::Sample& sample() const noexcept {
     assert(type_ == Type::kSingle);
     return sample_.single;
   }
 
-  [[nodiscard]] PROMPP_LAMBDA_INLINE const SamplesVector& samples() const noexcept {
+  [[nodiscard]] PROMPP(lambda_inline) const SamplesVector& samples() const noexcept {
     assert(type_ == Type::kPlural);
     return sample_.plural;
   }
@@ -86,13 +87,13 @@ class SegmentSamplesStorage {
   using SparseVector = BareBones::SparseVector<CompactSamplesList, BareBones::Vector>;
   using Iterator = SparseVector::Iterator;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t samples_count() const noexcept { return samples_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count() const noexcept { return series_.items_count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t first_sample_added_at_ts_ns() const noexcept { return first_sample_added_at_tsns_; }
+  [[nodiscard]] PROMPP(inline) uint32_t samples_count() const noexcept { return samples_count_; }
+  [[nodiscard]] PROMPP(inline) uint32_t series_count() const noexcept { return series_.items_count(); }
+  [[nodiscard]] PROMPP(inline) Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
+  [[nodiscard]] PROMPP(inline) Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
+  [[nodiscard]] PROMPP(inline) int64_t first_sample_added_at_ts_ns() const noexcept { return first_sample_added_at_tsns_; }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     series_.clear();
 
     samples_count_ = 0;
@@ -103,7 +104,7 @@ class SegmentSamplesStorage {
   }
 
   template <class T>
-  PROMPP_ALWAYS_INLINE void add(Primitives::LabelSetID ls_id, const T& smpl) {
+  PROMPP(inline) void add(Primitives::LabelSetID ls_id, const T& smpl) {
     if (first_sample_added_at_tsns_ == 0) [[unlikely]] {
       const auto now = std::chrono::system_clock::now();
       first_sample_added_at_tsns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
@@ -122,8 +123,8 @@ class SegmentSamplesStorage {
 
   template <class Callback>
     requires std::is_invocable_v<Callback, Primitives::LabelSetID, Primitives::Timestamp, Primitives::Sample::value_type>
-  PROMPP_ALWAYS_INLINE void for_each(Callback&& func) const {
-    for_each([&](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE { func(ls_id, sample.timestamp(), sample.value()); });
+  PROMPP(inline) void for_each(Callback&& func) const {
+    for_each([&](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) PROMPP(lambda_inline) { func(ls_id, sample.timestamp(), sample.value()); });
   }
 
   template <class Callback>
@@ -140,10 +141,10 @@ class SegmentSamplesStorage {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return series_.begin(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return SparseVector::end(); }
+  [[nodiscard]] PROMPP(inline) Iterator begin() const noexcept { return series_.begin(); }
+  [[nodiscard]] static PROMPP(inline) auto end() noexcept { return SparseVector::end(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return series_.empty(); }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return series_.empty(); }
 
  private:
   static constexpr auto kSeriesReserveSize = 512U;

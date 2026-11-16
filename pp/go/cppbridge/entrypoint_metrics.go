@@ -24,6 +24,10 @@ var snapshotLSSCopyAddedSeriesDurationMax = newMaxGaugeMetric()
 // [LabelSetStorage].FinalizeCopyAndShrink() cpp call duration.
 var lssFinalizeCopyAndShrinkDurationMax = newMaxGaugeMetric()
 
+// headWalEncoderLongFinalizeDurationMax is the max value of
+// [HeadWalEncoder].LongFinalize() cpp call duration.
+var headWalEncoderLongFinalizeDurationMax = newMaxGaugeMetric()
+
 // [LabelSetStorage].SetPendingShrinkBoundary() cpp call duration.
 var _ = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewGaugeFunc(
 	prometheus.GaugeOpts{
@@ -49,6 +53,15 @@ var _ = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewGaugeFunc(
 		Help: "The time duration lss finalize copy and shrink cpp call.",
 	},
 	lssFinalizeCopyAndShrinkDurationMax.get,
+)
+
+// [HeadWalEncoder].LongFinalize() cpp call duration.
+var _ = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewGaugeFunc(
+	prometheus.GaugeOpts{
+		Name: "prompp_rotator_head_wal_encoder_long_finalize_duration_nanoseconds",
+		Help: "The time duration head wal encoder long finalize cpp call.",
+	},
+	headWalEncoderLongFinalizeDurationMax.get,
 )
 
 type maxGaugeMetric struct {

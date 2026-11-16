@@ -2,9 +2,7 @@
 
 #include <stdexcept>
 
-void Config::parameter(const std::string& name) {
-  params_.insert({name, ""});
-}
+void Config::parameter(const std::string& name) { params_.insert({name, ""}); }
 
 void Config::load(char** args, int n) {
   for (int i = 0; i < n; i += 2) {

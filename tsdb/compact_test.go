@@ -1060,10 +1060,10 @@ func TestCompaction_populateBlock(t *testing.T) {
 				for _, chk := range s.chunks {
 					var (
 						samples       = make([]sample, 0, chk.Chunk.NumSamples())
-						iter          = chk.Chunk.Iterator(iter)
 						firstTs int64 = math.MaxInt64
 						s       sample
 					)
+					iter = chk.Chunk.Iterator(iter)
 					for vt := iter.Next(); vt != chunkenc.ValNone; vt = iter.Next() {
 						switch vt {
 						case chunkenc.ValFloat:
@@ -1402,7 +1402,7 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 				createBlock(t, db.Dir(), genSeries(1, 1, m.MinTime, m.MaxTime))
 			}
 			require.NoError(t, db.reload())
-			require.Equal(t, len(blocks), len(db.Blocks()), "unexpected block count after a reloadBlocks")
+			require.Len(t, db.Blocks(), len(blocks), "unexpected block count after a reloadBlocks")
 
 			return len(blocks) + 1, 2
 		},
@@ -1624,7 +1624,8 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 	timeStep := DefaultBlockDuration / int64(numHistograms)
 	for _, c := range cases {
 		t.Run(
-			fmt.Sprintf("series=%d,span=%d,gap=%d,buckets=%d",
+			fmt.Sprintf(
+				"series=%d,span=%d,gap=%d,buckets=%d",
 				len(allSchemas)*c.numSeriesPerSchema,
 				c.numSpans,
 				c.gapBetweenSpans,
@@ -1779,11 +1780,13 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 					numSpans:               c.numSpans,
 					gapBetweenSpans:        c.gapBetweenSpans,
 				})
-			})
+			},
+		)
 	}
 
 	for _, s := range summaries {
-		fmt.Printf(`
+		fmt.Printf(
+			`
 Meta: NumBuckets=%d, NumSpans=%d, GapBetweenSpans=%d
 Old Block: NumSeries=%d, IndexSize=%d, ChunksSize=%d, TotalSize=%d
 Sparse Block: NumSeries=%d, IndexSize=%d, ChunksSize=%d, TotalSize=%d
@@ -1929,6 +1932,51 @@ func TestCompactEmptyResultBlockWithTombstone(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, ulids)
 	require.NoError(t, block.Close())
+}
+
+func TestCompactEmptyDirs(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+
+	c, err := NewLeveledCompactor(ctx, nil, log.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	require.Nil(t, CompactBlockMetas(ulid.MustNew(1000, nil)))
+}
+
+func TestCompactAllBlocksCorrupted(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+
+	blockDir1 := createBlock(t, tmpdir, genSeries(1, 1, 0, 10))
+	blockDir2 := createBlock(t, tmpdir, genSeries(1, 1, 10, 20))
+	// Corrupt the blocks so that the meta file stays readable
+	// but OpenBlock fails.
+	require.NoError(t, os.RemoveAll(path.Join(blockDir1, indexFilename)))
+	require.NoError(t, os.RemoveAll(path.Join(blockDir2, indexFilename)))
+
+	c, err := NewLeveledCompactor(ctx, nil, log.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, []string{blockDir1, blockDir2}, nil)
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+
+	for _, dir := range []string{blockDir1, blockDir2} {
+		meta, _, metaErr := readMetaFile(dir)
+		require.NoError(t, metaErr)
+		require.True(t, meta.Compaction.IsCorrupted(), "block %s should be marked as corrupted", dir)
+	}
+
+	// Corrupted blocks are excluded from the plan, so the compactBlocks
+	// loop observes an empty plan and terminates instead of retrying forever.
+	plan, err := c.Plan(tmpdir)
+	require.NoError(t, err)
+	require.Empty(t, plan)
 }
 
 func TestDelayedCompaction(t *testing.T) {

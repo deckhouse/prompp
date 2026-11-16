@@ -140,7 +140,7 @@ func (r *Reader) next() (err error) {
 			r.rec = append(r.rec, buf[:length]...)
 		}
 
-		if err := validateRecord(r.curRecTyp, i); err != nil {
+		if err = validateRecord(r.curRecTyp, i); err != nil {
 			return err
 		}
 		if r.curRecTyp == recLast || r.curRecTyp == recFull {

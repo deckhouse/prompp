@@ -576,14 +576,14 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 		uids = append(uids, meta.ULID.String())
 	}
 
-	// All blocks may have been skipped as corrupted.
-	if len(metas) == 0 {
-		return nil, nil
-	}
-
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)
+	// All input blocks may have been skipped as corrupted above (or no dirs were given at all),
+	// leaving metas empty. There is nothing to compact.
+	if meta == nil {
+		return nil, nil
+	}
 	err := c.write(dest, meta, blockPopulator, writeMetaFileFn, blocks...)
 	if err == nil {
 		if meta.Stats.NumSamples == 0 {
@@ -980,7 +980,12 @@ func splitByRange(ds []dirMeta, tr int64) [][]dirMeta {
 
 // CompactBlockMetas merges many block metas into one, combining its source blocks together
 // and adjusting compaction level. Min/Max time of result block meta covers all input blocks.
+// Returns nil if no block metas are given.
 func CompactBlockMetas(uid ulid.ULID, blocks ...*tsdb.BlockMeta) *tsdb.BlockMeta {
+	if len(blocks) == 0 {
+		return nil
+	}
+
 	res := &tsdb.BlockMeta{
 		ULID: uid,
 	}

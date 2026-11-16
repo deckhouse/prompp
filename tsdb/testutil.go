@@ -122,7 +122,7 @@ func requireEqualOOOSamples(t *testing.T, expectedSamples int, db *DB) {
 }
 
 func requireEqualSamples(t *testing.T, name string, expected, actual []chunks.Sample, ignoreCounterResets bool) {
-	require.Equal(t, len(expected), len(actual), "Length not equal to expected for %s", name)
+	require.Len(t, actual, len(expected), "Length not equal to expected for %s", name)
 	for i, s := range expected {
 		expectedSample := s
 		actualSample := actual[i]

@@ -67,15 +67,15 @@ func (l *WALHashdexLimits) UnmarshalBinary(data []byte) error {
 	var offset int
 
 	maxLabelNameLength, n := binary.Uvarint(data[offset:])
-	l.MaxLabelNameLength = uint32(maxLabelNameLength)
+	l.MaxLabelNameLength = uint32(maxLabelNameLength) // #nosec G115 // no overflow
 	offset += n
 
 	maxLabelValueLength, n := binary.Uvarint(data[offset:])
-	l.MaxLabelValueLength = uint32(maxLabelValueLength)
+	l.MaxLabelValueLength = uint32(maxLabelValueLength) // #nosec G115 // no overflow
 	offset += n
 
 	maxLabelNamesPerTimeseries, n := binary.Uvarint(data[offset:])
-	l.MaxLabelNamesPerTimeseries = uint32(maxLabelNamesPerTimeseries)
+	l.MaxLabelNamesPerTimeseries = uint32(maxLabelNamesPerTimeseries) // #nosec G115 // no overflow
 	offset += n
 
 	maxTimeseriesCount, _ := binary.Uvarint(data[offset:])
@@ -328,6 +328,7 @@ func NewPrometheusScraperHashdex() *WALPrometheusScraperHashdex {
 func (h *WALPrometheusScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walPrometheusScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
+	runtime.KeepAlive(h)
 	return scraped, errorFromCode(errorCode)
 }
 
@@ -341,6 +342,7 @@ func (h *WALPrometheusScraperHashdex) RangeMetadata(f func(metadata WALScraperHa
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }
@@ -384,6 +386,7 @@ func NewOpenMetricsScraperHashdex() *WALOpenMetricsScraperHashdex {
 func (h *WALOpenMetricsScraperHashdex) Parse(buffer []byte, default_timestamp int64) (uint32, error) {
 	h.buffer = buffer
 	scraped, errorCode := walOpenMetricsScraperHashdexParse(h.hashdex, h.buffer, default_timestamp)
+	runtime.KeepAlive(h)
 	return scraped, errorFromCode(errorCode)
 }
 
@@ -397,6 +400,7 @@ func (h *WALOpenMetricsScraperHashdex) RangeMetadata(f func(metadata WALScraperH
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }

@@ -288,7 +288,7 @@ func (txr *txRing) cleanupAppendIDsBelow(bound uint64) {
 		}
 	}
 
-	txr.txIDFirst %= uint32(len(txr.txIDs))
+	txr.txIDFirst %= uint32(len(txr.txIDs)) // #nosec G115 // no overflow
 }
 
 func (txr *txRing) iterator() *txRingIterator {

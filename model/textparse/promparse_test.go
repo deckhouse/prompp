@@ -59,7 +59,7 @@ wind_speed{A="2",c="3"} 12345
 # comment with escaped \n newline
 # comment with escaped \ escape character
 # HELP nohelp1
-# HELP nohelp2 
+# HELP nohelp2
 go_gc_duration_seconds{ quantile="1.0", a="b" } 8.3835e-05
 go_gc_duration_seconds { quantile="1.0", a="b" } 8.3835e-05
 go_gc_duration_seconds { quantile= "1.0", a= "b", } 8.3835e-05
@@ -520,13 +520,13 @@ func BenchmarkParse(b *testing.B) {
 
 				Outer:
 					for i < b.N {
-						t, err := p.Next()
+						t, errNext := p.Next()
 						switch t {
 						case EntryInvalid:
-							if errors.Is(err, io.EOF) {
+							if errors.Is(errNext, io.EOF) {
 								break Outer
 							}
-							b.Fatal(err)
+							b.Fatal(errNext)
 						case EntrySeries:
 							m, _, _ := p.Series()
 							total += len(m)
@@ -549,13 +549,13 @@ func BenchmarkParse(b *testing.B) {
 
 				Outer:
 					for i < b.N {
-						t, err := p.Next()
+						t, errNext := p.Next()
 						switch t {
 						case EntryInvalid:
-							if errors.Is(err, io.EOF) {
+							if errors.Is(errNext, io.EOF) {
 								break Outer
 							}
-							b.Fatal(err)
+							b.Fatal(errNext)
 						case EntrySeries:
 							m, _, _ := p.Series()
 
@@ -583,13 +583,13 @@ func BenchmarkParse(b *testing.B) {
 
 				Outer:
 					for i < b.N {
-						t, err := p.Next()
+						t, errNext := p.Next()
 						switch t {
 						case EntryInvalid:
-							if errors.Is(err, io.EOF) {
+							if errors.Is(errNext, io.EOF) {
 								break Outer
 							}
-							b.Fatal(err)
+							b.Fatal(errNext)
 						case EntrySeries:
 							m, _, _ := p.Series()
 

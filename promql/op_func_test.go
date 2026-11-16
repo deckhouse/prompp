@@ -235,7 +235,7 @@ func (s *ReplaceNaNSuite) TestMinimal() {
 
 	result := query.Exec(context.Background())
 	s.Require().NoError(result.Err)
-	s.Zero(result.String())
+	s.Empty(result.String())
 }
 
 func (s *ReplaceNaNSuite) TestMultiple() {
@@ -344,13 +344,13 @@ func TestSmoothie(t *testing.T) {
 	assert.Len(t, m[0].Floats, 5)
 	assert.EqualValues(t, 0, m[0].Floats[0].T)
 	assert.EqualValues(t, 0, m[0].Floats[0].F)
-	assert.EqualValues(t, 1*minute, m[0].Floats[1].T)
-	assert.EqualValues(t, 0.5, m[0].Floats[1].F)
-	assert.EqualValues(t, 2*minute, m[0].Floats[2].T)
+	assert.Equal(t, 1*minute, m[0].Floats[1].T)
+	assert.Equal(t, 0.5, m[0].Floats[1].F)
+	assert.Equal(t, 2*minute, m[0].Floats[2].T)
 	assert.EqualValues(t, 1, m[0].Floats[2].F)
-	assert.EqualValues(t, 3*minute, m[0].Floats[3].T)
-	assert.EqualValues(t, 1.5, m[0].Floats[3].F)
-	assert.EqualValues(t, 4*minute, m[0].Floats[4].T)
+	assert.Equal(t, 3*minute, m[0].Floats[3].T)
+	assert.Equal(t, 1.5, m[0].Floats[3].F)
+	assert.Equal(t, 4*minute, m[0].Floats[4].T)
 	assert.EqualValues(t, 2, m[0].Floats[4].F)
 }
 
@@ -447,7 +447,7 @@ func (s *ZeroIfNoneSuite) TestMinimal() {
 
 	result := query.Exec(context.Background())
 	s.Require().NoError(result.Err)
-	s.Zero(result.String())
+	s.Empty(result.String())
 }
 
 func (s *ZeroIfNoneSuite) TestMultiple() {

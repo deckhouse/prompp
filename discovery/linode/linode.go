@@ -356,7 +356,7 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 			linodeLabelSpecsTransferBytes: model.LabelValue(strconv.FormatInt(int64(instance.Specs.Transfer)<<20, 10)),
 		}
 
-		addr := net.JoinHostPort(publicIPv4, strconv.FormatUint(uint64(d.port), 10))
+		addr := net.JoinHostPort(publicIPv4, strconv.FormatUint(uint64(d.port), 10)) // #nosec G115 // no overflow
 		labels[model.AddressLabel] = model.LabelValue(addr)
 
 		if len(instance.Tags) > 0 {

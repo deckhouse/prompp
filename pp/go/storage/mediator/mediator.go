@@ -37,6 +37,9 @@ type Mediator struct {
 	c         chan struct{}
 	closeOnce sync.Once
 	closer    *util.Closer
+
+	closedMu sync.RWMutex
+	closed   bool
 }
 
 // NewMediator init new Mediator.
@@ -63,12 +66,23 @@ func (m *Mediator) Close() {
 	_ = m.closer.Close()
 	m.timer.Stop()
 	m.closeOnce.Do(func() {
+		m.closedMu.Lock()
+		m.closed = true
+		m.closedMu.Unlock()
+
 		close(m.c)
 	})
 }
 
 // Trigger send notify to channel.
 func (m *Mediator) Trigger() {
+	m.closedMu.RLock()
+	defer m.closedMu.RUnlock()
+
+	if m.closed {
+		return
+	}
+
 	select {
 	case m.c <- struct{}{}:
 	default:
@@ -77,6 +91,13 @@ func (m *Mediator) Trigger() {
 
 // TriggerWithResetTimer send notify to channel and reset timer.
 func (m *Mediator) TriggerWithResetTimer() {
+	m.closedMu.RLock()
+	defer m.closedMu.RUnlock()
+
+	if m.closed {
+		return
+	}
+
 	select {
 	case m.c <- struct{}{}:
 		m.timer.Reset()

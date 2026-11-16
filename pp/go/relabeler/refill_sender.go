@@ -335,7 +335,7 @@ func (rsm *RefillSendManager) fileProcessing(ctx context.Context, fileInfo fs.Fi
 		wg.Add(1)
 		go func(dr Dialer, dn string, id int, data []uint32) {
 			defer wg.Done()
-			if err := rsm.send(ctx, dr, reader, uint16(id), data); err != nil {
+			if err := rsm.send(ctx, dr, reader, uint16(id), data); err != nil { // #nosec G115 // no overflow
 				if !IsPermanent(err) {
 					rsm.addUnavailableDialer(dn)
 					withError.Store(true)
@@ -773,7 +773,7 @@ func (rr *RefillReader) distributeRejects(sm *SendMap) {
 	dnames := rr.markupFile.DestinationsNames()
 	for _, rj := range rr.markupFile.rejects {
 		sm.Append(
-			dnames.IDToString(int32(rj.NameID)),
+			dnames.IDToString(int32(rj.NameID)), // #nosec G115 // no overflow
 			rj.ShardID,
 			rj.Segment,
 		)
@@ -782,7 +782,7 @@ func (rr *RefillReader) distributeRejects(sm *SendMap) {
 
 // distributeNotAck - distribute not ack segment.
 func (rr *RefillReader) distributeNotAck(sm *SendMap) {
-	shards := uint16(rr.markupFile.Shards())
+	shards := uint16(rr.markupFile.Shards()) // #nosec G115 // no overflow
 
 	for _, dname := range rr.markupFile.DestinationsNames().ToString() {
 		for shardID := uint16(0); shardID < shards; shardID++ {
@@ -867,7 +867,7 @@ func (rr *RefillReader) WriteRefillShardEOF(ctx context.Context, dname string, s
 	}
 
 	// create frame
-	fe, err := frames.NewRefillShardEOFFrame(uint32(dnameID), shardID)
+	fe, err := frames.NewRefillShardEOFFrame(uint32(dnameID), shardID) // #nosec G115 // no overflow
 	if err != nil {
 		return err
 	}

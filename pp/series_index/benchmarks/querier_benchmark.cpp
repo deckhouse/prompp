@@ -1,7 +1,6 @@
 #include <benchmark/benchmark.h>
 
 #include "benchmark/statistic.h"
-#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -55,7 +54,7 @@ const std::array kBenchmarkCases{
 };
 
 void LssQuery(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& lss = get_lss();
 
   for ([[maybe_unused]] auto _ : state) {

@@ -30,13 +30,17 @@ func NewLSS() *LSS {
 	}
 }
 
-// AllocatedMemory return size of allocated memory for labelset storages.
-func (l *LSS) AllocatedMemory() uint64 {
+// AllocatedMemory return size of allocated memory for the target and the input labelset storages
+// separately. The input lss is dropped by [LSS.ReleaseIngestionStructures], its memory is 0 then.
+func (l *LSS) AllocatedMemory() (target, input uint64) {
 	l.locker.RLock()
-	am := l.input.AllocatedMemory() + l.target.AllocatedMemory()
+	target = l.target.AllocatedMemory()
+	if l.input != nil {
+		input = l.input.AllocatedMemory()
+	}
 	l.locker.RUnlock()
 
-	return am
+	return target, input
 }
 
 // CopyAddedSeriesTo copy the label sets from the source lss to the destination lss that were added source lss.
@@ -81,9 +85,25 @@ func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) 
 	l.newToOldLsIDsMapping = destination.dstSrcLsIDsMapping
 }
 
+// GroupSeriesByLabelNames group series by label names.
+func (l *LSS) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []uint32) *cppbridge.SeriesGroups {
+	l.locker.RLock()
+	snapshot := l.getSnapshot()
+	l.locker.RUnlock()
+
+	return snapshot.GroupSeriesByLabelNames(seriesIDs, labelNameIDs)
+}
+
 // Input returns input lss.
 func (l *LSS) Input() *cppbridge.LabelSetStorage {
 	return l.input
+}
+
+// LabelNameToIDs get label name ids from lss.
+func (l *LSS) LabelNameToIDs(names []string, namesIDs []uint32) {
+	l.locker.RLock()
+	l.target.LabelNameToIDs(names, namesIDs)
+	l.locker.RUnlock()
 }
 
 // QueryLabelNames add to dedup all the unique label names present in lss in sorted order.
@@ -159,6 +179,27 @@ func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
 	l.locker.RLock()
 	status.FromLSS(l.target, limit)
 	l.locker.RUnlock()
+}
+
+// ReleaseIngestionStructures releases label set -> ls id hash set of target lss and drops input lss,
+// it's only needed while the head accepts data.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+// so it's allowed only for read-only lss.
+func (l *LSS) ReleaseIngestionStructures() {
+	l.locker.Lock()
+	l.input = nil
+	l.target.ReleaseHashSet()
+	l.locker.Unlock()
+}
+
+// ReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of target lss,
+// sorting index is built beforehand.
+// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+func (l *LSS) ReleaseLSIDSet() {
+	l.locker.Lock()
+	l.target.ReleaseLSIDSet()
+	l.locker.Unlock()
 }
 
 // RLock locks the resource for reading.

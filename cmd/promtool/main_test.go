@@ -486,7 +486,7 @@ func TestCheckRules(t *testing.T) {
 		os.Stdin = r
 
 		exitCode := CheckRules(newLintConfig(lintOptionDuplicateRules, false))
-		require.Equal(t, successExitCode, exitCode, "")
+		require.Equal(t, successExitCode, exitCode)
 	})
 
 	t.Run("rules-bad", func(t *testing.T) {
@@ -508,7 +508,7 @@ func TestCheckRules(t *testing.T) {
 		os.Stdin = r
 
 		exitCode := CheckRules(newLintConfig(lintOptionDuplicateRules, false))
-		require.Equal(t, failureExitCode, exitCode, "")
+		require.Equal(t, failureExitCode, exitCode)
 	})
 
 	t.Run("rules-lint-fatal", func(t *testing.T) {
@@ -530,24 +530,24 @@ func TestCheckRules(t *testing.T) {
 		os.Stdin = r
 
 		exitCode := CheckRules(newLintConfig(lintOptionDuplicateRules, true))
-		require.Equal(t, lintErrExitCode, exitCode, "")
+		require.Equal(t, lintErrExitCode, exitCode)
 	})
 }
 
 func TestCheckRulesWithRuleFiles(t *testing.T) {
 	t.Run("rules-good", func(t *testing.T) {
 		exitCode := CheckRules(newLintConfig(lintOptionDuplicateRules, false), "./testdata/rules.yml")
-		require.Equal(t, successExitCode, exitCode, "")
+		require.Equal(t, successExitCode, exitCode)
 	})
 
 	t.Run("rules-bad", func(t *testing.T) {
 		exitCode := CheckRules(newLintConfig(lintOptionDuplicateRules, false), "./testdata/rules-bad.yml")
-		require.Equal(t, failureExitCode, exitCode, "")
+		require.Equal(t, failureExitCode, exitCode)
 	})
 
 	t.Run("rules-lint-fatal", func(t *testing.T) {
 		exitCode := CheckRules(newLintConfig(lintOptionDuplicateRules, true), "./testdata/prometheus-rules.lint.yml")
-		require.Equal(t, lintErrExitCode, exitCode, "")
+		require.Equal(t, lintErrExitCode, exitCode)
 	})
 }
 

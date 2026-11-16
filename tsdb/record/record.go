@@ -317,7 +317,7 @@ func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) 
 		val := dec.Be64()
 
 		samples = append(samples, RefSample{
-			Ref: chunks.HeadSeriesRef(int64(baseRef) + dref),
+			Ref: chunks.HeadSeriesRef(int64(baseRef) + dref), // #nosec G115 // no overflow
 			T:   baseTime + dtime,
 			V:   math.Float64frombits(val),
 		})
@@ -381,7 +381,7 @@ func (d *Decoder) ExemplarsFromBuffer(dec *encoding.Decbuf, exemplars []RefExemp
 		lset := d.DecodeLabels(dec)
 
 		exemplars = append(exemplars, RefExemplar{
-			Ref:    chunks.HeadSeriesRef(baseRef + uint64(dref)),
+			Ref:    chunks.HeadSeriesRef(baseRef + uint64(dref)), // #nosec G115 // no overflow
 			T:      baseTime + dtime,
 			V:      math.Float64frombits(val),
 			Labels: lset,
@@ -443,7 +443,7 @@ func (d *Decoder) HistogramSamples(rec []byte, histograms []RefHistogramSample) 
 		dtime := dec.Varint64()
 
 		rh := RefHistogramSample{
-			Ref: chunks.HeadSeriesRef(baseRef + uint64(dref)),
+			Ref: chunks.HeadSeriesRef(baseRef + uint64(dref)), // #nosec G115 // no overflow
 			T:   baseTime + dtime,
 			H:   &histogram.Histogram{},
 		}
@@ -465,7 +465,7 @@ func (d *Decoder) HistogramSamples(rec []byte, histograms []RefHistogramSample) 
 func DecodeHistogram(buf *encoding.Decbuf, h *histogram.Histogram) {
 	h.CounterResetHint = histogram.CounterResetHint(buf.Byte())
 
-	h.Schema = int32(buf.Varint64())
+	h.Schema = int32(buf.Varint64()) // #nosec G115 // no overflow
 	h.ZeroThreshold = math.Float64frombits(buf.Be64())
 
 	h.ZeroCount = buf.Uvarint64()
@@ -477,7 +477,7 @@ func DecodeHistogram(buf *encoding.Decbuf, h *histogram.Histogram) {
 		h.PositiveSpans = make([]histogram.Span, l)
 	}
 	for i := range h.PositiveSpans {
-		h.PositiveSpans[i].Offset = int32(buf.Varint64())
+		h.PositiveSpans[i].Offset = int32(buf.Varint64()) // #nosec G115 // no overflow
 		h.PositiveSpans[i].Length = buf.Uvarint32()
 	}
 
@@ -486,7 +486,7 @@ func DecodeHistogram(buf *encoding.Decbuf, h *histogram.Histogram) {
 		h.NegativeSpans = make([]histogram.Span, l)
 	}
 	for i := range h.NegativeSpans {
-		h.NegativeSpans[i].Offset = int32(buf.Varint64())
+		h.NegativeSpans[i].Offset = int32(buf.Varint64()) // #nosec G115 // no overflow
 		h.NegativeSpans[i].Length = buf.Uvarint32()
 	}
 
@@ -525,7 +525,7 @@ func (d *Decoder) FloatHistogramSamples(rec []byte, histograms []RefFloatHistogr
 		dtime := dec.Varint64()
 
 		rh := RefFloatHistogramSample{
-			Ref: chunks.HeadSeriesRef(baseRef + uint64(dref)),
+			Ref: chunks.HeadSeriesRef(baseRef + uint64(dref)), // #nosec G115 // no overflow
 			T:   baseTime + dtime,
 			FH:  &histogram.FloatHistogram{},
 		}
@@ -547,7 +547,7 @@ func (d *Decoder) FloatHistogramSamples(rec []byte, histograms []RefFloatHistogr
 func DecodeFloatHistogram(buf *encoding.Decbuf, fh *histogram.FloatHistogram) {
 	fh.CounterResetHint = histogram.CounterResetHint(buf.Byte())
 
-	fh.Schema = int32(buf.Varint64())
+	fh.Schema = int32(buf.Varint64()) // #nosec G115 // no overflow
 	fh.ZeroThreshold = buf.Be64Float64()
 
 	fh.ZeroCount = buf.Be64Float64()
@@ -559,7 +559,7 @@ func DecodeFloatHistogram(buf *encoding.Decbuf, fh *histogram.FloatHistogram) {
 		fh.PositiveSpans = make([]histogram.Span, l)
 	}
 	for i := range fh.PositiveSpans {
-		fh.PositiveSpans[i].Offset = int32(buf.Varint64())
+		fh.PositiveSpans[i].Offset = int32(buf.Varint64()) // #nosec G115 // no overflow
 		fh.PositiveSpans[i].Length = buf.Uvarint32()
 	}
 
@@ -568,7 +568,7 @@ func DecodeFloatHistogram(buf *encoding.Decbuf, fh *histogram.FloatHistogram) {
 		fh.NegativeSpans = make([]histogram.Span, l)
 	}
 	for i := range fh.NegativeSpans {
-		fh.NegativeSpans[i].Offset = int32(buf.Varint64())
+		fh.NegativeSpans[i].Offset = int32(buf.Varint64()) // #nosec G115 // no overflow
 		fh.NegativeSpans[i].Length = buf.Uvarint32()
 	}
 
@@ -653,7 +653,7 @@ func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
 	buf.PutBE64int64(first.T)
 
 	for _, s := range samples {
-		buf.PutVarint64(int64(s.Ref) - int64(first.Ref))
+		buf.PutVarint64(int64(s.Ref) - int64(first.Ref)) // #nosec G115 // no overflow
 		buf.PutVarint64(s.T - first.T)
 		buf.PutBE64(math.Float64bits(s.V))
 	}
@@ -697,7 +697,7 @@ func (e *Encoder) EncodeExemplarsIntoBuffer(exemplars []RefExemplar, buf *encodi
 	buf.PutBE64int64(first.T)
 
 	for _, ex := range exemplars {
-		buf.PutVarint64(int64(ex.Ref) - int64(first.Ref))
+		buf.PutVarint64(int64(ex.Ref) - int64(first.Ref)) // #nosec G115 // no overflow
 		buf.PutVarint64(ex.T - first.T)
 		buf.PutBE64(math.Float64bits(ex.V))
 		EncodeLabels(buf, ex.Labels)
@@ -731,7 +731,7 @@ func (e *Encoder) HistogramSamples(histograms []RefHistogramSample, b []byte) []
 	buf.PutBE64int64(first.T)
 
 	for _, h := range histograms {
-		buf.PutVarint64(int64(h.Ref) - int64(first.Ref))
+		buf.PutVarint64(int64(h.Ref) - int64(first.Ref)) // #nosec G115 // no overflow
 		buf.PutVarint64(h.T - first.T)
 
 		EncodeHistogram(&buf, h.H)
@@ -789,7 +789,7 @@ func (e *Encoder) FloatHistogramSamples(histograms []RefFloatHistogramSample, b 
 	buf.PutBE64int64(first.T)
 
 	for _, h := range histograms {
-		buf.PutVarint64(int64(h.Ref) - int64(first.Ref))
+		buf.PutVarint64(int64(h.Ref) - int64(first.Ref)) // #nosec G115 // no overflow
 		buf.PutVarint64(h.T - first.T)
 
 		EncodeFloatHistogram(&buf, h.FH)
