@@ -106,7 +106,10 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
   }
 
   PROMPP_ALWAYS_INLINE static bool is_int_and_ge_than(double value2, double value1) noexcept {
-    return is_int(value2) && is_in_bounds(static_cast<int64_t>(value2) - static_cast<int64_t>(value1), 0, std::numeric_limits<EncoderDeltaType>::max());
+    // value1 is already an integer double in the int64_t range.
+    // Every accepted integer delta is exact as double.
+    return value2 >= value1 && value2 < 0x1p63 && value2 - value1 <= static_cast<double>(std::numeric_limits<EncoderDeltaType>::max()) &&
+           static_cast<double>(static_cast<int64_t>(value2)) == value2;
   }
 };
 
