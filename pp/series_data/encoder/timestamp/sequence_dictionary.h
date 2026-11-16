@@ -142,8 +142,8 @@ class SequenceDictionary {
   };
 
   // Live sequences; each one is listed once however many chunks share it.
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto sequences() const noexcept {
-    return sequences_ | std::views::transform([](const Sequence& sequence) PROMPP_LAMBDA_INLINE {
+  [[nodiscard]] PROMPP(inline) auto sequences() const noexcept {
+    return sequences_ | std::views::transform([](const Sequence& sequence) PROMPP(lambda_inline) {
              return SequenceView{.stream = sequence.stream, .last_timestamp = sequence.encoder.timestamp()};
            });
   }
