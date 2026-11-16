@@ -282,13 +282,15 @@ func (t *Target) Health() TargetHealth {
 
 // SampleLimit extracts sample limit from target labels.
 // PP_CHANGES.md override sample limit.
+//
+// A negative or unparsable value means "no override": the configured limit applies.
 func (t *Target) SampleLimit() int {
 	limit := t.labels.Get("__sample_limit__")
 	if limit == "" {
 		return 0
 	}
 	convertedLimit, err := strconv.Atoi(limit)
-	if err != nil {
+	if err != nil || convertedLimit < 0 {
 		return 0
 	}
 	return convertedLimit

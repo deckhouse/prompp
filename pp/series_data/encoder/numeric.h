@@ -1,15 +1,18 @@
 #pragma once
 
+#include <bit>
 #include <cmath>
+#include <limits>
 
 #include "bare_bones/numeric.h"
 #include "bare_bones/preprocess.h"
 
 namespace series_data::encoder::value {
 
-PROMPP(inline) constexpr bool is_int(double value) noexcept { return static_cast<double>(static_cast<int64_t>(value)) == value; }
-
-PROMPP(inline) constexpr bool is_positive_int(double value) noexcept { return value >= 0.0 && is_int(value); }
+PROMPP(inline) constexpr bool is_int(double value) noexcept {
+  // INT64_MAX rounds to 2^63 as double, so the upper bound is exclusive.
+  return value >= -0x1p63 && value < 0x1p63 && static_cast<double>(static_cast<int64_t>(value)) == value;
+}
 
 template <class Number1, class Number2>
 PROMPP(inline) constexpr bool is_values_strictly_equal(Number1 a, Number2 b) noexcept {
@@ -21,6 +24,9 @@ PROMPP(inline) constexpr bool is_values_strictly_equal(Number1 a, Number2 b) noe
 }
 
 PROMPP(inline) constexpr bool is_float(double value) noexcept {
+  if (std::isfinite(value) && std::abs(value) > std::numeric_limits<float>::max()) {
+    return false;
+  }
   return is_values_strictly_equal(value, static_cast<double>(static_cast<float>(value)));
 }
 
