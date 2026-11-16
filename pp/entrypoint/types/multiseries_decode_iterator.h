@@ -42,10 +42,12 @@ class MultiSeriesDecodeIterator {
 
   DECODE_ITERATOR_TYPE_TRAITS();
 
-#define DEFINE_CONSTRUCTOR(MultiSeriesIteratorType, field, type)                                    \
-  template <class... Args>                                                                          \
-  explicit MultiSeriesDecodeIterator(std::in_place_type_t<MultiSeriesIteratorType>, Args&&... args) \
-      : iterator_{.field{std::forward<Args>(args)...}}, type_{Type::type} {}
+// Construct the active member explicitly to avoid incorrect GCC exception cleanup for aggregate unions.
+#define DEFINE_CONSTRUCTOR(MultiSeriesIteratorType, field, type)                                                          \
+  template <class... Args>                                                                                                \
+  explicit MultiSeriesDecodeIterator(std::in_place_type_t<MultiSeriesIteratorType>, Args&&... args) : type_{Type::type} { \
+    std::construct_at(&iterator_.field, std::forward<Args>(args)...);                                                     \
+  }
 
   DEFINE_CONSTRUCTOR(MinMultiSeriesIterator, min, kMin)
   DEFINE_CONSTRUCTOR(MaxMultiSeriesIterator, max, kMax)
@@ -120,6 +122,7 @@ class MultiSeriesDecodeIterator {
 
  private:
   union Iterators {
+    Iterators() noexcept {}
     ~Iterators() {}
 
     MinMultiSeriesIterator min;

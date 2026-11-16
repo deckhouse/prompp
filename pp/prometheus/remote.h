@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -13,9 +14,9 @@ namespace PromPP::Prometheus::Remote {
 
 class Tag {
  public:
-  enum Query { kStartTimestampMs = 1, kEndTimestampMs = 2, kLabelMatchers = 3, kHints = 4 };
-  enum LabelMatcher { kType = 1, kName = 2, kValue = 3 };
-  enum LabelValuesRequest { kQuery = 1, kLabelName = 2 };
+  enum Query : uint8_t { kStartTimestampMs = 1, kEndTimestampMs = 2, kLabelMatchers = 3, kHints = 4 };
+  enum LabelMatcher : uint8_t { kType = 1, kName = 2, kValue = 3 };
+  enum LabelValuesRequest : uint8_t { kQuery = 1, kLabelName = 2 };
 };
 
 class ProtobufReader {

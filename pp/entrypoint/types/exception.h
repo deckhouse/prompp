@@ -3,11 +3,23 @@
 #include <exception>
 #include <ostream>
 #include <source_location>
+#include <utility>
 
 #include "bare_bones/exception.h"
 #include "bare_bones/preprocess.h"
 
 namespace entrypoint::types {
+
+// Temporary policy for entrypoints whose ABI has no error result.
+// Exceptions must not unwind through Go frames. Define a shared error policy before adding recovery here.
+template <class Function>
+PROMPP_ALWAYS_INLINE void invoke_without_error_result(Function&& function) noexcept {
+  try {
+    std::forward<Function>(function)();
+  } catch (...) {
+    std::terminate();
+  }
+}
 
 PROMPP_ALWAYS_INLINE void handle_current_exception(std::ostream& out, const std::source_location location = std::source_location::current()) {
   out << location.function_name() << ": ";

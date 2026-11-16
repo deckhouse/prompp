@@ -9,7 +9,7 @@ namespace series_index {
 
 class QueriedSeries {
  public:
-  enum class Source : uint32_t {
+  enum class Source : uint8_t {
     kRule = 0,
     kFederate,
     kOther,

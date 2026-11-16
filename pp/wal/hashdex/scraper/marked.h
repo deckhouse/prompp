@@ -18,7 +18,7 @@ class Metric {
 
   struct Context {
     std::string_view buffer;
-    const BareBones::Memory<BareBones::MemoryControlBlock, char>& bytes_buffer;
+    const BareBones::Memory<BareBones::MemoryControlBlock, std::byte>& bytes_buffer;
     Primitives::Timestamp default_timestamp{};
   };
 
@@ -32,7 +32,7 @@ class Metric {
 
   template <class Timeseries>
   void read(Timeseries& ts) const {
-    const char* ptr = bytes_buffer_.control_block().data + item_->data_offset;
+    const std::byte* ptr = bytes_buffer_.control_block().data + item_->data_offset;
 
     const auto [next_ptr, layout, labels_count] = encoding::LayoutCountCodec::decode(ptr);
     ptr = next_ptr;
@@ -50,7 +50,7 @@ class Metric {
 
  private:
   std::string_view buffer_;
-  const BareBones::Memory<BareBones::MemoryControlBlock, char>& bytes_buffer_;
+  const BareBones::Memory<BareBones::MemoryControlBlock, std::byte>& bytes_buffer_;
   const MarkedMetric* item_{};
   Primitives::Timestamp default_timestamp_;
 };
@@ -189,8 +189,8 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
  private:
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t bytes_count() const noexcept { return bytes_ptr_ - bytes_buffer_.control_block().data; }
 
-  BareBones::Memory<BareBones::MemoryControlBlock, char> bytes_buffer_;
-  char* bytes_ptr_{};
+  BareBones::Memory<BareBones::MemoryControlBlock, std::byte> bytes_buffer_;
+  std::byte* bytes_ptr_{};
 };
 
 class MetadataMarkupBuffer : public MarkupBuffer<Metadata> {

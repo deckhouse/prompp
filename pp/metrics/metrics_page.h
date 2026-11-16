@@ -85,7 +85,17 @@ class MetricsPage : public MetricsPageControlBlock {
  public:
   static_assert(!std::is_pointer_v<Derived>);
 
-  using MetricsPageControlBlock::MetricsPageControlBlock;
+  MetricsPage(const MetricsPage&) = delete;
+  MetricsPage(MetricsPage&&) noexcept = delete;
+
+  MetricsPage& operator=(const MetricsPage&) = delete;
+  MetricsPage& operator=(MetricsPage&&) noexcept = delete;
+
+ private:
+  friend Derived;
+
+  explicit MetricsPage(uint32_t page_object_size) : MetricsPageControlBlock(page_object_size) {}
+  MetricsPage(uint32_t page_object_size, uint32_t metric_offset) : MetricsPageControlBlock(page_object_size, metric_offset) {}
 
   explicit MetricsPage() : MetricsPageControlBlock(sizeof(Derived)) {
     static_assert(sizeof(Derived) >= sizeof(MetricsPageControlBlock) + sizeof(Metric), "Metrics page must contain at least one metric");
@@ -95,12 +105,6 @@ class MetricsPage : public MetricsPageControlBlock {
     requires std::is_base_of_v<Metric, MemberType>
   explicit MetricsPage(MemberType Derived::* first_metric_member)
       : MetricsPageControlBlock(sizeof(Derived), std::bit_cast<size_t>(&(static_cast<const Derived*>(nullptr)->*first_metric_member))) {}
-
-  MetricsPage(const MetricsPage&) = delete;
-  MetricsPage(MetricsPage&&) noexcept = delete;
-
-  MetricsPage& operator=(const MetricsPage&) = delete;
-  MetricsPage& operator=(MetricsPage&&) noexcept = delete;
 };
 
 }  // namespace metrics

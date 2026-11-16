@@ -1111,7 +1111,7 @@ class SerializedDataIterSeekToFixture : public SerializerTrait, public testing::
  protected:
   SerializedData serialized_data_;
 
-  SerializedDataView::SeriesIterator create_iterator() noexcept {
+  SerializedDataView::SeriesIterator create_iterator() {
     serialized_data_ = serialize();
     SerializedDataView serialized_view(serialized_data_);
 
@@ -1261,7 +1261,7 @@ class SerializedDataIterSeekFixture : public SerializerTrait, public testing::Te
  protected:
   SerializedData serialized_data_;
 
-  SerializedDataView::SeriesIterator create_iterator() noexcept {
+  SerializedDataView::SeriesIterator create_iterator() {
     serialized_data_ = serialize();
     SerializedDataView serialized_view(serialized_data_);
 

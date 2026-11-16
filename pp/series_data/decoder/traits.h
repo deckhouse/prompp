@@ -151,6 +151,11 @@ class DecodeIteratorTrait {
  protected:
   [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
+
+ private:
+  friend Derived;
+
+  DecodeIteratorTrait() = default;
 };
 
 }  // namespace series_data::decoder

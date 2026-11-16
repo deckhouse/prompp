@@ -1,8 +1,12 @@
 #include <parallel_hashmap/phmap_utils.h>
+#include <array>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <future>
 #include <iomanip>
+#include <limits>
 #include <span>
 #include <string>
 #include <thread>
@@ -38,10 +42,11 @@ class DummyWal {
       uint32_t t_;
       const LabelSet* label_set_;
 
-      IteratorBase(const LabelSet* label_set = 0, uint32_t i = 0) : i_(i), t_(0), label_set_(label_set) { assert(i_ == 0 || i_ == label_set->size()); }
+      explicit IteratorBase(const LabelSet* label_set = 0, uint32_t i = 0) : i_(i), t_(0), label_set_(label_set) { assert(i_ == 0 || i_ == label_set->size()); }
 
       void next_impl() {
-        t_ += label_set_->word_positions[i_ * 2] + label_set_->word_positions[i_ * 2 + 1];
+        const auto index = static_cast<size_t>(i_) * 2;
+        t_ += label_set_->word_positions[index] + label_set_->word_positions[index + 1];
         i_++;
       }
     };
@@ -66,8 +71,9 @@ class DummyWal {
       }
       bool operator==(Iterator other) const { return i_ == other.i_; }
       value_type operator*() const {
-        return std::make_pair(std::string_view(label_set_->text_data.data() + t_, label_set_->word_positions[i_ * 2]),
-                              std::string_view(label_set_->text_data.data() + t_ + label_set_->word_positions[i_ * 2], label_set_->word_positions[i_ * 2 + 1]));
+        const auto index = static_cast<size_t>(i_) * 2;
+        return std::make_pair(std::string_view(label_set_->text_data.data() + t_, label_set_->word_positions[index]),
+                              std::string_view(label_set_->text_data.data() + t_ + label_set_->word_positions[index], label_set_->word_positions[index + 1]));
       }
     };
 
@@ -79,7 +85,7 @@ class DummyWal {
 
       friend class LabelSet;
 
-      Names(const LabelSet* label_set) : label_set_(label_set) {}
+      explicit Names(const LabelSet* label_set) : label_set_(label_set) {}
 
      public:
       class Iterator : public IteratorBase {
@@ -102,7 +108,7 @@ class DummyWal {
         }
         bool operator==(Iterator other) const { return i_ == other.i_; }
         bool operator!=(Iterator other) const { return !(*this == other); }
-        value_type operator*() const { return std::string_view(label_set_->text_data.data() + t_, label_set_->word_positions[i_ * 2]); }
+        value_type operator*() const { return std::string_view(label_set_->text_data.data() + t_, label_set_->word_positions[static_cast<size_t>(i_) * 2]); }
       };
 
       Iterator begin() const { return Iterator(label_set_, 0); }
@@ -150,11 +156,14 @@ class DummyWal {
   };
 
  private:
+  static constexpr size_t kBufferSize = static_cast<size_t>(16) * 1024 * 1024;
+  static_assert(kBufferSize <= static_cast<size_t>(std::numeric_limits<std::streamsize>::max()));
+
   uint64_t cnt_ = 0;
 
   std::ifstream file_;
   BareBones::LZ4Stream::istream in_;
-  enum { A, B } a_or_b_ = A;
+  enum : uint8_t { A, B } a_or_b_ = A;
   std::vector<char> buf_a_;
   std::vector<char> buf_b_;
   std::future<bool> reader_;
@@ -167,9 +176,9 @@ class DummyWal {
       return false;
 
     if (a_or_b_ == A) {
-      in_.read(buf_a_.data(), buf_a_.size());
+      in_.read(buf_a_.data(), static_cast<std::streamsize>(kBufferSize));
     } else {
-      in_.read(buf_b_.data(), buf_b_.size());
+      in_.read(buf_b_.data(), static_cast<std::streamsize>(kBufferSize));
     }
 
     if (in_.bad()) {
@@ -180,12 +189,12 @@ class DummyWal {
   }
 
  public:
-  DummyWal(const std::string& file_path) : file_(file_path, std::ios_base::in | std::ios_base::binary), in_(&file_) {
+  explicit DummyWal(const std::string& file_path) : file_(file_path, std::ios_base::in | std::ios_base::binary), in_(&file_) {
     if (!file_.is_open()) {
       throw std::runtime_error("failed to open file '" + file_path + "'");
     }
-    buf_a_.resize(16 * 1024 * 1024);
-    buf_b_.resize(16 * 1024 * 1024);
+    buf_a_.resize(kBufferSize);
+    buf_b_.resize(kBufferSize);
     reader_ = std::async(&DummyWal::do_read, this);
   }
 

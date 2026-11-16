@@ -171,7 +171,7 @@ class BytesStream : public std::ostream {
       return count;
     }
 
-    pos_type seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode) override { return slice_->size(); }
+    pos_type seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode) override { return pos_type(static_cast<off_type>(slice_->size())); }
   };
 
   output_buffer buffer_;
