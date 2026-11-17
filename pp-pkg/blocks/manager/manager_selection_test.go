@@ -285,7 +285,8 @@ func (s *ManagerSelectionSuite) TestSelectsOneOverlappingVersion() {
 			name: "out of query raw does not hide downsampling",
 			blocks: []selectionBlock{
 				{samples: []selectionSample{{100, 1}, {200, 2}}},
-				{samples: []selectionSample{{6_000, 60}, {7_000, 70}}}, ds,
+				{samples: []selectionSample{{6_000, 60}, {7_000, 70}}},
+				ds,
 			},
 			query: selectionQuery{mint: 500, maxt: 5_000, samples: ds.samples, resolution: selectionConfiguredResolution},
 		},

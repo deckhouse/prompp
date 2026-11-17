@@ -139,7 +139,8 @@ func (s *downsamplingLookbackSuite) TestPolicyBoundaries() {
 		{"equal boundary", (downsamplingLookbackOldSeconds-5*60)*1000 + 1, 20 * time.Minute, nil},
 		{
 			"one millisecond past boundary", (downsamplingLookbackOldSeconds-5*60)*1000 + 2,
-			20 * time.Minute, []float64{7},
+			20 * time.Minute,
+			[]float64{7},
 		},
 		{"base lookback crosses boundary", (downsamplingLookbackOldSeconds - 60) * 1000, 20 * time.Minute, []float64{7}},
 		{"disabled", downsamplingLookbackNowSeconds * 1000, 0, nil},
