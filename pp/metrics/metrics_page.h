@@ -23,21 +23,21 @@ class MetricsPageControlBlock {
 
     explicit Iterator(const MetricsPageControlBlock* metrics_page) : metrics_page_(metrics_page), offset_(metrics_page_ ? metrics_page_->metric_offset() : 0) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return metric(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator->() const noexcept { return metric(); }
+    [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return metric(); }
+    [[nodiscard]] PROMPP(inline) value_type operator->() const noexcept { return metric(); }
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       offset_ += metric()->object_size();
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept {
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept {
       return metrics_page_ == nullptr || offset_ == metrics_page_->page_object_size();
     }
 
@@ -60,18 +60,18 @@ class MetricsPageControlBlock {
 
   virtual void refresh_metrics() noexcept {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsPageControlBlock* next_metrics_page() const noexcept { return next_metrics_page_; }
-  PROMPP_ALWAYS_INLINE void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t page_object_size() const noexcept { return page_object_size_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t metric_offset() const noexcept { return metric_offset_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_detached() const noexcept { return ref_count_ == 0; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_active() const noexcept {
+  [[nodiscard]] PROMPP(inline) MetricsPageControlBlock* next_metrics_page() const noexcept { return next_metrics_page_; }
+  PROMPP(inline) void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
+  [[nodiscard]] PROMPP(inline) uint32_t page_object_size() const noexcept { return page_object_size_; }
+  [[nodiscard]] PROMPP(inline) uint32_t metric_offset() const noexcept { return metric_offset_; }
+  [[nodiscard]] PROMPP(inline) bool is_detached() const noexcept { return ref_count_ == 0; }
+  [[nodiscard]] PROMPP(inline) bool is_active() const noexcept {
     return std::ranges::any_of(*this, [](const Metric* metric) { return metric->is_active(); });
   }
-  PROMPP_ALWAYS_INLINE void detach() noexcept { ref_count_ = 0; }
+  PROMPP(inline) void detach() noexcept { ref_count_ = 0; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP(inline) Iterator begin() const noexcept { return Iterator(this); }
+  [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
  private:
   MetricsPageControlBlock* next_metrics_page_{};

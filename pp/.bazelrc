@@ -11,7 +11,11 @@ build --flag_alias=asan=//bazel/toolchain:asan
 
 # Profiling specific flags
 build --flag_alias=profiling=//bazel/toolchain:profiling
-build --flag_alias=profiling_opts=//bazel/toolchain:profiling_opts
+
+# Instrumented profiling build (Tracy zones). Kept in its own output tree so
+# that flipping profiling on and off does not invalidate the ordinary build.
+build:profile --//bazel/toolchain:profiling=1
+build:profile --platform_suffix=prof
 
 # clang-tidy specific flags
 build:clang-tidy --//bazel/toolchain:clang_tidy

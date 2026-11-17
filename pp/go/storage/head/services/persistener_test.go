@@ -232,6 +232,7 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 		cppbridge.NoDownsampling,
 		2*time.Hour,
 		0,
+		0,
 		s.clock,
 		prometheus.DefaultRegisterer,
 	)
@@ -272,6 +273,7 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 		block.DefaultChunkSegmentSize,
 		cppbridge.NoDownsampling,
 		2*time.Hour,
+		0,
 		0,
 		s.clock,
 		prometheus.DefaultRegisterer,

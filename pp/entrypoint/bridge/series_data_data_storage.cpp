@@ -11,6 +11,7 @@
 #include "entrypoint/types/querier.h"
 #include "entrypoint/types/serialization.h"
 #include "head/chunk_recoder.h"
+#include "head/non_empty_quants.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
@@ -72,6 +73,25 @@ extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* 
 
   std::visit([res](const auto& data_storage) { new (res) Result{.interval = series_data::Decoder::get_time_interval(data_storage)}; },
              *static_cast<Arguments*>(args)->data_storage);
+}
+
+extern "C" void prompp_series_data_data_storage_non_empty_quants(void* args, void* res) {
+  struct Arguments {
+    DataStoragePtr data_storage;
+    int64_t quant_duration;
+  };
+  struct Result {
+    Slice<int64_t> quants;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+  std::visit(
+      [in, out](const auto& data_storage) {
+        const auto quants = head::get_non_empty_quants(data_storage, in->quant_duration);
+        out->quants.push_back(quants.begin(), quants.end());
+      },
+      *in->data_storage);
 }
 
 extern "C" void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res) {
@@ -361,7 +381,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
   const auto out = static_cast<Result*>(res);
   // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   std::visit(
-      [out](auto& chunk_recoder) PROMPP_LAMBDA_INLINE {
+      [out](auto& chunk_recoder) PROMPP(lambda_inline) {
         chunk_recoder.recode_next_chunk(*out);
         out->has_more_data = chunk_recoder.has_more_data();
         out->buffer.reset_to(chunk_recoder.bytes());

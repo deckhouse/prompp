@@ -295,6 +295,7 @@ func (m *Manager) initServices(
 					o.Downsampling.Milliseconds(),
 					o.BlockDuration,
 					o.MaxRetentionPeriod,
+					o.BlockDuration,
 					clock,
 					r,
 				),

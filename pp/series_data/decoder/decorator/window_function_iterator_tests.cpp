@@ -64,9 +64,7 @@ class WindowFunctionIteratorFixture : public testing::TestWithParam<WindowFuncti
 
 using MaxOverTimeWindowFunctionIteratorFixture = WindowFunctionIteratorFixture<MaxOverTimeIterator<>, StepRangeWindowCalculator>;
 
-TEST_P(MaxOverTimeWindowFunctionIteratorFixture, Test) {
-  test();
-}
+TEST_P(MaxOverTimeWindowFunctionIteratorFixture, Test) { test(); }
 
 INSTANTIATE_TEST_SUITE_P(NoStep,
                          MaxOverTimeWindowFunctionIteratorFixture,
@@ -200,9 +198,7 @@ INSTANTIATE_TEST_SUITE_P(StaleNanSkipped,
 
 using SumOverTimeWindowFunctionIteratorFixture = WindowFunctionIteratorFixture<SumOverTimeIterator<>, StepRangeWindowCalculator>;
 
-TEST_P(SumOverTimeWindowFunctionIteratorFixture, Test) {
-  test();
-}
+TEST_P(SumOverTimeWindowFunctionIteratorFixture, Test) { test(); }
 
 INSTANTIATE_TEST_SUITE_P(DoesNotDoubleCountBoundarySample,
                          SumOverTimeWindowFunctionIteratorFixture,

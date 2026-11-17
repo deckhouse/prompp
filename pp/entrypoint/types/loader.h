@@ -32,12 +32,12 @@ class RevertableLoader {
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void load_next(std::span<const uint8_t> buffer) { loader_.load_next(buffer); }
-  PROMPP_ALWAYS_INLINE void load_finalize() { loader_.load_finalize(); }
+  PROMPP(inline) void load_next(std::span<const uint8_t> buffer) { loader_.load_next(buffer); }
+  PROMPP(inline) void load_finalize() { loader_.load_finalize(); }
 
-  PROMPP_ALWAYS_INLINE void revert() { reverter_.revert(); }
+  PROMPP(inline) void revert() { reverter_.revert(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorageWithArenas& storage() noexcept { return loader_.storage(); }
+  [[nodiscard]] PROMPP(inline) DataStorageWithArenas& storage() noexcept { return loader_.storage(); }
 
  private:
   ::series_data::unloading::Loader<DataStorageWithArenas> loader_;

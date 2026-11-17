@@ -37,7 +37,7 @@ series_data::querier::QueriedChunkList generate_query(uint32_t size) {
 }
 
 void WalSerializedData(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& samples = benchmark::get_compact_samples();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp() < b.timestamp(); });
@@ -68,7 +68,7 @@ void WalSerializedData(benchmark::State& state) {
 }
 
 void WalConstantSerializedData(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& samples = benchmark::get_compact_samples();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp() < b.timestamp(); });

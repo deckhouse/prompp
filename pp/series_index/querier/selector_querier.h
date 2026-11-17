@@ -15,7 +15,7 @@ enum class QuerierStatus : uint8_t {
   kMatch,
 };
 
-PROMPP_ALWAYS_INLINE bool is_querier_status_error(QuerierStatus status) noexcept {
+PROMPP(inline) bool is_querier_status_error(QuerierStatus status) noexcept {
   return status != QuerierStatus::kMatch && status != QuerierStatus::kNoMatch;
 }
 
@@ -31,7 +31,7 @@ class SelectorQuerier {
   explicit SelectorQuerier(const TrieIndex& index, const MatchResolver& match_resolver) : index_(index), match_resolver_(match_resolver) {}
 
   template <class LabelMatchers>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE QuerierStatus query(const LabelMatchers& label_matchers, Selector& selector) {
+  [[nodiscard]] PROMPP(inline) QuerierStatus query(const LabelMatchers& label_matchers, Selector& selector) {
     const auto status = query_impl(label_matchers, selector);
     excluded_value_ids_ = {};
     return status;
@@ -81,12 +81,12 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  PROMPP_ALWAYS_INLINE QuerierStatus query(const LabelMatcher& label_matcher, Selector::Matcher& matcher, Selector::MatcherList& matchers) {
+  PROMPP(inline) QuerierStatus query(const LabelMatcher& label_matcher, Selector::Matcher& matcher, Selector::MatcherList& matchers) {
     return query_values(label_matcher, get_values_trie(label_matcher, matcher), matcher, matchers);
   }
 
   template <class LabelMatcher>
-  PROMPP_ALWAYS_INLINE uint32_t get_values_trie(const LabelMatcher& label_matcher, Selector::Matcher& matcher) const noexcept {
+  PROMPP(inline) uint32_t get_values_trie(const LabelMatcher& label_matcher, Selector::Matcher& matcher) const noexcept {
     if (auto index = index_.names_trie().lookup(static_cast<std::string_view>(label_matcher.name)); index) {
       const auto name_id = *index;
       matcher.label_name_match = match_resolver_.resolve_name(name_id);
@@ -244,9 +244,9 @@ class SelectorQuerier {
     }
   }
 
-  PROMPP_ALWAYS_INLINE PromPP::Prometheus::MatchStatus regexp_search(const regexp::RegexpPtr& regexp,
-                                                                     uint32_t label_name_id,
-                                                                     Selector::Matcher& matcher) noexcept {
+  PROMPP(inline) PromPP::Prometheus::MatchStatus regexp_search(const regexp::RegexpPtr& regexp,
+                                                                        uint32_t label_name_id,
+                                                                        Selector::Matcher& matcher) noexcept {
     const auto value_resolver = match_resolver_.value_resolver(label_name_id);
     typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, value_resolver);
     return regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*index_.values_trie(label_name_id), regexp);
@@ -263,7 +263,7 @@ class SelectorQuerier {
     return status;
   }
 
-  PROMPP_ALWAYS_INLINE PromPP::Prometheus::MatchStatus regexp_search_excludes(const regexp::RegexpPtr& regexp, const auto& values_trie) noexcept {
+  PROMPP(inline) PromPP::Prometheus::MatchStatus regexp_search_excludes(const regexp::RegexpPtr& regexp, const auto& values_trie) noexcept {
     excluded_value_ids_.clear();
 
     ValueMatchIdResolver value_id_resolver;

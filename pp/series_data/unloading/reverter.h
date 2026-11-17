@@ -44,7 +44,7 @@ class LoadReverter {
     uint8_t chunk_id;
   };
 
-  PROMPP_ALWAYS_INLINE void process_series(uint32_t ls_id) noexcept {
+  PROMPP(inline) void process_series(uint32_t ls_id) noexcept {
     for (uint8_t chunk_id = 0; const auto& data : storage_.chunks(ls_id)) {
       if (const auto& chunk = data.chunk(); is_unloadable_encoder(chunk.encoding_state.encoding_type)) {
         source_sizes_.emplace_back(ls_id, get_chunk_stream(storage_, chunk, data.is_open()).size_in_bits(), chunk_id);
@@ -53,7 +53,7 @@ class LoadReverter {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void revert_chunk(const LsIdSizeChunkId& meta) const noexcept {
+  PROMPP(inline) void revert_chunk(const LsIdSizeChunkId& meta) const noexcept {
     auto& chunk_bit_sequence = get_chunk_stream(storage_, meta.ls_id, meta.chunk_id);
     if (meta.source_size_in_bits == chunk_bit_sequence.size_in_bits()) {
       return;

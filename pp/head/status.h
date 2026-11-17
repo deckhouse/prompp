@@ -54,26 +54,27 @@ class TopItems {
     min_element_ = &elements_.front();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Element& min_element() const noexcept { return *min_element_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Elements& elements() const noexcept { return elements_; }
+  [[nodiscard]] PROMPP(inline) const Element& min_element() const noexcept { return *min_element_; }
+  [[nodiscard]] PROMPP(inline) const Elements& elements() const noexcept { return elements_; }
 
   template <class ElementConstructor>
-  PROMPP_ALWAYS_INLINE void add(uint32_t count, ElementConstructor&& element_constructor) noexcept {
+  PROMPP(inline) void add(uint32_t count, ElementConstructor&& element_constructor) noexcept {
     if (count > min_element_->count) {
       *min_element_ = std::forward<ElementConstructor>(element_constructor)();
       // min_element returns iterator with overloaded operator `*` that returns reference to element in vector's memory.
       // Explicit operator `&` reinterprets reference into pointer to address in vector's memory.
       // Important! We assume that we never reallocate vector's memory, so pointer always valid.
-      min_element_ = &*std::ranges::min_element(elements_, [](const Element& lhs, const Element& rhs) PROMPP_LAMBDA_INLINE { return lhs.count < rhs.count; });
+      min_element_ =
+          &*std::ranges::min_element(elements_, [](const Element& lhs, const Element& rhs) PROMPP(lambda_inline) { return lhs.count < rhs.count; });
     }
   }
 
-  PROMPP_ALWAYS_INLINE void sort() noexcept {
-    std::ranges::sort(elements_, [](const Element& lhs, const Element& rhs) PROMPP_LAMBDA_INLINE { return lhs.count > rhs.count; });
+  PROMPP(inline) void sort() noexcept {
+    std::ranges::sort(elements_, [](const Element& lhs, const Element& rhs) PROMPP(lambda_inline) { return lhs.count > rhs.count; });
     min_element_ = &elements_.back();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return elements_.size(); }
+  [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return elements_.size(); }
 
  private:
   Elements elements_;
@@ -100,9 +101,10 @@ class StatusGetterLSS {
       return;
     }
 
-    static constexpr auto fill_top_items = [](const auto& top_items, auto& destination) PROMPP_LAMBDA_INLINE {
+    static constexpr auto fill_top_items = [](const auto& top_items, auto& destination) PROMPP(lambda_inline) {
       destination.reserve(top_items.size());
-      std::ranges::copy_if(top_items.elements(), std::back_inserter(destination), [&](const auto& item) PROMPP_LAMBDA_INLINE { return item.count > 0; });
+      std::ranges::copy_if(top_items.elements(), std::back_inserter(destination),
+                           [&](const auto& item) PROMPP(lambda_inline) { return item.count > 0; });
     };
 
     status.num_label_pairs = label_count_;
@@ -146,7 +148,8 @@ class StatusGetterLSS {
       const auto count = view.values(k_it.id()).size();
 
       label_count_ += count;
-      top_label_value_count_by_name_.add(count, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = StringType(*k_it), .count = count}; });
+      top_label_value_count_by_name_.add(count,
+                                         [&] PROMPP(lambda_inline) { return StringCountItem<StringType>{.name = StringType(*k_it), .count = count}; });
     }
 
     top_label_value_count_by_name_.sort();
@@ -179,25 +182,26 @@ class StatusGetterLSS {
       auto label_value = get_label_value(name_id, value_id);
       size_in_bytes += series_count * label_value.size();
 
-      top_series_count_by_label_value_pair_.add(series_count, [&] PROMPP_LAMBDA_INLINE {
+      top_series_count_by_label_value_pair_.add(series_count, [&] PROMPP(lambda_inline) {
         return StringPairCountItem<StringType>{.name = get_label_name(name_id), .value = label_value, .count = series_count};
       });
     }
 
     top_memory_in_bytes_by_label_name_.add(
-        size_in_bytes, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_name(name_id), .count = size_in_bytes}; });
+        size_in_bytes, [&] PROMPP(lambda_inline) { return StringCountItem<StringType>{.name = get_label_name(name_id), .count = size_in_bytes}; });
   }
 
   void enumerate_metric_name_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) {
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
       auto series_count = values[value_id].count();
-      top_series_count_by_metric_name_.add(
-          series_count, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_value(name_id, value_id), .count = series_count}; });
+      top_series_count_by_metric_name_.add(series_count, [&] PROMPP(lambda_inline) {
+        return StringCountItem<StringType>{.name = get_label_value(name_id, value_id), .count = series_count};
+      });
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_name(uint32_t name_id) const noexcept { return StringType(lss_.data_view().key_symbol(name_id)); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_value(uint32_t name_id, uint32_t value_id) const noexcept {
+  [[nodiscard]] PROMPP(inline) StringType get_label_name(uint32_t name_id) const noexcept { return StringType(lss_.data_view().key_symbol(name_id)); }
+  [[nodiscard]] PROMPP(inline) StringType get_label_value(uint32_t name_id, uint32_t value_id) const noexcept {
     return StringType(lss_.data_view().value_symbol(name_id, value_id));
   }
 };

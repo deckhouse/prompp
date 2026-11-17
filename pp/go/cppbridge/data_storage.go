@@ -2,6 +2,7 @@ package cppbridge
 
 import (
 	"runtime"
+	"slices"
 	"sync/atomic"
 	"unsafe"
 )
@@ -45,6 +46,17 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 	}
 
 	return *ds.timeInterval.Load()
+}
+
+// NonEmptyQuants returns the sorted start timestamps of the quantDuration-aligned quants that hold at least
+// one sample, the unloaded and the outdated samples included.
+func (ds *DataStorage) NonEmptyQuants(quantDuration int64) []int64 {
+	cppQuants := seriesDataDataStorageNonEmptyQuants(ds.dataStorage, quantDuration)
+	runtime.KeepAlive(ds)
+
+	quants := slices.Clone(cppQuants)
+	freeBytes(*(*[]byte)(unsafe.Pointer(&cppQuants))) // #nosec G103 // it's meant to be that way
+	return quants
 }
 
 func (ds *DataStorage) GetQueriedSeriesBitset() []byte {

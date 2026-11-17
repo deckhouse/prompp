@@ -31,12 +31,12 @@ struct SerializedData {
   BareBones::Vector<chunk::SerializedChunk> chunks;
   Memory bytes_buffer;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return chunks.allocated_memory() + bytes_buffer.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept { return chunks.allocated_memory() + bytes_buffer.allocated_memory(); }
 
  private:
   static constexpr uint32_t kNoTimestampOffset = std::numeric_limits<uint32_t>::max();
 
-  PROMPP_ALWAYS_INLINE void destroy_chunk_data(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) noexcept {
+  PROMPP(inline) void destroy_chunk_data(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) noexcept {
     using enum EncodingType;
 
     switch (chunk.encoding_state.encoding_type) {
@@ -63,7 +63,7 @@ struct SerializedData {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void destroy_timestamp_stream_if_needed(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) {
+  PROMPP(inline) void destroy_timestamp_stream_if_needed(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) {
     if (timestamp_offset == kNoTimestampOffset || chunk.timestamps_offset > timestamp_offset) [[unlikely]] {
       timestamp_offset = chunk.timestamps_offset;
       std::destroy_at(reinterpret_cast<const SerializedCompactBitSequenceWithItemsCount<Reallocator>*>(bytes_buffer + chunk.timestamps_offset));
@@ -121,7 +121,7 @@ class DataSerializer {
   }
 
   template <class ChunkList>
-  PROMPP_ALWAYS_INLINE static uint32_t get_chunk_count(const ChunkList& chunks) noexcept {
+  static PROMPP(inline) uint32_t get_chunk_count(const ChunkList& chunks) noexcept {
     if constexpr (std::is_same_v<ChunkList, typename Storage::Chunks>) {
       return chunks.non_empty_chunk_count();
     } else {
@@ -254,11 +254,12 @@ class SerializedDataView {
           buffer_size_(buffer.size()),
           series_id_(chunk_iter_->label_set_id) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return *decode_iter_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return decode_iter_.operator->(); }
+    [[nodiscard]] PROMPP(inline) const encoder::Sample& operator*() const noexcept { return *decode_iter_; }
+    [[nodiscard]] PROMPP(inline) const encoder::Sample* operator->() const noexcept { return decode_iter_.operator->(); }
 
-    PROMPP_ALWAYS_INLINE SeriesIterator& operator++() noexcept {
-      const auto iterator_is_end = decode_iter_.visit([](auto& iterator) PROMPP_LAMBDA_INLINE { return ++iterator == decoder::DecodeIteratorSentinel{}; });
+    PROMPP(inline) SeriesIterator& operator++() noexcept {
+      const auto iterator_is_end =
+          decode_iter_.visit([](auto& iterator) PROMPP(lambda_inline) { return ++iterator == decoder::DecodeIteratorSentinel{}; });
       if (iterator_is_end) [[unlikely]] {
         advance_to_next_series_chunk();
       }
@@ -266,15 +267,15 @@ class SerializedDataView {
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE SeriesIterator operator++(int) noexcept {
+    PROMPP(inline) SeriesIterator operator++(int) noexcept {
       const auto it = *this;
       ++*this;
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const decoder::DecodeIteratorSentinel&) const noexcept { return chunk_iter_ == chunk_iter_end_; }
+    PROMPP(inline) bool operator==(const decoder::DecodeIteratorSentinel&) const noexcept { return chunk_iter_ == chunk_iter_end_; }
 
-    PROMPP_ALWAYS_INLINE void reset(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id) {
+    PROMPP(inline) void reset(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id) {
       buffer_ = buffer.data();
       buffer_size_ = buffer.size();
       chunk_iter_ = chunks.begin() + chunk_id;
@@ -285,7 +286,7 @@ class SerializedDataView {
     }
 
     template <decoder::SeekKind Kind, class SeekHandler>
-    PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+    PROMPP(inline) void seek(SeekHandler&& handler) {
       using enum decoder::SeekResult;
 
       if (*this == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
@@ -312,7 +313,7 @@ class SerializedDataView {
       } while (true);
     }
 
-    PROMPP_ALWAYS_INLINE void invalidate_sample() noexcept { decode_iter_.invalidate_sample(); }
+    PROMPP(inline) void invalidate_sample() noexcept { decode_iter_.invalidate_sample(); }
 
     void seek_to(PromPP::Primitives::Timestamp timestamp) noexcept {
       if (*this == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
@@ -339,7 +340,7 @@ class SerializedDataView {
     uint32_t buffer_size_;
     uint32_t series_id_;
 
-    PROMPP_ALWAYS_INLINE bool advance_to_next_series_chunk() noexcept {
+    PROMPP(inline) bool advance_to_next_series_chunk() noexcept {
       ++chunk_iter_;
       if (chunk_iter_ != chunk_iter_end_ && chunk_iter_->label_set_id == series_id_) {
         reset_decode_iterator();
@@ -350,10 +351,10 @@ class SerializedDataView {
       return false;
     }
 
-    PROMPP_ALWAYS_INLINE void reset_decode_iterator() noexcept { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, chunk_iter_); }
+    PROMPP(inline) void reset_decode_iterator() noexcept { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, chunk_iter_); }
 
-    PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
-                                                                                 chunk::SerializedChunkSpan::const_iterator chunk_iter) noexcept {
+    PROMPP(inline) decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
+                                                                                    chunk::SerializedChunkSpan::const_iterator chunk_iter) noexcept {
       return Decoder::create_decode_iterator(buffer, *chunk_iter, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
@@ -365,8 +366,8 @@ class SerializedDataView {
       : chunks_(serialized_data.chunks.data(), serialized_data.chunks.size()),
         buffer_(serialized_data.bytes_buffer.control_block().data, serialized_data.bytes_buffer.size()) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return chunks_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept { return buffer_; }
+  [[nodiscard]] PROMPP(inline) chunk::SerializedChunkSpan get_chunks_view() const noexcept { return chunks_; }
+  [[nodiscard]] PROMPP(inline) std::span<const unsigned char> get_buffer_view() const noexcept { return buffer_; }
 
   [[nodiscard]] series_id_inner_chunk_id_t next_series() noexcept {
     const auto& chunks = chunks_;
