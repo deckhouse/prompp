@@ -462,7 +462,7 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 		defer cancel()
 	}
 
-	opts, err := extractQueryOpts(r, api.getLookbackDelta(ts.UnixMilli()))
+	opts, err := extractQueryOpts(r)
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -479,6 +479,8 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 			qry.Close()
 		}
 	}()
+
+	api.applyDownsamplingLookback(qry) // PP_CHANGES.md: Adjust the prepared query's effective lookback.
 
 	ctx = httputil.ContextFromRequest(ctx, r)
 
@@ -510,15 +512,7 @@ func (api *API) formatQuery(r *http.Request) (result apiFuncResult) {
 	return apiFuncResult{expr.Pretty(0), nil, nil, nil}
 }
 
-func (api *API) getLookbackDelta(mint int64) time.Duration {
-	if api.downsamplingLookbackDelta > 0 && mint < api.minTimeBlocks() {
-		return api.downsamplingLookbackDelta
-	}
-
-	return 0
-}
-
-func extractQueryOpts(r *http.Request, extraLookbackDelta time.Duration) (promql.QueryOpts, error) {
+func extractQueryOpts(r *http.Request) (promql.QueryOpts, error) {
 	var duration time.Duration
 
 	if strDuration := r.FormValue("lookback_delta"); strDuration != "" {
@@ -527,10 +521,6 @@ func extractQueryOpts(r *http.Request, extraLookbackDelta time.Duration) (promql
 			return nil, fmt.Errorf("error parsing lookback delta duration: %w", err)
 		}
 		duration = parsedDuration
-	}
-
-	if extraLookbackDelta > 0 {
-		duration = max(extraLookbackDelta, duration)
 	}
 
 	return promql.NewPrometheusQueryOpts(r.FormValue("stats") == "all", duration), nil
@@ -577,7 +567,7 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 		defer cancel()
 	}
 
-	opts, err := extractQueryOpts(r, api.getLookbackDelta(start.UnixMilli()))
+	opts, err := extractQueryOpts(r)
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -593,6 +583,8 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 			qry.Close()
 		}
 	}()
+
+	api.applyDownsamplingLookback(qry) // PP_CHANGES.md: Adjust the prepared query's effective lookback.
 
 	ctx = httputil.ContextFromRequest(ctx, r)
 
