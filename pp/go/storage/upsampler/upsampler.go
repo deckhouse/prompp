@@ -27,9 +27,10 @@ var gaugeFuncs = map[string]struct{}{
 	"idelta": {},
 }
 
-// overTimeFuncs aggregate the values inside the window rather than their trend. A straight
-// line through a gap would feed them values that were never measured, so synthetic samples
-// hold the last known value instead; only the emptiness of the window is what they fix.
+// overTimeFuncs aggregate the values inside the window rather than their trend.
+// Synthetic samples hold the last measured value instead of interpolating new values.
+// They participate in aggregation like real samples, so results are approximate even
+// for windows that already contain real samples: counts, sums and statistics can change.
 var overTimeFuncs = map[string]struct{}{
 	"avg_over_time":      {},
 	"min_over_time":      {},
@@ -44,12 +45,12 @@ var overTimeFuncs = map[string]struct{}{
 	"present_over_time":  {},
 }
 
-// allowedFuncs is the union of the three groups above — the range-vector functions for
-// which synthetic samples don't change the meaning of the result, only whether there is
-// one at all. It is derived rather than written out, so a function added to a group can
-// never be classified without being allowed, or allowed without a filling rule.
-// changes/resets stay out of every group: they count discrete events between samples, and
-// a synthetic sample would fabricate information there instead of merely smoothing it.
+// allowedFuncs is the union of the three groups above: range-vector functions for which
+// approximate results from synthetic samples are accepted to reduce empty windows.
+// It is derived rather than written out, so a function added to a group can never be
+// classified without being allowed, or allowed without a filling rule.
+// changes/resets stay out of every group: they count discrete events between samples,
+// which synthesis cannot recover.
 var allowedFuncs = func() map[string]struct{} {
 	funcs := make(map[string]struct{}, len(counterFuncs)+len(gaugeFuncs)+len(overTimeFuncs))
 	maps.Copy(funcs, counterFuncs)

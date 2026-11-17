@@ -26,8 +26,8 @@ const (
 	GaugeFunc FuncKind = iota
 	// CounterFunc interpolates a rise but holds a drop, which is a hidden counter reset.
 	CounterFunc
-	// OverTimeFunc holds the last known value: an _over_time window aggregates values,
-	// and the only value known inside a gap is the one that was measured before it.
+	// OverTimeFunc holds the last measured value. Synthetic samples participate in
+	// aggregation like real ones, so even a nonempty window's result can change.
 	OverTimeFunc
 )
 
@@ -285,11 +285,10 @@ func (it *Iterator) synthesizeAt(t int64) {
 		return
 	}
 
-	// An _over_time function aggregates the values inside its window rather than their
-	// trend, so a straight line between two real samples would feed it values that were
-	// never measured — min/max of the window would drift with the slope. Holding the last
-	// known value keeps every aggregate inside the set of measured values, and only the
-	// emptiness of the window is what the synthetic samples fix.
+	// An _over_time function aggregates window values rather than their trend.
+	// Hold the last measured value instead of introducing interpolated sample values.
+	// Repetitions change the window's count and value distribution, so aggregates are
+	// approximate even when the window already contains real samples.
 	if it.typeOfFunc == OverTimeFunc {
 		it.t0 = t
 		return

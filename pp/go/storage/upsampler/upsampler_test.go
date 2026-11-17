@@ -64,8 +64,8 @@ func TestNeedsUpsampling(t *testing.T) {
 	}
 }
 
-// TestNeedsUpsamplingAllowedFuncs pins the full allow-list: rate-like functions and the
-// _over_time family, all of which read a whole range window and so tolerate synthetic points.
+// TestNeedsUpsamplingAllowedFuncs pins the full allow-list of rate-like and _over_time
+// functions for which approximate results from synthetic samples are accepted.
 func TestNeedsUpsamplingAllowedFuncs(t *testing.T) {
 	allowedFuncs := []string{
 		"rate",
