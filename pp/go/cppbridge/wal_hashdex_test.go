@@ -138,6 +138,24 @@ func (s *HashdexSuite) TestCppInvalidDataForHashdex() {
 	_ = h
 }
 
+func (s *HashdexSuite) TestRejectsDuplicateLabelNames() {
+	request := &prompb.WriteRequest{Timeseries: []prompb.TimeSeries{{
+		Labels: []prompb.Label{
+			{Name: "job", Value: "api"},
+			{Name: "zone", Value: "east"},
+			{Name: "job", Value: "worker"},
+		},
+		Samples: []prompb.Sample{{Timestamp: s.startTimestamp, Value: 1}},
+	}}}
+	data, err := request.Marshal()
+	s.Require().NoError(err)
+
+	_, err = cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), cppbridge.DefaultWALHashdexLimits())
+
+	s.Require().ErrorContains(err, "Duplicate label name: job")
+	s.True(cppbridge.IsRemoteWriteParsingError(err))
+}
+
 func (s *HashdexSuite) TestHashdexWithHardLimitsOnLabelNameLength() {
 	limits := cppbridge.WALHashdexLimits{
 		MaxLabelNameLength: 2,

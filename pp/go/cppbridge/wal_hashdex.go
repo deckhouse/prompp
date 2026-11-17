@@ -249,6 +249,7 @@ const (
 	scraperParseInvalidValue
 	scraperParseInvalidTimestamp
 	scraperMarkupBufferOverflow
+	scraperDuplicateLabelName
 )
 
 var (
@@ -264,6 +265,8 @@ var (
 	ErrScraperParseInvalidTimestamp = errors.New("scraper parse invalid timestamp")
 	// ErrScraperMarkupBufferOverflow error when the scrape markup buffer exceeds 4 GiB.
 	ErrScraperMarkupBufferOverflow = errors.New("scraper markup buffer size exceeds 4 GiB")
+	// ErrScraperDuplicateLabelName indicates a repeated label name in a series.
+	ErrScraperDuplicateLabelName = errors.New("scraper parse duplicate label name")
 
 	codeToError = map[uint32]error{
 		scraperParseNoError:          nil,
@@ -273,6 +276,7 @@ var (
 		scraperParseInvalidValue:     ErrScraperParseInvalidValue,
 		scraperParseInvalidTimestamp: ErrScraperParseInvalidTimestamp,
 		scraperMarkupBufferOverflow:  ErrScraperMarkupBufferOverflow,
+		scraperDuplicateLabelName:    ErrScraperDuplicateLabelName,
 	}
 )
 

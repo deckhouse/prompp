@@ -43,6 +43,7 @@ func IsRemoteWriteParsingError(err error) bool {
 		0x75a82db7eb2779f1, // No samples for labelSet
 		0xf5386714f93eb11f, // Invalid protobuf
 		0xbe40bda82f01b869, // Invalid protobuf
+		0x456a9d8a8915042e, // Duplicate label name
 	)
 	//revive:enable
 }

@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "metric.h"
 #include "protobuf.h"
 #include "wal/hashdex/test_fixture.h"
 
 #include "primitives/label_set.h"
 #include "primitives/sample.h"
+#include "third_party/protozero/pbf_writer.hpp"
 
 namespace {
 
@@ -82,6 +85,86 @@ TEST(ProtobufNoSamples, DoesNotThrowWhenSkippingTimeseriesWithNoSamples) {
   // Act & Assert
   EXPECT_NO_THROW(hashdex.presharding(protobuf, true));
   EXPECT_TRUE(get_floats(hashdex).empty());
+}
+
+TEST(ProtobufDuplicateLabelNames, RejectsSeriesWithoutSamplesEvenWhenSkippingIsEnabled) {
+  // Arrange
+  std::string protobuf;
+  {
+    protozero::pbf_writer writer(protobuf);
+    protozero::pbf_writer series(writer, 1);
+    PromPP::Prometheus::RemoteWrite::write_label(series, "__name__", "metric");
+    PromPP::Prometheus::RemoteWrite::write_label(series, "job", "");
+    PromPP::Prometheus::RemoteWrite::write_label(series, "job", "");
+  }
+  PromPP::WAL::hashdex::Protobuf hashdex;
+  BareBones::Exception::Code error_code{};
+
+  // Act
+  try {
+    hashdex.presharding(protobuf, true);
+  } catch (const BareBones::Exception& error) {
+    error_code = error.code();
+  }
+
+  // Assert
+  EXPECT_EQ(0x456a9d8a8915042eULL, error_code);
+  EXPECT_TRUE(hashdex.floats().empty());
+}
+
+TEST(ProtobufLabelNormalization, RemovesUniqueEmptyValueBeforeHashing) {
+  // Arrange
+  std::string protobuf;
+  {
+    protozero::pbf_writer writer(protobuf);
+    protozero::pbf_writer series(writer, 1);
+    PromPP::Prometheus::RemoteWrite::write_label(series, "job", "api");
+    PromPP::Prometheus::RemoteWrite::write_label(series, "instance", "");
+    PromPP::Prometheus::RemoteWrite::write_sample(series, Sample{1, 1.0});
+  }
+  PromPP::WAL::hashdex::Protobuf hashdex;
+  const LabelViewSet expected{{"job", "api"}};
+
+  // Act
+  hashdex.presharding(protobuf, false);
+  const auto floats = get_floats(hashdex);
+
+  // Assert
+  ASSERT_EQ(1U, floats.size());
+  EXPECT_EQ(expected, floats.front().timeseries.label_set());
+  EXPECT_EQ(hash_value(expected), floats.front().hash);
+}
+
+std::string make_wide_protobuf_series() {
+  std::string protobuf;
+  {
+    protozero::pbf_writer writer(protobuf);
+    protozero::pbf_writer series(writer, 1);
+    PromPP::Prometheus::RemoteWrite::write_label(series, "__name__", "metric");
+    PromPP::Prometheus::RemoteWrite::write_label(series, "label_1000", "east");
+    for (unsigned index = 1001; index <= 1300; ++index) {
+      PromPP::Prometheus::RemoteWrite::write_label(series, "label_" + std::to_string(index), "");
+    }
+    PromPP::Prometheus::RemoteWrite::write_label(series, "job", "api");
+    PromPP::Prometheus::RemoteWrite::write_sample(series, Sample{1, 1.0});
+  }
+  return protobuf;
+}
+
+TEST(ProtobufLabelNormalization, PreservesHashWithWideLabelSet) {
+  // Arrange
+  const std::string protobuf = make_wide_protobuf_series();
+  PromPP::WAL::hashdex::Protobuf hashdex;
+  const LabelViewSet expected{{"__name__", "metric"}, {"job", "api"}, {"label_1000", "east"}};
+
+  // Act
+  hashdex.presharding(protobuf, false);
+  const auto floats = get_floats(hashdex);
+
+  // Assert
+  ASSERT_EQ(1U, floats.size());
+  EXPECT_EQ(expected, floats.front().timeseries.label_set());
+  EXPECT_EQ(hash_value(expected), floats.front().hash);
 }
 
 }  // namespace

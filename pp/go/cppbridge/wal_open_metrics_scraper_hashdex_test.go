@@ -122,3 +122,12 @@ func (s *OpenMetricsScraperHashdexSuite) TestParseInvalidUtf8DiscardsPreviousPar
 	s.Equal(uint32(0), scraped)
 	s.Empty(actualMetadata)
 }
+
+func (s *OpenMetricsScraperHashdexSuite) TestRejectsDuplicateLabelNames() {
+	input := []byte("metric{job=\"api\",job=\"other\"} 1\n# EOF\n")
+
+	scraped, err := s.hasdex.Parse(input, -1)
+
+	s.Require().ErrorIs(err, cppbridge.ErrScraperDuplicateLabelName)
+	s.Equal(uint32(0), scraped)
+}

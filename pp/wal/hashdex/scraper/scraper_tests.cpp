@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <optional>
+#include <string>
 
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
@@ -81,6 +82,12 @@ TEST_P(PrometheusScraperFixture, LegacyPerTokenUtf8Validation) {
 }
 
 INSTANTIATE_TEST_SUITE_P(EmptyBuffer, PrometheusScraperFixture, testing::Values(ScraperCase{.buffer = "", .result = Error::kNoError, .floats = {}}));
+
+INSTANTIATE_TEST_SUITE_P(DuplicateLabelNames,
+                         PrometheusScraperFixture,
+                         testing::Values(ScraperCase{.buffer = "metric{job=\"api\",zone=\"east\",job=\"api\"} 1\n", .result = Error::kDuplicateLabelName},
+                                         ScraperCase{.buffer = "metric{job=\"api\",\"job\"=\"\"} 1\n", .result = Error::kDuplicateLabelName},
+                                         ScraperCase{.buffer = "metric{__name__=\"other\"} 1\n", .result = Error::kDuplicateLabelName}));
 
 INSTANTIATE_TEST_SUITE_P(Comment, PrometheusScraperFixture, testing::Values(ScraperCase{.buffer = "# comment\n", .result = Error::kNoError, .floats = {}}));
 
@@ -535,6 +542,10 @@ INSTANTIATE_TEST_SUITE_P(EmptyBuffer,
                          testing::Values(ScraperCase{.buffer = "# EOF", .result = Error::kNoError, .floats = {}},
                                          ScraperCase{.buffer = "# EOF\n", .result = Error::kNoError, .floats = {}}));
 
+INSTANTIATE_TEST_SUITE_P(DuplicateLabelNames,
+                         OpenMetricsScraperFixture,
+                         testing::Values(ScraperCase{.buffer = "metric{job=\"\",job=\"api\"} 1\n# EOF\n", .result = Error::kDuplicateLabelName}));
+
 INSTANTIATE_TEST_SUITE_P(
     InvalidInput,
     OpenMetricsScraperFixture,
@@ -937,6 +948,52 @@ TYPED_TEST(ScraperReuseFixture, InvalidUtf8DiscardsPreviousParse) {
   EXPECT_EQ(Error::kInvalidUtf8, result);
   EXPECT_TRUE(floats.empty());
   EXPECT_TRUE(metadata.empty());
+}
+
+std::string make_wide_scrape(std::string_view last_label) {
+  std::string buffer = "metric{label_1000=\"east\",";
+  for (unsigned index = 1001; index <= 1300; ++index) {
+    buffer += "label_" + std::to_string(index) + "=\"\",";
+  }
+  buffer += "job=\"api\",";
+  buffer += last_label;
+  buffer += "} 1\n# EOF\n";
+  return buffer;
+}
+
+template <class Scraper>
+class WideScraperLabelsFixture : public ::testing::Test {};
+
+TYPED_TEST_SUITE(WideScraperLabelsFixture, ScraperTypes);
+
+TYPED_TEST(WideScraperLabelsFixture, PreservesHashWithWideLabelSet) {
+  // Arrange
+  TypeParam scraper;
+  auto buffer = make_wide_scrape("label_1301=\"\"");
+  const LabelViewSet expected{{"__name__", "metric"}, {"job", "api"}, {"label_1000", "east"}};
+
+  // Act
+  const auto error = scraper.parse(buffer, kDefaultTimestamp);
+  const auto floats = PromPP::WAL::hashdex::get_floats(scraper);
+
+  // Assert
+  ASSERT_EQ(Error::kNoError, error);
+  ASSERT_EQ(1U, floats.size());
+  EXPECT_EQ(expected, floats.front().timeseries.label_set());
+  EXPECT_EQ(hash_value(expected), floats.front().hash);
+}
+
+TYPED_TEST(WideScraperLabelsFixture, RejectsDuplicateEmptyLabelInWideLabelSet) {
+  // Arrange
+  TypeParam scraper;
+  auto buffer = make_wide_scrape("label_1001=\"\"");
+
+  // Act
+  const auto error = scraper.parse(buffer, kDefaultTimestamp);
+
+  // Assert
+  EXPECT_EQ(Error::kDuplicateLabelName, error);
+  EXPECT_EQ(0U, scraper.floats().size());
 }
 
 // Builds a scrape buffer whose real `# TYPE`/metric lines sit past the 4 GiB mark, preceded by
