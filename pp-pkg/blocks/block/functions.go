@@ -24,7 +24,7 @@ const checkContextEveryNIterations = 100
 //
 
 // CloseAll closes all given closers.
-func CloseAll(cs []io.Closer) error {
+func CloseAll[TCloser io.Closer](cs []TCloser) error {
 	errs := make([]error, 0, len(cs))
 	for _, c := range cs {
 		errs = append(errs, c.Close())

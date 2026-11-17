@@ -700,6 +700,7 @@ func (s *querierOptimize) Querier(mint, maxt int64) (prom_storage.Querier, error
 		maxt,
 		s.step.Milliseconds(),
 		s.start.UnixMilli(),
+		0, cppbridge.NoDownsampling,
 		nil,
 	)
 	q.IsPossibleToOptimize = func(

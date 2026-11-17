@@ -28,6 +28,24 @@ func (api *API) ApplyConfig(conf *config.Config) error {
 	return nil
 }
 
+// applyDownsamplingLookback extends the effective lookback of a prepared [parser.EvalStmt]
+// when its selector ranges reach old data. It must run before [promql.Query.Exec].
+func (api *API) applyDownsamplingLookback(query promql.Query) {
+	if api.downsamplingLookbackDelta <= 0 {
+		return
+	}
+
+	stmt, ok := query.Statement().(*parser.EvalStmt)
+	if !ok {
+		return
+	}
+
+	mint, _ := promql.FindMinMaxTime(stmt)
+	if mint < api.minTimeBlocks() {
+		stmt.LookbackDelta = max(stmt.LookbackDelta, api.downsamplingLookbackDelta)
+	}
+}
+
 // Register the API's endpoints in the given router from op.
 func (api *API) opRegister(r *route.Router, wrapAgent func(f apiFunc) http.HandlerFunc) {
 	r.Get("/query_head", wrapAgent(api.queryHead))

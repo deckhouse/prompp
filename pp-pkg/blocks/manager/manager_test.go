@@ -109,6 +109,34 @@ func (s *ManagerSuite) TestManagerExportsLoadedBlocksMetrics() {
 	}
 }
 
+func (s *ManagerSuite) TestManagerExportsDownsampledBlocksMetricSeparately() {
+	s.createTestDownsamplingBlock(s.dir, 9000, "metric_c", 60_000)
+
+	reg := prometheus.NewRegistry()
+	m, err := NewManager(s.dir, nil, s.compactor, nil, s.chunkPool, nil, s.logger, reg)
+	s.Require().NoError(err)
+	s.T().Cleanup(m.Close)
+
+	blocks := m.Blocks()
+	s.Require().Len(blocks, 3)
+
+	// Every test block is shorter than a minute, so all of them share one duration bucket.
+	durationLabel := strconv.FormatInt(
+		normalizeBlockDurationMinutes(blocks[0].Meta().MaxTime-blocks[0].Meta().MinTime),
+		10,
+	)
+
+	// The raw gauge counts the two raw blocks only, the downsampled one counts the third block.
+	s.Require().Equal(
+		float64(2),
+		testutil.ToFloat64(m.metrics.loadedBlocksByDuration.WithLabelValues(durationLabel)),
+	)
+	s.Require().Equal(
+		float64(1),
+		testutil.ToFloat64(m.metrics.loadedDownsampledBlocksByDuration.WithLabelValues(durationLabel)),
+	)
+}
+
 func (s *ManagerSuite) createTestBlock(dir string, startTS int, metric string) {
 	s.T().Helper()
 
@@ -116,6 +144,26 @@ func (s *ManagerSuite) createTestBlock(dir string, startTS int, metric string) {
 		storage.NewListSeries(labels.FromStrings("__name__", metric), chunks.GenerateSamples(startTS, 2)),
 	}
 	_, err := tsdb.CreateBlock(series, dir, 0, log.NewNopLogger())
+	s.Require().NoError(err)
+}
+
+func (s *ManagerSuite) createTestDownsamplingBlock(dir string, startTS int, metric string, resolution int64) {
+	s.T().Helper()
+
+	// Create a normal block first
+	series := []storage.Series{
+		storage.NewListSeries(labels.FromStrings("__name__", metric), chunks.GenerateSamples(startTS, 2)),
+	}
+	blockIDStr, err := tsdb.CreateBlock(series, dir, 0, s.logger)
+	s.Require().NoError(err)
+
+	// Create Thanos metadata file for downsampling BEFORE loading the block
+	// This way when OpenBlocks loads the block, it will read the resolution
+	meta, _, err := block.ReadFromDir(blockIDStr)
+	s.Require().NoError(err)
+	meta.Thanos.Downsample.Resolution = resolution
+
+	_, err = block.WriteThanosMetaFile(s.logger, blockIDStr, meta)
 	s.Require().NoError(err)
 }
 

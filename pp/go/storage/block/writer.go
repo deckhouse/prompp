@@ -56,6 +56,7 @@ type Writer[TShard Shard] struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
+	downsamplingMs           int64
 	shardLabelsCtor          func(numberOfShards, shardID uint16) map[string]string
 	retentionPeriod          time.Duration
 	futurePeriod             time.Duration
@@ -77,7 +78,7 @@ type Writer[TShard Shard] struct {
 // ahead of now are kept.
 func NewWriter[TShard Shard](
 	dataDir string,
-	maxBlockChunkSegmentSize int64,
+	maxBlockChunkSegmentSize, downsamplingMs int64,
 	blockDuration time.Duration,
 	retentionPeriod time.Duration,
 	futurePeriod time.Duration,
@@ -98,6 +99,7 @@ func NewWriter[TShard Shard](
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
+		downsamplingMs:           downsamplingMs,
 		retentionPeriod:          retentionPeriod,
 		futurePeriod:             futurePeriod,
 		shardLabelsCtor:          shardLabelsCtor,
@@ -142,6 +144,7 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 
 	retentionCutoffMs, applyRetention := w.retentionCutoffMs()
 	futureCutoffMs, applyFuture := w.futureCutoffMs()
+	lss := sd.LSS().Target()
 	tLabels := w.shardLabelsCtor(numberOfShards, sd.ShardID())
 
 	// The last quant is clamped to the last sample, so that a quant with old samples only is skipped too.
@@ -173,7 +176,11 @@ func (w *Writer[TShard]) createWriters(sd TShard, numberOfShards uint16) blockWr
 			continue
 		}
 
-		writers.append(w.createWriter(w.dataDir, sd, sd.LSS().Target(), minT, maxT, cppbridge.NoDownsampling, tLabels))
+		writers.append(w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling, tLabels))
+
+		if w.downsamplingMs != cppbridge.NoDownsampling {
+			writers.append(w.createWriter(w.dataDir, sd, lss, minT, maxT, w.downsamplingMs, tLabels))
+		}
 	}
 
 	if len(skippedFutureQuants) > 0 {
@@ -209,6 +216,7 @@ func (w *Writer[TShard]) createWriter(
 	return newBlockWriter(
 		dataDir,
 		w.maxBlockChunkSegmentSize,
+		downsamplingMs,
 		lss,
 		chunkIterator,
 		tLabels,

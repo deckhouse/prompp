@@ -60,8 +60,8 @@ func BenchmarkQuerierStageStats(b *testing.B) {
 func benchmarkQuerierStageStats(
 	b *testing.B, h *ppstorage.Head, metrics *querier.Metrics, operation string, parallel bool,
 ) {
-	q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), 1, 0, metrics)
-	cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), nil, metrics)
+	q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), 1, 0, 0, cppbridge.NoDownsampling, metrics)
+	cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), 0, cppbridge.NoDownsampling, nil, metrics)
 	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "stage_metric")
 	matchers := []*labels.Matcher{matcher}
 	hints := &storage.SelectHints{Start: 0, End: 10, Step: 1}

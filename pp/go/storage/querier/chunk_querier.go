@@ -36,6 +36,8 @@ type ChunkQuerier[
 	deduplicatorCtor deduplicatorCtor
 	mint             int64
 	maxt             int64
+	retentionMS      int64
+	downsamplingMS   int64
 	closer           func() error
 	metrics          *Metrics
 }
@@ -50,7 +52,7 @@ func NewChunkQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
+	mint, maxt, retentionMS, downsamplingMS int64,
 	closer func() error,
 	metrics *Metrics,
 ) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
@@ -59,6 +61,8 @@ func NewChunkQuerier[
 		deduplicatorCtor: deduplicatorCtor,
 		mint:             mint,
 		maxt:             maxt,
+		retentionMS:      retentionMS,
+		downsamplingMS:   downsamplingMS,
 		closer:           closer,
 		metrics:          metrics,
 	}
@@ -122,6 +126,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 // Select returns a chunk set of series that matches the given label matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
+//revive:disable-next-line:function-length // this is a complex algorithm
 func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	_ bool,
@@ -151,7 +156,8 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	resources.serializedData = poolProvider.GetSerializedData()
 
 	t := queryDataStorage(
-		dsQueryChunkQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, hints, stats,
+		dsQueryChunkQuerier, q.head, resources.lssQueryResults, resources.serializedData,
+		q.mint, q.maxt, q.getDownsamplingMs(), hints, stats,
 	)
 	resources.addTask(t)
 
@@ -172,4 +178,13 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	stats.lap.Mark(stageBuildResult)
 
 	return result
+}
+
+// getDownsamplingMs calculates the downsampling milliseconds based on the time range.
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) getDownsamplingMs() int64 {
+	if q.maxt-q.mint > q.retentionMS {
+		return q.downsamplingMS
+	}
+
+	return cppbridge.NoDownsampling
 }

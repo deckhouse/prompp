@@ -4358,6 +4358,10 @@ func makeAdapter(t *testing.T, clock clockwork.Clock, hManager *pp_storage.Manag
 		clock,
 		hManager.Proxy(),
 		hManager.Builder(),
+		&pp_pkg_storage.AdapterOptions{
+			RetentionMS:    86400000,
+			DownsamplingMS: 0,
+		},
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)

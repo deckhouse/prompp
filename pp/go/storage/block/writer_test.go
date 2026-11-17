@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
+	"github.com/thanos-io/thanos/pkg/block/metadata"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -66,6 +67,7 @@ func (s *WriterSuite) SetupTest() {
 	s.blockWriter = block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		0,
 		0,
@@ -272,6 +274,46 @@ func (s *WriterSuite) TestWrite() {
 	s.assertWrittenBlocks(blocks, err)
 }
 
+func (s *WriterSuite) TestWriteDownsampledBlocksSkipsFutureQuants() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: time.Minute.Milliseconds(), Value: 1},
+				{Timestamp: (4 * time.Hour).Milliseconds(), Value: 2},
+			},
+		},
+	})
+	resolution := (5 * time.Minute).Milliseconds()
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		resolution,
+		blockDuration,
+		0,
+		blockDuration,
+		clockwork.NewFakeClockAt(time.UnixMilli(0)),
+		prometheus.NewRegistry(),
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 2)
+	var rawMeta, downsampledMeta metadata.Meta
+	s.Require().NoError(json.Unmarshal(s.mustReadFile(blocks[0].MetaFilename()), &rawMeta))
+	s.Require().NoError(json.Unmarshal(s.mustReadFile(blocks[1].MetaFilename()), &downsampledMeta))
+	s.Equal(int64(cppbridge.NoDownsampling), rawMeta.Thanos.Downsample.Resolution)
+	s.Equal(uint64(2), rawMeta.Stats.NumSamples)
+	s.Equal(resolution, downsampledMeta.Thanos.Downsample.Resolution)
+	s.Equal(uint64(1), downsampledMeta.Stats.NumSeries)
+	s.Less(downsampledMeta.MaxTime, blockDuration.Milliseconds())
+}
+
 func (s *WriterSuite) TestWriteInBatches() {
 	// Arrange
 	s.fillHead()
@@ -363,6 +405,7 @@ func (s *WriterSuite) TestSkipBlocksBeyondRetention() {
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		time.Hour,
 		0,
@@ -392,6 +435,7 @@ func (s *WriterSuite) TestKeepBlockThatHoldsRetentionCutoff() {
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		time.Hour,
 		0,
@@ -445,6 +489,7 @@ func (s *WriterSuite) TestKeepFutureSamplesOfCutoffQuant() {
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		0,
 		blockDuration,
@@ -478,6 +523,7 @@ func (s *WriterSuite) TestSkipFutureBlocks() {
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		0,
 		blockDuration,

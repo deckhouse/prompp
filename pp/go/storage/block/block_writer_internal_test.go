@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 func TestNewBlockWriterCreatesNoFiles(t *testing.T) {
@@ -12,7 +14,7 @@ func TestNewBlockWriterCreatesNoFiles(t *testing.T) {
 	dataDir := t.TempDir()
 
 	// Act
-	writer := newBlockWriter(dataDir, DefaultChunkSegmentSize, nil, ChunkIterator{}, nil)
+	writer := newBlockWriter(dataDir, DefaultChunkSegmentSize, cppbridge.NoDownsampling, nil, ChunkIterator{}, nil)
 
 	// Assert
 	entries, err := os.ReadDir(dataDir)
@@ -24,7 +26,7 @@ func TestNewBlockWriterCreatesNoFiles(t *testing.T) {
 func TestCloseNotOpenedBlockWriter(t *testing.T) {
 	// Arrange
 	dataDir := t.TempDir()
-	writer := newBlockWriter(dataDir, DefaultChunkSegmentSize, nil, ChunkIterator{}, nil)
+	writer := newBlockWriter(dataDir, DefaultChunkSegmentSize, cppbridge.NoDownsampling, nil, ChunkIterator{}, nil)
 
 	// Act
 	err := writer.Close()

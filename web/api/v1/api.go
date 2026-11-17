@@ -118,6 +118,9 @@ type RulesRetriever interface {
 	AlertingRules() []*rules.AlertingRule
 }
 
+// MinTimeBlocks is a function that returns the minimum time of all blocks managed by the manager.
+type MinTimeBlocks func() int64
+
 // StatsRenderer converts engine statistics into a format suitable for the API.
 type StatsRenderer func(context.Context, *stats.Statistics, string) stats.QueryStats
 
@@ -194,8 +197,10 @@ type API struct {
 	QueryEngine       promql.QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
 
-	adapter   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
-	opHandler *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	adapter                   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
+	opHandler                 *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	minTimeBlocks             MinTimeBlocks      // PP_CHANGES.md: rebuild on cpp
+	downsamplingLookbackDelta time.Duration      // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
@@ -233,6 +238,8 @@ func NewAPI(
 	eq storage.ExemplarQueryable,
 
 	adapter handler.Adapter, // PP_CHANGES.md: rebuild on cpp
+	minTimeBlocks MinTimeBlocks, // PP_CHANGES.md: rebuild on cpp
+	downsamplingLookbackDelta time.Duration, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
 	tr func(context.Context) TargetRetriever,
@@ -260,12 +267,18 @@ func NewAPI(
 	acceptRemoteWriteProtoMsgs []config.RemoteWriteProtoMsg,
 	otlpEnabled bool,
 ) *API {
+	if minTimeBlocks == nil {
+		minTimeBlocks = defultMinTimeBlocks
+	}
+
 	a := &API{
 		QueryEngine:       qe,
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
-		adapter: adapter, // PP_CHANGES.md: rebuild on cpp
+		adapter:                   adapter,                   // PP_CHANGES.md: rebuild on cpp
+		minTimeBlocks:             minTimeBlocks,             // PP_CHANGES.md: rebuild on cpp
+		downsamplingLookbackDelta: downsamplingLookbackDelta, // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
 		targetRetriever:       tr,
@@ -467,6 +480,8 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 		}
 	}()
 
+	api.applyDownsamplingLookback(qry) // PP_CHANGES.md: Adjust the prepared query's effective lookback.
+
 	ctx = httputil.ContextFromRequest(ctx, r)
 
 	res := qry.Exec(ctx)
@@ -568,6 +583,8 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 			qry.Close()
 		}
 	}()
+
+	api.applyDownsamplingLookback(qry) // PP_CHANGES.md: Adjust the prepared query's effective lookback.
 
 	ctx = httputil.ContextFromRequest(ctx, r)
 
@@ -1955,4 +1972,9 @@ func toHintLimit(limit int) int {
 		return limit + 1
 	}
 	return limit
+}
+
+// defaultMinTimeBlocks returns the default value for the minimum time blocks.
+func defultMinTimeBlocks() int64 {
+	return math.MaxInt64
 }
