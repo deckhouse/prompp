@@ -27,6 +27,8 @@ const (
 	lssQueryInstantQuerySelector = "lss_query_instant_query_selector"
 	// lssQueryRangeQuerySelector name of task.
 	lssQueryRangeQuerySelector = "lss_query_range_query_selector"
+	// lssQuerySeriesCountSelector name of task.
+	lssQuerySeriesCountSelector = "lss_query_series_count_selector"
 	// lssLabelValuesQuerier name of task.
 	lssLabelValuesQuerier = "lss_label_values_querier"
 	// lssLabelNamesQuerier name of task.
@@ -314,6 +316,37 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	}
 
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
+}
+
+// SeriesCount returns the number of head series that match the given label matchers. It runs only
+// the label set query and does not read the series data.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) SeriesCount(
+	ctx context.Context,
+	matchers ...*labels.Matcher,
+) (int, error) {
+	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSeriesCount)
+	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return 0, nil
+		}
+
+		return 0, err
+	}
+
+	defer resources.close()
+
+	if err = queryLss(lssQuerySeriesCountSelector, q.head, matchers, &resources); err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, result := range resources.lssQueryResults {
+		if result != nil {
+			count += result.Len()
+		}
+	}
+
+	return count, nil
 }
 
 // selectInstant returns a instant set of series that matches the given label matchers.

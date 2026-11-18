@@ -390,7 +390,7 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 		}
 	}
 
-	s.Equal(188, series)
+	s.Equal(224, series)
 }
 
 func (s *QuerierStatsSuite) TestRotationWithDifferentShardCount() {
@@ -582,7 +582,7 @@ func (s *QuerierStatsSuite) TestUnexecutedStagesAreZero() {
 		}
 	}
 
-	s.Equal(94, series)
+	s.Equal(112, series)
 }
 
 func (s *QuerierStatsSuite) assertHistogramAfterRelease() {

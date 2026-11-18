@@ -24,6 +24,7 @@ func TestQueryStageLabels(t *testing.T) {
 		{"label_values", operationLabelValues, observeMetadataStages},
 		{"chunk_label_names", operationChunkLabelNames, observeMetadataStages},
 		{"chunk_label_values", operationChunkLabelValues, observeMetadataStages},
+		{"series_count", operationSeriesCount, observeSelectStages},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange

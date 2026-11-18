@@ -53,10 +53,11 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
-	"github.com/prometheus/prometheus/pp-pkg/handler"  // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/rules"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"   // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/cppbridge" // PP_CHANGES.md: jemalloc profile
+	"github.com/prometheus/prometheus/pp-pkg/handler"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/querysplit" // PP_CHANGES.md: split range queries by block bounds
+	"github.com/prometheus/prometheus/pp-pkg/rules"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"     // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/cppbridge"   // PP_CHANGES.md: jemalloc profile
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/template"
@@ -293,6 +294,14 @@ type Options struct {
 
 	Gatherer   prometheus.Gatherer
 	Registerer prometheus.Registerer
+
+	// PP_CHANGES.md: split range queries by block bounds start
+	// QueryRangeSplitBounds returns the bounds of the persisted blocks. Nil disables the split.
+	QueryRangeSplitBounds querysplit.BoundsFunc
+	// QueryRangeSplit configures the split of the requests with the querysplit.Header header. The
+	// handler sets the lookback delta and the registerer from these options.
+	QueryRangeSplit querysplit.Options
+	// PP_CHANGES.md: split range queries by block bounds end
 }
 
 // New initializes a new web Handler.
@@ -393,6 +402,10 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		o.AcceptRemoteWriteProtoMsgs,
 		o.EnableOTLPWriteReceiver,
 	)
+	splitOpts := o.QueryRangeSplit
+	splitOpts.LookbackDelta = o.LookbackDelta
+	splitOpts.Registerer = o.Registerer
+	h.apiV1.EnableRangeQuerySplit(o.QueryRangeSplitBounds, splitOpts)
 	// PP_CHANGES.md: rebuild on cpp end
 
 	if o.RoutePrefix != "/" {
@@ -740,7 +753,8 @@ func (h *Handler) Run(ctx context.Context, listeners []net.Listener, webConfig s
 	}
 	av1 := route.New().
 		WithInstrumentation(h.metrics.instrumentHandlerWithPrefix("/api/v1")).
-		WithInstrumentation(setPathWithPrefix(apiPath + "/v1"))
+		WithInstrumentation(setPathWithPrefix(apiPath + "/v1")).
+		WithInstrumentation(querysplit.Instrument) // PP_CHANGES.md: split range queries by block bounds
 	h.apiV1.Register(av1)
 
 	mux.Handle(apiPath+"/v1/", http.StripPrefix(apiPath+"/v1", av1))
