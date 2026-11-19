@@ -809,17 +809,17 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 void prompp_primitives_lss_query_selector(void* args, void* res);
 
 /**
- * @brief query selector from lss for label matchers
+ * @brief query a snapshot, consuming the selector
  *
  * @param args {
- *     snapshot uintptr // pointer to snapshot
- *     selector uintptr // pointer to constructed selector
+ *     snapshot    uintptr // pointer to snapshot
+ *     selector    uintptr // pointer to constructed selector
+ *     sort_series bool    // sort IDs by label sets
  * }
  *
  * @param res {
- *     matches           []uint32 // matched series ids
- *     label_set_lengths []uint16 // slice of series label set length
- *     status            uint32   // query status
+ *     matches []uint32 // matched series ids
+ *     status  uint32   // query status
  * }
  */
 void prompp_primitives_snapshot_query(void* args, void* res);
@@ -852,9 +852,8 @@ void prompp_primitives_group_series_by_label_names_result_free(void* args);
  * @brief free label set matches returned by prompp_primitives_snapshot_query
  *
  * @param args {
- *     matches           []uint32 // matched series ids
- *     label_set_lengths []uint16 // slice of series label set length
- *     status            uint32   // query status
+ *     matches []uint32 // matched series ids
+ *     status  uint32   // query status
  * }
  */
 void prompp_primitives_lss_query_result_free(void* args);

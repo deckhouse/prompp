@@ -6,14 +6,15 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/stagestats"
 )
 
+// lssQueryStageName labels the index lookup in both caller and shard metrics.
+const lssQueryStageName = "lss_query"
+
 const (
 	// stageSemaphoreWait waits for head query access, including failed acquisition attempts.
 	stageSemaphoreWait stagestats.Stage = iota
 	// stagePrepare prepares pooled buffers and matchers for Select.
 	stagePrepare
-	// stageLSSQuerySelector creates, enqueues, and waits for selector tasks on all shards.
-	stageLSSQuerySelector
-	// stageLSSQuery queries the snapshots selected by [Querier.Select] or [ChunkQuerier.Select].
+	// stageLSSQuery enqueues and waits for selector construction and snapshot queries on all shards.
 	stageLSSQuery
 	// stageDataStorageQuery prepares, enqueues, and waits for primary data queries, including load registration.
 	stageDataStorageQuery
@@ -39,8 +40,8 @@ const (
 )
 
 const (
-	// shardStageLSSQuerySelector accounts the maximum duration of Select selector queries across shards.
-	shardStageLSSQuerySelector stagestats.Stage = iota
+	// shardStageLSSQuery accounts for the maximum duration of the complete index lookup across shards.
+	shardStageLSSQuery stagestats.Stage = iota
 	// shardStageDataStorageQuery accounts the maximum duration of primary data queries across shards.
 	shardStageDataStorageQuery
 	// shardStageCount sizes the Select shard stage names and is not a measured stage.
@@ -55,7 +56,7 @@ const (
 )
 
 const (
-	// slotLSS stores each shard's selector or metadata query duration.
+	// slotLSS stores each shard's index lookup or metadata query duration.
 	slotLSS = iota
 	// slotDataStorageQuery stores each shard's primary data query duration, excluding asynchronous loads.
 	slotDataStorageQuery
@@ -84,8 +85,7 @@ const (
 var stageNames = [stageCount]string{
 	stageSemaphoreWait:    "semaphore_wait",
 	stagePrepare:          "prepare",
-	stageLSSQuerySelector: "lss_query_selector",
-	stageLSSQuery:         "lss_query",
+	stageLSSQuery:         lssQueryStageName,
 	stageDataStorageQuery: "data_storage_query",
 	stageDataLoadWait:     "data_load_wait",
 	stageBuildResult:      "build_result",
@@ -95,19 +95,19 @@ var stageNames = [stageCount]string{
 var metadataStageNames = [metadataStageCount]string{
 	metadataStageSemaphoreWait: "semaphore_wait",
 	metadataStagePrepare:       "prepare",
-	metadataStageLSSQuery:      "lss_query",
+	metadataStageLSSQuery:      lssQueryStageName,
 	metadataStageBuildResult:   "build_result",
 }
 
 // shardStageNames maps Select shard stage indices to metric labels.
 var shardStageNames = [shardStageCount]string{
-	shardStageLSSQuerySelector: "lss_query_selector",
+	shardStageLSSQuery:         lssQueryStageName,
 	shardStageDataStorageQuery: "data_storage_query",
 }
 
 // metadataShardStageNames maps metadata shard stage indices to metric labels.
 var metadataShardStageNames = [metadataShardStageCount]string{
-	metadataShardStageLSSQuery: "lss_query",
+	metadataShardStageLSSQuery: lssQueryStageName,
 }
 
 // operationNames maps operation indices to the fixed operation label values shared by both metric families.

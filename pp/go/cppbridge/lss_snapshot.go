@@ -140,24 +140,15 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 // LSSQueryResult
 //
 
-// LSSQueryResult query execution result in lss with copy.
+// LSSQueryResult owns the native series ID buffer returned by [LabelSetSnapshot.Query].
 type LSSQueryResult struct {
-	matches         []uint32 // c allocated
-	labelSetLengths []uint16 // c allocated
-	status          uint32
+	matches []uint32 // C-allocated.
+	status  uint32
 }
 
-// newLSSQueryResult init new LSSQueryResult.
-func newLSSQueryResult(
-	matches []uint32,
-	labelSetLengths []uint16,
-	status uint32,
-) *LSSQueryResult {
-	lqr := &LSSQueryResult{
-		matches:         matches,
-		labelSetLengths: labelSetLengths,
-		status:          status,
-	}
+// newLSSQueryResult wraps the native result, freeing the buffer immediately on non-matches.
+func newLSSQueryResult(matches []uint32, status uint32) *LSSQueryResult {
+	lqr := &LSSQueryResult{matches: matches, status: status}
 
 	if status != LSSQueryStatusMatch {
 		lqr.Close()
@@ -172,18 +163,17 @@ func newLSSQueryResult(
 	return lqr
 }
 
-// Close frees the C-allocated result buffers and cancels the finalizer.
+// Close frees the C-allocated series IDs and cancels the finalizer.
 // It is idempotent: subsequent calls (and the finalizer) are no-ops.
 // After Close the result must not be read anymore.
 func (r *LSSQueryResult) Close() {
-	if r.matches == nil && r.labelSetLengths == nil {
+	if r.matches == nil {
 		return
 	}
 
 	runtime.SetFinalizer(r, nil)
 	primitivesLabelSetMatchesFree(r)
 	r.matches = nil
-	r.labelSetLengths = nil
 }
 
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
@@ -195,33 +185,9 @@ func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
 	return -1
 }
 
-func (r *LSSQueryResult) LengthBySeriesID(seriesID uint32, searchFrom int) (length uint16, index int) {
-	for {
-		if searchFrom > len(r.matches)-1 {
-			return 0, -1
-		}
-
-		if r.matches[searchFrom] == seriesID {
-			return r.labelSetLengths[searchFrom], searchFrom
-		}
-
-		searchFrom++
-	}
-}
-
-// GetByIndex return ls id and length for ls id by index.
-func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
-	return r.matches[i], r.labelSetLengths[i]
-}
-
 // IDs return labels sets ids.
 func (r *LSSQueryResult) IDs() []uint32 {
 	return r.matches
-}
-
-// LabelSetLengths return labels sets lengths.
-func (r *LSSQueryResult) LabelSetLengths() []uint16 {
-	return r.labelSetLengths
 }
 
 // Len of result.
