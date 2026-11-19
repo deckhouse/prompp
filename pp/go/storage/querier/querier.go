@@ -1060,11 +1060,8 @@ func closeLSSQueryResults(lssQueryResults []*cppbridge.LSSQueryResult) {
 	}
 }
 
-// queryLss fills snapshots and LSS results and registers every buffer and task before using them.
-// With sortSeries the matched ids of every shard are ordered by labels; otherwise the C++ sort is skipped.
-//
-//revive:disable-next-line:cyclomatic but readable.
-//revive:disable-next-line:function-length long but readable.
+// queryLss resolves matchers and queries snapshots in one task, publishing results by shard ID.
+// With sortSeries the matched IDs of every shard are ordered by labels; otherwise the C++ sort is skipped.
 func queryLss[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -1087,55 +1084,45 @@ func queryLss[
 
 	resources.snapshots = resources.pool.GetSnapshots()
 	resources.lssQueryResults = resources.pool.GetLSSQueryResults()
-	resources.selectors = resources.pool.GetSelectors()
-	resources.errors = resources.pool.GetErrors()
 	convertedMatchers := convertPrometheusMatchersToPPMatchers(matchers...)
 	stats.lap.Mark(stagePrepare)
 
 	// Capture slice headers so shard tasks do not retain the mutable resource owner.
-	selectors := resources.selectors
+	results := resources.lssQueryResults
 	snapshots := resources.snapshots
 	slots := stats.slots
-	tLSSQuerySelector := head.CreateTask(
+	t := head.CreateTask(
 		taskName,
-		func(shard TShard) (err error) {
+		func(shard TShard) error {
 			shardID := shard.ShardID()
 			start := slots.Start()
-			selectors[shardID], snapshots[shardID], err = shard.LSS().QuerySelector(shardID, convertedMatchers)
+			selector, snapshot, err := shard.LSS().QuerySelector(shardID, convertedMatchers)
+			if err != nil || selector == 0 {
+				slots.Since(shardID, slotLSS, start)
+
+				return err
+			}
+
+			result := snapshot.Query(selector, sortSeries)
 			slots.Since(shardID, slotLSS, start)
 
-			return err
+			switch status := result.Status(); status {
+			case cppbridge.LSSQueryStatusMatch:
+				snapshots[shardID] = snapshot
+				results[shardID] = result
+			case cppbridge.LSSQueryStatusNoMatch:
+			default:
+				return fmt.Errorf("failed to query from shard: %d, query status: %d", shardID, status)
+			}
+
+			return nil
 		},
 	)
-	resources.addTask(tLSSQuerySelector)
-	head.Enqueue(tLSSQuerySelector)
-	err := tLSSQuerySelector.Wait()
-	stats.lap.Mark(stageLSSQuerySelector)
-	stats.shards.ObserveMax(shardStageLSSQuerySelector, slots, slotLSS)
-
-	if err != nil {
-		return err
-	}
-
-	for shardID, selector := range selectors {
-		if selector == 0 {
-			continue
-		}
-
-		lssQueryResult := snapshots[shardID].Query(selector, sortSeries)
-		switch lssQueryResult.Status() {
-		case cppbridge.LSSQueryStatusMatch:
-			resources.lssQueryResults[shardID] = lssQueryResult
-		case cppbridge.LSSQueryStatusNoMatch:
-		default:
-			resources.errors[shardID] = fmt.Errorf(
-				"failed to query from shard: %d, query status: %d", shardID, lssQueryResult.Status(),
-			)
-		}
-	}
-
-	err = errors.Join(resources.errors...)
+	resources.addTask(t)
+	head.Enqueue(t)
+	err := t.Wait()
 	stats.lap.Mark(stageLSSQuery)
+	stats.shards.ObserveMax(shardStageLSSQuery, slots, slotLSS)
 
 	return err
 }

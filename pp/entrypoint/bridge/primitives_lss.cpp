@@ -105,7 +105,6 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
 
 struct LssQueryResult {
   PromPP::Primitives::Go::Slice<uint32_t> matches;
-  PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths;
   uint32_t status;
 };
 
@@ -142,31 +141,19 @@ extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
     SelectorPtr selector;
     bool sort_series;
   };
-  struct Result {
-    PromPP::Primitives::Go::Slice<uint32_t> matches;
-    PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths{};
-    uint32_t status;
-  };
 
   const auto in = static_cast<Arguments*>(args);
-  auto& snapshot_variant = *in->snapshot;
+  const auto& snapshot_variant = *in->snapshot;
   auto query_result = Querier{}.query(*in->selector);
   in->selector.reset();
   if (in->sort_series) {
     std::visit([&query_result](const auto& snapshot) { snapshot.sorting_index().sort(query_result.series_ids); }, snapshot_variant);
   }
 
-  const auto out = new (res) Result{
+  new (res) LssQueryResult{
       .matches = std::move(query_result.series_ids),
       .status = static_cast<uint32_t>(query_result.status),
   };
-  out->label_set_lengths.reserve(out->matches.size());
-  std::visit(
-      [&out](const auto& snapshot) {
-        std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
-                               [&snapshot](const auto ls_id) PROMPP(lambda_inline) { return static_cast<uint16_t>(snapshot[ls_id].size()); });
-      },
-      snapshot_variant);
 }
 
 struct GroupSeriesByLabelNamesResult {

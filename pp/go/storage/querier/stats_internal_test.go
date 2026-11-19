@@ -58,13 +58,12 @@ func observeSelectStages(recorders queryRecorders) {
 	caller := recorders.stages.Stripe(0)
 	caller.Observe(stageSemaphoreWait, 1)
 	caller.Observe(stagePrepare, 2)
-	caller.Observe(stageLSSQuerySelector, 3)
 	caller.Observe(stageLSSQuery, 4)
 	caller.Observe(stageDataStorageQuery, 5)
 	caller.Observe(stageDataLoadWait, 6)
 	caller.Observe(stageBuildResult, 7)
 
 	shards := recorders.shards.Stripe(0)
-	shards.Observe(shardStageLSSQuerySelector, 1)
+	shards.Observe(shardStageLSSQuery, 1)
 	shards.Observe(shardStageDataStorageQuery, 2)
 }

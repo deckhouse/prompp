@@ -39,11 +39,9 @@ type HeadPool[TGShard Shard] struct {
 	// use in querier
 	snapshotsPool       zeropool.Pool[[]*cppbridge.LabelSetSnapshot]
 	lssQueryResultsPool zeropool.Pool[[]*cppbridge.LSSQueryResult]
-	selectorsPool       zeropool.Pool[[]uintptr]
 	seriesSetPool       zeropool.Pool[[]storage.SeriesSet]
 	chunkSeriesSetPool  zeropool.Pool[[]storage.ChunkSeriesSet]
 	serializedDataPool  zeropool.Pool[[]*cppbridge.DataStorageSerializedData]
-	errorsPool          zeropool.Pool[[]error]
 	seriesGroupsPool    zeropool.Pool[[]*cppbridge.SeriesGroups]
 	nameIDsPool         pool.SlicePool[uint32]
 }
@@ -91,9 +89,6 @@ func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 		lssQueryResultsPool: zeropool.New(func() []*cppbridge.LSSQueryResult {
 			return make([]*cppbridge.LSSQueryResult, numberOfShards)
 		}),
-		selectorsPool: zeropool.New(func() []uintptr {
-			return make([]uintptr, numberOfShards)
-		}),
 		seriesSetPool: zeropool.New(func() []storage.SeriesSet {
 			return make([]storage.SeriesSet, numberOfShards)
 		}),
@@ -102,9 +97,6 @@ func NewHeadPool[TGShard Shard](numberOfShards uint16) *HeadPool[TGShard] {
 		}),
 		serializedDataPool: zeropool.New(func() []*cppbridge.DataStorageSerializedData {
 			return make([]*cppbridge.DataStorageSerializedData, numberOfShards)
-		}),
-		errorsPool: zeropool.New(func() []error {
-			return make([]error, numberOfShards)
 		}),
 		seriesGroupsPool: zeropool.New(func() []*cppbridge.SeriesGroups {
 			return make([]*cppbridge.SeriesGroups, numberOfShards)
@@ -211,17 +203,6 @@ func (hp *HeadPool[TGShard]) PutLSSQueryResults(results []*cppbridge.LSSQueryRes
 	hp.lssQueryResultsPool.Put(results)
 }
 
-// GetSelectors gets a slice of [uintptr] from the pool.
-func (hp *HeadPool[TGShard]) GetSelectors() []uintptr {
-	return hp.selectorsPool.Get()
-}
-
-// PutSelectors adds slice of [uintptr] to the pool after resetting it.
-func (hp *HeadPool[TGShard]) PutSelectors(selectors []uintptr) {
-	clear(selectors)
-	hp.selectorsPool.Put(selectors)
-}
-
 // GetSeriesSet gets a slice of [storage.SeriesSet] from the pool.
 func (hp *HeadPool[TGShard]) GetSeriesSet() []storage.SeriesSet {
 	return hp.seriesSetPool.Get()
@@ -253,17 +234,6 @@ func (hp *HeadPool[TGShard]) GetSerializedData() []*cppbridge.DataStorageSeriali
 func (hp *HeadPool[TGShard]) PutSerializedData(sd []*cppbridge.DataStorageSerializedData) {
 	clear(sd)
 	hp.serializedDataPool.Put(sd)
-}
-
-// GetErrors gets a slice of [error] from the pool.
-func (hp *HeadPool[TGShard]) GetErrors() []error {
-	return hp.errorsPool.Get()
-}
-
-// PutErrors adds slice of [error] to the pool after resetting it.
-func (hp *HeadPool[TGShard]) PutErrors(errs []error) {
-	clear(errs)
-	hp.errorsPool.Put(errs)
 }
 
 // GetSeriesGroups gets a slice of [cppbridge.SeriesGroups] from the pool.

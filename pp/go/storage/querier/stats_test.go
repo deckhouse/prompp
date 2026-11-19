@@ -66,7 +66,7 @@ func (s *QuerierStatsSuite) SetupTest() {
 	s.T().Cleanup(func() { s.Require().NoError(engine.Close()) })
 	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
 	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
-	s.matchers = []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "__name__", "stage_metric")}
+	s.matchers = []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, stageStatsMetric)}
 	s.hints = &storage.SelectHints{Start: 0, End: 10, Step: 1}
 }
 
@@ -159,6 +159,22 @@ func (s *QuerierStatsSuite) TestCrossSeriesRange() {
 
 	s.Require().NoError(result.Err())
 	s.Equal(before, s.counts("select_range", false))
+}
+
+func (s *QuerierStatsSuite) TestDisjointPostings() {
+	// Arrange: series 0 and 2 exist on the same shard but can never match together.
+	matchers := []*labels.Matcher{
+		labels.MustNewMatcher(labels.MatchEqual, "series", "0"),
+		labels.MustNewMatcher(labels.MatchEqual, "series", "2"),
+	}
+
+	// Act
+	result := s.q.Select(s.T().Context(), false, s.hints, matchers...)
+
+	// Assert
+	s.Require().NoError(result.Err())
+	s.False(result.Next())
+	s.Equal(map[string]float64{"lss_query": 1}, s.counts("select_range", true))
 }
 
 func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
@@ -327,7 +343,7 @@ func (s *QuerierStatsSuite) TestNoMatches() {
 	result := s.q.Select(context.Background(), false, s.hints, matcher)
 	s.Require().NoError(result.Err())
 	s.False(result.Next())
-	s.Equal(map[string]float64{"lss_query_selector": 1}, s.counts("select_range", true))
+	s.Equal(map[string]float64{"lss_query": 1}, s.counts("select_range", true))
 	s.NotContains(s.counts("select_range", false), "data_load_wait")
 }
 
@@ -390,7 +406,7 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 		}
 	}
 
-	s.Equal(188, series)
+	s.Equal(176, series)
 }
 
 func (s *QuerierStatsSuite) TestRotationWithDifferentShardCount() {
@@ -405,18 +421,25 @@ func (s *QuerierStatsSuite) TestRotationWithDifferentShardCount() {
 }
 
 func (s *QuerierStatsSuite) TestSelectorError() {
-	s.shards[0].lss.selectorErr = errors.New("selector failed")
-	result := s.q.Select(context.Background(), false, s.hints, s.matchers...)
-	s.Require().EqualError(result.Err(), "selector failed")
+	// Arrange: the other shard still matches the selector.
+	selectorErr := errors.New("selector failed")
+	s.shards[0].lss.selectorErr = selectorErr
+
+	// Act
+	result := s.q.Select(s.T().Context(), false, s.hints, s.matchers...)
+
+	// Assert
+	s.Require().ErrorIs(result.Err(), selectorErr)
+	s.False(result.Next())
 	s.Equal(map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1,
+		"semaphore_wait": 1, "prepare": 1, "lss_query": 1,
 	}, s.counts("select_range", false))
-	s.Equal(map[string]float64{"lss_query_selector": 1}, s.counts("select_range", true))
+	s.Equal(map[string]float64{"lss_query": 1}, s.counts("select_range", true))
 
 	s.shards[0].lss.selectorErr = nil
 	s.Require().NoError(s.cq.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Equal(float64(2), s.counts("select_range", false)["lss_query_selector"])
+	s.Equal(float64(2), s.counts("select_range", false)["lss_query"])
 	s.Equal(float64(1), s.counts("select_range", true)["data_storage_query"])
 }
 
@@ -512,7 +535,7 @@ func (s *QuerierStatsSuite) TestSlotsDoNotRetainPreviousQuery() {
 	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "absent")
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, matcher).Err())
 	s.Equal(map[string]float64{
-		"lss_query_selector": 2, "data_storage_query": 1,
+		"lss_query": 2, "data_storage_query": 1,
 	}, s.counts("select_range", true))
 }
 
@@ -582,7 +605,7 @@ func (s *QuerierStatsSuite) TestUnexecutedStagesAreZero() {
 		}
 	}
 
-	s.Equal(94, series)
+	s.Equal(88, series)
 }
 
 func (s *QuerierStatsSuite) assertHistogramAfterRelease() {
@@ -634,7 +657,7 @@ func (s *QuerierStatsSuite) assertMetadata(operation string) {
 func (s *QuerierStatsSuite) assertSelect(operation string, load bool) {
 	s.T().Helper()
 	expected := map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1, "lss_query": 1,
+		"semaphore_wait": 1, "prepare": 1, "lss_query": 1,
 		"data_storage_query": 1, "build_result": 1,
 	}
 
@@ -643,7 +666,7 @@ func (s *QuerierStatsSuite) assertSelect(operation string, load bool) {
 	}
 
 	s.Equal(expected, s.counts(operation, false))
-	s.Equal(map[string]float64{"lss_query_selector": 1, "data_storage_query": 1}, s.counts(operation, true))
+	s.Equal(map[string]float64{"lss_query": 1, "data_storage_query": 1}, s.counts(operation, true))
 }
 
 func (s *QuerierStatsSuite) counts(operation string, shards bool) map[string]float64 {
