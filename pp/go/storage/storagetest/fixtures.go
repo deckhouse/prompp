@@ -164,6 +164,7 @@ func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStora
 // SamplesMap samples map with series ID as key.
 type SamplesMap map[uint32][]cppbridge.Sample
 
+// GetSamplesFromSerializedData copies the samples; the caller retains ownership of serializedData.
 func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerializedData) SamplesMap {
 	result := make(SamplesMap)
 
@@ -277,6 +278,8 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.InstantSeriesSet{}, nil
 	}
@@ -288,7 +291,6 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}
 
-	runtime.KeepAlive(lssQueryResult)
 	return querier.NewInstantSeriesSet(snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
 
@@ -341,6 +343,8 @@ func StaleNaNQuery(
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.StaleNaNSeriesSet{}, nil
 	}

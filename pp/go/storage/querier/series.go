@@ -56,12 +56,12 @@ func (it *ChunkIterator) At() (int64, float64) {
 }
 
 // AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
-func (it *ChunkIterator) AtFloatHistogram(h *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+func (*ChunkIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
 	return 0, nil
 }
 
 // AtHistogram returns the current timestamp/value pair if the value is a histogram with integer counts.
-func (it *ChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
+func (*ChunkIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
 	return 0, nil
 }
 
@@ -71,12 +71,16 @@ func (it *ChunkIterator) AtT() int64 {
 }
 
 // Err returns the current error.
-func (it *ChunkIterator) Err() error {
+func (*ChunkIterator) Err() error {
 	return nil
 }
 
 // Next advances the iterator by one and returns the type of the value.
 func (it *ChunkIterator) Next() chunkenc.ValueType {
+	if it.serializedData.IsClosed() {
+		return chunkenc.ValNone
+	}
+
 	if !it.isInitialized {
 		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
@@ -100,6 +104,10 @@ func (it *ChunkIterator) Next() chunkenc.ValueType {
 
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
 func (it *ChunkIterator) Seek(t int64) chunkenc.ValueType {
+	if it.serializedData.IsClosed() {
+		return chunkenc.ValNone
+	}
+
 	// adjust lower limit.
 	if t < it.mint {
 		t = it.mint
@@ -144,6 +152,10 @@ func (s *Series) Labels() labels.Labels {
 }
 
 func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
+	if s.serializedData.IsClosed() {
+		return chunkenc.NewNopIterator()
+	}
+
 	chunkIterator, ok := it.(*ChunkIterator)
 	if !ok {
 		return NewChunkIterator(
@@ -182,7 +194,7 @@ func NewSeriesSet(
 }
 
 func (s *SeriesSet) Next() bool {
-	if s.serializedData == nil {
+	if s.serializedData.IsClosed() {
 		return false
 	}
 

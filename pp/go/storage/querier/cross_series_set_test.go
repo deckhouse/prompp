@@ -2,7 +2,6 @@ package querier_test
 
 import (
 	"math"
-	"runtime"
 	"testing"
 	"unsafe"
 
@@ -35,31 +34,31 @@ func (s *CrossSeriesSetSuite) SetupTest() {
 
 	timeSeries := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 3}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 5}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 13, Value: 7}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 2}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 4}},
 		},
 	}
@@ -82,6 +81,8 @@ func (s *CrossSeriesSetSuite) query(
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.CrossSeriesSet{}
 	}
@@ -104,12 +105,11 @@ func (s *CrossSeriesSetSuite) query(
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	}, downsamplingMs, hints)
+	s.T().Cleanup(dsQueryResult.SerializedData.Close)
 
 	nameIDs := make([]uint32, len(hints.Grouping))
 	lss.LabelNameToIDs(hints.Grouping, nameIDs)
 	seriesGroups := lss.GroupSeriesByLabelNames(lssQueryResult.IDs(), nameIDs)
-	// the ids are C-allocated and freed by the finalizer, keep the result alive across the cgo call
-	runtime.KeepAlive(lssQueryResult)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 
@@ -130,7 +130,7 @@ func (s *CrossSeriesSetSuite) query(
 func (s *CrossSeriesSetSuite) TestQueryWithoutGrouping() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -151,11 +151,11 @@ func (s *CrossSeriesSetSuite) TestQueryWithoutGrouping() {
 			Samples: []cppbridge.Sample(nil),
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 	}
@@ -178,7 +178,7 @@ func (s *CrossSeriesSetSuite) TestQueryWithoutGrouping() {
 func (s *CrossSeriesSetSuite) TestQueryGrouping_MultipleMissingLabelsBeforeExistingLabel() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -205,7 +205,7 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_MultipleMissingLabelsBeforeExist
 func (s *CrossSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -231,11 +231,11 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 			Samples: []cppbridge.Sample(nil),
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 	}
@@ -260,7 +260,7 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_OneGroupingLabel() {
 func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -286,11 +286,11 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 			Samples: []cppbridge.Sample(nil),
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 	}
@@ -315,7 +315,7 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels() {
 func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGroupingLabel() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -341,11 +341,11 @@ func (s *CrossSeriesSetSuite) TestQueryGrouping_TwoGroupingLabels_WithMissingGro
 			Samples: []cppbridge.Sample(nil),
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: math.Float64frombits(value.StaleNaN)}},
 		},
 	}

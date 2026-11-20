@@ -198,6 +198,8 @@ func (s *QuerierSuite) TestOptimizationPredicateSkippedForIneligibleQueries() {
 		s.Run(c.name, func() {
 			s.Require().NoError(querier.SetSelectFuncOptimize(c.optimization))
 			q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 1, 0, nil)
+			defer func() { s.Require().NoError(q.Close()) }()
+
 			calls := 0
 			q.IsPossibleToOptimize = func(
 				[]*cppbridge.LSSQueryResult,
@@ -213,7 +215,6 @@ func (s *QuerierSuite) TestOptimizationPredicateSkippedForIneligibleQueries() {
 			s.NotEmpty(storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 			s.Require().NoError(seriesSet.Err())
 			s.Zero(calls)
-			s.Require().NoError(q.Close())
 		})
 	}
 }

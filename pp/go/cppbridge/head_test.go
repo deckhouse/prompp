@@ -1,7 +1,6 @@
 package cppbridge_test
 
 import (
-	"runtime"
 	"testing"
 	"unsafe"
 
@@ -125,7 +124,10 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 		EndTimestampMs:   timeInterval.MaxT,
 		LabelSetIDs:      []uint32{0, 1},
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
+	defer result.SerializedData.Close()
+
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
+	defer recoder.Close()
 
 	// Act
 	chunk1 := recoder.RecodeNextChunk()
@@ -372,6 +374,7 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 		EndTimestampMs:   hints.End,
 		LabelSetIDs:      seriesToSerialize,
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&hints))
+	defer result.SerializedData.Close()
 
 	it := createIterator(result.SerializedData, series)
 	defer it.Close()
@@ -382,7 +385,6 @@ func (s *DataStorageSerializedDataMultiSeriesIteratorSuite) collectSamples(
 		it.Next()
 	}
 
-	runtime.KeepAlive(result.SerializedData)
 	return out
 }
 

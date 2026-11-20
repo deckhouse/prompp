@@ -235,7 +235,7 @@ func (ar *Adapter) BatchStorage() storage.BatchStorage {
 }
 
 // ChunkQuerier provides querying access over time series data of a fixed time range.
-// Returns new Chunk Querier that merges results of given primary and secondary chunk queriers.
+// The returned querier merges head results and invalidates all selections on close.
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
@@ -243,7 +243,7 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 		queriers = append(
 			queriers,
 			querier.NewChunkQuerier(
-				ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics,
+				ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, ar.activeQuerierMetrics,
 			),
 		)
 	}
@@ -256,16 +256,12 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 		queriers = append(
 			queriers,
 			querier.NewChunkQuerier(
-				head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics,
+				head, querier.NewNoOpShardedDeduplicator, mint, maxt, ar.storageQuerierMetrics,
 			),
 		)
 	}
 
-	return storage.NewMergeChunkQuerier(
-		nil,
-		queriers,
-		storage.NewConcatenatingChunkSeriesMerger(),
-	), nil
+	return querier.NewMergedChunkQuerier(queriers), nil
 }
 
 // ApplyConfig updates hashdex limits from the global config.
@@ -363,7 +359,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 		)
 	}
 
-	return querier.NewMultiQuerier(queriers, nil), nil
+	return querier.NewMultiQuerier(queriers), nil
 }
 
 // StartTime returns the oldest timestamp stored in the storage.

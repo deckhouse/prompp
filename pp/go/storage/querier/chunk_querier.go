@@ -36,11 +36,11 @@ type ChunkQuerier[
 	deduplicatorCtor deduplicatorCtor
 	mint             int64
 	maxt             int64
-	closer           func() error
 	metrics          *Metrics
+	results          queryResults[storage.ChunkSeries, chunkResultResources]
 }
 
-// NewChunkQuerier init new [ChunkQuerier].
+// NewChunkQuerier creates a chunk querier for the given head and time range.
 func NewChunkQuerier[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -51,7 +51,6 @@ func NewChunkQuerier[
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
-	closer func() error,
 	metrics *Metrics,
 ) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
@@ -59,20 +58,23 @@ func NewChunkQuerier[
 		deduplicatorCtor: deduplicatorCtor,
 		mint:             mint,
 		maxt:             maxt,
-		closer:           closer,
 		metrics:          metrics,
 	}
 }
 
-// Close [ChunkQuerier] if need.
+// Close invalidates outstanding chunk selections and releases their native buffers and recoders.
+// It must not overlap with use of the querier or its results.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
 func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
-	if q.closer != nil {
-		err := q.closer()
-		q.closer = nil
-		return err
-	}
+	q.results.releaseAll(func(resources chunkResultResources) {
+		closeChunkSeriesSets(resources.sets)
+		closeSerializedData(resources.serializedData)
+
+		pool := q.head.PoolProvider()
+		pool.PutChunkSeriesSet(resources.sets)
+		pool.PutSerializedData(resources.serializedData)
+	})
 
 	return nil
 }
@@ -120,7 +122,9 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 }
 
 // Select returns a chunk set of series that matches the given label matchers.
+// Consume the set before calling [ChunkQuerier.Close]; already emitted chunks own their payloads.
 //
+//revive:disable-next-line:function-length // this is a complex algorithm.
 //revive:disable-next-line:confusing-naming // other type of querier.
 func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
@@ -128,6 +132,10 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
+	if q.results.isClosed {
+		return storage.EmptyChunkSeriesSet()
+	}
+
 	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSelectChunks)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
@@ -138,7 +146,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	defer resources.close()
+	defer resources.releaseTemporary()
 
 	stats := &resources.stats
 	poolProvider := resources.pool
@@ -168,7 +176,12 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		)
 	}
 
-	result := NewMergeShardChunkSeriesSet(resources.chunkSeriesSets)
+	result := q.results.register(NewMergeShardChunkSeriesSet(resources.chunkSeriesSets), chunkResultResources{
+		sets:           resources.chunkSeriesSets,
+		serializedData: resources.serializedData,
+	})
+	resources.chunkSeriesSets = nil
+	resources.serializedData = nil
 	stats.lap.Mark(stageBuildResult)
 
 	return result

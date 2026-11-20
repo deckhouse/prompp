@@ -18,26 +18,31 @@ import (
 )
 
 func (s *QuerierStatsSuite) TestRealDataStorageLoading() {
-	for _, operation := range []string{"select_instant", "select_range", "select_chunks"} {
+	for _, operation := range []string{opSelectInstant, opSelectRange, opSelectChunks} {
 		s.Run(operation, func() {
 			h := s.newUnloadableHead()
 			maxt := int64(10)
 
-			if operation == "select_instant" {
+			if operation == opSelectInstant {
 				maxt = 5
 			}
 
 			q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, maxt, 1, 0, s.metrics)
-			cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+			cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, s.metrics)
+			defer func() {
+				qErr, cqErr := q.Close(), cq.Close()
+				s.Require().NoError(qErr)
+				s.Require().NoError(cqErr)
+			}()
 
-			if operation == "select_chunks" {
+			if operation == opSelectChunks {
 				result := cq.Select(context.Background(), false, s.hints, s.matchers...)
 				s.Require().NoError(result.Err())
 				s.True(result.Next())
 			} else {
 				hints := s.hints
 
-				if operation == "select_instant" {
+				if operation == opSelectInstant {
 					hints = &storage.SelectHints{}
 				}
 
@@ -46,7 +51,7 @@ func (s *QuerierStatsSuite) TestRealDataStorageLoading() {
 				s.True(result.Next())
 			}
 
-			s.assertSelect(operation, true)
+			s.assertSelect(operation, stageDataLoadWait)
 		})
 	}
 }
@@ -62,7 +67,7 @@ func (s *QuerierStatsSuite) newUnloadableHead() *ppstorage.Head {
 	s.Require().NoError(err)
 	s.T().Cleanup(func() { s.Require().NoError(h.Close()) })
 	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, h, []storagetest.TimeSeries{{
-		Labels: labels.FromStrings("__name__", "stage_metric", "series", "0"),
+		Labels: labels.FromStrings(labels.MetricName, "stage_metric", "series", "0"),
 		Samples: []cppbridge.Sample{
 			{Timestamp: 0, Value: 1},
 			{Timestamp: 5, Value: 2},

@@ -46,8 +46,12 @@ func TestChunkSeriesSetRetainsSeriesAfterAdvancement(t *testing.T) {
 		EndTimestampMs:   interval.MaxT,
 		LabelSetIDs:      seriesIDs,
 	}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
+	defer query.SerializedData.Close()
+
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, query.Status)
 	recoder := cppbridge.NewSerializedChunkRecoder(query.SerializedData, interval)
+	defer recoder.Close()
+
 	set := NewChunkSeriesSet(lss.CreateLabelSetSnapshot(), recoder)
 	require.True(t, set.Next())
 	first := set.At()

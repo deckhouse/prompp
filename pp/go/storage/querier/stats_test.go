@@ -21,6 +21,60 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+const (
+	// opSelectInstant identifies instant sample selections in the operation label.
+	opSelectInstant = "select_instant"
+	// opSelectRange identifies range sample selections in the operation label.
+	opSelectRange = "select_range"
+	// opSelectChunks identifies chunk selections in the operation label.
+	opSelectChunks = "select_chunks"
+	// opLabelNames identifies sample querier label-name lookups.
+	opLabelNames = "label_names"
+	// opLabelValues identifies sample querier label-value lookups.
+	opLabelValues = "label_values"
+	// opChunkLabelNames identifies chunk querier label-name lookups.
+	opChunkLabelNames = "chunk_label_names"
+	// opChunkLabelValues identifies chunk querier label-value lookups.
+	opChunkLabelValues = "chunk_label_values"
+
+	// stageSemaphoreWait identifies an attempt to acquire head query access.
+	stageSemaphoreWait = "semaphore_wait"
+	// stagePrepare identifies query preparation after acquiring access.
+	stagePrepare = "prepare"
+	// stageLSSQuerySelector identifies selector construction.
+	stageLSSQuerySelector = "lss_query_selector"
+	// stageLSSQuery identifies label-set or metadata lookup.
+	stageLSSQuery = "lss_query"
+	// stageDataStorageQuery identifies a query against the head's sample storage.
+	stageDataStorageQuery = "data_storage_query"
+	// stageDataLoadWait identifies a wait for deferred sample loading.
+	stageDataLoadWait = "data_load_wait"
+	// stageBuildResult identifies construction of the query result.
+	stageBuildResult = "build_result"
+	// stageCleanup identifies the stage label that must not be emitted at release.
+	stageCleanup = "cleanup"
+
+	// queryStageExecutions names the counter family for whole-query stages.
+	queryStageExecutions = "prompp_querier_query_stage_executions_total"
+	// shardStageExecutions names the counter family for shard stages.
+	shardStageExecutions = "prompp_querier_query_shard_stage_executions_total"
+	// selectDurationHistogram names the legacy Select duration histogram.
+	selectDurationHistogram = "prompp_querier_query_select_duration"
+	// labelNamesDurationHistogram names the legacy label-name lookup duration histogram.
+	labelNamesDurationHistogram = "prompp_querier_query_label_names_duration"
+	// labelValuesDurationHistogram names the legacy label-value lookup duration histogram.
+	labelValuesDurationHistogram = "prompp_querier_query_label_values_duration"
+	// queryTypeInstant identifies instant selections in the legacy histogram.
+	queryTypeInstant = "instant"
+	// queryTypeRange identifies range selections in the legacy histogram.
+	queryTypeRange = "range"
+
+	// selectFuncSum requests cross-series aggregation in Select hints.
+	selectFuncSum = "sum"
+	// selectFuncMaxOverTime requests max-over-time aggregation in Select hints.
+	selectFuncMaxOverTime = "max_over_time"
+)
+
 type statsQuerier = querier.Querier[
 	*statsTask, querier.DataStorage, querier.LSS, *statsShard, *statsHead,
 ]
@@ -64,9 +118,17 @@ func (s *QuerierStatsSuite) SetupTest() {
 	}, nil, 0, nil)
 	s.head = &statsHead{Head: engine}
 	s.T().Cleanup(func() { s.Require().NoError(engine.Close()) })
-	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
-	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
-	s.matchers = []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "__name__", "stage_metric")}
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
+	cq := querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, s.metrics)
+	require := s.Require()
+	s.T().Cleanup(func() {
+		qErr, cqErr := q.Close(), cq.Close()
+		require.NoError(qErr)
+		require.NoError(cqErr)
+	})
+
+	s.q, s.cq = q, cq
+	s.matchers = []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, "stage_metric")}
 	s.hints = &storage.SelectHints{Start: 0, End: 10, Step: 1}
 }
 
@@ -74,32 +136,32 @@ func (s *QuerierStatsSuite) TestCancelledAcquire() {
 	s.head.acquireErr = context.Canceled
 	result := s.q.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Require().ErrorIs(result.Err(), context.Canceled)
-	s.Equal(map[string]float64{"semaphore_wait": 1}, s.counts("select_range", false))
-	s.Empty(s.counts("select_range", true))
-	s.Zero(s.histogramCount("prompp_querier_query_select_duration", "range"))
+	s.Equal(map[string]float64{stageSemaphoreWait: 1}, s.counts(opSelectRange, queryStageExecutions))
+	s.Empty(s.counts(opSelectRange, shardStageExecutions))
+	s.Zero(s.histogramCount(selectDurationHistogram, queryTypeRange))
 }
 
 func (s *QuerierStatsSuite) TestChunkLabelNames() {
 	values, _, err := s.cq.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
 	s.Require().NoError(err)
-	s.Equal([]string{"__name__", "__name__", "series", "series"}, values)
-	s.assertMetadata("chunk_label_names")
-	s.Zero(s.histogramCount("prompp_querier_query_label_names_duration", ""))
+	s.Equal([]string{labels.MetricName, labels.MetricName, "series", "series"}, values)
+	s.assertMetadata(opChunkLabelNames)
+	s.Zero(s.histogramCount(labelNamesDurationHistogram, ""))
 }
 
 func (s *QuerierStatsSuite) TestChunkLabelValues() {
 	values, _, err := s.cq.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
 	s.Require().NoError(err)
 	s.Len(values, 4)
-	s.assertMetadata("chunk_label_values")
-	s.Zero(s.histogramCount("prompp_querier_query_label_values_duration", ""))
+	s.assertMetadata(opChunkLabelValues)
+	s.Zero(s.histogramCount(labelValuesDurationHistogram, ""))
 }
 
 func (s *QuerierStatsSuite) TestChunkSelect() {
 	result := s.cq.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Require().NoError(result.Err())
 	s.True(result.Next())
-	s.assertSelect("select_chunks", false)
+	s.assertSelect(opSelectChunks)
 }
 
 func (s *QuerierStatsSuite) TestChunkSelectLoadError() {
@@ -107,13 +169,13 @@ func (s *QuerierStatsSuite) TestChunkSelectLoadError() {
 	result := s.cq.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Require().NoError(result.Err())
 	s.False(result.Next())
-	s.assertSelect("select_chunks", true)
+	s.assertSelect(opSelectChunks, stageDataLoadWait)
 }
 
 func (s *QuerierStatsSuite) TestClosedAcquire() {
 	s.head.acquireErr = locker.ErrSemaphoreClosed
 	s.Require().NoError(s.cq.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Equal(map[string]float64{"semaphore_wait": 1}, s.counts("select_chunks", false))
+	s.Equal(map[string]float64{stageSemaphoreWait: 1}, s.counts(opSelectChunks, queryStageExecutions))
 }
 
 func (s *QuerierStatsSuite) TestConcurrentQueries() {
@@ -129,36 +191,38 @@ func (s *QuerierStatsSuite) TestConcurrentQueries() {
 
 	wg.Wait()
 
-	for _, count := range s.counts("select_range", false) {
+	for _, count := range s.counts(opSelectRange, queryStageExecutions) {
 		s.Equal(float64(160), count)
 	}
 
-	for _, count := range s.counts("select_range", true) {
+	for _, count := range s.counts(opSelectRange, shardStageExecutions) {
 		s.Equal(float64(160), count)
 	}
 
-	s.NotContains(s.counts("select_range", false), "data_load_wait")
+	s.NotContains(s.counts(opSelectRange, queryStageExecutions), stageDataLoadWait)
 }
 
 func (s *QuerierStatsSuite) TestCrossSeriesRange() {
 	s.Require().NoError(querier.SetSelectFuncOptimize("cross"))
 	s.T().Cleanup(querier.SetDefaultOptimizeType)
 	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
+	defer func() { s.Require().NoError(q.Close()) }()
+
 	q.IsPossibleToOptimize = func([]*cppbridge.LSSQueryResult, *storage.SelectHints, int64, int64) bool {
 		return true
 	}
-	s.hints.Func = "sum"
+	s.hints.Func = selectFuncSum
 	result := q.Select(context.Background(), false, s.hints, s.matchers...)
 
 	s.Require().NoError(result.Err())
-	s.assertSelect("select_range", false)
-	s.Equal(uint64(1), s.histogramCount("prompp_querier_query_select_duration", "range"))
+	s.assertSelect(opSelectRange)
+	s.Equal(uint64(1), s.histogramCount(selectDurationHistogram, queryTypeRange))
 	s.Equal(float64(1), testutil.ToFloat64(s.metrics.OptimizationType.WithLabelValues("cross_series")))
-	before := s.counts("select_range", false)
+	before := s.counts(opSelectRange, queryStageExecutions)
 	iterateSeriesSet(result)
 
 	s.Require().NoError(result.Err())
-	s.Equal(before, s.counts("select_range", false))
+	s.Equal(before, s.counts(opSelectRange, queryStageExecutions))
 }
 
 func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
@@ -170,25 +234,25 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 		call      func() error
 	}{
 		{
-			operation: "select_instant",
+			operation: opSelectInstant,
 			call: func() error {
 				return s.q.Select(ctx, false, &storage.SelectHints{}, s.matchers...).Err()
 			},
 		},
 		{
-			operation: "select_range",
+			operation: opSelectRange,
 			call: func() error {
 				return s.q.Select(ctx, false, s.hints, s.matchers...).Err()
 			},
 		},
 		{
-			operation: "select_chunks",
+			operation: opSelectChunks,
 			call: func() error {
 				return s.cq.Select(ctx, false, s.hints, s.matchers...).Err()
 			},
 		},
 		{
-			operation: "label_names",
+			operation: opLabelNames,
 			call: func() error {
 				_, _, err := s.q.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
 
@@ -196,7 +260,7 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 			},
 		},
 		{
-			operation: "label_values",
+			operation: opLabelValues,
 			call: func() error {
 				_, _, err := s.q.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
 
@@ -204,7 +268,7 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 			},
 		},
 		{
-			operation: "chunk_label_names",
+			operation: opChunkLabelNames,
 			call: func() error {
 				_, _, err := s.cq.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
 
@@ -212,7 +276,7 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 			},
 		},
 		{
-			operation: "chunk_label_values",
+			operation: opChunkLabelValues,
 			call: func() error {
 				_, _, err := s.cq.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
 
@@ -229,8 +293,8 @@ func (s *QuerierStatsSuite) TestFailedAcquireAllOperations() {
 
 			// Assert
 			s.Require().ErrorIs(err, context.Canceled)
-			s.Equal(map[string]float64{"semaphore_wait": 1}, s.counts(tc.operation, false))
-			s.Empty(s.counts(tc.operation, true))
+			s.Equal(map[string]float64{stageSemaphoreWait: 1}, s.counts(tc.operation, queryStageExecutions))
+			s.Empty(s.counts(tc.operation, shardStageExecutions))
 		})
 	}
 }
@@ -242,8 +306,8 @@ func (s *QuerierStatsSuite) TestHistogramAfterRelease() {
 func (s *QuerierStatsSuite) TestInstant() {
 	result := s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...)
 	s.Require().NoError(result.Err())
-	s.assertSelect("select_instant", false)
-	s.Equal(uint64(1), s.histogramCount("prompp_querier_query_select_duration", "instant"))
+	s.assertSelect(opSelectInstant)
+	s.Equal(uint64(1), s.histogramCount(selectDurationHistogram, queryTypeInstant))
 }
 
 func (s *QuerierStatsSuite) TestInstantLoadError() {
@@ -251,32 +315,32 @@ func (s *QuerierStatsSuite) TestInstantLoadError() {
 	s.enableLoad(err)
 	result := s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...)
 	s.Require().ErrorIs(result.Err(), err)
-	counts := s.counts("select_instant", false)
-	s.Equal(float64(1), counts["data_load_wait"])
-	s.NotContains(counts, "cleanup")
-	s.NotContains(counts, "build_result")
+	counts := s.counts(opSelectInstant, queryStageExecutions)
+	s.Equal(float64(1), counts[stageDataLoadWait])
+	s.NotContains(counts, stageCleanup)
+	s.NotContains(counts, stageBuildResult)
 }
 
 func (s *QuerierStatsSuite) TestIteratorDoesNotRecord() {
 	result := s.q.Select(context.Background(), false, s.hints, s.matchers...)
-	before := s.counts("select_range", false)
+	before := s.counts(opSelectRange, queryStageExecutions)
 	iterateSeriesSet(result)
-	s.Equal(before, s.counts("select_range", false))
+	s.Equal(before, s.counts(opSelectRange, queryStageExecutions))
 }
 
 func (s *QuerierStatsSuite) TestLabelNames() {
 	values, _, err := s.q.LabelNames(context.Background(), &storage.LabelHints{Limit: 1}, s.matchers...)
 	s.Require().NoError(err)
-	s.Equal([]string{"__name__"}, values)
-	s.assertMetadata("label_names")
-	s.Equal(uint64(1), s.histogramCount("prompp_querier_query_label_names_duration", ""))
+	s.Equal([]string{labels.MetricName}, values)
+	s.assertMetadata(opLabelNames)
+	s.Equal(uint64(1), s.histogramCount(labelNamesDurationHistogram, ""))
 }
 
 func (s *QuerierStatsSuite) TestLabelValues() {
 	values, _, err := s.q.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
 	s.Require().NoError(err)
 	s.Equal([]string{"0", "1", "2", "3"}, values)
-	s.assertMetadata("label_values")
+	s.assertMetadata(opLabelValues)
 }
 
 func (s *QuerierStatsSuite) TestMetadataAnnotations() {
@@ -284,18 +348,18 @@ func (s *QuerierStatsSuite) TestMetadataAnnotations() {
 	_, anns, err := s.q.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
 	s.Require().NoError(err)
 	s.Len(anns, 1)
-	s.assertMetadata("label_names")
+	s.assertMetadata(opLabelNames)
 }
 
 func (s *QuerierStatsSuite) TestMetadataCancelledAfterWait() {
 	for _, names := range []bool{true, false} {
 		ctx, cancel := context.WithCancel(context.Background())
 		s.shards[0].lss.cancel = cancel
-		operation := "label_values"
+		operation := opLabelValues
 		var err error
 
 		if names {
-			operation = "label_names"
+			operation = opLabelNames
 			_, _, err = s.q.LabelNames(ctx, &storage.LabelHints{}, s.matchers...)
 		} else {
 			_, _, err = s.q.LabelValues(ctx, "series", &storage.LabelHints{}, s.matchers...)
@@ -303,49 +367,55 @@ func (s *QuerierStatsSuite) TestMetadataCancelledAfterWait() {
 
 		s.Require().ErrorIs(err, context.Canceled)
 		s.Equal(map[string]float64{
-			"semaphore_wait": 1, "prepare": 1, "lss_query": 1,
-		}, s.counts(operation, false))
+			stageSemaphoreWait: 1, stagePrepare: 1, stageLSSQuery: 1,
+		}, s.counts(operation, queryStageExecutions))
 	}
 }
 
 func (s *QuerierStatsSuite) TestNilMetrics() {
 	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, nil)
+	defer func() { s.Require().NoError(q.Close()) }()
+
 	s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Empty(s.counts("select_range", false))
-	s.Empty(s.counts("select_range", true))
+	s.Empty(s.counts(opSelectRange, queryStageExecutions))
+	s.Empty(s.counts(opSelectRange, shardStageExecutions))
 }
 
 func (s *QuerierStatsSuite) TestNilRegisterer() {
 	metrics := querier.NewMetrics(nil, querier.QueryableAppenderSource)
 	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, metrics)
+	defer func() { s.Require().NoError(q.Close()) }()
+
 	s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Empty(s.counts("select_range", false))
+	s.Empty(s.counts(opSelectRange, queryStageExecutions))
 }
 
 func (s *QuerierStatsSuite) TestNoMatches() {
-	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "absent")
+	matcher := labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, "absent")
 	result := s.q.Select(context.Background(), false, s.hints, matcher)
 	s.Require().NoError(result.Err())
 	s.False(result.Next())
-	s.Equal(map[string]float64{"lss_query_selector": 1}, s.counts("select_range", true))
-	s.NotContains(s.counts("select_range", false), "data_load_wait")
+	s.Equal(map[string]float64{stageLSSQuerySelector: 1}, s.counts(opSelectRange, shardStageExecutions))
+	s.NotContains(s.counts(opSelectRange, queryStageExecutions), stageDataLoadWait)
 }
 
 func (s *QuerierStatsSuite) TestOptimizedRange() {
 	s.Require().NoError(querier.SetSelectFuncOptimize("all"))
 	s.T().Cleanup(querier.SetDefaultOptimizeType)
 	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
-	s.hints.Func = "max_over_time"
+	defer func() { s.Require().NoError(q.Close()) }()
+
+	s.hints.Func = selectFuncMaxOverTime
 	s.hints.Range = 10
 	s.hints.Step = 4
 	s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.assertSelect("select_range", false)
+	s.assertSelect(opSelectRange)
 	s.Equal(float64(1), testutil.ToFloat64(s.metrics.OptimizationType.WithLabelValues("aggregation")))
 }
 
 func (s *QuerierStatsSuite) TestRange() {
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.assertSelect("select_range", false)
+	s.assertSelect(opSelectRange)
 }
 
 func (s *QuerierStatsSuite) TestRangeLoadError() {
@@ -353,7 +423,7 @@ func (s *QuerierStatsSuite) TestRangeLoadError() {
 	result := s.q.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Require().NoError(result.Err())
 	s.False(result.Next())
-	s.assertSelect("select_range", true)
+	s.assertSelect(opSelectRange, stageDataLoadWait)
 }
 
 func (s *QuerierStatsSuite) TestRegistrationAndSources() {
@@ -361,11 +431,13 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 	reused := querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
 	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, reused)
 	_ = q.Select(context.Background(), false, s.hints, s.matchers...)
-	s.Equal(float64(2), s.counts("select_range", false)["build_result"])
+	s.Require().NoError(q.Close())
+	s.Equal(float64(2), s.counts(opSelectRange, queryStageExecutions)[stageBuildResult])
 	other := querier.NewMetrics(s.registry, querier.QueryableStorageSource)
 	q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, other)
 	_ = q.Select(context.Background(), false, s.hints, s.matchers...)
-	s.Equal(float64(2), s.counts("select_range", false)["build_result"])
+	s.Require().NoError(q.Close())
+	s.Equal(float64(2), s.counts(opSelectRange, queryStageExecutions)[stageBuildResult])
 	families, err := s.registry.Gather()
 	s.Require().NoError(err)
 	var series int
@@ -382,9 +454,9 @@ func (s *QuerierStatsSuite) TestRegistrationAndSources() {
 		for _, metric := range family.GetMetric() {
 			s.Len(metric.GetLabel(), 3)
 
-			if family.GetName() == "prompp_querier_query_stage_executions_total" &&
+			if family.GetName() == queryStageExecutions &&
 				metricLabel(metric, "source") == querier.QueryableStorageSource &&
-				metricLabel(metric, "operation") == "select_range" && metricLabel(metric, "stage") == "build_result" {
+				metricLabel(metric, "operation") == opSelectRange && metricLabel(metric, "stage") == stageBuildResult {
 				s.Equal(float64(1), metric.GetCounter().GetValue())
 			}
 		}
@@ -397,11 +469,14 @@ func (s *QuerierStatsSuite) TestRotationWithDifferentShardCount() {
 	for _, count := range []uint16{1, 3} {
 		h := newStageStatsHead(s.T(), 6, count)
 		q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
-		s.Require().NoError(q.Select(context.Background(), false, s.hints, s.matchers...).Err())
+		queryErr := q.Select(context.Background(), false, s.hints, s.matchers...).Err()
+		closeErr := q.Close()
+		s.Require().NoError(queryErr)
+		s.Require().NoError(closeErr)
 	}
 
-	s.Equal(float64(2), s.counts("select_range", false)["build_result"])
-	s.Equal(float64(2), s.counts("select_range", true)["data_storage_query"])
+	s.Equal(float64(2), s.counts(opSelectRange, queryStageExecutions)[stageBuildResult])
+	s.Equal(float64(2), s.counts(opSelectRange, shardStageExecutions)[stageDataStorageQuery])
 }
 
 func (s *QuerierStatsSuite) TestSelectorError() {
@@ -409,15 +484,15 @@ func (s *QuerierStatsSuite) TestSelectorError() {
 	result := s.q.Select(context.Background(), false, s.hints, s.matchers...)
 	s.Require().EqualError(result.Err(), "selector failed")
 	s.Equal(map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1,
-	}, s.counts("select_range", false))
-	s.Equal(map[string]float64{"lss_query_selector": 1}, s.counts("select_range", true))
+		stageSemaphoreWait: 1, stagePrepare: 1, stageLSSQuerySelector: 1,
+	}, s.counts(opSelectRange, queryStageExecutions))
+	s.Equal(map[string]float64{stageLSSQuerySelector: 1}, s.counts(opSelectRange, shardStageExecutions))
 
 	s.shards[0].lss.selectorErr = nil
 	s.Require().NoError(s.cq.Select(context.Background(), false, s.hints, s.matchers...).Err())
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.Equal(float64(2), s.counts("select_range", false)["lss_query_selector"])
-	s.Equal(float64(1), s.counts("select_range", true)["data_storage_query"])
+	s.Equal(float64(2), s.counts(opSelectRange, queryStageExecutions)[stageLSSQuerySelector])
+	s.Equal(float64(1), s.counts(opSelectRange, shardStageExecutions)[stageDataStorageQuery])
 }
 
 func (s *QuerierStatsSuite) TestSelectorTaskCleanupOnEnqueuePanic() {
@@ -426,19 +501,19 @@ func (s *QuerierStatsSuite) TestSelectorTaskCleanupOnEnqueuePanic() {
 		call      func()
 	}{
 		{
-			operation: "select_instant",
+			operation: opSelectInstant,
 			call: func() {
 				s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...)
 			},
 		},
 		{
-			operation: "select_range",
+			operation: opSelectRange,
 			call: func() {
 				s.q.Select(context.Background(), false, s.hints, s.matchers...)
 			},
 		},
 		{
-			operation: "select_chunks",
+			operation: opSelectChunks,
 			call: func() {
 				s.cq.Select(context.Background(), false, s.hints, s.matchers...)
 			},
@@ -509,11 +584,11 @@ func (s *QuerierStatsSuite) TestSharedLoadWaiters() {
 
 func (s *QuerierStatsSuite) TestSlotsDoNotRetainPreviousQuery() {
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "absent")
+	matcher := labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, "absent")
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, matcher).Err())
 	s.Equal(map[string]float64{
-		"lss_query_selector": 2, "data_storage_query": 1,
-	}, s.counts("select_range", true))
+		stageLSSQuerySelector: 2, stageDataStorageQuery: 1,
+	}, s.counts(opSelectRange, shardStageExecutions))
 }
 
 func (s *QuerierStatsSuite) TestStageMetricsDisabled() {
@@ -521,7 +596,13 @@ func (s *QuerierStatsSuite) TestStageMetricsDisabled() {
 	s.registry = prometheus.NewRegistry()
 	s.metrics = querier.NewMetrics(s.registry, querier.QueryableAppenderSource)
 	s.q = querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, 1, 0, s.metrics)
-	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, nil, s.metrics)
+	s.cq = querier.NewChunkQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 10, s.metrics)
+	defer func() {
+		qErr, cqErr := s.q.Close(), s.cq.Close()
+		s.Require().NoError(qErr)
+		s.Require().NoError(cqErr)
+	}()
+
 	start := time.Now()
 
 	s.assertHistogramAfterRelease()
@@ -556,13 +637,13 @@ func (s *QuerierStatsSuite) TestStageMetricsDisabled() {
 
 	s.head.acquireErr = context.Canceled
 	s.Require().ErrorIs(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err(), context.Canceled)
-	s.Equal(uint64(1), s.histogramCount("prompp_querier_query_select_duration", "range"))
+	s.Equal(uint64(1), s.histogramCount(selectDurationHistogram, queryTypeRange))
 }
 
 func (s *QuerierStatsSuite) TestSuccessfulLoad() {
 	s.enableLoad(nil)
 	s.Require().NoError(s.q.Select(context.Background(), false, s.hints, s.matchers...).Err())
-	s.assertSelect("select_range", true)
+	s.assertSelect(opSelectRange, stageDataLoadWait)
 }
 
 func (s *QuerierStatsSuite) TestUnexecutedStagesAreZero() {
@@ -593,10 +674,10 @@ func (s *QuerierStatsSuite) assertHistogramAfterRelease() {
 		histogram string
 		queryType string
 	}{
-		{"select_instant", "prompp_querier_query_select_duration", "instant"},
-		{"select_range", "prompp_querier_query_select_duration", "range"},
-		{"label_names", "prompp_querier_query_label_names_duration", ""},
-		{"label_values", "prompp_querier_query_label_values_duration", ""},
+		{opSelectInstant, selectDurationHistogram, queryTypeInstant},
+		{opSelectRange, selectDurationHistogram, queryTypeRange},
+		{opLabelNames, labelNamesDurationHistogram, ""},
+		{opLabelValues, labelValuesDurationHistogram, ""},
 	} {
 		s.Run(tc.operation, func() {
 			s.head.onRelease = func() {
@@ -606,19 +687,19 @@ func (s *QuerierStatsSuite) assertHistogramAfterRelease() {
 			var err error
 
 			switch tc.operation {
-			case "select_instant":
+			case opSelectInstant:
 				err = s.q.Select(context.Background(), false, &storage.SelectHints{}, s.matchers...).Err()
-			case "select_range":
+			case opSelectRange:
 				err = s.q.Select(context.Background(), false, s.hints, s.matchers...).Err()
-			case "label_names":
+			case opLabelNames:
 				_, _, err = s.q.LabelNames(context.Background(), &storage.LabelHints{}, s.matchers...)
-			case "label_values":
+			case opLabelValues:
 				_, _, err = s.q.LabelValues(context.Background(), "series", &storage.LabelHints{}, s.matchers...)
 			}
 
 			s.Require().NoError(err)
 			s.Equal(uint64(1), s.histogramCount(tc.histogram, tc.queryType))
-			s.NotContains(s.counts(tc.operation, false), "cleanup")
+			s.NotContains(s.counts(tc.operation, queryStageExecutions), stageCleanup)
 		})
 	}
 }
@@ -626,34 +707,32 @@ func (s *QuerierStatsSuite) assertHistogramAfterRelease() {
 func (s *QuerierStatsSuite) assertMetadata(operation string) {
 	s.T().Helper()
 	s.Equal(map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query": 1, "build_result": 1,
-	}, s.counts(operation, false))
-	s.Equal(map[string]float64{"lss_query": 1}, s.counts(operation, true))
+		stageSemaphoreWait: 1, stagePrepare: 1, stageLSSQuery: 1, stageBuildResult: 1,
+	}, s.counts(operation, queryStageExecutions))
+	s.Equal(map[string]float64{stageLSSQuery: 1}, s.counts(operation, shardStageExecutions))
 }
 
-func (s *QuerierStatsSuite) assertSelect(operation string, load bool) {
+// assertSelect checks the execution counts for the usual Select stages and any additional query stages.
+func (s *QuerierStatsSuite) assertSelect(operation string, additionalStages ...string) {
 	s.T().Helper()
 	expected := map[string]float64{
-		"semaphore_wait": 1, "prepare": 1, "lss_query_selector": 1, "lss_query": 1,
-		"data_storage_query": 1, "build_result": 1,
+		stageSemaphoreWait: 1, stagePrepare: 1, stageLSSQuerySelector: 1, stageLSSQuery: 1,
+		stageDataStorageQuery: 1, stageBuildResult: 1,
 	}
 
-	if load {
-		expected["data_load_wait"] = 1
+	for _, stage := range additionalStages {
+		expected[stage] = 1
 	}
 
-	s.Equal(expected, s.counts(operation, false))
-	s.Equal(map[string]float64{"lss_query_selector": 1, "data_storage_query": 1}, s.counts(operation, true))
+	s.Equal(expected, s.counts(operation, queryStageExecutions))
+	s.Equal(map[string]float64{
+		stageLSSQuerySelector: 1, stageDataStorageQuery: 1,
+	}, s.counts(operation, shardStageExecutions))
 }
 
-func (s *QuerierStatsSuite) counts(operation string, shards bool) map[string]float64 {
+// counts returns the executed stages for one operation and metric family.
+func (s *QuerierStatsSuite) counts(operation, name string) map[string]float64 {
 	s.T().Helper()
-	name := "prompp_querier_query_stage_executions_total"
-
-	if shards {
-		name = "prompp_querier_query_shard_stage_executions_total"
-	}
-
 	families, err := s.registry.Gather()
 	s.Require().NoError(err)
 	counts := make(map[string]float64)

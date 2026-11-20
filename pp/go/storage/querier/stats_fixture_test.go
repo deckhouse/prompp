@@ -118,6 +118,7 @@ func (d *statsDataStorage) InstantQuery(maxt int64, ids []uint32, samples uintpt
 	return result
 }
 
+// Query transfers the real query result to the caller, even when simulating a load.
 func (d *statsDataStorage) Query(
 	query cppbridge.DataStorageQuery, downsampling int64, hints *storage.SelectHints,
 ) cppbridge.DataStorageQueryResult {

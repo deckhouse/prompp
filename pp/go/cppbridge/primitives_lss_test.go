@@ -238,6 +238,8 @@ func (s *QueryableLSSSuite) TestQuery() {
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 		snapshot := s.lss.CreateLabelSetSnapshot()
 		queryResult := snapshot.Query(selector, true)
+		defer queryResult.Close()
+
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
 		s.Require().Len(queryResult.IDs(), 3)
 		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
@@ -984,6 +986,8 @@ func (s *RotateLSSSuite) convertQueryResultToLabelSets(
 	selector uintptr,
 ) []cppbridge.Labels {
 	res := snapshot.Query(selector, true)
+	defer res.Close()
+
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, res.Status())
 
 	actualLabelSets := make([]cppbridge.Labels, 0, len(res.IDs()))

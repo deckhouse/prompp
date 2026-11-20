@@ -268,7 +268,9 @@ func (s *Shard) UnloadUnusedSeriesData() error {
 	return nil
 }
 
-// LoadAndQuerySeriesData loads the data and queries the series from the [DataStorage].
+// LoadAndQuerySeriesData completes the shard's deferred queries only after all
+// snapshots load successfully. On failure it discards the queries without
+// writing to their outputs before the task can report the error.
 func (s *Shard) LoadAndQuerySeriesData() (err error) {
 	var queriers []uintptr
 	s.loadAndQueryTask.Release(func(q []uintptr) {
@@ -279,6 +281,8 @@ func (s *Shard) LoadAndQuerySeriesData() (err error) {
 		})
 	})
 	if err != nil {
+		cppbridge.DiscardDataStorageQueries(queriers)
+
 		return err
 	}
 

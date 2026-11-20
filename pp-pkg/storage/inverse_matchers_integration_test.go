@@ -96,7 +96,7 @@ func (s *inverseMixedSuite) SetupSuite() {
 	blockQ, err := tsdb.NewBlockQuerier(b, 0, 300)
 	s.Require().NoError(err)
 	headQ := querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, 0, 300, 30, 0, nil)
-	s.mixedQuerier = querier.NewMultiQuerier([]storage.Querier{blockQ, headQ}, nil)
+	s.mixedQuerier = querier.NewMultiQuerier([]storage.Querier{blockQ, headQ})
 	s.T().Cleanup(func() { s.Require().NoError(s.mixedQuerier.Close()) })
 }
 

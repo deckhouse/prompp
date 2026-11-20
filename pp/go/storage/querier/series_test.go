@@ -87,6 +87,8 @@ func (s *SeriesSetTestSuite) query(
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.SeriesSet{}
 	}
@@ -96,6 +98,7 @@ func (s *SeriesSetTestSuite) query(
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	}, downsamplingMs, hints)
+	s.T().Cleanup(dsQueryResult.SerializedData.Close)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
@@ -115,6 +118,8 @@ func (s *SeriesSetTestSuite) queryAggr(
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.AggrSeriesSet{}
 	}
@@ -124,6 +129,7 @@ func (s *SeriesSetTestSuite) queryAggr(
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	}, downsamplingMs, hints)
+	s.T().Cleanup(dsQueryResult.SerializedData.Close)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewAggrSeriesSet(snapshot, dsQueryResult.SerializedData, lssQueryResult, start, end)

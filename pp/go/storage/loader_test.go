@@ -217,6 +217,8 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 		EndTimestampMs:   2,
 		LabelSetIDs:      []uint32{0},
 	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
+	defer queryResult.SerializedData.Close()
+
 	err := loadedHead.Close()
 
 	// Assert
@@ -269,6 +271,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 		EndTimestampMs:   4,
 		LabelSetIDs:      []uint32{0},
 	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
+	defer queryResult.SerializedData.Close()
 
 	err := loadedHead.Close()
 
@@ -715,6 +718,8 @@ func (s *HeadLoadSuite) TestLoadWalV2AfterCommitsOfExhaustedShardOnly() {
 		EndTimestampMs:   math.MaxInt64,
 		LabelSetIDs:      []uint32{0},
 	}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
+	defer queryResult.SerializedData.Close()
+
 	record, err := s.catalog.Get(loadedHead.ID())
 	s.Require().NoError(err)
 	segmentsByShard := make([]uint16, 0, numberOfExhaustedSegments+storagetest.NumberOfShards)

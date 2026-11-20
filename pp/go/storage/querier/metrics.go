@@ -16,6 +16,14 @@ const (
 	QueryableStorageSource = "queryable_storage"
 )
 
+// defaultBuckets defult buckets for metrics.
+var defaultBuckets = []float64{
+	50, 100, 250, 500, 750,
+	1000, 2500, 5000, 7500,
+	10000, 25000, 50000, 75000,
+	100000, 500000,
+}
+
 // QueryStageMetricsEnabled enables caller and shard stage metrics for newly created [Metrics].
 // Disabled by default; enable via PROMPP_FEATURES=enable_query_stage_metrics.
 var QueryStageMetricsEnabled = false
@@ -35,16 +43,12 @@ type Metrics struct {
 //revive:disable-next-line:function-length // metrics constructor.
 func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	factory := util.NewUnconflictRegisterer(registerer)
+	//revive:disable:add-constant this is already constants
 	selectDuration := factory.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "prompp_querier_query_select_duration",
-			Help: "Select query from head duration in microseconds",
-			Buckets: []float64{
-				50, 100, 250, 500, 750,
-				1000, 2500, 5000, 7500,
-				10000, 25000, 50000, 75000,
-				100000, 500000,
-			},
+			Name:        "prompp_querier_query_select_duration",
+			Help:        "Select query from head duration in microseconds",
+			Buckets:     defaultBuckets,
 			ConstLabels: prometheus.Labels{"source": source},
 		},
 		[]string{"query_type"},
@@ -53,27 +57,17 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	m := &Metrics{
 		LabelNamesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
-				Name: "prompp_querier_query_label_names_duration",
-				Help: "Label names query from head duration in microseconds",
-				Buckets: []float64{
-					50, 100, 250, 500, 750,
-					1000, 2500, 5000, 7500,
-					10000, 25000, 50000, 75000,
-					100000, 500000,
-				},
+				Name:        "prompp_querier_query_label_names_duration",
+				Help:        "Label names query from head duration in microseconds",
+				Buckets:     defaultBuckets,
 				ConstLabels: prometheus.Labels{"source": source},
 			},
 		),
 		LabelValuesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
-				Name: "prompp_querier_query_label_values_duration",
-				Help: "Label values query from head duration in microseconds",
-				Buckets: []float64{
-					50, 100, 250, 500, 750,
-					1000, 2500, 5000, 7500,
-					10000, 25000, 50000, 75000,
-					100000, 500000,
-				},
+				Name:        "prompp_querier_query_label_values_duration",
+				Help:        "Label values query from head duration in microseconds",
+				Buckets:     defaultBuckets,
 				ConstLabels: prometheus.Labels{"source": source},
 			},
 		),

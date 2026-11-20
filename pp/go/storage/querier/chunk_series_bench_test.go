@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunks"
 )
 
+//revive:disable-next-line:cognitive-complexity // this is benchmark.
 func BenchmarkChunkSeriesChunksIterator(b *testing.B) {
 	for _, count := range []int{1, 2, 16, 128} {
 		b.Run(strconv.Itoa(count), func(b *testing.B) {
@@ -64,6 +65,7 @@ func BenchmarkChunkSeriesChunksIterator(b *testing.B) {
 	}
 }
 
+//revive:disable-next-line:cognitive-complexity // this is benchmark.
 func BenchmarkChunkSeriesLifecycle(b *testing.B) {
 	for _, count := range []int{1, 2, 16, 128} {
 		b.Run(strconv.Itoa(count), func(b *testing.B) {
@@ -83,13 +85,17 @@ func BenchmarkChunkSeriesLifecycle(b *testing.B) {
 				EndTimestampMs:   interval.MaxT,
 				LabelSetIDs:      []uint32{0},
 			}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
+			defer query.SerializedData.Close()
+
 			require.Equal(b, cppbridge.DataStorageQueryStatusSuccess, query.Status)
-			newSet := func() *ChunkSeriesSet {
+			newSet := func() (*ChunkSeriesSet, *cppbridge.ChunkRecoder) {
 				recoder := cppbridge.NewSerializedChunkRecoder(query.SerializedData, interval)
 
-				return NewChunkSeriesSet(snapshot, recoder)
+				return NewChunkSeriesSet(snapshot, recoder), recoder
 			}
-			set := newSet()
+			set, recoder := newSet()
+			defer recoder.Close()
+
 			require.True(b, set.Next())
 			series := set.At()
 			iterator := series.Iterator(nil)
@@ -107,7 +113,7 @@ func BenchmarkChunkSeriesLifecycle(b *testing.B) {
 				b.ReportAllocs()
 
 				for b.Loop() {
-					result := newSet()
+					result, recoder := newSet()
 
 					for result.Next() {
 						reused = result.At().Iterator(reused)
@@ -118,9 +124,11 @@ func BenchmarkChunkSeriesLifecycle(b *testing.B) {
 						}
 					}
 
-					if err := result.Err(); err != nil {
-						b.Fatal(err)
-					}
+					err := result.Err()
+					b.StopTimer()
+					recoder.Close()
+					require.NoError(b, err)
+					b.StartTimer()
 				}
 			})
 

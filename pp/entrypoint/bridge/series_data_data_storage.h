@@ -127,7 +127,7 @@ void prompp_get_promql_optimized_functions(void* res);
  *
  * @param res {
  *     querier uintptr        // pointer to constructed Querier if data loading is needed.
- *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
+ *                            // Finalize after a successful load, or discard after a failed load.
  *     status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
  *     serializedData uintptr // pointer to serialized data
  * }
@@ -194,6 +194,15 @@ void prompp_series_data_data_storage_query_stalenan_series(void* args);
  *        }
  */
 void prompp_series_data_data_storage_query_final(void* args);
+
+/**
+ * @brief Destroys deferred queries without finalizing or writing to their output.
+ *
+ * @param args {
+ *     queriers []uintptr // pointers to deferred queries, zeroed on return
+ * }
+ */
+void prompp_series_data_data_storage_query_discard(void* args);
 
 /**
  * @brief series data DataStorage destructor.

@@ -44,7 +44,7 @@ type queryResources[TTask Task, TShard poolprovider.Shard] struct {
 }
 
 // newQueryResources binds acquired head query access, timing, and pools without acquiring buffers.
-// The caller defers [queryResources.close] before acquiring tasks or buffers.
+// The caller defers [queryResources.releaseTemporary] before acquiring tasks or buffers.
 func newQueryResources[TTask Task, TShard poolprovider.Shard](
 	pool *poolprovider.HeadPool[TShard],
 	tasksPool taskPool[TTask],
@@ -60,14 +60,15 @@ func (r *queryResources[TTask, TShard]) addTask(t TTask) {
 	r.taskCount++
 }
 
-// close returns acquired buffers and tasks, releases head query access, and then observes the legacy histogram.
-// Query result buffers are closed before their pooled slice is cleared; returned series sets no longer need them.
-func (r *queryResources[TTask, TShard]) close() {
+// releaseTemporary returns buffers and tasks, releases head query access, and observes the legacy histogram.
+// Only resources not transferred to the querier are destroyed here.
+func (r *queryResources[TTask, TShard]) releaseTemporary() {
 	for i := r.taskCount - 1; i >= 0; i-- {
 		r.tasksPool.PutTask(r.tasks[i])
 	}
 
 	if r.chunkSeriesSets != nil {
+		closeChunkSeriesSets(r.chunkSeriesSets)
 		r.pool.PutChunkSeriesSet(r.chunkSeriesSets)
 	}
 
@@ -76,6 +77,7 @@ func (r *queryResources[TTask, TShard]) close() {
 	}
 
 	if r.serializedData != nil {
+		closeSerializedData(r.serializedData)
 		r.pool.PutSerializedData(r.serializedData)
 	}
 
@@ -105,7 +107,7 @@ func (r *queryResources[TTask, TShard]) close() {
 }
 
 // beginSelectQuery starts timing and acquires head query access, including timing failed acquisition attempts.
-// After successful acquisition, the caller defers [queryResources.close] before acquiring buffers or tasks.
+// After successful acquisition, the caller defers [queryResources.releaseTemporary] before acquiring buffers or tasks.
 func beginSelectQuery[
 	TTask Task,
 	TDataStorage DataStorage,
