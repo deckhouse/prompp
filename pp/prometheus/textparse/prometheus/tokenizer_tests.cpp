@@ -372,14 +372,14 @@ INSTANTIATE_TEST_SUITE_P(
 
 INSTANTIATE_TEST_SUITE_P(EmbeddedNull,
                          PrometheusTokenizerTruncatedInputFixture,
-                         testing::Values(TokenizerCase{.str = "metric 1\x00"
+                         testing::Values(TokenizerCase{.str = "metric 1\x00"sv
                                                               "2",
                                                        .tokens = {Token{.text = "metric", .token = TokenType::kMetricName},
                                                                   Token{.text = " ", .token = TokenType::kWhitespace},
-                                                                  Token{.text = "1\x00"
+                                                                  Token{.text = "1\x00"sv
                                                                                 "2",
                                                                         .token = TokenType::kValue},
                                                                   Token{.text = "", .token = TokenType::kEOF}}},
-                                         TokenizerCase{.str = "\x00metric 1", .tokens = {Token{.text = "\x00", .token = TokenType::kEOF}}}));
+                                         TokenizerCase{.str = "\x00metric 1"sv, .tokens = {Token{.text = "\x00"sv, .token = TokenType::kEOF}}}));
 
 }  // namespace
