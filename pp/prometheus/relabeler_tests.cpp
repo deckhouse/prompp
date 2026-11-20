@@ -55,10 +55,10 @@ class ItemTest {
   ItemTest(LabelViewSet&& label_set, std::vector<Sample>&& samples)
       : label_set_(std::move(label_set)), samples_(std::move(samples)), hash_(hash_value(label_set_)) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+  [[nodiscard]] PROMPP(inline) size_t hash() const { return hash_; }
 
   template <class Timeseries>
-  PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
+  PROMPP(inline) void read(Timeseries& timeseries) const {
     timeseries.label_set().add(label_set_);
     for (const auto& sample : samples_) {
       timeseries.samples().emplace_back(sample.timestamp(), sample.value());
@@ -79,8 +79,8 @@ class HashdexTest : public std::vector<ItemTest> {
 
   void emplace_back(LabelViewSet&& label_set, std::vector<Sample>&& samples) { Base::emplace_back(std::move(label_set), std::move(samples)); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return *this; }
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
+  [[nodiscard]] PROMPP(inline) const auto& floats() const noexcept { return *this; }
+  [[nodiscard]] static PROMPP(inline) auto metadata() noexcept {
     struct Stub {};
     return Stub{};
   }

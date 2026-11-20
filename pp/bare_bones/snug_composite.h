@@ -1,10 +1,13 @@
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
+#include "bare_bones/compiler.h"
+
+// Suppress array-bounds diagnostics from the parallel_hashmap headers.
+PROMPP(diagnostic, push)
+PROMPP(diagnostic, ignore, array_bounds)
 #include <parallel_hashmap/btree.h>
 #include <parallel_hashmap/phmap.h>
-#pragma GCC diagnostic pop
+PROMPP(diagnostic, pop)
 
 #include <experimental/scope>
 
@@ -73,7 +76,7 @@ struct SymbolTableView {
   const char* data = nullptr;
   const Item* items = nullptr;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view operator[](uint32_t id) const noexcept {
+  [[nodiscard]] PROMPP(inline) std::string_view operator[](uint32_t id) const noexcept {
     const auto& it = items[id];
     return std::string_view(data + it.pos, it.length);
   }
@@ -106,46 +109,48 @@ class GenericDecodingTable {
 
    public:
     // NOLINTNEXTLINE(google-explicit-constructor)
-    PROMPP_ALWAYS_INLINE Proxy(uint32_t id) noexcept : id_(id) {}
+    PROMPP(inline) Proxy(uint32_t id) noexcept : id_(id) {}
 
     // NOLINTNEXTLINE(google-explicit-constructor)
-    PROMPP_ALWAYS_INLINE operator uint32_t() const noexcept { return id_; }
+    PROMPP(inline) operator uint32_t() const noexcept {
+      return id_;
+    }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const Proxy& o) noexcept { return id_ == o.id_; }
+    PROMPP(inline) bool operator==(const Proxy& o) noexcept { return id_ == o.id_; }
   };
 
   struct Hasher {
     using is_transparent = void;
 
     const GenericDecodingTable* decoding_table;
-    PROMPP_ALWAYS_INLINE explicit Hasher(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
+    explicit PROMPP(inline) Hasher(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
 
-    PROMPP_ALWAYS_INLINE size_t operator()(const std::string_view& str) const noexcept { return XXHash3::hash(str); }
-    PROMPP_ALWAYS_INLINE size_t operator()(const std::string& str) const noexcept { return XXHash3::hash(str); }
+    PROMPP(inline) size_t operator()(const std::string_view& str) const noexcept { return XXHash3::hash(str); }
+    PROMPP(inline) size_t operator()(const std::string& str) const noexcept { return XXHash3::hash(str); }
 
     template <class Class>
-    PROMPP_ALWAYS_INLINE size_t operator()(const Class& c) const noexcept {
+    PROMPP(inline) size_t operator()(const Class& c) const noexcept {
       return phmap::Hash<Class>()(c);
     }
 
-    PROMPP_ALWAYS_INLINE size_t operator()(const Proxy& p) const noexcept { return this->operator()(decoding_table->operator[](p)); }
+    PROMPP(inline) size_t operator()(const Proxy& p) const noexcept { return this->operator()(decoding_table->operator[](p)); }
   };
 
   struct EqualityComparator {
     using is_transparent = void;
 
     const GenericDecodingTable* decoding_table;
-    PROMPP_ALWAYS_INLINE explicit EqualityComparator(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
+    explicit PROMPP(inline) EqualityComparator(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
 
-    PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Proxy& b) const noexcept { return a == b; }
+    PROMPP(inline) bool operator()(const Proxy& a, const Proxy& b) const noexcept { return a == b; }
 
     template <class Class>
-    PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
+    PROMPP(inline) bool operator()(const Proxy& a, const Class& b) const noexcept {
       return decoding_table->operator[](a) == b;
     }
 
     template <class Class>
-    PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
+    PROMPP(inline) bool operator()(const Class& a, const Proxy& b) const noexcept {
       return decoding_table->operator[](b) == a;
     }
   };
@@ -153,20 +158,20 @@ class GenericDecodingTable {
   struct LessComparator {
     using is_transparent = void;
 
-    PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table) noexcept : decoding_table_(decoding_table) {}
+    explicit PROMPP(inline) LessComparator(const GenericDecodingTable* decoding_table) noexcept : decoding_table_(decoding_table) {}
 
-    PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Proxy& b) const noexcept {
+    PROMPP(inline) bool operator()(const Proxy& a, const Proxy& b) const noexcept {
       return decoding_table_->operator[](a) < decoding_table_->operator[](b);
     }
 
     template <class Class>
-    PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
+    PROMPP(inline) bool operator()(const Proxy& a, const Class& b) const noexcept {
       return decoding_table_->operator[](a) < b;
     }
 
     template <class Class>
       requires(!std::is_same_v<Class, Proxy>)
-    PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
+    PROMPP(inline) bool operator()(const Class& a, const Proxy& b) const noexcept {
       return a < decoding_table_->operator[](b);
     }
 
@@ -181,11 +186,11 @@ class GenericDecodingTable {
     uint8_t table_version_;
 
    public:
-    explicit PROMPP_ALWAYS_INLINE Checkpoint(const storage_type& storage, uint32_t next_item_index, uint32_t size, uint8_t table_version) noexcept
+    explicit PROMPP(inline) Checkpoint(const storage_type& storage, uint32_t next_item_index, uint32_t size, uint8_t table_version) noexcept
         : next_item_index_(next_item_index), size_(size), storage_checkpoint_(storage.checkpoint()), table_version_(table_version) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return size_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
+    [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return size_; }
+    [[nodiscard]] PROMPP(inline) uint32_t next_item_index() const noexcept { return next_item_index_; }
 
     const typename storage_type::checkpoint_type& storage_checkpoint() const noexcept { return storage_checkpoint_; }
 
@@ -264,7 +269,7 @@ class GenericDecodingTable {
       Checkpoint const* to_;
 
      public:
-      PROMPP_ALWAYS_INLINE Delta(Checkpoint const& from, Checkpoint const& to) noexcept : from_(&from), to_(&to) {}
+      PROMPP(inline) Delta(Checkpoint const& from, Checkpoint const& to) noexcept : from_(&from), to_(&to) {}
 
       [[nodiscard]] bool empty() const noexcept { return from_->size() >= to_->size(); }
 
@@ -279,9 +284,9 @@ class GenericDecodingTable {
     Delta operator-(const Checkpoint& from) const noexcept { return Delta(from, *this); }
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Hasher hasher() const noexcept { return Hasher(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE EqualityComparator equality_comparator() const noexcept { return EqualityComparator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator() const noexcept { return LessComparator(this); }
+  [[nodiscard]] PROMPP(inline) Hasher hasher() const noexcept { return Hasher(this); }
+  [[nodiscard]] PROMPP(inline) EqualityComparator equality_comparator() const noexcept { return EqualityComparator(this); }
+  [[nodiscard]] PROMPP(inline) LessComparator less_comparator() const noexcept { return LessComparator(this); }
 
   storage_type storage_;
   uint8_t version_{1};
@@ -316,9 +321,9 @@ class GenericDecodingTable {
   GenericDecodingTable(GenericDecodingTable&& other) noexcept = delete;
   GenericDecodingTable& operator=(GenericDecodingTable&& other) noexcept = delete;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type storage_composite(uint32_t id) const noexcept { return storage_.composite(id); }
+  [[nodiscard]] PROMPP(inline) value_type storage_composite(uint32_t id) const noexcept { return storage_.composite(id); }
 
-  PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept {
+  PROMPP(inline) value_type operator[](uint32_t id) const noexcept {
     if constexpr (has_resolve<Derived, value_type>) {
       return static_cast<const Derived*>(this)->resolve_impl(id);
     } else {
@@ -326,8 +331,8 @@ class GenericDecodingTable {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return storage_.count(); }
+  [[nodiscard]] PROMPP(inline) uint32_t items_count() const noexcept {
     if constexpr (has_items_count<Derived>) {
       return static_cast<const Derived*>(this)->items_count_impl();
     } else {
@@ -335,9 +340,9 @@ class GenericDecodingTable {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
 
-  PROMPP_ALWAYS_INLINE storage_type::view_type data_view() const noexcept { return storage_.view(); }
+  PROMPP(inline) storage_type::view_type data_view() const noexcept { return storage_.view(); }
 
   [[nodiscard]] decltype(auto) symbol_table_read_view() const noexcept
     requires has_symbol_read_view<storage_type>
@@ -346,13 +351,13 @@ class GenericDecodingTable {
   }
 
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
-  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
+  PROMPP(inline) void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
     storage_.reserve(other.storage_);
   }
 
-  PROMPP_ALWAYS_INLINE void reserve(uint32_t count) { storage_.reserve(count); }
+  PROMPP(inline) void reserve(uint32_t count) { storage_.reserve(count); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept {
+  [[nodiscard]] PROMPP(inline) uint32_t next_item_index() const noexcept {
     if constexpr (has_next_item_index<Derived>) {
       return static_cast<const Derived*>(this)->next_item_index_impl();
     } else {
@@ -360,9 +365,9 @@ class GenericDecodingTable {
     }
   }
 
-  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(storage_, next_item_index(), size(), version_); }
+  PROMPP(inline) auto checkpoint() const noexcept { return checkpoint_type(storage_, next_item_index(), size(), version_); }
 
-  PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept
+  PROMPP(inline) void rollback(const checkpoint_type& checkpoint) noexcept
     requires(!kIsReadOnly)
   {
     if constexpr (has_rollback<Derived, checkpoint_type>) {
@@ -375,19 +380,19 @@ class GenericDecodingTable {
     }
   }
 
-  PROMPP_ALWAYS_INLINE size_t save_size(const checkpoint_type& checkpoint, const checkpoint_type* from = nullptr) const noexcept {
+  PROMPP(inline) size_t save_size(const checkpoint_type& checkpoint, const checkpoint_type* from = nullptr) const noexcept {
     return checkpoint.save_size(storage_, from);
   }
 
-  PROMPP_ALWAYS_INLINE size_t save_size(const delta_type& delta) const noexcept { return delta.save_size(storage_); }
+  PROMPP(inline) size_t save_size(const delta_type& delta) const noexcept { return delta.save_size(storage_); }
 
   template <OutputStream S>
-  PROMPP_ALWAYS_INLINE void save(S& out, const checkpoint_type& checkpoint, const checkpoint_type* from = nullptr) const noexcept {
+  PROMPP(inline) void save(S& out, const checkpoint_type& checkpoint, const checkpoint_type* from = nullptr) const noexcept {
     checkpoint.save(out, storage_, from);
   }
 
   template <OutputStream S>
-  PROMPP_ALWAYS_INLINE void save(S& out, const delta_type& delta) const noexcept {
+  PROMPP(inline) void save(S& out, const delta_type& delta) const noexcept {
     delta.save(out, storage_);
   }
 
@@ -460,12 +465,12 @@ class GenericDecodingTable {
     return in;
   }
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return storage_.view().begin(); }
-  PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.view().end(); }
+  PROMPP(inline) auto begin() const noexcept { return storage_.view().begin(); }
+  PROMPP(inline) auto end() const noexcept { return storage_.view().end(); }
 
-  PROMPP_ALWAYS_INLINE auto remainder_size() const noexcept { return storage_.remainder_size(); }
+  PROMPP(inline) auto remainder_size() const noexcept { return storage_.remainder_size(); }
 
-  PROMPP_ALWAYS_INLINE auto version() const noexcept { return version_; }
+  PROMPP(inline) auto version() const noexcept { return version_; }
 };
 
 template <template <template <class> class> class Filament, template <class> class Vector>
@@ -495,7 +500,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c) noexcept {
+  PROMPP(inline) uint32_t find_or_emplace(const Class& c) noexcept {
     return *set_.lazy_emplace(c, [&](const auto& ctor) {
       const auto id = Base::storage_.emplace_back(c);
       ctor(id);
@@ -503,7 +508,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   }
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
+  PROMPP(inline) uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
     return *set_.lazy_emplace_with_hash(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), [&](const auto& ctor) {
       const auto id = Base::storage_.emplace_back(c);
       ctor(id);
@@ -511,7 +516,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   }
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c) const noexcept {
+  PROMPP(inline) std::optional<uint32_t> find(const Class& c) const noexcept {
     if (auto i = set_.find(c); i != set_.end()) {
       return *i + shift_;
     }
@@ -519,7 +524,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   }
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
+  PROMPP(inline) std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
     if (auto i = set_.find(c, phmap::phmap_mix<sizeof(size_t)>()(hashval)); i != set_.end()) {
       return *i + shift_;
     }
@@ -545,9 +550,9 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return Base::allocated_memory() + set_allocated_memory_; }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return Base::allocated_memory() + set_allocated_memory_; }
 
-  PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept {
+  PROMPP(inline) value_type operator[](uint32_t id) const noexcept {
     assert(id >= shift_);
     return Base::operator[](id - shift_);
   }
@@ -567,10 +572,10 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
       set_{{}, 0, Base::hasher(), Base::equality_comparator(), Allocator<typename Base::Proxy, DefaultReallocator, uint32_t>{set_allocated_memory_}};
   uint32_t shift_{0};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.count(); }
+  [[nodiscard]] PROMPP(inline) uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.count(); }
 
   template <ls_id_range R>
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+  PROMPP(inline) void after_items_load_impl(R&& loaded_ids) noexcept {
     if constexpr (std::ranges::sized_range<R>) {
       set_.reserve(std::ranges::size(loaded_ids));
     }
@@ -609,7 +614,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   phmap::flat_hash_set<typename Base::Proxy, Hasher, EqualityComparator> set_{{}, 0, Hasher{}, EqualityComparator{}};
 
   template <ls_id_range R>
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+  PROMPP(inline) void after_items_load_impl(R&& loaded_ids) noexcept {
     if constexpr (std::ranges::sized_range<R>) {
       set_.reserve(std::ranges::size(loaded_ids), Base::hasher());
     }
@@ -627,7 +632,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   EncodingBimap& operator=(EncodingBimap&&) noexcept = delete;
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c) noexcept {
+  PROMPP(inline) uint32_t find_or_emplace(const Class& c) noexcept {
     return *set_.lazy_emplace(c, Base::hasher(), Base::equality_comparator(), [&](const auto& ctor) {
       const uint32_t id = Base::storage_.emplace_back(c);
       ctor(id);
@@ -635,7 +640,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
+  PROMPP(inline) uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
     return *set_.lazy_emplace_with_hash(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), Base::hasher(), Base::equality_comparator(), [&](const auto& ctor) {
       const uint32_t id = Base::storage_.emplace_back(c);
       ctor(id);
@@ -643,7 +648,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
   template <class Class, class Cache, class... Args>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_with_cache(const Class& c, uint32_t id, Cache& cache, Args&&... args) noexcept {
+  PROMPP(inline) uint32_t find_or_emplace_with_cache(const Class& c, uint32_t id, Cache& cache, Args&&... args) noexcept {
     if (const auto value = cache[id]; value != Base::kInvalidId) {
       return value;
     }
@@ -656,7 +661,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c) const noexcept {
+  PROMPP(inline) std::optional<uint32_t> find(const Class& c) const noexcept {
     if (auto i = set_.find(c, Base::hasher(), Base::equality_comparator()); i != set_.end()) {
       return *i;
     }
@@ -664,14 +669,14 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
   template <class Class>
-  PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
+  PROMPP(inline) std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
     if (auto i = set_.find(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), Base::equality_comparator()); i != set_.end()) {
       return *i;
     }
     return {};
   }
 
-  PROMPP_ALWAYS_INLINE void rollback_impl(const typename Base::checkpoint_type& s) noexcept
+  PROMPP(inline) void rollback_impl(const typename Base::checkpoint_type& s) noexcept
     requires(!Base::kIsReadOnly)
   {
     assert(s.size() <= Base::items_count());
@@ -681,7 +686,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
     return Base::allocated_memory() + set_.capacity() * sizeof(typename Base::Proxy);
   }
 };

@@ -107,11 +107,11 @@ class Scraper {
    public:
     explicit FloatsWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept {
       return scraper_.metric_buffer_.begin(scraper_.parser_.tokenizer().buffer(), scraper_.default_timestamp());
     }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
+    [[nodiscard]] static PROMPP(inline) auto end() noexcept { return MetricMarkupBuffer::end(); }
 
    private:
     const Scraper& scraper_;
@@ -121,27 +121,27 @@ class Scraper {
    public:
     explicit MetadataWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metadata_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return scraper_.metadata_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetadataMarkupBuffer::end(); }
+    [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return scraper_.metadata_buffer_.items_count(); }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return scraper_.metadata_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
+    [[nodiscard]] static PROMPP(inline) auto end() noexcept { return MetadataMarkupBuffer::end(); }
 
    private:
     const Scraper& scraper_;
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
+  [[nodiscard]] PROMPP(inline) FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
+  [[nodiscard]] PROMPP(inline) MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }
+  [[nodiscard]] PROMPP(inline) Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
     return metric_buffer_.allocated_memory() + metadata_buffer_.allocated_memory() + labels_.allocated_memory();
   }
 
  private:
   using Token = Prometheus::textparse::Token;
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     metric_buffer_.clear();
     metadata_buffer_.clear();
     parser_.tokenizer().tokenize({});
@@ -149,7 +149,7 @@ class Scraper {
 
   template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_metadata() {
-    static constexpr auto get_metadata_type = [](Token token) PROMPP_LAMBDA_INLINE {
+    static constexpr auto get_metadata_type = [](Token token) PROMPP(lambda_inline) {
       if (token == Token::kHelp) {
         return Prometheus::MetadataType::kHelp;
       }
@@ -345,13 +345,13 @@ class Scraper {
   }
 
   [[nodiscard]] Error encode_metric_data(const uint64_t metric_offset) noexcept {
-    const auto name = [buffer = parser_.tokenizer().buffer()](const MarkedLabel& label) PROMPP_LAMBDA_INLINE { return label.name.view(buffer); };
+    const auto name = [buffer = parser_.tokenizer().buffer()](const MarkedLabel& label) PROMPP(lambda_inline) { return label.name.view(buffer); };
     std::ranges::sort(labels_, {}, name);
     if (std::ranges::adjacent_find(labels_, std::ranges::equal_to{}, name) != labels_.end()) [[unlikely]] {
       return Error::kDuplicateLabelName;
     }
 
-    const auto empty_tail = std::ranges::remove_if(labels_, [](const MarkedLabel& label) PROMPP_LAMBDA_INLINE { return label.value.is_empty(); });
+    const auto empty_tail = std::ranges::remove_if(labels_, [](const MarkedLabel& label) PROMPP(lambda_inline) { return label.value.is_empty(); });
     labels_.erase(empty_tail.begin(), empty_tail.end());
 
     metric_buffer_.add_metric(metric_offset);

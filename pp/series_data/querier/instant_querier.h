@@ -42,8 +42,8 @@ class InstantQuerier {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Storage& get_storage() const noexcept { return storage_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Storage& get_storage() noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) const Storage& get_storage() const noexcept { return storage_; }
+  [[nodiscard]] PROMPP(inline) Storage& get_storage() noexcept { return storage_; }
   [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
   [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
@@ -52,13 +52,13 @@ class InstantQuerier {
   BareBones::Bitset series_to_load_;
 
   template <typename SampleType>
-  PROMPP_ALWAYS_INLINE static void store_series_id(SampleType& sample, LabelSetID ls_id) noexcept {
+  static PROMPP(inline) void store_series_id(SampleType& sample, LabelSetID ls_id) noexcept {
     if constexpr (requires { sample.series_id = ls_id; }) {
       sample.series_id = ls_id;
     }
   }
 
-  PROMPP_ALWAYS_INLINE void query_sample(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
+  PROMPP(inline) void query_sample(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     if (!storage_.series_exists(ls_id)) [[unlikely]] {
       return;
     }
@@ -77,7 +77,7 @@ class InstantQuerier {
   void check_inside_series(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     for (const auto& chunk_data : typename Storage::SeriesChunks(&storage_, ls_id)) {
       if (Decoder::get_chunk_time_interval(chunk_data).contains(timestamp)) {
-        Decoder::create_decode_iterator(chunk_data, [&](auto&& begin, auto&& end) PROMPP_LAMBDA_INLINE {
+        Decoder::create_decode_iterator(chunk_data, [&](auto&& begin, auto&& end) PROMPP(lambda_inline) {
           for (auto sample_it = begin; sample_it != end && sample_it->timestamp <= timestamp; ++sample_it) {
             sample = *sample_it;
           }
