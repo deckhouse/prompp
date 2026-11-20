@@ -2,6 +2,7 @@
 
 #include <simdutf/simdutf.h>
 
+#include <algorithm>
 #include <span>
 
 #include "bare_bones/algorithm.h"
@@ -344,9 +345,16 @@ class Scraper {
   }
 
   [[nodiscard]] Error encode_metric_data(const uint64_t metric_offset) noexcept {
-    metric_buffer_.add_metric(metric_offset);
+    const auto name = [buffer = parser_.tokenizer().buffer()](const MarkedLabel& label) PROMPP(lambda_inline) { return label.name.view(buffer); };
+    std::ranges::sort(labels_, {}, name);
+    if (std::ranges::adjacent_find(labels_, std::ranges::equal_to{}, name) != labels_.end()) [[unlikely]] {
+      return Error::kDuplicateLabelName;
+    }
 
-    sort_and_filter_labels();
+    const auto empty_tail = std::ranges::remove_if(labels_, [](const MarkedLabel& label) PROMPP(lambda_inline) { return label.value.is_empty(); });
+    labels_.erase(empty_tail.begin(), empty_tail.end());
+
+    metric_buffer_.add_metric(metric_offset);
     append_labels_hash();
 
     if (!metric_buffer_.bytes_enlarge(encoding::metric_maximum_encoding_size(labels_.size()))) [[unlikely]] {
@@ -371,15 +379,6 @@ class Scraper {
 
       metric_buffer_.add_label(label);
     }
-  }
-
-  void sort_and_filter_labels() noexcept {
-    const auto it =
-        std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) PROMPP(lambda_inline) { return label.value.is_empty(); });
-    labels_.erase(it, labels_.end());
-
-    std::sort(labels_.begin(), labels_.end(),
-              [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP(lambda_inline) { return a.name.view(buffer) < b.name.view(buffer); });
   }
 
   void append_labels_hash() noexcept {

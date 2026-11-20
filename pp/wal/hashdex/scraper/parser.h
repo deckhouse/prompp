@@ -16,6 +16,7 @@ enum class Error : uint32_t {
   kInvalidValue,
   kInvalidTimestamp,
   kMarkupBufferOverflow,
+  kDuplicateLabelName,
 };
 
 template <class Value>

@@ -118,6 +118,10 @@ func FuzzScraperHashdexAgainstTextparse(f *testing.F) {
 		}
 
 		cppResult := parseCopy(t, newScraperHashdex(openMetrics), in)
+		if errors.Is(cppResult.err, cppbridge.ErrScraperDuplicateLabelName) {
+			// The Go parser can accept repeated label names. Hasdex rejects them.
+			t.Skip()
+		}
 
 		if cppResult.err != nil {
 			t.Fatalf("the C++ parser rejected a body the Go parser accepted: %v", cppResult.err)

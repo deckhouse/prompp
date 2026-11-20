@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cassert>
 #include <sstream>
 #include <string_view>
 
@@ -8,6 +10,8 @@
 #include "third_party/protozero/pbf_reader.hpp"
 
 #include "bare_bones/exception.h"
+#include "bare_bones/vector.h"
+#include "primitives/primitives.h"
 
 namespace PromPP {
 namespace Prometheus {
@@ -212,29 +216,32 @@ PROMPP(inline) void read_timeseries_without_samples(ProtobufReader&& pb_timeseri
   }
 }
 
-template <class ProtobufReader, class LabelSet>
-PROMPP(inline) bool read_timeseries_label_set(ProtobufReader&& pb_timeseries, LabelSet& label_set, const PbLabelSetMemoryLimits& limits) {
-  size_t current_message_n = 0;
+PROMPP(inline) bool read_timeseries_label_set(protozero::pbf_reader pb_timeseries,
+                                                       BareBones::Vector<Primitives::LabelView>& labels,
+                                                       const PbLabelSetMemoryLimits& limits) {
+  assert(labels.empty());
   bool has_samples = false;
+  bool has_empty_values = false;
   while (pb_timeseries.next()) {
     switch (pb_timeseries.tag()) {
       case 1: {  // label
-        if (limits.max_label_names_per_timeseries && current_message_n >= limits.max_label_names_per_timeseries) {
+        if (limits.max_label_names_per_timeseries && labels.size() >= limits.max_label_names_per_timeseries) {
           throw BareBones::Exception(0xf666cea4f74038c7, "Max Label Names count per Timeseries limit exceeded");
         }
 
         auto pb_label = pb_timeseries.get_message();
-        typename LabelSet::label_type label;
+        Primitives::LabelView label;
         read_label(pb_label, label);
-        if (size_t label_name_sz = std::size(std::get<0>(label)); limits.max_label_name_length && label_name_sz > limits.max_label_name_length) {
+        const auto& [name, value] = label;
+        if (size_t label_name_sz = name.size(); limits.max_label_name_length && label_name_sz > limits.max_label_name_length) {
           throw BareBones::Exception(0x01102a3321345745, "Label name size (%zd) exceeds the maximum name size limit", label_name_sz);
         }
-        if (size_t label_value_sz = std::size(std::get<1>(label)); limits.max_label_value_length && label_value_sz > limits.max_label_value_length) {
+        if (size_t label_value_sz = value.size(); limits.max_label_value_length && label_value_sz > limits.max_label_value_length) {
           throw BareBones::Exception(0x32b5ff9563758da8, "Label value size (%zd) exceeds the maximum value size limit", label_value_sz);
         }
-        label_set.add(label);
+        labels.push_back(label);
 
-        current_message_n++;
+        has_empty_values |= value.empty();
       } break;
 
       case 2:  // sample
@@ -247,7 +254,19 @@ PROMPP(inline) bool read_timeseries_label_set(ProtobufReader&& pb_timeseries, La
     }
   }
 
-  if (__builtin_expect(!label_set.size(), false)) {
+  std::ranges::sort(labels, {}, &Primitives::LabelView::first);
+  if (const auto duplicate = std::ranges::adjacent_find(labels, std::ranges::equal_to{}, &Primitives::LabelView::first); duplicate != labels.end())
+      [[unlikely]] {
+    const auto name = duplicate->first;
+    throw BareBones::Exception(0x456a9d8a8915042e, "Duplicate label name: %.*s", static_cast<int>(std::min(name.size(), size_t{200})),
+                               name.empty() ? "" : name.data());
+  }
+
+  if (has_empty_values) [[unlikely]] {
+    const auto empty_tail = std::ranges::remove_if(labels, [](const auto& label) { return label.second.empty(); });
+    labels.erase(empty_tail.begin(), empty_tail.end());
+  }
+  if (labels.empty()) [[unlikely]] {
     throw BareBones::Exception(0x68997b7d2e49de1e, "Protobuf message has an empty label set, can't read timeseries");
   }
 

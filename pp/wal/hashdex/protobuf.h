@@ -2,9 +2,12 @@
 
 #include "snappy.h"
 
+#include <experimental/scope>
+
 #include "bare_bones/vector.h"
 #include "metric.h"
-#include "primitives/label_set.h"
+#include "primitives/hash.h"
+#include "primitives/primitives.h"
 #include "prometheus/hashdex.h"
 #include "prometheus/remote_write.h"
 
@@ -82,18 +85,18 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   BareBones::Vector<Item> floats_;
   BareBones::Vector<Metadata> metadata_;
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
-  Primitives::LabelViewSet label_set_;
+  BareBones::Vector<Primitives::LabelView> labels_;
 
   void parse_timeseries(protozero::pbf_reader& pb, bool skip_no_samples_series) {
     if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
     auto pb_view = pb.get_view();
-    bool has_samples = read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+    const auto clear_labels = std::experimental::scope_exit([this]() noexcept { labels_.clear(); });
+    const bool has_samples = read_timeseries_label_set(protozero::pbf_reader{pb_view}, labels_, limits_);
 
     if (!has_samples) [[unlikely]] {
       if (skip_no_samples_series) [[unlikely]] {
-        label_set_.clear();
         return;
       }
 
@@ -101,12 +104,10 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     }
 
     if (floats_.empty()) [[unlikely]] {
-      set_cluser_and_replica_values(label_set_);
+      set_cluser_and_replica_values(labels_);
     }
 
-    floats_.emplace_back(hash_value(label_set_), pb_view);
-
-    label_set_.clear();
+    floats_.emplace_back(Primitives::hash::hash_of_label_set(labels_), pb_view);
   }
 
   void parse_metadata(protozero::pbf_reader pb_metadata) {
