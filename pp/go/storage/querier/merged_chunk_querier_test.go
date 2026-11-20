@@ -160,6 +160,7 @@ func TestMergedChunkQuerierRemoteReadClose(t *testing.T) {
 			require.Nil(t, observed.selected.At())
 			require.False(t, unstarted.Next())
 			require.False(t, leftResult.Next())
+			require.Nil(t, leftResult.At())
 			require.False(t, rightResult.Next())
 			require.Equal(t, mergeLifetimeLabels("a"), retainedLabels)
 			requireLifetimeChunk(t, retainedChunk, 1)

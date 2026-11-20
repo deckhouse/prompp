@@ -48,10 +48,12 @@ func (s *QuerierSuite) TestCloseStopsRangeSelectionsAndBorrowedIterators() {
 	for _, tc := range []struct {
 		name string
 		fn   string
+		sort bool
 	}{
-		{name: "range"},
-		{name: "aggregation", fn: "min_over_time"},
-		{name: "cross series", fn: "sum"},
+		{name: "sorted range", sort: true},
+		{name: "unsorted range"},
+		{name: "aggregation", fn: "min_over_time", sort: true},
+		{name: "cross series", fn: "sum", sort: true},
 	} {
 		s.Run(tc.name, func() {
 			// Arrange
@@ -61,8 +63,8 @@ func (s *QuerierSuite) TestCloseStopsRangeSelectionsAndBorrowedIterators() {
 				return true
 			}
 			hints := &storage.SelectHints{Start: 2, End: 8, Step: 2, Range: 3, LookbackDelta: 3, Func: tc.fn}
-			started := q.Select(s.T().Context(), true, hints, matcher)
-			unread := q.Select(s.T().Context(), true, hints, matcher)
+			started := q.Select(s.T().Context(), tc.sort, hints, matcher)
+			unread := q.Select(s.T().Context(), tc.sort, hints, matcher)
 			s.Require().NoError(unread.Err())
 			s.Require().NoError(started.Err())
 			s.Require().True(started.Next())
@@ -84,6 +86,7 @@ func (s *QuerierSuite) TestCloseStopsRangeSelectionsAndBorrowedIterators() {
 			s.Require().NoError(err)
 			s.Require().NoError(repeatedErr)
 			s.False(started.Next())
+			s.Nil(started.At())
 			s.False(unread.Next())
 			s.Equal(originalLabels, series.Labels().String())
 			s.Equal(chunkenc.ValNone, iterator.Next())

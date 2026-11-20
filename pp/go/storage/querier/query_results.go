@@ -25,11 +25,29 @@ type querySeriesSet[T any] interface {
 }
 
 //
+// embeddedQueryResult
+//
+
+// embeddedQueryResult lets a head set carry its own list node instead of allocating a wrapper.
+type embeddedQueryResult[T, R any] interface {
+	// resultNode returns the node stored in the set.
+	resultNode() *queryResult[T, R]
+	// invalidate drops shard references, including prefetched series, before resources are released.
+	invalidate()
+}
+
+//
 // queryResult
 //
 
+// sampleQueryResult owns a head selection's serialized sample buffers.
+type sampleQueryResult = queryResult[storage.Series, []*cppbridge.DataStorageSerializedData]
+
+// chunkQueryResult owns a head selection's chunk recoders and serialized buffers.
+type chunkQueryResult = queryResult[storage.ChunkSeries, chunkResultResources]
+
 // queryResult owns a successful Select result until its querier closes it.
-// Its wrapper stops iteration even when the underlying merge already has prefetched series.
+// It is either embedded in the returned set or used directly as a wrapper for a delegated set.
 type queryResult[T, R any] struct {
 	set       querySeriesSet[T]
 	resources R
@@ -69,6 +87,11 @@ func (r *queryResult[T, R]) Warnings() annotations.Annotations {
 	return r.set.Warnings()
 }
 
+// resultNode returns the link embedded in a head set.
+func (r *queryResult[T, R]) resultNode() *queryResult[T, R] {
+	return r
+}
+
 //
 // queryResults
 //
@@ -81,16 +104,25 @@ type queryResults[T, R any] struct {
 	isClosed bool
 }
 
-// register takes ownership of a selection and its resources until the querier closes.
-func (r *queryResults[T, R]) register(set querySeriesSet[T], resources R) *queryResult[T, R] {
-	result := &queryResult[T, R]{set: set, resources: resources}
+// register takes ownership of a newly built selection and its resources until the querier closes.
+func (r *queryResults[T, R]) register(set querySeriesSet[T], resources R) querySeriesSet[T] {
+	var result *queryResult[T, R]
+	published := set
+	if owned, ok := set.(embeddedQueryResult[T, R]); ok {
+		result = owned.resultNode()
+	} else {
+		result = new(queryResult[T, R])
+		published = result
+	}
+	result.set = set
+	result.resources = resources
 
 	r.mu.Lock()
 	result.next = r.first
 	r.first = result
 	r.mu.Unlock()
 
-	return result
+	return published
 }
 
 // releaseAll invalidates each result before releasing its resources. A nil release only invalidates results.
@@ -102,6 +134,9 @@ func (r *queryResults[T, R]) releaseAll(release func(R)) {
 		result := r.first
 		r.first = result.next
 		result.next = nil
+		if owned, ok := result.set.(embeddedQueryResult[T, R]); ok {
+			owned.invalidate()
+		}
 		result.set = nil
 		resources := result.resources
 		var zero R
