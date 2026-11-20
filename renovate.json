@@ -87,6 +87,16 @@
       "description": "Stay on aws-sdk-go v1.55.5: newer v1.55.x revisions added package-level // Deprecated: annotations that staticcheck (SA1019) reports as fatal across upstream discovery/aws/*. Bump only after migrating to aws-sdk-go-v2 (see #330).",
       "matchPackageNames": ["github.com/aws/aws-sdk-go"],
       "allowedVersions": "<1.55.6"
+    },
+    {
+      "description": "Keep googletest below 1.18.0. googletest >= 1.18.0 depends on abseil-cpp >= 20260526.0, the first abseil release without compatibility_level (level 0), while protobuf <= 37 (transitive via rules_cc and aspect_rules_lint) declares abseil compatibility level 1, so bzlmod cannot resolve the pp module graph; protobuf >= 30 also needs Bazel 8. Remove this limit after the migration to Bazel 8 and to a protobuf that accepts abseil >= 20260526.",
+      "matchPackageNames": ["googletest"],
+      "allowedVersions": "<1.18.0"
+    },
+    {
+      "description": "Keep abseil-cpp below 20260526.0, the first release without compatibility_level (level 0). protobuf <= 37 (transitive via rules_cc and aspect_rules_lint) declares abseil compatibility level 1 and protobuf >= 30 needs Bazel 8. Remove this limit after the migration to Bazel 8 and to a protobuf that accepts abseil >= 20260526. Matches the http_archive in pp/third_party/deps.bzl and a future bazel_dep module abseil-cpp.",
+      "matchPackageNames": ["abseil-cpp", "abseil/abseil-cpp", "com_google_absl"],
+      "allowedVersions": "!/^(20260526|2026(0[6-9]|1[0-2])|202[7-9]|20[3-9])/"
     }
   ]
 }

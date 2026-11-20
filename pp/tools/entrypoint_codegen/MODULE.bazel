@@ -6,7 +6,11 @@ module(
 bazel_dep(name = "platforms", version = "0.0.11")
 bazel_dep(name = "rules_cc", version = "0.2.27")
 
-bazel_dep(name = "googletest", version = "1.15.2")
+# Keep googletest below 1.18: 1.18 needs abseil-cpp >= 20260526.0, which has no
+# compatibility_level, while protobuf <= 37 declares abseil level 1 and protobuf >= 30
+# needs Bazel 8. Lift the limit (also in renovate.json) after the migration to Bazel 8
+# and a protobuf that accepts abseil >= 20260526.
+bazel_dep(name = "googletest", version = "1.17.0.bcr.2")
 
 libclang = use_extension("//:libclang_repository.bzl", "libclang_extension")
 libclang.configure(
