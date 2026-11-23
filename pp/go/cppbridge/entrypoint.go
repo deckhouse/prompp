@@ -1151,14 +1151,15 @@ func walDecoderDtor(decoder uintptr) {
 func walSegmentSamplesStorageListCtor(count uint64, storages *segmentSamplesStorageListCPP) {
 	args := struct {
 		count    uint64
-		storages uintptr
-	}{count, uintptr(unsafe.Pointer(storages))}
+		storages *segmentSamplesStorageListCPP
+	}{count, storages}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_ctor,
 		uintptr(unsafe.Pointer(&args)),
 	)
+	runtime.KeepAlive(storages)
 }
 
 func walSegmentSamplesStorageAdd(
@@ -1195,14 +1196,15 @@ func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
 
 func walSegmentSamplesStorageListDtor(s *segmentSamplesStorageListCPP) {
 	args := struct {
-		storages uintptr
-	}{uintptr(unsafe.Pointer(s))}
+		storages *segmentSamplesStorageListCPP
+	}{s}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
+	runtime.KeepAlive(s)
 }
 
 func walSegmentSamplesStorageListSplitMessages(
@@ -1210,10 +1212,10 @@ func walSegmentSamplesStorageListSplitMessages(
 	messageSamplesThreshold uint32,
 ) []RWMessage {
 	args := struct {
-		storageList             uintptr
+		storageList             *segmentSamplesStorageListCPP
 		messageSamplesThreshold uint32
 		messages                []RWMessage
-	}{uintptr(unsafe.Pointer(s)), messageSamplesThreshold, nil}
+	}{s, messageSamplesThreshold, nil}
 
 	testGC()
 	fastcgo.UnsafeCall1(

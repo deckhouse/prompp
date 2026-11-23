@@ -299,26 +299,22 @@ type segmentSamplesStorageListCPP struct {
 	storages []CppSegmentSamplesStorage
 }
 
-// freeSegmentSamplesStorageListCPP frees the C-allocated segmentSamplesStorageListCPP.
-func freeSegmentSamplesStorageListCPP(s segmentSamplesStorageListCPP) {
-	walSegmentSamplesStorageListDtor(&s)
-	runtime.KeepAlive(s)
-}
-
 //
 // SegmentSamplesStorageList
 //
 
-// SegmentSamplesStorageList wrapper for segmentSamplesStorageListCPP.
+// SegmentSamplesStorageList owns the C++ sample storage for a remote-write batch.
 type SegmentSamplesStorageList struct {
-	cppList segmentSamplesStorageListCPP
+	cppList *segmentSamplesStorageListCPP
 }
 
 // NewSegmentSamplesStorage creates a new [SegmentSamplesStorageList].
 func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
-	s := &SegmentSamplesStorageList{}
-	walSegmentSamplesStorageListCtor(count, &s.cppList)
-	runtime.AddCleanup(s, freeSegmentSamplesStorageListCPP, s.cppList)
+	// The native list must keep the same address through destruction. Allocate it
+	// separately so the cleanup can retain it without retaining the Go owner.
+	s := &SegmentSamplesStorageList{cppList: new(segmentSamplesStorageListCPP)}
+	walSegmentSamplesStorageListCtor(count, s.cppList)
+	runtime.AddCleanup(s, walSegmentSamplesStorageListDtor, s.cppList)
 
 	return s
 }
@@ -329,13 +325,18 @@ func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 }
 
 // Get returns the segment samples storage by segment ID.
+// The caller must keep the list alive while using the returned storage.
 func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
 	return &s.cppList.storages[segmentID]
 }
 
 // SplitMessages splits the storage list into messages by samples per message.
+// The caller must keep the list alive until the messages have been encoded.
 func (s *SegmentSamplesStorageList) SplitMessages(messageSamplesThreshold, targetSegmentID uint32) *RWMessageList {
-	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(&s.cppList, messageSamplesThreshold))
+	messages := walSegmentSamplesStorageListSplitMessages(s.cppList, messageSamplesThreshold)
+	runtime.KeepAlive(s)
+
+	return NewRWMessageList(targetSegmentID, messages)
 }
 
 //
