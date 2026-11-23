@@ -130,12 +130,17 @@ func (s *EncodedSegment) Size() int64 {
 
 // CRC32 - hash.
 func (s *EncodedSegment) CRC32() uint32 {
-	return crc32.ChecksumIEEE(s.buf)
+	sum := crc32.ChecksumIEEE(s.buf)
+	runtime.KeepAlive(s)
+
+	return sum
 }
 
 // WriteTo - implements io.WriterTo inerface.
 func (s *EncodedSegment) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(s.buf)
+	runtime.KeepAlive(s)
+
 	return int64(n), err
 }
 

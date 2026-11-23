@@ -53,12 +53,17 @@ func (s *HeadEncodedSegment) Size() int64 {
 
 // CRC32 the hash amount according to the data.
 func (s *HeadEncodedSegment) CRC32() uint32 {
-	return crc32.ChecksumIEEE(s.buf)
+	sum := crc32.ChecksumIEEE(s.buf)
+	runtime.KeepAlive(s)
+
+	return sum
 }
 
 // WriteTo implements io.WriterTo inerface.
 func (s *HeadEncodedSegment) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(s.buf)
+	runtime.KeepAlive(s)
+
 	return int64(n), err
 }
 

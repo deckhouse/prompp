@@ -111,13 +111,17 @@ func (p *DecodedProtobuf) Size() int64 {
 
 // CRC32 calculate crc32 sum.
 func (p *DecodedProtobuf) CRC32() uint32 {
-	return crc32.ChecksumIEEE(p.buf)
+	sum := crc32.ChecksumIEEE(p.buf)
+	runtime.KeepAlive(p)
+
+	return sum
 }
 
 // WriteTo - implements io.WriterTo interface.
 func (p *DecodedProtobuf) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(p.buf)
 	runtime.KeepAlive(p)
+
 	return int64(n), err
 }
 

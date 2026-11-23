@@ -39,7 +39,7 @@ var (
 		},
 	)
 
-	// lsQueryResultCreate counts [LSSQueryResult] objects, including queries without matches.
+	// lsQueryResultCreate counts [LSSQueryResult] objects that own C++ buffers.
 	lsQueryResultCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        cppObjectsCreateMetricName,
@@ -48,7 +48,7 @@ var (
 		},
 	)
 
-	// lsQueryResultFinalize counts releases of the C++ buffers held by [LSSQueryResult].
+	// lsQueryResultFinalize counts [LSSQueryResult] objects whose C++ buffers were released.
 	lsQueryResultFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        cppObjectsFinalizeMetricName,
@@ -189,6 +189,11 @@ func newLSSQueryResult(
 		labelSetLengths: labelSetLengths,
 		status:          status,
 	}
+
+	if !lqr.hasNativeBuffers() {
+		return lqr
+	}
+
 	lsQueryResultCreate.Inc()
 
 	if status != LSSQueryStatusMatch {
@@ -208,7 +213,7 @@ func newLSSQueryResult(
 // It is idempotent: subsequent calls (and the finalizer) are no-ops.
 // After Close the result must not be read anymore.
 func (r *LSSQueryResult) Close() {
-	if r.matches == nil && r.labelSetLengths == nil {
+	if !r.hasNativeBuffers() {
 		return
 	}
 
@@ -268,4 +273,9 @@ func (r *LSSQueryResult) Len() int {
 // Status query execution.
 func (r *LSSQueryResult) Status() uint32 {
 	return r.status
+}
+
+// hasNativeBuffers reports whether the result owns any C++ buffer.
+func (r *LSSQueryResult) hasNativeBuffers() bool {
+	return r.matches != nil || r.labelSetLengths != nil
 }

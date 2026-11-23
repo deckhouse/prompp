@@ -117,7 +117,7 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 	bytesWritten, err := iw.cppIndexWriter.WriteLabelIndicesTo(w)
 	n += int64(bytesWritten)
 	if err != nil {
-		return n, fmt.Errorf("failed to write label indicies: %w", err)
+		return n, fmt.Errorf("failed to write label indices: %w", err)
 	}
 
 	for {
@@ -134,7 +134,7 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 
 	bytesWritten, err = iw.cppIndexWriter.WriteLabelIndicesTableTo(w)
 	if err != nil {
-		return n, fmt.Errorf("failed to write label indicies table: %w", err)
+		return n, fmt.Errorf("failed to write label indices table: %w", err)
 	}
 	n += int64(bytesWritten)
 
@@ -146,7 +146,7 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 
 	bytesWritten, err = iw.cppIndexWriter.WriteTableOfContentsTo(w)
 	if err != nil {
-		return n, fmt.Errorf("failed to write table of content: %w", err)
+		return n, fmt.Errorf("failed to write table of contents: %w", err)
 	}
 	n += int64(bytesWritten)
 
