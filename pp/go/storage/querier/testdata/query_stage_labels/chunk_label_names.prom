@@ -1,0 +1,18 @@
+# HELP prompp_querier_query_stage_duration_nanoseconds_total Head query stages on the caller goroutine, including unsuccessful attempts. Total duration of the stage in nanoseconds.
+# TYPE prompp_querier_query_stage_duration_nanoseconds_total counter
+prompp_querier_query_stage_duration_nanoseconds_total{operation="chunk_label_names",source="queryable_appender",stage="semaphore_wait"} 1
+prompp_querier_query_stage_duration_nanoseconds_total{operation="chunk_label_names",source="queryable_appender",stage="prepare"} 2
+prompp_querier_query_stage_duration_nanoseconds_total{operation="chunk_label_names",source="queryable_appender",stage="lss_query"} 3
+prompp_querier_query_stage_duration_nanoseconds_total{operation="chunk_label_names",source="queryable_appender",stage="build_result"} 4
+# HELP prompp_querier_query_stage_executions_total Head query stages on the caller goroutine, including unsuccessful attempts. Total number of the stage executions.
+# TYPE prompp_querier_query_stage_executions_total counter
+prompp_querier_query_stage_executions_total{operation="chunk_label_names",source="queryable_appender",stage="semaphore_wait"} 1
+prompp_querier_query_stage_executions_total{operation="chunk_label_names",source="queryable_appender",stage="prepare"} 1
+prompp_querier_query_stage_executions_total{operation="chunk_label_names",source="queryable_appender",stage="lss_query"} 1
+prompp_querier_query_stage_executions_total{operation="chunk_label_names",source="queryable_appender",stage="build_result"} 1
+# HELP prompp_querier_query_shard_stage_duration_nanoseconds_total Head query stages on shards, maximum per invocation, including unsuccessful attempts. Total duration of the stage in nanoseconds.
+# TYPE prompp_querier_query_shard_stage_duration_nanoseconds_total counter
+prompp_querier_query_shard_stage_duration_nanoseconds_total{operation="chunk_label_names",source="queryable_appender",stage="lss_query"} 1
+# HELP prompp_querier_query_shard_stage_executions_total Head query stages on shards, maximum per invocation, including unsuccessful attempts. Total number of the stage executions.
+# TYPE prompp_querier_query_shard_stage_executions_total counter
+prompp_querier_query_shard_stage_executions_total{operation="chunk_label_names",source="queryable_appender",stage="lss_query"} 1

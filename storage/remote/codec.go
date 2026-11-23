@@ -720,7 +720,7 @@ func (it *chunkedSeriesIterator) resetIterator() {
 	if it.idx < len(it.chunks) {
 		chunk := it.chunks[it.idx]
 
-		decodedChunk, err := chunkenc.FromData(chunkenc.Encoding(chunk.Type), chunk.Data)
+		decodedChunk, err := chunkenc.FromData(chunkenc.Encoding(chunk.Type), chunk.Data) // #nosec G115 // no overflow
 		if err != nil {
 			it.err = err
 			return

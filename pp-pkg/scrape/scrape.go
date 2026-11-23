@@ -141,7 +141,10 @@ type scrapePool struct {
 
 	symbolTable *labels.SymbolTable
 
-	targetMtx sync.Mutex
+	// targetMtx is an RWMutex so that the read-only off-path readers — such as
+	// [scrapePool.relabelingCachesAllocatedMemory], called on every /metrics scrape — do not
+	// serialize with each other.
+	targetMtx sync.RWMutex
 	// activeTargets and loops must always be synchronized to have the same
 	// set of hashes.
 	activeTargets       map[uint64]*Target
@@ -242,8 +245,8 @@ func newScrapePool(
 			targetOptions.TargetLabels = append(
 				targetOptions.TargetLabels,
 				cppbridge.Label{
-					Name:  *((*string)(unsafe.Pointer(&l.Name))),
-					Value: *((*string)(unsafe.Pointer(&l.Value))),
+					Name:  *(*string)(unsafe.Pointer(&l.Name)),
+					Value: *(*string)(unsafe.Pointer(&l.Value)),
 				},
 			)
 		})
@@ -282,8 +285,8 @@ func newScrapePool(
 }
 
 func (sp *scrapePool) ActiveTargets() []*Target {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
+	sp.targetMtx.RLock()
+	defer sp.targetMtx.RUnlock()
 
 	var tActive []*Target
 	for _, t := range sp.activeTargets {
@@ -294,14 +297,14 @@ func (sp *scrapePool) ActiveTargets() []*Target {
 
 // Return dropped targets, subject to KeepDroppedTargets limit.
 func (sp *scrapePool) DroppedTargets() []*Target {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
+	sp.targetMtx.RLock()
+	defer sp.targetMtx.RUnlock()
 	return sp.droppedTargets
 }
 
 func (sp *scrapePool) DroppedTargetsCount() int {
-	sp.targetMtx.Lock()
-	defer sp.targetMtx.Unlock()
+	sp.targetMtx.RLock()
+	defer sp.targetMtx.RUnlock()
 	return sp.droppedTargetsCount
 }
 
@@ -326,6 +329,31 @@ func (sp *scrapePool) getScrapeFailureLogger() log.Logger {
 	sp.scrapeFailureLoggerMtx.RLock()
 	defer sp.scrapeFailureLoggerMtx.RUnlock()
 	return sp.scrapeFailureLogger
+}
+
+// relabelingCachesAllocatedMemory return size of allocated memory for the relabeling mapping
+// caches of all the pool's scrape loops, separately for the scrape and the report states.
+//
+// With many targets the measurement itself is the long part, so targetMtx is only held for the
+// snapshot of the loops: it must not block a sync or a reload of the pool for the whole walk.
+// A loop stopped in the meantime is still safe to measure — the snapshot keeps it alive and its
+// states are never reassigned, so the worst case is a slightly stale number for a target that is
+// already gone.
+func (sp *scrapePool) relabelingCachesAllocatedMemory() (scrapeState, reportState uint64) {
+	sp.targetMtx.RLock()
+	loops := make([]loop, 0, len(sp.loops))
+	for _, l := range sp.loops {
+		loops = append(loops, l)
+	}
+	sp.targetMtx.RUnlock()
+
+	for _, l := range loops {
+		scrape, report := l.relabelingCachesAllocatedMemory()
+		scrapeState += scrape
+		reportState += report
+	}
+
+	return scrapeState, reportState
 }
 
 // stop terminates all scrape loops and returns after they all terminated.
@@ -413,10 +441,10 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 		timeout       = time.Duration(sp.config.ScrapeTimeout)
 		bodySizeLimit = int64(sp.config.BodySizeLimit)
 		metricLimits  = &cppbridge.MetricLimits{
-			LabelLimit:            int64(sp.config.LabelLimit),
-			LabelNameLengthLimit:  int64(sp.config.LabelNameLengthLimit),
-			LabelValueLengthLimit: int64(sp.config.LabelValueLengthLimit),
-			SampleLimit:           int64(sp.config.SampleLimit),
+			LabelLimit:            int64(sp.config.LabelLimit),            // #nosec G115 // no overflow
+			LabelNameLengthLimit:  int64(sp.config.LabelNameLengthLimit),  // #nosec G115 // no overflow
+			LabelValueLengthLimit: int64(sp.config.LabelValueLengthLimit), // #nosec G115 // no overflow
+			SampleLimit:           int64(sp.config.SampleLimit),           // #nosec G115 // no overflow
 		}
 		honorLabels              = sp.config.HonorLabels
 		honorTimestamps          = sp.config.HonorTimestamps
@@ -559,10 +587,10 @@ func (sp *scrapePool) sync(targets []*Target) {
 		timeout       = time.Duration(sp.config.ScrapeTimeout)
 		bodySizeLimit = int64(sp.config.BodySizeLimit)
 		metricLimits  = &cppbridge.MetricLimits{
-			LabelLimit:            int64(sp.config.LabelLimit),
-			LabelNameLengthLimit:  int64(sp.config.LabelNameLengthLimit),
-			LabelValueLengthLimit: int64(sp.config.LabelValueLengthLimit),
-			SampleLimit:           int64(sp.config.SampleLimit),
+			LabelLimit:            int64(sp.config.LabelLimit),            // #nosec G115 // no overflow
+			LabelNameLengthLimit:  int64(sp.config.LabelNameLengthLimit),  // #nosec G115 // no overflow
+			LabelValueLengthLimit: int64(sp.config.LabelValueLengthLimit), // #nosec G115 // no overflow
+			SampleLimit:           int64(sp.config.SampleLimit),           // #nosec G115 // no overflow
 		}
 		honorLabels              = sp.config.HonorLabels
 		honorTimestamps          = sp.config.HonorTimestamps
@@ -811,6 +839,7 @@ type loop interface {
 	stop()
 	getCache() *scrapeCache
 	disableEndOfRunStalenessMarkers()
+	relabelingCachesAllocatedMemory() (scrapeState, reportState uint64)
 }
 
 type scrapeLoop struct {
@@ -1202,6 +1231,12 @@ func (sl *scrapeLoop) disableEndOfRunStalenessMarkers() {
 	sl.disabledEndOfRunStalenessMarkers = true
 }
 
+// relabelingCachesAllocatedMemory return size of allocated memory for the relabeling mapping
+// caches of the loop's scrape and report states.
+func (sl *scrapeLoop) relabelingCachesAllocatedMemory() (scrapeState, reportState uint64) {
+	return sl.state.CachesAllocatedMemory(), sl.reportState.CachesAllocatedMemory()
+}
+
 func (sl *scrapeLoop) getCache() *scrapeCache {
 	return sl.cache
 }
@@ -1297,7 +1332,7 @@ loop:
 			continue
 		}
 
-		if addErr := batch.Add(builder, uint64(t), val); addErr != nil {
+		if addErr := batch.Add(builder, uint64(t), val); addErr != nil { // #nosec G115 // no overflow
 			level.Debug(sl.logger).Log("msg", "failed add metrics", "err", addErr)
 			switch {
 			case errors.Is(err, errSampleLimit):
@@ -1463,21 +1498,21 @@ func (sl *scrapeLoop) report(
 
 	batch := sl.bufferBatches.get()
 
-	batch.AddWithLabelSet(scrapeHealthMetricName, uint64(ts), health)
-	batch.AddWithLabelSet(scrapeDurationMetricName, uint64(ts), duration.Seconds())
-	batch.AddWithLabelSet(scrapeSamplesMetricName, uint64(ts), float64(scraped))
-	batch.AddWithLabelSet(samplesPostRelabelMetricName, uint64(ts), float64(stats.SamplesAdded))
-	batch.AddWithLabelSet(scrapeSeriesAddedMetricName, uint64(ts), float64(stats.SeriesAdded))
-	batch.AddWithLabelSet(scrapeSeriesDroppedMetricName, uint64(ts), float64(stats.SeriesDrop))
+	batch.AddWithLabelSet(scrapeHealthMetricName, ts, health)
+	batch.AddWithLabelSet(scrapeDurationMetricName, ts, duration.Seconds())
+	batch.AddWithLabelSet(scrapeSamplesMetricName, ts, float64(scraped))
+	batch.AddWithLabelSet(samplesPostRelabelMetricName, ts, float64(stats.SamplesAdded))
+	batch.AddWithLabelSet(scrapeSeriesAddedMetricName, ts, float64(stats.SeriesAdded))
+	batch.AddWithLabelSet(scrapeSeriesDroppedMetricName, ts, float64(stats.SeriesDrop))
 
 	if sl.reportExtraMetrics {
-		batch.AddWithLabelSet(scrapeTimeoutMetricName, uint64(ts), sl.timeout.Seconds())
+		batch.AddWithLabelSet(scrapeTimeoutMetricName, ts, sl.timeout.Seconds())
 		batch.AddWithLabelSet(
 			scrapeSampleLimitMetricName,
-			uint64(ts),
+			ts,
 			float64(sl.state.RelabelerOptions().MetricLimits.SampleLimit),
 		)
-		batch.AddWithLabelSet(scrapeBodySizeBytesMetricName, uint64(ts), float64(bytes))
+		batch.AddWithLabelSet(scrapeBodySizeBytesMetricName, ts, float64(bytes))
 	}
 
 	if _, err = sl.adapter.AppendTimeSeries(
@@ -1497,16 +1532,16 @@ func (sl *scrapeLoop) reportStale(start time.Time) (err error) {
 
 	batch := sl.bufferBatches.get()
 
-	batch.AddWithLabelSet(scrapeHealthMetricName, uint64(ts), staleNaN)
-	batch.AddWithLabelSet(scrapeDurationMetricName, uint64(ts), staleNaN)
-	batch.AddWithLabelSet(scrapeSamplesMetricName, uint64(ts), staleNaN)
-	batch.AddWithLabelSet(samplesPostRelabelMetricName, uint64(ts), staleNaN)
-	batch.AddWithLabelSet(scrapeSeriesAddedMetricName, uint64(ts), staleNaN)
+	batch.AddWithLabelSet(scrapeHealthMetricName, ts, staleNaN)
+	batch.AddWithLabelSet(scrapeDurationMetricName, ts, staleNaN)
+	batch.AddWithLabelSet(scrapeSamplesMetricName, ts, staleNaN)
+	batch.AddWithLabelSet(samplesPostRelabelMetricName, ts, staleNaN)
+	batch.AddWithLabelSet(scrapeSeriesAddedMetricName, ts, staleNaN)
 
 	if sl.reportExtraMetrics {
-		batch.AddWithLabelSet(scrapeTimeoutMetricName, uint64(ts), staleNaN)
-		batch.AddWithLabelSet(scrapeSampleLimitMetricName, uint64(ts), staleNaN)
-		batch.AddWithLabelSet(scrapeBodySizeBytesMetricName, uint64(ts), staleNaN)
+		batch.AddWithLabelSet(scrapeTimeoutMetricName, ts, staleNaN)
+		batch.AddWithLabelSet(scrapeSampleLimitMetricName, ts, staleNaN)
+		batch.AddWithLabelSet(scrapeBodySizeBytesMetricName, ts, staleNaN)
 	}
 
 	if _, err = sl.adapter.AppendTimeSeries(

@@ -10,10 +10,10 @@
 
 namespace {
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 
 using LssCopier =
@@ -116,17 +116,17 @@ static void run_resolve_loop(const Lss& lss, benchmark::State& state) {
 }
 
 void ResolveNoShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   run_resolve_loop(get_lss_no_shrink(), state);
 }
 
 void ResolveAfterShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   run_resolve_loop(get_lss_after_shrink(), state);
 }
 
 void ResolveFixedState(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   run_resolve_loop(get_lss_fixed_state(), state);
 }
 

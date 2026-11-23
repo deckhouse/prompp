@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
-#include "primitives/snug_composites.h"
 #include "series_index/querier/label_values_querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -53,8 +52,8 @@ TEST_P(LabelValuesQuerierFixture, TestQuery) {
   std::vector<std::string_view> values;
 
   // Act
-  const auto status =
-      querier_.query(GetParam().label_name, GetParam().label_matchers, [&values](std::string_view value) PROMPP_LAMBDA_INLINE { values.emplace_back(value); });
+  const auto status = querier_.query(GetParam().label_name, GetParam().label_matchers,
+                                     [&values](std::string_view value) PROMPP(lambda_inline) { values.emplace_back(value); });
 
   // Assert
   EXPECT_EQ(GetParam().expected_status, status);

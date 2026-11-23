@@ -24,11 +24,11 @@ class Metric {
   Metric& operator=(const Metric&) = delete;
   Metric& operator=(Metric&&) noexcept = delete;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t object_size() const noexcept { return object_size_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_active() const noexcept { return go_metric_.active; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::Go::Metric* go_metric() const noexcept { return &go_metric_; }
+  [[nodiscard]] PROMPP(inline) size_t object_size() const noexcept { return object_size_; }
+  [[nodiscard]] PROMPP(inline) bool is_active() const noexcept { return go_metric_.active; }
+  [[nodiscard]] PROMPP(inline) const PromPP::Primitives::Go::Metric* go_metric() const noexcept { return &go_metric_; }
 
-  PROMPP_ALWAYS_INLINE void deactivate() noexcept { go_metric_.active = 0; }
+  PROMPP(inline) void deactivate() noexcept { go_metric_.active = 0; }
 
  private:
   PromPP::Primitives::BasicLabelSet<Label> labels_;
@@ -61,9 +61,9 @@ class GenericCounter final : public Metric {
   explicit GenericCounter(LabelSet&& labels, std::string_view name, ValueType value = {})
       : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), value_(value) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return value_; }
-  PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
-  PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return value_; }
+  PROMPP(inline) void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+  PROMPP(inline) void inc() noexcept { inc(1.0f); }
 
  protected:
   Type value_{};
@@ -80,7 +80,7 @@ class GenericCounterRef final : public Metric {
   explicit GenericCounterRef(LabelSet&& labels, std::string_view name, Type value)
       : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), counter_(value) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return *counter_.value; }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return *counter_.value; }
 
  protected:
   PromPP::Primitives::Go::dto::Counter counter_;
@@ -101,12 +101,12 @@ class GenericGauge final : public Metric {
   explicit GenericGauge(LabelSet&& labels, std::string_view name, ValueType value = {})
       : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), value_(value) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return value_; }
-  PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
-  PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
-  PROMPP_ALWAYS_INLINE void dec(BareBones::concepts::arithmetic auto count) noexcept { value_ -= count; }
-  PROMPP_ALWAYS_INLINE void dec() noexcept { dec(1.0f); }
-  PROMPP_ALWAYS_INLINE void set(BareBones::concepts::arithmetic auto value) noexcept { value_ = value; }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return value_; }
+  PROMPP(inline) void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+  PROMPP(inline) void inc() noexcept { inc(1.0f); }
+  PROMPP(inline) void dec(BareBones::concepts::arithmetic auto count) noexcept { value_ -= count; }
+  PROMPP(inline) void dec() noexcept { dec(1.0f); }
+  PROMPP(inline) void set(BareBones::concepts::arithmetic auto value) noexcept { value_ = value; }
 
  protected:
   double value_{};
@@ -123,7 +123,7 @@ class GenericGaugeRef final : public Metric {
   explicit GenericGaugeRef(LabelSet&& labels, std::string_view name, Type value)
       : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), gauge_(value) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return *gauge_.value; }
+  [[nodiscard]] PROMPP(inline) double value() const noexcept { return *gauge_.value; }
 
  protected:
   PromPP::Primitives::Go::dto::Gauge gauge_;

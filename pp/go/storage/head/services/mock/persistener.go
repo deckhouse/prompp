@@ -15,7 +15,7 @@ import (
 //
 //		// make and configure a mocked services.HeadBlockWriter
 //		mockedHeadBlockWriter := &HeadBlockWriterMock{
-//			WriteFunc: func(shard TShard) ([]block.WrittenBlock, error) {
+//			WriteFunc: func(shard TShard, numberOfShards uint16) ([]block.WrittenBlock, error) {
 //				panic("mock out the Write method")
 //			},
 //		}
@@ -26,7 +26,7 @@ import (
 //	}
 type HeadBlockWriterMock[TShard services.Shard] struct {
 	// WriteFunc mocks the Write method.
-	WriteFunc func(shard TShard) ([]block.WrittenBlock, error)
+	WriteFunc func(shard TShard, numberOfShards uint16) ([]block.WrittenBlock, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -34,25 +34,29 @@ type HeadBlockWriterMock[TShard services.Shard] struct {
 		Write []struct {
 			// Shard is the shard argument value.
 			Shard TShard
+			// NumberOfShards is the numberOfShards argument value.
+			NumberOfShards uint16
 		}
 	}
 	lockWrite sync.RWMutex
 }
 
 // Write calls WriteFunc.
-func (mock *HeadBlockWriterMock[TShard]) Write(shard TShard) ([]block.WrittenBlock, error) {
+func (mock *HeadBlockWriterMock[TShard]) Write(shard TShard, numberOfShards uint16) ([]block.WrittenBlock, error) {
 	if mock.WriteFunc == nil {
 		panic("HeadBlockWriterMock.WriteFunc: method is nil but HeadBlockWriter.Write was just called")
 	}
 	callInfo := struct {
-		Shard TShard
+		Shard          TShard
+		NumberOfShards uint16
 	}{
-		Shard: shard,
+		Shard:          shard,
+		NumberOfShards: numberOfShards,
 	}
 	mock.lockWrite.Lock()
 	mock.calls.Write = append(mock.calls.Write, callInfo)
 	mock.lockWrite.Unlock()
-	return mock.WriteFunc(shard)
+	return mock.WriteFunc(shard, numberOfShards)
 }
 
 // WriteCalls gets all the calls that were made to Write.
@@ -60,10 +64,12 @@ func (mock *HeadBlockWriterMock[TShard]) Write(shard TShard) ([]block.WrittenBlo
 //
 //	len(mockedHeadBlockWriter.WriteCalls())
 func (mock *HeadBlockWriterMock[TShard]) WriteCalls() []struct {
-	Shard TShard
+	Shard          TShard
+	NumberOfShards uint16
 } {
 	var calls []struct {
-		Shard TShard
+		Shard          TShard
+		NumberOfShards uint16
 	}
 	mock.lockWrite.RLock()
 	calls = mock.calls.Write

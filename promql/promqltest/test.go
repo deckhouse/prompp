@@ -112,6 +112,39 @@ func NewTestEngineWithOpts(tb testing.TB, opts promql.EngineOpts) *promql.Engine
 	return ng
 }
 
+// GetBuiltInExprs returns all the eval statement expressions from the built-in test files.
+func GetBuiltInExprs() ([]string, error) {
+	files, err := fs.Glob(testsFs, "*/*.test")
+	if err != nil {
+		return nil, err
+	}
+
+	var exprs []string
+	for _, fn := range files {
+		content, err := fs.ReadFile(testsFs, fn)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a minimal test struct just for parsing
+		testInstance := &test{
+			cmds: []testCommand{},
+		}
+		if err := testInstance.parse(string(content)); err != nil {
+			return nil, err
+		}
+
+		// Extract expressions from eval commands
+		for _, cmd := range testInstance.cmds {
+			if evalCmd, ok := cmd.(*evalCmd); ok {
+				exprs = append(exprs, evalCmd.expr)
+			}
+		}
+	}
+
+	return exprs, nil
+}
+
 // RunBuiltinTests runs an acceptance test suite against the provided engine.
 func RunBuiltinTests(t TBRun, engine promql.QueryEngine) {
 	t.Cleanup(func() { parser.EnableExperimentalFunctions = false })
@@ -286,9 +319,9 @@ func (t *test) parseEval(lines []string, i int) (int, *evalCmd, error) {
 
 	if isInstant {
 		at := instantParts[2]
-		offset, err := model.ParseDuration(at)
-		if err != nil {
-			return i, nil, formatErr("invalid timestamp definition %q: %s", at, err)
+		offset, errParse := model.ParseDuration(at)
+		if errParse != nil {
+			return i, nil, formatErr("invalid timestamp definition %q: %s", at, errParse)
 		}
 		ts := testStartTime.Add(time.Duration(offset))
 		cmd = newInstantEvalCmd(expr, ts, i+1)
@@ -297,23 +330,23 @@ func (t *test) parseEval(lines []string, i int) (int, *evalCmd, error) {
 		to := rangeParts[3]
 		step := rangeParts[4]
 
-		parsedFrom, err := model.ParseDuration(from)
-		if err != nil {
-			return i, nil, formatErr("invalid start timestamp definition %q: %s", from, err)
+		parsedFrom, errParse := model.ParseDuration(from)
+		if errParse != nil {
+			return i, nil, formatErr("invalid start timestamp definition %q: %s", from, errParse)
 		}
 
-		parsedTo, err := model.ParseDuration(to)
-		if err != nil {
-			return i, nil, formatErr("invalid end timestamp definition %q: %s", to, err)
+		parsedTo, errParse := model.ParseDuration(to)
+		if errParse != nil {
+			return i, nil, formatErr("invalid end timestamp definition %q: %s", to, errParse)
 		}
 
 		if parsedTo < parsedFrom {
 			return i, nil, formatErr("invalid test definition, end timestamp (%s) is before start timestamp (%s)", to, from)
 		}
 
-		parsedStep, err := model.ParseDuration(step)
-		if err != nil {
-			return i, nil, formatErr("invalid step definition %q: %s", step, err)
+		parsedStep, errParse := model.ParseDuration(step)
+		if errParse != nil {
+			return i, nil, formatErr("invalid step definition %q: %s", step, errParse)
 		}
 
 		cmd = newRangeEvalCmd(expr, testStartTime.Add(time.Duration(parsedFrom)), testStartTime.Add(time.Duration(parsedTo)), time.Duration(parsedStep), i+1)
@@ -564,7 +597,7 @@ func processUpperBoundsAndCreateBaseHistogram(upperBounds0 []float64) ([]float64
 		Sum:    0,
 		Schema: histogram.CustomBucketsSchema,
 		PositiveSpans: []histogram.Span{
-			{Offset: 0, Length: uint32(len(upperBounds))},
+			{Offset: 0, Length: uint32(len(upperBounds))}, // #nosec G115 // no overflow
 		},
 		PositiveBuckets: make([]float64, len(upperBounds)),
 		CustomValues:    customBounds,
@@ -1198,7 +1231,7 @@ func (t *test) runInstantQuery(iq atModifierTestCase, cmd *evalCmd, engine promq
 	res := q.Exec(t.context)
 	if res.Err != nil {
 		if cmd.fail {
-			if err := cmd.checkExpectedFailure(res.Err); err != nil {
+			if err = cmd.checkExpectedFailure(res.Err); err != nil {
 				return err
 			}
 
@@ -1237,7 +1270,7 @@ func (t *test) runInstantQuery(iq atModifierTestCase, cmd *evalCmd, engine promq
 		return nil
 	}
 	mat := rangeRes.Value.(promql.Matrix)
-	if err := assertMatrixSorted(mat); err != nil {
+	if err = assertMatrixSorted(mat); err != nil {
 		return err
 	}
 
@@ -1469,8 +1502,8 @@ func (ll *LazyLoader) appendTill(ts int64) error {
 
 // WithSamplesTill loads the samples till given timestamp and executes the given function.
 func (ll *LazyLoader) WithSamplesTill(ts time.Time, fn func(error)) {
-	tsMilli := ts.Sub(time.Unix(0, 0).UTC()) / time.Millisecond
-	fn(ll.appendTill(int64(tsMilli)))
+	tsDuration := ts.Sub(time.Unix(0, 0).UTC()) / time.Millisecond
+	fn(ll.appendTill(int64(tsDuration)))
 }
 
 // QueryEngine returns the LazyLoader's query engine.

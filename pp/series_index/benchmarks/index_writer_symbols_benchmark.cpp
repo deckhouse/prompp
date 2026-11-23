@@ -19,9 +19,9 @@
 namespace {
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
 using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
@@ -155,7 +155,7 @@ uint32_t first_non_empty_series_id(const Lss& lss) {
   return 0;
 }
 
-PROMPP_ALWAYS_INLINE void reset_stream(std::ostringstream& stream) {
+PROMPP(inline) void reset_stream(std::ostringstream& stream) {
   stream.str({});
   stream.clear();
 }
@@ -218,7 +218,7 @@ struct IndexWriterCallTimings {
 std::vector<IndexWriterCallTimings> index_writer_call_timings;
 
 void IndexWriterEntrypointCalls(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   using std::chrono::steady_clock;
 
   const auto& lss = get_lss_no_shrink();

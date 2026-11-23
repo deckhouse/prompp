@@ -939,8 +939,8 @@ func (a *headAppender) Commit() (err error) {
 			var mmapRefs []chunks.ChunkDiskMapperRef
 			ok, chunkCreated, mmapRefs = series.insert(s.T, s.V, nil, nil, a.head.chunkDiskMapper, oooCapMax, a.head.logger)
 			if chunkCreated {
-				r, ok := oooMmapMarkers[series.ref]
-				if !ok || r != nil {
+				r, find := oooMmapMarkers[series.ref]
+				if !find || r != nil {
 					// !ok means there are no markers collected for these samples yet. So we first flush the samples
 					// before setting this m-map marker.
 
@@ -1479,7 +1479,7 @@ func (s *memSeries) mmapCurrentOOOHeadChunk(chunkDiskMapper *chunks.ChunkDiskMap
 		chunkRefs = append(chunkRefs, chunkRef)
 		s.ooo.oooMmappedChunks = append(s.ooo.oooMmappedChunks, &mmappedChunk{
 			ref:        chunkRef,
-			numSamples: uint16(memchunk.chunk.NumSamples()),
+			numSamples: uint16(memchunk.chunk.NumSamples()), // #nosec G115 // no overflow
 			minTime:    memchunk.minTime,
 			maxTime:    memchunk.maxTime,
 		})
@@ -1503,7 +1503,7 @@ func (s *memSeries) mmapChunks(chunkDiskMapper *chunks.ChunkDiskMapper) (count i
 		chunkRef := chunkDiskMapper.WriteChunk(s.ref, chk.minTime, chk.maxTime, chk.chunk, false, handleChunkWriteError)
 		s.mmappedChunks = append(s.mmappedChunks, &mmappedChunk{
 			ref:        chunkRef,
-			numSamples: uint16(chk.chunk.NumSamples()),
+			numSamples: uint16(chk.chunk.NumSamples()), // #nosec G115 // no overflow
 			minTime:    chk.minTime,
 			maxTime:    chk.maxTime,
 		})

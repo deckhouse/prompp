@@ -24,12 +24,13 @@ func (*protobufWriter) Close() error {
 }
 
 // Write [cppbridge.SnappyProtobufEncodedData] to [remote.WriteClient].
+// The attempt number of this delivery comes from the context and is reported as the Retry-Attempt header.
 func (w *protobufWriter) Write(ctx context.Context, protobuf []byte) error {
 	if len(protobuf) == 0 {
 		return nil
 	}
 
 	// TODO WriteResponseStats
-	_, err := w.client.Store(ctx, protobuf, 0)
+	_, err := w.client.Store(ctx, protobuf, deliveryMarksFromContext(ctx).retryAttempt)
 	return err
 }

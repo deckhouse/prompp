@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <random>
+#include <sstream>
+
 #include "bare_bones/vector.h"
 
 namespace {
@@ -84,7 +87,9 @@ TEST_F(BareBonesVectorAllocatedMemoryFixture, DereferencableWithAllocatedMemoryM
   EXPECT_EQ(vector.capacity() * sizeof(Vector::value_type) + vector.size() * kObjectAllocatedMemory, allocated_memory);
 }
 
-TEST(BareBonesVector, InitializerListConstructor) {
+class BareBonesVectorFixture : public testing::Test {};
+
+TEST_F(BareBonesVectorFixture, InitializerListConstructor) {
   // Arrange
 
   // Act
@@ -95,6 +100,30 @@ TEST(BareBonesVector, InitializerListConstructor) {
   EXPECT_EQ("123", vector[0]);
   EXPECT_EQ("456", vector[1]);
   EXPECT_EQ("789", vector[2]);
+}
+
+TEST_F(BareBonesVectorFixture, PushBack) {
+  // Arrange
+  Vector<uint32_t> vector;
+  std::array items{1U, 2U, 3U, 4U, 5U};
+
+  // Act
+  vector.push_back(items.begin(), items.end());
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(vector, items));
+}
+
+TEST_F(BareBonesVectorFixture, PushBackNonTriviallyCopyableObjects) {
+  // Arrange
+  Vector<Vector<uint32_t>> vector;
+  std::array items{Vector{1U, 2U, 3U}, Vector{4U, 5U, 6U}};
+
+  // Act
+  vector.push_back(items.begin(), items.end());
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(vector, items));
 }
 
 class BareBonesVectorEraseFixture : public testing::Test {
@@ -189,5 +218,58 @@ TEST_F(BareBonesVectorEraseFixture, EraseAllItems) {
   // Assert
   EXPECT_TRUE(vector_.empty());
 }
+
+struct VectorValuesCase {
+  const char* name;
+  std::vector<uint32_t> values;
+};
+
+class BareBonesVectorValuesFixture : public testing::TestWithParam<VectorValuesCase> {
+ protected:
+  [[nodiscard]] static std::vector<uint32_t> mixed_values() {
+    std::mt19937 generator(42);
+    std::vector<uint32_t> values(100);
+    std::ranges::generate(values, [&generator] { return generator(); });
+    return values;
+  }
+
+ public:
+  static auto cases() {
+    return testing::Values(VectorValuesCase{.name = "Empty", .values = {}}, VectorValuesCase{.name = "Zeros", .values = std::vector<uint32_t>(100, 0)},
+                           VectorValuesCase{.name = "MixedValues", .values = mixed_values()});
+  }
+};
+
+TEST_P(BareBonesVectorValuesFixture, PreservesInsertionOrder) {
+  // Arrange
+  Vector<uint32_t> actual;
+
+  // Act
+  std::ranges::copy(GetParam().values, std::back_inserter(actual));
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, actual));
+}
+
+TEST_P(BareBonesVectorValuesFixture, StreamRoundTripPreservesValuesAndSaveSize) {
+  // Arrange
+  Vector<uint32_t> source;
+  std::ranges::copy(GetParam().values, std::back_inserter(source));
+  Vector<uint32_t> restored;
+  std::stringstream stream;
+
+  // Act
+  stream << source;
+  stream >> restored;
+
+  // Assert
+  EXPECT_EQ(source.save_size(), stream.str().size());
+  EXPECT_TRUE(std::ranges::equal(GetParam().values, restored));
+}
+
+INSTANTIATE_TEST_SUITE_P(EmptyZerosAndMixedValues,
+                         BareBonesVectorValuesFixture,
+                         BareBonesVectorValuesFixture::cases(),
+                         [](const testing::TestParamInfo<VectorValuesCase>& info) { return info.param.name; });
 
 }  // namespace

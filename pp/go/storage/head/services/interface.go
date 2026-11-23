@@ -111,8 +111,8 @@ type HeadInformer interface {
 	// SetActiveStatus sets the [catalog.StatusActive] status by headID.
 	SetActiveStatus(headID string) error
 
-	// SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
-	SetRotatedStatus(headID string) error
+	// SetRotatedStatus sets the [catalog.StatusRotated] status and the time bounds of the [Head] data by headID.
+	SetRotatedStatus(headID string, timeInterval cppbridge.TimeInterval) error
 }
 
 //
@@ -201,8 +201,20 @@ type Shard interface {
 	// DSAllocatedMemory return size of allocated memory for [DataStorage].
 	DSAllocatedMemory() uint64
 
-	// LSSAllocatedMemory return size of allocated memory for labelset storages.
-	LSSAllocatedMemory() uint64
+	// LSSAllocatedMemory return size of allocated memory for the target and the input labelset
+	// storages separately.
+	LSSAllocatedMemory() (target, input uint64)
+
+	// LSSReleaseIngestionStructures releases label set -> ls id hash set of lss and drops input lss.
+	// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets,
+	// so it's allowed only for read-only lss.
+	LSSReleaseIngestionStructures()
+
+	// LSSReleaseLSIDSet releases sorted ls id set and label set -> ls id hash set of lss,
+	// sorting index is built beforehand.
+	// Attention: works only with QueryableEncodingBimap type of LSS. After release lss can't find or add label sets and
+	// ls id set is empty, so it's allowed only for read-only lss after chunk recoding and data loading are done.
+	LSSReleaseLSIDSet()
 
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks in [DataStorage].
 	MergeOutOfOrderChunks()
@@ -212,6 +224,10 @@ type Shard interface {
 
 	// WalCommit finalize segment from encoder and write to wal.
 	WalCommit() error
+
+	// WalLongCommit finalize segment from encoder and write to wal,
+	// intended for a long-running finalization (e.g. after copying all added series into a new head).
+	WalLongCommit() error
 
 	// WalCurrentSize returns current [Wal] size.
 	WalCurrentSize() int64
@@ -270,5 +286,5 @@ type Loader[
 
 // HeadBlockWriter writes block on disk from [Head].
 type HeadBlockWriter[TShard Shard] interface {
-	Write(shard TShard) ([]block.WrittenBlock, error)
+	Write(shard TShard, numberOfShards uint16) ([]block.WrittenBlock, error)
 }

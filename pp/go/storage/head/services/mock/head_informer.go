@@ -4,6 +4,7 @@
 package mock
 
 import (
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"sync"
 	"time"
 )
@@ -20,7 +21,7 @@ import (
 //			SetActiveStatusFunc: func(headID string) error {
 //				panic("mock out the SetActiveStatus method")
 //			},
-//			SetRotatedStatusFunc: func(headID string) error {
+//			SetRotatedStatusFunc: func(headID string, timeInterval cppbridge.TimeInterval) error {
 //				panic("mock out the SetRotatedStatus method")
 //			},
 //		}
@@ -37,7 +38,7 @@ type HeadInformerMock struct {
 	SetActiveStatusFunc func(headID string) error
 
 	// SetRotatedStatusFunc mocks the SetRotatedStatus method.
-	SetRotatedStatusFunc func(headID string) error
+	SetRotatedStatusFunc func(headID string, timeInterval cppbridge.TimeInterval) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -55,6 +56,8 @@ type HeadInformerMock struct {
 		SetRotatedStatus []struct {
 			// HeadID is the headID argument value.
 			HeadID string
+			// TimeInterval is the timeInterval argument value.
+			TimeInterval cppbridge.TimeInterval
 		}
 	}
 	lockCreatedAt        sync.RWMutex
@@ -127,19 +130,21 @@ func (mock *HeadInformerMock) SetActiveStatusCalls() []struct {
 }
 
 // SetRotatedStatus calls SetRotatedStatusFunc.
-func (mock *HeadInformerMock) SetRotatedStatus(headID string) error {
+func (mock *HeadInformerMock) SetRotatedStatus(headID string, timeInterval cppbridge.TimeInterval) error {
 	if mock.SetRotatedStatusFunc == nil {
 		panic("HeadInformerMock.SetRotatedStatusFunc: method is nil but HeadInformer.SetRotatedStatus was just called")
 	}
 	callInfo := struct {
-		HeadID string
+		HeadID       string
+		TimeInterval cppbridge.TimeInterval
 	}{
-		HeadID: headID,
+		HeadID:       headID,
+		TimeInterval: timeInterval,
 	}
 	mock.lockSetRotatedStatus.Lock()
 	mock.calls.SetRotatedStatus = append(mock.calls.SetRotatedStatus, callInfo)
 	mock.lockSetRotatedStatus.Unlock()
-	return mock.SetRotatedStatusFunc(headID)
+	return mock.SetRotatedStatusFunc(headID, timeInterval)
 }
 
 // SetRotatedStatusCalls gets all the calls that were made to SetRotatedStatus.
@@ -147,10 +152,12 @@ func (mock *HeadInformerMock) SetRotatedStatus(headID string) error {
 //
 //	len(mockedHeadInformer.SetRotatedStatusCalls())
 func (mock *HeadInformerMock) SetRotatedStatusCalls() []struct {
-	HeadID string
+	HeadID       string
+	TimeInterval cppbridge.TimeInterval
 } {
 	var calls []struct {
-		HeadID string
+		HeadID       string
+		TimeInterval cppbridge.TimeInterval
 	}
 	mock.lockSetRotatedStatus.RLock()
 	calls = mock.calls.SetRotatedStatus

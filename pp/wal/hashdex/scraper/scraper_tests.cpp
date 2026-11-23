@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <optional>
+
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
 #include "wal/hashdex/test_fixture.h"
@@ -25,6 +27,7 @@ using std::operator""s;
 struct ScraperCase {
   std::string_view buffer;
   Error result;
+  std::optional<Error> legacy_result{};
   std::vector<Metadata> metadata{};
   std::vector<FloatMetric> floats{};
 };
@@ -57,6 +60,22 @@ TEST_P(PrometheusScraperFixture, Test) {
 
   // Assert
   EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().floats, floats);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+TEST_P(PrometheusScraperFixture, LegacyPerTokenUtf8Validation) {
+  // Arrange
+  std::string buffer(GetParam().buffer.data(), GetParam().buffer.size());
+  buffer.shrink_to_fit();
+
+  // Act
+  const auto result = scraper_.parse_validate_utf_per_token(buffer, kDefaultTimestamp);
+  const auto floats = get_floats();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().legacy_result.value_or(GetParam().result), result);
   EXPECT_EQ(GetParam().floats, floats);
   EXPECT_EQ(GetParam().metadata, metadata);
 }
@@ -136,8 +155,11 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(ScraperCase{.buffer = "a\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b='c'} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b=\n", .result = Error::kUnexpectedToken, .floats = {}},
-                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a{b=\"\xff\"} 1\n", .result = Error::kInvalidUtf8, .floats = {}},
+                    ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
+                    ScraperCase{.buffer = "# comment \xff\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
+                    ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
                     ScraperCase{.buffer = "{\"a\", \"b = \"c\"}\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n", .result = Error::kUnexpectedToken, .floats = {}},
                     ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
@@ -553,8 +575,11 @@ INSTANTIATE_TEST_SUITE_P(
         ScraperCase{.buffer = "a{b=\"c\"d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\"c\",,d=\"e\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
-        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "a{\xff=\"foo\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a{b=\"\xff\"} 1\n# EOF\n", .result = Error::kInvalidUtf8, .floats = {}},
+        ScraperCase{.buffer = "a{b=\"\xc3", .result = Error::kInvalidUtf8, .legacy_result = Error::kUnexpectedToken, .floats = {}},
+        ScraperCase{.buffer = "# comment \xff\n# EOF\n", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
+        ScraperCase{.buffer = "# comment \xff", .result = Error::kInvalidUtf8, .legacy_result = Error::kNoError, .floats = {}},
         ScraperCase{.buffer = "{\"a\",\"b = \"c\"}\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "{\"a\",b\\nc=\"d\"} 1\n# EOF", .result = Error::kUnexpectedToken, .floats = {}},
         ScraperCase{.buffer = "a true\n", .result = Error::kInvalidValue, .floats = {}},
@@ -881,6 +906,38 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                                {"mount_point", "D:\\"},
                                                                                            },
                                                                                            BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
+
+// A reused scraper must not expose the previous parse after a body is rejected as invalid UTF-8.
+template <class Scraper>
+class ScraperReuseFixture : public ::testing::Test {
+ protected:
+  Scraper scraper_;
+
+  void SetUp() override {
+    std::string previous = "# HELP metric help text\nmetric 1\n# EOF\n"s;
+    ASSERT_EQ(Error::kNoError, scraper_.parse(previous, kDefaultTimestamp));
+    ASSERT_EQ(1U, scraper_.floats().size());
+    ASSERT_EQ(1U, scraper_.metadata().size());
+  }
+};
+
+using ScraperTypes = ::testing::Types<PrometheusScraper, OpenMetricsScraper>;
+TYPED_TEST_SUITE(ScraperReuseFixture, ScraperTypes);
+
+TYPED_TEST(ScraperReuseFixture, InvalidUtf8DiscardsPreviousParse) {
+  // Arrange
+  std::string buffer = "metric{label=\"\xff\"} 1\n# EOF\n"s;
+
+  // Act
+  const auto result = this->scraper_.parse(buffer, kDefaultTimestamp);
+  const auto floats = PromPP::WAL::hashdex::get_floats(this->scraper_);
+  const auto metadata = PromPP::WAL::hashdex::get_metadata(this->scraper_);
+
+  // Assert
+  EXPECT_EQ(Error::kInvalidUtf8, result);
+  EXPECT_TRUE(floats.empty());
+  EXPECT_TRUE(metadata.empty());
+}
 
 // Builds a scrape buffer whose real `# TYPE`/metric lines sit past the 4 GiB mark, preceded by
 // filler comment lines that the scraper skips.

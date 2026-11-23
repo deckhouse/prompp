@@ -37,7 +37,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, d
 		return &querier.SeriesSet{}
 	}
 
-	lssQueryResult := snapshot.Query(selector)
+	lssQueryResult := snapshot.Query(selector, true)
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.SeriesSet{}
 	}
@@ -74,6 +74,41 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 		b.StartTimer()
 
 		iterateSeriesSet(seriesSet)
+	}
+}
+
+// BenchmarkSnapshotQuerySort measures the LSS query of one shard with and without the label-sorted ids.
+func BenchmarkSnapshotQuerySort(b *testing.B) {
+	size := 200000
+	matchers := []model.LabelMatcher{{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}}
+	lss := shard.NewLSS()
+	ds := shard.NewDataStorage(false, false)
+	timeSeries := make([]storagetest.TimeSeries, 0, size)
+	for i := range size {
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels:  labels.FromStrings("__name__", "metric", "instance", fmt.Sprintf("host%07d", size-i), "job", "node"),
+			Samples: []cppbridge.Sample{{Timestamp: int64(i), Value: float64(i)}},
+		})
+	}
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
+
+	for _, sortSeries := range []bool{true, false} {
+		b.Run(fmt.Sprintf("sort_%t", sortSeries), func(b *testing.B) {
+			for b.Loop() {
+				b.StopTimer()
+				selector, snapshot, err := lss.QuerySelector(0, matchers)
+				require.NoError(b, err)
+				b.StartTimer()
+
+				result := snapshot.Query(selector, sortSeries)
+				require.Equal(b, size, result.Len())
+				result.Close()
+			}
+		})
 	}
 }
 

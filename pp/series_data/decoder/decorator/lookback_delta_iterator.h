@@ -14,25 +14,25 @@ class LookbackDeltaIterator {
     update_sample();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return iterator_.interval(); }
-  PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
+  [[nodiscard]] PROMPP(inline) const PromPP::Primitives::TimeInterval& interval() const noexcept { return iterator_.interval(); }
+  PROMPP(inline) void set_interval(const PromPP::Primitives::TimeInterval& interval) {
     iterator_.set_interval(interval);
     update_sample();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
+  PROMPP(inline) const encoder::Sample& operator*() const { return sample_; }
+  PROMPP(inline) const encoder::Sample* operator->() const { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_samples() const noexcept { return iterator_.has_more_samples(); }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
+  [[nodiscard]] PROMPP(inline) bool has_more_samples() const noexcept { return iterator_.has_more_samples(); }
 
-  PROMPP_ALWAYS_INLINE LookbackDeltaIterator& operator++() {
+  PROMPP(inline) LookbackDeltaIterator& operator++() {
     ++iterator_;
     update_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE LookbackDeltaIterator operator++(int) {
+  PROMPP(inline) LookbackDeltaIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;
@@ -45,7 +45,7 @@ class LookbackDeltaIterator {
   Iterator iterator_;
   PromPP::Primitives::Timestamp lookback_delta_;
 
-  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+  PROMPP(inline) void update_sample() noexcept {
     if (iterator_ != DecodeIteratorSentinel{}) [[likely]] {
       if (BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[unlikely]] {
         sample_ = kInvalidSample;
@@ -60,7 +60,7 @@ class LookbackDeltaIterator {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool sample_in_lookback_delta_interval() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool sample_in_lookback_delta_interval() const noexcept {
     return sample_.timestamp > iterator_.interval().max - lookback_delta_;
   }
 };

@@ -125,7 +125,7 @@ func (a Annotations) CountWarningsAndInfo() (countWarnings, countInfo int) {
 	return
 }
 
-//nolint:revive // error-naming.
+//nolint:revive,staticcheck // Ignore ST1012, these are descriptive, widely-referenced public API names rather than internal sentinel errors; renaming to the ErrFoo convention would be a bigger breaking change than this cleanup warrants.
 var (
 	// Currently there are only 2 types, warnings and info.
 	// For now, info are visually identical with warnings as we have not updated
@@ -139,12 +139,12 @@ var (
 	BadBucketLabelWarning                      = fmt.Errorf("%w: bucket label %q is missing or has a malformed value", PromQLWarning, model.BucketLabel)
 	MixedFloatsHistogramsWarning               = fmt.Errorf("%w: encountered a mix of histograms and floats for", PromQLWarning)
 	MixedClassicNativeHistogramsWarning        = fmt.Errorf("%w: vector contains a mix of classic and native histograms for metric name", PromQLWarning)
-	NativeHistogramNotCounterWarning           = fmt.Errorf("%w: this native histogram metric is not a counter:", PromQLWarning)
-	NativeHistogramNotGaugeWarning             = fmt.Errorf("%w: this native histogram metric is not a gauge:", PromQLWarning)
+	NativeHistogramNotCounterWarning           = fmt.Errorf("%w: this native histogram metric is not a counter", PromQLWarning)
+	NativeHistogramNotGaugeWarning             = fmt.Errorf("%w: this native histogram metric is not a gauge", PromQLWarning)
 	MixedExponentialCustomHistogramsWarning    = fmt.Errorf("%w: vector contains a mix of histograms with exponential and custom buckets schemas for metric name", PromQLWarning)
 	IncompatibleCustomBucketsHistogramsWarning = fmt.Errorf("%w: vector contains histograms with incompatible custom buckets for metric name", PromQLWarning)
 
-	PossibleNonCounterInfo                  = fmt.Errorf("%w: metric might not be a counter, name does not end in _total/_sum/_count/_bucket:", PromQLInfo)
+	PossibleNonCounterInfo                  = fmt.Errorf("%w: metric might not be a counter, name does not end in _total/_sum/_count/_bucket", PromQLInfo)
 	HistogramQuantileForcedMonotonicityInfo = fmt.Errorf("%w: input to histogram_quantile needed to be fixed for monotonicity (see https://prometheus.io/docs/prometheus/latest/querying/functions/#histogram_quantile) for metric name", PromQLInfo)
 )
 

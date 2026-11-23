@@ -139,7 +139,7 @@ func DirHash(t *testing.T, path string) []byte {
 		if info.IsDir() {
 			return nil
 		}
-		f, err := os.Open(path)
+		f, err := os.Open(path) // #nosec G122 G304 // it's meant to be that way
 		require.NoError(t, err)
 		defer f.Close()
 

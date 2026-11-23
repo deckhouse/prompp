@@ -109,9 +109,9 @@ func TestReadyAndHealthy(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := webHandler.Run(ctx, l, "")
-		if err != nil {
-			panic(fmt.Sprintf("Can't start web handler:%s", err))
+		errHandler := webHandler.Run(ctx, l, "")
+		if errHandler != nil {
+			panic(fmt.Sprintf("Can't start web handler:%s", errHandler))
 		}
 	}()
 
@@ -227,9 +227,9 @@ func TestRoutePrefix(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := webHandler.Run(ctx, l, "")
-		if err != nil {
-			panic(fmt.Sprintf("Can't start web handler:%s", err))
+		errHandler := webHandler.Run(ctx, l, "")
+		if errHandler != nil {
+			panic(fmt.Sprintf("Can't start web handler:%s", errHandler))
 		}
 	}()
 
@@ -318,6 +318,40 @@ func TestDebugHandler(t *testing.T) {
 		handler.router.ServeHTTP(w, req)
 
 		require.Equal(t, tc.code, w.Code)
+	}
+}
+
+func TestUIRedirects(t *testing.T) {
+	for _, tc := range []struct {
+		useOldUI      bool
+		url, location string
+	}{
+		{true, "/", "/graph"},
+		{false, "/", "/query"},
+		{false, "/graph?g0.expr=up", "/query?g0.expr=up"},
+	} {
+		opts := &Options{
+			RoutePrefix:     "/",
+			ListenAddresses: []string{"somehost:9090"},
+			ExternalURL: &url.URL{
+				Host:   "localhost.localdomain:9090",
+				Scheme: "http",
+			},
+			UseOldUI: tc.useOldUI,
+		}
+		handler := New(nil, opts, nil)
+		handler.SetReady(true)
+
+		w := httptest.NewRecorder()
+
+		req, err := http.NewRequest(http.MethodGet, tc.url, nil)
+
+		require.NoError(t, err)
+
+		handler.router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusFound, w.Code)
+		require.Equal(t, tc.location, w.Header().Get("Location"))
 	}
 }
 
@@ -417,9 +451,9 @@ func TestShutdownWithStaleConnection(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err := webHandler.Run(ctx, l, "")
-		if err != nil {
-			panic(fmt.Sprintf("Can't start web handler:%s", err))
+		errHandler := webHandler.Run(ctx, l, "")
+		if errHandler != nil {
+			panic(fmt.Sprintf("Can't start web handler:%s", errHandler))
 		}
 		close(closed)
 	}()
@@ -624,7 +658,7 @@ func cleanupSnapshot(t *testing.T, dbDir string, resp *http.Response) {
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, snapshot))
-	require.NotZero(t, snapshot.Data.Name, "snapshot directory not returned")
+	require.NotEmpty(t, snapshot.Data.Name, "snapshot directory not returned")
 	require.NoError(t, os.Remove(filepath.Join(dbDir, "snapshots", snapshot.Data.Name)))
 	require.NoError(t, os.Remove(filepath.Join(dbDir, "snapshots")))
 }

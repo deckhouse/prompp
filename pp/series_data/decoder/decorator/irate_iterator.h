@@ -15,24 +15,24 @@ class IRateIterator {
     find_last_2samples();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
-  PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
+  [[nodiscard]] PROMPP(inline) const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
+  PROMPP(inline) void set_interval(const PromPP::Primitives::TimeInterval& interval) {
     interval_ = interval;
     find_last_2samples();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
+  PROMPP(inline) const encoder::Sample& operator*() const { return sample_; }
+  PROMPP(inline) const encoder::Sample* operator->() const { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
 
-  PROMPP_ALWAYS_INLINE IRateIterator& operator++() {
+  PROMPP(inline) IRateIterator& operator++() {
     sample_ = *iterator_;
     iterator_.invalidate_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE IRateIterator operator++(int) {
+  PROMPP(inline) IRateIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;

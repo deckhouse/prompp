@@ -1,4 +1,3 @@
-#include <gmock/gmock-matchers.h>
 #include <gtest/gtest.h>
 #include <tuple>
 #include <vector>
@@ -11,7 +10,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
@@ -20,7 +19,7 @@ template <class DecodingTable, class SortingIndex, class SeriesIds, class Querya
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = QueryableEncodingBimap<DefaultSharedVector>;
 using LsIdProxy = typename Lss::LsIdSet::value_type;
 
@@ -219,6 +218,89 @@ TEST_F(BimapFixture, InsertedSeriesUpdatesMaxItemIndex) {
 
   // Assert
   EXPECT_EQ(2U, lss_.next_item_index());
+}
+
+class BimapReleaseFixture : public BimapFixture {
+ protected:
+  const LabelViewSet ls_b_{{"job", "b"}};
+  const LabelViewSet ls_c_{{"job", "c"}};
+  const LabelViewSet ls_a_{{"job", "a"}};
+
+  void SetUp() override {
+    lss_.find_or_emplace(ls_b_);
+    lss_.find_or_emplace(ls_c_);
+    lss_.find_or_emplace(ls_a_);
+  }
+};
+
+TEST_F(BimapReleaseFixture, ReleaseHashSetReleasesMemory) {
+  // Arrange
+  const auto before = lss_.allocated_memory();
+
+  // Act
+  lss_.release_hash_set();
+
+  // Assert
+  EXPECT_LT(lss_.allocated_memory(), before);
+}
+
+TEST_F(BimapReleaseFixture, ReleaseHashSetDisablesFind) {
+  // Arrange
+
+  // Act
+  lss_.release_hash_set();
+
+  // Assert
+  EXPECT_FALSE(lss_.find(ls_b_).has_value());
+}
+
+TEST_F(BimapReleaseFixture, ReleaseHashSetKeepsLsIdSet) {
+  // Arrange
+
+  // Act
+  lss_.release_hash_set();
+
+  // Assert
+  EXPECT_EQ(3U, lss_.ls_id_set().size());
+}
+
+TEST_F(BimapReleaseFixture, ReleaseLsIdSetReleasesMemory) {
+  // Arrange
+  lss_.build_deferred_indexes();
+  const auto before = lss_.allocated_memory();
+
+  // Act
+  lss_.release_ls_id_set();
+
+  // Assert
+  EXPECT_LT(lss_.allocated_memory(), before);
+  EXPECT_TRUE(lss_.ls_id_set().empty());
+}
+
+TEST_F(BimapReleaseFixture, ReleaseLsIdSetBuildsSortingIndex) {
+  // Arrange
+  std::vector<uint32_t> ids = {0U, 1U, 2U};
+
+  // Act
+  lss_.release_ls_id_set();
+  lss_.sorting_index().sort(ids);
+
+  // Assert
+  EXPECT_EQ((std::vector<uint32_t>{2U, 0U, 1U}), ids);
+}
+
+TEST_F(BimapReleaseFixture, ReleaseAllKeepsSeriesResolvable) {
+  // Arrange
+
+  // Act
+  lss_.release_hash_set();
+  lss_.release_ls_id_set();
+
+  // Assert
+  EXPECT_EQ(3U, lss_.items_count());
+  EXPECT_EQ(ls_b_, lss_[0]);
+  EXPECT_EQ(ls_c_, lss_[1]);
+  EXPECT_EQ(ls_a_, lss_[2]);
 }
 
 class BimapFixedStateFixture : public BimapFixture {
@@ -604,6 +686,22 @@ TEST_F(BimapCopierFixture, FinalizeShrinkKeepsTrie) {
   ASSERT_NE(nullptr, lss_.trie_index().values_trie(*lss_.trie_index().names_trie().lookup("job")));
   EXPECT_EQ(ls0_, lss_[0]);
   EXPECT_EQ(ls1_, lss_[1]);
+}
+
+TEST_F(BimapCopierFixture, ShouldReserveMemoryForAddedSeriesBitset) {
+  // Arrange
+  const BareBones::Vector ids_for_copy{0U};
+  Lss lss_copy;
+
+  dst_src_ids_mapping_.clear();
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  // Act
+  lss_copy.mark_active_atomic(0U);
+
+  // Assert
+  EXPECT_TRUE(lss_copy.added_series().is_set(0U));
 }
 
 class BimapShrinkedStateFixture : public BimapFixture {

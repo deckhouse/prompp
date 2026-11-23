@@ -267,14 +267,14 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
- * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ * @brief Set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
  *
- * @param args {
- *     lss                 uintptr  // pointer to source queryable lss;
- *     shrink_boundary      uint32  // boundary
- * }
+ * @param lss_ptr Address of an entrypoint::types::LssVariant containing QueryableEncodingBimap.
+ * @param shrink_boundary Pending shrink boundary (uint32_t value passed as uint64_t).
+ *
+ * @attention This binding is called through cgo.
  */
-void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+void prompp_primitives_lss_set_pending_shrink_boundary(uint64_t lss_ptr, uint64_t shrink_boundary);
 
 /**
  * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
@@ -296,6 +296,29 @@ void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
  *
  */
 void prompp_primitives_free_ls_ids_mapping(void* args);
+
+/**
+ * @brief Release the label set -> ls id hash set of queryable lss.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After release lss can't find or add label sets, so it's allowed only for read-only lss.
+ */
+void prompp_primitives_lss_release_hash_set(void* args);
+
+/**
+ * @brief Release the sorted ls id set and the label set -> ls id hash set of queryable lss, sorting index is built beforehand.
+ *
+ * @param args {
+ *     lss                uintptr  // pointer to queryable lss;
+ * }
+ *
+ * @attention After release lss can't find or add label sets and ls id set is empty, so it's allowed only for read-only lss
+ * after chunk recoding and data loading are done.
+ */
+void prompp_primitives_lss_release_ls_id_set(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

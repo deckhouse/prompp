@@ -43,7 +43,7 @@ func (s Selector) Matches(labels Labels) bool {
 // ReadLabels reads up to n label sets in a JSON formatted file fn. It is mostly useful
 // to load testing data.
 func ReadLabels(fn string, n int) ([]Labels, error) {
-	f, err := os.Open(fn)
+	f, err := os.Open(fn) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, err
 	}

@@ -1,48 +1,36 @@
 #pragma once
 
-#define PROMPP_ATTRIBUTE_INLINE __attribute__((always_inline))
-#define PROMPP_ATTRIBUTE_NOINLINE __attribute__((noinline))
+#include <version>
 
-#ifdef NDEBUG
-#define PROMPP_ALWAYS_INLINE inline PROMPP_ATTRIBUTE_INLINE
-#define PROMPP_LAMBDA_INLINE PROMPP_ATTRIBUTE_INLINE
-#else
-#define PROMPP_ALWAYS_INLINE inline PROMPP_ATTRIBUTE_NOINLINE
-#define PROMPP_LAMBDA_INLINE PROMPP_ATTRIBUTE_NOINLINE
-#endif
+#include "compiler.h"  // IWYU pragma: export
 
-#define PROMPP_ATTRIBUTE_PACKED __attribute__((__packed__))
+// PROMPP(feature, name): query library/header availability using a literal name below; also valid in #if.
+#define PROMPP_DETAIL_feature(name) PROMPP_DETAIL_FEATURE_##name()
 
-#define PROMPP_STRINGIFY(a) #a
-
-#ifdef __clang__
-#define DIAGNOSTIC_CLASS_MEMACCESS "-Wdynamic-class-memaccess"
-#define DIAGNOSTIC_STRINGOP_OVERREAD "-Wstringop-overread"
-#define DIAGNOSTIC_ARRAY_BOUNDS "-Warray-bounds"
-#define DIAGNOSTIC_MAYBE_UNINITIALIZED "-Wuninitialized"
-#define PRAGMA_DIAGNOSTIC(value) _Pragma(PROMPP_STRINGIFY(clang diagnostic value))
-#elif __GNUC__
-#define DIAGNOSTIC_CLASS_MEMACCESS "-Wclass-memaccess"
-#define DIAGNOSTIC_STRINGOP_OVERREAD "-Wstringop-overread"
-#define DIAGNOSTIC_ARRAY_BOUNDS "-Warray-bounds"
-#define DIAGNOSTIC_MAYBE_UNINITIALIZED "-Wmaybe-uninitialized"
-#define PRAGMA_DIAGNOSTIC(value) _Pragma(PROMPP_STRINGIFY(GCC diagnostic value))
-#else
-#error #pragma diagnostic is not supported
-#endif
-
+// PROMPP(test): 1 if GTest headers are available, 0 otherwise; the existing test-build heuristic, also valid in #if.
 #if __has_include(<gtest/gtest.h>)
-constexpr auto kIsUnitTestBuild = true;
+#  define PROMPP_DETAIL_test() 1
 #else
-constexpr auto kIsUnitTestBuild = false;
+#  define PROMPP_DETAIL_test() 0
 #endif
 
-#ifdef __SANITIZE_ADDRESS__
-constexpr auto kIsBuildWithAsan = true;
-#else
-constexpr auto kIsBuildWithAsan = false;
-#endif
-
+// PROMPP(feature, jemalloc): 1 if jemalloc headers are available, 0 otherwise.
 #if __has_include(<jemalloc/jemalloc.h>)
-#define JEMALLOC_AVAILABLE 1
+#  define PROMPP_DETAIL_FEATURE_jemalloc() 1
+#else
+#  define PROMPP_DETAIL_FEATURE_jemalloc() 0
+#endif
+
+// PROMPP(feature, std_spanstream): 1 if the spanstream header is available, 0 otherwise.
+#if __has_include(<spanstream>)
+#  define PROMPP_DETAIL_FEATURE_std_spanstream() 1
+#else
+#  define PROMPP_DETAIL_FEATURE_std_spanstream() 0
+#endif
+
+// PROMPP(feature, std_pointer_interconvertible): 1 if the standard library provides pointer-interconvertibility checks, 0 otherwise.
+#ifdef __cpp_lib_is_pointer_interconvertible
+#  define PROMPP_DETAIL_FEATURE_std_pointer_interconvertible() 1
+#else
+#  define PROMPP_DETAIL_FEATURE_std_pointer_interconvertible() 0
 #endif

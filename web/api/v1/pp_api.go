@@ -18,14 +18,14 @@ import (
 )
 
 // ApplyConfig updates the configs for opHandler and otlpWriteHandler.
-func (api *API) ApplyConfig(conf *config.Config) (err error) {
+func (api *API) ApplyConfig(conf *config.Config) error {
 	if api.opHandler != nil {
 		if err := api.opHandler.ApplyConfig(conf); err != nil {
 			return fmt.Errorf("failed apply opHandler config: %w", err)
 		}
 	}
 
-	return err
+	return nil
 }
 
 // Register the API's endpoints in the given router from op.
@@ -60,9 +60,9 @@ func (api *API) queryHead(r *http.Request) apiFuncResult {
 	ctx := r.Context()
 	if to := r.FormValue("timeout"); to != "" {
 		var cancel context.CancelFunc
-		timeout, err := parseDuration(to)
-		if err != nil {
-			return invalidParamError(err, "timeout")
+		timeout, errParse := parseDuration(to)
+		if errParse != nil {
+			return invalidParamError(errParse, "timeout")
 		}
 
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -140,22 +140,30 @@ func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.Handler
 	}
 }
 
-func (api *API) remoteWriteWebsocket(middlewares ...middleware.Middleware) http.HandlerFunc {
+func (api *API) remoteWriteWebsocket(...middleware.Middleware) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		if api.opHandler != nil {
-			api.opHandler.Websocket(middlewares...).ServeHTTP(rw, r)
-		} else {
-			http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
-		}
+		// temporarily disabled pending further development
+
+		// if api.opHandler != nil {
+		// 	api.opHandler.Websocket(middlewares...).ServeHTTP(rw, r)
+		// } else {
+		// 	http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+		// }
+
+		http.Error(rw, "remote write websocket is not supported", http.StatusMethodNotAllowed)
 	}
 }
 
-func (api *API) remoteWriteRefill(middlewares ...middleware.Middleware) http.HandlerFunc {
+func (api *API) remoteWriteRefill(...middleware.Middleware) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		if api.opHandler != nil {
-			api.opHandler.Refill(middlewares...).ServeHTTP(rw, r)
-		} else {
-			http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
-		}
+		// temporarily disabled pending further development
+
+		// if api.opHandler != nil {
+		// 	api.opHandler.Refill(middlewares...).ServeHTTP(rw, r)
+		// } else {
+		// 	http.Error(rw, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+		// }
+
+		http.Error(rw, "remote write refill is not supported", http.StatusMethodNotAllowed)
 	}
 }

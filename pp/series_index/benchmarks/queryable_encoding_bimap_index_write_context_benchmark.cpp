@@ -12,10 +12,10 @@
 namespace {
 
 template <class T>
-using DefaultSharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+using DefaultSharedVector = BareBones::SharedVector<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using Lss = series_index::QueryableEncodingBimap<DefaultSharedVector>;
 template <class T>
-using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+using DefaultSharedSpan = BareBones::SharedSpan<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<DefaultSharedSpan>;
 using LssCopier =
     series_index::QueryableEncodingBimapCopier<Lss, typename Lss::SortingIndexBuilder::Index, BareBones::Bitset, Lss, BareBones::Vector<uint32_t>>;
@@ -79,7 +79,7 @@ const Lss& get_lss_after_shrink() {
 }
 
 void IndexWriteContextNoShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& lss = get_lss_no_shrink();
   for ([[maybe_unused]] auto _ : state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss};
@@ -89,7 +89,7 @@ void IndexWriteContextNoShrink(benchmark::State& state) {
 }
 
 void IndexWriteContextAfterShrink(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& lss = get_lss_after_shrink();
   for ([[maybe_unused]] auto _ : state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss};

@@ -80,10 +80,13 @@ class SymbolIdsCollector {
 
   void collect_current(ExportSymbolIds& symbol_ids) const {
     const auto view = lss_.data_view();
-    for (auto it = view.keys().begin(), e = view.keys().end(); it != e; ++it) {
+    const auto keys = view.keys();
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
       symbol_ids.emplace_back(SymbolSource::kCurrent, it.id(), kKeyOnlyValueId);
     }
-    for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
+
+    const auto values = view.values();
+    for (auto it = values.begin(); it != values.end(); ++it) {
       symbol_ids.emplace_back(SymbolSource::kCurrent, it.key_id(), it.value_id());
     }
   }
@@ -210,7 +213,7 @@ class IndexWriteContext {
 
   // First up-to-8 bytes of the string as a big-endian integer (zero-padded), so integer
   // ordering matches byte-lexicographic ordering of the prefix.
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static uint64_t load_prefix(std::string_view symbol) noexcept {
+  [[nodiscard]] static PROMPP(inline) uint64_t load_prefix(std::string_view symbol) noexcept {
     if (symbol.size() >= sizeof(uint64_t)) {
       uint64_t prefix = 0;
       std::memcpy(&prefix, symbol.data(), sizeof(uint64_t));

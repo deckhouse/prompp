@@ -18,12 +18,12 @@ Two extensions are exposed:
 """
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "4141c384aa2a8e2da87dd17d16457caaecfeeda1",
+        commit = "1aa39fe721cf6e94a3fc4b502c9292e9e13d39e0",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
@@ -36,17 +36,17 @@ def _third_party_dev_deps_impl(_ctx):
         patches = [
             Label("//third_party/patches/google_benchmark:0001-BUILD.bazel.patch"),
         ],
-        sha256 = "9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340",
-        strip_prefix = "benchmark-1.9.5/",
-        url = "https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz",
+        sha256 = "acc5c7c0fbed855c4aaa2d7c3c36fb82b0c15c28f4e151e3f679c2fc0aa404af",
+        strip_prefix = "benchmark-1.10.0/",
+        url = "https://github.com/google/benchmark/archive/refs/tags/v1.10.0.tar.gz",
     )
 
     http_archive(
         name = "tracy",
         build_file = Label("//third_party:tracy.BUILD"),
-        sha256 = "ce2fb5b89aeb6db8401d7efe1bfe8393b7a81ca551273e8c6dd46ed37c02a040",
-        strip_prefix = "tracy-0.12.0/",
-        url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.tar.gz",
+        sha256 = "bf4af567e9c7524d07f3caa745fad02fb33bd5694f11910750382d1efbb251c1",
+        strip_prefix = "tracy-0.14.1/",
+        url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.14.1.tar.gz",
     )
 
 third_party_dev_deps = module_extension(implementation = _third_party_dev_deps_impl)
@@ -75,31 +75,21 @@ def _third_party_deps_impl(_ctx):
             Label("//third_party/patches/parallel_hashmap:btree.h.patch"),
             Label("//third_party/patches/parallel_hashmap:0003-custom_hash_eq.patch"),
         ],
-        sha256 = "b61435437713e2d98ce2a5539a0bff7e6e9e6a6b9fe507dbf490a852b8c2904f",
-        strip_prefix = "parallel-hashmap-1.35",
-        url = "https://github.com/greg7mdp/parallel-hashmap/archive/refs/tags/1.35.zip",
-    )
-
-    http_archive(
-        name = "scope_exit",
-        build_file = Label("//third_party:scope_exit.BUILD"),
-        sha256 = "9428fcdf00714e25fc7c67c28faf0821787b3234165b542a7f2223f464747d83",
-        strip_prefix = "SC22WG21_Papers-7f9c58dabea6872f86f7960157e2ca38880e14cb/workspace/P0052_scope_exit/src",
-        url = "https://github.com/PeterSommerlad/SC22WG21_Papers/archive/7f9c58dabea6872f86f7960157e2ca38880e14cb.zip",
+        sha256 = "75959ad0fc9f1421cd6bb462b8f77e7de4328edd5e547ae798e417cb22b81d9c",
+        strip_prefix = "parallel-hashmap-1.37",
+        url = "https://github.com/greg7mdp/parallel-hashmap/archive/refs/tags/1.37.zip",
     )
 
     http_archive(
         name = "lz4",
         build_file = Label("//third_party:lz4.BUILD"),
         patches = [
-            Label("//third_party/patches/lz4:0001-remove_visibility_attribute.patch"),
             Label("//third_party/patches/lz4:0002-add_allocated_memory.patch"),
-            Label("//third_party/patches/lz4:0003-fix_offsetof_calculation.patch"),
             Label("//third_party/patches/lz4:0004-svacer_fixes.patch"),
         ],
-        sha256 = "658ba6191fa44c92280d4aa2c271b0f4fbc0e34d249578dd05e50e76d0e5efcc",
-        strip_prefix = "lz4-1.9.2",
-        url = "https://github.com/lz4/lz4/archive/v1.9.2.tar.gz",
+        sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b",
+        strip_prefix = "lz4-1.10.0",
+        url = "https://github.com/lz4/lz4/archive/v1.10.0.tar.gz",
     )
 
     http_archive(
@@ -143,7 +133,7 @@ def _third_party_deps_impl(_ctx):
 
     git_repository(
         name = "snappy",
-        commit = "7406111ac4ae539ea0db8b7ea2dc76730cd957f4",
+        commit = "946606459314e55d029c85f9a8c46f8809467f0f",
         remote = "https://github.com/google/snappy",
         shallow_since = "1778353109 +0000",
     )
@@ -185,15 +175,8 @@ def _third_party_deps_impl(_ctx):
     http_archive(
         name = "simdutf",
         build_file = Label("//third_party:simdutf.BUILD"),
-        sha256 = "66c85f591133e3baa23cc441d6e2400dd2c94c4902820734ddbcd9e04dd3988b",
-        url = "https://github.com/simdutf/simdutf/releases/download/v6.2.0/singleheader.zip",
-    )
-
-    http_file(
-        name = "fastfloat_header",
-        downloaded_file_path = "fastfloat/fast_float.h",
-        sha256 = "1335e82c61fda54476ecbd94b92356deebeb3f0122802c3f103ee528ac08624e",
-        url = "https://github.com/fastfloat/fast_float/releases/download/v8.0.0/fast_float.h",
+        sha256 = "be74bbed96491196995f73d72a24472a0c2010b58e57ee1ae8880fecbe96a325",
+        url = "https://github.com/simdutf/simdutf/releases/download/v6.5.0/singleheader.zip",
     )
 
 third_party_deps = module_extension(implementation = _third_party_deps_impl)

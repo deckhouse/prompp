@@ -24,33 +24,33 @@ class GoHead : public Prometheus::hashdex::Abstract {
     using pointer = Iterator*;
     using reference = Iterator&;
 
-    PROMPP_ALWAYS_INLINE Iterator(const Hashes* hashes, const Lss* lss, const DataStorage* data_storage)
+    PROMPP(inline) Iterator(const Hashes* hashes, const Lss* lss, const DataStorage* data_storage)
         : hashes_(hashes), lss_(lss), data_storage_(data_storage), max_ls_id_(lss->next_item_index()) {}
 
-    PROMPP_ALWAYS_INLINE const Iterator& operator*() const noexcept { return *this; }
-    PROMPP_ALWAYS_INLINE const Iterator* operator->() const noexcept { return this; }
+    PROMPP(inline) const Iterator& operator*() const noexcept { return *this; }
+    PROMPP(inline) const Iterator* operator->() const noexcept { return this; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hashes_->operator[](ls_id_); }
+    [[nodiscard]] PROMPP(inline) size_t hash() const { return hashes_->operator[](ls_id_); }
 
     template <class Timeseries>
-    PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
+    PROMPP(inline) void read(Timeseries& timeseries) const {
       using enum series_data::chunk::DataChunk::Type;
 
       timeseries.label_set().append_sorted(lss_->operator[](ls_id_));
-      series_data::Decoder::decode_series(*data_storage_, ls_id_, [&timeseries](const series_data::encoder::Sample& sample) PROMPP_LAMBDA_INLINE {
+      series_data::Decoder::decode_series(*data_storage_, ls_id_, [&timeseries](const series_data::encoder::Sample& sample) PROMPP(lambda_inline) {
         timeseries.samples().emplace_back(sample.timestamp, sample.value);
         return true;
       });
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return ls_id_ == max_ls_id_; }
+    PROMPP(inline) bool operator==(const IteratorSentinel&) const noexcept { return ls_id_ == max_ls_id_; }
 
-    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+    PROMPP(inline) Iterator& operator++() noexcept {
       ++ls_id_;
       return *this;
     }
 
-    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+    PROMPP(inline) Iterator operator++(int) noexcept {
       auto tmp = *this;
       ++(*this);
       return tmp;
@@ -66,7 +66,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
 
   class Floats {
    public:
-    PROMPP_ALWAYS_INLINE void reset(const Lss* lss, const DataStorage* data_storage) noexcept {
+    PROMPP(inline) void reset(const Lss* lss, const DataStorage* data_storage) noexcept {
       lss_ = lss;
       data_storage_ = data_storage;
 
@@ -77,9 +77,9 @@ class GoHead : public Prometheus::hashdex::Abstract {
       }
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return hashes_.size(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator{&hashes_, lss_, data_storage_}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] PROMPP(inline) size_t size() const noexcept { return hashes_.size(); }
+    [[nodiscard]] PROMPP(inline) Iterator begin() const noexcept { return Iterator{&hashes_, lss_, data_storage_}; }
+    [[nodiscard]] static PROMPP(inline) IteratorSentinel end() noexcept { return {}; }
 
    private:
     Hashes hashes_;
@@ -87,15 +87,15 @@ class GoHead : public Prometheus::hashdex::Abstract {
     const DataStorage* data_storage_{};
   };
 
-  PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, DataStorage* data_storage) {
+  PROMPP(inline) void presharding(const Lss* lss, DataStorage* data_storage) {
     series_data::Encoder encoder(*data_storage);
     series_data::OutdatedChunkMerger{encoder}.merge();
 
     floats_.reset(lss, data_storage);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
+  [[nodiscard]] PROMPP(inline) const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] static PROMPP(inline) auto metadata() noexcept {
     struct Stub {};
     return Stub{};
   }

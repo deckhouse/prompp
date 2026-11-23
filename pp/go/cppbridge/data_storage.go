@@ -2,6 +2,7 @@ package cppbridge
 
 import (
 	"runtime"
+	"slices"
 	"sync/atomic"
 	"unsafe"
 
@@ -52,6 +53,16 @@ func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	return ds
 }
 
+// TimeInterval returns the timestamp bounds of the stored data, [NewInvalidTimeInterval] if there is none.
+//
+// The bounds are cached: computing them from the storage walks every series and decodes the first
+// timestamp of each. [DataStorage.EncodeInnerSeriesSlice] keeps the cache up to date, so a storage that is
+// only appended to never needs a rescan.
+//
+// The cache of a storage filled through [HeadWalDecoder.DecodeToDataStorage], which does not maintain it,
+// must be primed with invalidateCache before the first append: an invalid cache is indistinguishable from
+// the cache of an empty storage, and extending it with the bounds of one appended batch would report the
+// restored data as absent.
 func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 	if invalidateCache || ds.timeInterval.Load().IsInvalid() {
 		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
@@ -60,6 +71,17 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
 	}
 
 	return *ds.timeInterval.Load()
+}
+
+// NonEmptyQuants returns the sorted start timestamps of the quantDuration-aligned quants that hold at least
+// one sample, the unloaded and the outdated samples included.
+func (ds *DataStorage) NonEmptyQuants(quantDuration int64) []int64 {
+	cppQuants := seriesDataDataStorageNonEmptyQuants(ds.dataStorage, quantDuration)
+	runtime.KeepAlive(ds)
+
+	quants := slices.Clone(cppQuants)
+	freeBytes(*(*[]byte)(unsafe.Pointer(&cppQuants))) // #nosec G103 // it's meant to be that way
+	return quants
 }
 
 func (ds *DataStorage) GetQueriedSeriesBitset() []byte {
@@ -91,10 +113,20 @@ func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {
 	runtime.KeepAlive(ds)
 }
 
-// EncodeInnerSeriesSlice encodes InnerSeries slice produced by relabeler into the data storage.
+// EncodeInnerSeriesSlice encodes InnerSeries slice produced by relabeler into the data storage
+// and keeps the cached time interval in sync with the appended samples.
 func (ds *DataStorage) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
 	seriesDataEncoderEncodeInnerSeriesSlice(ds.dataStorage, innerSeriesSlice)
 	runtime.KeepAlive(ds)
+
+	appended := NewInvalidTimeInterval()
+	for i := range innerSeriesSlice {
+		interval := innerSeriesSlice[i].TimeInterval()
+		appended.MinT = min(appended.MinT, interval.MinT)
+		appended.MaxT = max(appended.MaxT, interval.MaxT)
+	}
+
+	ds.extendTimeInterval(appended)
 }
 
 // MergeOutOfOrderChunks merges out of order chunks in the data storage.
@@ -148,18 +180,12 @@ func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selec
 	}
 }
 
-// InstantQuery .
-// Deprecated: InstantQuery .
+// InstantQuery finds, for each series in labelSetIDs, the sample closest to (at or before) targetTimestamp
+// and writes it into the C-shared samples slice (pointed to by samples), in the same order as labelSetIDs.
 func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
 	result := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 	runtime.KeepAlive(ds)
 	return result
-}
-
-// QueryFirstTimestamps fills timestamps with the first sample timestamp (Prometheus ms) for each series in seriesIDs.
-func (ds *DataStorage) QueryFirstTimestamps(seriesIDs []uint32, timestamps []int64) {
-	seriesDataDataStorageQueryFirstTimestamps(ds.dataStorage, seriesIDs, timestamps)
-	runtime.KeepAlive(ds)
 }
 
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each
@@ -172,4 +198,28 @@ func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	seriesDataDataStorageQueryFinal(queriers)
 	runtime.KeepAlive(queriers)
+}
+
+// extendTimeInterval widens the cached time interval to cover interval. The bounds of the data
+// only ever grow, so the cache is never narrowed.
+func (ds *DataStorage) extendTimeInterval(interval TimeInterval) {
+	if interval.IsInvalid() {
+		return
+	}
+
+	for {
+		cached := ds.timeInterval.Load()
+		minT := min(cached.MinT, interval.MinT)
+		maxT := max(cached.MaxT, interval.MaxT)
+
+		// Return before taking the address of an interval, so the common case of an append that widens
+		// nothing does not move one to the heap.
+		if minT == cached.MinT && maxT == cached.MaxT {
+			return
+		}
+
+		if ds.timeInterval.CompareAndSwap(cached, &TimeInterval{MinT: minT, MaxT: maxT}) {
+			return
+		}
+	}
 }

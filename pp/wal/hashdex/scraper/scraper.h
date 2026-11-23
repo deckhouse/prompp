@@ -21,6 +21,32 @@ template <ParserInterface Parser>
 class Scraper {
  public:
   [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    // Validates ignored comments too, unlike the legacy parser.
+    return parse_impl<Utf8ValidationMode::kWholeInput>(buffer, default_timestamp);
+  }
+
+  [[nodiscard]] Error parse_validate_utf_per_token(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    // Uses legacy per-token UTF-8 validation.
+    return parse_impl<Utf8ValidationMode::kPerToken>(buffer, default_timestamp);
+  }
+
+ private:
+  enum class Utf8ValidationMode : uint8_t {
+    kPerToken,
+    kWholeInput,
+  };
+
+  template <Utf8ValidationMode validation_mode>
+  [[nodiscard]] Error parse_impl(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    if constexpr (validation_mode == Utf8ValidationMode::kWholeInput) {
+      if (!simdutf::validate_utf8(buffer.data(), buffer.size())) [[unlikely]] {
+        // The scraper may be reused, and the markup of the previous parse points into a buffer that the
+        // caller may already have released.
+        clear();
+        return Error::kInvalidUtf8;
+      }
+    }
+
     metric_buffer_.initialize(buffer.size() / 4);
     metadata_buffer_.initialize(buffer.size() / 128);
     labels_.reserve(255);
@@ -49,7 +75,7 @@ class Scraper {
         case Token::kHelp:
         case Token::kUnit:
         case Token::kType: {
-          if (const auto error = parse_metadata(); error != Error::kNoError) [[unlikely]] {
+          if (const auto error = parse_metadata<validation_mode>(); error != Error::kNoError) [[unlikely]] {
             return error;
           }
           break;
@@ -57,7 +83,7 @@ class Scraper {
 
         case Token::kMetricName:
         case Token::kBraceOpen: {
-          if (const auto error = parse_metric(); error != Error::kNoError) [[unlikely]] {
+          if (const auto error = parse_metric<validation_mode>(); error != Error::kNoError) [[unlikely]] {
             return error;
           }
 
@@ -75,15 +101,16 @@ class Scraper {
     }
   }
 
+ public:
   class FloatsWrapper {
    public:
     explicit FloatsWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept {
       return scraper_.metric_buffer_.begin(scraper_.parser_.tokenizer().buffer(), scraper_.default_timestamp());
     }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
+    [[nodiscard]] static PROMPP(inline) auto end() noexcept { return MetricMarkupBuffer::end(); }
 
    private:
     const Scraper& scraper_;
@@ -93,28 +120,35 @@ class Scraper {
    public:
     explicit MetadataWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metadata_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return scraper_.metadata_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetadataMarkupBuffer::end(); }
+    [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return scraper_.metadata_buffer_.items_count(); }
+    [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return scraper_.metadata_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
+    [[nodiscard]] static PROMPP(inline) auto end() noexcept { return MetadataMarkupBuffer::end(); }
 
    private:
     const Scraper& scraper_;
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
+  [[nodiscard]] PROMPP(inline) FloatsWrapper floats() const noexcept { return FloatsWrapper{*this}; }
+  [[nodiscard]] PROMPP(inline) MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }
+  [[nodiscard]] PROMPP(inline) Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
     return metric_buffer_.allocated_memory() + metadata_buffer_.allocated_memory() + labels_.allocated_memory();
   }
 
  private:
   using Token = Prometheus::textparse::Token;
 
+  PROMPP(inline) void clear() noexcept {
+    metric_buffer_.clear();
+    metadata_buffer_.clear();
+    parser_.tokenizer().tokenize({});
+  }
+
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_metadata() {
-    static constexpr auto get_metadata_type = [](Token token) PROMPP_LAMBDA_INLINE {
+    static constexpr auto get_metadata_type = [](Token token) PROMPP(lambda_inline) {
       if (token == Token::kHelp) {
         return Prometheus::MetadataType::kHelp;
       }
@@ -144,8 +178,10 @@ class Scraper {
       return Error::kUnexpectedToken;
     }
 
-    if (type == Token::kHelp && !simdutf::validate_utf8(text.data(), text.size())) [[unlikely]] {
-      return Error::kInvalidUtf8;
+    if constexpr (validation_mode == Utf8ValidationMode::kPerToken) {
+      if (type == Token::kHelp && !simdutf::validate_utf8(text.data(), text.size())) [[unlikely]] {
+        return Error::kInvalidUtf8;
+      }
     }
 
     const auto buffer = tokenizer.buffer();
@@ -153,6 +189,7 @@ class Scraper {
     return Error::kNoError;
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error parse_metric() {
     labels_.clear();
 
@@ -174,7 +211,7 @@ class Scraper {
     }
 
     if (tokenizer.token() == Token::kBraceOpen) [[likely]] {
-      if (const auto error = tokenize_label_set(have_metric_name); error != Error::kNoError) {
+      if (const auto error = tokenize_label_set<validation_mode>(have_metric_name); error != Error::kNoError) {
         return error;
       }
 
@@ -194,13 +231,14 @@ class Scraper {
     return encode_metric_data(metric_offset);
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error tokenize_label_set(bool& have_metric_name) noexcept {
     auto& tokenizer = parser_.tokenizer();
     tokenizer.next_non_whitespace();
 
     while (tokenizer.token() != Token::kBraceClose) {
       MarkedLabel label;
-      if (const auto error = get_label_name(label.name); error != Error::kNoError) [[unlikely]] {
+      if (const auto error = get_label_name<validation_mode>(label.name); error != Error::kNoError) [[unlikely]] {
         return error;
       }
 
@@ -209,7 +247,7 @@ class Scraper {
           return Error::kUnexpectedToken;
         }
 
-        if (const auto error = get_quoted_value(label.value); error != Error::kNoError) [[unlikely]] {
+        if (const auto error = get_quoted_value<validation_mode>(label.value); error != Error::kNoError) [[unlikely]] {
           return error;
         }
 
@@ -236,6 +274,7 @@ class Scraper {
     return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error get_label_name(MarkedString& label_name) const noexcept {
     auto& tokenizer = parser_.tokenizer();
 
@@ -244,12 +283,13 @@ class Scraper {
       return Error::kNoError;
     }
     if (tokenizer.token() == Token::kQuotedString) {
-      return get_quoted_value(label_name);
+      return get_quoted_value<validation_mode>(label_name);
     }
 
     return Error::kUnexpectedToken;
   }
 
+  template <Utf8ValidationMode validation_mode>
   [[nodiscard]] Error get_quoted_value(MarkedString& string) const noexcept {
     auto& tokenizer = parser_.tokenizer();
 
@@ -266,8 +306,10 @@ class Scraper {
     });
     value.remove_suffix(value.size() - (copy_to - value.data()));
 
-    if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
-      return Error::kInvalidUtf8;
+    if constexpr (validation_mode == Utf8ValidationMode::kPerToken) {
+      if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
+        return Error::kInvalidUtf8;
+      }
     }
 
     string = MarkedString::create(value, tokenizer.buffer());
@@ -332,12 +374,12 @@ class Scraper {
   }
 
   void sort_and_filter_labels() noexcept {
-    const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) PROMPP_LAMBDA_INLINE { return label.value.is_empty(); });
+    const auto it =
+        std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) PROMPP(lambda_inline) { return label.value.is_empty(); });
     labels_.erase(it, labels_.end());
 
-    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
-      return a.name.view(buffer) < b.name.view(buffer);
-    });
+    std::sort(labels_.begin(), labels_.end(),
+              [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP(lambda_inline) { return a.name.view(buffer) < b.name.view(buffer); });
   }
 
   void append_labels_hash() noexcept {

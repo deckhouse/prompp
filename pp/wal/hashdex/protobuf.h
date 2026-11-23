@@ -13,7 +13,7 @@ namespace PromPP::WAL::hashdex {
 class Protobuf : public Prometheus::hashdex::Abstract {
  public:
   Protobuf() noexcept = default;
-  explicit PROMPP_ALWAYS_INLINE Protobuf(const Prometheus::hashdex::Limits& limits) noexcept
+  explicit PROMPP(inline) Protobuf(const Prometheus::hashdex::Limits& limits) noexcept
       : limits_{
             .max_label_name_length = limits.max_label_name_length,
             .max_label_value_length = limits.max_label_value_length,
@@ -21,9 +21,9 @@ class Protobuf : public Prometheus::hashdex::Abstract {
             .max_timeseries_count = limits.max_timeseries_count,
         } {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& limits() const noexcept { return limits_; }
+  [[nodiscard]] PROMPP(inline) const auto& limits() const noexcept { return limits_; }
 
-  void presharding(std::string_view protobuf) {
+  void presharding(std::string_view protobuf, bool skip_no_samples_series) {
     enum Tag : uint8_t {
       kTimeseries = 1,
       kMetadata = 3,
@@ -35,7 +35,7 @@ class Protobuf : public Prometheus::hashdex::Abstract {
       while (pb.next()) {
         switch (pb.tag()) {
           case kTimeseries: {
-            parse_timeseries(pb);
+            parse_timeseries(pb, skip_no_samples_series);
             break;
           }
 
@@ -55,13 +55,13 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   };
 
   // snappy_presharding uncompress protobuf via snappy and make presharding slice with hash and proto.
-  PROMPP_ALWAYS_INLINE void snappy_presharding(std::string_view snappy_protobuf) {
+  PROMPP(inline) void snappy_presharding(std::string_view snappy_protobuf, bool skip_no_samples_series) {
     snappy::Uncompress(snappy_protobuf.data(), snappy_protobuf.size(), &protobuf_);
-    presharding(protobuf_);
+    presharding(protobuf_, skip_no_samples_series);
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& floats() const noexcept { return floats_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metadata() const noexcept { return metadata_; }
+  [[nodiscard]] PROMPP(inline) const auto& floats() const noexcept { return floats_; }
+  [[nodiscard]] PROMPP(inline) const auto& metadata() const noexcept { return metadata_; }
 
  private:
   class Item {
@@ -69,11 +69,11 @@ class Protobuf : public Prometheus::hashdex::Abstract {
     std::string_view data_;
 
    public:
-    PROMPP_ALWAYS_INLINE explicit Item(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+    explicit PROMPP(inline) Item(size_t hash, std::string_view data) noexcept : hash_(hash), data_(data) {}
+    [[nodiscard]] PROMPP(inline) size_t hash() const { return hash_; }
 
     template <class Timeseries>
-    PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
+    PROMPP(inline) void read(Timeseries& timeseries) const {
       Prometheus::RemoteWrite::read_timeseries(protozero::pbf_reader(data_), timeseries);
     }
   };
@@ -84,12 +84,21 @@ class Protobuf : public Prometheus::hashdex::Abstract {
   const Prometheus::RemoteWrite::PbLabelSetMemoryLimits limits_{};
   Primitives::LabelViewSet label_set_;
 
-  void parse_timeseries(protozero::pbf_reader& pb) {
+  void parse_timeseries(protozero::pbf_reader& pb, bool skip_no_samples_series) {
     if (limits_.max_timeseries_count && floats_.size() >= limits_.max_timeseries_count) [[unlikely]] {
       throw BareBones::Exception(0xdedb5b24d946cc4d, "Max Timeseries count limit exceeded");
     }
     auto pb_view = pb.get_view();
-    read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+    bool has_samples = read_timeseries_label_set(protozero::pbf_reader{pb_view}, label_set_, limits_);
+
+    if (!has_samples) [[unlikely]] {
+      if (skip_no_samples_series) [[unlikely]] {
+        label_set_.clear();
+        return;
+      }
+
+      throw BareBones::Exception(0x2609ba8d388d48aa, "Protobuf message has no samples for label set");
+    }
 
     if (floats_.empty()) [[unlikely]] {
       set_cluser_and_replica_values(label_set_);

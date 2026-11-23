@@ -639,7 +639,7 @@ TEST_P(ProcessExternalLabelsFixture, Test) {
   builder_.reset(GetParam().labels);
 
   // Act
-  process_external_labels(builder_, GetParam().external_labels);
+  process_external_labels(builder_, GetParam().external_labels, GetParam().labels);
 
   // Assert
   EXPECT_EQ(GetParam().expected, builder_.label_view_set());
@@ -683,5 +683,48 @@ INSTANTIATE_TEST_SUITE_P(AddingWithWithoutClashingLabels,
                          testing::Values(ProcessExternalLabelsCase{.labels = {{"a_name", "a_value"}, {"b_name", "b_value"}},
                                                                    .external_labels = {{"a_name", "a1_value"}, {"b_name", "b1_value"}, {"c_name", "c1_value"}},
                                                                    .expected = {{"a_name", "a_value"}, {"b_name", "b_value"}, {"c_name", "c1_value"}}}));
+
+INSTANTIATE_TEST_SUITE_P(
+    PreserveSeriesLabels,
+    ProcessExternalLabelsFixture,
+    testing::Values(
+        ProcessExternalLabelsCase{.labels = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}},
+                                  .external_labels = {{"job", "external-job"}},
+                                  .expected = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}}},
+        ProcessExternalLabelsCase{.labels = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}},
+                                  .external_labels = {{"__name__", "external_metric"}, {"aaa", "external-a"}, {"job", "external-job"}, {"zzz", "external-z"}},
+                                  .expected = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}}},
+        ProcessExternalLabelsCase{.labels = {{"__name__", "node_dmi_info"}, {"instance", "localhost:9100"}, {"job", "node"}, {"zone", "local"}},
+                                  .external_labels = {{"instance", "external-instance"}, {"job", "external-job"}},
+                                  .expected = {{"__name__", "node_dmi_info"}, {"instance", "localhost:9100"}, {"job", "node"}, {"zone", "local"}}}));
+
+INSTANTIATE_TEST_SUITE_P(MergeInterleavedLabels,
+                         ProcessExternalLabelsFixture,
+                         testing::Values(ProcessExternalLabelsCase{.labels = {{"aaa", "1"}, {"instance", "localhost:9100"}, {"job", "node"}, {"zzz", "9"}},
+                                                                   .external_labels = {{"__name__", "node_dmi_info"},
+                                                                                       {"aaa", "external-a"},
+                                                                                       {"cluster", "production"},
+                                                                                       {"job", "external-job"},
+                                                                                       {"region", "eu"},
+                                                                                       {"zzz", "external-z"},
+                                                                                       {"zzzz", "last"}},
+                                                                   .expected = {{"__name__", "node_dmi_info"},
+                                                                                {"aaa", "1"},
+                                                                                {"cluster", "production"},
+                                                                                {"instance", "localhost:9100"},
+                                                                                {"job", "node"},
+                                                                                {"region", "eu"},
+                                                                                {"zzz", "9"},
+                                                                                {"zzzz", "last"}}}));
+
+INSTANTIATE_TEST_SUITE_P(
+    EmptyLabelValues,
+    ProcessExternalLabelsFixture,
+    testing::Values(ProcessExternalLabelsCase{.labels = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", ""}, {"zzz", "9"}},
+                                              .external_labels = {{"job", "external-job"}},
+                                              .expected = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "external-job"}, {"zzz", "9"}}},
+                    ProcessExternalLabelsCase{.labels = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}},
+                                              .external_labels = {{"cluster", ""}, {"job", ""}, {"zzzz", ""}},
+                                              .expected = {{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}}}));
 
 }  // namespace

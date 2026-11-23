@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
@@ -26,6 +27,7 @@ type cmdWALPPToBlock struct {
 	blockDuration        model.Duration
 	updateCatalog        bool
 	removeConvertedHeads bool
+	keepFutureSamples    bool
 }
 
 func registerCmdWALPPToBlock(cmd *cmdWALPPToBlock, clause *kingpin.CmdClause) {
@@ -41,6 +43,9 @@ func registerCmdWALPPToBlock(cmd *cmdWALPPToBlock, clause *kingpin.CmdClause) {
 		"remove-converted-heads",
 		"After conversion, delete all converted heads. Default true.",
 	).Default("true").Hidden().BoolVar(&cmd.removeConvertedHeads)
+
+	clause.Flag("keep-future-samples", "Persist samples that start later than now plus the min block duration. Such blocks push all other blocks out of time retention.").
+		BoolVar(&cmd.keepFutureSamples)
 }
 
 func (cmd *cmdWALPPToBlock) Do(
@@ -66,7 +71,8 @@ func (cmd *cmdWALPPToBlock) Do(
 
 	level.Debug(logger).Log("msg", "read catalog log")
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, registerer)
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, registerer,
+		catalog.WithHeadDirInspector(catalog.NewHeadDirInspector(workingDir)))
 	if err != nil {
 		return fmt.Errorf("failed init head catalog: %w", err)
 	}
@@ -82,11 +88,17 @@ func (cmd *cmdWALPPToBlock) Do(
 
 	level.Debug(logger).Log("msg", "catalog records", "len", len(headRecords))
 
+	futurePeriod := time.Duration(cmd.blockDuration)
+	if cmd.keepFutureSamples {
+		futurePeriod = 0
+	}
+
 	bw := block.NewWriter[*shard.Shard](
 		workingDir,
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
+		futurePeriod,
 		clock,
 		registerer,
 	)
@@ -106,8 +118,9 @@ func (cmd *cmdWALPPToBlock) Do(
 
 		level.Debug(logger).Log("msg", "write block", "id", headRecord.ID(), "dir", headRecord.Dir())
 
+		numberOfShards := h.NumberOfShards()
 		for shard := range h.RangeShards() {
-			if _, err := bw.Write(shard); err != nil {
+			if _, err = bw.Write(shard, numberOfShards); err != nil {
 				_ = h.Close()
 				return fmt.Errorf(
 					"failed to write tsdb block [id: %s, dir: %s]: %w",

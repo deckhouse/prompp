@@ -16,8 +16,8 @@ struct GoTimeSeries {
   uint64_t timestamp{};
   double value{};
 
-  PROMPP_ALWAYS_INLINE GoTimeSeries() = default;
-  PROMPP_ALWAYS_INLINE GoTimeSeries(std::initializer_list<PromPP::Primitives::LabelView> lvs, const PromPP::Primitives::Sample& sample) {
+  PROMPP(inline) GoTimeSeries() = default;
+  PROMPP(inline) GoTimeSeries(std::initializer_list<PromPP::Primitives::LabelView> lvs, const PromPP::Primitives::Sample& sample) {
     size_t index{0};
     for (const auto& [ln, lv] : lvs) {
       PromPP::Primitives::Go::LabelView go_label_view;
@@ -105,7 +105,7 @@ struct TestWALOutputDecoder : public testing::Test {
   }
 
   template <class SegmentStream>
-  PROMPP_ALWAYS_INLINE void make_segment(const std::vector<GoTimeSeries>& gtss, SegmentStream& segment_stream, Encoder& enc) {
+  PROMPP(inline) void make_segment(const std::vector<GoTimeSeries>& gtss, SegmentStream& segment_stream, Encoder& enc) {
     // make Hashdex
     Slice<GoTimeSeries> go_time_series_slice;
     for (const GoTimeSeries& gts : gtss) {
@@ -120,7 +120,7 @@ struct TestWALOutputDecoder : public testing::Test {
     enc.finalize(&stats_, segment_stream);
   }
 
-  PROMPP_ALWAYS_INLINE void stateless_relabeler_reset_to(std::initializer_list<RelabelConfigTest> cfgs) {
+  PROMPP(inline) void stateless_relabeler_reset_to(std::initializer_list<RelabelConfigTest> cfgs) {
     rcts_.resize(0);
     rcts_buf_.resize(0);
     rcts_.reserve(cfgs.size());
@@ -265,6 +265,28 @@ TEST_F(TestWALOutputDecoder, ProcessSegment) {
 
   const std::vector<RefSample> expected_ref_samples{{.id = 0, .t = 10, .v = 1}, {.id = 0, .t = 11, .v = 1}, {.id = 1, .t = 11, .v = 1}};
   EXPECT_EQ(expected_ref_samples, actual_ref_samples);
+}
+
+TEST_F(TestWALOutputDecoder, PreserveSeriesLabelsBeforeRelabeling) {
+  // Arrange
+  vector_external_labels_ = {{String("cluster"), String("production")}, {String("job"), String("external-job")}};
+  external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size(), vector_external_labels_.size());
+  stateless_relabeler_reset_to(
+      {{.source_labels = {"job"}, .regex = "node", .action = rAction::rKeep}, {.source_labels = {"cluster"}, .regex = "production", .action = rAction::rKeep}});
+  OutputDecoder decoder(sr_, output_lss_, external_labels_);
+  Encoder encoder{uint16_t{}, uint8_t{}};
+  std::stringstream segment_stream;
+  make_segment({{{{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"job", "node"}, {"zzz", "9"}}, {10, 1}}}, segment_stream, encoder);
+  std::vector<RefSample> actual_samples;
+
+  // Act
+  segment_stream >> decoder;
+  decoder.process_segment([&](LabelSetID ls_id, Timestamp ts, Sample::value_type value) { actual_samples.emplace_back(ls_id, ts, value); });
+
+  // Assert
+  EXPECT_EQ((std::vector<RefSample>{{.id = 0, .t = 10, .v = 1}}), actual_samples);
+  ASSERT_EQ(1U, output_lss_.next_item_index());
+  EXPECT_EQ((LabelViewSet{{"__name__", "node_dmi_info"}, {"aaa", "1"}, {"cluster", "production"}, {"job", "node"}, {"zzz", "9"}}), output_lss_[0]);
 }
 
 TEST_F(TestWALOutputDecoder, ProcessSegmentWithDrop) {
@@ -513,7 +535,7 @@ class SegmentSamplesStorageListSplitMessagesFixture : public ::testing::Test {
     int64_t t;
     double v;
 
-    PROMPP_ALWAYS_INLINE bool operator==(const MessageBoundary& boundary) const noexcept = default;
+    PROMPP(inline) bool operator==(const MessageBoundary& boundary) const noexcept = default;
   };
 
   Slice<GoMessage> messages_;

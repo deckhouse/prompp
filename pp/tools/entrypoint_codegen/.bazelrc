@@ -1,0 +1,3 @@
+common --noenable_workspace
+
+build --noreuse_sandbox_directories

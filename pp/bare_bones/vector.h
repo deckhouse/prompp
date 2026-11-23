@@ -6,7 +6,7 @@
 #include <fstream>
 #include <numeric>
 
-#include <scope_exit.h>
+#include <experimental/scope>
 
 #include "allocated_memory.h"
 #include "exception.h"
@@ -38,78 +38,54 @@ class GenericVector {
   using iterator = T*;
   using const_iterator = const T*;
 
-  PROMPP_ALWAYS_INLINE void reserve(SizeType size) noexcept { derived()->memory().grow_to_fit_at_least(size); }
+  PROMPP(inline) void reserve(SizeType size) noexcept { derived()->memory().grow_to_fit_at_least(size); }
 
-  PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept { derived()->memory().resize_to_fit_at_least(size()); }
+  PROMPP(inline) void shrink_to_fit() noexcept { derived()->memory().resize_to_fit_at_least(size()); }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
-    reserve(new_size);
-
-    if constexpr (!std::is_trivial_v<T>) {
-      const auto current_size = size();
-      auto memory = data();
-
-      if constexpr (IsZeroInitializable<T>::value) {
-        if constexpr (IsTriviallyDestructible<T>::value) {
-          if (new_size > current_size) {
-            zero_memory(memory + current_size, new_size - current_size);
-          } else {
-            zero_memory(memory + new_size, current_size - new_size);
-          }
-        } else {
-          if (new_size > current_size) {
-            zero_memory(memory + current_size, new_size - current_size);
-          } else {
-            std::destroy_n(memory + new_size, current_size - new_size);
-          }
-        }
-      } else {
-        if (new_size > current_size) {
-          // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
-          memory += current_size;
-          for (SizeType i = current_size; i != new_size; ++i) {
-            std::construct_at(memory++);
-          }
-        } else {
-          std::destroy_n(memory + new_size, current_size - new_size);
-        }
-      }
+  PROMPP(inline) void resize(SizeType new_size) noexcept {
+    const auto current_size = size();
+    if (new_size > current_size) {
+      grow_storage(new_size);
+      derived()->set_size(new_size);
+    } else {
+      derived()->set_size(new_size);
+      decrease_storage(new_size, current_size);
     }
-
-    derived()->set_size(new_size);
   }
 
-  PROMPP_ALWAYS_INLINE void resize(SizeType new_size, const T& value) noexcept {
+  PROMPP(inline) void resize(SizeType new_size, const T& value) noexcept {
     const auto current_size = size();
-    resize(new_size);
     if (new_size > current_size) {
-      std::fill(data() + current_size, data() + new_size, value);
+      reserve(new_size);
+      std::uninitialized_fill(data() + current_size, data() + new_size, value);
+      derived()->set_size(new_size);
+    } else {
+      resize(new_size);
     }
   }
 
   template <class Writer>
     requires std::is_invocable_v<Writer, iterator, SizeType>
-  PROMPP_ALWAYS_INLINE void reserve_and_write(SizeType additional_size, Writer&& writer) {
+  PROMPP(inline) void reserve_and_write(SizeType additional_size, Writer&& writer) {
     reserve(size() + additional_size);
     derived()->set_size(size() + std::forward<Writer>(writer)(end(), additional_size));
   }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
+    const auto current_size = size();
+    derived()->set_size(0);
+
     if constexpr (!std::is_trivial_v<T>) {
       auto memory = data();
-      const auto current_size = size();
-
       if constexpr (IsTriviallyDestructible<T>::value) {
         zero_memory(memory, current_size);
       } else {
         std::destroy_n(memory, current_size);
       }
     }
-
-    derived()->set_size(0);
   }
 
-  PROMPP_ALWAYS_INLINE iterator erase(iterator it) noexcept {
+  PROMPP(inline) iterator erase(iterator it) noexcept {
     if (it == end()) [[unlikely]] {
       return it;
     }
@@ -117,7 +93,7 @@ class GenericVector {
     return erase(it, it + 1);
   }
 
-  PROMPP_ALWAYS_INLINE iterator erase(iterator first, iterator last) noexcept {
+  PROMPP(inline) iterator erase(iterator first, iterator last) noexcept {
     assert(first >= begin());
     assert(last <= end());
     assert(last >= first);
@@ -126,114 +102,122 @@ class GenericVector {
       return first;
     }
 
+    const auto count = last - first;
+    const auto tail = end() - last;
+    derived()->set_size(size() - count);
+
     if constexpr (!IsTriviallyDestructible<T>::value) {
-      std::destroy_n(first, last - first);
+      std::destroy_n(first, count);
     }
 
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, class_memaccess)
     // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memmove(first, last, (end() - last) * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
+    std::memmove(first, last, tail * sizeof(T));
+    PROMPP(diagnostic, pop)
 
-    derived()->set_size(size() - (last - first));
     return first;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return derived()->memory(); }
+  [[nodiscard]] PROMPP(inline) const T* data() const noexcept { return derived()->memory(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return derived()->memory(); }
+  [[nodiscard]] PROMPP(inline) T* data() noexcept { return derived()->memory(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
+  [[nodiscard]] PROMPP(inline) bool empty() const noexcept { return size() == 0; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType capacity() const noexcept { return derived()->memory().size(); }
+  [[nodiscard]] PROMPP(inline) SizeType capacity() const noexcept { return derived()->memory().size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-    return mem::allocated_memory(derived()->memory()) +
-           std::accumulate(begin(), end(), 0, [](size_t memory, const auto& item) PROMPP_LAMBDA_INLINE { return memory + mem::allocated_memory(item); });
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
+    return mem::allocated_memory(derived()->memory()) + std::accumulate(begin(), end(), 0, [](size_t memory, const auto& item) PROMPP(lambda_inline) {
+             return memory + mem::allocated_memory(item);
+           });
   }
 
   template <class Item>
-  PROMPP_ALWAYS_INLINE void push_back(Item&& item) noexcept {
+  PROMPP(inline) void push_back(Item&& item) noexcept {
     auto pos = size();
-    resize(pos + 1);
+    reserve(pos + 1);
     std::construct_at(data() + pos, std::forward<Item>(item));
+    derived()->set_size(pos + 1);
   }
 
   template <class Item>
-  PROMPP_ALWAYS_INLINE iterator insert(iterator pos, Item&& item) noexcept {
+  PROMPP(inline) iterator insert(iterator pos, Item&& item) noexcept {
     assert(pos >= data());
     assert(pos <= data() + size());
 
     const auto idx = pos - data();
-    reserve(size() + 1);
+    const auto old_size = size();
+    reserve(old_size + 1);
     const auto memory = data();
 
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, class_memaccess)
     // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
-    std::memmove(memory + idx + 1, memory + idx, (size() - idx) * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
+    std::memmove(memory + idx + 1, memory + idx, (old_size - idx) * sizeof(T));
+    PROMPP(diagnostic, pop)
 
-    derived()->set_size(size() + 1);
-    return std::construct_at(memory + idx, std::forward<Item>(item));
+    auto* inserted = std::construct_at(memory + idx, std::forward<Item>(item));
+    derived()->set_size(old_size + 1);
+    return inserted;
   }
 
   template <class... Args>
-  PROMPP_ALWAYS_INLINE T& emplace_back(Args&&... args) noexcept {
+  PROMPP(inline) T& emplace_back(Args&&... args) noexcept {
     auto pos = size();
     reserve(pos + 1);
+    auto& ref = *std::construct_at(data() + pos, std::forward<Args>(args)...);
     derived()->set_size(pos + 1);
-    return *std::construct_at(data() + pos, std::forward<Args>(args)...);
+    return ref;
   }
 
   template <std::random_access_iterator IteratorType, class IteratorSentinelType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, T> && std::sentinel_for<IteratorSentinelType, IteratorType>
-  PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
+  PROMPP(inline) void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
     const auto pos = size();
     const auto size = std::distance(begin, end);
-    resize(pos + size);
+    reserve(pos + size);
 
     if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
-      std::memcpy(data() + pos, begin, size);
+      std::memcpy(data() + pos, begin, size * sizeof(T));
     } else {
-      std::ranges::copy(begin, end, data() + pos);
+      std::uninitialized_copy(begin, end, data() + pos);
     }
+
+    derived()->set_size(pos + size);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return derived()->get_size(); }
+  [[nodiscard]] PROMPP(inline) SizeType size() const noexcept { return derived()->get_size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T& back() const noexcept { return data()[size() - 1]; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T& back() noexcept { return data()[size() - 1]; }
+  [[nodiscard]] PROMPP(inline) const T& back() const noexcept { return data()[size() - 1]; }
+  [[nodiscard]] PROMPP(inline) T& back() noexcept { return data()[size() - 1]; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator begin() noexcept { return data(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return data(); }
+  [[nodiscard]] PROMPP(inline) iterator begin() noexcept { return data(); }
+  [[nodiscard]] PROMPP(inline) const_iterator begin() const noexcept { return data(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator end() noexcept { return begin() + size(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return begin() + size(); }
+  [[nodiscard]] PROMPP(inline) iterator end() noexcept { return begin() + size(); }
+  [[nodiscard]] PROMPP(inline) const_iterator end() const noexcept { return begin() + size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T& operator[](SizeType i) const {
+  [[nodiscard]] PROMPP(inline) const T& operator[](SizeType i) const {
     assert(i < size());
     return data()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T& operator[](SizeType i) {
+  [[nodiscard]] PROMPP(inline) T& operator[](SizeType i) {
     assert(i < size());
     return data()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const GenericVector& vec) const { return size() == vec.size() && std::ranges::equal(*this, vec); }
+  [[nodiscard]] PROMPP(inline) bool operator==(const GenericVector& vec) const { return size() == vec.size() && std::ranges::equal(*this, vec); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t save_size() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t save_size() const noexcept {
     // version is written and read by methods put() and get() and they write and read 1 byte
     return 1 + sizeof(SizeType) + sizeof(T) * size();
   }
 
   template <OutputStream S>
   friend S& operator<<(S& out, const GenericVector& vec) {
-    auto original_exceptions = out.exceptions();
-    auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
-    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = scoped_stream_exceptions(out, std::ifstream::failbit | std::ifstream::badbit);
 
     // write version
     out.put(1);
@@ -271,9 +255,7 @@ class GenericVector {
       throw Exception(0xe637da228c04829d, "Invalid vector format version %d while reading from stream, only version 1 is supported", version);
     }
 
-    auto original_exceptions = in.exceptions();
-    auto sg2 = std::experimental::scope_exit([&]() { in.exceptions(original_exceptions); });
-    in.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = scoped_stream_exceptions(in, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     // read size
     SizeType size_to_read;
@@ -304,15 +286,46 @@ class GenericVector {
   }
 
  private:
-  PROMPP_ALWAYS_INLINE static void zero_memory(void* memory, SizeType size) {
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    std::memset(memory, 0, size * sizeof(T));
-    PRAGMA_DIAGNOSTIC(pop)
+  PROMPP(inline) void grow_storage(SizeType new_size) noexcept {
+    reserve(new_size);
+
+    if constexpr (!std::is_trivial_v<T>) {
+      const auto current_size = size();
+      auto memory = data();
+
+      if constexpr (IsZeroInitializable<T>::value) {
+        zero_memory(memory + current_size, new_size - current_size);
+      } else {
+        // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
+        memory += current_size;
+        for (SizeType i = current_size; i != new_size; ++i) {
+          std::construct_at(memory++);
+        }
+      }
+    }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
+  PROMPP(inline) void decrease_storage(SizeType new_size, SizeType current_size) noexcept {
+    if constexpr (!std::is_trivial_v<T>) {
+      auto memory = data();
+
+      if constexpr (IsZeroInitializable<T>::value && IsTriviallyDestructible<T>::value) {
+        zero_memory(memory + new_size, current_size - new_size);
+      } else {
+        std::destroy_n(memory + new_size, current_size - new_size);
+      }
+    }
+  }
+
+  static PROMPP(inline) void zero_memory(void* memory, SizeType size) {
+    PROMPP(diagnostic, push)
+    PROMPP(diagnostic, ignore, class_memaccess)
+    std::memset(memory, 0, size * sizeof(T));
+    PROMPP(diagnostic, pop)
+  }
+
+  [[nodiscard]] PROMPP(inline) Derived* derived() noexcept { return static_cast<Derived*>(this); }
+  [[nodiscard]] PROMPP(inline) const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
 template <template <class> class MemoryControlBlock, class T, ReallocatorInterface Reallocator>
@@ -342,16 +355,16 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
  protected:
   friend class GenericVector<MemoryBasedVector, SizeType, T>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto& memory() noexcept { return memory_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& memory() const noexcept { return memory_; }
+  [[nodiscard]] PROMPP(inline) auto& memory() noexcept { return memory_; }
+  [[nodiscard]] PROMPP(inline) const auto& memory() const noexcept { return memory_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.control_block().items_count; }
-  PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.control_block().items_count = size; }
+  [[nodiscard]] PROMPP(inline) SizeType get_size() const noexcept { return memory_.control_block().items_count; }
+  PROMPP(inline) void set_size(SizeType size) noexcept { memory_.control_block().items_count = size; }
 
  private:
   MemoryType memory_;
 
-  PROMPP_ALWAYS_INLINE void copy(const MemoryBasedVector& other) {
+  PROMPP(inline) void copy(const MemoryBasedVector& other) {
     set_size(other.get_size());
 
     if constexpr (IsTriviallyCopyable<T>::value) {
@@ -368,10 +381,11 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
 template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
 using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T, Reallocator>;
 
-template <class T, ReallocatorInterface Reallocator>
-class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+class SharedVector
+    : public GenericVector<SharedVector<T, ControlBlockType, Reallocator>, typename SharedMemory<T, ControlBlockType, Reallocator>::SizeType, T> {
  public:
-  using SizeType = typename SharedMemory<T, Reallocator>::SizeType;
+  using SizeType = typename SharedMemory<T, ControlBlockType, Reallocator>::SizeType;
   using Base = GenericVector<SharedVector, SizeType, T>;
 
   SharedVector() = default;
@@ -383,88 +397,88 @@ class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename
   SharedVector& operator=(const SharedVector&) = default;
   SharedVector& operator=(SharedVector&&) noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& shared_ptr() const noexcept { return memory_.ptr(); }
+  [[nodiscard]] PROMPP(inline) const auto& shared_ptr() const noexcept { return memory_.ptr(); }
 
  protected:
   friend class GenericVector<SharedVector, SizeType, T>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto& memory() noexcept { return memory_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& memory() const noexcept { return memory_; }
+  [[nodiscard]] PROMPP(inline) auto& memory() noexcept { return memory_; }
+  [[nodiscard]] PROMPP(inline) const auto& memory() const noexcept { return memory_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.items_count(); }
-  PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_items_count(size); }
+  [[nodiscard]] PROMPP(inline) SizeType get_size() const noexcept { return memory_.items_count(); }
+  PROMPP(inline) void set_size(SizeType size) noexcept { memory_.set_items_count(size); }
 
  private:
-  SharedMemory<T, Reallocator> memory_;
+  SharedMemory<T, ControlBlockType, Reallocator> memory_;
 };
 
 template <class T>
 struct IsTriviallyReallocatable<Vector<T>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsTriviallyReallocatable<SharedVector<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<SharedVector<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 template <class T>
 struct IsZeroInitializable<Vector<T>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsZeroInitializable<SharedVector<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsZeroInitializable<SharedVector<T, ControlBlockType, Reallocator>> : std::true_type {};
 
-template <class T, ReallocatorInterface Reallocator>
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
 class SharedSpan {
  public:
   using iterator_category = std::contiguous_iterator_tag;
   using value_type = T;
   using iterator = T*;
   using const_iterator = const T*;
-  using SizeType = typename SharedVector<T, Reallocator>::SizeType;
+  using SizeType = typename SharedVector<T, ControlBlockType, Reallocator>::SizeType;
 
   SharedSpan() noexcept = default;
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector)
-      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(vector.shared_ptr())) {}
+  explicit SharedSpan(const SharedVector<Item, ControlBlockType, Reallocator>& vector)
+      : data_(reinterpret_cast<const SharedPtr<T, ControlBlockType, Reallocator>&>(vector.shared_ptr())) {}
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedMemory<Item, Reallocator>& memory)
-      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(memory.ptr())) {}
+  explicit SharedSpan(const SharedMemory<Item, ControlBlockType, Reallocator>& memory)
+      : data_(reinterpret_cast<const SharedPtr<T, ControlBlockType, Reallocator>&>(memory.ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
   SharedSpan& operator=(const SharedSpan&) = default;
   SharedSpan& operator=(SharedSpan&& other) noexcept {
-    if (this != other) [[likely]] {
+    if (this != &other) [[likely]] {
       data_ = std::move(other.data_);
     }
 
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T& operator[](SizeType i) const {
+  [[nodiscard]] PROMPP(inline) const T& operator[](SizeType i) const {
     assert(i < size());
     return data_.get()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE T& operator[](SizeType i) {
+  [[nodiscard]] PROMPP(inline) T& operator[](SizeType i) {
     assert(i < size());
     return data_.get()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.items_count(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return begin(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* begin() const noexcept { return data_.get(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
+  [[nodiscard]] PROMPP(inline) SizeType size() const noexcept { return data_.items_count(); }
+  [[nodiscard]] PROMPP(inline) const T* data() const noexcept { return begin(); }
+  [[nodiscard]] PROMPP(inline) const T* begin() const noexcept { return data_.get(); }
+  [[nodiscard]] PROMPP(inline) const T* end() const noexcept { return begin() + size(); }
 
  private:
-  SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator> data_;
+  SharedPtr<T, ControlBlockType, Reallocator> data_;
 };
 
 template <class T>
 struct IsSharedSpan : std::false_type {};
 
-template <class T, ReallocatorInterface Reallocator>
-struct IsSharedSpan<SharedSpan<T, Reallocator>> : std::true_type {};
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+struct IsSharedSpan<SharedSpan<T, ControlBlockType, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

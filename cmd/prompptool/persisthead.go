@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/google/uuid"
+	"github.com/grafana/regexp"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
@@ -29,10 +29,11 @@ import (
 var shardWalFilePattern = regexp.MustCompile(`^shard_(\d+)\.wal$`)
 
 type cmdPersistHead struct {
-	headPath       string
-	outputDir      string
-	blockDuration  model.Duration
-	numberOfShards uint16
+	headPath          string
+	outputDir         string
+	blockDuration     model.Duration
+	numberOfShards    uint16
+	keepFutureSamples bool
 }
 
 func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
@@ -48,6 +49,9 @@ func registerCmdPersistHead(cmd *cmdPersistHead, clause *kingpin.CmdClause) {
 
 	clause.Flag("number-of-shards", "Number of shards in the head. 0 means autodetect by shard_*.wal files.").
 		Default("0").Uint16Var(&cmd.numberOfShards)
+
+	clause.Flag("keep-future-samples", "Persist samples that start later than now plus the min block duration. Such blocks push all other blocks out of time retention.").
+		BoolVar(&cmd.keepFutureSamples)
 }
 
 // Do loads a single head directly by path (without consulting head.log) and writes TSDB blocks.
@@ -127,11 +131,17 @@ func (cmd *cmdPersistHead) Do(
 		}
 	}()
 
+	futurePeriod := time.Duration(cmd.blockDuration)
+	if cmd.keepFutureSamples {
+		futurePeriod = 0
+	}
+
 	bw := block.NewWriter[*shard.Shard](
 		outputDir,
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),
 		0, // no retention filtering: persist all heads regardless of age
+		futurePeriod,
 		clockwork.NewRealClock(),
 		registerer,
 	)
@@ -142,7 +152,7 @@ func (cmd *cmdPersistHead) Do(
 			return err
 		}
 
-		writtenBlocks, writeErr := bw.Write(sd)
+		writtenBlocks, writeErr := bw.Write(sd, numberOfShards)
 		if writeErr != nil {
 			return fmt.Errorf("failed to write tsdb block [id: %s, dir: %s]: %w", id.String(), headID, writeErr)
 		}
@@ -195,5 +205,5 @@ func detectNumberOfShards(headPath string) (uint16, error) {
 		return 0, nil
 	}
 
-	return uint16(maxShardID + 1), nil //nolint:gosec // shard count fits uint16
+	return uint16(maxShardID + 1), nil
 }

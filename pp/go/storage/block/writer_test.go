@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -49,7 +51,7 @@ func TestMain(m *testing.M) {
 	// Force a few GC cycles and give the finalizer goroutine a chance to free them first.
 	for i := 0; i < 3; i++ {
 		runtime.GC()
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	os.Exit(code)
 }
@@ -65,6 +67,7 @@ func (s *WriterSuite) SetupTest() {
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		blockDuration,
+		0,
 		0,
 		clockwork.NewRealClock(),
 		prometheus.DefaultRegisterer,
@@ -137,7 +140,7 @@ func (s *WriterSuite) shard() *shard.Shard {
 
 func (s *WriterSuite) fillHead() {
 	ts := time.UnixMilli(1753805651969)
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -263,7 +266,7 @@ func (s *WriterSuite) TestWrite() {
 
 	// Act
 	block.LsIDBatchSize = 2
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -275,7 +278,7 @@ func (s *WriterSuite) TestWriteInBatches() {
 
 	// Act
 	block.LsIDBatchSize = 1
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -288,7 +291,7 @@ func (s *WriterSuite) TestWriteWithDataUnloading() {
 
 	// Act
 	block.LsIDBatchSize = 2
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -301,7 +304,7 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 	// Act
 	block.LsIDBatchSize = 1
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -309,7 +312,7 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 func (s *WriterSuite) TestSkipEmptyBlock() {
 	// Arrange
-	storagetest.MustAppendTimeSeries(&s.Suite, s.head, []storagetest.TimeSeries{
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "value1"),
 			Samples: []cppbridge.Sample{
@@ -320,9 +323,179 @@ func (s *WriterSuite) TestSkipEmptyBlock() {
 	})
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.shard())
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
 
 	// Assert
 	s.Require().NoError(err)
 	s.Len(blocks, 2)
+}
+
+func (s *WriterSuite) TestCreateWritersOnlyForNonEmptyQuants() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds() * 1000, Value: 1},
+			},
+		},
+	})
+
+	// Act
+	count, err := s.blockWriter.CreatedWritersCount(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(2, count)
+}
+
+func (s *WriterSuite) TestSkipBlocksBeyondRetention() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: (10*time.Hour + 15*time.Minute).Milliseconds(), Value: 0},
+			},
+		},
+	})
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		time.Hour,
+		0,
+		clockwork.NewFakeClockAt(time.UnixMilli((11*time.Hour + 30*time.Minute).Milliseconds())),
+		prometheus.NewRegistry(),
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Empty(blocks)
+}
+
+func (s *WriterSuite) TestKeepBlockThatHoldsRetentionCutoff() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: (10*time.Hour + 15*time.Minute).Milliseconds(), Value: 0},
+				{Timestamp: (10*time.Hour + 45*time.Minute).Milliseconds(), Value: 1},
+			},
+		},
+	})
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		time.Hour,
+		0,
+		clockwork.NewFakeClockAt(time.UnixMilli((11*time.Hour + 30*time.Minute).Milliseconds())),
+		prometheus.NewRegistry(),
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 1)
+	s.Equal((10*time.Hour + 15*time.Minute).Milliseconds(), blocks[0].Meta.MinTime)
+}
+
+func (s *WriterSuite) TestSkipManyEmptyBlocks() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds() * 1000, Value: 1},
+			},
+		},
+	})
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 2)
+	s.Equal(int64(0), blocks[0].Meta.MinTime)
+	s.Equal(blockDuration.Milliseconds()*1000, blocks[1].Meta.MinTime)
+}
+
+func (s *WriterSuite) TestKeepFutureSamplesOfCutoffQuant() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: (3*time.Hour + 45*time.Minute).Milliseconds(), Value: 1},
+				{Timestamp: (4 * time.Hour).Milliseconds(), Value: 2},
+			},
+		},
+	})
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		0,
+		blockDuration,
+		clockwork.NewFakeClockAt(time.UnixMilli((time.Hour + 15*time.Minute).Milliseconds())),
+		prometheus.NewRegistry(),
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 2)
+	s.Equal(int64(0), blocks[0].Meta.MinTime)
+	s.Equal((3*time.Hour + 45*time.Minute).Milliseconds(), blocks[1].Meta.MinTime)
+}
+
+func (s *WriterSuite) TestSkipFutureBlocks() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(s.T().Context(), s.Require().NoError, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds(), Value: 1},
+				{Timestamp: blockDuration.Milliseconds() * 2, Value: 2},
+			},
+		},
+	})
+	registry := prometheus.NewRegistry()
+	blockWriter := block.NewWriter[*shard.Shard](
+		s.dataDir,
+		block.DefaultChunkSegmentSize,
+		blockDuration,
+		0,
+		blockDuration,
+		clockwork.NewFakeClockAt(time.UnixMilli(0)),
+		registry,
+	)
+
+	// Act
+	blocks, err := blockWriter.Write(s.shard(), s.head.NumberOfShards())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Require().Len(blocks, 2)
+	s.Equal(int64(0), blocks[0].Meta.MinTime)
+	s.Equal(blockDuration.Milliseconds(), blocks[1].Meta.MinTime)
+	s.NoError(testutil.GatherAndCompare(registry, strings.NewReader(`
+# HELP prompp_block_writer_dropped_future_blocks_total Number of blocks not written because they start later than now plus the future period, rounded down to a block boundary.
+# TYPE prompp_block_writer_dropped_future_blocks_total counter
+prompp_block_writer_dropped_future_blocks_total{shard_id="0"} 1
+`), "prompp_block_writer_dropped_future_blocks_total"))
 }

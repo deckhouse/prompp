@@ -41,47 +41,70 @@ class ChunkRecoderIterator {
       : time_interval_(time_interval),
         ls_id_iterator_(std::forward<LsIdSetIterator>(ls_id_iterator_), ls_id_batch_size),
         ls_id_end_iterator_(std::forward<LsIdSetIteratorSentinel>(ls_id_end_iterator)),
-        chunk_iterator_(data_storage,
-                        ls_id_iterator_ != ls_id_end_iterator_ ? static_cast<LabelSetID>(*ls_id_iterator_) : PromPP::Primitives::kInvalidLabelSetID) {
-    advance_to_non_empty_chunk();
-  }
+        chunk_iterator_(data_storage, PromPP::Primitives::kInvalidLabelSetID) {}
 
+  // Starts the next batch of ls ids and returns whether it holds any. It deliberately touches no
+  // chunk: the batch is positioned on its first chunk only when it is consumed, see
+  // position_to_first_chunk().
   bool next_batch() noexcept {
     ls_id_iterator_.next_batch();
-
-    if (*this != IteratorSentinel{}) {
-      chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
-      advance_to_non_empty_chunk();
-      return *this != IteratorSentinel{};
-    }
-
-    return false;
+    positioned_ = false;
+    return ls_id_iterator_ != ls_id_end_iterator_;
   }
 
-  const value_type& operator*() const noexcept { return *chunk_iterator_; }
-  const value_type* operator->() const noexcept { return chunk_iterator_.operator->(); }
+  const value_type& operator*() noexcept {
+    position_to_first_chunk();
+    return *chunk_iterator_;
+  }
 
-  PROMPP_ALWAYS_INLINE ChunkRecoderIterator& operator++() noexcept {
+  const value_type* operator->() noexcept {
+    position_to_first_chunk();
+    return chunk_iterator_.operator->();
+  }
+
+  PROMPP(inline) ChunkRecoderIterator& operator++() noexcept {
+    position_to_first_chunk();
     advance_iterator();
     advance_to_non_empty_chunk();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE ChunkRecoderIterator operator++(int) noexcept {
+  PROMPP(inline) ChunkRecoderIterator operator++(int) noexcept {
     const auto it = *this;
     ++*this;
     return it;
   }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return ls_id_iterator_ == ls_id_end_iterator_; }
+  PROMPP(inline) bool operator==(const IteratorSentinel&) noexcept {
+    position_to_first_chunk();
+    return ls_id_iterator_ == ls_id_end_iterator_;
+  }
 
  private:
   const PromPP::Primitives::TimeInterval time_interval_;
   BareBones::iterator::BatchIterator<LsIdSetIterator, LsIdSetIteratorSentinel> ls_id_iterator_;
   [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
   series_data::DataStorage<>::SeriesChunkIterator chunk_iterator_;
+  bool positioned_{};
 
-  PROMPP_ALWAYS_INLINE void advance_iterator() noexcept {
+  // Positions the iterator on the first chunk of the current batch, and does nothing once the batch
+  // is positioned. The chunks of a batch become readable only after the batch is loaded, and loading
+  // invalidates every pointer into the chunk structures of the storage: open_chunks is reallocated,
+  // and the outdated chunk merger replaces finalized chunks. So the position is taken when the batch
+  // is consumed, instead of the constructor and next_batch() taking it one batch ahead of the load.
+  PROMPP(inline) void position_to_first_chunk() noexcept {
+    if (positioned_) [[likely]] {
+      return;
+    }
+
+    positioned_ = true;
+    if (ls_id_iterator_ != ls_id_end_iterator_) {
+      chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      advance_to_non_empty_chunk();
+    }
+  }
+
+  PROMPP(inline) void advance_iterator() noexcept {
     if (++chunk_iterator_ == IteratorSentinel{}) {
       if (++ls_id_iterator_ != ls_id_end_iterator_) {
         chunk_iterator_ = series_data::DataStorage<>::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
@@ -90,7 +113,7 @@ class ChunkRecoderIterator {
   }
 
   void advance_to_non_empty_chunk() noexcept {
-    const auto chunk_is_empty = [this] PROMPP_LAMBDA_INLINE {
+    const auto chunk_is_empty = [this] PROMPP(lambda_inline) {
       if (this->chunk_is_empty()) {
         return true;
       }
@@ -106,7 +129,7 @@ class ChunkRecoderIterator {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool chunk_is_empty() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool chunk_is_empty() const noexcept {
     return chunk_iterator_ == IteratorSentinel{} || chunk_iterator_->chunk().is_empty();
   }
 };
@@ -117,7 +140,7 @@ class ChunkRecoder {
   explicit ChunkRecoder(ChunkIterator&& iterator, const PromPP::Primitives::TimeInterval& time_interval, PromPP::Primitives::Timestamp downsampling_ms)
       : iterator_(std::move(iterator)), time_interval_{time_interval}, downsampling_ms_{downsampling_ms} {}
 
-  PROMPP_ALWAYS_INLINE ChunkIterator& chunk_iterator() noexcept { return iterator_; }
+  PROMPP(inline) ChunkIterator& chunk_iterator() noexcept { return iterator_; }
 
   void recode_next_chunk(ChunkInfoInterface auto& info) {
     reset_info(info);
@@ -138,8 +161,8 @@ class ChunkRecoder {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> bytes() const noexcept { return stream_.bytes(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return iterator_ != series_data::IteratorSentinel{}; }
+  [[nodiscard]] PROMPP(inline) std::span<const uint8_t> bytes() const noexcept { return stream_.bytes(); }
+  [[nodiscard]] PROMPP(inline) bool has_more_data() noexcept { return iterator_ != series_data::IteratorSentinel{}; }
 
  private:
   using Sample = series_data::encoder::Sample;
@@ -156,14 +179,14 @@ class ChunkRecoder {
   const PromPP::Primitives::TimeInterval time_interval_;
   const PromPP::Primitives::Timestamp downsampling_ms_;
 
-  PROMPP_ALWAYS_INLINE static void reset_info(ChunkInfoInterface auto& info) noexcept {
+  static PROMPP(inline) void reset_info(ChunkInfoInterface auto& info) noexcept {
     info.interval.reset(0, 0);
     info.samples_count = 0;
     info.series_id = PromPP::Primitives::kInvalidLabelSetID;
   }
 
-  PROMPP_ALWAYS_INLINE void write_samples_count_placeholder() noexcept { stream_.write_bits(0, kSamplesCountSizeInBits); }
-  PROMPP_ALWAYS_INLINE void write_samples_count(uint16_t samples_count) noexcept {
+  PROMPP(inline) void write_samples_count_placeholder() noexcept { stream_.write_bits(0, kSamplesCountSizeInBits); }
+  PROMPP(inline) void write_samples_count(uint16_t samples_count) noexcept {
     *reinterpret_cast<uint16_t*>(stream_.raw_bytes()) = BareBones::Bit::be(samples_count);
   }
 

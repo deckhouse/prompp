@@ -62,7 +62,7 @@ func NewWriteSegmentV4(id uint32, payload WritePayload) *WriteSegmentV4 {
 	if payload == nil {
 		return f
 	}
-	f.Size = uint32(payload.Size())
+	f.Size = uint32(payload.Size()) // #nosec G115 // no overflow
 	chksum := crc32.NewIEEE()
 	_, _ = payload.WriteTo(chksum)
 	f.CRC = chksum.Sum32()
@@ -74,7 +74,7 @@ func (f *WriteSegmentV4) WriteTo(w io.Writer) (int64, error) {
 	buf := make([]byte, segmentSizeV4)
 	var offset int
 	// write SentAt and move offset
-	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(f.SentAt))
+	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(f.SentAt)) // #nosec G115 // no overflow
 	offset += sizeOfUint64
 
 	// write ID and move offset
@@ -148,7 +148,7 @@ func (f *ReadSegmentV4) Read(ctx context.Context, r io.Reader) error {
 
 	var offset int
 	// read SentAt and move offset
-	f.SentAt = int64(binary.LittleEndian.Uint64(buf[offset : offset+sizeOfUint64]))
+	f.SentAt = int64(binary.LittleEndian.Uint64(buf[offset : offset+sizeOfUint64])) // #nosec G115 // no overflow
 	offset += sizeOfUint64
 
 	// read ID and move offset
@@ -223,7 +223,7 @@ func (f *ResponseV4) Read(ctx context.Context, r io.Reader) error {
 
 	var offset int
 	// read SentAt and move offset
-	f.SentAt = int64(binary.LittleEndian.Uint64(buf[offset : offset+sizeOfUint64]))
+	f.SentAt = int64(binary.LittleEndian.Uint64(buf[offset : offset+sizeOfUint64])) // #nosec G115 // no overflow
 	offset += sizeOfUint64
 
 	// read SegmentID and move offset
@@ -258,7 +258,7 @@ func (f *ResponseV4) WriteTo(w io.Writer) (int64, error) {
 	buf := make([]byte, responseSizeV4)
 	var offset int
 	// write SentAt and move offset
-	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(f.SentAt))
+	binary.LittleEndian.PutUint64(buf[offset:offset+sizeOfUint64], uint64(f.SentAt)) // #nosec G115 // no overflow
 	offset += sizeOfUint64
 
 	// write SegmentID and move offset
@@ -271,7 +271,7 @@ func (f *ResponseV4) WriteTo(w io.Writer) (int64, error) {
 
 	// write length Text and move offset
 	lengthText := len([]byte(f.Text))
-	binary.LittleEndian.PutUint32(buf[offset:offset+sizeOfUint32], uint32(lengthText))
+	binary.LittleEndian.PutUint32(buf[offset:offset+sizeOfUint32], uint32(lengthText)) // #nosec G115 // no overflow
 
 	k, err := w.Write(buf)
 	if err != nil {
@@ -308,7 +308,7 @@ func NewWriteRefillSegmentV4(id uint32, payload WritePayload) *WriteRefillSegmen
 	if payload == nil {
 		return f
 	}
-	f.Size = uint32(payload.Size())
+	f.Size = uint32(payload.Size()) // #nosec G115 // no overflow
 	chksum := crc32.NewIEEE()
 	_, _ = payload.WriteTo(chksum)
 	f.CRC = chksum.Sum32()

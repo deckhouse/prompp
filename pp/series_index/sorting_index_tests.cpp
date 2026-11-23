@@ -3,10 +3,10 @@
 #include "bare_bones/vector.h"
 #include "series_index/sorting_index.h"
 
-PRAGMA_DIAGNOSTIC(push)
-PRAGMA_DIAGNOSTIC(ignored "-Warray-bounds")
+PROMPP(diagnostic, push)
+PROMPP(diagnostic, ignore, array_bounds)
 #include <parallel_hashmap/btree.h>
-PRAGMA_DIAGNOSTIC(pop)
+PROMPP(diagnostic, pop)
 
 namespace {
 
@@ -19,15 +19,15 @@ class SortingIndexFixture : public testing::Test {
 
  protected:
   struct LessComparator {
-    PROMPP_ALWAYS_INLINE static bool operator()(uint32_t a, uint32_t b) noexcept { return kItems[a] < kItems[b]; }
+    static PROMPP(inline) bool operator()(uint32_t a, uint32_t b) noexcept { return kItems[a] < kItems[b]; }
   };
   using Set = phmap::btree_set<uint32_t, LessComparator>;
 
   template <class T>
-  using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+  using SharedVector = BareBones::SharedVector<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   template <class T>
-  using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+  using SharedSpan = BareBones::SharedSpan<T, BareBones::SharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
 
   Set set_{{}, LessComparator{}};
   SortingIndexBuilder<Set, BareBones::Vector, kItems.size() + 1> index_{set_};
@@ -46,8 +46,8 @@ TEST_F(SortingIndexFixture, BuildAndSort) {
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act
-  index_.build();
-  index_.sort(series_ids.begin(), series_ids.end());
+  index_.build(static_cast<uint32_t>(kItems.size()));
+  index_.sort(series_ids.begin(), series_ids.end(), static_cast<uint32_t>(kItems.size()));
 
   // Assert
   EXPECT_FALSE(index_.empty());
@@ -57,14 +57,14 @@ TEST_F(SortingIndexFixture, BuildAndSort) {
 TEST_F(SortingIndexFixture, UpdateAndSort) {
   // Arrange
   set_.emplace(0);
-  index_.build();
+  index_.build(1);
 
   std::array series_ids{"d"_idx, "b"_idx, "a"_idx};
 
   // Act
   index_.update(set_.emplace(1).first);
   index_.update(set_.emplace(2).first);
-  index_.sort(series_ids.begin(), series_ids.end());
+  index_.sort(series_ids.begin(), series_ids.end(), 3);
 
   // Assert
   EXPECT_FALSE(index_.empty());
@@ -74,7 +74,7 @@ TEST_F(SortingIndexFixture, UpdateAndSort) {
 TEST_F(SortingIndexFixture, ResetIndexOnUpdateError) {
   // Arrange
   set_.emplace(0);
-  index_.build();
+  index_.build(1);
 
   // Act
   index_.update(set_.emplace(1).first);
@@ -94,7 +94,7 @@ TEST_F(SortingIndexFixture, BuildIndexInSort) {
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act
-  index_.sort(series_ids.begin(), series_ids.end());
+  index_.sort(series_ids.begin(), series_ids.end(), static_cast<uint32_t>(kItems.size()));
 
   // Assert
   EXPECT_FALSE(index_.empty());
@@ -111,11 +111,48 @@ TEST_F(SortingIndexFixture, IndexSnapshot) {
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act
-  index.build();
+  index.build(static_cast<uint32_t>(kItems.size()));
   series_index::SortingIndex<SharedSpan>(index.index()).sort(series_ids.begin(), series_ids.end());
 
   // Assert
   EXPECT_THAT(series_ids, testing::ElementsAre("a"_idx, "b"_idx, "c"_idx, "d"_idx));
+}
+
+TEST_F(SortingIndexFixture, RebuildDoesNotChangeSnapshot) {
+  // Arrange
+  SortingIndexBuilder<Set, SharedVector, kItems.size() + 1> index{set_};
+  set_.emplace(0);
+  set_.emplace(1);
+  set_.emplace(2);
+  set_.emplace(3);
+  index.build(static_cast<uint32_t>(kItems.size()));
+  const series_index::SortingIndex<SharedSpan> snapshot(index.index());
+  const std::vector<uint32_t> expected(snapshot.index.begin(), snapshot.index.end());
+  set_.erase("a"_idx);
+
+  // Act
+  index.rebuild(static_cast<uint32_t>(kItems.size()));
+
+  // Assert
+  EXPECT_THAT(snapshot.index, testing::ElementsAreArray(expected));
+  EXPECT_NE(snapshot.index.data(), index.index().index.data());
+}
+
+TEST_F(SortingIndexFixture, RebuildWithEmptySetDoesNotChangeSnapshot) {
+  // Arrange
+  SortingIndexBuilder<Set, SharedVector, kItems.size() + 1> index{set_};
+  set_.emplace(0);
+  set_.emplace(1);
+  index.build(2);
+  const series_index::SortingIndex<SharedSpan> snapshot(index.index());
+  set_.clear();
+
+  // Act
+  index.rebuild(2);
+
+  // Assert
+  EXPECT_EQ(snapshot.index.size(), 2U);
+  EXPECT_TRUE(index.empty());
 }
 
 }  // namespace

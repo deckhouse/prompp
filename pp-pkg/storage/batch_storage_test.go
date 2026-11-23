@@ -11,13 +11,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -40,14 +39,15 @@ func (b *testTimeSeriesBatch) Destroy() {
 
 type BatchStorageSuite struct {
 	suite.Suite
-	ctx     context.Context
-	dataDir string
-	catalog *catalog.Catalog
-	builder *pp_storage.Builder
-	clock   clockwork.Clock
-	state   *cppbridge.StateV2
-	adapter *Adapter
-	manager *pp_storage.Manager
+	registry *prometheus.Registry
+	ctx      context.Context
+	dataDir  string
+	catalog  *catalog.Catalog
+	builder  *pp_storage.Builder
+	clock    clockwork.Clock
+	state    *cppbridge.StateV2
+	adapter  *Adapter
+	manager  *pp_storage.Manager
 }
 
 func TestBatchStorageSuite(t *testing.T) {
@@ -55,6 +55,7 @@ func TestBatchStorageSuite(t *testing.T) {
 }
 
 func (s *BatchStorageSuite) SetupTest() {
+	s.registry = prometheus.NewRegistry()
 	s.ctx = context.Background()
 	s.clock = clockwork.NewFakeClock()
 	s.dataDir = s.createDataDir()
@@ -62,7 +63,7 @@ func (s *BatchStorageSuite) SetupTest() {
 		s.catalog,
 		s.dataDir,
 		maxSegmentSize,
-		prometheus.DefaultRegisterer,
+		s.registry,
 		unloadDataStorageInterval,
 	)
 	s.state = cppbridge.NewTransitionStateV2()
@@ -108,7 +109,7 @@ func (s *BatchStorageSuite) createManagerAndAdapter() {
 		pp_storage.NewTriggerNotifier(),
 		pp_storage.NewTriggerNotifier(),
 		nil,
-		prometheus.DefaultRegisterer,
+		s.registry,
 	)
 	s.Require().NoError(errManager)
 
@@ -117,7 +118,7 @@ func (s *BatchStorageSuite) createManagerAndAdapter() {
 		s.manager.Proxy(),
 		s.manager.Builder(),
 		s.manager.MergeOutOfOrderChunks,
-		prometheus.DefaultRegisterer,
+		s.registry,
 	)
 }
 
@@ -275,4 +276,68 @@ func collectLabelSets(ss storage.SeriesSet) []labels.Labels {
 		out = append(out, ss.At().Labels())
 	}
 	return out
+}
+
+func (s *BatchStorageSuite) TestStats_AppendTimeSeriesNotAccounted() {
+	// Arrange
+	bs := s.adapter.BatchStorage().(*BatchStorage)
+	before := s.appendStageExecutions()
+
+	// Act
+	_, err := bs.AppendTimeSeries(s.ctx, s.statsBatch(), s.state, false)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(before, s.appendStageExecutions())
+}
+
+func (s *BatchStorageSuite) TestStats_CommitAccountedAsAppend() {
+	// Arrange
+	bs := s.adapter.BatchStorage().(*BatchStorage)
+	_, err := bs.AppendTimeSeries(s.ctx, s.statsBatch(), s.state, false)
+	s.Require().NoError(err)
+	before := s.appendStageExecutions()
+
+	// Act
+	err = bs.Commit(s.ctx)
+
+	// Assert
+	s.Require().NoError(err)
+	after := s.appendStageExecutions()
+	s.InDelta(before["semaphore_wait"]+1, after["semaphore_wait"], 0)
+	s.InDelta(before["append_data_wal"]+1, after["append_data_wal"], 0)
+}
+
+// statsBatch returns a batch of one sample.
+func (*BatchStorageSuite) statsBatch() *testTimeSeriesBatch {
+	return &testTimeSeriesBatch{
+		timeSeries: []pp_model.TimeSeries{
+			{
+				LabelSet:  pp_model.NewLabelSetBuilder().Set("__name__", "stats_metric").Set("job", "stats").Build(),
+				Timestamp: 1000,
+				Value:     1.0,
+			},
+		},
+	}
+}
+
+// appendStageExecutions returns the number of executions by stage of the appends into the active head.
+func (s *BatchStorageSuite) appendStageExecutions() map[string]float64 {
+	registry := prometheus.NewRegistry()
+	s.Require().NoError(registry.Register(s.adapter.appendRecorders.Stages))
+	families, err := registry.Gather()
+	s.Require().NoError(err)
+
+	result := map[string]float64{}
+	for _, family := range families {
+		if family.GetName() != "prompp_head_append_stage_executions_total" {
+			continue
+		}
+
+		for _, metric := range family.GetMetric() {
+			result[metric.GetLabel()[0].GetValue()] = metric.GetCounter().GetValue()
+		}
+	}
+
+	return result
 }

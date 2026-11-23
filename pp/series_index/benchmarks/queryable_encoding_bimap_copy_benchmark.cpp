@@ -3,18 +3,18 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <vector>
 
-#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
-using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
+template <class T>
+using SharedVectorWithChangesDetection = BareBones::SharedVector<T, BareBones::AtomicSharedPtrControlBlockWithItemCount, BareBones::DefaultReallocator>;
+
+using Lss = series_index::QueryableEncodingBimap<SharedVectorWithChangesDetection>;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using LssCopier = series_index::QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
@@ -53,7 +53,7 @@ struct CopyPartsTimings {
   std::chrono::nanoseconds build_ls_id_hashset{};
   std::chrono::nanoseconds build_reverse_index{};
 
-  PROMPP_ALWAYS_INLINE std::chrono::nanoseconds total() const noexcept {
+  PROMPP(inline) std::chrono::nanoseconds total() const noexcept {
     return copy_added_series + copy_ls_id_set + build_trie_index + build_ls_id_hashset + build_reverse_index;
   }
 };
@@ -61,7 +61,7 @@ struct CopyPartsTimings {
 std::vector<CopyPartsTimings> copy_parts_timings;
 
 void CopyAllStepsWithTiming(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 

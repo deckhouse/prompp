@@ -1,5 +1,8 @@
 #pragma once
 
+#include <iterator>
+#include <ranges>
+
 #include "allocated_memory.h"
 #include "preprocess.h"
 #include "vector.h"
@@ -22,23 +25,23 @@ concept destroyable_with = requires(T t, Args... args) {
 template <class T>
 union ItemOrHole {
   template <class... Args>
-  PROMPP_ALWAYS_INLINE explicit ItemOrHole(Args&&... args) : value{std::forward<Args>(args)...} {}
+  explicit PROMPP(inline) ItemOrHole(Args&&... args) : value{std::forward<Args>(args)...} {}
 
-  PROMPP_ALWAYS_INLINE ~ItemOrHole() {}
+  PROMPP(inline) ~ItemOrHole() {}
 
   template <class... Args>
-  PROMPP_ALWAYS_INLINE void create_item(Args&&... args) {
+  PROMPP(inline) void create_item(Args&&... args) {
     std::construct_at(&value, std::forward<Args>(args)...);
   }
   template <class... Args>
-  PROMPP_ALWAYS_INLINE void destroy_item(Args&&... args) {
+  PROMPP(inline) void destroy_item(Args&&... args) {
     if constexpr (destroyable_with<T, Args...>) {
       value.destroy(std::forward<Args>(args)...);
     }
     std::destroy_at(&value);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(value); }
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept { return mem::allocated_memory(value); }
 
   T value;
   uint32_t next_hole;
@@ -59,7 +62,7 @@ class VectorWithHoles {
   }
 
   template <class... Args>
-  PROMPP_ALWAYS_INLINE T& emplace_back(Args&&... args) noexcept {
+  PROMPP(inline) T& emplace_back(Args&&... args) noexcept {
     if (has_holes()) [[unlikely]] {
       auto& item = vector_[next_hole_];
 
@@ -73,7 +76,7 @@ class VectorWithHoles {
   }
 
   template <class... Args>
-  PROMPP_ALWAYS_INLINE void erase(uint32_t index, Args&&... args) {
+  PROMPP(inline) void erase(uint32_t index, Args&&... args) {
     assert(index < vector_.size());
     assert(!is_hole(index));
 
@@ -85,27 +88,77 @@ class VectorWithHoles {
     mark_hole(index);
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t index_of(const T& item) const noexcept { return reinterpret_cast<const Item*>(&item) - vector_.begin(); }
+  PROMPP(inline) uint32_t index_of(const T& item) const noexcept { return reinterpret_cast<const Item*>(&item) - vector_.begin(); }
 
-  PROMPP_ALWAYS_INLINE const T& operator[](uint32_t i) const noexcept { return vector_[i].value; }
-  PROMPP_ALWAYS_INLINE T& operator[](uint32_t i) noexcept { return vector_[i].value; }
+  PROMPP(inline) const T& operator[](uint32_t i) const noexcept { return vector_[i].value; }
+  PROMPP(inline) T& operator[](uint32_t i) noexcept { return vector_[i].value; }
 
-  PROMPP_ALWAYS_INLINE const T& at(uint32_t i) const {
+  PROMPP(inline) const T& at(uint32_t i) const {
     if (is_hole(i)) {
       throw Exception(0x8749d003112fc0c4, "VectorWithHoles::at: attempt to access a hole");
     }
     return vector_[i].value;
   }
-  PROMPP_ALWAYS_INLINE T& at(uint32_t i) {
+  PROMPP(inline) T& at(uint32_t i) {
     if (is_hole(i)) {
       throw Exception(0xa4ce63143b8d187c, "VectorWithHoles::at: attempt to access a hole");
     }
     return vector_[i].value;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return vector_.size(); }
+  [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return vector_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+  // Skips holes; without the holes bitset finding them would cost a walk of the hole list per item.
+  class ConstIterator {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const T*;
+    using reference = const T&;
+
+    ConstIterator() = default;
+    PROMPP(inline) ConstIterator(const VectorWithHoles& vector, uint32_t index) noexcept : vector_(&vector), index_(index) { skip_holes(); }
+
+    [[nodiscard]] PROMPP(inline) reference operator*() const noexcept { return (*vector_)[index_]; }
+    [[nodiscard]] PROMPP(inline) pointer operator->() const noexcept { return &(*vector_)[index_]; }
+
+    PROMPP(inline) ConstIterator& operator++() noexcept {
+      ++index_;
+      skip_holes();
+      return *this;
+    }
+    PROMPP(inline) ConstIterator operator++(int) noexcept {
+      const ConstIterator retval = *this;
+      ++*this;
+      return retval;
+    }
+
+    [[nodiscard]] PROMPP(inline) bool operator==(const ConstIterator& other) const noexcept { return index_ == other.index_; }
+
+   private:
+    const VectorWithHoles* vector_{};
+    uint32_t index_{};
+
+    PROMPP(inline) void skip_holes() noexcept {
+      while (index_ < vector_->size() && vector_->is_hole(index_)) {
+        ++index_;
+      }
+    }
+  };
+
+  [[nodiscard]] PROMPP(inline) ConstIterator begin() const noexcept
+    requires VectorWithHolesImpl::holes_need_bitset<T>
+  {
+    return ConstIterator(*this, 0);
+  }
+  [[nodiscard]] PROMPP(inline) ConstIterator end() const noexcept
+    requires VectorWithHolesImpl::holes_need_bitset<T>
+  {
+    return ConstIterator(*this, size());
+  }
+
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
     size_t allocated_memory = vector_.capacity() * sizeof(Item);
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
       allocated_memory += holes_index_set_.allocated_memory();
@@ -126,8 +179,8 @@ class VectorWithHoles {
   [[no_unique_address]] BitsetOrEmpty holes_index_set_;
   uint32_t next_hole_{std::numeric_limits<uint32_t>::max()};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_holes() const noexcept { return next_hole_ != std::numeric_limits<uint32_t>::max(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hole(uint32_t index) const noexcept {
+  [[nodiscard]] PROMPP(inline) bool has_holes() const noexcept { return next_hole_ != std::numeric_limits<uint32_t>::max(); }
+  [[nodiscard]] PROMPP(inline) bool is_hole(uint32_t index) const noexcept {
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
       return holes_index_set_.is_set(index);
     } else {
@@ -143,12 +196,12 @@ class VectorWithHoles {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void mark_hole(uint32_t index) noexcept {
+  PROMPP(inline) void mark_hole(uint32_t index) noexcept {
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
       holes_index_set_.set(index);
     }
   }
-  PROMPP_ALWAYS_INLINE void unmark_hole(uint32_t index) noexcept {
+  PROMPP(inline) void unmark_hole(uint32_t index) noexcept {
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
       holes_index_set_.reset(index);
     }
@@ -156,18 +209,18 @@ class VectorWithHoles {
 
   // skips holes and applies f for each item
   template <class UnaryFunc>
-  PROMPP_ALWAYS_INLINE void for_each_item(UnaryFunc&& f) {
+  PROMPP(inline) void for_each_item(UnaryFunc&& f) {
     for_each_item_impl(std::forward<UnaryFunc>(f), *this);
   }
 
   // const variant
   template <class UnaryFunc>
-  PROMPP_ALWAYS_INLINE void for_each_item(UnaryFunc&& f) const {
+  PROMPP(inline) void for_each_item(UnaryFunc&& f) const {
     for_each_item_impl(std::forward<UnaryFunc>(f), *this);
   }
 
   template <class UnaryFunc, class Self>
-  static PROMPP_ALWAYS_INLINE void for_each_item_impl(UnaryFunc&& f, Self&& self) {
+  static PROMPP(inline) void for_each_item_impl(UnaryFunc&& f, Self&& self) {
     size_t index_global = 0;
     const auto& holes_index_set = self.holes_index_set_;
     auto& vector = self.vector_;
@@ -186,3 +239,11 @@ class VectorWithHoles {
 };
 
 }  // namespace BareBones
+
+// VectorWithHoles::size() counts holes, while iteration skips them; disable sized-range fast paths.
+namespace std::ranges {
+
+template <class T, BareBones::ReallocatorInterface Reallocator>
+inline constexpr bool disable_sized_range<BareBones::VectorWithHoles<T, Reallocator>> = true;
+
+}  // namespace std::ranges

@@ -33,22 +33,22 @@ func debugWrite(cfg debugWriterConfig) error {
 
 	for _, endPointGroup := range cfg.endPointGroups {
 		for url, filename := range endPointGroup.urlToFilename {
-			url := cfg.serverURL + url
-			fmt.Println("collecting:", url)
-			res, err := http.Get(url)
-			if err != nil {
-				return fmt.Errorf("error executing HTTP request: %w", err)
+			fullURL := cfg.serverURL + url
+			fmt.Println("collecting:", fullURL)
+			res, errGet := http.Get(fullURL) // #nosec G107 // it's meant to be that way, this is debug
+			if errGet != nil {
+				return fmt.Errorf("error executing HTTP request: %w", errGet)
 			}
-			body, err := io.ReadAll(res.Body)
+			body, errGet := io.ReadAll(res.Body)
 			res.Body.Close()
-			if err != nil {
-				return fmt.Errorf("error reading the response body: %w", err)
+			if errGet != nil {
+				return fmt.Errorf("error reading the response body: %w", errGet)
 			}
 
 			if endPointGroup.postProcess != nil {
-				body, err = endPointGroup.postProcess(body)
-				if err != nil {
-					return fmt.Errorf("error post-processing HTTP response body: %w", err)
+				body, errGet = endPointGroup.postProcess(body)
+				if errGet != nil {
+					return fmt.Errorf("error post-processing HTTP response body: %w", errGet)
 				}
 			}
 			if err := archiver.write(filename, body); err != nil {

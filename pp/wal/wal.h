@@ -1,6 +1,5 @@
 #pragma once
 
-#include <scope_exit.h>
 #include <chrono>
 #include <iterator>
 #include <limits>
@@ -16,6 +15,7 @@
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/sparse_vector.h"
+#include "bare_bones/streams.h"
 #include "bare_bones/vector.h"
 
 #include "primitives/primitives.h"
@@ -158,7 +158,9 @@ class BasicEncoder {
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
-    bool ts_delta_rle_is_worth_trying = segment_samples_.series_count() * 0.1 > (segment_samples_.samples_count() - segment_samples_.series_count());
+    const uint64_t samples = segment_samples_.samples_count();
+    const uint64_t series = segment_samples_.series_count();
+    bool ts_delta_rle_is_worth_trying = samples >= series && 10 * (samples - series) < series;
 
     ts_base_ = std::min(ts_base_, segment_samples_.earliest_sample());
 
@@ -199,8 +201,7 @@ class BasicEncoder {
       });
     }
 
-    auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-    stream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit);
 
     lz4stream_.set_stream(&stream);
 
@@ -296,41 +297,38 @@ class BasicEncoder {
   explicit BasicEncoder(uint16_t shard_id = 0, uint8_t pow_two_of_total_shards = 0)
       : label_sets_checkpoint_(label_sets_.checkpoint()), uuid_(generate_uuid()), shard_id_(shard_id), pow_two_of_total_shards_(pow_two_of_total_shards) {}
 
-  inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
+  PROMPP(inline) const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
+  PROMPP(inline) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
 
-  // Exclusive upper bound for label set ids written to WAL.
-  inline __attribute__((always_inline)) uint32_t max_written_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
+  PROMPP(inline) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
-  inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
+  PROMPP(inline) uint16_t shard_id() const noexcept { return shard_id_; }
 
-  inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
+  PROMPP(inline) uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
 
-  inline __attribute__((always_inline)) uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
+  PROMPP(inline) uint64_t samples() const { return samples_; }
 
-  inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
+  PROMPP(inline) uint32_t series() const { return label_sets_.items_count(); }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
+  PROMPP(inline) uint64_t metadata_bytes() const { return metadata_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t metadata_bytes() const { return metadata_bytes_; }
+  PROMPP(inline) uint64_t label_sets_bytes() const { return label_sets_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t label_sets_bytes() const { return label_sets_bytes_; }
+  PROMPP(inline) uint64_t ls_id_bytes() const { return ls_id_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t ls_id_bytes() const { return ls_id_bytes_; }
+  PROMPP(inline) uint64_t timestamps_bytes() const { return ts_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t timestamps_bytes() const { return ts_bytes_; }
+  PROMPP(inline) uint64_t values_bytes() const { return v_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t values_bytes() const { return v_bytes_; }
+  PROMPP(inline) uint64_t total_bytes() const { return metadata_bytes_ + label_sets_bytes_ + ls_id_bytes_ + ts_bytes_ + v_bytes_; }
 
-  inline __attribute__((always_inline)) uint64_t total_bytes() const { return metadata_bytes_ + label_sets_bytes_ + ls_id_bytes_ + ts_bytes_ + v_bytes_; }
+  PROMPP(inline) size_t remainder_size() const noexcept { return label_sets_.remainder_size(); }
 
-  inline __attribute__((always_inline)) size_t remainder_size() const noexcept { return label_sets_.remainder_size(); }
-
-  inline __attribute__((always_inline)) size_t allocated_memory() const noexcept { return label_sets_.allocated_memory() + gorilla_.allocated_memory(); }
+  PROMPP(inline) size_t allocated_memory() const noexcept { return label_sets_.allocated_memory() + gorilla_.allocated_memory(); }
 
   template <typename T>
-  PROMPP_ALWAYS_INLINE Primitives::LabelSetID add(const T& tmsr) {
+  PROMPP(inline) Primitives::LabelSetID add(const T& tmsr) {
     Primitives::LabelSetID ls_id = label_sets_.find_or_emplace(tmsr.label_set());
 
     for (const auto& smpl : tmsr.samples()) {
@@ -340,7 +338,7 @@ class BasicEncoder {
   }
 
   template <typename T>
-  PROMPP_ALWAYS_INLINE Primitives::LabelSetID add(const T& tmsr, size_t hashval) {
+  PROMPP(inline) Primitives::LabelSetID add(const T& tmsr, size_t hashval) {
     Primitives::LabelSetID ls_id = label_sets_.find_or_emplace(tmsr.label_set(), hashval);
     for (const auto& smpl : tmsr.samples()) {
       segment_samples_.add(ls_id, smpl);
@@ -349,24 +347,24 @@ class BasicEncoder {
   }
 
   template <typename Sample>
-  PROMPP_ALWAYS_INLINE void add_sample_on_ls_id(uint32_t ls_id, const Sample& sample) {
+  PROMPP(inline) void add_sample_on_ls_id(uint32_t ls_id, const Sample& sample) {
     segment_samples_.add(ls_id, sample);
   }
 
   template <typename Samples>
-  PROMPP_ALWAYS_INLINE void add_samples_on_ls_id(uint32_t ls_id, const Samples& samples) {
+  PROMPP(inline) void add_samples_on_ls_id(uint32_t ls_id, const Samples& samples) {
     for (const auto& smpl : samples) {
       segment_samples_.add(ls_id, smpl);
     }
   }
 
   template <typename LabelSet>
-  PROMPP_ALWAYS_INLINE Primitives::LabelSetID add_label_set(const LabelSet& label_set) {
+  PROMPP(inline) Primitives::LabelSetID add_label_set(const LabelSet& label_set) {
     return label_sets_.find_or_emplace(label_set);
   }
 
   template <typename LabelSet>
-  PROMPP_ALWAYS_INLINE Primitives::LabelSetID add_label_set(const LabelSet& label_set, size_t hashval) {
+  PROMPP(inline) Primitives::LabelSetID add_label_set(const LabelSet& label_set, size_t hashval) {
     return label_sets_.find_or_emplace(label_set, hashval);
   }
 
@@ -469,7 +467,7 @@ struct SampleCrc {
   BareBones::CRC32 timestamp{};
   BareBones::CRC32 values{};
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP(inline) void clear() noexcept {
     timestamp.clear();
     values.clear();
   }
@@ -495,10 +493,10 @@ class GorillaSampleDecoder {
  public:
   Primitives::Timestamp timestamp_base{std::numeric_limits<Primitives::Timestamp>::max()};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<GorillaDecoder>& gorilla() const noexcept { return gorilla_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return gorilla_.allocated_memory(); }
+  [[nodiscard]] PROMPP(inline) const BareBones::Vector<GorillaDecoder>& gorilla() const noexcept { return gorilla_; }
+  [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept { return gorilla_.allocated_memory(); }
 
-  PROMPP_ALWAYS_INLINE void load(std::istream& stream) {
+  PROMPP(inline) void load(std::istream& stream) {
     uint32_t gorilla_count = 0;
     stream.read(reinterpret_cast<char*>(&gorilla_count), sizeof(gorilla_count));
     set_series_count(gorilla_count);
@@ -508,23 +506,23 @@ class GorillaSampleDecoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void set_series_count(Primitives::LabelSetID value) { gorilla_.resize(value); }
+  PROMPP(inline) void set_series_count(Primitives::LabelSetID value) { gorilla_.resize(value); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
-                                                               Primitives::Timestamp timestamp,
-                                                               BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc& crc) {
+  [[nodiscard]] PROMPP(inline) Primitives::Sample decode(Primitives::LabelSetID ls_id,
+                                                                 Primitives::Timestamp timestamp,
+                                                                 BareBones::BitSequenceReader& value_sequence,
+                                                                 SampleCrc& crc) {
     return decode_impl(ls_id, timestamp, value_sequence, crc);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
-                                                               BareBones::BitSequenceReader& timestamp_sequence,
-                                                               BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc& crc) {
+  [[nodiscard]] PROMPP(inline) Primitives::Sample decode(Primitives::LabelSetID ls_id,
+                                                                 BareBones::BitSequenceReader& timestamp_sequence,
+                                                                 BareBones::BitSequenceReader& value_sequence,
+                                                                 SampleCrc& crc) {
     return decode_impl(ls_id, timestamp_sequence, value_sequence, crc);
   }
 
-  PROMPP_ALWAYS_INLINE static SampleCrc::ValidationResult validate_crc(SampleCrc actual, SampleCrc expected) noexcept {
+  static PROMPP(inline) SampleCrc::ValidationResult validate_crc(SampleCrc actual, SampleCrc expected) noexcept {
     using enum SampleCrc::ValidationResult;
 
     if (actual.timestamp != expected.timestamp) [[unlikely]] {
@@ -541,10 +539,10 @@ class GorillaSampleDecoder {
   BareBones::Vector<GorillaDecoder> gorilla_;
 
   template <class Timestamp>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode_impl(Primitives::LabelSetID ls_id,
-                                                                    Timestamp&& timestamp,
-                                                                    BareBones::BitSequenceReader& value_sequence,
-                                                                    SampleCrc& crc) {
+  [[nodiscard]] PROMPP(inline) Primitives::Sample decode_impl(Primitives::LabelSetID ls_id,
+                                                                      Timestamp&& timestamp,
+                                                                      BareBones::BitSequenceReader& value_sequence,
+                                                                      SampleCrc& crc) {
     if (ls_id >= gorilla_.size()) [[unlikely]] {
       throw BareBones::Exception(0xf0e57d2a0e5ce7ed, "Error while processing segment LabelSets: Unknown segment's LabelSet's id %d", ls_id);
     }
@@ -636,8 +634,7 @@ class BasicDecoder {
       stream.read(v1_data, sizeof(v1_data));
     }
 
-    auto sg1 = std::experimental::scope_exit([original_exceptions = stream.exceptions(), &stream]() { stream.exceptions(original_exceptions); });
-    stream.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+    const auto exception_guard = BareBones::scoped_stream_exceptions(stream, std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
 
     std::istream& in = get_stream(stream);
 
@@ -673,7 +670,7 @@ class BasicDecoder {
     sample_decoder_.set_series_count(label_sets_.next_item_index());
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::istream& get_stream(std::istream& stream) noexcept {
+  [[nodiscard]] PROMPP(inline) std::istream& get_stream(std::istream& stream) noexcept {
     if (encoder_version_ == BasicEncoderVersion::kV3) {
       lz4stream_.set_stream(&stream);
       return lz4stream_;
@@ -685,20 +682,20 @@ class BasicDecoder {
  public:
   BasicDecoder(LabelSetsTable& label_sets, BasicEncoderVersion encoder_version) : label_sets_(label_sets), encoder_version_(encoder_version) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SampleDecoder& sample_decoder() const noexcept { return sample_decoder_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SampleDecoder& sample_decoder() noexcept { return sample_decoder_; }
+  [[nodiscard]] PROMPP(inline) const SampleDecoder& sample_decoder() const noexcept { return sample_decoder_; }
+  [[nodiscard]] PROMPP(inline) SampleDecoder& sample_decoder() noexcept { return sample_decoder_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return last_processed_segment_ == std::numeric_limits<uint32_t>::max(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept { return encoder_version_ != BasicEncoderVersion::kUnknown; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE BasicEncoderVersion encoder_version() const noexcept { return encoder_version_; }
+  [[nodiscard]] PROMPP(inline) bool is_empty() const noexcept { return last_processed_segment_ == std::numeric_limits<uint32_t>::max(); }
+  [[nodiscard]] PROMPP(inline) bool is_valid() const noexcept { return encoder_version_ != BasicEncoderVersion::kUnknown; }
+  [[nodiscard]] PROMPP(inline) BasicEncoderVersion encoder_version() const noexcept { return encoder_version_; }
 
-  PROMPP_ALWAYS_INLINE void set_encoder_version(BasicEncoderVersion version) noexcept {
+  PROMPP(inline) void set_encoder_version(BasicEncoderVersion version) noexcept {
     assert(is_empty());
     encoder_version_ = version;
   }
-  PROMPP_ALWAYS_INLINE void invalidate() noexcept { encoder_version_ = BasicEncoderVersion::kUnknown; }
+  PROMPP(inline) void invalidate() noexcept { encoder_version_ = BasicEncoderVersion::kUnknown; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+  [[nodiscard]] PROMPP(inline) size_t allocated_memory() const noexcept {
     return sample_decoder_.allocated_memory() + lz4stream_.allocated_memory() + segment_gorilla_ts_bitseq_.allocated_memory() +
            segment_gorilla_v_bitseq_.allocated_memory() + segment_ls_id_delta_rle_seq_.allocated_memory() + segment_ts_delta_rle_seq_.allocated_memory();
   }
@@ -710,26 +707,28 @@ class BasicDecoder {
            this->pow_two_of_total_shards_ == reader.pow_two_of_total_shards_;
   }
 
-  inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
+  PROMPP(inline) const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.items_count(); }
+  PROMPP(inline) uint32_t series() const { return label_sets_.items_count(); }
 
   /// \Returns Total processed samples count.
   /// \seealso \ref process_segment().
-  inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
+  PROMPP(inline) uint64_t samples() const {
+    return samples_;
+  }
 
-  inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
+  PROMPP(inline) uint16_t shard_id() const noexcept { return shard_id_; }
 
-  inline __attribute__((always_inline)) uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
+  PROMPP(inline) uint8_t pow_two_of_total_shards() const noexcept { return pow_two_of_total_shards_; }
 
-  inline __attribute__((always_inline)) uint32_t last_processed_segment() const { return last_processed_segment_; }
+  PROMPP(inline) uint32_t last_processed_segment() const { return last_processed_segment_; }
 
-  inline __attribute__((always_inline)) int64_t created_at_tsns() const { return created_at_tsns_; }
+  PROMPP(inline) int64_t created_at_tsns() const { return created_at_tsns_; }
 
-  inline __attribute__((always_inline)) int64_t encoded_at_tsns() const { return encoded_at_tsns_; }
+  PROMPP(inline) int64_t encoded_at_tsns() const { return encoded_at_tsns_; }
 
-  inline __attribute__((always_inline)) Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
-  inline __attribute__((always_inline)) Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
+  PROMPP(inline) Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
+  PROMPP(inline) Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
 
   template <class InputStream>
   friend InputStream& operator>>(InputStream& in, BasicDecoder& wal) {

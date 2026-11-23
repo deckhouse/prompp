@@ -3,7 +3,6 @@
 #include <chrono>
 #include <ios>
 
-#include "bare_bones/gorilla.h"  // stale_nan utils
 #include "dummy_wal.h"
 #include "log.h"
 #include "prometheus/remote_write.h"

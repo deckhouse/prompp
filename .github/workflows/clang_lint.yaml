@@ -32,6 +32,13 @@ jobs:
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
     steps:
+      - name: Fix root-owned files
+        run: |
+          if [ -d "${{ github.workspace }}" ]; then
+            docker run --rm -v "${{ github.workspace }}":/workspace busybox \
+              chown -R "$(id -u):$(id -g)" /workspace || true
+          fi
+
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
 
@@ -71,6 +78,13 @@ jobs:
     if: github.event_name != 'pull_request' || needs.changes.outputs.cpp == 'true'
     runs-on: fsn-dev-gitlab-runner
     steps:
+      - name: Fix root-owned files
+        run: |
+          if [ -d "${{ github.workspace }}" ]; then
+            docker run --rm -v "${{ github.workspace }}":/workspace busybox \
+              chown -R "$(id -u):$(id -g)" /workspace || true
+          fi
+
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
 

@@ -184,7 +184,7 @@ func (ls LabelSet) With(key, value string) LabelSet {
 	if ok {
 		// we should replace value
 		oldValue := ls.Value(i)
-		d := int32(len(value) - len(oldValue))
+		d := int32(len(value) - len(oldValue)) // #nosec G115 // no overflow
 		res := LabelSet{
 			data:  make([]byte, 0, len(ls.data)+int(d)),
 			pairs: make([]pair, 0, len(ls.pairs)),
@@ -196,7 +196,7 @@ func (ls LabelSet) With(key, value string) LabelSet {
 	}
 
 	// we should insert key and value
-	d := int32(len(key) + len(value) + additionalSymbols)
+	d := int32(len(key) + len(value) + additionalSymbols) // #nosec G115 // no overflow
 	res := LabelSet{
 		data:  make([]byte, 0, len(ls.data)+int(d)),
 		pairs: make([]pair, 0, len(ls.pairs)+1),
@@ -389,11 +389,11 @@ func (ls LabelSet) Hash() uint64 {
 }
 
 func (ls *LabelSet) append(key, value string) {
-	dKey := delegatedStringView{int32(len(ls.data)), int32(len(key))}
+	dKey := delegatedStringView{int32(len(ls.data)), int32(len(key))} // #nosec G115 // no overflow
 	ls.data = append(ls.data, []byte(key)...)
 	ls.data = append(ls.data, ':')
 
-	dValue := delegatedStringView{int32(len(ls.data)), int32(len(value))}
+	dValue := delegatedStringView{int32(len(ls.data)), int32(len(value))} // #nosec G115 // no overflow
 	ls.data = append(ls.data, []byte(value)...)
 	ls.data = append(ls.data, ';')
 
@@ -407,11 +407,11 @@ func (ls *LabelSet) appendFrom(other LabelSet, a, b int) {
 	}
 
 	begin := other.pairs[a].key.begin
-	end := int32(len(other.data))
+	end := int32(len(other.data)) // #nosec G115 // no overflow
 	if b < other.Len() {
 		end = other.pairs[b].key.begin
 	}
-	delta := int32(len(ls.data)) - begin
+	delta := int32(len(ls.data)) - begin // #nosec G115 // no overflow
 
 	ls.data = append(ls.data, other.data[begin:end]...)
 
