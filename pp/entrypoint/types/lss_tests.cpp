@@ -1,15 +1,24 @@
 #include <gtest/gtest.h>
 
+#include <array>
+#include <barrier>
 #include <cstdint>
 #include <memory>
+#include <thread>
 #include <tuple>
+#include <utility>
 #include <variant>
 
 #include "bare_bones/exception.h"
+#include "bare_bones/preprocess.h"
 #include "bare_bones/vector.h"
 #include "entrypoint/types/lss.h"
 #include "primitives/label_set.h"
 #include "series_index/queryable_encoding_bimap.h"
+
+#if PROMPP(asan)
+#  include <sanitizer/asan_interface.h>
+#endif
 
 namespace {
 
@@ -145,6 +154,43 @@ TEST_F(SnapshotLssFixture, ResolvesNormalQueryableLss) {
   ASSERT_TRUE(std::holds_alternative<SnapshotLSS>(*snapshot));
   EXPECT_EQ(ls0_, std::get<SnapshotLSS>(*snapshot)[0]);
   EXPECT_EQ(ls4_, std::get<SnapshotLSS>(*snapshot)[4]);
+}
+
+TEST_F(SnapshotLssFixture, ConcurrentOwnerAndSnapshotRelease) {
+  // Arrange
+  auto lss = create_queryable_lss();
+  auto snapshot = create_snapshot_lss(*lss);
+  auto surviving_snapshot = create_snapshot_lss(*lss);
+  // Keep a handle to the real sorting buffer to check both releases decremented its count.
+  auto sorting_buffer = std::get<QueryableEncodingBimap>(*lss).sorting_index().index;
+  ASSERT_EQ(4U, sorting_buffer.shared_ptr().use_count());
+  std::array<uint32_t, 2> series_ids{4U, 0U};
+  std::barrier release(2);
+
+  // Act
+  std::jthread snapshot_cleanup([snapshot = std::move(snapshot), &release]() mutable {
+    release.arrive_and_wait();
+    snapshot.reset();
+  });
+  release.arrive_and_wait();
+  lss.reset();
+  snapshot_cleanup.join();
+
+  const auto remaining_references = sorting_buffer.shared_ptr().use_count();
+  sorting_buffer = {};
+  const auto& remaining = std::get<SnapshotLSS>(*surviving_snapshot);
+  remaining.sorting_index().sort(series_ids);
+
+  // Assert
+  EXPECT_EQ(2U, remaining_references);
+  EXPECT_EQ(ls0_, remaining[0]);
+  EXPECT_EQ(ls4_, remaining[4]);
+  EXPECT_EQ((std::array<uint32_t, 2>{0U, 4U}), series_ids);
+#if PROMPP(asan)
+  const auto* buffer_address = remaining.sorting_index().index.data();
+  surviving_snapshot.reset();
+  EXPECT_TRUE(__asan_address_is_poisoned(buffer_address));
+#endif
 }
 
 TEST_F(SnapshotLssFixture, FromFixedQueryableLssIsShrinkAware) {
