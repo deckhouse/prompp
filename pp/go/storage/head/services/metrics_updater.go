@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"runtime"
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -126,11 +127,12 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collect(ct
 	}
 }
 
-// fromShards collects metrics from the head's shards.
+// collectFromShards publishes shard metrics and holds the head alive until publication completes.
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
 func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collectFromShards(head THead, active bool) {
 	headID := head.ID()
+
 	for shard := range head.RangeShards() {
 		ls := make(prometheus.Labels, 3) //revive:disable-line:add-constant it's labels count
 
@@ -151,4 +153,6 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collectFro
 		ls["allocator"] = "input_lss"
 		s.memoryInUse.With(ls).Set(float64(inputLSSMemory))
 	}
+
+	runtime.KeepAlive(head)
 }

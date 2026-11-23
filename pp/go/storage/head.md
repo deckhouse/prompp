@@ -62,3 +62,9 @@ The head that has completed its work, but has not yet been converted into blocks
       - *Flush* - write to storage from buffer if exist;
     - **Head**:
       - *Close* - wait all active task is finished and close query semaphore with lock(on select returns empty series set), stop goroutine, **Wal** close.
+
+## Per-head memory metrics
+
+`Close` stops the head but does not release its C++ memory. The last published
+`prompp_head_cgo_memory_bytes` values remain visible until the runtime cleans up the unreachable head.
+The metrics updater keeps the head alive through its final write, so cleanup cannot race with publication.
