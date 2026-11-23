@@ -12,19 +12,21 @@ import (
 )
 
 var (
+	// dsCreate counts newly created [DataStorage] objects.
 	dsCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_cpp_objects_create_count",
-			Help:        "Current number of created C++ objects.",
-			ConstLabels: prometheus.Labels{"object": "data_storage"},
+			Name:        cppObjectsCreateMetricName,
+			Help:        cppObjectsCreateMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "data_storage"},
 		},
 	)
 
+	// dsFinalize counts [DataStorage] objects released by the runtime cleanup.
 	dsFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_cpp_objects_finalize_count",
-			Help:        "Current number of finalized C++ objects.",
-			ConstLabels: prometheus.Labels{"object": "data_storage"},
+			Name:        cppObjectsFinalizeMetricName,
+			Help:        cppObjectsFinalizeMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "data_storage"},
 		},
 	)
 )

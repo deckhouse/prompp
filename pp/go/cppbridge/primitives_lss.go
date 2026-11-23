@@ -12,19 +12,21 @@ import (
 )
 
 var (
+	// lssStorageCreate counts newly created [LabelSetStorage] objects.
 	lssStorageCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_cpp_objects_create_count",
-			Help:        "Current number of created C++ objects.",
-			ConstLabels: prometheus.Labels{"object": "label_set_storage"},
+			Name:        cppObjectsCreateMetricName,
+			Help:        cppObjectsCreateMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "label_set_storage"},
 		},
 	)
 
+	// lssStorageFinalize counts [LabelSetStorage] objects released by the runtime cleanup.
 	lssStorageFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_cpp_objects_finalize_count",
-			Help:        "Current number of finalized C++ objects.",
-			ConstLabels: prometheus.Labels{"object": "label_set_storage"},
+			Name:        cppObjectsFinalizeMetricName,
+			Help:        cppObjectsFinalizeMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "label_set_storage"},
 		},
 	)
 )

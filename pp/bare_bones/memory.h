@@ -193,9 +193,8 @@ concept SharedPtrControlBlockInterface = requires(ControlBlock control_block, co
   requires std::integral<typename ControlBlock::RefCounter>;
   requires std::integral<typename ControlBlock::ItemCounter>;
 
-  { control_block.ref_count() } -> std::same_as<typename ControlBlock::RefCounter&>;
-  { const_control_block.ref_count() } -> std::same_as<typename ControlBlock::RefCounter>;
-  { control_block.atomic_ref_count() } -> std::same_as<typename ControlBlock::AtomicRefCounter>;
+  { control_block.ref_count() } -> std::same_as<std::atomic<typename ControlBlock::RefCounter>&>;
+  { const_control_block.ref_count() } -> std::same_as<const std::atomic<typename ControlBlock::RefCounter>&>;
 
   { control_block.items_count() } -> std::same_as<typename ControlBlock::ItemCounter>;
   { control_block.set_items_count(typename ControlBlock::ItemCounter()) };
@@ -205,17 +204,15 @@ class SharedPtrControlBlockWithItemCount {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
-  using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
   [[nodiscard]] PROMPP(inline) ItemCounter items_count() const noexcept { return items_count_; }
   PROMPP(inline) void set_items_count(ItemCounter count) noexcept { items_count_ = count; }
 
-  [[nodiscard]] PROMPP(inline) RefCounter& ref_count() noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP(inline) RefCounter ref_count() const noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP(inline) AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+  [[nodiscard]] PROMPP(inline) std::atomic<RefCounter>& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) const std::atomic<RefCounter>& ref_count() const noexcept { return ref_count_; }
 
  private:
-  RefCounter ref_count_{1};
+  std::atomic<RefCounter> ref_count_{1};
   ItemCounter items_count_{};
 };
 
@@ -225,17 +222,15 @@ class AtomicSharedPtrControlBlockWithItemCount {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
-  using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
   [[nodiscard]] PROMPP(inline) ItemCounter items_count() const noexcept { return items_count_.load(std::memory_order_acquire); }
   PROMPP(inline) void set_items_count(ItemCounter count) noexcept { items_count_.store(count, std::memory_order_release); }
 
-  [[nodiscard]] PROMPP(inline) RefCounter& ref_count() noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP(inline) RefCounter ref_count() const noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP(inline) AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+  [[nodiscard]] PROMPP(inline) std::atomic<RefCounter>& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) const std::atomic<RefCounter>& ref_count() const noexcept { return ref_count_; }
 
  private:
-  RefCounter ref_count_{1};
+  std::atomic<RefCounter> ref_count_{1};
   std::atomic<ItemCounter> items_count_{};
 };
 
@@ -245,17 +240,15 @@ class SharedPtrControlBlock {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
-  using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
   [[nodiscard]] static PROMPP(inline) ItemCounter items_count() noexcept { return 0; }
   static PROMPP(inline) void set_items_count(ItemCounter) noexcept {}
 
-  [[nodiscard]] PROMPP(inline) RefCounter& ref_count() noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP(inline) RefCounter ref_count() const noexcept { return ref_count_; }
-  [[nodiscard]] PROMPP(inline) AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+  [[nodiscard]] PROMPP(inline) std::atomic<RefCounter>& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP(inline) const std::atomic<RefCounter>& ref_count() const noexcept { return ref_count_; }
 
  private:
-  RefCounter ref_count_{1};
+  std::atomic<RefCounter> ref_count_{1};
 };
 
 static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlock>);
@@ -300,7 +293,7 @@ class SharedPtr {
   }
 
   PROMPP(inline) void reallocate(uint32_t old_size, uint32_t new_size) {
-    if (non_atomic_is_unique()) [[likely]] {
+    if (is_unique()) [[likely]] {
       non_atomic_reallocate(new_size);
     } else {
       const SharedPtr old(std::move(*this));
@@ -319,17 +312,18 @@ class SharedPtr {
     }
   }
 
-  [[nodiscard]] PROMPP(inline) ControlBlock::RefCounter non_atomic_ref_count() const noexcept {
+  [[nodiscard]] PROMPP(inline) ControlBlock::RefCounter use_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->ref_count();
+      return block->ref_count().load(std::memory_order_relaxed);
     }
 
     return 0;
   }
 
-  [[nodiscard]] PROMPP(inline) bool non_atomic_is_unique() const noexcept {
+  [[nodiscard]] PROMPP(inline) bool is_unique() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->ref_count() == 1;
+      // Synchronize with other owners' releases before modifying the buffer in place.
+      return block->ref_count().load(std::memory_order_acquire) == 1;
     }
 
     return true;
@@ -378,18 +372,14 @@ class SharedPtr {
 
   PROMPP(inline) void inc_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      ++block->atomic_ref_count();
+      block->ref_count().fetch_add(1, std::memory_order_relaxed);
     }
   }
 
   PROMPP(inline) void dec_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      if (block->ref_count() == 1) [[likely]] {
+      if (block->ref_count().fetch_sub(1, std::memory_order_acq_rel) == 1) [[likely]] {
         destroy();
-      } else {
-        if (--block->atomic_ref_count() == 0) [[unlikely]] {
-          destroy();
-        }
       }
     }
   }

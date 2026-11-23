@@ -51,6 +51,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+// metricObjectLabel identifies the C++ object measured by a bridge metric.
+const metricObjectLabel = "object"
+
 type (
 	CppStdVector                         = [C.Sizeof_StdVector]byte
 	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
@@ -74,14 +77,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "per_goroutine_relabeler", "method": "input_relabeling"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "per_goroutine_relabeler", "method": "input_relabeling"},
 		},
 	)
 	perGoroutineRelabelerInputRelabelingCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "per_goroutine_relabeler", "method": "input_relabeling"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "per_goroutine_relabeler", "method": "input_relabeling"},
 		},
 	)
 
@@ -93,8 +96,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "input_relabeling_from_cache",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "input_relabeling_from_cache",
 			},
 		},
 	)
@@ -105,8 +108,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "input_relabeling_from_cache",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "input_relabeling_from_cache",
 			},
 		},
 	)
@@ -119,8 +122,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "relabeling_with_stalenans",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "relabeling_with_stalenans",
 			},
 		},
 	)
@@ -131,8 +134,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "relabeling_with_stalenans",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "relabeling_with_stalenans",
 			},
 		},
 	)
@@ -145,8 +148,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "relabeling_with_stalenans_from_cache",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "relabeling_with_stalenans_from_cache",
 			},
 		},
 	)
@@ -157,8 +160,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "relabeling_with_stalenans_from_cache",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "relabeling_with_stalenans_from_cache",
 			},
 		},
 	)
@@ -171,8 +174,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "input_transition_relabeling",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "input_transition_relabeling",
 			},
 		},
 	)
@@ -183,8 +186,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "input_transition_relabeling",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "input_transition_relabeling",
 			},
 		},
 	)
@@ -197,8 +200,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "input_transition_relabeling_only_read",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "input_transition_relabeling_only_read",
 			},
 		},
 	)
@@ -209,8 +212,8 @@ var (
 			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help: "The time duration cpp call.",
 			ConstLabels: prometheus.Labels{
-				"object": "per_goroutine_relabeler",
-				"method": "input_transition_relabeling_only_read",
+				metricObjectLabel: "per_goroutine_relabeler",
+				"method":          "input_transition_relabeling_only_read",
 			},
 		},
 	)
@@ -222,7 +225,7 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "per_goroutine_relabeler", "method": "append_relabeler_series"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "per_goroutine_relabeler", "method": "append_relabeler_series"},
 		},
 	)
 	perGoroutineRelabelerAppendRelabelerSeriesCount = util.NewUnconflictRegisterer(
@@ -231,7 +234,7 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "per_goroutine_relabeler", "method": "append_relabeler_series"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "per_goroutine_relabeler", "method": "append_relabeler_series"},
 		},
 	)
 
@@ -240,14 +243,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "input_relabeler", "method": "update_relabeler_state"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "input_relabeler", "method": "update_relabeler_state"},
 		},
 	)
 	inputRelabelerUpdateRelabelerStateCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "input_relabeler", "method": "update_relabeler_state"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "input_relabeler", "method": "update_relabeler_state"},
 		},
 	)
 
@@ -256,14 +259,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "allocated_memory"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "allocated_memory"},
 		},
 	)
 	headDataStorageAllocatedMemoryCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "allocated_memory"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "allocated_memory"},
 		},
 	)
 
@@ -272,14 +275,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "dtor"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "dtor"},
 		},
 	)
 	headDataStorageDtorCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "dtor"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "dtor"},
 		},
 	)
 
@@ -288,14 +291,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "query"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "query"},
 		},
 	)
 	headDataStorageQueryCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "query"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "query"},
 		},
 	)
 
@@ -304,14 +307,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "query_final"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "query_final"},
 		},
 	)
 	headDataStorageQueryFinalCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "query_final"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "query_final"},
 		},
 	)
 
@@ -320,14 +323,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "encode_inner_series_slice"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "encode_inner_series_slice"},
 		},
 	)
 	headDataStorageEncodeInnerSeriesSliceCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "encode_inner_series_slice"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "encode_inner_series_slice"},
 		},
 	)
 
@@ -336,14 +339,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "merge_out_of_order_chunks"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "merge_out_of_order_chunks"},
 		},
 	)
 	headDataStorageMergeOutOfOrderChunksCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "merge_out_of_order_chunks"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_data_storage", "method": "merge_out_of_order_chunks"},
 		},
 	)
 
@@ -352,14 +355,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "prometheus_hashdex", "method": "parse"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "prometheus_hashdex", "method": "parse"},
 		},
 	)
 	prometheusHashdexParseCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "prometheus_hashdex", "method": "parse"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "prometheus_hashdex", "method": "parse"},
 		},
 	)
 
@@ -368,14 +371,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "open_metrics_hashdex", "method": "parse"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "open_metrics_hashdex", "method": "parse"},
 		},
 	)
 	openMetricsHashdexParseCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "open_metrics_hashdex", "method": "parse"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "open_metrics_hashdex", "method": "parse"},
 		},
 	)
 
@@ -384,14 +387,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_wal_encoder", "method": "add_inner_series"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_wal_encoder", "method": "add_inner_series"},
 		},
 	)
 	headWalEncoderAddInnerSeriesCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_wal_encoder", "method": "add_inner_series"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_wal_encoder", "method": "add_inner_series"},
 		},
 	)
 
@@ -400,14 +403,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_wal_encoder", "method": "finalize"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_wal_encoder", "method": "finalize"},
 		},
 	)
 	headWalEncoderFinalizeCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "head_wal_encoder", "method": "finalize"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "head_wal_encoder", "method": "finalize"},
 		},
 	)
 
@@ -416,14 +419,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "chunk_recoder", "method": "recode_next_chunk"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "chunk_recoder", "method": "recode_next_chunk"},
 		},
 	)
 	chunkRecoderRecodeNextChunkCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "chunk_recoder", "method": "recode_next_chunk"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "chunk_recoder", "method": "recode_next_chunk"},
 		},
 	)
 
@@ -432,14 +435,14 @@ var (
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "lss", "method": "allocated_memory"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "lss", "method": "allocated_memory"},
 		},
 	)
 	lssAllocatedMemoryCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
 			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
 			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "lss", "method": "allocated_memory"},
+			ConstLabels: prometheus.Labels{metricObjectLabel: "lss", "method": "allocated_memory"},
 		},
 	)
 )
