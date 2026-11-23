@@ -8,6 +8,13 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
+// Head sets must keep implementing the fast path that registers their inline ownership node.
+var (
+	_ embeddedQueryResult[storage.Series, []*cppbridge.DataStorageSerializedData] = (*mergeShardSeriesSet)(nil)
+	_ embeddedQueryResult[storage.Series, []*cppbridge.DataStorageSerializedData] = (*concatShardSeriesSet)(nil)
+	_ embeddedQueryResult[storage.ChunkSeries, chunkResultResources]              = (*mergeShardChunkSeriesSet)(nil)
+)
+
 //
 // querySeriesSet
 //
@@ -85,11 +92,6 @@ func (r *queryResult[T, R]) Warnings() annotations.Annotations {
 	}
 
 	return r.set.Warnings()
-}
-
-// resultNode returns the link embedded in a head set.
-func (r *queryResult[T, R]) resultNode() *queryResult[T, R] {
-	return r
 }
 
 //

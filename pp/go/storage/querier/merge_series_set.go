@@ -11,7 +11,7 @@ import (
 // mergeShardSeriesSet merges many [storage.SeriesSet] together from different shards.
 // Since there are always different series in the shards, there is no need to check them for Equal.
 type mergeShardSeriesSet struct {
-	sampleQueryResult
+	result     sampleQueryResult
 	heap       seriesSetHeap
 	currentSet storage.SeriesSet
 }
@@ -137,6 +137,11 @@ func (s *mergeShardSeriesSet) invalidate() {
 	s.currentSet = nil
 }
 
+// resultNode returns the ownership node stored in the merged set.
+func (s *mergeShardSeriesSet) resultNode() *sampleQueryResult {
+	return &s.result
+}
+
 //
 // seriesSetHeap
 //
@@ -177,7 +182,7 @@ func (h seriesSetHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 // concatShardSeriesSet iterates many [storage.SeriesSet] from different shards one after another.
 // It is used when the caller does not need the series sorted by labels, so no heap merge is required.
 type concatShardSeriesSet struct {
-	sampleQueryResult
+	result     sampleQueryResult
 	sets       []storage.SeriesSet
 	currentSet storage.SeriesSet
 }
@@ -262,6 +267,11 @@ func (s *concatShardSeriesSet) invalidate() {
 	s.currentSet = nil
 }
 
+// resultNode returns the ownership node stored in the concatenated set.
+func (s *concatShardSeriesSet) resultNode() *sampleQueryResult {
+	return &s.result
+}
+
 //
 // mergeShardChunkSeriesSet
 //
@@ -269,7 +279,7 @@ func (s *concatShardSeriesSet) invalidate() {
 // mergeShardChunkSeriesSet merges many [storage.ChunkSeriesSet] together from different shards.
 // Since there are always different series in the shards, there is no need to check them for Equal.
 type mergeShardChunkSeriesSet struct {
-	chunkQueryResult
+	result     chunkQueryResult
 	heap       chunkSeriesSetHeap
 	currentSet storage.ChunkSeriesSet
 }
@@ -342,6 +352,11 @@ func (*mergeShardChunkSeriesSet) Warnings() annotations.Annotations {
 func (s *mergeShardChunkSeriesSet) invalidate() {
 	s.heap = nil
 	s.currentSet = nil
+}
+
+// resultNode returns the ownership node stored in the merged chunk set.
+func (s *mergeShardChunkSeriesSet) resultNode() *chunkQueryResult {
+	return &s.result
 }
 
 //
