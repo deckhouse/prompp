@@ -335,6 +335,12 @@ func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 	runtime.KeepAlive(loader)
 }
 
+// destroy uses a value receiver so cleanup retains the arena without retaining the loader wrapper.
+func (loader UnloadedDataLoader) destroy() {
+	seriesDataUnloadedDataLoaderDtor(loader.loader)
+	runtime.KeepAlive(loader.ds)
+}
+
 func (ds *DataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	result := &UnloadedDataLoader{
 		loader: seriesDataUnloadedDataLoaderCtor(ds.dataStorage, queriers),
@@ -343,7 +349,7 @@ func (ds *DataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	runtime.KeepAlive(ds)
 	runtime.KeepAlive(queriers)
 
-	runtime.AddCleanup(result, seriesDataUnloadedDataLoaderDtor, result.loader)
+	runtime.AddCleanup(result, UnloadedDataLoader.destroy, *result)
 
 	return result
 }
@@ -370,7 +376,7 @@ func (ds *DataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSiz
 	}
 	runtime.KeepAlive(ds)
 	runtime.KeepAlive(lss)
-	runtime.AddCleanup(result, seriesDataUnloadedDataLoaderDtor, result.loader)
+	runtime.AddCleanup(result, UnloadedDataLoader.destroy, result.UnloadedDataLoader)
 
 	return result
 }
