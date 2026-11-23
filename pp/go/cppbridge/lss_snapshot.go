@@ -13,7 +13,7 @@ const (
 	// cppObjectsCreateMetricName identifies the counter family for C++ object creation.
 	cppObjectsCreateMetricName = "prompp_cppbridge_cpp_objects_create_count"
 	// cppObjectsCreateMetricHelp is shared by all object types in the creation counter family.
-	cppObjectsCreateMetricHelp = "Current number of created C++ objects."
+	cppObjectsCreateMetricHelp = "Total number of created C++ objects."
 	// cppObjectsFinalizeMetricName identifies the counter family for C++ object release.
 	cppObjectsFinalizeMetricName = "prompp_cppbridge_cpp_objects_finalize_count"
 	// cppObjectsFinalizeMetricHelp is shared by all object types in the release counter family.

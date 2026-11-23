@@ -10,10 +10,8 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
-// postingsBatchSize bounds the bytes produced by one WriteNextPostingsBatch call, capping the
-// writer's transient buffer instead of materialising the whole postings section (tens of MiB) at
-// once. The bound is checked only between whole postings, so individual large postings (the
-// all-series posting and hot label values) are emitted atomically and can still exceed it.
+// postingsBatchSize is the target batch size for [cppbridge.IndexWriter.WriteNextPostingsBatchTo].
+// The writer checks the threshold between postings, so a large posting may exceed it.
 const postingsBatchSize = 1 << 16
 
 // Chunk represents a recoded chunk.
@@ -116,37 +114,37 @@ func NewIndexWriter(lss *cppbridge.LabelSetStorage) IndexWriter {
 
 // WriteRestTo writes the rest of the index to the writer.
 func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
-	bytesWritten, err := w.Write(iw.cppIndexWriter.WriteLabelIndices())
+	bytesWritten, err := iw.cppIndexWriter.WriteLabelIndicesTo(w)
 	n += int64(bytesWritten)
 	if err != nil {
 		return n, fmt.Errorf("failed to write label indicies: %w", err)
 	}
 
 	for {
-		data, hasMoreData := iw.cppIndexWriter.WriteNextPostingsBatch(postingsBatchSize)
-		bytesWritten, err = w.Write(data)
+		var hasMore bool
+		bytesWritten, hasMore, err = iw.cppIndexWriter.WriteNextPostingsBatchTo(postingsBatchSize, w)
 		if err != nil {
 			return n, fmt.Errorf("failed to write postings: %w", err)
 		}
 		n += int64(bytesWritten)
-		if !hasMoreData {
+		if !hasMore {
 			break
 		}
 	}
 
-	bytesWritten, err = w.Write(iw.cppIndexWriter.WriteLabelIndicesTable())
+	bytesWritten, err = iw.cppIndexWriter.WriteLabelIndicesTableTo(w)
 	if err != nil {
 		return n, fmt.Errorf("failed to write label indicies table: %w", err)
 	}
 	n += int64(bytesWritten)
 
-	bytesWritten, err = w.Write(iw.cppIndexWriter.WritePostingsTableOffsets())
+	bytesWritten, err = iw.cppIndexWriter.WritePostingsTableOffsetsTo(w)
 	if err != nil {
 		return n, fmt.Errorf("failed to write posting table offsets: %w", err)
 	}
 	n += int64(bytesWritten)
 
-	bytesWritten, err = w.Write(iw.cppIndexWriter.WriteTableOfContents())
+	bytesWritten, err = iw.cppIndexWriter.WriteTableOfContentsTo(w)
 	if err != nil {
 		return n, fmt.Errorf("failed to write table of content: %w", err)
 	}
@@ -159,13 +157,13 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Writer) (n int64, err error) {
 	if !iw.isPrefixWritten {
 		var bytesWritten int
-		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteHeader())
+		bytesWritten, err = iw.cppIndexWriter.WriteHeaderTo(w)
 		n += int64(bytesWritten)
 		if err != nil {
 			return n, fmt.Errorf("failed to write header: %w", err)
 		}
 
-		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteSymbols())
+		bytesWritten, err = iw.cppIndexWriter.WriteSymbolsTo(w)
 		n += int64(bytesWritten)
 		if err != nil {
 			return n, fmt.Errorf("failed to write symbols: %w", err)
@@ -173,10 +171,11 @@ func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Wri
 		iw.isPrefixWritten = true
 	}
 
-	bytesWritten, err := w.Write(iw.cppIndexWriter.WriteSeries(
+	bytesWritten, err := iw.cppIndexWriter.WriteSeriesTo(
 		id,
 		*(*[]cppbridge.ChunkMetadata)(unsafe.Pointer(&chunks)), // #nosec G103 // it's meant to be that way
-	))
+		w,
+	)
 	n += int64(bytesWritten)
 	if err != nil {
 		return n, fmt.Errorf("failed to write series: %w", err)
