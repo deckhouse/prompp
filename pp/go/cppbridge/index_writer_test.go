@@ -54,8 +54,8 @@ func TestIndexWriterWritesFullIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	for {
-		_, hasMore, err := writer.WriteNextPostingsBatchTo(16, &index)
-		require.NoError(t, err)
+		_, hasMore, errWrite := writer.WriteNextPostingsBatchTo(16, &index)
+		require.NoError(t, errWrite)
 		if !hasMore {
 			break
 		}

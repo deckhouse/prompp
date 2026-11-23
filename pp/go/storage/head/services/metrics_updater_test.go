@@ -80,7 +80,7 @@ func TestMetricsUpdaterKeepsMemoryMetricsDuringHeadRemoval(t *testing.T) {
 		}
 		require.Empty(t, heads.Heads())
 		runtime.GC()
-		require.True(t, headRef.Value() != nil, "the in-flight collector must keep the removed head reachable")
+		require.NotNil(t, headRef.Value(), "the in-flight collector must keep the removed head reachable")
 
 		count, err := testutil.GatherAndCount(registry, memoryMetric)
 		require.NoError(t, err)
