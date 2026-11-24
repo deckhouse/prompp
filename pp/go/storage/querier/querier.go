@@ -155,15 +155,32 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
+// selectorTimeRange narrows the querier range to the range of one selector.
+// The PromQL engine opens one querier over the union of all selectors of a query
+// and passes the range of each selector in hints.Start and hints.End. A selector
+// with an offset or an @ modifier must be answered at its own End, otherwise the
+// engine gets a sample outside the selector's lookback window and drops it.
+// Hints without a range (nil or zero Start and End) keep the querier range.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectorTimeRange(
+	hints *storage.SelectHints,
+) (mint, maxt int64) {
+	if hints == nil || (hints.Start == 0 && hints.End == 0) {
+		return q.mint, q.maxt
+	}
+
+	return max(q.mint, hints.Start), min(q.maxt, hints.End)
+}
+
 // selectInstant returns a instant set of series that matches the given label matchers.
 //
 //revive:disable-next-line:function-length long but readable.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	ctx context.Context,
 	sortSeries bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
+	mint, maxt := q.selectorTimeRange(hints)
 	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSelectInstant)
 	if err != nil {
 		if errors.Is(err, locker.ErrSemaphoreClosed) {
@@ -185,8 +202,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	}
 
 	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
-	if q.mint <= valueNotFoundTimestampValue {
-		valueNotFoundTimestampValue = q.mint - 1
+	if mint <= valueNotFoundTimestampValue {
+		valueNotFoundTimestampValue = mint - 1
 	}
 
 	resources.seriesSets = poolProvider.GetSeriesSet()
@@ -210,7 +227,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 			start := slots.Start()
 			result := s.DataStorage().InstantQuery(
-				q.maxt,
+				maxt,
 				lssQueryResult.IDs(),
 				uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))), // #nosec G103 // it's meant to be that way
 			)
@@ -258,7 +275,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	sortSeries bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	resources, err := beginSelectQuery(ctx, q.head, q.metrics, operationSelectRange)
@@ -281,9 +298,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
+	mint, maxt := q.selectorTimeRange(hints)
 	resources.serializedData = poolProvider.GetSerializedData()
 	t := queryDataStorage(
-		dsQueryRangeQuerier, q.head, resources.lssQueryResults, resources.serializedData, q.mint, q.maxt, stats,
+		dsQueryRangeQuerier, q.head, resources.lssQueryResults, resources.serializedData, mint, maxt, stats,
 	)
 	resources.addTask(t)
 
@@ -291,8 +309,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	for shardID, serializedData := range resources.serializedData {
 		if serializedData != nil {
 			resources.seriesSets[shardID] = NewSeriesSet(
-				q.mint,
-				q.maxt,
+				mint,
+				maxt,
 				resources.lssQueryResults[shardID],
 				resources.snapshots[shardID],
 				serializedData,
