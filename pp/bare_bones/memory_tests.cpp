@@ -241,13 +241,19 @@ struct MovingReallocator : DefaultReallocator {
   }
 };
 
+struct CountingControlBlock : BareBones::AtomicSharedPtrControlBlockWithItemCount {
+  static inline uint32_t constructions{};
+
+  explicit CountingControlBlock(ItemCounter items_count) noexcept : AtomicSharedPtrControlBlockWithItemCount(items_count) { ++constructions; }
+};
+
 TEST_F(SharedPtrFixture, MovingReallocatePreservesMetadataAndPayload) {
   // Arrange
   constexpr std::array<uint8_t, 4> kPayload{10, 20, 30, 40};
   constexpr uint32_t kItemCount = 3;
-  using ControlBlock = BareBones::AtomicSharedPtrControlBlockWithItemCount;
-  using Reallocator = MovingReallocator<sizeof(ControlBlock) + kPayload.size()>;
-  BareBones::SharedPtr<uint8_t, ControlBlock, Reallocator> ptr(kPayload.size(), kItemCount);
+  using Reallocator = MovingReallocator<sizeof(CountingControlBlock) + kPayload.size()>;
+  BareBones::SharedPtr<uint8_t, CountingControlBlock, Reallocator> ptr(kPayload.size(), kItemCount);
+  const auto constructions_before = CountingControlBlock::constructions;
   std::memcpy(ptr.get(), kPayload.data(), kPayload.size());
   const auto original_address = reinterpret_cast<uintptr_t>(ptr.get());
 
@@ -256,6 +262,7 @@ TEST_F(SharedPtrFixture, MovingReallocatePreservesMetadataAndPayload) {
 
   // Assert
   EXPECT_NE(original_address, reinterpret_cast<uintptr_t>(ptr.get()));
+  ASSERT_EQ(constructions_before + 1, CountingControlBlock::constructions);
   EXPECT_EQ(1U, ptr.use_count());
   EXPECT_EQ(kItemCount, ptr.items_count());
   EXPECT_TRUE(std::equal(kPayload.begin(), kPayload.end(), ptr.get()));
