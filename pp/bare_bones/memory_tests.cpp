@@ -1,5 +1,9 @@
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <barrier>
+#include <cstdint>
+#include <cstring>
 #include <numeric>
 #include <thread>
 
@@ -223,6 +227,38 @@ TEST_F(SharedPtrFixture, Reallocate) {
   // Assert
   EXPECT_TRUE(ptr.is_unique());
   EXPECT_EQ(1U, ptr.use_count());
+}
+
+template <size_t kOldAllocationSize>
+struct MovingReallocator : DefaultReallocator {
+  static void* reallocate(void* memory, size_t size) {
+    auto* result = allocate(size);
+    if (result != nullptr && memory != nullptr) {
+      std::memcpy(result, memory, std::min(size, kOldAllocationSize));
+      free(memory);
+    }
+    return result;
+  }
+};
+
+TEST_F(SharedPtrFixture, MovingReallocatePreservesMetadataAndPayload) {
+  // Arrange
+  constexpr std::array<uint8_t, 4> kPayload{10, 20, 30, 40};
+  constexpr uint32_t kItemCount = 3;
+  using ControlBlock = BareBones::AtomicSharedPtrControlBlockWithItemCount;
+  using Reallocator = MovingReallocator<sizeof(ControlBlock) + kPayload.size()>;
+  BareBones::SharedPtr<uint8_t, ControlBlock, Reallocator> ptr(kPayload.size(), kItemCount);
+  std::memcpy(ptr.get(), kPayload.data(), kPayload.size());
+  const auto original_address = reinterpret_cast<uintptr_t>(ptr.get());
+
+  // Act
+  ptr.reallocate(kPayload.size(), 32);
+
+  // Assert
+  EXPECT_NE(original_address, reinterpret_cast<uintptr_t>(ptr.get()));
+  EXPECT_EQ(1U, ptr.use_count());
+  EXPECT_EQ(kItemCount, ptr.items_count());
+  EXPECT_TRUE(std::equal(kPayload.begin(), kPayload.end(), ptr.get()));
 }
 
 TEST_F(SharedPtrFixture, CopyConstructor) {
