@@ -2,8 +2,10 @@ package querier_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -468,6 +470,47 @@ func (s *QuerierSuite) TestLabelNames() {
 	// Assert
 	s.Equal([]string{"__name__", "job0"}, names)
 	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestSelectSortSeriesFlag() {
+	// Arrange
+	const numSeries = 64
+	timeSeries := make([]storagetest.TimeSeries, 0, numSeries)
+	for i := range numSeries {
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels:  labels.FromStrings("__name__", "metric", "instance", fmt.Sprintf("host%02d", numSeries-i)),
+			Samples: []cppbridge.Sample{{Timestamp: 1, Value: float64(i)}},
+		})
+	}
+	s.appendTimeSeries(timeSeries)
+	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "metric")
+	isSorted := func(series []storagetest.TimeSeries) bool {
+		return slices.IsSortedFunc(series, func(a, b storagetest.TimeSeries) int { return labels.Compare(a.Labels, b.Labels) })
+	}
+	selectSeries := func(sortSeries bool, hints *prom_storage.SelectHints) []storagetest.TimeSeries {
+		q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, s.scrapeInterval, 0, nil)
+		defer func() { _ = q.Close() }()
+		return storagetest.TimeSeriesFromSeriesSet(q.Select(s.context, sortSeries, hints, matcher), true)
+	}
+	rangeHints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1}
+	instantHints := &prom_storage.SelectHints{Start: 2, End: 2}
+
+	// Act
+	sortedRange := selectSeries(true, rangeHints)
+	unsortedRange := selectSeries(false, rangeHints)
+	sortedInstant := selectSeries(true, instantHints)
+	unsortedInstant := selectSeries(false, instantHints)
+
+	// Assert
+	s.Require().Len(sortedRange, numSeries)
+	s.Require().True(isSorted(sortedRange))
+	// the series are appended in descending label order, so the unsorted path must not look sorted
+	s.Require().False(isSorted(unsortedRange))
+	s.Require().ElementsMatch(sortedRange, unsortedRange)
+	s.Require().Len(sortedInstant, numSeries)
+	s.Require().True(isSorted(sortedInstant))
+	s.Require().False(isSorted(unsortedInstant))
+	s.Require().ElementsMatch(sortedInstant, unsortedInstant)
 }
 
 func (s *QuerierSuite) TestLabelNamesWithLimit() {

@@ -27,12 +27,8 @@ const FunctionDecl& FactStore::function(FunctionId id) const {
   return !id.is_valid() || id.get() >= functions_.size() ? invalid_function_ : functions_[id.get()];
 }
 
-std::span<const SourceFileDecl> FactStore::source_files() const noexcept {
-  return source_files_;
-}
+std::span<const SourceFileDecl> FactStore::source_files() const noexcept { return source_files_; }
 
-std::span<const FunctionDecl> FactStore::functions() const noexcept {
-  return functions_;
-}
+std::span<const FunctionDecl> FactStore::functions() const noexcept { return functions_; }
 
 }  // namespace epgen::facts

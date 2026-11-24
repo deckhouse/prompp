@@ -38,6 +38,4 @@ extern "C" void prompp_get_head_status_data_storage(void* args, void* res) {
       *in->data_storage);
 }
 
-extern "C" void prompp_free_head_status(void* args) {
-  static_cast<Status*>(args)->~Status();
-}
+extern "C" void prompp_free_head_status(void* args) { static_cast<Status*>(args)->~Status(); }

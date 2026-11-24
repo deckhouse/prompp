@@ -9,11 +9,11 @@ namespace series_index::querier::regexp {
 
 using RegexpPtr = std::unique_ptr<re2::Regexp, void (*)(re2::Regexp*)>;
 
-PROMPP_ALWAYS_INLINE RegexpPtr make_regexp(re2::Regexp* regexp) {
+PROMPP(inline) RegexpPtr make_regexp(re2::Regexp* regexp) {
   return {regexp, [](re2::Regexp* r) { r->Decref(); }};
 }
 
-PROMPP_ALWAYS_INLINE RegexpPtr concatenate(re2::Regexp** regexps, int count, re2::Regexp::ParseFlags flags) {
+PROMPP(inline) RegexpPtr concatenate(re2::Regexp** regexps, int count, re2::Regexp::ParseFlags flags) {
   for (int i = 0; i < count; ++i) {
     regexps[i]->Incref();
   }
@@ -37,7 +37,7 @@ inline std::string runes_to_string(re2::Regexp* rgx) {
 
 class RegexpParser {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static re2::Regexp::ParseFlags regexp_parse_flags() {
+  [[nodiscard]] static PROMPP(inline) re2::Regexp::ParseFlags regexp_parse_flags() {
     return re2::Regexp::NeverCapture | re2::Regexp::MatchNL | re2::Regexp::PerlClasses | re2::Regexp::OneLine | re2::Regexp::PerlX;
   }
 
@@ -63,7 +63,7 @@ class RegexpCompiledProg {
   RegexpCompiledProg() = default;
   explicit RegexpCompiledProg(re2::Regexp* rgx) { compile(rgx); }
 
-  PROMPP_ALWAYS_INLINE bool compile(re2::Regexp* rgx) {
+  PROMPP(inline) bool compile(re2::Regexp* rgx) {
     prog_.reset(rgx->CompileToProg(0));
     return prog_ != nullptr;
   }

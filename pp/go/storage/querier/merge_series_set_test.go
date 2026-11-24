@@ -2,6 +2,7 @@ package querier_test
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -162,9 +163,132 @@ func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 	}
 }
 
+// assertConcatShardSeriesSetsEqual checks that the concatenation of asets yields the sets one after another,
+// in their own order (csets, equal to asets), and the same series as the sorted merge of esets.
+func assertConcatShardSeriesSetsEqual(s *MergeShardSeriesSetSuite, esets, csets, asets []storage.SeriesSet) {
+	expectedSorted := storagetest.TimeSeriesFromSeriesSet(querier.NewMergeShardSeriesSet(esets), true)
+	expectedConcat := make([]storagetest.TimeSeries, 0, len(expectedSorted))
+	for _, set := range csets {
+		expectedConcat = append(expectedConcat, storagetest.TimeSeriesFromSeriesSet(set, true)...)
+	}
+	actual := storagetest.TimeSeriesFromSeriesSet(querier.NewConcatShardSeriesSet(asets), true)
+	s.Require().True(slices.IsSortedFunc(expectedSorted, func(a, b storagetest.TimeSeries) int {
+		return labels.Compare(a.Labels, b.Labels)
+	}))
+	s.Require().ElementsMatch(expectedSorted, actual)
+	s.Require().Equal(expectedConcat, actual)
+}
+
+func (s *MergeShardSeriesSetSuite) TestConcatShardSeriesSetScenarios() {
+	var start int64
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	for _, bm := range mergeSeriesSetMatrix() {
+		s.Run(fmt.Sprintf("%d_%d_%d", bm.numShards, bm.numSeries, bm.numSamples), func() {
+			head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
+			end := int64(bm.numSamples)
+
+			s.Run("happy_path", func() {
+				esets := make([]storage.SeriesSet, 0, bm.numShards)
+				csets := make([]storage.SeriesSet, 0, bm.numShards)
+				asets := make([]storage.SeriesSet, 0, bm.numShards)
+				for i := range bm.numShards {
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					csets = append(csets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+				}
+				assertConcatShardSeriesSetsEqual(s, esets, csets, asets)
+			})
+
+			s.Run("empty_series_sets_interleaved", func() {
+				esets := make([]storage.SeriesSet, 0, bm.numShards)
+				csets := make([]storage.SeriesSet, 0, bm.numShards)
+				asets := make([]storage.SeriesSet, 0, bm.numShards*2+1)
+				for i := range bm.numShards {
+					if i%2 == 0 {
+						asets = append(asets, &querier.SeriesSet{})
+					}
+					esets = append(esets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					csets = append(csets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+					asets = append(asets, queryOpt(s.T(), head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher))
+				}
+				asets = append(asets, &querier.SeriesSet{})
+				assertConcatShardSeriesSetsEqual(s, esets, csets, asets)
+			})
+		})
+	}
+}
+
+func (s *MergeShardSeriesSetSuite) TestConcatShardSeriesSetPooledBufferReuse() {
+	// Arrange
+	head := makeHead(2, 10, 1)
+	matcher := model.LabelMatcher{Name: "__name__", Value: "metric", MatcherType: model.MatcherTypeExactMatch}
+	sets := make([]storage.SeriesSet, 0, 2)
+	for i := range 2 {
+		sets = append(sets, queryOpt(s.T(), head.lsses[i], head.dss[i], 0, 1, cppbridge.NoDownsampling, matcher))
+	}
+
+	// Act
+	concat := querier.NewConcatShardSeriesSet(sets)
+	clear(sets)
+	actual := storagetest.TimeSeriesFromSeriesSet(concat, true)
+
+	// Assert
+	s.Require().Len(actual, 20)
+	s.Require().False(concat.Next())
+}
+
 //
 // BenchmarkMergeSeriesSet
 //
+
+func BenchmarkMergeVsConcatShardSeriesSet(b *testing.B) {
+	var start int64
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	for _, bm := range []struct {
+		numShards, numSeries int
+	}{
+		{2, 1000},
+		{8, 1000},
+		{32, 1000},
+		{64, 1000},
+	} {
+		head := makeHead(bm.numShards, bm.numSeries, 1)
+		seriesSets := make([]storage.SeriesSet, 0, bm.numShards)
+		for _, ctor := range []struct {
+			name string
+			fn   func([]storage.SeriesSet) storage.SeriesSet
+		}{
+			{"merge", querier.NewMergeShardSeriesSet},
+			{"concat", querier.NewConcatShardSeriesSet},
+		} {
+			b.Run(fmt.Sprintf("%s/shards_%d/series_%d", ctor.name, bm.numShards, bm.numSeries), func(b *testing.B) {
+				for b.Loop() {
+					b.StopTimer()
+					seriesSets = seriesSets[:0]
+					for i := range bm.numShards {
+						seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, 1, cppbridge.NoDownsampling, matcher))
+					}
+					b.StartTimer()
+
+					seriesSet := ctor.fn(seriesSets)
+					for seriesSet.Next() {
+						_ = seriesSet.At().Labels()
+					}
+				}
+			})
+		}
+	}
+}
 
 func BenchmarkMergeSeriesSet(b *testing.B) {
 	var start int64

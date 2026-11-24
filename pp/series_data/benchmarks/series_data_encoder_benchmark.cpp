@@ -8,7 +8,7 @@
 namespace {
 
 void SeriesDataEncoder(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& samples = benchmark::get_compact_samples();
 
   series_data::DataStorage<> storage;

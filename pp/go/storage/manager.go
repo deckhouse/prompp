@@ -293,6 +293,7 @@ func (m *Manager) initServices(
 					block.DefaultChunkSegmentSize,
 					o.BlockDuration,
 					o.MaxRetentionPeriod,
+					o.BlockDuration,
 					clock,
 					r,
 				),

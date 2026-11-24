@@ -148,3 +148,24 @@ func (s *OpenMetricsScraperHashdexSuite) TestParseEOFWordWithoutNewline() {
 	s.Require().NoError(err)
 	s.Equal(uint32(1), scraped)
 }
+
+func (s *OpenMetricsScraperHashdexSuite) TestParseInvalidUtf8DiscardsPreviousParse() {
+	// Arrange
+	previousScraped, err := s.hasdex.Parse([]byte("# HELP metric help text\nmetric 1\n# EOF\n"), -1)
+	s.Require().NoError(err)
+	s.Require().Equal(uint32(1), previousScraped)
+	input := []byte("metric{label=\"\xff\"} 1\n# EOF\n")
+
+	// Act
+	scraped, err := s.hasdex.Parse(input, -1)
+	var actualMetadata []cppbridge.WALScraperHashdexMetadata
+	s.hasdex.RangeMetadata(func(md cppbridge.WALScraperHashdexMetadata) bool {
+		actualMetadata = append(actualMetadata, md)
+		return true
+	})
+
+	// Assert
+	s.Require().ErrorIs(err, cppbridge.ErrScraperInvalidUtf8)
+	s.Equal(uint32(0), scraped)
+	s.Empty(actualMetadata)
+}

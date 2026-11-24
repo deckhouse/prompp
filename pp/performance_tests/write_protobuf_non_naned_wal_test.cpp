@@ -26,7 +26,7 @@ using source_ls_pair_id_to_uid_map = std::map<source_id, source_uid>;
 
 // Helper class for separating samples by their ID and timestamp window.
 class WalMessagesTimeWindowPack {
-  constexpr static inline source_uid INVALID_SOURCE_UID = std::numeric_limits<source_uid>::max();
+  static inline constexpr source_uid INVALID_SOURCE_UID = std::numeric_limits<source_uid>::max();
   std::vector<source_id> source_id_map_;
   source_ls_pair_id_to_uid_map source_id_rev_map_;
   size_t buffer_size_ = 0;
