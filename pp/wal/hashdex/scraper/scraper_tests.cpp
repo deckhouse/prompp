@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <memory>
 #include <optional>
+#include <span>
 
 #include "scraper.h"
 #include "wal/hashdex/metric.h"
@@ -175,7 +178,7 @@ INSTANTIATE_TEST_SUITE_P(
                     ScraperCase{.buffer = "go_gc_duration_seconds_count \n", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "go_gc_duration_seconds_count\n", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "go_gc_duration_seconds_count", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kInvalidValue, .metrics = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "{\"a\"\n}\n", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "{} 1\n", .result = Error::kNoMetricName, .metrics = {}},
                     ScraperCase{.buffer = "{\"\xff\"\n}\n", .result = Error::kInvalidUtf8, .metrics = {}},
@@ -911,6 +914,91 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
                                                                                        },
                                                                                        BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
+// The body ends in the middle of a token, or its last line has no trailing newline. The body is
+// copied into a heap buffer of the exact size, without a terminator, so that a read past the end
+// is reported by ASan and the result cannot depend on the bytes after the buffer.
+template <class Scraper>
+class TruncatedBufferScraperFixture : public ScraperFixture<Scraper> {
+ protected:
+  std::unique_ptr<char[]> buffer_;
+  std::span<char> span_;
+
+  void SetUp() override {
+    calculate_labelset_hash(const_cast<ScraperCase&>(this->GetParam()).metrics);
+
+    const auto body = this->GetParam().buffer;
+    buffer_ = std::make_unique_for_overwrite<char[]>(body.size());
+    std::ranges::copy(body, buffer_.get());
+    span_ = {buffer_.get(), body.size()};
+  }
+};
+
+class PrometheusScraperTruncatedBufferFixture : public TruncatedBufferScraperFixture<PrometheusScraper> {};
+
+TEST_P(PrometheusScraperTruncatedBufferFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = scraper_.parse(span_, kDefaultTimestamp);
+  const auto metrics = get_metrics();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().metrics, metrics);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TruncatedBuffer,
+    PrometheusScraperTruncatedBufferFixture,
+    testing::Values(ScraperCase{.buffer = "#1010101010101010\n# TYPE", .result = Error::kNoError},
+                    ScraperCase{.buffer = "# TYPE metric",
+                                .result = Error::kNoError,
+                                .metadata = {Metadata{.metric_name = "metric", .text = "", .type = MetadataType::kType}}},
+                    ScraperCase{.buffer = "metric ", .result = Error::kUnexpectedToken},
+                    ScraperCase{.buffer = "metric{a=\"b", .result = Error::kUnexpectedToken},
+                    ScraperCase{
+                        .buffer = "metric 1",
+                        .result = Error::kNoError,
+                        .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "metric"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                    ScraperCase{.buffer = "metric 1 2",
+                                .result = Error::kNoError,
+                                .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "metric"}}, BareBones::Vector<Sample>{Sample{2, 1}}}}}}));
+
+class OpenMetricsScraperTruncatedBufferFixture : public TruncatedBufferScraperFixture<OpenMetricsScraper> {};
+
+TEST_P(OpenMetricsScraperTruncatedBufferFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = scraper_.parse(span_, kDefaultTimestamp);
+  const auto metrics = get_metrics();
+  const auto metadata = get_metadata();
+
+  // Assert
+  EXPECT_EQ(GetParam().result, result);
+  EXPECT_EQ(GetParam().metrics, metrics);
+  EXPECT_EQ(GetParam().metadata, metadata);
+}
+
+INSTANTIATE_TEST_SUITE_P(TruncatedBuffer,
+                         OpenMetricsScraperTruncatedBufferFixture,
+                         testing::Values(ScraperCase{.buffer = "#1010101010101010\n# TYPE", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "# TYPE", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "# TYPE metric", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "metric ", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "metric 1 ", .result = Error::kUnexpectedToken},
+                                         ScraperCase{.buffer = "metric 1 # ", .result = Error::kInvalidTimestamp},
+                                         ScraperCase{.buffer = "metric 1\n# EOF",
+                                                     .result = Error::kNoError,
+                                                     .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "metric"}},
+                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+                                         ScraperCase{.buffer = "metric 1 # {a=\"b\"} 2\n# EOF",
+                                                     .result = Error::kNoError,
+                                                     .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "metric"}},
+                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}}));
+
 // A reused scraper must not expose the previous parse after a body is rejected as invalid UTF-8.
 template <class Scraper>
 class ScraperReuseFixture : public ::testing::Test {
@@ -920,7 +1008,7 @@ class ScraperReuseFixture : public ::testing::Test {
   void SetUp() override {
     std::string previous = "# HELP metric help text\nmetric 1\n# EOF\n"s;
     ASSERT_EQ(Error::kNoError, scraper_.parse(previous, kDefaultTimestamp));
-    ASSERT_EQ(1U, scraper_.floats().size());
+    ASSERT_EQ(1U, scraper_.metrics().size());
     ASSERT_EQ(1U, scraper_.metadata().size());
   }
 };
@@ -934,12 +1022,12 @@ TYPED_TEST(ScraperReuseFixture, InvalidUtf8DiscardsPreviousParse) {
 
   // Act
   const auto result = this->scraper_.parse(buffer, kDefaultTimestamp);
-  const auto floats = PromPP::WAL::hashdex::get_floats(this->scraper_);
-  const auto metadata = PromPP::WAL::hashdex::get_metadata(this->scraper_);
+  const auto metrics = PromPP::WAL::hashdex::get_metrics(this->scraper_.metrics());
+  const auto metadata = PromPP::WAL::hashdex::get_metadata(this->scraper_.metadata());
 
   // Assert
   EXPECT_EQ(Error::kInvalidUtf8, result);
-  EXPECT_TRUE(floats.empty());
+  EXPECT_TRUE(metrics.empty());
   EXPECT_TRUE(metadata.empty());
 }
 

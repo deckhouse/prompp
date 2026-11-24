@@ -131,9 +131,9 @@ class Unloader {
   }
 
   PROMPP(inline) static uint32_t calculate_stream_reserve_size(const BareBones::Bitset& ls_id_bitmap,
-                                                                     const EncodingChunkLengthSequence& chunk_length_sequence,
-                                                                     const EncodingChunkIDSequence& chunk_id_sequence,
-                                                                     uint32_t total_bitseqs_size) noexcept {
+                                                                        const EncodingChunkLengthSequence& chunk_length_sequence,
+                                                                        const EncodingChunkIDSequence& chunk_id_sequence,
+                                                                        uint32_t total_bitseqs_size) noexcept {
     uint32_t reserved_stream_size = 0;
     reserved_stream_size += ls_id_bitmap.get_write_size();
     reserved_stream_size += chunk_id_sequence.data().get_write_size();

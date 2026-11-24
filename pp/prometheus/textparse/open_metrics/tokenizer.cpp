@@ -80,207 +80,106 @@ Token Tokenizer::next_impl() noexcept {
   {
     unsigned char yych;
     unsigned int yyaccept = 0;
-    static const int yyctable[12] = {(int)((char*) && yyc_init - (char*) && yyc_init),
-                                     (int)((char*) && yyc_comment - (char*) && yyc_init),
-                                     (int)((char*) && yyc_meta_name - (char*) && yyc_init),
-                                     (int)((char*) && yyc_meta_text_with_leading_spaces - (char*) && yyc_init),
-                                     (int)((char*) && yyc_exemplar_labels - (char*) && yyc_init),
-                                     (int)((char*) && yyc_labels - (char*) && yyc_init),
-                                     (int)((char*) && yyc_label_value - (char*) && yyc_init),
-                                     (int)((char*) && yyc_exemplar_label_value - (char*) && yyc_init),
-                                     (int)((char*) && yyc_value - (char*) && yyc_init),
-                                     (int)((char*) && yyc_timestamp - (char*) && yyc_init),
-                                     (int)((char*) && yyc_exemplar_value - (char*) && yyc_init),
-                                     (int)((char*) && yyc_exemplar_timestamp - (char*) && yyc_init)};
-    static const unsigned char yybm_init[256] = {
-        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  128, 0,  0,  0,  0,
-        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 0, 0,  0,  0,  0,  0,  64, 64, 64, 64, 64,  64, 64, 64, 64,
-        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 0,  0,  0,  0,  64, 0, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,  64, 64, 64, 64,
-        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,
-        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,
-        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,
-        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0};
-    static const unsigned char yybm_comment[256] = {
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0};
-    static const unsigned char yybm_meta_name[256] = {
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 0,
-        0, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 128,
-        0, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0};
-    static const unsigned char yybm_meta_text_with_leading_spaces[256] = {
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0};
-    static const unsigned char yybm_exemplar_labels[256] = {
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0,   0, 0, 0, 0, 0,
-        0, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 128,
-        0, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0};
-    static const unsigned char yybm_labels[256] = {
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0,   0, 0, 0, 0, 0,
-        0, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 128,
-        0, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0,
-        0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 0, 0, 0, 0};
-    static const unsigned char yybm_value[256] = {
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
-    static const unsigned char yybm_timestamp[256] = {
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
-    static const unsigned char yybm_exemplar_value[256] = {
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
-    static const unsigned char yybm_exemplar_timestamp[256] = {
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 0,   128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
-    goto*((char*) && yyc_init + yyctable[condition_]);
+    switch (condition_) {
+      case yycinit:
+        goto yyc_init;
+      case yyccomment:
+        goto yyc_comment;
+      case yycmeta_name:
+        goto yyc_meta_name;
+      case yycmeta_text_with_leading_spaces:
+        goto yyc_meta_text_with_leading_spaces;
+      case yycexemplar_labels:
+        goto yyc_exemplar_labels;
+      case yyclabels:
+        goto yyc_labels;
+      case yyclabel_value:
+        goto yyc_label_value;
+      case yycexemplar_label_value:
+        goto yyc_exemplar_label_value;
+      case yycvalue:
+        goto yyc_value;
+      case yyctimestamp:
+        goto yyc_timestamp;
+      case yycexemplar_value:
+        goto yyc_exemplar_value;
+      case yycexemplar_timestamp:
+        goto yyc_exemplar_timestamp;
+    }
   /* *********************************** */
   yyc_init:
     marker_ptr_ = cursor_ptr_;
-    if ((limit_ptr_ - cursor_ptr_) < 2) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 0x00:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy1;
+        goto yy2;
+      case '\n':
+        goto yy3;
+      case '#':
+        goto yy4;
+      case ':':
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy6;
+      case '{':
+        goto yy8;
+      default:
+        goto yy1;
     }
-    yych = *cursor_ptr_;
-    {
-      static const int yytarget[256] = {(int)((char*) && yy2 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy3 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy4 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1), (int)((char*) && yy5 - (char*) && yy1),
-                                        (int)((char*) && yy6 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1), (int)((char*) && yy1 - (char*) && yy1),
-                                        (int)((char*) && yy1 - (char*) && yy1)};
-      goto*((char*) && yy1 + yytarget[yych]);
-    }
-  yy1: { return Token::kInvalid; }
+  yy1: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
   yy2:
     ++cursor_ptr_;
     {
@@ -292,41 +191,110 @@ Token Tokenizer::next_impl() noexcept {
       return Token::kLinebreak;
     }
   yy4:
-    yych = *++cursor_ptr_;
-    if (yybm_init[0 + yych] & 128)
-      goto yy7;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy9;
+      default:
+        goto yy5;
+    }
+  yy5:
     cursor_ptr_ = marker_ptr_;
     goto yy1;
-  yy5:
+  yy6:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case ':':
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy6;
+      default:
+        goto yy7;
     }
-    yych = *cursor_ptr_;
-    if (yybm_init[0 + yych] & 64)
-      goto yy5;
+  yy7:
     condition_ = yycvalue;
     {
       return Token::kMetricName;
     }
-  yy6:
+  yy8:
     ++cursor_ptr_;
     condition_ = yyclabels;
     {
       return Token::kBraceOpen;
     }
-  yy7:
+  yy9:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy9;
+      default:
+        goto yy10;
     }
-    yych = *cursor_ptr_;
-    if (yybm_init[0 + yych] & 128)
-      goto yy7;
+  yy10:
     condition_ = yyccomment;
     {
       token_ptr_ = cursor_ptr_;
@@ -334,152 +302,208 @@ Token Tokenizer::next_impl() noexcept {
   /* *********************************** */
   yyc_comment:
     marker_ptr_ = cursor_ptr_;
-    if ((limit_ptr_ - cursor_ptr_) < 5) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
-    }
-    yych = *cursor_ptr_;
-    if (yych <= 'H') {
-      if (yych == 'E')
-        goto yy10;
-      if (yych >= 'H')
-        goto yy12;
-    } else {
-      if (yych <= 'S')
-        goto yy9;
-      if (yych <= 'T')
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'E':
         goto yy13;
-      if (yych <= 'U')
-        goto yy14;
+      case 'H':
+        goto yy15;
+      case 'T':
+        goto yy16;
+      case 'U':
+        goto yy17;
+      default:
+        goto yy12;
     }
-  yy9:
+  yy12:
     condition_ = yycinit;
     {
-      return Token::kInvalid;
+      return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid;
     }
-  yy10:
-    yych = *++cursor_ptr_;
-    if (yych == 'O')
-      goto yy15;
-  yy11:
-    cursor_ptr_ = marker_ptr_;
-    goto yy9;
-  yy12:
-    yych = *++cursor_ptr_;
-    if (yych == 'E')
-      goto yy16;
-    goto yy11;
   yy13:
-    yych = *++cursor_ptr_;
-    if (yych == 'Y')
-      goto yy17;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'O':
+        goto yy18;
+      default:
+        goto yy14;
+    }
   yy14:
-    yych = *++cursor_ptr_;
-    if (yych == 'N')
-      goto yy18;
-    goto yy11;
+    cursor_ptr_ = marker_ptr_;
+    goto yy12;
   yy15:
-    yych = *++cursor_ptr_;
-    if (yych == 'F')
-      goto yy19;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'E':
+        goto yy19;
+      default:
+        goto yy14;
+    }
   yy16:
-    yych = *++cursor_ptr_;
-    if (yych == 'L')
-      goto yy21;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'Y':
+        goto yy20;
+      default:
+        goto yy14;
+    }
   yy17:
-    yych = *++cursor_ptr_;
-    if (yych == 'P')
-      goto yy22;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'N':
+        goto yy21;
+      default:
+        goto yy14;
+    }
   yy18:
-    yych = *++cursor_ptr_;
-    if (yych == 'I')
-      goto yy23;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'F':
+        goto yy22;
+      default:
+        goto yy14;
+    }
   yy19:
-    yych = *++cursor_ptr_;
-    if (yych == '\n')
-      goto yy24;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'L':
+        goto yy24;
+      default:
+        goto yy14;
+    }
   yy20:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'P':
+        goto yy25;
+      default:
+        goto yy14;
+    }
+  yy21:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'I':
+        goto yy26;
+      default:
+        goto yy14;
+    }
+  yy22:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+        goto yy27;
+      default:
+        goto yy23;
+    }
+  yy23:
     condition_ = yycinit;
     {
       return Token::kEOFWord;
     }
-  yy21:
-    yych = *++cursor_ptr_;
-    if (yych == 'P')
-      goto yy25;
-    goto yy11;
-  yy22:
-    yych = *++cursor_ptr_;
-    if (yych == 'E')
-      goto yy26;
-    goto yy11;
-  yy23:
-    yych = *++cursor_ptr_;
-    if (yych == 'T')
-      goto yy27;
-    goto yy11;
   yy24:
     ++cursor_ptr_;
-    goto yy20;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'P':
+        goto yy28;
+      default:
+        goto yy14;
+    }
   yy25:
-    yych = *++cursor_ptr_;
-    if (yybm_comment[0 + yych] & 128)
-      goto yy28;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'E':
+        goto yy29;
+      default:
+        goto yy14;
+    }
   yy26:
-    yych = *++cursor_ptr_;
-    if (yych == ' ')
-      goto yy29;
-    goto yy11;
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 'T':
+        goto yy30;
+      default:
+        goto yy14;
+    }
   yy27:
-    yych = *++cursor_ptr_;
-    if (yych == ' ')
-      goto yy30;
-    goto yy11;
+    ++cursor_ptr_;
+    goto yy23;
   yy28:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy31;
+      default:
+        goto yy14;
     }
-    yych = *cursor_ptr_;
-    if (yybm_comment[0 + yych] & 128)
-      goto yy28;
+  yy29:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy33;
+      default:
+        goto yy14;
+    }
+  yy30:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy35;
+      default:
+        goto yy14;
+    }
+  yy31:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy31;
+      default:
+        goto yy32;
+    }
+  yy32:
     condition_ = yycmeta_name;
     {
       return Token::kHelp;
     }
-  yy29:
+  yy33:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy33;
+      default:
+        goto yy34;
     }
-    yych = *cursor_ptr_;
-    if (yych == ' ')
-      goto yy29;
+  yy34:
     condition_ = yycmeta_name;
     {
       return Token::kType;
     }
-  yy30:
+  yy35:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy35;
+      default:
+        goto yy36;
     }
-    yych = *cursor_ptr_;
-    if (yych == ' ')
-      goto yy30;
+  yy36:
     condition_ = yycmeta_name;
     {
       return Token::kUnit;
@@ -487,124 +511,153 @@ Token Tokenizer::next_impl() noexcept {
   /* *********************************** */
   yyc_meta_name:
     marker_ptr_ = cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '"':
+        goto yy39;
+      case ':':
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy40;
+      default:
+        goto yy38;
     }
-    yych = *cursor_ptr_;
-    {
-      static const int yytarget[256] = {
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy33 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32), (int)((char*) && yy34 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32), (int)((char*) && yy32 - (char*) && yy32),
-          (int)((char*) && yy32 - (char*) && yy32)};
-      goto*((char*) && yy32 + yytarget[yych]);
-    }
-  yy32: { return Token::kInvalid; }
-  yy33:
+  yy38: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy39:
     ++cursor_ptr_;
     condition_ = yycmeta_text_with_leading_spaces;
     {
       return consume_escaped_string(Token::kMetricName);
     }
-  yy34:
+  yy40:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy42;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case ':':
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy40;
+      default:
+        goto yy41;
     }
-    yych = *cursor_ptr_;
-    if (yybm_meta_name[0 + yych] & 128)
-      goto yy34;
-    if (yych == ' ')
-      goto yy35;
+  yy41:
     cursor_ptr_ = marker_ptr_;
-    goto yy32;
-  yy35:
+    goto yy38;
+  yy42:
     ++cursor_ptr_;
     condition_ = yycmeta_text_with_leading_spaces;
     {
@@ -613,18 +666,18 @@ Token Tokenizer::next_impl() noexcept {
     }
   /* *********************************** */
   yyc_meta_text_with_leading_spaces:
-    goto yy36;
-  yy37:
+    goto yy43;
+  yy44:
     ++cursor_ptr_;
-  yy36:
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+  yy43:
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy44;
+      default:
+        goto yy45;
     }
-    yych = *cursor_ptr_;
-    if (yybm_meta_text_with_leading_spaces[0 + yych] & 128)
-      goto yy37;
+  yy45:
     condition_ = yycinit;
     {
       token_ptr_ = cursor_ptr_;
@@ -632,133 +685,163 @@ Token Tokenizer::next_impl() noexcept {
     }
   /* *********************************** */
   yyc_exemplar_labels:
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '"':
+        goto yy48;
+      case ',':
+        goto yy49;
+      case '=':
+        goto yy50;
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy51;
+      case '}':
+        goto yy53;
+      default:
+        goto yy47;
     }
-    yych = *cursor_ptr_;
-    {
-      static const int yytarget[256] = {
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy40 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy41 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy42 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39), (int)((char*) && yy43 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy44 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39), (int)((char*) && yy39 - (char*) && yy39),
-          (int)((char*) && yy39 - (char*) && yy39)};
-      goto*((char*) && yy39 + yytarget[yych]);
-    }
-  yy39: { return Token::kInvalid; }
-  yy40:
+  yy47: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy48:
     ++cursor_ptr_;
     {
       return consume_escaped_string(Token::kQuotedString);
     }
-  yy41:
+  yy49:
     ++cursor_ptr_;
     {
       return Token::kComma;
     }
-  yy42:
+  yy50:
     ++cursor_ptr_;
     condition_ = yycexemplar_label_value;
     {
       return Token::kEqual;
     }
-  yy43:
+  yy51:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy51;
+      default:
+        goto yy52;
     }
-    yych = *cursor_ptr_;
-    if (yybm_exemplar_labels[0 + yych] & 128)
-      goto yy43;
-    {
-      return Token::kLabelName;
-    }
-  yy44:
+  yy52: { return Token::kLabelName; }
+  yy53:
     ++cursor_ptr_;
     condition_ = yycexemplar_value;
     {
@@ -766,133 +849,163 @@ Token Tokenizer::next_impl() noexcept {
     }
   /* *********************************** */
   yyc_labels:
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '"':
+        goto yy56;
+      case ',':
+        goto yy57;
+      case '=':
+        goto yy58;
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy59;
+      case '}':
+        goto yy61;
+      default:
+        goto yy55;
     }
-    yych = *cursor_ptr_;
-    {
-      static const int yytarget[256] = {
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy47 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy48 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy49 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46), (int)((char*) && yy50 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy51 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46), (int)((char*) && yy46 - (char*) && yy46),
-          (int)((char*) && yy46 - (char*) && yy46)};
-      goto*((char*) && yy46 + yytarget[yych]);
-    }
-  yy46: { return Token::kInvalid; }
-  yy47:
+  yy55: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy56:
     ++cursor_ptr_;
     {
       return consume_escaped_string(Token::kQuotedString);
     }
-  yy48:
+  yy57:
     ++cursor_ptr_;
     {
       return Token::kComma;
     }
-  yy49:
+  yy58:
     ++cursor_ptr_;
     condition_ = yyclabel_value;
     {
       return Token::kEqual;
     }
-  yy50:
+  yy59:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case '_':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+        goto yy59;
+      default:
+        goto yy60;
     }
-    yych = *cursor_ptr_;
-    if (yybm_labels[0 + yych] & 128)
-      goto yy50;
-    {
-      return Token::kLabelName;
-    }
-  yy51:
+  yy60: { return Token::kLabelName; }
+  yy61:
     ++cursor_ptr_;
     condition_ = yycvalue;
     {
@@ -900,18 +1013,15 @@ Token Tokenizer::next_impl() noexcept {
     }
   /* *********************************** */
   yyc_label_value:
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '"':
+        goto yy64;
+      default:
+        goto yy63;
     }
-    yych = *cursor_ptr_;
-    if (yych == '"')
-      goto yy53;
-    {
-      return Token::kInvalid;
-    }
-  yy53:
+  yy63: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy64:
     ++cursor_ptr_;
     condition_ = yyclabels;
     {
@@ -919,18 +1029,15 @@ Token Tokenizer::next_impl() noexcept {
     }
   /* *********************************** */
   yyc_exemplar_label_value:
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '"':
+        goto yy67;
+      default:
+        goto yy66;
     }
-    yych = *cursor_ptr_;
-    if (yych == '"')
-      goto yy55;
-    {
-      return Token::kInvalid;
-    }
-  yy55:
+  yy66: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy67:
     ++cursor_ptr_;
     condition_ = yycexemplar_labels;
     {
@@ -939,39 +1046,52 @@ Token Tokenizer::next_impl() noexcept {
   /* *********************************** */
   yyc_value:
     marker_ptr_ = cursor_ptr_;
-    if ((limit_ptr_ - cursor_ptr_) < 2) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy70;
+      case '{':
+        goto yy72;
+      default:
+        goto yy69;
     }
-    yych = *cursor_ptr_;
-    if (yych == ' ')
-      goto yy58;
-    if (yych == '{')
-      goto yy59;
-  yy57: { return Token::kInvalid; }
-  yy58:
-    yych = *++cursor_ptr_;
-    if (yybm_value[0 + yych] & 128)
-      goto yy60;
+  yy69: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy70:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy71;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy71;
+        goto yy73;
+    }
+  yy71:
     cursor_ptr_ = marker_ptr_;
-    goto yy57;
-  yy59:
+    goto yy69;
+  yy72:
     ++cursor_ptr_;
     condition_ = yyclabels;
     {
       return Token::kBraceOpen;
     }
-  yy60:
+  yy73:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy74;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy74;
+        goto yy73;
     }
-    yych = *cursor_ptr_;
-    if (yybm_value[0 + yych] & 128)
-      goto yy60;
+  yy74:
     condition_ = yyctimestamp;
     {
       ++token_ptr_;
@@ -980,144 +1100,86 @@ Token Tokenizer::next_impl() noexcept {
   /* *********************************** */
   yyc_timestamp:
     marker_ptr_ = cursor_ptr_;
-    if ((limit_ptr_ - cursor_ptr_) < 4) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+        goto yy77;
+      case ' ':
+        goto yy78;
+      default:
+        goto yy76;
     }
-    yych = *cursor_ptr_;
-    if (yych == '\n')
-      goto yy63;
-    if (yych == ' ')
-      goto yy64;
-  yy62: { return Token::kInvalid; }
-  yy63:
+  yy76: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy77:
     ++cursor_ptr_;
     condition_ = yycinit;
     {
       return Token::kLinebreak;
     }
-  yy64:
-    yych = *++cursor_ptr_;
-    {
-      static const int yytarget[256] = {
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy65 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy65 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy69 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy65 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65), (int)((char*) && yy66 - (char*) && yy65),
-          (int)((char*) && yy66 - (char*) && yy65)};
-      goto*((char*) && yy65 + yytarget[yych]);
+  yy78:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy79;
+      case '#':
+        goto yy83;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy79;
+        goto yy80;
     }
-  yy65:
+  yy79:
     cursor_ptr_ = marker_ptr_;
     if (yyaccept == 0)
-      goto yy62;
+      goto yy76;
     else
-      goto yy68;
-  yy66:
+      goto yy82;
+  yy80:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+  yy81:
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy82;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy82;
+        goto yy80;
     }
-    yych = *cursor_ptr_;
-  yy67:
-    if (yybm_timestamp[0 + yych] & 128)
-      goto yy66;
-  yy68: {
+  yy82: {
     ++token_ptr_;
     return Token::kTimestamp;
   }
-  yy69:
+  yy83:
     yyaccept = 1;
-    yych = *(marker_ptr_ = ++cursor_ptr_);
-    if (yych != ' ')
-      goto yy67;
-    yych = *++cursor_ptr_;
-    if (yych != '{')
-      goto yy65;
+    ++cursor_ptr_;
+    marker_ptr_ = cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case 0x00:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy82;
+        goto yy80;
+      case ' ':
+        goto yy84;
+      default:
+        goto yy81;
+    }
+  yy84:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '{':
+        goto yy85;
+      default:
+        goto yy79;
+    }
+  yy85:
     ++cursor_ptr_;
     condition_ = yycexemplar_labels;
     {
@@ -1126,31 +1188,44 @@ Token Tokenizer::next_impl() noexcept {
   /* *********************************** */
   yyc_exemplar_value:
     marker_ptr_ = cursor_ptr_;
-    if ((limit_ptr_ - cursor_ptr_) < 2) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case ' ':
+        goto yy88;
+      default:
+        goto yy87;
     }
-    yych = *cursor_ptr_;
-    if (yych == ' ')
-      goto yy72;
-  yy71: { return Token::kInvalid; }
-  yy72:
-    yych = *++cursor_ptr_;
-    if (yybm_exemplar_value[0 + yych] & 128)
-      goto yy73;
-    cursor_ptr_ = marker_ptr_;
-    goto yy71;
-  yy73:
+  yy87: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy88:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy89;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy89;
+        goto yy90;
     }
-    yych = *cursor_ptr_;
-    if (yybm_exemplar_value[0 + yych] & 128)
-      goto yy73;
+  yy89:
+    cursor_ptr_ = marker_ptr_;
+    goto yy87;
+  yy90:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy91;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy91;
+        goto yy90;
+    }
+  yy91:
     condition_ = yycexemplar_timestamp;
     {
       ++token_ptr_;
@@ -1159,43 +1234,55 @@ Token Tokenizer::next_impl() noexcept {
   /* *********************************** */
   yyc_exemplar_timestamp:
     marker_ptr_ = cursor_ptr_;
-    if ((limit_ptr_ - cursor_ptr_) < 2) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+        goto yy94;
+      case ' ':
+        goto yy95;
+      default:
+        goto yy93;
     }
-    yych = *cursor_ptr_;
-    if (yych == '\n')
-      goto yy76;
-    if (yych == ' ')
-      goto yy77;
-  yy75: { return Token::kInvalid; }
-  yy76:
+  yy93: { return cursor_ptr_ == limit_ptr_ ? Token::kEOF : Token::kInvalid; }
+  yy94:
     ++cursor_ptr_;
     condition_ = yycinit;
     {
       return Token::kLinebreak;
     }
-  yy77:
-    yych = *++cursor_ptr_;
-    if (yybm_exemplar_timestamp[0 + yych] & 128)
-      goto yy78;
-    cursor_ptr_ = marker_ptr_;
-    goto yy75;
-  yy78:
+  yy95:
     ++cursor_ptr_;
-    if (limit_ptr_ <= cursor_ptr_) {
-      if (limit_ptr_ == cursor_ptr_) {
-        return Token::kEOF;
-      }
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy96;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy96;
+        goto yy97;
     }
-    yych = *cursor_ptr_;
-    if (yybm_exemplar_timestamp[0 + yych] & 128)
-      goto yy78;
-    {
-      ++token_ptr_;
-      return Token::kTimestamp;
+  yy96:
+    cursor_ptr_ = marker_ptr_;
+    goto yy93;
+  yy97:
+    ++cursor_ptr_;
+    yych = (cursor_ptr_ < limit_ptr_ ? static_cast<unsigned char>(*cursor_ptr_) : 0);
+    switch (yych) {
+      case '\n':
+      case ' ':
+      case '{':
+        goto yy98;
+      default:
+        if ((limit_ptr_ - cursor_ptr_ < 1))
+          goto yy98;
+        goto yy97;
     }
+  yy98: {
+    ++token_ptr_;
+    return Token::kTimestamp;
+  }
   }
 }
 // NOLINTEND

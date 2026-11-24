@@ -328,7 +328,7 @@ class SerializedDataView {
     PROMPP(inline) void reset_decode_iterator() { decode_iter_ = create_decode_iterator({buffer_, buffer_size_}, *chunk_iter_); }
 
     PROMPP(inline) static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer,
-                                                                                        const chunk::SerializedChunk& chunk) noexcept {
+                                                                                           const chunk::SerializedChunk& chunk) noexcept {
       return Decoder::create_decode_iterator(buffer, chunk, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         return decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
