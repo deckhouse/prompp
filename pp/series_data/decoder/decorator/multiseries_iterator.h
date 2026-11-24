@@ -16,24 +16,24 @@ class MultiSeriesIterator {
     seek_to_first_non_stale_nan_sample();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
+  PROMPP(inline) const encoder::Sample& operator*() const { return sample_; }
+  PROMPP(inline) const encoder::Sample* operator->() const { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
 
-  PROMPP_ALWAYS_INLINE MultiSeriesIterator& operator++() {
+  PROMPP(inline) MultiSeriesIterator& operator++() {
     update_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE MultiSeriesIterator operator++(int) {
+  PROMPP(inline) MultiSeriesIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;
   }
 
   template <class IteratorsGenerator>
-  PROMPP_ALWAYS_INLINE void reset(const WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
+  PROMPP(inline) void reset(const WindowFunctionParameters& parameters, IteratorsGenerator&& iterators_generator) {
     iterators_.clear();
     std::forward<IteratorsGenerator>(iterators_generator)(iterators_);
 
@@ -47,7 +47,7 @@ class MultiSeriesIterator {
   BareBones::Vector<Iterator> iterators_;
   const WindowFunctionParameters* parameters_;
 
-  PROMPP_ALWAYS_INLINE void seek_to_first_non_stale_nan_sample() {
+  PROMPP(inline) void seek_to_first_non_stale_nan_sample() {
     do {
       update_sample();
     } while (*this != DecodeIteratorSentinel{} && BareBones::Encoding::Gorilla::isstalenan(sample_.value));
@@ -69,8 +69,8 @@ class MultiSeriesIterator {
     sample_.timestamp = current_window.max;
   }
 
-  PROMPP_ALWAYS_INLINE void handle_samples(const PromPP::Primitives::TimeInterval& current_window,
-                                           const PromPP::Primitives::TimeInterval& next_window) noexcept {
+  PROMPP(inline) void handle_samples(const PromPP::Primitives::TimeInterval& current_window,
+                                              const PromPP::Primitives::TimeInterval& next_window) noexcept {
     SampleHandler handler{sample_, current_window};
     for (auto it = iterators_.begin(); it != iterators_.end();) {
       auto& iterator = *it;

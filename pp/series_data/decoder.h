@@ -30,11 +30,11 @@ concept SeriesChunkIteratorData = requires(const T& data) {
 template <BareBones::ReallocatorInterface Reallocator>
 struct SerializedCompactBitSequence {
   template <class CompactBitSequence>
-  PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequence(const CompactBitSequence& bit_sequence)
+  explicit PROMPP(inline) SerializedCompactBitSequence(const CompactBitSequence& bit_sequence)
       : ptr(bit_sequence.shared_memory()), size_in_bits(bit_sequence.size_in_bits()) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
+  [[nodiscard]] PROMPP(inline) std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
+  [[nodiscard]] PROMPP(inline) BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
 
   encoder::CompactBitSequence<Reallocator>::SharedPtr ptr;
   uint32_t size_in_bits;
@@ -43,11 +43,11 @@ struct SerializedCompactBitSequence {
 template <BareBones::ReallocatorInterface Reallocator>
 struct SerializedCompactBitSequenceWithItemsCount {
   template <class CompactBitSequenceWithItemsCount>
-  PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequenceWithItemsCount(const CompactBitSequenceWithItemsCount& bit_sequence)
+  explicit PROMPP(inline) SerializedCompactBitSequenceWithItemsCount(const CompactBitSequenceWithItemsCount& bit_sequence)
       : ptr(bit_sequence.stream.shared_memory()), size_in_bits(bit_sequence.stream.size_in_bits()), items_count(bit_sequence.count()) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept {
+  [[nodiscard]] PROMPP(inline) std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
+  [[nodiscard]] PROMPP(inline) BareBones::BitSequenceReader reader() const noexcept {
     return encoder::BitSequenceWithItemsCount<Reallocator>::reader(buffer());
   }
 
@@ -61,7 +61,7 @@ struct SerializedCompactBitSequenceWithItemsCount {
 class Decoder {
  public:
   template <chunk::DataChunk::Type chunk_type, class DataStorage, class Callback>
-  PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
+  static PROMPP(inline) void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
     create_decode_iterator<chunk_type>(storage, chunk,
                                        [&callback](auto&& begin, auto&& end) { std::ranges::for_each(begin, end, std::forward<Callback>(callback)); });
   }
@@ -74,7 +74,7 @@ class Decoder {
   template <chunk::DataChunk::Type chunk_type, class DataStorage>
   static encoder::SampleList decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk) {
     encoder::SampleList result;
-    decode_chunk<chunk_type>(storage, chunk, [&result](const encoder::Sample& sample) PROMPP_LAMBDA_INLINE {
+    decode_chunk<chunk_type>(storage, chunk, [&result](const encoder::Sample& sample) PROMPP(lambda_inline) {
       result.emplace_back(sample);
       return true;
     });
@@ -105,7 +105,7 @@ class Decoder {
                                                               const chunk::DataChunk& open_chunk) {
     auto result = decode_chunks(storage, finalized_chunks);
     auto& open_chunk_samples = result.emplace_back();
-    decode_chunk<chunk::DataChunk::Type::kOpen>(storage, open_chunk, [&open_chunk_samples](const encoder::Sample& sample) PROMPP_LAMBDA_INLINE {
+    decode_chunk<chunk::DataChunk::Type::kOpen>(storage, open_chunk, [&open_chunk_samples](const encoder::Sample& sample) PROMPP(lambda_inline) {
       open_chunk_samples.emplace_back(sample);
       return true;
     });
@@ -291,12 +291,12 @@ class Decoder {
   }
 
   template <class Callback>
-  PROMPP_ALWAYS_INLINE static void create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk, Callback&& callback) {
+  static PROMPP(inline) void create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk, Callback&& callback) {
     create_decode_iterator(chunk.buffer(), chunk.chunk(), std::forward<Callback>(callback));
   }
 
   template <class DataStorage>
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_min_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_series_min_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
     using enum chunk::DataChunk::Type;
 
     if (const auto it = storage.finalized_chunks.find(ls_id); it != storage.finalized_chunks.end()) {
@@ -306,27 +306,27 @@ class Decoder {
   }
 
   template <class DataStorage>
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_max_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_series_max_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
     using enum chunk::DataChunk::Type;
 
     return get_open_chunk_last_timestamp(storage, storage.open_chunks[ls_id]);
   }
 
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_series_time_interval(const DataStorage& storage, uint32_t ls_id) {
+  [[nodiscard]] static PROMPP(inline) PromPP::Primitives::TimeInterval get_series_time_interval(const DataStorage& storage, uint32_t ls_id) {
     return {.min = get_series_min_timestamp(storage, ls_id), .max = get_series_max_timestamp(storage, ls_id)};
   }
 
   template <chunk::DataChunk::Type chunk_type, class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_chunk_first_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     assert(!chunk.is_empty());
     return encoder::timestamp::TimestampDecoder::decode_first(get_stream_reader(storage, chunk));
   }
 
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage,
-                                                                              const chunk::DataChunk& chunk,
-                                                                              chunk::DataChunk::Type chunk_type) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_chunk_first_timestamp(const DataStorage& storage,
+                                                                                const chunk::DataChunk& chunk,
+                                                                                chunk::DataChunk::Type chunk_type) noexcept {
     if (chunk_type == chunk::DataChunk::Type::kOpen) {
       return get_chunk_first_timestamp<chunk::DataChunk::Type::kOpen>(storage, chunk);
     }
@@ -334,22 +334,22 @@ class Decoder {
   }
 
   template <SeriesChunkIteratorData ChunkData>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const ChunkData& chunk_data) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_chunk_first_timestamp(const ChunkData& chunk_data) noexcept {
     return get_chunk_first_timestamp(*chunk_data.storage(), chunk_data.chunk(), chunk_data.chunk_type());
   }
 
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_open_chunk_last_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_open_chunk_last_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     assert(!chunk.is_empty());
     return storage.timestamp_store.last_timestamp(chunk.timestamp_id);
   }
 
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_finalized_chunk_last_timestamp(
-      const DataStorage& storage,
-      uint32_t ls_id,
-      typename DataStorage::FinalizedChunkList::ChunksList::const_iterator chunk_it,
-      typename DataStorage::FinalizedChunkList::ChunksList::const_iterator end_it) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t
+  get_finalized_chunk_last_timestamp(const DataStorage& storage,
+                                     uint32_t ls_id,
+                                     typename DataStorage::FinalizedChunkList::ChunksList::const_iterator chunk_it,
+                                     typename DataStorage::FinalizedChunkList::ChunksList::const_iterator end_it) noexcept {
     if (const auto next_chunk_it = std::next(chunk_it); next_chunk_it != end_it) {
       return get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, *next_chunk_it) - 1;
     }
@@ -357,7 +357,7 @@ class Decoder {
   }
 
   template <SeriesChunkIteratorData ChunkData>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const ChunkData& chunk_data) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_chunk_last_timestamp(const ChunkData& chunk_data) noexcept {
     if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
       return get_chunk_last_timestamp<chunk::DataChunk::Type::kOpen>(chunk_data);
     }
@@ -366,7 +366,7 @@ class Decoder {
   }
 
   template <chunk::DataChunk::Type chunk_type, SeriesChunkIteratorData ChunkData>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const ChunkData& chunk_data) noexcept {
+  [[nodiscard]] static PROMPP(inline) int64_t get_chunk_last_timestamp(const ChunkData& chunk_data) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return get_open_chunk_last_timestamp(*chunk_data.storage(), chunk_data.chunk());
     }
@@ -376,12 +376,12 @@ class Decoder {
   }
 
   template <chunk::DataChunk::Type chunk_type, SeriesChunkIteratorData ChunkData>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const ChunkData& chunk_data) {
+  [[nodiscard]] static PROMPP(inline) PromPP::Primitives::TimeInterval get_chunk_time_interval(const ChunkData& chunk_data) {
     return {.min = get_chunk_first_timestamp<chunk_type>(*chunk_data.storage(), chunk_data.chunk()), .max = get_chunk_last_timestamp<chunk_type>(chunk_data)};
   }
 
   template <SeriesChunkIteratorData ChunkData>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const ChunkData& chunk_data) {
+  [[nodiscard]] static PROMPP(inline) PromPP::Primitives::TimeInterval get_chunk_time_interval(const ChunkData& chunk_data) {
     if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
       return get_chunk_time_interval<chunk::DataChunk::Type::kOpen>(chunk_data);
     }
@@ -389,7 +389,7 @@ class Decoder {
   }
 
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static double get_open_chunk_last_value(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
+  [[nodiscard]] static PROMPP(inline) double get_open_chunk_last_value(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     using enum EncodingType;
 
     switch (chunk.encoding_state.encoding_type) {
@@ -432,7 +432,7 @@ class Decoder {
   // share one sequence, so walking the sequences visits far fewer items than walking the series. Samples of outdated
   // chunks are not covered until they are merged.
   template <class DataStorage>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_time_interval(const DataStorage& storage) noexcept {
+  [[nodiscard]] static PROMPP(inline) PromPP::Primitives::TimeInterval get_time_interval(const DataStorage& storage) noexcept {
     return storage.timestamp_store.time_bounds();
   }
 

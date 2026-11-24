@@ -15,25 +15,25 @@ class RateIterator {
     seek_to_first_sample();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
-  PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
+  [[nodiscard]] PROMPP(inline) const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
+  PROMPP(inline) void set_interval(const PromPP::Primitives::TimeInterval& interval) {
     interval_ = interval;
     counter_reset_ = false;
     sample_ = kInvalidSample;
     seek_to_first_sample();
   }
 
-  PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return sample_; }
-  PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return &sample_; }
+  PROMPP(inline) const encoder::Sample& operator*() const { return sample_; }
+  PROMPP(inline) const encoder::Sample* operator->() const { return &sample_; }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
+  PROMPP(inline) bool operator==(const DecodeIteratorSentinel&) const { return sample_.timestamp == kInvalidTimestamp; }
 
-  PROMPP_ALWAYS_INLINE RateIterator& operator++() {
+  PROMPP(inline) RateIterator& operator++() {
     seek_to_next_sample();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE RateIterator operator++(int) {
+  PROMPP(inline) RateIterator operator++(int) {
     const auto result = *this;
     ++*this;
     return result;
@@ -65,7 +65,7 @@ class RateIterator {
     });
   }
 
-  PROMPP_ALWAYS_INLINE void seek_to_next_sample() {
+  PROMPP(inline) void seek_to_next_sample() {
     sample_.timestamp = kInvalidTimestamp;
 
     iterator_.template seek<SeekKind::kNext_Stop_NextAndStop>([this](PromPP::Primitives::Timestamp timestamp, double value) {

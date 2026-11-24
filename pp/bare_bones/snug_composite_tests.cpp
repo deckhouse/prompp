@@ -108,33 +108,33 @@ struct TestStringFilament {
         iterator_type() = default;
         explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
 
-        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+        PROMPP(inline) iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+        PROMPP(inline) iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP(inline) bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP(inline) value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
-        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
+        [[nodiscard]] PROMPP(inline) uint32_t id() const noexcept { return id_; }
 
        private:
         const storage_type* storage_ptr_;
         uint32_t id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] PROMPP(inline) auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP(inline) auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP(inline) uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP(inline) uint32_t next_item_index() const noexcept { return storage_ptr->count(); }
     };
 
     using view_type = symbols_view;
@@ -147,21 +147,21 @@ struct TestStringFilament {
     Vector<char> data;
     Vector<item_type> items;
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
+    [[nodiscard]] PROMPP(inline) uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(data.size() <= max_ui32);
       return max_ui32 - static_cast<uint32_t>(data.size());
     }
 
     template <class AnotherStorageType>
-    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP(inline) void reserve(const AnotherStorageType& other) noexcept {
       items.reserve(other.items.size());
       data.reserve(other.data.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP(inline) composite_type composite(uint32_t id) const noexcept {
       const auto item = items[id];
       return std::string_view(data.data() + item.pos, item.length);
     }
@@ -173,11 +173,11 @@ struct TestStringFilament {
       }
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+    [[nodiscard]] PROMPP(inline) uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items);
     }
 
-    PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
+    PROMPP(inline) uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items.size());
       const auto pos = static_cast<uint32_t>(data.size());
       items.emplace_back(pos, str.length());
@@ -185,10 +185,10 @@ struct TestStringFilament {
       return id;
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+    [[nodiscard]] PROMPP(inline) checkpoint_type checkpoint() const noexcept {
       return {static_cast<uint32_t>(data.size()), static_cast<uint32_t>(items.size())};
     }
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+    PROMPP(inline) void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.data_size <= data.size());
       assert(checkpoint.items_size <= items.size());
       data.resize(checkpoint.data_size);
@@ -249,7 +249,7 @@ struct TestStringFilament {
       return std::views::iota(original_size, items.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP(inline) view_type view() const noexcept { return {.storage_ptr = this}; }
 
     void drop_front(uint32_t drop_count) {
       if (drop_count != count()) [[unlikely]] {

@@ -12,6 +12,7 @@ import (
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 
 	"github.com/prometheus/prometheus/pp-pkg/blocks/block"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
@@ -43,62 +44,85 @@ func (wb *WrittenBlock) MetaFilename() string {
 }
 
 // blockWriter is a writer for a block.
+//
+// The temporary block dir, its files and the [IndexWriter] are created on the first chunk write:
+// a shard is split into one writer per block-duration quant, and on a wide time interval
+// (e.g. samples with a far-future timestamp) most of the quants are empty.
 type blockWriter struct {
 	WrittenBlock
+
+	dataDir                  string
+	maxBlockChunkSegmentSize int64
+	lss                      *cppbridge.LabelSetStorage
 
 	chunkWriter     *ChunkWriter
 	indexFileWriter *FileWriter
 	indexWriter     IndexWriter
 
 	chunkRecoder chunkRecoder
+	opened       bool
 	finished     bool
 }
 
 func newBlockWriter(
-	dir string,
+	dataDir string,
 	maxBlockChunkSegmentSize int64,
-	indexWriter IndexWriter,
+	lss *cppbridge.LabelSetStorage,
 	chunkIterator ChunkIterator,
 	tLabels map[string]string,
-) (writer blockWriter, err error) {
-	uid := ulid.MustNew(ulid.Now(), rand.Reader)
-	writer.Dir = filepath.Join(dir, uid.String()) + tmpForCreationBlockDirSuffix
-
-	if err = createTmpDir(writer.Dir); err != nil {
-		return writer, err
-	}
-
-	if err = writer.createWriters(maxBlockChunkSegmentSize); err != nil {
-		return writer, err
-	}
-
-	writer.Meta = metadata.Meta{
-		BlockMeta: tsdb.BlockMeta{
-			ULID:    uid,
-			MinTime: math.MaxInt64,
-			MaxTime: math.MinInt64,
-			Version: block.MetaVersion1,
-			Compaction: tsdb.BlockMetaCompaction{
-				Level:   1,
-				Sources: []ulid.ULID{uid},
+) blockWriter {
+	return blockWriter{
+		WrittenBlock: WrittenBlock{
+			Meta: metadata.Meta{
+				BlockMeta: tsdb.BlockMeta{
+					MinTime: math.MaxInt64,
+					MaxTime: math.MinInt64,
+					Version: block.MetaVersion1,
+					Compaction: tsdb.BlockMetaCompaction{
+						Level: 1,
+					},
+				},
+				Thanos: metadata.Thanos{
+					Version: metadata.ThanosVersion1,
+					Labels:  tLabels,
+					Source:  "pp_block_writer",
+				},
 			},
 		},
-		Thanos: metadata.Thanos{
-			Version: metadata.ThanosVersion1,
-			Labels:  tLabels,
-			Source:  "pp_block_writer",
-		},
+		dataDir:                  dataDir,
+		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
+		lss:                      lss,
+		chunkRecoder:             newChunkRecoder(chunkIterator),
+	}
+}
+
+// open creates the temporary block dir, its writers and the [IndexWriter], if not created yet.
+func (writer *blockWriter) open() error {
+	if writer.opened {
+		return nil
 	}
 
-	writer.indexWriter = indexWriter
-	writer.chunkRecoder = newChunkRecoder(chunkIterator)
+	uid := ulid.MustNew(ulid.Now(), rand.Reader)
+	writer.Dir = filepath.Join(writer.dataDir, uid.String()) + tmpForCreationBlockDirSuffix
+	writer.Meta.ULID = uid
+	writer.Meta.Compaction.Sources = []ulid.ULID{uid}
 
-	return writer, err
+	if err := createTmpDir(writer.Dir); err != nil {
+		return errors.Join(err, os.RemoveAll(writer.Dir))
+	}
+
+	if err := writer.createWriters(writer.maxBlockChunkSegmentSize); err != nil {
+		return errors.Join(err, os.RemoveAll(writer.Dir))
+	}
+
+	writer.indexWriter = NewIndexWriter(writer.lss)
+	writer.opened = true
+	return nil
 }
 
 // isEmpty returns true if [IndexWriter] contains no samples, an empty block.
 func (writer *blockWriter) isEmpty() bool {
-	return writer.indexWriter.isEmpty()
+	return !writer.opened || writer.indexWriter.isEmpty()
 }
 
 func (writer *blockWriter) createWriters(maxBlockChunkSegmentSize int64) error {
@@ -138,14 +162,22 @@ func (writer *blockWriter) Flush() (err error) {
 // Close closes the block writer.
 func (writer *blockWriter) Close() error {
 	err := writer.Flush()
-	if !writer.finished {
+	if writer.opened && !writer.finished {
 		err = errors.Join(err, os.RemoveAll(writer.Dir))
 	}
 	return err
 }
 
 func (writer *blockWriter) recodeAndWriteChunksBatch() error {
-	return writer.chunkRecoder.recode(writer.chunkWriter, &writer.Meta.BlockMeta, writer.writeSeries)
+	return writer.chunkRecoder.recode(writer.writeChunk, &writer.Meta.BlockMeta, writer.writeSeries)
+}
+
+func (writer *blockWriter) writeChunk(chunk Chunk) (ChunkMetadata, error) {
+	if err := writer.open(); err != nil {
+		return ChunkMetadata{}, err
+	}
+
+	return writer.chunkWriter.Write(chunk)
 }
 
 func (writer *blockWriter) writeRestOfRecodedChunks() error {
@@ -262,13 +294,13 @@ type chunkRecoder struct {
 }
 
 func (recoder *chunkRecoder) recode(
-	chunkWriter *ChunkWriter,
+	writeChunk func(chunk Chunk) (ChunkMetadata, error),
 	blockMeta *tsdb.BlockMeta,
 	writeSeries func(seriesID uint32, chunksMetadata []ChunkMetadata) error,
 ) (err error) {
 	for chunk := range recoder.chunkIterator.RangeBatch {
 		var chunkMetadata ChunkMetadata
-		if chunkMetadata, err = chunkWriter.Write(chunk); err != nil {
+		if chunkMetadata, err = writeChunk(chunk); err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)
 		}
 

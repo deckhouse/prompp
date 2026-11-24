@@ -6,8 +6,8 @@
 
 #include "preprocess.h"
 
-#if JEMALLOC_AVAILABLE
-#include <jemalloc/jemalloc.h>
+#if PROMPP(feature, jemalloc)
+#  include <jemalloc/jemalloc.h>
 #endif
 
 namespace BareBones {
@@ -32,19 +32,19 @@ concept ArenaAllocatorInterface = requires(ArenaReallocator reallocator) {
 };
 
 struct DefaultReallocator {
-  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept {
-#if JEMALLOC_AVAILABLE
+  static PROMPP(inline) size_t allocation_size(size_t needed_size) noexcept {
+#if PROMPP(feature, jemalloc)
     return nallocx(needed_size, 0);
 #else
     return needed_size;
 #endif
   }
 
-  PROMPP_ALWAYS_INLINE static void* allocate(size_t size) { return std::malloc(size); }
+  static PROMPP(inline) void* allocate(size_t size) { return std::malloc(size); }
 
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
+  static PROMPP(inline) void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
 
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
+  static PROMPP(inline) void free(void* memory) { return std::free(memory); }
 };
 
 static_assert(ReallocatorInterface<DefaultReallocator>);
@@ -64,21 +64,21 @@ class Allocator {
   constexpr Allocator& operator=(Allocator&&) noexcept = delete;
   constexpr bool operator==(const Allocator& other) const noexcept { return &allocated_memory_ == &other.allocated_memory_; };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE constexpr T* allocate(std::size_t n) {
+  [[nodiscard]] PROMPP(inline) constexpr T* allocate(std::size_t n) {
     allocated_memory_ += static_cast<CounterType>(n * sizeof(T));
 
     auto r = static_cast<T*>(Reallocator::allocate(n * sizeof(T)));
     std::uninitialized_default_construct_n(r, n);
     return r;
   }
-  PROMPP_ALWAYS_INLINE void deallocate(T* p, std::size_t n) {
+  PROMPP(inline) void deallocate(T* p, std::size_t n) {
     std::destroy_n(p, n);
     Reallocator::free(p);
 
     allocated_memory_ -= static_cast<CounterType>(n * sizeof(T));
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CounterType allocated_memory() const noexcept { return allocated_memory_; }
+  [[nodiscard]] PROMPP(inline) CounterType allocated_memory() const noexcept { return allocated_memory_; }
 
  private:
   template <class AnyType, ReallocatorInterface AnyReallocator, class CounterType2>

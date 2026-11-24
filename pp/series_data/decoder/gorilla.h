@@ -18,21 +18,21 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<GorillaDecodeIte
     }
   }
 
-  PROMPP_ALWAYS_INLINE GorillaDecodeIteratorGeneral& operator++() noexcept {
+  PROMPP(inline) GorillaDecodeIteratorGeneral& operator++() noexcept {
     if (decode()) [[likely]] {
       update_sample();
     }
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE GorillaDecodeIteratorGeneral operator++(int) noexcept {
+  PROMPP(inline) GorillaDecodeIteratorGeneral operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return data_.decoder.last_value(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.decoder.last_timestamp(); }
+  [[nodiscard]] PROMPP(inline) double decoded_value() const noexcept { return data_.decoder.last_value(); }
+  [[nodiscard]] PROMPP(inline) PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return data_.decoder.last_timestamp(); }
 
  protected:
   friend Base;
@@ -51,7 +51,7 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<GorillaDecodeIte
   Data data_;
 
  private:
-  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+  PROMPP(inline) bool decode() noexcept {
     if (--data_.remaining_samples > 0) [[likely]] {
       data_.decoder.decode(data_.reader, data_.reader);
       return true;
@@ -60,7 +60,7 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<GorillaDecodeIte
     return false;
   }
 
-  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+  PROMPP(inline) void update_sample() noexcept {
     data_.sample.value = data_.decoder.last_value();
     data_.sample.timestamp = data_.decoder.last_timestamp();
   }

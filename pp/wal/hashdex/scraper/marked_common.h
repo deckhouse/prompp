@@ -17,16 +17,16 @@ struct MarkedString {
   uint64_t offset = 0;
   uint32_t length = 0;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static MarkedString create(std::string_view value, std::string_view buffer) noexcept {
+  [[nodiscard]] static PROMPP(inline) MarkedString create(std::string_view value, std::string_view buffer) noexcept {
     return {
         .offset = static_cast<uint64_t>(value.data() - buffer.data()),
         .length = static_cast<uint32_t>(value.size()),
     };
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_reserved_name() const noexcept { return offset == 0 && length == 0; }
+  [[nodiscard]] PROMPP(inline) bool is_reserved_name() const noexcept { return offset == 0 && length == 0; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return length == 0; }
+  [[nodiscard]] PROMPP(inline) bool is_empty() const noexcept { return length == 0; }
 
   [[nodiscard]] std::string_view view(const std::string_view& buffer) const noexcept {
     if (is_reserved_name()) [[unlikely]] {

@@ -27,7 +27,7 @@ QueryableEncodingBimap& get_lss() {
 }
 
 void FindOrEmplaceWithEmplace(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   const auto& lss = get_lss();
 
   for ([[maybe_unused]] auto _ : state) {
@@ -39,7 +39,7 @@ void FindOrEmplaceWithEmplace(benchmark::State& state) {
 }
 
 void FindOrEmplaceWithFind(benchmark::State& state) {
-  ZoneScoped;
+  PROMPP_PROFILE(function);
   auto& lss = get_lss();
 
   for ([[maybe_unused]] auto _ : state) {
