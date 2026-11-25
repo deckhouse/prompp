@@ -16,6 +16,7 @@ package promqltest
 import (
 	"math"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -156,6 +157,40 @@ func TestLazyLoader_WithSamplesTill(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestLazyLoader_RetainsSamplesAcrossWallClockRotation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Arrange
+		loader, err := NewLazyLoader("load 1m\n  marker 1\n", LazyLoaderOpts{})
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, loader.Close()) })
+
+		loader.WithSamplesTill(testStartTime, func(err error) { require.NoError(t, err) })
+
+		// Act
+		// Let a two-hour rotation and its background persistence finish if driven by wall time.
+		time.Sleep(2 * time.Hour)
+		synctest.Wait()
+
+		evalTime := testStartTime.Add(time.Hour)
+		ctx := loader.Context()
+		query, err := loader.QueryEngine().NewInstantQuery(
+			ctx,
+			loader.Queryable(),
+			nil,
+			"scalar(max_over_time(marker[2h]))",
+			evalTime,
+		)
+		require.NoError(t, err)
+		defer query.Close()
+
+		result := query.Exec(ctx)
+
+		// Assert
+		require.NoError(t, result.Err)
+		require.Equal(t, promql.Scalar{T: evalTime.UnixMilli(), V: 1}, result.Value)
+	})
 }
 
 func TestRunTest(t *testing.T) {
