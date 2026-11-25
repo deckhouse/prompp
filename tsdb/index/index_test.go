@@ -335,6 +335,65 @@ func TestPostingsMany(t *testing.T) {
 	}
 }
 
+func TestIndexRW_PostingsAcrossBatches(t *testing.T) {
+	const firstName, lastName = "first", "last"
+
+	for _, tc := range []struct {
+		name    string
+		symbols int
+	}{
+		{name: "at the dense table limit", symbols: maxDensePostingsNameSymbols},
+		{name: "above the dense table limit", symbols: maxDensePostingsNameSymbols + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			ctx := context.Background()
+			fn := filepath.Join(t.TempDir(), indexFilename)
+			w, err := NewWriter(ctx, fn)
+			require.NoError(t, err)
+
+			require.NoError(t, w.AddSymbol(firstName))
+			for i := range tc.symbols - 2 {
+				// Keep the unused symbols lexicographically ordered between the two names.
+				require.NoError(t, w.AddSymbol("id"+strconv.Itoa(1_000_000+i)))
+			}
+			require.NoError(t, w.AddSymbol(lastName))
+
+			// Both labels occur in every series, so each requires a separate batch.
+			require.NoError(t, w.AddSeries(0, labels.FromStrings(firstName, lastName, lastName, firstName)))
+			require.NoError(t, w.AddSeries(1, labels.FromStrings(firstName, lastName, lastName, lastName)))
+
+			// Act
+			require.NoError(t, w.Close())
+			r, err := NewFileReader(fn)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, r.Close()) })
+
+			// Assert
+			all, err := r.Postings(ctx, "", "")
+			require.NoError(t, err)
+			refs, err := ExpandPostings(all)
+			require.NoError(t, err)
+			require.Len(t, refs, 2)
+
+			for _, want := range []struct {
+				name, value string
+				refs        []storage.SeriesRef
+			}{
+				{name: firstName, value: lastName, refs: refs},
+				{name: lastName, value: firstName, refs: refs[:1]},
+				{name: lastName, value: lastName, refs: refs[1:]},
+			} {
+				p, err := r.Postings(ctx, want.name, want.value)
+				require.NoError(t, err)
+				got, err := ExpandPostings(p)
+				require.NoError(t, err)
+				require.Equal(t, want.refs, got, "%s=%q", want.name, want.value)
+			}
+		})
+	}
+}
+
 func TestPersistence_index_e2e(t *testing.T) {
 	ctx := context.Background()
 	lbls, err := labels.ReadLabels(filepath.Join("..", "testdata", "20kseries.json"), 20000)
