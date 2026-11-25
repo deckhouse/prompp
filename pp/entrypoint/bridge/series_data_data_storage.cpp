@@ -274,6 +274,17 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   }
 }
 
+extern "C" void prompp_series_data_data_storage_query_discard(void* args) {
+  struct Arguments {
+    Slice<QuerierVariantPtr> queriers;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  for (auto& querier_ptr : in->queriers) {
+    querier_ptr.reset();
+  }
+}
+
 extern "C" void prompp_series_data_data_storage_query_stalenan_series(void* args) {
   using series_data::Decoder;
 

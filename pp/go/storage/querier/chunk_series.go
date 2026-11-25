@@ -49,6 +49,10 @@ func (*ChunkSeriesSet) Err() error {
 
 // Next advances the iterator by one and returns false if there are no more values.
 func (css *ChunkSeriesSet) Next() bool {
+	if css.chunkRecoder == nil {
+		return false
+	}
+
 	if css.lastRecodedChunk == nil && !css.nextChunk() {
 		return false
 	}
@@ -101,6 +105,17 @@ func (css *ChunkSeriesSet) nextChunk() bool {
 	css.lastRecodedChunk = &lastRecodedChunk
 
 	return true
+}
+
+// releaseRecoder invalidates the shard set and destroys its recoder
+// without touching previously returned Go-owned series.
+func (css *ChunkSeriesSet) releaseRecoder() {
+	recoder := css.chunkRecoder
+	css.chunkRecoder = nil
+	css.labelSetSnapshot = nil
+	css.lastRecodedChunk = nil
+	css.chunkSeries = nil
+	recoder.Close()
 }
 
 //

@@ -245,6 +245,8 @@ func (s *OptimizedChunkIteratorSuite) querySerializedData(start, hintsStart int6
 		EndTimestampMs:   start + 399,
 		LabelSetIDs:      []uint32{0},
 	}, cppbridge.NoDownsampling, unsafe.Pointer(hints))
+	s.T().Cleanup(result.SerializedData.Close)
+
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
 	seriesID, ref := result.SerializedData.Next()
 	s.Require().NotEqual(uint32(math.MaxUint32), seriesID)

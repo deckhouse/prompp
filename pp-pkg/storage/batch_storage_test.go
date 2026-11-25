@@ -205,6 +205,8 @@ func (s *BatchStorageSuite) TestCommit_WithSamplesAdded() {
 		EndTimestampMs:   5000,
 		LabelSetIDs:      []uint32{0},
 	}, cppbridge.NoDownsampling, &storage.SelectHints{})
+	defer queryResult.SerializedData.Close()
+
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, queryResult.Status)
 	s.Equal(storagetest.SamplesMap{
 		0: []cppbridge.Sample{
@@ -243,6 +245,8 @@ func (s *BatchStorageSuite) TestEphemeralHead_IsSterileBetweenEvaluations() {
 	// Sanity: bs1's own querier MUST see the series we just wrote.
 	q1, err := bs1.Querier(0, 10_000)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(q1.Close()) }()
+
 	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "leak_check")
 	got1 := collectLabelSets(q1.Select(s.ctx, false, nil, matcher))
 	s.Require().Len(got1, 1, "bs1 must see its own series")
@@ -257,6 +261,8 @@ func (s *BatchStorageSuite) TestEphemeralHead_IsSterileBetweenEvaluations() {
 	// Assert 2: bs2 MUST NOT see the series written into bs1.
 	q2, err := bs2.Querier(0, 10_000)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(q2.Close()) }()
+
 	got2 := collectLabelSets(q2.Select(s.ctx, false, nil, matcher))
 	s.Require().Empty(got2,
 		"bs2 must be sterile and not leak series from bs1 — got %v", got2)
@@ -264,6 +270,8 @@ func (s *BatchStorageSuite) TestEphemeralHead_IsSterileBetweenEvaluations() {
 	// Assert 3: nothing reached the main (active) head either, since bs1.Commit() was not called.
 	mainQ, err := s.adapter.Querier(0, 10_000)
 	s.Require().NoError(err)
+	defer func() { s.Require().NoError(mainQ.Close()) }()
+
 	gotMain := collectLabelSets(mainQ.Select(s.ctx, false, nil, matcher))
 	s.Require().Empty(gotMain,
 		"main head must NOT see uncommitted ephemeral data — got %v", gotMain)

@@ -64,7 +64,7 @@ func TestMergeShardSeriesSetSuite(t *testing.T) {
 func (s *MergeShardSeriesSetSuite) TestMergeShardSeriesSetScenarios() {
 	var start int64
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -182,7 +182,7 @@ func assertConcatShardSeriesSetsEqual(s *MergeShardSeriesSetSuite, esets, csets,
 func (s *MergeShardSeriesSetSuite) TestConcatShardSeriesSetScenarios() {
 	var start int64
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -226,7 +226,7 @@ func (s *MergeShardSeriesSetSuite) TestConcatShardSeriesSetScenarios() {
 func (s *MergeShardSeriesSetSuite) TestConcatShardSeriesSetPooledBufferReuse() {
 	// Arrange
 	head := makeHead(2, 10, 1)
-	matcher := model.LabelMatcher{Name: "__name__", Value: "metric", MatcherType: model.MatcherTypeExactMatch}
+	matcher := model.LabelMatcher{Name: labels.MetricName, Value: "metric", MatcherType: model.MatcherTypeExactMatch}
 	sets := make([]storage.SeriesSet, 0, 2)
 	for i := range 2 {
 		sets = append(sets, queryOpt(s.T(), head.lsses[i], head.dss[i], 0, 1, cppbridge.NoDownsampling, matcher))
@@ -249,7 +249,7 @@ func (s *MergeShardSeriesSetSuite) TestConcatShardSeriesSetPooledBufferReuse() {
 func BenchmarkMergeVsConcatShardSeriesSet(b *testing.B) {
 	var start int64
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -264,6 +264,7 @@ func BenchmarkMergeVsConcatShardSeriesSet(b *testing.B) {
 	} {
 		head := makeHead(bm.numShards, bm.numSeries, 1)
 		seriesSets := make([]storage.SeriesSet, 0, bm.numShards)
+		buffers := make([]*cppbridge.DataStorageSerializedData, bm.numShards)
 		for _, ctor := range []struct {
 			name string
 			fn   func([]storage.SeriesSet) storage.SeriesSet
@@ -276,7 +277,9 @@ func BenchmarkMergeVsConcatShardSeriesSet(b *testing.B) {
 					b.StopTimer()
 					seriesSets = seriesSets[:0]
 					for i := range bm.numShards {
-						seriesSets = append(seriesSets, queryOpt(b, head.lsses[i], head.dss[i], start, 1, cppbridge.NoDownsampling, matcher))
+						set, buffer := newTestSeriesSet(b, head.lsses[i], head.dss[i], start, 1, cppbridge.NoDownsampling, matcher)
+						seriesSets = append(seriesSets, set)
+						buffers[i] = buffer
 					}
 					b.StartTimer()
 
@@ -284,6 +287,9 @@ func BenchmarkMergeVsConcatShardSeriesSet(b *testing.B) {
 					for seriesSet.Next() {
 						_ = seriesSet.At().Labels()
 					}
+
+					b.StopTimer()
+					closeTestMergeBuffers(buffers)
 				}
 			})
 		}
@@ -293,7 +299,7 @@ func BenchmarkMergeVsConcatShardSeriesSet(b *testing.B) {
 func BenchmarkMergeSeriesSet(b *testing.B) {
 	var start int64
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -310,21 +316,16 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 		end := int64(bm.numSamples)
 		head := makeHead(bm.numShards, bm.numSeries, bm.numSamples)
 		seriesSets := make([]storage.SeriesSet, 0, bm.numShards)
+		buffers := make([]*cppbridge.DataStorageSerializedData, bm.numShards)
 
 		b.Run(fmt.Sprintf("%d_%d_%d", bm.numShards, bm.numSeries, bm.numSamples), func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
 				b.StopTimer()
 				seriesSets = seriesSets[:0]
 				for i := 0; i < bm.numShards; i++ {
-					seriesSets = append(seriesSets, queryOpt(
-						b,
-						head.lsses[i],
-						head.dss[i],
-						start,
-						end,
-						cppbridge.NoDownsampling,
-						matcher,
-					))
+					set, buffer := newTestSeriesSet(b, head.lsses[i], head.dss[i], start, end, cppbridge.NoDownsampling, matcher)
+					seriesSets = append(seriesSets, set)
+					buffers[i] = buffer
 				}
 				b.StartTimer()
 
@@ -333,6 +334,9 @@ func BenchmarkMergeSeriesSet(b *testing.B) {
 				for seriesSet.Next() {
 					_ = 0
 				}
+
+				b.StopTimer()
+				closeTestMergeBuffers(buffers)
 			}
 		})
 	}
@@ -370,7 +374,7 @@ func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries
 	for j := range numSeries {
 		evenNumbered := j%2 == 0
 		ls := labels.FromStrings(
-			"__name__", "metric",
+			labels.MetricName, "metric",
 			"even_numbered", strconv.FormatBool(evenNumbered),
 			"foo", fmt.Sprintf("bar%d", j),
 			"shard_id", fmt.Sprintf("id_%d", shardID),
@@ -385,4 +389,25 @@ func makeTimeSeries(numSeries, numSamples, shardID int) []storagetest.TimeSeries
 	}
 
 	return timeSeries
+}
+
+// closeTestMergeBuffers releases one benchmark iteration's inputs outside the measured merge.
+func closeTestMergeBuffers(buffers []*cppbridge.DataStorageSerializedData) {
+	for _, buffer := range buffers {
+		buffer.Close()
+	}
+}
+
+// queryOpt ties the test selection to its subtest rather than a benchmark loop.
+func queryOpt(
+	t *testing.T,
+	lss *shard.LSS,
+	ds *shard.DataStorage,
+	start, end, downsamplingMs int64,
+	matcher model.LabelMatcher,
+) *querier.SeriesSet {
+	set, buffer := newTestSeriesSet(t, lss, ds, start, end, downsamplingMs, matcher)
+	t.Cleanup(buffer.Close)
+
+	return set
 }

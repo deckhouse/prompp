@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -51,10 +50,6 @@ func (s *ChunkQuerierSuite) SetupTest() {
 	s.head = s.mustCreateHead(1)
 }
 
-func (s *ChunkQuerierSuite) TearDownTest() {
-	runtime.GC()
-}
-
 func (s *ChunkQuerierSuite) createDataDirectory() string {
 	dataDir := filepath.Join(s.T().TempDir(), "data")
 	s.Require().NoError(os.MkdirAll(dataDir, os.ModeDir))
@@ -99,12 +94,14 @@ func (s *ChunkQuerierSuite) createQuerier(selectHints *prom_storage.SelectHints)
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, selectHints.Start, selectHints.End, nil, nil)
-	runtime.SetFinalizer(q, (*ChunkQuerier).Close)
+	](s.head, querier.NewNoOpShardedDeduplicator, selectHints.Start, selectHints.End, nil)
+	require := s.Require()
+	s.T().Cleanup(func() { require.NoError(q.Close()) })
+
 	return q
 }
 
-func (s *ChunkQuerierSuite) timeSeriesFromChunkSeriesSet(
+func (*ChunkQuerierSuite) timeSeriesFromChunkSeriesSet(
 	chunkSeriesSet prom_storage.ChunkSeriesSet,
 ) []storagetest.TimeSeries {
 	var result []storagetest.TimeSeries
@@ -135,13 +132,13 @@ func (s *ChunkQuerierSuite) TestSelect() {
 	// Arrange
 	timeSeries := []storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -151,7 +148,7 @@ func (s *ChunkQuerierSuite) TestSelect() {
 
 	selectHints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1}
 	q := s.createQuerier(selectHints)
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric")
 
 	// Act
 	chunkSeriesSet := q.Select(s.context, false, selectHints, matcher)
@@ -164,13 +161,13 @@ func (s *ChunkQuerierSuite) TestSelectWithoutData() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -179,7 +176,7 @@ func (s *ChunkQuerierSuite) TestSelectWithoutData() {
 
 	selectHints := &prom_storage.SelectHints{Start: 11, End: 22, Step: 1}
 	q := s.createQuerier(selectHints)
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric")
 
 	// Act
 	chunkSeriesSet := q.Select(s.context, false, selectHints, matcher)
@@ -192,7 +189,7 @@ func (s *ChunkQuerierSuite) TestSelectWithoutMatching() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
@@ -201,7 +198,7 @@ func (s *ChunkQuerierSuite) TestSelectWithoutMatching() {
 
 	selectHints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1}
 	q := s.createQuerier(selectHints)
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "unknown_metric")
 
 	// Act
 	chunkSeriesSet := q.Select(s.context, false, selectHints, matcher)
@@ -214,7 +211,7 @@ func (s *ChunkQuerierSuite) TestSelectWithDataStorageLoading() {
 	// Arrange
 	timeSeries := []storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 0},
 				{Timestamp: 1, Value: 1},
@@ -222,7 +219,7 @@ func (s *ChunkQuerierSuite) TestSelectWithDataStorageLoading() {
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 				{Timestamp: 1, Value: 11},
@@ -234,7 +231,7 @@ func (s *ChunkQuerierSuite) TestSelectWithDataStorageLoading() {
 
 	selectHints := &prom_storage.SelectHints{Start: 0, End: 3, Step: 1}
 	q := s.createQuerier(selectHints)
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric")
 
 	s.Require().NoError(services.UnloadUnusedSeriesDataWithHead(s.head))
 
@@ -267,7 +264,7 @@ func (s *ChunkQuerierSuite) TestSelectOnClosedHead() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Labels: labels.FromStrings(labels.MetricName, "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
@@ -276,7 +273,7 @@ func (s *ChunkQuerierSuite) TestSelectOnClosedHead() {
 
 	selectHints := &prom_storage.SelectHints{Start: 0, End: 2, Step: 1}
 	q := s.createQuerier(selectHints)
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric")
 
 	s.Require().NoError(s.head.Close())
 
@@ -291,13 +288,13 @@ func (s *ChunkQuerierSuite) TestLabelNames() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Labels: labels.FromStrings(labels.MetricName, "metric0", "job0", "test0"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Labels: labels.FromStrings(labels.MetricName, "metric1", "job1", "test1"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -305,14 +302,15 @@ func (s *ChunkQuerierSuite) TestLabelNames() {
 	})
 
 	q := s.createQuerier(&prom_storage.SelectHints{})
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric0")
 
 	// Act
 	names, anns, err := q.LabelNames(s.context, &prom_storage.LabelHints{Limit: 10}, matcher)
 
 	// Assert
 	s.Require().NoError(err)
-	s.Equal([]string{"__name__", "job0"}, names)
+	s.Equal([]string{labels.MetricName, "job0"}, names)
+
 	s.Len(anns.AsErrors(), 1)
 }
 
@@ -320,13 +318,13 @@ func (s *ChunkQuerierSuite) TestLabelNamesWithLimit() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Labels: labels.FromStrings(labels.MetricName, "metric0", "job0", "test0"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Labels: labels.FromStrings(labels.MetricName, "metric1", "job1", "test1"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -334,14 +332,14 @@ func (s *ChunkQuerierSuite) TestLabelNamesWithLimit() {
 	})
 
 	q := s.createQuerier(&prom_storage.SelectHints{})
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric0")
 
 	// Act
 	names, anns, err := q.LabelNames(s.context, &prom_storage.LabelHints{Limit: 1}, matcher)
 
 	// Assert
 	s.Require().NoError(err)
-	s.Equal([]string{"__name__"}, names)
+	s.Equal([]string{labels.MetricName}, names)
 	s.Len(anns.AsErrors(), 1)
 }
 
@@ -349,13 +347,13 @@ func (s *ChunkQuerierSuite) TestLabelNamesNoMatches() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Labels: labels.FromStrings(labels.MetricName, "metric0", "job0", "test0"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Labels: labels.FromStrings(labels.MetricName, "metric1", "job1", "test1"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -363,7 +361,7 @@ func (s *ChunkQuerierSuite) TestLabelNamesNoMatches() {
 	})
 
 	q := s.createQuerier(&prom_storage.SelectHints{})
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric3")
 
 	// Act
 	names, anns, err := q.LabelNames(s.context, &prom_storage.LabelHints{Limit: 1}, matcher)
@@ -378,13 +376,13 @@ func (s *ChunkQuerierSuite) TestLabelValues() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Labels: labels.FromStrings(labels.MetricName, "metric0", "job0", "test0"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Labels: labels.FromStrings(labels.MetricName, "metric1", "job1", "test1"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -392,10 +390,10 @@ func (s *ChunkQuerierSuite) TestLabelValues() {
 	})
 
 	q := s.createQuerier(&prom_storage.SelectHints{})
-	matcher, _ := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
+	matcher, _ := labels.NewMatcher(labels.MatchRegexp, labels.MetricName, "metric.*")
 
 	// Act
-	names, anns, err := q.LabelValues(s.context, "__name__", &prom_storage.LabelHints{Limit: 10}, matcher)
+	names, anns, err := q.LabelValues(s.context, labels.MetricName, &prom_storage.LabelHints{Limit: 10}, matcher)
 
 	// Assert
 	s.Require().NoError(err)
@@ -407,13 +405,13 @@ func (s *ChunkQuerierSuite) TestLabelValuesNoMatches() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Labels: labels.FromStrings(labels.MetricName, "metric0", "job0", "test0"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Labels: labels.FromStrings(labels.MetricName, "metric1", "job1", "test1"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -421,10 +419,10 @@ func (s *ChunkQuerierSuite) TestLabelValuesNoMatches() {
 	})
 
 	q := s.createQuerier(&prom_storage.SelectHints{})
-	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, labels.MetricName, "metric2")
 
 	// Act
-	names, anns, err := q.LabelValues(s.context, "__name__", &prom_storage.LabelHints{Limit: 10}, matcher)
+	names, anns, err := q.LabelValues(s.context, labels.MetricName, &prom_storage.LabelHints{Limit: 10}, matcher)
 
 	// Assert
 	s.Require().NoError(err)
@@ -436,13 +434,13 @@ func (s *ChunkQuerierSuite) TestLabelValuesNoMatchesOnName() {
 	// Arrange
 	s.appendTimeSeries([]storagetest.TimeSeries{
 		{
-			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Labels: labels.FromStrings(labels.MetricName, "metric0", "job0", "test0"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Labels: labels.FromStrings(labels.MetricName, "metric1", "job1", "test1"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -450,7 +448,7 @@ func (s *ChunkQuerierSuite) TestLabelValuesNoMatchesOnName() {
 	})
 
 	q := s.createQuerier(&prom_storage.SelectHints{})
-	matcher, _ := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
+	matcher, _ := labels.NewMatcher(labels.MatchRegexp, labels.MetricName, "metric.*")
 
 	// Act
 	names, anns, err := q.LabelValues(s.context, "instance", &prom_storage.LabelHints{Limit: 10}, matcher)

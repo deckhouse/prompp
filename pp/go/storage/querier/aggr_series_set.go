@@ -59,7 +59,7 @@ func (*AggrSeriesSet) Err() error {
 // Next advances the iterator by one and returns false if there are no more values.
 // [storage.SeriesSet] interface implementation.
 func (ss *AggrSeriesSet) Next() bool {
-	if ss.serializedData == nil {
+	if ss.serializedData.IsClosed() {
 		return false
 	}
 
@@ -118,6 +118,10 @@ func NewAggrSeries(
 // Iterator returns an iterator that iterates over the aggregated of the samples of [AggrSeries].
 // [storage.Series] interface implementation.
 func (s *AggrSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
+	if s.serializedData.IsClosed() {
+		return chunkenc.NewNopIterator()
+	}
+
 	aggrChunkIterator, ok := it.(*AggrChunkIterator)
 	if !ok {
 		return NewAggrChunkIterator(
@@ -167,8 +171,6 @@ func NewAggrChunkIterator(
 
 // At returns the current timestamp/value pair if the value is a float.
 // [chunkenc.Iterator] interface implementation.
-//
-
 func (it *AggrChunkIterator) At() (int64, float64) {
 	return it.chunkIterator.Timestamp(), it.chunkIterator.Value()
 }
@@ -200,6 +202,10 @@ func (*AggrChunkIterator) Err() error {
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
 func (it *AggrChunkIterator) Next() chunkenc.ValueType {
+	if it.serializedData.IsClosed() {
+		return chunkenc.ValNone
+	}
+
 	if !it.chunkIterator.HasData() || it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
@@ -220,6 +226,10 @@ func (it *AggrChunkIterator) Next() chunkenc.ValueType {
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
 // [chunkenc.Iterator] interface implementation.
 func (it *AggrChunkIterator) Seek(t int64) chunkenc.ValueType {
+	if it.serializedData.IsClosed() {
+		return chunkenc.ValNone
+	}
+
 	it.isInitialized = true
 	t = max(t, it.mint)
 

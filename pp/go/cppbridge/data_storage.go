@@ -139,16 +139,25 @@ func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *UnusedSeriesDataUnloade
 	return unloader
 }
 
+// DataStorageQuery identifies the time interval and series to serialize.
 type DataStorageQuery struct {
 	StartTimestampMs int64
 	EndTimestampMs   int64
 	LabelSetIDs      []uint32
 }
 
+// Query returns an owned range result. If loading is deferred, the caller must
+// keep the result reachable until the query handle is finalized or discarded.
+//
+// Keep this call out of line so the returned Go object escapes. A deferred
+// native query retains the address of its serializedData field across calls.
+//
+//go:noinline
 func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selectHints unsafe.Pointer) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData(ds)
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs, selectHints)
-	runtime.KeepAlive(selectHints)
+	runtime.KeepAlive(ds)
+
 	return DataStorageQueryResult{
 		Querier:        querier,
 		Status:         status,
@@ -158,6 +167,8 @@ func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selec
 
 // InstantQuery finds, for each series in labelSetIDs, the sample closest to (at or before) targetTimestamp
 // and writes it into the C-shared samples slice (pointed to by samples), in the same order as labelSetIDs.
+// If loading is deferred, keep labelSetIDs and the samples backing storage reachable
+// until the query handle is finalized or discarded.
 func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
 	r := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 	runtime.KeepAlive(ds)
@@ -171,8 +182,18 @@ func (ds *DataStorage) QueryStaleNaNSeries(seriesIDs []uint32, series uintptr) {
 	runtime.KeepAlive(ds)
 }
 
+// QueryFinal completes and destroys all deferred queries after a successful load.
+// Their borrowed inputs and outputs must stay reachable through this call.
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	seriesDataDataStorageQueryFinal(queriers)
+	runtime.KeepAlive(queriers)
+	runtime.KeepAlive(ds)
+}
+
+// DiscardDataStorageQueries destroys deferred queries without writing to their outputs.
+// The handles in queriers are zeroed before it returns.
+func DiscardDataStorageQueries(queriers []uintptr) {
+	seriesDataDataStorageQueryDiscard(queriers)
 	runtime.KeepAlive(queriers)
 }
 

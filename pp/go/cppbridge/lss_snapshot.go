@@ -83,7 +83,7 @@ func (lss *LabelSetSnapshot) Serialize(lsID uint32) string {
 	return unsafe.String(unsafe.SliceData(buf), length)
 }
 
-// Query returns a LSSQueryResult that matches the given selector.
+// Query returns the matches for selector. The caller must close the result.
 // With sortSeries the ids are ordered by label sets; otherwise they stay in ascending series id order.
 func (lss *LabelSetSnapshot) Query(selector uintptr, sortSeries bool) *LSSQueryResult {
 	result := newLSSQueryResult(primitivesSnapshotQuery(lss.pointer, selector, sortSeries))
@@ -140,7 +140,8 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 // LSSQueryResult
 //
 
-// LSSQueryResult query execution result in lss with copy.
+// LSSQueryResult owns the native arrays returned by [LabelSetSnapshot.Query].
+// It must not be copied.
 type LSSQueryResult struct {
 	matches         []uint32 // c allocated
 	labelSetLengths []uint16 // c allocated
@@ -161,26 +162,18 @@ func newLSSQueryResult(
 
 	if status != LSSQueryStatusMatch {
 		lqr.Close()
-
-		return lqr
 	}
-
-	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
-		result.Close()
-	})
 
 	return lqr
 }
 
-// Close frees the C-allocated result buffers and cancels the finalizer.
-// It is idempotent: subsequent calls (and the finalizer) are no-ops.
-// After Close the result must not be read anymore.
+// Close frees the native result buffers and invalidates their borrowed slices.
+// Subsequent calls are no-ops.
 func (r *LSSQueryResult) Close() {
 	if r.matches == nil && r.labelSetLengths == nil {
 		return
 	}
 
-	runtime.SetFinalizer(r, nil)
 	primitivesLabelSetMatchesFree(r)
 	r.matches = nil
 	r.labelSetLengths = nil
@@ -214,12 +207,12 @@ func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
 	return r.matches[i], r.labelSetLengths[i]
 }
 
-// IDs return labels sets ids.
+// IDs returns the series IDs, borrowed until [LSSQueryResult.Close].
 func (r *LSSQueryResult) IDs() []uint32 {
 	return r.matches
 }
 
-// LabelSetLengths return labels sets lengths.
+// LabelSetLengths returns the label set lengths, borrowed until [LSSQueryResult.Close].
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 	return r.labelSetLengths
 }

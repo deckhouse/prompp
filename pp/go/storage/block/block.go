@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime"
 	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -77,19 +78,25 @@ func NewChunkIterator(
 }
 
 // RangeBatch iterates over all chunks available in batch, calling fn for each chunk.
+// The chunk's bytes are borrowed and must be consumed or copied before fn returns.
 func (i *ChunkIterator) RangeBatch(fn func(Chunk) bool) {
 	if !i.hasMoreData {
 		return
 	}
-	rc := i.r.RecodeNextChunk()
+	recoder := i.r
+	rc := recoder.RecodeNextChunk()
+
 	for rc.SeriesId != math.MaxUint32 {
-		if !fn(Chunk{rc: &rc}) {
+		more := fn(Chunk{rc: &rc})
+		runtime.KeepAlive(recoder)
+
+		if !more {
 			return
 		}
 		if !rc.HasMoreData {
 			return
 		}
-		rc = i.r.RecodeNextChunk()
+		rc = recoder.RecodeNextChunk()
 	}
 }
 

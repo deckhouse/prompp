@@ -31,31 +31,31 @@ func (s *AggrSeriesSetSuite) SetupTest() {
 
 	timeSeries := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 5}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 3}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test", "instance", "instance1"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test", "instance", "instance1"),
 			Samples: []cppbridge.Sample{{Timestamp: 13, Value: 7}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 4}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "job", "test2", "instance", "instance2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "job", "test2", "instance", "instance2"),
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 2}},
 		},
 	}
@@ -78,6 +78,8 @@ func (s *AggrSeriesSetSuite) query(
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 		return &querier.AggrSeriesSet{}
 	}
@@ -87,6 +89,7 @@ func (s *AggrSeriesSetSuite) query(
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	}, downsamplingMs, hints)
+	s.T().Cleanup(dsQueryResult.SerializedData.Close)
 
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 
@@ -104,7 +107,7 @@ func (s *AggrSeriesSetSuite) query(
 func (s *AggrSeriesSetSuite) TestMaxOverTimeFunc() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -121,11 +124,11 @@ func (s *AggrSeriesSetSuite) TestMaxOverTimeFunc() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "instance", "instance1", "job", "test"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "instance", "instance1", "job", "test"),
 			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 5}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "instance", "instance2", "job", "test2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "instance", "instance2", "job", "test2"),
 			Samples: []cppbridge.Sample{{Timestamp: 11, Value: 4}},
 		},
 	}
@@ -142,7 +145,7 @@ func (s *AggrSeriesSetSuite) TestMaxOverTimeFunc() {
 func (s *AggrSeriesSetSuite) TestMinOverTimeFunc() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -159,11 +162,11 @@ func (s *AggrSeriesSetSuite) TestMinOverTimeFunc() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "instance", "instance1", "job", "test"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "instance", "instance1", "job", "test"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "instance", "instance2", "job", "test2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "instance", "instance2", "job", "test2"),
 			Samples: []cppbridge.Sample{{Timestamp: 10, Value: 1}},
 		},
 	}
@@ -180,7 +183,7 @@ func (s *AggrSeriesSetSuite) TestMinOverTimeFunc() {
 func (s *AggrSeriesSetSuite) TestLastOverTimeFunc() {
 	// Arrange
 	matcher := model.LabelMatcher{
-		Name:        "__name__",
+		Name:        labels.MetricName,
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
 	}
@@ -197,11 +200,11 @@ func (s *AggrSeriesSetSuite) TestLastOverTimeFunc() {
 
 	expected := []storagetest.TimeSeries{
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "instance", "instance1", "job", "test"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "instance", "instance1", "job", "test"),
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 3}},
 		},
 		{
-			Labels:  labels.FromStrings("__name__", "metric", "instance", "instance2", "job", "test2"),
+			Labels:  labels.FromStrings(labels.MetricName, "metric", "instance", "instance2", "job", "test2"),
 			Samples: []cppbridge.Sample{{Timestamp: 12, Value: 2}},
 		},
 	}

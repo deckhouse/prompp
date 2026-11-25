@@ -2190,6 +2190,8 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 	return res.allocatedMemory
 }
 
+// DataStorageQueryResult carries the native result and any pending load.
+// When Querier is nonzero, it borrows the output until finalized or discarded.
 type DataStorageQueryResult struct {
 	Querier        uintptr
 	Status         uint8
@@ -2246,6 +2248,9 @@ func seriesDataDataStorageQueryV2(
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+	runtime.KeepAlive(query.LabelSetIDs)
+	runtime.KeepAlive(selectHints)
+	runtime.KeepAlive(serializedData)
 	headDataStorageQuerySum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageQueryCount.Inc()
 
@@ -2267,6 +2272,7 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+	runtime.KeepAlive(labelSetIDs)
 
 	return res
 }
@@ -2298,6 +2304,18 @@ func seriesDataDataStorageQueryFinal(queriers []uintptr) {
 	)
 	headDataStorageQueryFinalSum.Add(float64(time.Since(start).Nanoseconds()))
 	headDataStorageQueryFinalCount.Inc()
+}
+
+func seriesDataDataStorageQueryDiscard(queriers []uintptr) {
+	args := struct {
+		queriers []uintptr
+	}{queriers}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_query_discard,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 func seriesDataSerializedDataDtor(serializedData uintptr) {
@@ -2337,10 +2355,10 @@ func seriesDataSerializedDataSamplesIteratorCtor(
 	chunkRef uint32,
 ) {
 	args := struct {
-		iterator       uintptr
+		iterator       *DataStorageSerializedDataSamplesIterator
 		serializedData uintptr
 		chunkRef       uint32
-	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+	}{iterator, serializedData, chunkRef}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2362,9 +2380,9 @@ func seriesDataSerializedDataSamplesIteratorSeek(
 	targetTimestamp int64,
 ) {
 	args := struct {
-		iterator        uintptr
+		iterator        *DataStorageSerializedDataSamplesIterator
 		targetTimestamp int64
-	}{uintptr(unsafe.Pointer(iterator)), targetTimestamp}
+	}{iterator, targetTimestamp}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2379,10 +2397,10 @@ func seriesDataSerializedDataSamplesIteratorReset(
 	chunkRef uint32,
 ) {
 	args := struct {
-		iterator       uintptr
+		iterator       *DataStorageSerializedDataSamplesIterator
 		serializedData uintptr
 		chunkRef       uint32
-	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+	}{iterator, serializedData, chunkRef}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2397,10 +2415,10 @@ func seriesDataSerializedDataAggregationIteratorCtor(
 	chunkRef uint32,
 ) {
 	args := struct {
-		iterator       uintptr
+		iterator       *DataStorageSerializedDataAggregationIterator
 		serializedData uintptr
 		chunkRef       uint32
-	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+	}{iterator, serializedData, chunkRef}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2423,10 +2441,10 @@ func seriesDataSerializedDataAggregationIteratorReset(
 	chunkRef uint32,
 ) {
 	args := struct {
-		iterator       uintptr
+		iterator       *DataStorageSerializedDataAggregationIterator
 		serializedData uintptr
 		chunkRef       uint32
-	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
+	}{iterator, serializedData, chunkRef}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2441,10 +2459,10 @@ func seriesDataSerializedDataMultiSeriesIteratorCtor(
 	seriesIDs []uint32,
 ) {
 	args := struct {
-		iterator       uintptr
+		iterator       *DataStorageSerializedDataMultiSeriesIterator
 		serializedData uintptr
 		seriesIDs      []uint32
-	}{uintptr(unsafe.Pointer(iterator)), serializedData, seriesIDs}
+	}{iterator, serializedData, seriesIDs}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2460,10 +2478,10 @@ func seriesDataSerializedDataMultiSeriesIteratorReset(
 	seriesIDs []uint32,
 ) {
 	args := struct {
-		iterator       uintptr
+		iterator       *DataStorageSerializedDataMultiSeriesIterator
 		serializedData uintptr
 		seriesIDs      []uint32
-	}{uintptr(unsafe.Pointer(iterator)), serializedData, seriesIDs}
+	}{iterator, serializedData, seriesIDs}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -2674,6 +2692,7 @@ func seriesDataSerializedChunkRecoderCtor(serializedData *DataStorageSerializedD
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+	runtime.KeepAlive(serializedData)
 
 	return res.chunkRecoder
 }

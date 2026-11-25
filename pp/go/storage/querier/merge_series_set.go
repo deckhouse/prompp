@@ -11,6 +11,7 @@ import (
 // mergeShardSeriesSet merges many [storage.SeriesSet] together from different shards.
 // Since there are always different series in the shards, there is no need to check them for Equal.
 type mergeShardSeriesSet struct {
+	result     sampleQueryResult
 	heap       seriesSetHeap
 	currentSet storage.SeriesSet
 }
@@ -93,6 +94,10 @@ func newManyShardSeriesSets(sortSeries bool, ssets ...[]storage.SeriesSet) stora
 
 // At returns the current [storage.Series], implement [storage.SeriesSet] interface.
 func (s *mergeShardSeriesSet) At() storage.Series {
+	if s.currentSet == nil {
+		return nil
+	}
+
 	return s.currentSet.At()
 }
 
@@ -124,6 +129,17 @@ func (s *mergeShardSeriesSet) Next() bool {
 // Always returns empty(nil) [annotations.Annotations], because shards should not have any warnings.
 func (*mergeShardSeriesSet) Warnings() annotations.Annotations {
 	return nil
+}
+
+// invalidate drops the prefetched shard sets before the result's buffers are released.
+func (s *mergeShardSeriesSet) invalidate() {
+	s.heap = nil
+	s.currentSet = nil
+}
+
+// resultNode returns the ownership node stored in the merged set.
+func (s *mergeShardSeriesSet) resultNode() *sampleQueryResult {
+	return &s.result
 }
 
 //
@@ -166,6 +182,7 @@ func (h seriesSetHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 // concatShardSeriesSet iterates many [storage.SeriesSet] from different shards one after another.
 // It is used when the caller does not need the series sorted by labels, so no heap merge is required.
 type concatShardSeriesSet struct {
+	result     sampleQueryResult
 	sets       []storage.SeriesSet
 	currentSet storage.SeriesSet
 }
@@ -207,6 +224,10 @@ func NewConcatManyShardSeriesSets(ssets ...[]storage.SeriesSet) storage.SeriesSe
 
 // At returns the current [storage.Series], implement [storage.SeriesSet] interface.
 func (s *concatShardSeriesSet) At() storage.Series {
+	if s.currentSet == nil {
+		return nil
+	}
+
 	return s.currentSet.At()
 }
 
@@ -240,6 +261,17 @@ func (*concatShardSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
 
+// invalidate drops the current and unvisited shard sets before the result's buffers are released.
+func (s *concatShardSeriesSet) invalidate() {
+	s.sets = nil
+	s.currentSet = nil
+}
+
+// resultNode returns the ownership node stored in the concatenated set.
+func (s *concatShardSeriesSet) resultNode() *sampleQueryResult {
+	return &s.result
+}
+
 //
 // mergeShardChunkSeriesSet
 //
@@ -247,6 +279,7 @@ func (*concatShardSeriesSet) Warnings() annotations.Annotations {
 // mergeShardChunkSeriesSet merges many [storage.ChunkSeriesSet] together from different shards.
 // Since there are always different series in the shards, there is no need to check them for Equal.
 type mergeShardChunkSeriesSet struct {
+	result     chunkQueryResult
 	heap       chunkSeriesSetHeap
 	currentSet storage.ChunkSeriesSet
 }
@@ -278,6 +311,10 @@ func NewMergeShardChunkSeriesSet(sets []storage.ChunkSeriesSet) storage.ChunkSer
 
 // At returns the current [storage.ChunkSeries], implement [storage.ChunkSeriesSet] interface.
 func (s *mergeShardChunkSeriesSet) At() storage.ChunkSeries {
+	if s.currentSet == nil {
+		return nil
+	}
+
 	return s.currentSet.At()
 }
 
@@ -309,6 +346,17 @@ func (s *mergeShardChunkSeriesSet) Next() bool {
 // Always returns empty(nil) [annotations.Annotations], because shards should not have any warnings.
 func (*mergeShardChunkSeriesSet) Warnings() annotations.Annotations {
 	return nil
+}
+
+// invalidate drops the prefetched shard sets before the result's recoders are released.
+func (s *mergeShardChunkSeriesSet) invalidate() {
+	s.heap = nil
+	s.currentSet = nil
+}
+
+// resultNode returns the ownership node stored in the merged chunk set.
+func (s *mergeShardChunkSeriesSet) resultNode() *chunkQueryResult {
+	return &s.result
 }
 
 //

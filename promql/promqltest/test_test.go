@@ -126,6 +126,8 @@ func TestLazyLoader_WithSamplesTill(t *testing.T) {
 				queryable := suite.Queryable()
 				querier, err := queryable.Querier(math.MinInt64, math.MaxInt64)
 				require.NoError(t, err)
+				defer func() { require.NoError(t, querier.Close()) }()
+
 				for _, s := range tc.series {
 					var matchers []*labels.Matcher
 					s.Metric.Range(func(label labels.Label) {

@@ -55,6 +55,7 @@ type Sample struct {
 	Value     float64
 }
 
+// RecodedChunk describes a chunk whose payload is borrowed from its [ChunkRecoder].
 type RecodedChunk struct {
 	TimeInterval
 	SeriesId     uint32
@@ -69,7 +70,8 @@ const (
 	UnlimitedLsIdBatchSize uint32 = math.MaxUint32
 )
 
-// ChunkRecoder is Go wrapper around C++ ChunkRecoder.
+// ChunkRecoder wraps a native recoder and keeps its input storage reachable.
+// It must not be copied or used after [ChunkRecoder.Close].
 type ChunkRecoder struct {
 	recoder      uintptr
 	recodedChunk RecodedChunk
@@ -79,6 +81,7 @@ type ChunkRecoder struct {
 	serializedData *DataStorageSerializedData
 }
 
+// NewChunkRecoder creates a recoder for block writing, with a finalizer as a fallback.
 func NewChunkRecoder(
 	lss *LabelSetStorage,
 	lsIdBatchSize uint32,
@@ -86,46 +89,65 @@ func NewChunkRecoder(
 	timeInterval TimeInterval,
 	downsamplingMs int64,
 ) *ChunkRecoder {
-	return initializeChunkRecoder(
-		lss,
-		dataStorage,
-		nil,
-		seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval, downsamplingMs),
-	)
+	recoder := &ChunkRecoder{
+		recoder: seriesDataChunkRecoderCtor(
+			lss.Pointer(),
+			lsIdBatchSize,
+			dataStorage.dataStorage,
+			timeInterval,
+			downsamplingMs,
+		),
+		lss:         lss,
+		dataStorage: dataStorage,
+	}
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(dataStorage)
+	runtime.SetFinalizer(recoder, (*ChunkRecoder).Close)
+
+	return recoder
 }
 
+// NewSerializedChunkRecoder borrows serializedData. The caller must close the recoder
+// before closing serializedData.
 func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, serializedData, seriesDataSerializedChunkRecoderCtor(serializedData, timeInterval))
-}
-
-func initializeChunkRecoder(
-	lss *LabelSetStorage,
-	dataStorage *DataStorage,
-	serializedData *DataStorageSerializedData,
-	recoder uintptr,
-) *ChunkRecoder {
-	chunkRecoder := &ChunkRecoder{
-		recoder:        recoder,
-		lss:            lss,
-		dataStorage:    dataStorage,
+	return &ChunkRecoder{
+		recoder:        seriesDataSerializedChunkRecoderCtor(serializedData, timeInterval),
 		serializedData: serializedData,
 	}
-
-	runtime.SetFinalizer(chunkRecoder, func(chunkRecoder *ChunkRecoder) {
-		seriesDataChunkRecoderDtor(chunkRecoder.recoder)
-	})
-
-	return chunkRecoder
 }
 
-func (recoder *ChunkRecoder) RecodeNextChunk() RecodedChunk {
-	seriesDataChunkRecoderRecodeNextChunk(recoder.recoder, &recoder.recodedChunk)
-	return recoder.recodedChunk
+// Close destroys the recoder and invalidates borrowed payloads. It does not close the input.
+// Repeated calls, including calls on a nil or zero recoder, are no-ops.
+func (recoder *ChunkRecoder) Close() {
+	if recoder == nil || recoder.recoder == 0 {
+		return
+	}
+
+	if recoder.lss != nil {
+		runtime.SetFinalizer(recoder, nil)
+	}
+
+	seriesDataChunkRecoderDtor(recoder.recoder)
+	runtime.KeepAlive(recoder)
+	*recoder = ChunkRecoder{}
 }
 
+// NextBatch advances the block-writing recoder to the next batch.
 func (recoder *ChunkRecoder) NextBatch() bool {
 	result := seriesDataChunkRecoderNextBatch(recoder.recoder)
 	runtime.KeepAlive(recoder)
+
+	return result
+}
+
+// RecodeNextChunk returns metadata and a borrowed payload, valid until the next
+// recode, batch advance, or close. Keep the recoder reachable until the payload
+// is consumed or copied.
+func (recoder *ChunkRecoder) RecodeNextChunk() RecodedChunk {
+	seriesDataChunkRecoderRecodeNextChunk(recoder.recoder, &recoder.recodedChunk)
+	result := recoder.recodedChunk
+	runtime.KeepAlive(recoder)
+
 	return result
 }
 
@@ -199,21 +221,43 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
+// DataStorageSerializedData owns the native buffer of a range query.
+// It must not be copied, and its owner must close it after deferred loading
+// and all borrowers have finished.
 type DataStorageSerializedData struct {
 	serializedData uintptr
 	ds             *DataStorage
 }
 
+// NewDataStorageSerializedData creates a range query result before the native buffer is available.
 func NewDataStorageSerializedData(ds *DataStorage) *DataStorageSerializedData {
-	sd := &DataStorageSerializedData{
-		ds: ds,
-	}
-	runtime.SetFinalizer(sd, func(sd *DataStorageSerializedData) {
-		seriesDataSerializedDataDtor(sd.serializedData)
-	})
-	return sd
+	return &DataStorageSerializedData{ds: ds}
 }
 
+// Close frees the native buffer and releases the storage reference. The caller must first
+// finish or discard any deferred native query and close any recoder borrowing the buffer.
+// Close does nothing on a nil receiver and may be called repeatedly.
+func (sd *DataStorageSerializedData) Close() {
+	if sd == nil {
+		return
+	}
+
+	if sd.serializedData != 0 {
+		seriesDataSerializedDataDtor(sd.serializedData)
+		runtime.KeepAlive(sd)
+		sd.serializedData = 0
+	}
+
+	sd.ds = nil
+}
+
+// IsClosed reports whether there is no native buffer, including for a nil
+// receiver or a pending query whose buffer has not been populated.
+func (sd *DataStorageSerializedData) IsClosed() bool {
+	return sd == nil || sd.serializedData == 0
+}
+
+// Next returns the next series and chunk reference. It requires an open buffer.
 func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	seriesID, chunkRef := seriesDataSerializedDataNext(sd.serializedData)
 	runtime.KeepAlive(sd)
@@ -226,14 +270,18 @@ type DataStorageSerializedDataSamplesIteratorControlBlock struct {
 	remainingSamples uint8
 }
 
+// DataStorageSerializedDataSamplesIterator borrows the buffer supplied on construction or reset.
 type DataStorageSerializedDataSamplesIterator struct {
 	DataStorageSerializedDataSamplesIteratorControlBlock
 	cppInternalData [unsafe.Sizeof(CppSerializedDataSamplesIterator{}) - unsafe.Sizeof(DataStorageSerializedDataSamplesIteratorControlBlock{})]byte
 }
 
+// NewDataStorageSerializedDataSamplesIterator borrows serializedData for iteration.
 func NewDataStorageSerializedDataSamplesIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataSamplesIterator {
 	it := DataStorageSerializedDataSamplesIterator{}
 	seriesDataSerializedDataSamplesIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
+
 	return it
 }
 
@@ -245,8 +293,10 @@ func (it *DataStorageSerializedDataSamplesIterator) Seek(timestamp int64) {
 	seriesDataSerializedDataSamplesIteratorSeek(it, timestamp)
 }
 
+// Reset reuses the iterator, borrowing serializedData for subsequent iteration.
 func (it *DataStorageSerializedDataSamplesIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
 	seriesDataSerializedDataSamplesIteratorReset(it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
 }
 
 func (it *DataStorageSerializedDataSamplesIterator) HasData() bool {
@@ -278,14 +328,18 @@ func (it *sampleControlBlock) Value() float64 {
 	return it.value
 }
 
+// DataStorageSerializedDataAggregationIterator borrows the buffer supplied on construction or reset.
 type DataStorageSerializedDataAggregationIterator struct {
 	sampleControlBlock
 	cppInternalData [unsafe.Sizeof(CppSerializedDataAggregationIterator{}) - unsafe.Sizeof(sampleControlBlock{})]byte
 }
 
+// NewDataStorageSerializedDataAggregationIterator borrows serializedData for iteration.
 func NewDataStorageSerializedDataAggregationIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataAggregationIterator {
 	it := DataStorageSerializedDataAggregationIterator{}
 	seriesDataSerializedDataAggregationIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
+
 	return it
 }
 
@@ -293,18 +347,24 @@ func (it *DataStorageSerializedDataAggregationIterator) Next() {
 	seriesDataSerializedDataAggregationIteratorNext(it)
 }
 
+// Reset reuses the iterator, borrowing serializedData for subsequent iteration.
 func (it *DataStorageSerializedDataAggregationIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
 	seriesDataSerializedDataAggregationIteratorReset(it, serializedData.serializedData, chunkRef)
+	runtime.KeepAlive(serializedData)
 }
 
+// DataStorageSerializedDataMultiSeriesIterator borrows the buffer supplied on construction or reset.
 type DataStorageSerializedDataMultiSeriesIterator struct {
 	sampleControlBlock
 	cppInternalData [unsafe.Sizeof(CppSerializedDataMultiSeriesIterator{}) - unsafe.Sizeof(sampleControlBlock{})]byte
 }
 
+// NewDataStorageSerializedDataMultiSeriesIterator borrows serializedData for iteration.
 func NewDataStorageSerializedDataMultiSeriesIterator(serializedData *DataStorageSerializedData, seriesIDs []uint32) DataStorageSerializedDataMultiSeriesIterator {
 	it := DataStorageSerializedDataMultiSeriesIterator{}
 	seriesDataSerializedDataMultiSeriesIteratorCtor(&it, serializedData.serializedData, seriesIDs)
+	runtime.KeepAlive(serializedData)
+
 	return it
 }
 
@@ -312,10 +372,13 @@ func (it *DataStorageSerializedDataMultiSeriesIterator) Next() {
 	seriesDataSerializedDataMultiSeriesIteratorNext(it)
 }
 
+// Reset reuses the iterator, borrowing serializedData for subsequent iteration.
 func (it *DataStorageSerializedDataMultiSeriesIterator) Reset(serializedData *DataStorageSerializedData, seriesIDs []uint32) {
 	seriesDataSerializedDataMultiSeriesIteratorReset(it, serializedData.serializedData, seriesIDs)
+	runtime.KeepAlive(serializedData)
 }
 
+// Close frees the iterator's own allocations without reading the borrowed buffer.
 func (it *DataStorageSerializedDataMultiSeriesIterator) Close() {
 	seriesDataSerializedDataMultiSeriesIteratorDtor(it)
 }
@@ -337,6 +400,7 @@ func (ds *DataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 		ds:     ds,
 	}
 	runtime.KeepAlive(queriers)
+	runtime.KeepAlive(ds)
 
 	runtime.SetFinalizer(result, func(loader *UnloadedDataLoader) {
 		seriesDataUnloadedDataLoaderDtor(loader.loader)

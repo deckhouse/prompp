@@ -3,6 +3,7 @@ package querier
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"sync"
 
@@ -11,42 +12,30 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
-//
-// MultiQuerier
-//
-
-// MultiQuerier querier which makes requests to all queriers from the created list and merges the received results.
+// MultiQuerier merges results from child queriers and owns their lifetimes.
+// Close must not overlap with selection or iteration.
 type MultiQuerier struct {
 	queriers []storage.Querier
-	closer   func() error
+	results  queryResults[storage.Series, struct{}]
 }
 
-// NewMultiQuerier init new [MultiQuerier].
-func NewMultiQuerier(queriers []storage.Querier, closer func() error) *MultiQuerier {
-	qs := make([]storage.Querier, 0, len(queriers))
-	for _, q := range queriers {
-		if rawQ, ok := q.(*MultiQuerier); ok {
-			qs = append(qs, rawQ.queriers...)
-			continue
-		}
-
-		qs = append(qs, q)
-	}
-
+// NewMultiQuerier takes ownership of its child queriers, including nested merges.
+func NewMultiQuerier(queriers []storage.Querier) *MultiQuerier {
 	return &MultiQuerier{
-		queriers: qs,
-		closer:   closer,
+		queriers: slices.Clone(queriers),
 	}
 }
 
-// Close closes all [storage.Querier]s if need.
+// Close invalidates all selections and closes every child, joining any errors.
 func (q *MultiQuerier) Close() (err error) {
-	for _, querier := range q.queriers {
-		err = errors.Join(err, querier.Close())
-	}
+	queriers := q.queriers
+	q.queriers = nil
+	q.results.releaseAll(nil)
 
-	if q.closer != nil {
-		err = errors.Join(err, q.closer())
+	for _, querier := range queriers {
+		if closeErr := querier.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 	}
 
 	return err
@@ -133,8 +122,11 @@ func (q *MultiQuerier) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
-	if len(q.queriers) == 1 {
-		return q.queriers[0].Select(ctx, sortSeries, hints, matchers...)
+	switch len(q.queriers) {
+	case 0:
+		return storage.EmptySeriesSet()
+	case 1:
+		return q.results.register(q.queriers[0].Select(ctx, sortSeries, hints, matchers...), struct{}{})
 	}
 
 	seriesSets := make([]storage.SeriesSet, len(q.queriers))
@@ -151,7 +143,7 @@ func (q *MultiQuerier) Select(
 
 	wg.Wait()
 
-	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+	return q.results.register(storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge), struct{}{})
 }
 
 // DeduplicateAndSortStringSlices merge, deduplicate, and sort rows in slices

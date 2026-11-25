@@ -163,9 +163,9 @@ func (s *AppenderSuite) createState(config []*cppbridge.RelabelConfig) *cppbridg
 	return state
 }
 
+// headStorageData retains native label owners and the copied samples for assertions.
 type headStorageData struct {
 	lssResult []*cppbridge.LabelSetStorageGetLabelSetsResult
-	dsResult  []cppbridge.DataStorageQueryResult
 	shards    []storageData
 }
 
@@ -177,7 +177,6 @@ type storageData struct {
 func (s *AppenderSuite) getHeadData(labelSetIDs []uint32) headStorageData {
 	data := headStorageData{
 		lssResult: make([]*cppbridge.LabelSetStorageGetLabelSetsResult, 0, s.head.NumberOfShards()),
-		dsResult:  make([]cppbridge.DataStorageQueryResult, 0, s.head.NumberOfShards()),
 		shards:    make([]storageData, 0, s.head.NumberOfShards()),
 	}
 
@@ -190,12 +189,12 @@ func (s *AppenderSuite) getHeadData(labelSetIDs []uint32) headStorageData {
 			EndTimestampMs:   math.MaxInt64,
 			LabelSetIDs:      labelSetIDs,
 		}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
-		data.dsResult = append(data.dsResult, dsResult)
 
 		data.shards = append(data.shards, storageData{
 			labels:  lssResult.LabelsSets(),
 			samples: storagetest.GetSamplesFromSerializedData(dsResult.SerializedData),
 		})
+		dsResult.SerializedData.Close()
 	}
 
 	return data

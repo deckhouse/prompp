@@ -30,16 +30,25 @@ func iterateSeriesSet(seriesSet storage.SeriesSet) {
 	}
 }
 
-func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, downsamplingMs int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
+// newTestSeriesSet returns a shard selection and its serialized buffer, which the caller owns.
+func newTestSeriesSet(
+	t testing.TB,
+	lss *shard.LSS,
+	ds *shard.DataStorage,
+	start, end, downsamplingMs int64,
+	matchers ...model.LabelMatcher,
+) (*querier.SeriesSet, *cppbridge.DataStorageSerializedData) {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	require.NoError(t, err)
 	if selector == 0 || snapshot == nil {
-		return &querier.SeriesSet{}
+		return &querier.SeriesSet{}, nil
 	}
 
 	lssQueryResult := snapshot.Query(selector, true)
+	defer lssQueryResult.Close()
+
 	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-		return &querier.SeriesSet{}
+		return &querier.SeriesSet{}, nil
 	}
 
 	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
@@ -47,9 +56,14 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, d
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	}, downsamplingMs, &storage.SelectHints{})
+	data := dsQueryResult.SerializedData
+	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
+		cppbridge.DiscardDataStorageQueries([]uintptr{dsQueryResult.Querier})
+		data.Close()
+		require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
+	}
 
-	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
+	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, data), data
 }
 
 func BenchmarkSeriesSetOpt(b *testing.B) {
@@ -70,10 +84,13 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 		b.StopTimer()
 		runtime.GC()
 		runtime.GC()
-		seriesSet := queryOpt(b, lss, ds, start, end, cppbridge.NoDownsampling, matcher)
+		seriesSet, data := newTestSeriesSet(b, lss, ds, start, end, cppbridge.NoDownsampling, matcher)
 		b.StartTimer()
 
 		iterateSeriesSet(seriesSet)
+
+		b.StopTimer()
+		data.Close()
 	}
 }
 

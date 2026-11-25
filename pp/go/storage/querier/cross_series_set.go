@@ -113,7 +113,7 @@ func (*CrossSeriesSet) Err() error {
 // Next advances the iterator by one and returns false if there are no more values.
 // [storage.SeriesSet] interface implementation.
 func (ss *CrossSeriesSet) Next() bool {
-	if ss.serializedData == nil {
+	if ss.serializedData.IsClosed() {
 		return false
 	}
 
@@ -174,6 +174,10 @@ func NewCrossSeries(
 // Iterator returns an iterator that iterates over the cross samples of the [CrossSeries].
 // [storage.Series] interface implementation.
 func (s *CrossSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
+	if s.serializedData.IsClosed() {
+		return chunkenc.NewNopIterator()
+	}
+
 	chunkIterator, ok := it.(*CrossChunkIterator)
 	if !ok {
 		return NewCrossChunkIterator(
@@ -269,6 +273,10 @@ func (*CrossChunkIterator) Err() error {
 // Next advances the iterator by one and returns the type of the value.
 // [chunkenc.Iterator] interface implementation.
 func (it *CrossChunkIterator) Next() chunkenc.ValueType {
+	if it.serializedData.IsClosed() {
+		return chunkenc.ValNone
+	}
+
 	if !it.chunkIterator.HasData() || it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
@@ -289,6 +297,10 @@ func (it *CrossChunkIterator) Next() chunkenc.ValueType {
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
 // [chunkenc.Iterator] interface implementation.
 func (it *CrossChunkIterator) Seek(t int64) chunkenc.ValueType {
+	if it.serializedData.IsClosed() {
+		return chunkenc.ValNone
+	}
+
 	it.isInitialized = true
 	t = max(t, it.mint)
 

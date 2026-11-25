@@ -61,19 +61,55 @@ func benchmarkQuerierStageStats(
 	b *testing.B, h *ppstorage.Head, metrics *querier.Metrics, operation string, parallel bool,
 ) {
 	q := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), 1, 0, metrics)
-	cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), nil, metrics)
+	cq := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), metrics)
+	defer func() {
+		qErr, cqErr := q.Close(), cq.Close()
+		require.NoError(b, qErr)
+		require.NoError(b, cqErr)
+	}()
+
 	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "stage_metric")
 	matchers := []*labels.Matcher{matcher}
 	hints := &storage.SelectHints{Start: 0, End: 10, Step: 1}
 	ctx := context.Background()
-	query := func() {
+	if operation == "instant" {
+		hints = &storage.SelectHints{}
+	}
+
+	query := func(timeSelect bool) {
 		switch operation {
-		case "instant":
-			runtime.KeepAlive(q.Select(ctx, false, &storage.SelectHints{}, matchers...))
-		case "range":
-			runtime.KeepAlive(q.Select(ctx, false, hints, matchers...))
+		case "instant", "range":
+			selected := querier.NewQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), 1, 0, metrics)
+
+			if timeSelect {
+				b.StartTimer()
+			}
+
+			runtime.KeepAlive(selected.Select(ctx, false, hints, matchers...))
+
+			if timeSelect {
+				b.StopTimer()
+			}
+
+			if err := selected.Close(); err != nil {
+				b.Error(err)
+			}
 		case "chunks":
-			runtime.KeepAlive(cq.Select(ctx, false, hints, matchers...))
+			selected := querier.NewChunkQuerier(h, querier.NewNoOpShardedDeduplicator, int64(0), int64(10), metrics)
+
+			if timeSelect {
+				b.StartTimer()
+			}
+
+			runtime.KeepAlive(selected.Select(ctx, false, hints, matchers...))
+
+			if timeSelect {
+				b.StopTimer()
+			}
+
+			if err := selected.Close(); err != nil {
+				b.Error(err)
+			}
 		case "label_names":
 			_, _, _ = q.LabelNames(ctx, &storage.LabelHints{}, matchers...)
 		case "label_values":
@@ -84,22 +120,29 @@ func benchmarkQuerierStageStats(
 			_, _, _ = cq.LabelValues(ctx, "series", &storage.LabelHints{}, matchers...)
 		}
 	}
-	query()
+	query(false)
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	if parallel {
+		// Parallel workers cannot pause the benchmark timer independently.
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				query()
+				query(false)
 			}
 		})
 
 		return
 	}
 
+	timeSelect := operation == "instant" || operation == "range" || operation == "chunks"
+
 	for b.Loop() {
-		query()
+		if timeSelect {
+			b.StopTimer()
+		}
+
+		query(timeSelect)
 	}
 }
 

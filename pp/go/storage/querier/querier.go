@@ -168,6 +168,7 @@ type Querier[
 	deduplicatorCtor deduplicatorCtor
 	metrics          *Metrics
 	queryOptimize    queryOptimizeType
+	results          queryResults[storage.Series, []*cppbridge.DataStorageSerializedData]
 }
 
 // NewQuerier init new [Querier].
@@ -247,10 +248,17 @@ func newQuerierWithSelectFuncOptimize[
 	}
 }
 
-// Close [Querier] if need.
+// Close releases every outstanding [Querier.Select] result. It must not overlap with use of the querier or its results.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (*Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
+	q.results.releaseAll(func(buffers []*cppbridge.DataStorageSerializedData) {
+		if buffers != nil {
+			closeSerializedData(buffers)
+			q.head.PoolProvider().PutSerializedData(buffers)
+		}
+	})
+
 	return nil
 }
 
@@ -297,6 +305,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 }
 
 // Select returns a set of series that matches the given label matchers.
+// Consume the set and any sample iterators before calling [Querier.Close].
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
@@ -305,6 +314,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
+	if q.results.isClosed {
+		return emptySeriesSet
+	}
+
 	if q.mint == q.maxt {
 		return q.selectInstant(ctx, sortSeries, hints, matchers...)
 	}
@@ -352,7 +365,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		return storage.ErrSeriesSet(err)
 	}
 
-	defer resources.close()
+	defer resources.releaseTemporary()
 
 	stats := &resources.stats
 	poolProvider := resources.pool
@@ -426,13 +439,15 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		stats.lap.Mark(stageDataLoadWait)
 	}
 
-	result := newShardSeriesSet(resources.seriesSets, sortSeries)
+	result := q.results.register(newShardSeriesSet(resources.seriesSets, sortSeries), nil)
 	stats.lap.Mark(stageBuildResult)
 
 	return result
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
+//
+//revive:disable-next-line:function-length // this is a complex algorithm.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	sortSeries bool,
@@ -449,7 +464,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	defer resources.close()
+	defer resources.releaseTemporary()
 
 	stats := &resources.stats
 	poolProvider := resources.pool
@@ -503,9 +518,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		q.metrics.OptimizationType.WithLabelValues(optimizationType).Inc()
 	}
 
+	owned := q.results.register(result, resources.serializedData)
+	resources.serializedData = nil
 	stats.lap.Mark(stageBuildResult)
 
-	return result
+	return owned
 }
 
 // makeAggrSeriesSet fills the caller-owned shard buffer and builds a merged set without retaining the buffer.
@@ -563,6 +580,8 @@ func (*Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeSeriesSet(
 }
 
 // makeCrossSeriesSet queries the cross series set.
+//
+//revive:disable-next-line:function-length // this is a complex algorithm.
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) makeCrossSeriesSet(
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	snapshots []*cppbridge.LabelSetSnapshot,
@@ -901,6 +920,7 @@ func queryDataStorage[
 
 	hasQueries := loadAndQueryWaiter.HasQueriesAfterPrimaryWait()
 	if err := loadAndQueryWaiter.Wait(); err != nil {
+		closeSerializedData(shardedSerializedData)
 		clear(shardedSerializedData)
 		SendUnrecoverableError(err)
 	}
@@ -913,6 +933,8 @@ func queryDataStorage[
 }
 
 // queryLabelNames returns label names present in the head for the given matchers.
+//
+//revive:disable-next-line:function-length // this is a complex algorithm.
 func queryLabelNames[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -943,7 +965,7 @@ func queryLabelNames[
 
 	poolProvider := head.PoolProvider()
 	resources := newQueryResources(poolProvider, head, stats, release)
-	defer resources.close()
+	defer resources.releaseTemporary()
 
 	if resources.stats.shards.Enabled() {
 		resources.slots = poolProvider.GetShardSlots()
@@ -994,6 +1016,8 @@ func queryLabelNames[
 }
 
 // queryLabelValues returns label values present in the head for the specific label name.
+//
+//revive:disable-next-line:function-length // this is a complex algorithm.
 func queryLabelValues[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -1025,7 +1049,7 @@ func queryLabelValues[
 
 	poolProvider := head.PoolProvider()
 	resources := newQueryResources(poolProvider, head, stats, release)
-	defer resources.close()
+	defer resources.releaseTemporary()
 
 	if resources.stats.shards.Enabled() {
 		resources.slots = poolProvider.GetShardSlots()
@@ -1072,9 +1096,7 @@ func queryLabelValues[
 }
 
 // closeLSSQueryResults releases the C-allocated buffers held by the query results.
-// It is safe to call once every series set built from these results has copied out
-// (or no longer needs) the data it references. Nil entries are skipped and Close is
-// idempotent, so the finalizer stays a harmless fallback.
+// It is safe to call once retained results no longer need those buffers.
 func closeLSSQueryResults(lssQueryResults []*cppbridge.LSSQueryResult) {
 	for _, lssQueryResult := range lssQueryResults {
 		if lssQueryResult != nil {
