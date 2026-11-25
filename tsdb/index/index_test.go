@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -533,6 +534,38 @@ func TestSymbols(t *testing.T) {
 		i++
 	}
 	require.NoError(t, iter.Err())
+}
+
+func TestReaderWithDenseSymbolOffsets(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	const (
+		labelName = "value"
+		count     = 300
+	)
+	suffix := strings.Repeat("x", 256)
+	input := make(indexWriterSeriesSlice, count)
+	for i := range input {
+		input[i] = &indexWriterSeries{labels: labels.FromStrings(labelName, fmt.Sprintf("%03d%s", i, suffix))}
+	}
+	ir, _, _ := createFileReader(ctx, t, input)
+	lastLabels := input[count-1].labels
+	p, err := ir.Postings(ctx, labelName, lastLabels.Get(labelName))
+	require.NoError(t, err)
+	require.True(t, p.Next())
+	ref := p.At()
+
+	// Act
+	view, err := ir.WithDenseSymbolOffsets()
+	require.NoError(t, err)
+	builder := labels.NewScratchBuilder(1)
+	require.NoError(t, view.Series(ref, &builder, nil))
+
+	// Assert
+	require.Equal(t, lastLabels, builder.Labels())
+	require.NoError(t, view.Close())
+	require.NoError(t, ir.Series(ref, &builder, nil))
+	require.Equal(t, lastLabels, builder.Labels())
 }
 
 func BenchmarkReader_ShardedPostings(b *testing.B) {

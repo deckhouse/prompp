@@ -148,7 +148,7 @@ func (DefaultBlockPopulator) PopulateBlock(
 			}
 		}
 
-		indexr, err := b.Index()
+		indexr, err := openCompactionIndex(b)
 		if err != nil {
 			return fmt.Errorf("open index reader for block %+v: %w", bMeta, err)
 		}
@@ -1042,4 +1042,13 @@ func AllSortedPostings(ctx context.Context, reader tsdb.IndexReader) index.Posti
 	}
 
 	return reader.SortedPostings(all)
+}
+
+// openCompactionIndex uses dense symbol offsets for persisted Prom++ blocks.
+func openCompactionIndex(b tsdb.BlockReader) (tsdb.IndexReader, error) {
+	if persisted, ok := b.(*block.Block); ok {
+		return persisted.IndexForCompaction()
+	}
+
+	return b.Index()
 }

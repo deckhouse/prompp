@@ -72,7 +72,7 @@ type Block struct {
 	symbolTableSize uint64
 
 	chunkr     tsdb.ChunkReader
-	indexr     tsdb.IndexReader
+	indexr     *index.Reader
 	tombstones tombstones.Reader
 
 	logger log.Logger
@@ -235,6 +235,23 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 	}
 
 	return blockIndexReader{ir: pb.indexr, b: pb}, nil
+}
+
+// IndexForCompaction returns a reader with dense symbol offsets for the duration of compaction.
+// Like [Block.Index], the returned reader keeps the block open until it is closed.
+func (pb *Block) IndexForCompaction() (tsdb.IndexReader, error) {
+	if err := pb.startRead(); err != nil {
+		return nil, err
+	}
+
+	ir, err := pb.indexr.WithDenseSymbolOffsets()
+	if err != nil {
+		pb.pendingReaders.Done()
+
+		return nil, fmt.Errorf("build compaction symbol offsets: %w", err)
+	}
+
+	return blockIndexReader{ir: ir, b: pb}, nil
 }
 
 // IsDownsamplingBlock returns true if the block is a downsampling block.
