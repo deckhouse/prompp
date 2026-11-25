@@ -1538,22 +1538,15 @@ func primitivesLSSReleaseLSIDSet(lss uintptr) {
 	)
 }
 
-func primitivesSnapshotQuery(snapshot uintptr, selector uintptr, sortSeries bool) (
-	matches []uint32,
-	labelSetLengths []uint16,
-	status uint32,
-) {
+// primitivesSnapshotQuery consumes the selector and returns the C-owned series IDs and query status.
+func primitivesSnapshotQuery(snapshot uintptr, selector uintptr, sortSeries bool) (matches []uint32, status uint32) {
 	args := struct {
 		snapshot   uintptr
 		selector   uintptr
 		sortSeries bool
 	}{snapshot, selector, sortSeries}
 
-	var res struct {
-		matches         []uint32
-		labelSetLengths []uint16
-		status          uint32
-	}
+	var res LSSQueryResult
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -1562,7 +1555,7 @@ func primitivesSnapshotQuery(snapshot uintptr, selector uintptr, sortSeries bool
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.matches, res.labelSetLengths, res.status
+	return res.matches, res.status
 }
 
 func primitivesGroupSeriesByLabelNames(snapshot uintptr, seriesIDs []uint32, labelNameIDs []uint32) [][]uint32 {

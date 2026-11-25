@@ -238,14 +238,12 @@ func (s *QueryableLSSSuite) TestQuery() {
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 		snapshot := s.lss.CreateLabelSetSnapshot()
 		queryResult := snapshot.Query(selector, true)
+		defer queryResult.Close()
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
 		s.Require().Len(queryResult.IDs(), 3)
 		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
 		s.Require().Equal(s.labelSetIDs[0], queryResult.IDs()[1])
 		s.Require().Equal(s.labelSetIDs[2], queryResult.IDs()[2])
-		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[0])
-		s.Require().Equal(uint16(1), queryResult.LabelSetLengths()[1])
-		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[2])
 	}
 
 	// no positive matchers

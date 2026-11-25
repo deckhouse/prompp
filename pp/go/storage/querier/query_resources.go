@@ -30,11 +30,6 @@ type queryResources[TTask Task, TShard poolprovider.Shard] struct {
 	// releaseQuery releases acquired head query access after temporary resources have been returned.
 	releaseQuery func()
 
-	// selectors holds per-shard selector pointers until the caller's cleanup.
-	selectors []uintptr
-	// errors holds per-shard snapshot query errors until the caller's cleanup.
-	errors []error
-
 	snapshots       []*cppbridge.LabelSetSnapshot
 	lssQueryResults []*cppbridge.LSSQueryResult
 	serializedData  []*cppbridge.DataStorageSerializedData
@@ -77,14 +72,6 @@ func (r *queryResources[TTask, TShard]) close() {
 
 	if r.serializedData != nil {
 		r.pool.PutSerializedData(r.serializedData)
-	}
-
-	if r.errors != nil {
-		r.pool.PutErrors(r.errors)
-	}
-
-	if r.selectors != nil {
-		r.pool.PutSelectors(r.selectors)
 	}
 
 	if r.lssQueryResults != nil {
