@@ -1198,6 +1198,46 @@ func TestCompactDisjointOnDiskBlocks(t *testing.T) {
 	require.NoError(t, set.Err())
 }
 
+func TestCompactWithBlockPopulatorUsesCustomMerge(t *testing.T) {
+	dir := t.TempDir()
+	shared := labels.FromStrings("job", "shared")
+	first := testutils.CreateBlock(t, dir, []storage.Series{
+		storage.NewListSeries(shared, []chunks.Sample{testutils.SampleTest{TS: 10, V: 1}}),
+		storage.NewListSeries(labels.FromStrings("job", "unique"), []chunks.Sample{testutils.SampleTest{TS: 10, V: 2}}),
+	})
+	second := testutils.CreateBlock(t, dir, []storage.Series{
+		storage.NewListSeries(shared, []chunks.Sample{testutils.SampleTest{TS: 20, V: 3}}),
+	})
+	// Drop shared series; series present in only one block bypass the merge function.
+	merge := func(inputs ...storage.ChunkSeries) storage.ChunkSeries {
+		return storage.NewListChunkSeriesFromSamples(inputs[0].Labels())
+	}
+	compactor, err := NewLeveledCompactor(t.Context(), nil, nil, []int64{0}, nil, merge)
+	require.NoError(t, err)
+
+	// Simulate a built-in populator configured for a different compaction.
+	configured := DefaultBlockPopulator{mergeDisjointChunks: true}
+	for _, tc := range []struct {
+		name      string
+		populator BlockPopulator
+	}{
+		{name: "value", populator: configured},
+		{name: "pointer", populator: &configured},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dest := t.TempDir()
+			ids, err := compactor.CompactWithBlockPopulator(dest, []string{first, second}, nil, tc.populator)
+			require.NoError(t, err)
+			require.Len(t, ids, 1)
+
+			meta, _, err := block.ReadFromDir(filepath.Join(dest, ids[0].String()))
+			require.NoError(t, err)
+			require.Equal(t, uint64(1), meta.Stats.NumSeries)
+			require.Equal(t, uint64(1), meta.Stats.NumSamples)
+		})
+	}
+}
+
 func TestCompact_SingleCorruptedBlockDoesNotPanic(t *testing.T) {
 	t.Parallel()
 

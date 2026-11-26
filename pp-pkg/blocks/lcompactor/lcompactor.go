@@ -495,7 +495,7 @@ func NewLeveledCompactorWithOptions(
 // Compact creates a new block in the compactor's directory from the blocks in the
 // provided directories.
 func (c *LeveledCompactor) Compact(dest string, dirs []string, open []*block.Block) ([]ulid.ULID, error) {
-	return c.CompactWithBlockPopulator(dest, dirs, open, c.DefaultBlockPopulator())
+	return c.CompactWithBlockPopulator(dest, dirs, open, DefaultBlockPopulator{})
 }
 
 // CompactWithBlockPopulator compacts the blocks in the provided directories with the given [BlockPopulator].
@@ -633,11 +633,6 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 	}
 
 	return nil, errors.Join(errs...)
-}
-
-// DefaultBlockPopulator returns a populator configured for the compactor's merge function.
-func (c *LeveledCompactor) DefaultBlockPopulator() DefaultBlockPopulator {
-	return DefaultBlockPopulator{mergeDisjointChunks: c.defaultChunkMerge}
 }
 
 // Plan returns a list of compactable blocks in the provided directory.
@@ -863,6 +858,17 @@ func (c *LeveledCompactor) write(
 		return fmt.Errorf("open index writer: %w", err)
 	}
 	closers = append(closers, indexw)
+
+	// Configure the built-in populator alongside the merge function it will receive.
+	switch p := blockPopulator.(type) {
+	case DefaultBlockPopulator:
+		p.mergeDisjointChunks = c.defaultChunkMerge
+		blockPopulator = p
+	case *DefaultBlockPopulator:
+		configured := *p
+		configured.mergeDisjointChunks = c.defaultChunkMerge
+		blockPopulator = configured
+	}
 
 	if err = blockPopulator.PopulateBlock(
 		c.ctx,

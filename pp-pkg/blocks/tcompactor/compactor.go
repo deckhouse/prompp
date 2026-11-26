@@ -98,7 +98,7 @@ func NewTCompactor(
 		lCompactor:     lCompactor,
 		grouper:        NewDefaultGrouper(logger, reg),
 		planner:        planner,
-		blockPopulator: lCompactor.DefaultBlockPopulator(),
+		blockPopulator: lcompactor.DefaultBlockPopulator{},
 		metrics:        newMetrics(reg),
 	}, nil
 }
