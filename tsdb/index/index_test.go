@@ -541,7 +541,7 @@ func TestReaderWithDenseSymbolOffsets(t *testing.T) {
 	ctx := t.Context()
 	const (
 		labelName = "value"
-		count     = 300
+		count     = 2*checkContextEveryNIterations + 44
 	)
 	suffix := strings.Repeat("x", 256)
 	input := make(indexWriterSeriesSlice, count)
@@ -557,12 +557,19 @@ func TestReaderWithDenseSymbolOffsets(t *testing.T) {
 
 	// Act
 	const denseBytes = uint64(count+1) * 4
-	sparse, used, err := ir.WithDenseSymbolOffsets(denseBytes - 1)
+	sparse, used, err := ir.WithDenseSymbolOffsets(ctx, denseBytes-1)
 	require.NoError(t, err)
 	require.Nil(t, sparse)
 	require.Zero(t, used)
 
-	view, used, err := ir.WithDenseSymbolOffsets(denseBytes)
+	// Cancel on the second check inside the decode loop, before the short final batch.
+	cancelDuringDecode := &testutil.MockContextErrAfter{FailAfter: 3}
+	canceledView, used, err := ir.WithDenseSymbolOffsets(cancelDuringDecode, denseBytes)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, canceledView)
+	require.Zero(t, used)
+
+	view, used, err := ir.WithDenseSymbolOffsets(ctx, denseBytes)
 	require.NoError(t, err)
 	require.Equal(t, denseBytes, used)
 	builder := labels.NewScratchBuilder(1)

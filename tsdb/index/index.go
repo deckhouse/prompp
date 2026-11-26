@@ -1449,7 +1449,7 @@ func (s Symbols) Iter() StringIter {
 }
 
 // withDenseOffsets builds a view that shares the immutable table and sparse offsets.
-func (s *Symbols) withDenseOffsets() (*Symbols, error) {
+func (s *Symbols) withDenseOffsets(ctx context.Context) (*Symbols, error) {
 	if s.denseOffsets != nil {
 		return s, nil
 	}
@@ -1468,9 +1468,17 @@ func (s *Symbols) withDenseOffsets() (*Symbols, error) {
 		// The table length is encoded as a uint32.
 		dense.denseOffsets[i] = uint32(origLen - d.Len()) // #nosec G115 -- offset is bounded by the table length.
 		d.UvarintBytes()
+		if (i+1)%checkContextEveryNIterations == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if d.Err() != nil {
 		return nil, d.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return &dense, nil
@@ -1554,9 +1562,14 @@ func (r *Reader) SymbolTableSize() uint64 {
 
 // WithDenseSymbolOffsets returns a compaction view and the size in bytes of its dense table.
 // It returns a nil view and zero bytes if no dense table is needed or it exceeds maxBytes.
+// Cancellation aborts construction without returning a view.
 // The original reader must remain open until the view is no longer used.
 // Closing the view does not close the original reader.
-func (r *Reader) WithDenseSymbolOffsets(maxBytes uint64) (*Reader, uint64, error) {
+func (r *Reader) WithDenseSymbolOffsets(ctx context.Context, maxBytes uint64) (*Reader, uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+
 	if r.version == FormatV1 || r.symbols.seen == 0 {
 		return nil, 0, nil
 	}
@@ -1566,7 +1579,7 @@ func (r *Reader) WithDenseSymbolOffsets(maxBytes uint64) (*Reader, uint64, error
 		return nil, 0, nil
 	}
 
-	symbols, err := r.symbols.withDenseOffsets()
+	symbols, err := r.symbols.withDenseOffsets(ctx)
 	if err != nil {
 		return nil, 0, err
 	}

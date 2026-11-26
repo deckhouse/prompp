@@ -152,7 +152,7 @@ func (DefaultBlockPopulator) PopulateBlock(
 			}
 		}
 
-		indexr, err := openCompactionIndex(b, &denseBytesLeft)
+		indexr, err := openCompactionIndex(ctx, b, &denseBytesLeft)
 		if err != nil {
 			return fmt.Errorf("open index reader for block %+v: %w", bMeta, err)
 		}
@@ -1049,9 +1049,9 @@ func AllSortedPostings(ctx context.Context, reader tsdb.IndexReader) index.Posti
 }
 
 // openCompactionIndex debits the remaining budget only for dense tables used by persisted blocks.
-func openCompactionIndex(b tsdb.BlockReader, denseBytesLeft *uint64) (tsdb.IndexReader, error) {
+func openCompactionIndex(ctx context.Context, b tsdb.BlockReader, denseBytesLeft *uint64) (tsdb.IndexReader, error) {
 	if persisted, ok := b.(*block.Block); ok {
-		reader, denseBytes, err := persisted.IndexForCompaction(*denseBytesLeft)
+		reader, denseBytes, err := persisted.IndexForCompaction(ctx, *denseBytesLeft)
 		if err != nil {
 			return nil, err
 		}

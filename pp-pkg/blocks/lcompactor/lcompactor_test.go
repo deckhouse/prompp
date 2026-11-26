@@ -1158,12 +1158,12 @@ func TestCompactionIndexSharesDenseOffsetBudget(t *testing.T) {
 	// Act
 	budget := max(denseSizes[0], denseSizes[1]) + 1
 	bytesLeft := budget
-	dense, err := openCompactionIndex(blocks[0], &bytesLeft)
+	dense, err := openCompactionIndex(ctx, blocks[0], &bytesLeft)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, dense.Close()) })
 	bytesAfterFirst := bytesLeft
 
-	sparse, err := openCompactionIndex(blocks[1], &bytesLeft)
+	sparse, err := openCompactionIndex(ctx, blocks[1], &bytesLeft)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sparse.Close()) })
 

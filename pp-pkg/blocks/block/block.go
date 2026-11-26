@@ -239,13 +239,14 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 
 // IndexForCompaction returns a reader and the number of dense offset bytes it uses.
 // If the dense table does not fit in maxDenseBytes, the reader uses the original index.
+// If construction is canceled, it returns the context error and releases the block.
 // Like [Block.Index], the returned reader keeps the block open until it is closed.
-func (pb *Block) IndexForCompaction(maxDenseBytes uint64) (tsdb.IndexReader, uint64, error) {
+func (pb *Block) IndexForCompaction(ctx context.Context, maxDenseBytes uint64) (tsdb.IndexReader, uint64, error) {
 	if err := pb.startRead(); err != nil {
 		return nil, 0, err
 	}
 
-	ir, denseBytes, err := pb.indexr.WithDenseSymbolOffsets(maxDenseBytes)
+	ir, denseBytes, err := pb.indexr.WithDenseSymbolOffsets(ctx, maxDenseBytes)
 	if err != nil {
 		pb.pendingReaders.Done()
 
