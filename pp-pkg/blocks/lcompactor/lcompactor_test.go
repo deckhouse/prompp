@@ -1181,6 +1181,54 @@ func TestCompactionIndexSharesDenseOffsetBudget(t *testing.T) {
 	}
 }
 
+func TestCompactOnDiskBlocks(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	const labelName, labelValue = "job", "test"
+	lset := labels.FromStrings(labelName, labelValue)
+	samples := []chunks.Sample{
+		testutils.SampleTest{TS: 10, V: 1},
+		testutils.SampleTest{TS: 20, V: 2},
+	}
+	dir := t.TempDir()
+	inputs := make([]string, 0, len(samples))
+	for _, sample := range samples {
+		series := storage.NewListSeries(lset, []chunks.Sample{sample})
+		inputs = append(inputs, testutils.CreateBlock(t, dir, []storage.Series{series}))
+	}
+	compactor, err := NewLeveledCompactor(ctx, nil, nil, []int64{0}, nil, nil)
+	require.NoError(t, err)
+	dest := t.TempDir()
+
+	// Act
+	ids, err := compactor.Compact(dest, inputs, nil)
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
+	output, err := block.OpenBlock(nil, filepath.Join(dest, ids[0].String()), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, output.Close()) })
+	querier, err := tsdb.NewBlockQuerier(output, samples[0].T(), samples[len(samples)-1].T())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, querier.Close()) })
+	set := querier.Select(ctx, false, nil, labels.MustNewMatcher(labels.MatchEqual, labelName, labelValue))
+
+	// Assert
+	require.True(t, set.Next())
+	series := set.At()
+	require.Equal(t, lset, series.Labels())
+	it := series.Iterator(nil)
+	for _, sample := range samples {
+		require.Equal(t, chunkenc.ValFloat, it.Next())
+		ts, value := it.At()
+		require.Equal(t, sample.T(), ts)
+		require.Equal(t, sample.F(), value)
+	}
+	require.Equal(t, chunkenc.ValNone, it.Next())
+	require.NoError(t, it.Err())
+	require.False(t, set.Next())
+	require.NoError(t, set.Err())
+}
+
 func TestCompact_SingleCorruptedBlockDoesNotPanic(t *testing.T) {
 	t.Parallel()
 

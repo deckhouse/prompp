@@ -549,6 +549,7 @@ func TestReaderWithDenseSymbolOffsets(t *testing.T) {
 		input[i] = &indexWriterSeries{labels: labels.FromStrings(labelName, fmt.Sprintf("%03d%s", i, suffix))}
 	}
 	ir, _, _ := createFileReader(ctx, t, input)
+	sparseBytes := ir.SymbolTableSize()
 	lastLabels := input[count-1].labels
 	p, err := ir.Postings(ctx, labelName, lastLabels.Get(labelName))
 	require.NoError(t, err)
@@ -576,6 +577,8 @@ func TestReaderWithDenseSymbolOffsets(t *testing.T) {
 	require.NoError(t, view.Series(ref, &builder, nil))
 
 	// Assert
+	require.Equal(t, sparseBytes+denseBytes, view.SymbolTableSize())
+	require.Equal(t, sparseBytes, ir.SymbolTableSize())
 	require.Equal(t, lastLabels, builder.Labels())
 	require.NoError(t, view.Close())
 	require.NoError(t, ir.Series(ref, &builder, nil))
