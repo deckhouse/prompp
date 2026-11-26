@@ -787,6 +787,9 @@ type compactChunkIterator struct {
 
 	h           chunkIteratorHeap
 	initialized bool
+	run         chunks.Iterator
+	samples     chunkenc.Iterator
+	encoded     *listChunkSeriesIterator
 
 	err  error
 	curr chunks.Meta
@@ -805,13 +808,25 @@ func (c *compactChunkIterator) Next() bool {
 			}
 		}
 	}
-	if len(c.h) == 0 {
-		return false
+	iter := c.run
+	if iter == nil {
+		if len(c.h) == 0 {
+			return false
+		}
+		iter = heap.Pop(&c.h).(chunks.Iterator)
 	}
-
-	iter := heap.Pop(&c.h).(chunks.Iterator)
+	c.run = nil
 	c.curr = iter.At()
 	if iter.Next() {
+		// With at most two peers, pushing and popping a strict minimum
+		// restores the exact peer heap, including the order of ties.
+		if len(c.h) <= 2 {
+			next := iter.At().MinTime
+			if next > c.curr.MaxTime && (len(c.h) == 0 || next < c.h[0].At().MinTime) {
+				c.run = iter
+				return true
+			}
+		}
 		heap.Push(&c.h, iter)
 	}
 
@@ -851,7 +866,7 @@ func (c *compactChunkIterator) Next() bool {
 	}
 
 	// Add last as it's not yet included in overlap. We operate on same series, so labels does not matter here.
-	iter = NewSeriesToChunkEncoder(c.mergeFunc(append(overlapping, newChunkToSeriesDecoder(labels.EmptyLabels(), c.curr))...)).Iterator(nil)
+	iter = c.encodeOverlap(append(overlapping, newChunkToSeriesDecoder(labels.EmptyLabels(), c.curr)))
 	if !iter.Next() {
 		if c.err = iter.Err(); c.err != nil {
 			return false
@@ -874,14 +889,35 @@ func (c *compactChunkIterator) Err() error {
 	return errs.Err()
 }
 
+// encodeOverlap reuses decoded iterators and an exhausted output iterator without reusing chunk data.
+func (c *compactChunkIterator) encodeOverlap(series []Series) chunks.Iterator {
+	c.samples = c.mergeFunc(series...).Iterator(c.samples)
+	var reuse chunks.Iterator
+	// A previous encoding may still have unread chunks on the heap.
+	if out := c.encoded; out != nil && out.idx >= len(out.chks) {
+		clear(out.chks)
+		reuse = out
+	}
+	iter := encodeChunks(reuse, c.samples)
+	c.encoded, _ = iter.(*listChunkSeriesIterator)
+	return iter
+}
+
 // reset discards the previous merge state while retaining storage for the next series.
 func (c *compactChunkIterator) reset(mergeFunc VerticalSeriesMergeFunc, series []ChunkSeries) {
 	c.mergeFunc = mergeFunc
 	c.curr = chunks.Meta{}
 	c.err = nil
 	c.initialized = false
+	c.run = nil
 	clear(c.h)
 	c.h = c.h[:0]
+	c.samples = nil
+	if c.encoded != nil {
+		clear(c.encoded.chks)
+		c.encoded.chks = c.encoded.chks[:0]
+		c.encoded.idx = 0
+	}
 
 	if len(series) < len(c.iterators) {
 		clear(c.iterators[len(series):])

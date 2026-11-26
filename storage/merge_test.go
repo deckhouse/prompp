@@ -498,6 +498,32 @@ func TestCompactingChunkSeriesMerger(t *testing.T) {
 			),
 		},
 		{
+			name: "disjoint run before tied overlapping chunks",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1), chunks.GenerateSamples(5, 3)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 50}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 500}, fSample{6, 6}, fSample{7, 7}}),
+			},
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1),
+				[]chunks.Sample{fSample{5, 50}, fSample{6, 6}, fSample{7, 7}}),
+		},
+		{
+			name: "two separate overlaps with split output",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(0, 120), chunks.GenerateSamples(240, 120)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(119, 3), chunks.GenerateSamples(359, 3)),
+			},
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(0, 120), chunks.GenerateSamples(120, 2),
+				chunks.GenerateSamples(240, 120), chunks.GenerateSamples(360, 2)),
+		},
+		{
 			name: "110 overlapping",
 			input: []ChunkSeries{
 				NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"), chunks.GenerateSamples(0, 110)), // [0 - 110)
@@ -673,15 +699,18 @@ func TestCompactingChunkSeriesMergerHistogramCounterResetHint(t *testing.T) {
 					NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"),
 						[]chunks.Sample{sampleFunc(0, cr), sampleFunc(5, uk)},
 						[]chunks.Sample{sampleFunc(10, cr), sampleFunc(15, uk)},
+						[]chunks.Sample{sampleFunc(20, cr), sampleFunc(25, uk)},
 					),
 					NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"),
 						[]chunks.Sample{sampleFunc(0, cr), sampleFunc(5, uk)},
 						[]chunks.Sample{sampleFunc(10, cr), sampleFunc(12, uk), sampleFunc(15, uk)},
+						[]chunks.Sample{sampleFunc(20, cr), sampleFunc(22, uk), sampleFunc(25, uk)},
 					),
 				},
 				expected: NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"),
 					[]chunks.Sample{sampleFunc(0, cr), sampleFunc(5, uk)},
 					[]chunks.Sample{sampleFunc(10, uk), sampleFunc(12, uk), sampleFunc(15, uk)},
+					[]chunks.Sample{sampleFunc(20, uk), sampleFunc(22, uk), sampleFunc(25, uk)},
 				),
 			},
 			"histogram counter not reset hint dropped from differing series": {
@@ -730,7 +759,7 @@ func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
 		},
 	}
 	previous := merge(
-		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{1, 1}}),
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{1, 1}}, []chunks.Sample{fSample{2, 2}}),
 		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{100, 100}}),
 		failingInput,
 	).Iterator(nil)

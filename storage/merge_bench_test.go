@@ -16,14 +16,17 @@ func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 		name            string
 		differentValues bool
 		alternate       bool
+		sparse          bool
 	}{
 		{name: "duplicates"},
 		{name: "reencode", differentValues: true},
 		{name: "mixed_duplicates", alternate: true},
 		{name: "mixed_reencode", differentValues: true, alternate: true},
+		{name: "sparse_duplicates", sparse: true},
+		{name: "sparse_reencode", differentValues: true, sparse: true},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
-			inputs := benchmarkOverlappingChunkInputs(b, tc.differentValues)
+			inputs := benchmarkOverlappingChunkInputs(b, tc.differentValues, tc.sparse)
 			var reuse ChunkIteratorReuse
 			singleNext := false
 			b.ReportAllocs()
@@ -50,14 +53,21 @@ func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 	}
 }
 
-// benchmarkOverlappingChunkInputs builds three blocks with half of each block overlapping its neighbor.
-func benchmarkOverlappingChunkInputs(b *testing.B, differentValues bool) []ChunkSeries {
+// benchmarkOverlappingChunkInputs builds three blocks with either half a block or one chunk of overlap.
+func benchmarkOverlappingChunkInputs(b *testing.B, differentValues, sparse bool) []ChunkSeries {
 	const (
-		blockCount      = 3
-		chunksPerBlock  = 4
-		chunksPerStep   = chunksPerBlock / 2
-		samplesPerChunk = 120
+		blockCount           = 3
+		denseChunksPerBlock  = 4
+		sparseChunksPerBlock = 32
+		samplesPerChunk      = 120
 	)
+	chunksPerBlock := denseChunksPerBlock
+	chunksPerStep := chunksPerBlock / 2
+	if sparse {
+		chunksPerBlock = sparseChunksPerBlock
+		chunksPerStep = chunksPerBlock - 1
+	}
+
 	inputs := make([]ChunkSeries, blockCount)
 	lset := labels.FromStrings("job", "overlap")
 	samples := make([]chunks.Sample, samplesPerChunk)

@@ -290,6 +290,11 @@ func NewSeriesToChunkEncoder(series Series) ChunkSeries {
 }
 
 func (s *seriesToChunkEncoder) Iterator(it chunks.Iterator) chunks.Iterator {
+	return encodeChunks(it, s.Series.Iterator(nil))
+}
+
+// encodeChunks consumes samples and encodes new chunks, optionally reusing the output iterator's metadata buffer.
+func encodeChunks(it chunks.Iterator, seriesIter chunkenc.Iterator) chunks.Iterator {
 	var (
 		chk, newChk chunkenc.Chunk
 		app         chunkenc.Appender
@@ -306,7 +311,6 @@ func (s *seriesToChunkEncoder) Iterator(it chunks.Iterator) chunks.Iterator {
 	}
 
 	i := 0
-	seriesIter := s.Series.Iterator(nil)
 	lastType := chunkenc.ValNone
 	for typ := seriesIter.Next(); typ != chunkenc.ValNone; typ = seriesIter.Next() {
 		if typ != lastType || i >= seriesToChunkEncoderSplit {
