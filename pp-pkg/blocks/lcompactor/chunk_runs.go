@@ -50,7 +50,8 @@ type chunkCollector struct {
 }
 
 // appendRuns orders inputs by their first chunk, then reads each in full without a chunk heap.
-// Return false if actual chunk bounds disagree with the disjoint block ranges.
+// It returns (false, nil) if a chunk starts at or before the previous chunk ends,
+// whether the chunks come from the same input or different inputs.
 //
 //revive:disable-next-line:function-length // this is a complex algorithm.
 //revive:disable-next-line:cyclomatic // this is a complex algorithm.
