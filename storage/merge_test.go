@@ -741,9 +741,34 @@ func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
 		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{10, 10}, fSample{11, 11}}),
 		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{11, 11}, fSample{12, 12}}),
 	).Iterator(previous)
+	require.Same(t, previous, next)
 	got, err := ExpandChunks(next)
 	require.NoError(t, err)
 	require.Equal(t, chunks.GenerateSamples(10, 3), chunks.ChunkMetasToSamples(got))
+}
+
+// TestCompactingChunkSeriesMergerReusesInputIterators checks that the input gets its previous iterator.
+func TestCompactingChunkSeriesMergerReusesInputIterators(t *testing.T) {
+	lset := labels.FromStrings("job", "overlap")
+	input := NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(1, 3))
+	other := NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(2, 3))
+	iteratorFn := input.ChunkIteratorFn
+	var received, returned chunks.Iterator
+	input.ChunkIteratorFn = func(reuse chunks.Iterator) chunks.Iterator {
+		received = reuse
+		returned = iteratorFn(reuse)
+		return returned
+	}
+
+	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
+	merged := merge(input, other)
+	previous := merged.Iterator(nil)
+	wantReuse := returned
+	_, err := ExpandChunks(previous)
+	require.NoError(t, err)
+
+	merged.Iterator(previous)
+	require.Same(t, wantReuse, received)
 }
 
 func TestConcatenatingChunkSeriesMerger(t *testing.T) {
