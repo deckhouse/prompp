@@ -747,6 +747,38 @@ func TestCompactingChunkSeriesMergerHistogramCounterResetHint(t *testing.T) {
 	}
 }
 
+// TestCompactingChunkSeriesMergerReleasesEncodedChunks checks cleanup before the iterator is reused.
+func TestCompactingChunkSeriesMergerReleasesEncodedChunks(t *testing.T) {
+	lset := labels.FromStrings("job", "overlap")
+	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
+	merged := merge(
+		NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(10, 120)),
+		NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(129, 3)),
+	)
+	iter, ok := merged.Iterator(nil).(*compactChunkIterator)
+	require.True(t, ok)
+	require.True(t, iter.Next())
+	first := iter.At()
+	require.NotNil(t, iter.encoded)
+	encoded := iter.encoded.chks
+	require.True(t, iter.Next())
+	last := iter.At()
+
+	require.False(t, iter.Next())
+	require.NoError(t, iter.Err())
+	require.Nil(t, iter.samples)
+	require.Nil(t, iter.curr.Chunk)
+	require.Empty(t, iter.encoded.chks)
+	wantCapacity := cap(encoded)
+	require.Equal(t, wantCapacity, cap(iter.encoded.chks))
+	for _, meta := range encoded {
+		require.Nil(t, meta.Chunk)
+	}
+
+	got := chunks.ChunkMetasToSamples([]chunks.Meta{first, last})
+	require.Equal(t, chunks.GenerateSamples(10, 122), got)
+}
+
 // TestCompactingChunkSeriesMergerReuse discards unread chunks and errors from the preceding series.
 func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
 	lset := labels.FromStrings("job", "overlap")

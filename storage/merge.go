@@ -811,6 +811,7 @@ func (c *compactChunkIterator) Next() bool {
 	iter := c.run
 	if iter == nil {
 		if len(c.h) == 0 {
+			c.releaseSeriesData()
 			return false
 		}
 		iter = heap.Pop(&c.h).(chunks.Iterator)
@@ -903,21 +904,26 @@ func (c *compactChunkIterator) encodeOverlap(series []Series) chunks.Iterator {
 	return iter
 }
 
+// releaseSeriesData drops the current and re-encoded chunk references without discarding metadata capacity.
+func (c *compactChunkIterator) releaseSeriesData() {
+	c.curr = chunks.Meta{}
+	c.samples = nil
+	if out := c.encoded; out != nil {
+		clear(out.chks)
+		out.chks = out.chks[:0]
+		out.idx = 0
+	}
+}
+
 // reset discards the previous merge state while retaining storage for the next series.
 func (c *compactChunkIterator) reset(mergeFunc VerticalSeriesMergeFunc, series []ChunkSeries) {
 	c.mergeFunc = mergeFunc
-	c.curr = chunks.Meta{}
 	c.err = nil
 	c.initialized = false
 	c.run = nil
 	clear(c.h)
 	c.h = c.h[:0]
-	c.samples = nil
-	if c.encoded != nil {
-		clear(c.encoded.chks)
-		c.encoded.chks = c.encoded.chks[:0]
-		c.encoded.idx = 0
-	}
+	c.releaseSeriesData()
 
 	if len(series) < len(c.iterators) {
 		clear(c.iterators[len(series):])
