@@ -23,7 +23,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 def _third_party_dev_deps_impl(_ctx):
     git_repository(
         name = "gtest",
-        commit = "1aa39fe721cf6e94a3fc4b502c9292e9e13d39e0",
+        commit = "a46a6012a133c7c0929fdae55b321c2fe65f3c5f",
         patches = [
             Label("//third_party/patches/gtest:0001-no-werror.patch"),
         ],
