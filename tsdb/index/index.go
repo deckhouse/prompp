@@ -962,6 +962,10 @@ func (w *Writer) writePostingsToTmpFiles() error {
 		}
 
 		for _, name := range batchNames {
+			if err := w.ctx.Err(); err != nil {
+				return err
+			}
+
 			// Write out postings for this label name.
 			sid, err := w.symbols.ReverseLookup(name)
 			if err != nil {
