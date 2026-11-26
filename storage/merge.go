@@ -731,6 +731,7 @@ func (h *samplesIteratorHeap) Pop() interface{} {
 // In case of the chunk overlaps, it compacts those into one or more time-ordered non-overlapping chunks with merged data.
 // Samples from overlapped chunks are merged using series vertical merge func.
 // It expects the same labels for each given series.
+// The returned series can reuse a chunk iterator from a previous merge.
 //
 // NOTE: Use the returned merge function only when you see potentially overlapping series, as this introduces small a overhead
 // to handle overlaps between series.
@@ -741,15 +742,13 @@ func NewCompactingChunkSeriesMerger(mergeFunc VerticalSeriesMergeFunc) VerticalC
 		}
 		return &ChunkSeriesEntry{
 			Lset: series[0].Labels(),
-			ChunkIteratorFn: func(chunks.Iterator) chunks.Iterator {
-				iterators := make([]chunks.Iterator, 0, len(series))
-				for _, s := range series {
-					iterators = append(iterators, s.Iterator(nil))
+			ChunkIteratorFn: func(reuse chunks.Iterator) chunks.Iterator {
+				iter, _ := reuse.(*compactChunkIterator)
+				if iter == nil {
+					iter = &compactChunkIterator{}
 				}
-				return &compactChunkIterator{
-					mergeFunc: mergeFunc,
-					iterators: iterators,
-				}
+				iter.reset(mergeFunc, series)
+				return iter
 			},
 		}
 	}
@@ -762,7 +761,8 @@ type compactChunkIterator struct {
 	mergeFunc VerticalSeriesMergeFunc
 	iterators []chunks.Iterator
 
-	h chunkIteratorHeap
+	h           chunkIteratorHeap
+	initialized bool
 
 	err  error
 	curr chunks.Meta
@@ -773,7 +773,8 @@ func (c *compactChunkIterator) At() chunks.Meta {
 }
 
 func (c *compactChunkIterator) Next() bool {
-	if c.h == nil {
+	if !c.initialized {
+		c.initialized = true
 		for _, iter := range c.iterators {
 			if iter.Next() {
 				heap.Push(&c.h, iter)
@@ -849,6 +850,24 @@ func (c *compactChunkIterator) Err() error {
 	return errs.Err()
 }
 
+// reset discards the previous merge state while retaining storage for the next series.
+func (c *compactChunkIterator) reset(mergeFunc VerticalSeriesMergeFunc, series []ChunkSeries) {
+	c.mergeFunc = mergeFunc
+	c.curr = chunks.Meta{}
+	c.err = nil
+	c.initialized = false
+	clear(c.h)
+	c.h = c.h[:0]
+
+	if len(series) < len(c.iterators) {
+		clear(c.iterators[len(series):])
+	}
+	c.iterators = slices.Grow(c.iterators, max(0, len(series)-len(c.iterators)))[:len(series)]
+	for i, s := range series {
+		c.iterators[i] = s.Iterator(c.iterators[i])
+	}
+}
+
 type chunkIteratorHeap []chunks.Iterator
 
 func (h chunkIteratorHeap) Len() int      { return len(h) }
@@ -871,6 +890,7 @@ func (h *chunkIteratorHeap) Pop() interface{} {
 	old := *h
 	n := len(old)
 	x := old[n-1]
+	old[n-1] = nil
 	*h = old[0 : n-1]
 	return x
 }

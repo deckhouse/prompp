@@ -718,6 +718,34 @@ func TestCompactingChunkSeriesMergerHistogramCounterResetHint(t *testing.T) {
 	}
 }
 
+// TestCompactingChunkSeriesMergerReuse discards unread chunks and errors from the preceding series.
+func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
+	lset := labels.FromStrings("job", "overlap")
+	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
+	readErr := errors.New("failed to read input chunks")
+	failingInput := &ChunkSeriesEntry{
+		Lset: lset,
+		ChunkIteratorFn: func(chunks.Iterator) chunks.Iterator {
+			return errChunksIterator{err: readErr}
+		},
+	}
+	previous := merge(
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{1, 1}}),
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{100, 100}}),
+		failingInput,
+	).Iterator(nil)
+	require.True(t, previous.Next())
+	require.ErrorIs(t, previous.Err(), readErr)
+
+	next := merge(
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{10, 10}, fSample{11, 11}}),
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{11, 11}, fSample{12, 12}}),
+	).Iterator(previous)
+	got, err := ExpandChunks(next)
+	require.NoError(t, err)
+	require.Equal(t, chunks.GenerateSamples(10, 3), chunks.ChunkMetasToSamples(got))
+}
+
 func TestConcatenatingChunkSeriesMerger(t *testing.T) {
 	m := NewConcatenatingChunkSeriesMerger()
 
