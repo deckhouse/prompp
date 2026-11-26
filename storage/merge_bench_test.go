@@ -19,6 +19,8 @@ const (
 	benchmarkSparseOverlap
 	// benchmarkFourActive interleaves four inputs before a shared final chunk.
 	benchmarkFourActive
+	// benchmarkFourActiveRuns interleaves runs of disjoint chunks before a shared final chunk.
+	benchmarkFourActiveRuns
 )
 
 // BenchmarkCompactingChunkSeriesMerger measures chunk iteration with and without single-input rows.
@@ -38,6 +40,8 @@ func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 		{name: "sparse_reencode", differentValues: true, layout: benchmarkSparseOverlap},
 		{name: "four_active_duplicates", layout: benchmarkFourActive},
 		{name: "four_active_reencode", differentValues: true, layout: benchmarkFourActive},
+		{name: "four_active_runs_duplicates", layout: benchmarkFourActiveRuns},
+		{name: "four_active_runs_reencode", differentValues: true, layout: benchmarkFourActiveRuns},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			inputs := benchmarkOverlappingChunkInputs(b, tc.differentValues, tc.layout)
@@ -75,17 +79,24 @@ func benchmarkOverlappingChunkInputs(b *testing.B, differentValues bool, layout 
 		denseChunksPerBlock  = 4
 		sparseChunksPerBlock = 32
 		samplesPerChunk      = 120
+
+		// fourActiveRunLength is the number of consecutive chunks emitted from one input.
+		fourActiveRunLength = 8
 	)
 	blockCount := defaultBlockCount
 	chunksPerBlock := denseChunksPerBlock
 	chunksPerStep := chunksPerBlock / 2
+	runLength := 1
 	switch layout {
 	case benchmarkSparseOverlap:
 		chunksPerBlock = sparseChunksPerBlock
 		chunksPerStep = chunksPerBlock - 1
-	case benchmarkFourActive:
+	case benchmarkFourActive, benchmarkFourActiveRuns:
 		blockCount = fourActiveBlockCount
 		chunksPerBlock = sparseChunksPerBlock
+		if layout == benchmarkFourActiveRuns {
+			runLength = fourActiveRunLength
+		}
 	}
 
 	inputs := make([]ChunkSeries, blockCount)
@@ -95,11 +106,13 @@ func benchmarkOverlappingChunkInputs(b *testing.B, differentValues bool, layout 
 		metas := make([]chunks.Meta, chunksPerBlock)
 		for chunkIdx := range metas {
 			position := blockIdx*chunksPerStep + chunkIdx
-			if layout == benchmarkFourActive {
-				position = chunkIdx * blockCount
-				// No input runs out before the final overlap, so every earlier chunk has three peers.
-				if chunkIdx < chunksPerBlock-1 {
-					position += blockIdx
+			if blockCount == fourActiveBlockCount {
+				// All four inputs stay active until the shared final chunk.
+				if chunkIdx == chunksPerBlock-1 {
+					position = chunksPerBlock * blockCount
+				} else {
+					run := chunkIdx / runLength
+					position = (run*blockCount+blockIdx)*runLength + chunkIdx%runLength
 				}
 			}
 			mint := int64(position * samplesPerChunk)

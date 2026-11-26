@@ -819,13 +819,38 @@ func (c *compactChunkIterator) Next() bool {
 	c.nextInRun = nil
 	c.curr = iter.At()
 	if iter.Next() {
-		// With at most two peers, pushing and popping a strict minimum
-		// restores the exact peer heap, including the order of ties.
-		if len(c.h) <= 2 {
+		if len(c.h) <= 3 {
 			nextMinTime := iter.At().MinTime
-			if nextMinTime > c.curr.MaxTime && (len(c.h) == 0 || nextMinTime < c.h[0].At().MinTime) {
-				c.nextInRun = iter
-				return true
+			if nextMinTime > c.curr.MaxTime {
+				if len(c.h) == 0 {
+					c.nextInRun = iter
+					return true
+				}
+				root := c.h[0].At()
+				if nextMinTime < root.MinTime {
+					// Pushing and popping a strict minimum restores the peer heap,
+					// except with three peers and a tie between the root and left child.
+					// The old left child moves to the root when the new minimum is popped.
+					if len(c.h) == 3 {
+						left := c.h[1].At()
+						if left.MinTime == root.MinTime && left.MaxTime == root.MaxTime {
+							c.h.Swap(0, 1)
+						}
+					}
+					c.nextInRun = iter
+					return true
+				}
+				if root.MinTime > c.curr.MaxTime {
+					// Neither the advanced iterator nor any peer overlaps the current chunk.
+					// With three peers the new leaf's parent is the left child.
+					// A strictly later start means it cannot sift up.
+					if len(c.h) == 3 && nextMinTime > c.h[1].At().MinTime {
+						c.h = append(c.h, iter)
+					} else {
+						heap.Push(&c.h, iter)
+					}
+					return true
+				}
 			}
 		}
 		heap.Push(&c.h, iter)
