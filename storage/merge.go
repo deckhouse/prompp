@@ -339,6 +339,10 @@ type VerticalChunkSeriesMergeFunc func(...ChunkSeries) ChunkSeries
 func NewMergeChunkSeriesSet(sets []ChunkSeriesSet, mergeFunc VerticalChunkSeriesMergeFunc) ChunkSeriesSet {
 	genericSets := make([]genericSeriesSet, 0, len(sets))
 	for _, s := range sets {
+		if len(sets) > 1 {
+			genericSets = append(genericSets, &chunkSeriesCursor{ChunkSeriesSet: s})
+			continue
+		}
 		genericSets = append(genericSets, &genericChunkSeriesSetAdapter{s})
 	}
 	return &chunkSeriesSetAdapter{newGenericMergeSeriesSet(genericSets, (&chunkSeriesMergerAdapter{VerticalChunkSeriesMergeFunc: mergeFunc}).Merge)}
