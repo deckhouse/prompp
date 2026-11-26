@@ -1,6 +1,8 @@
 package lcompactor
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,10 +47,15 @@ func BenchmarkCompactDisjointChunks(b *testing.B) {
 
 			b.ReportAllocs()
 			for b.Loop() {
-				_, err := compactor.Compact(dest, dirs[:], blocks[:])
+				ids, err := compactor.Compact(dest, dirs[:], blocks[:])
 				if err != nil {
 					b.Fatal(err)
 				}
+
+				b.StopTimer()
+				require.Len(b, ids, 1)
+				require.NoError(b, os.RemoveAll(filepath.Join(dest, ids[0].String())))
+				b.StartTimer()
 			}
 		})
 	}
