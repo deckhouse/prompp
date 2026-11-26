@@ -9,23 +9,35 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunks"
 )
 
-// BenchmarkCompactingChunkSeriesMerger measures chunk iteration across overlapping in-memory blocks.
+// BenchmarkCompactingChunkSeriesMerger measures chunk iteration with and without single-input rows.
 func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
 	for _, tc := range []struct {
 		name            string
 		differentValues bool
+		alternate       bool
 	}{
 		{name: "duplicates"},
 		{name: "reencode", differentValues: true},
+		{name: "mixed_duplicates", alternate: true},
+		{name: "mixed_reencode", differentValues: true, alternate: true},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			inputs := benchmarkOverlappingChunkInputs(b, tc.differentValues)
-			var iter chunks.Iterator
+			var reuse ChunkIteratorReuse
+			singleNext := false
 			b.ReportAllocs()
 
 			for b.Loop() {
-				iter = merge(inputs...).Iterator(iter)
+				var series ChunkSeries
+				if singleNext {
+					// A series from one block bypasses the merger and replaces its iterator.
+					series = inputs[0]
+				} else {
+					series = merge(inputs...)
+				}
+				singleNext = tc.alternate && !singleNext
+				iter := reuse.Iterator(series)
 				for iter.Next() {
 					_ = iter.At()
 				}

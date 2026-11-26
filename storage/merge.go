@@ -740,18 +740,42 @@ func NewCompactingChunkSeriesMerger(mergeFunc VerticalSeriesMergeFunc) VerticalC
 		if len(series) == 0 {
 			return nil
 		}
-		return &ChunkSeriesEntry{
-			Lset: series[0].Labels(),
-			ChunkIteratorFn: func(reuse chunks.Iterator) chunks.Iterator {
-				iter, _ := reuse.(*compactChunkIterator)
-				if iter == nil {
-					iter = &compactChunkIterator{}
-				}
-				iter.reset(mergeFunc, series)
-				return iter
+		return &compactingChunkSeries{
+			ChunkSeriesEntry: ChunkSeriesEntry{
+				Lset: series[0].Labels(),
+				ChunkIteratorFn: func(reuse chunks.Iterator) chunks.Iterator {
+					iter, _ := reuse.(*compactChunkIterator)
+					if iter == nil {
+						iter = &compactChunkIterator{}
+					}
+					iter.reset(mergeFunc, series)
+					return iter
+				},
 			},
 		}
 	}
+}
+
+// ChunkIteratorReuse keeps separate iterators for compacting chunk series and other series.
+// The zero value is ready to use. Do not use a returned iterator after calling Iterator again.
+type ChunkIteratorReuse struct {
+	compacting chunks.Iterator
+	other      chunks.Iterator
+}
+
+// Iterator returns a chunk iterator for series, reusing the previous iterator from the same slot.
+func (r *ChunkIteratorReuse) Iterator(series ChunkSeries) chunks.Iterator {
+	if s, ok := series.(*compactingChunkSeries); ok {
+		r.compacting = s.Iterator(r.compacting)
+		return r.compacting
+	}
+	r.other = series.Iterator(r.other)
+	return r.other
+}
+
+// compactingChunkSeries identifies a series produced by [NewCompactingChunkSeriesMerger].
+type compactingChunkSeries struct {
+	ChunkSeriesEntry
 }
 
 // compactChunkIterator is responsible to compact chunks from different iterators of the same time series into single chainSeries.
@@ -862,6 +886,7 @@ func (c *compactChunkIterator) reset(mergeFunc VerticalSeriesMergeFunc, series [
 	if len(series) < len(c.iterators) {
 		clear(c.iterators[len(series):])
 	}
+
 	c.iterators = slices.Grow(c.iterators, max(0, len(series)-len(c.iterators)))[:len(series)]
 	for i, s := range series {
 		c.iterators[i] = s.Iterator(c.iterators[i])

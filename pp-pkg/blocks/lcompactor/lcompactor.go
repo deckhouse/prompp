@@ -199,9 +199,9 @@ func (DefaultBlockPopulator) PopulateBlock(
 	}
 
 	var (
-		ref      = storage.SeriesRef(0)
-		chks     []chunks.Meta
-		chksIter chunks.Iterator
+		ref   storage.SeriesRef
+		chks  []chunks.Meta
+		reuse storage.ChunkIteratorReuse
 	)
 
 	set := sets[0]
@@ -220,7 +220,7 @@ func (DefaultBlockPopulator) PopulateBlock(
 		}
 
 		s := set.At()
-		chksIter = s.Iterator(chksIter)
+		chksIter := reuse.Iterator(s)
 		chks = chks[:0]
 		for chksIter.Next() {
 			// We are not iterating in a streaming way over chunks as
