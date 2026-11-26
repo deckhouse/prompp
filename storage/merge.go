@@ -787,7 +787,7 @@ type compactChunkIterator struct {
 
 	h           chunkIteratorHeap
 	initialized bool
-	run         chunks.Iterator
+	nextInRun   chunks.Iterator
 	samples     chunkenc.Iterator
 	encoded     *listChunkSeriesIterator
 
@@ -808,7 +808,7 @@ func (c *compactChunkIterator) Next() bool {
 			}
 		}
 	}
-	iter := c.run
+	iter := c.nextInRun
 	if iter == nil {
 		if len(c.h) == 0 {
 			c.releaseSeriesData()
@@ -816,15 +816,15 @@ func (c *compactChunkIterator) Next() bool {
 		}
 		iter = heap.Pop(&c.h).(chunks.Iterator)
 	}
-	c.run = nil
+	c.nextInRun = nil
 	c.curr = iter.At()
 	if iter.Next() {
 		// With at most two peers, pushing and popping a strict minimum
 		// restores the exact peer heap, including the order of ties.
 		if len(c.h) <= 2 {
-			next := iter.At().MinTime
-			if next > c.curr.MaxTime && (len(c.h) == 0 || next < c.h[0].At().MinTime) {
-				c.run = iter
+			nextMinTime := iter.At().MinTime
+			if nextMinTime > c.curr.MaxTime && (len(c.h) == 0 || nextMinTime < c.h[0].At().MinTime) {
+				c.nextInRun = iter
 				return true
 			}
 		}
@@ -920,7 +920,7 @@ func (c *compactChunkIterator) reset(mergeFunc VerticalSeriesMergeFunc, series [
 	c.mergeFunc = mergeFunc
 	c.err = nil
 	c.initialized = false
-	c.run = nil
+	c.nextInRun = nil
 	clear(c.h)
 	c.h = c.h[:0]
 	c.releaseSeriesData()
