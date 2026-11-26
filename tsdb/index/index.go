@@ -1448,7 +1448,8 @@ func (s Symbols) Iter() StringIter {
 	}
 }
 
-// withDenseOffsets builds a view that shares the immutable table and sparse offsets.
+// withDenseOffsets builds a dense lookup table for formats with ordinal symbol IDs.
+// The view shares the immutable symbol data and sparse offsets with the original.
 func (s *Symbols) withDenseOffsets(ctx context.Context) (*Symbols, error) {
 	if s.denseOffsets != nil {
 		return s, nil
@@ -1560,8 +1561,10 @@ func (r *Reader) SymbolTableSize() uint64 {
 	return uint64(r.symbols.Size()) // #nosec G115 // no overflow
 }
 
-// WithDenseSymbolOffsets returns a compaction view and the size in bytes of its dense table.
-// It returns a nil view and zero bytes if no dense table is needed or it exceeds maxBytes.
+// WithDenseSymbolOffsets returns a compaction view with a dense lookup table for
+// formats with ordinal symbol IDs ([FormatV2] and [FormatV3]), and its size in bytes.
+// It returns a nil view and zero bytes for [FormatV1], which already uses byte
+// offsets as symbol IDs, for an empty table, or when the dense table exceeds maxBytes.
 // Cancellation aborts construction without returning a view.
 // The original reader must remain open until the view is no longer used.
 // Closing the view does not close the original reader.

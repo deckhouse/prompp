@@ -238,7 +238,10 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 }
 
 // IndexForCompaction returns a reader and the number of dense offset bytes it uses.
-// If the dense table does not fit in maxDenseBytes, the reader uses the original index.
+// It builds a dense table only for formats with ordinal symbol IDs
+// ([index.FormatV2] and [index.FormatV3]), and only if it fits in maxDenseBytes.
+// Otherwise, it uses the original index, including for [index.FormatV1], whose
+// symbol IDs are already byte offsets.
 // If construction is canceled, it returns the context error and releases the block.
 // Like [Block.Index], the returned reader keeps the block open until it is closed.
 func (pb *Block) IndexForCompaction(ctx context.Context, maxDenseBytes uint64) (tsdb.IndexReader, uint64, error) {
