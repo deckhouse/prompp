@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.8.20 / 2026-11-26
+
+### Fixes
+1. **PromQL selectors with `offset` or `@` use the correct time range.** Queries against the head use each selector's own range, preventing empty results when a query combines selectors evaluated at different times (#594).
+2. **Truncated Prometheus and OpenMetrics scrape responses are parsed safely.** The parser stops at the end of the response buffer. A final Prometheus sample or OpenMetrics end marker is still accepted without a trailing newline (#596).
+3. **Scrape parsing clears stale data after invalid UTF-8 and keeps metadata available while it is read.** A reused parser discards the previous response on an encoding error, and garbage collection no longer frees the parser while its metadata is in use (#595).
+4. **Negative `__sample_limit__` overrides preserve the configured scrape limit.** A negative label value is ignored so the limit configured for the scrape job still applies (#593).
+5. **Numeric sample encoding handles extreme values safely.** The encoder checks the range before narrowing a value or calculating an integer delta, avoiding out-of-range conversions and integer overflow (#591).
+6. **Go dependency security updates.** Updated OpenTelemetry Go core, SDK and trace to v1.47.0 (#609, #610) and Gorilla WebSocket to v1.5.4-0.20240701034025-d67f41855da4 (GO-2026-6278). The two AWS S3 Crypto SDK advisories (GO-2022-0646 and GO-2022-0635) remain covered by the existing VEX exclusions because the affected package is absent from the shipped binaries.
+7. **Web UI dependency security update.** Updated i18next to 26.3.4 to address GHSA-6jcc-5g8w-32mx. The production npm audit reports no known vulnerabilities.
+
+### Performance
+1. **Head queries skip sorting when the caller does not require ordered series.** PromQL can read matching series directly from each shard without sorting or merging them by label. Callers that request sorted results still receive them (#600).
+
 ## v0.8.19 / 2026-11-12
 
 ### Fixes
