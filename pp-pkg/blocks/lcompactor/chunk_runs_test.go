@@ -65,6 +65,7 @@ func TestChunkCollectorSkipsFallbackForDisjointChunks(t *testing.T) {
 	want := [][2]int64{{1, 2}, {3, 3}, {4, 5}}
 	require.Len(t, collector.metas, len(want))
 	for i, chunk := range collector.metas {
-		require.Equal(t, want[i], [2]int64{chunk.MinTime, chunk.MaxTime})
+		got := [2]int64{chunk.MinTime, chunk.MaxTime}
+		require.Equal(t, want[i], got)
 	}
 }

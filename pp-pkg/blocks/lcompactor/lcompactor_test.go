@@ -1166,10 +1166,10 @@ func TestCompactDisjointOnDiskBlocks(t *testing.T) {
 	outputDir := filepath.Join(dest, ids[0].String())
 	heapOutputDir := filepath.Join(heapDest, heapIDs[0].String())
 	for _, file := range []string{block.IndexFilename, filepath.Join("chunks", "000001")} {
-		want, err := os.ReadFile(filepath.Join(heapOutputDir, file))
-		require.NoError(t, err)
-		got, err := os.ReadFile(filepath.Join(outputDir, file))
-		require.NoError(t, err)
+		want, errRead := os.ReadFile(filepath.Join(heapOutputDir, file))
+		require.NoError(t, errRead)
+		got, errRead := os.ReadFile(filepath.Join(outputDir, file))
+		require.NoError(t, errRead)
 		require.Equal(t, want, got, file)
 	}
 
