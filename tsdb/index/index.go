@@ -895,9 +895,9 @@ func (w *Writer) writePostingsToTmpFiles() error {
 	if err := w.writePosting("", "", offsets); err != nil {
 		return err
 	}
+	seriesCount := uint64(len(offsets))
 	// Trade more in-flight postings for fewer scans of the series section.
-	maxBatchPostings := 2 * uint64(len(offsets))
-	maxPostings := uint64(len(offsets)) // No label name can have more postings than this.
+	maxBatchPostings := 2 * seriesCount
 
 	for len(names) > 0 {
 		batchNames := []string{}
@@ -905,12 +905,12 @@ func (w *Writer) writePostingsToTmpFiles() error {
 		for len(names) > 0 {
 			name := names[0]
 			count := w.labelNames[name]
-			if count > maxPostings {
+			if count > seriesCount {
 				return fmt.Errorf(
-					"corruption detected when writing postings to index: label %q has %d uses, but maxPostings is %d",
+					"corruption detected when writing postings to index: label %q occurs %d times in a block with %d series",
 					name,
 					count,
-					maxPostings,
+					seriesCount,
 				)
 			}
 			if batchPostings+count > maxBatchPostings {

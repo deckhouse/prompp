@@ -456,7 +456,7 @@ func TestWriter_ShouldReturnErrorOnSeriesWithDuplicatedLabelNames(t *testing.T) 
 
 	err = w.Close()
 	require.Error(t, err)
-	require.ErrorContains(t, err, "corruption detected when writing postings to index")
+	require.ErrorContains(t, err, `label "__name__" occurs 2 times in a block with 1 series`)
 }
 
 func TestWriterStopsPostingsBetweenLabelNames(t *testing.T) {
