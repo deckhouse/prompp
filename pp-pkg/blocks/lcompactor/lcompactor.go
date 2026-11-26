@@ -88,7 +88,9 @@ type BlockPopulator interface {
 //
 
 // DefaultBlockPopulator is the default block populator for the [LeveledCompactor].
-type DefaultBlockPopulator struct{}
+type DefaultBlockPopulator struct {
+	mergeDisjointChunks bool
+}
 
 // PopulateBlock fills the index and chunk writers with new data gathered as the union
 // of the provided blocks. It returns meta information for the new block.
@@ -97,7 +99,7 @@ type DefaultBlockPopulator struct{}
 //revive:disable-next-line:cyclomatic // copied from upstream
 //revive:disable-next-line:function-length // copied from upstream
 //revive:disable-next-line:cognitive-complexity // copied from upstream
-func (DefaultBlockPopulator) PopulateBlock(
+func (p DefaultBlockPopulator) PopulateBlock(
 	ctx context.Context,
 	metrics *CompactorMetrics,
 	logger log.Logger,
@@ -199,15 +201,15 @@ func (DefaultBlockPopulator) PopulateBlock(
 	}
 
 	var (
-		ref      = storage.SeriesRef(0)
-		chks     []chunks.Meta
-		chksIter chunks.Iterator
+		ref       storage.SeriesRef
+		collector chunkCollector
 	)
 
 	set := sets[0]
 	if len(sets) > 1 {
-		// Merge series using specified chunk series merger.
-		// The default one is the compacting series merger.
+		if p.mergeDisjointChunks && !overlapping {
+			mergeFunc = disjointChunkSeriesMerger(mergeFunc)
+		}
 		set = storage.NewMergeChunkSeriesSet(sets, mergeFunc)
 	}
 
@@ -220,18 +222,11 @@ func (DefaultBlockPopulator) PopulateBlock(
 		}
 
 		s := set.At()
-		chksIter = s.Iterator(chksIter)
-		chks = chks[:0]
-		for chksIter.Next() {
-			// We are not iterating in a streaming way over chunks as
-			// it's more efficient to do bulk write for index and
-			// chunk file purposes.
-			chks = append(chks, chksIter.At())
-		}
-
-		if err := chksIter.Err(); err != nil {
+		if err := collector.collect(s); err != nil {
 			return fmt.Errorf("chunk iter: %w", err)
 		}
+
+		chks := collector.metas
 
 		// Skip series with all deleted chunks.
 		if len(chks) == 0 {
@@ -411,6 +406,7 @@ type LeveledCompactor struct {
 	maxBlockChunkSegmentSize    int64
 	mergeFunc                   storage.VerticalChunkSeriesMergeFunc
 	postingsEncoder             index.PostingsEncoder
+	defaultChunkMerge           bool
 	enableOverlappingCompaction bool
 }
 
@@ -490,6 +486,7 @@ func NewLeveledCompactorWithOptions(
 		ctx:                         ctx,
 		maxBlockChunkSegmentSize:    maxBlockChunkSegmentSize,
 		mergeFunc:                   mergeFunc,
+		defaultChunkMerge:           opts.MergeFunc == nil,
 		postingsEncoder:             pe,
 		enableOverlappingCompaction: opts.EnableOverlappingCompaction,
 	}, nil
@@ -498,7 +495,7 @@ func NewLeveledCompactorWithOptions(
 // Compact creates a new block in the compactor's directory from the blocks in the
 // provided directories.
 func (c *LeveledCompactor) Compact(dest string, dirs []string, open []*block.Block) ([]ulid.ULID, error) {
-	return c.CompactWithBlockPopulator(dest, dirs, open, DefaultBlockPopulator{})
+	return c.CompactWithBlockPopulator(dest, dirs, open, c.DefaultBlockPopulator())
 }
 
 // CompactWithBlockPopulator compacts the blocks in the provided directories with the given [BlockPopulator].
@@ -636,6 +633,11 @@ func (c *LeveledCompactor) CompactWithBlockPopulatorWithWriteMetaFile(
 	}
 
 	return nil, errors.Join(errs...)
+}
+
+// DefaultBlockPopulator returns a populator configured for the compactor's merge function.
+func (c *LeveledCompactor) DefaultBlockPopulator() DefaultBlockPopulator {
+	return DefaultBlockPopulator{mergeDisjointChunks: c.defaultChunkMerge}
 }
 
 // Plan returns a list of compactable blocks in the provided directory.
