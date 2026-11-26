@@ -335,16 +335,17 @@ func NewMergeSeriesSet(sets []SeriesSet, mergeFunc VerticalSeriesMergeFunc) Seri
 // NOTE: It's up to implementation how series are vertically merged (if chunks are sorted, re-encoded etc).
 type VerticalChunkSeriesMergeFunc func(...ChunkSeries) ChunkSeries
 
-// NewMergeChunkSeriesSet returns a new ChunkSeriesSet that merges many SeriesSet together.
+// NewMergeChunkSeriesSet merges multiple [ChunkSeriesSet] values into one.
 func NewMergeChunkSeriesSet(sets []ChunkSeriesSet, mergeFunc VerticalChunkSeriesMergeFunc) ChunkSeriesSet {
-	genericSets := make([]genericSeriesSet, 0, len(sets))
-	for _, s := range sets {
-		if len(sets) > 1 {
-			genericSets = append(genericSets, &chunkSeriesCursor{ChunkSeriesSet: s})
-			continue
-		}
-		genericSets = append(genericSets, &genericChunkSeriesSetAdapter{s})
+	if len(sets) == 1 {
+		return sets[0]
 	}
+
+	genericSets := make([]genericSeriesSet, len(sets))
+	for i, set := range sets {
+		genericSets[i] = &chunkSeriesCursor{ChunkSeriesSet: set}
+	}
+
 	return &chunkSeriesSetAdapter{newGenericMergeSeriesSet(genericSets, (&chunkSeriesMergerAdapter{VerticalChunkSeriesMergeFunc: mergeFunc}).Merge)}
 }
 
