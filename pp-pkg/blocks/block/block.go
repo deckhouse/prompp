@@ -237,21 +237,26 @@ func (pb *Block) Index() (tsdb.IndexReader, error) {
 	return blockIndexReader{ir: pb.indexr, b: pb}, nil
 }
 
-// IndexForCompaction returns a reader with dense symbol offsets for the duration of compaction.
+// IndexForCompaction returns a reader and the number of dense offset bytes it uses.
+// If the dense table does not fit in maxDenseBytes, the reader uses the original index.
 // Like [Block.Index], the returned reader keeps the block open until it is closed.
-func (pb *Block) IndexForCompaction() (tsdb.IndexReader, error) {
+func (pb *Block) IndexForCompaction(maxDenseBytes uint64) (tsdb.IndexReader, uint64, error) {
 	if err := pb.startRead(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	ir, err := pb.indexr.WithDenseSymbolOffsets()
+	ir, denseBytes, err := pb.indexr.WithDenseSymbolOffsets(maxDenseBytes)
 	if err != nil {
 		pb.pendingReaders.Done()
 
-		return nil, fmt.Errorf("build compaction symbol offsets: %w", err)
+		return nil, 0, fmt.Errorf("build compaction symbol offsets: %w", err)
 	}
 
-	return blockIndexReader{ir: ir, b: pb}, nil
+	if ir == nil {
+		ir = pb.indexr
+	}
+
+	return blockIndexReader{ir: ir, b: pb}, denseBytes, nil
 }
 
 // IsDownsamplingBlock returns true if the block is a downsampling block.

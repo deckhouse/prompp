@@ -56,6 +56,9 @@ const (
 
 	// checkContextEveryNIterations is used in some tight loops to check if the context is done.
 	checkContextEveryNIterations = 128
+
+	// denseSymbolOffsetBytes is the size of one offset in the dense table.
+	denseSymbolOffsetBytes = 4
 )
 
 type indexWriterSeries struct {
@@ -1433,7 +1436,7 @@ func (s Symbols) ReverseLookup(sym string) (uint32, error) {
 
 // Size reports the bytes used by the offset tables.
 func (s Symbols) Size() int {
-	return len(s.offsets)*8 + len(s.denseOffsets)*4
+	return len(s.offsets)*8 + len(s.denseOffsets)*denseSymbolOffsetBytes
 }
 
 func (s Symbols) Iter() StringIter {
@@ -1447,7 +1450,7 @@ func (s Symbols) Iter() StringIter {
 
 // withDenseOffsets builds a view that shares the immutable table and sparse offsets.
 func (s *Symbols) withDenseOffsets() (*Symbols, error) {
-	if s.version == FormatV1 || s.denseOffsets != nil {
+	if s.denseOffsets != nil {
 		return s, nil
 	}
 
@@ -1549,13 +1552,23 @@ func (r *Reader) SymbolTableSize() uint64 {
 	return uint64(r.symbols.Size()) // #nosec G115 // no overflow
 }
 
-// WithDenseSymbolOffsets returns a compaction view of the index with direct symbol lookups.
+// WithDenseSymbolOffsets returns a compaction view and the size in bytes of its dense table.
+// It returns a nil view and zero bytes if no dense table is needed or it exceeds maxBytes.
 // The original reader must remain open until the view is no longer used.
 // Closing the view does not close the original reader.
-func (r *Reader) WithDenseSymbolOffsets() (*Reader, error) {
+func (r *Reader) WithDenseSymbolOffsets(maxBytes uint64) (*Reader, uint64, error) {
+	if r.version == FormatV1 || r.symbols.seen == 0 {
+		return nil, 0, nil
+	}
+
+	size := uint64(r.symbols.seen) * denseSymbolOffsetBytes // #nosec G115 -- seen is a non-negative symbol count.
+	if size > maxBytes {
+		return nil, 0, nil
+	}
+
 	symbols, err := r.symbols.withDenseOffsets()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	view := *r
@@ -1563,7 +1576,7 @@ func (r *Reader) WithDenseSymbolOffsets() (*Reader, error) {
 	view.symbols = symbols
 	view.dec = &Decoder{LookupSymbol: view.lookupSymbol}
 
-	return &view, nil
+	return &view, size, nil
 }
 
 // SortedLabelValues returns value tuples that exist for the given label name.

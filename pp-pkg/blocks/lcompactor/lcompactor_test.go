@@ -1131,6 +1131,56 @@ func TestCompaction_populateBlock(t *testing.T) {
 	}
 }
 
+func TestCompactionIndexSharesDenseOffsetBudget(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	dir := t.TempDir()
+	lset := labels.FromStrings("a", "b")
+	var blocks [2]*block.Block
+	var denseSizes [2]uint64
+	for i, ts := range []int64{1, 2} {
+		series := storage.NewListSeries(lset, []chunks.Sample{testutils.SampleTest{TS: ts, V: 1}})
+		b, err := block.OpenBlock(nil, testutils.CreateBlock(t, dir, []storage.Series{series}), nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, b.Close()) })
+		blocks[i] = b
+
+		reader, err := b.Index()
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, reader.Close()) })
+		symbols := reader.Symbols()
+		for symbols.Next() {
+			denseSizes[i] += 4 // The on-disk symbol count determines the dense table size.
+		}
+		require.NoError(t, symbols.Err())
+	}
+
+	// Act
+	budget := max(denseSizes[0], denseSizes[1]) + 1
+	bytesLeft := budget
+	dense, err := openCompactionIndex(blocks[0], &bytesLeft)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, dense.Close()) })
+	bytesAfterFirst := bytesLeft
+
+	sparse, err := openCompactionIndex(blocks[1], &bytesLeft)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sparse.Close()) })
+
+	// Assert
+	require.Equal(t, budget-denseSizes[0], bytesAfterFirst)
+	require.Equal(t, bytesAfterFirst, bytesLeft)
+	for _, reader := range []tsdb.IndexReader{dense, sparse} {
+		postings := AllSortedPostings(ctx, reader)
+		require.True(t, postings.Next())
+		builder := labels.NewScratchBuilder(1)
+		require.NoError(t, reader.Series(postings.At(), &builder, nil))
+		require.Equal(t, lset, builder.Labels())
+		require.False(t, postings.Next())
+		require.NoError(t, postings.Err())
+	}
+}
+
 func TestCompact_SingleCorruptedBlockDoesNotPanic(t *testing.T) {
 	t.Parallel()
 

@@ -556,8 +556,15 @@ func TestReaderWithDenseSymbolOffsets(t *testing.T) {
 	ref := p.At()
 
 	// Act
-	view, err := ir.WithDenseSymbolOffsets()
+	const denseBytes = uint64(count+1) * 4
+	sparse, used, err := ir.WithDenseSymbolOffsets(denseBytes - 1)
 	require.NoError(t, err)
+	require.Nil(t, sparse)
+	require.Zero(t, used)
+
+	view, used, err := ir.WithDenseSymbolOffsets(denseBytes)
+	require.NoError(t, err)
+	require.Equal(t, denseBytes, used)
 	builder := labels.NewScratchBuilder(1)
 	require.NoError(t, view.Series(ref, &builder, nil))
 
