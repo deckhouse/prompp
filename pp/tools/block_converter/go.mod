@@ -3,7 +3,7 @@ module blockgenerator
 go 1.26.0
 
 require (
-	github.com/alecthomas/kong v0.6.1
+	github.com/alecthomas/kong v0.9.0
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/prometheus/prometheus v0.55.1
 	go.uber.org/zap v1.24.0
