@@ -512,6 +512,23 @@ func TestCompactingChunkSeriesMerger(t *testing.T) {
 				[]chunks.Sample{fSample{5, 50}, fSample{6, 6}, fSample{7, 7}}),
 		},
 		{
+			name: "four inputs preserve heap tie order",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 20}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 30}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 40}, fSample{6, 6}, fSample{7, 7}}),
+			},
+			// Skipping Push/Pop with three peers would select 20 instead of 40 at t=5.
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1),
+				[]chunks.Sample{fSample{5, 40}, fSample{6, 6}, fSample{7, 7}}),
+		},
+		{
 			name: "two separate overlaps with split output",
 			input: []ChunkSeries{
 				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
