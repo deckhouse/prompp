@@ -898,21 +898,28 @@ func (w *Writer) writePostingsToTmpFiles() error {
 	maxPostings := uint64(len(offsets)) // No label name can have more postings than this.
 
 	for len(names) > 0 {
-		batchNames := []string{}
-		var c uint64
+		var batchLen int
+		var batchPostings uint64
 		// Try to bunch up label names into one loop, but avoid
 		// using more memory than a single label name can.
-		for len(names) > 0 {
-			if w.labelNames[names[0]]+c > maxPostings {
-				if c > 0 {
+		for _, name := range names {
+			count := w.labelNames[name]
+			if batchPostings+count > maxPostings {
+				if batchPostings > 0 {
 					break
 				}
-				return fmt.Errorf("corruption detected when writing postings to index: label %q has %d uses, but maxPostings is %d", names[0], w.labelNames[names[0]], maxPostings)
+				return fmt.Errorf(
+					"corruption detected when writing postings to index: label %q has %d uses, but maxPostings is %d",
+					name,
+					count,
+					maxPostings,
+				)
 			}
-			batchNames = append(batchNames, names[0])
-			c += w.labelNames[names[0]]
-			names = names[1:]
+			batchLen++
+			batchPostings += count
 		}
+		batchNames := names[:batchLen]
+		names = names[batchLen:]
 
 		nameSymbols := map[uint32]string{}
 		for _, name := range batchNames {
