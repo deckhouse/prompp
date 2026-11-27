@@ -1449,7 +1449,9 @@ func (ll *LazyLoader) clear() error {
 		return err
 	}
 
-	clock := clockwork.NewRealClock()
+	// Keep storage timers frozen while rule evaluation advances independently.
+	// Start just after the epoch because the catalog uses timestamp zero as a sentinel.
+	clock := clockwork.NewFakeClockAt(testStartTime.Add(time.Millisecond))
 	headCatalog, err := makeCatalog(clock, ll.fileLog)
 	if err != nil {
 		return errors.Join(err, ll.fileLog.Close())
