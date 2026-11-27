@@ -718,6 +718,59 @@ func TestCompactingChunkSeriesMergerHistogramCounterResetHint(t *testing.T) {
 	}
 }
 
+// TestCompactingChunkSeriesMergerReuse discards unread chunks and errors from the preceding series.
+func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
+	lset := labels.FromStrings("job", "overlap")
+	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
+	readErr := errors.New("failed to read input chunks")
+	failingInput := &ChunkSeriesEntry{
+		Lset: lset,
+		ChunkIteratorFn: func(chunks.Iterator) chunks.Iterator {
+			return errChunksIterator{err: readErr}
+		},
+	}
+	previous := merge(
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{1, 1}}),
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{100, 100}}),
+		failingInput,
+	).Iterator(nil)
+	require.True(t, previous.Next())
+	require.ErrorIs(t, previous.Err(), readErr)
+
+	next := merge(
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{10, 10}, fSample{11, 11}}),
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{11, 11}, fSample{12, 12}}),
+	).Iterator(previous)
+	require.Same(t, previous, next)
+	got, err := ExpandChunks(next)
+	require.NoError(t, err)
+	require.Equal(t, chunks.GenerateSamples(10, 3), chunks.ChunkMetasToSamples(got))
+}
+
+// TestCompactingChunkSeriesMergerReusesInputIterators checks that the input gets its previous iterator.
+func TestCompactingChunkSeriesMergerReusesInputIterators(t *testing.T) {
+	lset := labels.FromStrings("job", "overlap")
+	input := NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(1, 3))
+	other := NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(2, 3))
+	iteratorFn := input.ChunkIteratorFn
+	var received, returned chunks.Iterator
+	input.ChunkIteratorFn = func(reuse chunks.Iterator) chunks.Iterator {
+		received = reuse
+		returned = iteratorFn(reuse)
+		return returned
+	}
+
+	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
+	merged := merge(input, other)
+	previous := merged.Iterator(nil)
+	wantReuse := returned
+	_, err := ExpandChunks(previous)
+	require.NoError(t, err)
+
+	merged.Iterator(previous)
+	require.Same(t, wantReuse, received)
+}
+
 func TestConcatenatingChunkSeriesMerger(t *testing.T) {
 	m := NewConcatenatingChunkSeriesMerger()
 

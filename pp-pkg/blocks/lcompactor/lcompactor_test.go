@@ -856,6 +856,10 @@ func TestCompaction_populateBlock(t *testing.T) {
 						Lset:   map[string]string{"a": "1", "b": "3"},
 						Chunks: samplesForRange(480, 1199, 120),
 					},
+					{
+						Lset:   map[string]string{"a": "1", "b": "4"},
+						Chunks: samplesForRange(480, 1199, 120),
+					},
 				},
 				{
 					{
@@ -883,7 +887,7 @@ func TestCompaction_populateBlock(t *testing.T) {
 				},
 				{
 					Lset:   map[string]string{"a": "1", "b": "4"},
-					Chunks: samplesForRange(960, 1499, 120),
+					Chunks: samplesForRange(480, 1499, 120),
 				},
 			},
 		},
