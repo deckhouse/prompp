@@ -100,9 +100,7 @@ func NewDecodedProtobuf(b []byte, stats DecodedSegmentStats) *DecodedProtobuf {
 		buf:                 b,
 		DecodedSegmentStats: stats,
 	}
-	runtime.SetFinalizer(p, func(p *DecodedProtobuf) {
-		freeBytes(p.buf)
-	})
+	runtime.AddCleanup(p, freeBytes, p.buf)
 	return p
 }
 
@@ -113,13 +111,17 @@ func (p *DecodedProtobuf) Size() int64 {
 
 // CRC32 calculate crc32 sum.
 func (p *DecodedProtobuf) CRC32() uint32 {
-	return crc32.ChecksumIEEE(p.buf)
+	sum := crc32.ChecksumIEEE(p.buf)
+	runtime.KeepAlive(p)
+
+	return sum
 }
 
 // WriteTo - implements io.WriterTo interface.
 func (p *DecodedProtobuf) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(p.buf)
 	runtime.KeepAlive(p)
+
 	return int64(n), err
 }
 
@@ -181,9 +183,7 @@ func NewWALDecoder(encodersVersion uint8) *WALDecoder {
 	d := &WALDecoder{
 		decoder: walDecoderCtor(encodersVersion),
 	}
-	runtime.SetFinalizer(d, func(d *WALDecoder) {
-		walDecoderDtor(d.decoder)
-	})
+	runtime.AddCleanup(d, walDecoderDtor, d.decoder)
 	return d
 }
 
@@ -231,6 +231,7 @@ func (d *WALDecoder) DecodeDry(ctx context.Context, segment []byte) (uint32, err
 	}
 
 	segmentID, exception := walDecoderDecodeDry(d.decoder, segment)
+	runtime.KeepAlive(d)
 	return segmentID, handleException(exception)
 }
 
@@ -293,32 +294,53 @@ func (s OutputDecoderStats) SampleCount() uint32 {
 	return s.sampleCount
 }
 
-// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList.
-type SegmentSamplesStorageList struct {
+//
+// segmentSamplesStorageListCPP
+//
+
+// segmentSamplesStorageListCPP mirrors PromPP::WAL::SegmentSamplesStorageList.
+type segmentSamplesStorageListCPP struct {
 	storages []CppSegmentSamplesStorage
 }
 
-func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
-	return &s.storages[segmentID]
+//
+// SegmentSamplesStorageList
+//
+
+// SegmentSamplesStorageList owns the C++ sample storage for a remote-write batch.
+type SegmentSamplesStorageList struct {
+	cppList *segmentSamplesStorageListCPP
 }
 
+// NewSegmentSamplesStorage creates a new [SegmentSamplesStorageList].
 func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
-	s := &SegmentSamplesStorageList{}
-	walSegmentSamplesStorageListCtor(count, s)
-	runtime.SetFinalizer(s, func(s *SegmentSamplesStorageList) {
-		walSegmentSamplesStorageListDtor(s)
-	})
+	// The native list must keep the same address through destruction. Allocate it
+	// separately so the cleanup can retain it without retaining the Go owner.
+	s := &SegmentSamplesStorageList{cppList: new(segmentSamplesStorageListCPP)}
+	walSegmentSamplesStorageListCtor(count, s.cppList)
+	runtime.AddCleanup(s, walSegmentSamplesStorageListDtor, s.cppList)
 
 	return s
 }
 
+// ClearSegmentSamplesStorage clears the segment samples storage.
 func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 	walSegmentSamplesStorageClear(storage)
 }
 
+// Get returns the segment samples storage by segment ID.
+// The caller must keep the list alive while using the returned storage.
+func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
+	return &s.cppList.storages[segmentID]
+}
+
 // SplitMessages splits the storage list into messages by samples per message.
+// The caller must keep the list alive until the messages have been encoded.
 func (s *SegmentSamplesStorageList) SplitMessages(messageSamplesThreshold, targetSegmentID uint32) *RWMessageList {
-	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(s, messageSamplesThreshold))
+	messages := walSegmentSamplesStorageListSplitMessages(s.cppList, messageSamplesThreshold)
+	runtime.KeepAlive(s)
+
+	return NewRWMessageList(targetSegmentID, messages)
 }
 
 //
@@ -356,9 +378,7 @@ func NewWALOutputDecoder(
 		encodersVersion,
 	)
 
-	runtime.SetFinalizer(d, func(d *WALOutputDecoder) {
-		walOutputDecoderDtor(d.decoder)
-	})
+	runtime.AddCleanup(d, walOutputDecoderDtor, d.decoder)
 	return d
 }
 
@@ -446,9 +466,7 @@ func NewSnappyProtobufEncodedData(stats protobufEncoderStats, b []byte) *SnappyP
 		protobufEncoderStats: stats,
 		b:                    b,
 	}
-	runtime.SetFinalizer(sped, func(sped *SnappyProtobufEncodedData) {
-		freeBytes(sped.b)
-	})
+	runtime.AddCleanup(sped, freeBytes, sped.b)
 
 	return sped
 }

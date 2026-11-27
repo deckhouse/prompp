@@ -149,6 +149,8 @@ class CompactSequencePublicationFixture : public testing::TestWithParam<CompactS
 
   class ObservedControlBlock : public SharedPtrControlBlockWithItemCount {
    public:
+    using SharedPtrControlBlockWithItemCount::SharedPtrControlBlockWithItemCount;
+
     void set_items_count(ItemCounter count) noexcept {
       fixture_->record_publication(count);
       SharedPtrControlBlockWithItemCount::set_items_count(count);

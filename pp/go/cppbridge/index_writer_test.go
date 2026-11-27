@@ -1,55 +1,28 @@
 package cppbridge_test
 
 import (
+	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 )
 
-type IndexWriterSuite struct {
-	suite.Suite
-	lssStorage *cppbridge.LabelSetStorage
-	writer     *cppbridge.IndexWriter
-}
-
-func (s *IndexWriterSuite) setLabelSets(label_sets []model.LabelSet) {
-	for _, label_set := range label_sets {
-		s.lssStorage.FindOrEmplace(label_set)
-	}
-}
-
-func (s *IndexWriterSuite) writePostings(max_batch_size uint32) []byte {
-	var bytes []byte
-	for {
-		data, has_more_data := s.writer.WriteNextPostingsBatch(max_batch_size)
-		bytes = append(bytes, data...)
-		if !has_more_data {
-			break
-		}
-	}
-	return bytes
-}
-
-func TestIndexWriterSuite(t *testing.T) {
-	suite.Run(t, new(IndexWriterSuite))
-}
-
-func (s *IndexWriterSuite) SetupTest() {
-	s.lssStorage = cppbridge.NewQueryableLssStorage()
-}
-
-func (s *IndexWriterSuite) TestWriteFullIndex() {
+func TestIndexWriterWritesFullIndex(t *testing.T) {
 	// Arrange
-	s.setLabelSets([]model.LabelSet{
+	lss := cppbridge.NewQueryableLssStorage()
+	labelSets := []model.LabelSet{
 		model.NewLabelSetBuilder().Set("job", "cron").Set("server", "localhost").Set("process", "php").Build(),
 		model.NewLabelSetBuilder().Set("job", "cro1").Set("server", "127.0.0.1").Set("process", "nodejs").Build(),
 		model.NewLabelSetBuilder().Set("joa", "cron").Set("server", "127.0.0.1").Set("process", "nodejs").Build(),
-	})
+	}
+	for _, labelSet := range labelSets {
+		lss.FindOrEmplace(labelSet)
+	}
 
-	chunk_metadata_list := [][]cppbridge.ChunkMetadata{
+	chunkMetadata := [][]cppbridge.ChunkMetadata{
 		{
 			{MinTimestamp: 1000, MaxTimestamp: 2001, Reference: 0},
 			{MinTimestamp: 2002, MaxTimestamp: 4004, Reference: 100},
@@ -63,22 +36,40 @@ func (s *IndexWriterSuite) TestWriteFullIndex() {
 			{MinTimestamp: 2002, MaxTimestamp: 4004, Reference: 550},
 		},
 	}
-	s.writer = cppbridge.NewIndexWriter(s.lssStorage)
+	writer := cppbridge.NewIndexWriter(lss)
+	var index bytes.Buffer
 
 	// Act
-	index := append([]byte(nil), s.writer.WriteHeader()...)
-	index = append(index, s.writer.WriteSymbols()...)
-	index = append(index, s.writer.WriteSeries(2, chunk_metadata_list[2])...)
-	index = append(index, s.writer.WriteSeries(1, chunk_metadata_list[1])...)
-	index = append(index, s.writer.WriteSeries(0, chunk_metadata_list[0])...)
-	index = append(index, s.writer.WriteLabelIndices()...)
-	index = append(index, s.writePostings(16)...)
-	index = append(index, s.writer.WriteLabelIndicesTable()...)
-	index = append(index, s.writer.WritePostingsTableOffsets()...)
-	index = append(index, s.writer.WriteTableOfContents()...)
+	_, err := writer.WriteHeaderTo(&index)
+	require.NoError(t, err)
+	_, err = writer.WriteSymbolsTo(&index)
+	require.NoError(t, err)
+	_, err = writer.WriteSeriesTo(2, chunkMetadata[2], &index)
+	require.NoError(t, err)
+	_, err = writer.WriteSeriesTo(1, chunkMetadata[1], &index)
+	require.NoError(t, err)
+	_, err = writer.WriteSeriesTo(0, chunkMetadata[0], &index)
+	require.NoError(t, err)
+	_, err = writer.WriteLabelIndicesTo(&index)
+	require.NoError(t, err)
+
+	for {
+		_, hasMore, errWrite := writer.WriteNextPostingsBatchTo(16, &index)
+		require.NoError(t, errWrite)
+		if !hasMore {
+			break
+		}
+	}
+
+	_, err = writer.WriteLabelIndicesTableTo(&index)
+	require.NoError(t, err)
+	_, err = writer.WritePostingsTableOffsetsTo(&index)
+	require.NoError(t, err)
+	_, err = writer.WriteTableOfContentsTo(&index)
+	require.NoError(t, err)
 
 	// Assert
-	s.Equal([]byte{
+	require.Equal(t, []byte{
 		0xba, 0xaa, 0xd7, 0x00, 0x02, 0x00, 0x00, 0x00, 0x45, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x09, 0x31,
 		0x32, 0x37, 0x2e, 0x30, 0x2e, 0x30, 0x2e, 0x31, 0x04, 0x63, 0x72, 0x6f, 0x31, 0x04, 0x63, 0x72,
 		0x6f, 0x6e, 0x03, 0x6a, 0x6f, 0x61, 0x03, 0x6a, 0x6f, 0x62, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c,
@@ -120,5 +111,5 @@ func (s *IndexWriterSuite) TestWriteFullIndex() {
 		0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x52, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xac, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 		0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xdb, 0xe1, 0x3a, 0xf5, 0x9b,
-	}, index)
+	}, index.Bytes())
 }

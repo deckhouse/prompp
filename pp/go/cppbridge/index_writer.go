@@ -1,6 +1,7 @@
 package cppbridge
 
 import (
+	"io"
 	"runtime"
 	"unsafe"
 )
@@ -17,8 +18,6 @@ type ChunkMetadata struct {
 // stable addresses handed out once by the constructor; Go reads them here without an extra cgo
 // call. Go::Slice mirrors the Go slice header layout (data, len, cap) precisely for exactly this
 // use, so the buffer pointer is a *[]byte and the flag a *uint8 — no per-read reinterpretation.
-// The returned bytes alias prompp-owned memory and stay valid only until the next write_* call or
-// until the writer is finalized, so callers must consume them before then.
 type indexWriterOutput struct {
 	buffer          *[]byte
 	hasMorePostings *uint8
@@ -41,6 +40,8 @@ func (o indexWriterOutput) hasMore() bool {
 	return *o.hasMorePostings != 0
 }
 
+// IndexWriter serializes index sections to an [io.Writer] using a reusable C++ buffer.
+// Its write methods must not be used concurrently or reentrantly.
 type IndexWriter struct {
 	writer unsafe.Pointer
 	output indexWriterOutput
@@ -54,51 +55,76 @@ func NewIndexWriter(lss *LabelSetStorage) *IndexWriter {
 		output: newIndexWriterOutput(buffer, hasMorePostings),
 		lss:    lss,
 	}
-	runtime.SetFinalizer(writer, func(writer *IndexWriter) {
-		indexWriterDtor(writer.writer)
-	})
+	runtime.AddCleanup(writer, indexWriterDtor, writer.writer)
 	return writer
 }
 
-func (writer *IndexWriter) WriteHeader() []byte {
+// WriteHeaderTo writes the index header to dst.
+func (writer *IndexWriter) WriteHeaderTo(dst io.Writer) (int, error) {
 	indexWriterWriteHeader(writer.writer)
-	return writer.output.bytes()
+
+	return writer.writeTo(dst)
 }
 
-func (writer *IndexWriter) WriteSymbols() []byte {
-	indexWriterWriteSymbols(writer.writer)
-	return writer.output.bytes()
-}
-
-func (writer *IndexWriter) WriteSeries(ls_id uint32, chunks_meta []ChunkMetadata) []byte {
-	indexWriterWriteNextSeriesBatch(writer.writer, ls_id, chunks_meta)
-	return writer.output.bytes()
-}
-
-func (writer *IndexWriter) WriteLabelIndices() []byte {
-	indexWriterWriteLabelIndices(writer.writer)
-	return writer.output.bytes()
-}
-
-// WriteNextPostingsBatch writes one postings batch (up to maxBatchSize bytes) into the writer's
-// internal buffer and reports whether more batches remain. The returned slice aliases prompp-owned
-// memory and is valid only until the next write_* call, so callers must consume it before looping.
-func (writer *IndexWriter) WriteNextPostingsBatch(maxBatchSize uint32) ([]byte, bool) {
-	indexWriterWritePostings(writer.writer, maxBatchSize)
-	return writer.output.bytes(), writer.output.hasMore()
-}
-
-func (writer *IndexWriter) WriteLabelIndicesTable() []byte {
+// WriteLabelIndicesTableTo writes the label indices table to dst.
+func (writer *IndexWriter) WriteLabelIndicesTableTo(dst io.Writer) (int, error) {
 	indexWriterWriteLabelIndicesTable(writer.writer)
-	return writer.output.bytes()
+
+	return writer.writeTo(dst)
 }
 
-func (writer *IndexWriter) WritePostingsTableOffsets() []byte {
+// WriteLabelIndicesTo writes the label indices to dst.
+func (writer *IndexWriter) WriteLabelIndicesTo(dst io.Writer) (int, error) {
+	indexWriterWriteLabelIndices(writer.writer)
+
+	return writer.writeTo(dst)
+}
+
+// WriteNextPostingsBatchTo writes one batch to dst and reports whether more postings remain.
+// The size threshold is checked between postings, so a batch can exceed maxBatchSize.
+func (writer *IndexWriter) WriteNextPostingsBatchTo(
+	maxBatchSize uint32,
+	dst io.Writer,
+) (n int, hasMore bool, err error) {
+	indexWriterWritePostings(writer.writer, maxBatchSize)
+	hasMore = writer.output.hasMore()
+	n, err = writer.writeTo(dst)
+
+	return n, hasMore, err
+}
+
+// WritePostingsTableOffsetsTo writes the postings table offsets to dst.
+func (writer *IndexWriter) WritePostingsTableOffsetsTo(dst io.Writer) (int, error) {
 	indexWriterWritePostingsTableOffsets(writer.writer)
-	return writer.output.bytes()
+
+	return writer.writeTo(dst)
 }
 
-func (writer *IndexWriter) WriteTableOfContents() []byte {
+// WriteSeriesTo writes the series identified by id and its chunk metadata to dst.
+func (writer *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, dst io.Writer) (int, error) {
+	indexWriterWriteNextSeriesBatch(writer.writer, id, chunks)
+
+	return writer.writeTo(dst)
+}
+
+// WriteSymbolsTo writes the index symbol table to dst.
+func (writer *IndexWriter) WriteSymbolsTo(dst io.Writer) (int, error) {
+	indexWriterWriteSymbols(writer.writer)
+
+	return writer.writeTo(dst)
+}
+
+// WriteTableOfContentsTo writes the index table of contents to dst.
+func (writer *IndexWriter) WriteTableOfContentsTo(dst io.Writer) (int, error) {
 	indexWriterWriteTableOfContents(writer.writer)
-	return writer.output.bytes()
+
+	return writer.writeTo(dst)
+}
+
+// writeTo keeps the C++ buffer valid until dst.Write returns.
+func (writer *IndexWriter) writeTo(dst io.Writer) (int, error) {
+	n, err := dst.Write(writer.output.bytes())
+	runtime.KeepAlive(writer)
+
+	return n, err
 }

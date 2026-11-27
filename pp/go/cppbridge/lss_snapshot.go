@@ -5,21 +5,55 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/prometheus/prometheus/pp/go/util"
+)
+
+const (
+	// cppObjectsCreateMetricName identifies the counter family for C++ object creation.
+	cppObjectsCreateMetricName = "prompp_cppbridge_cpp_objects_create_count"
+	// cppObjectsCreateMetricHelp is shared by all object types in the creation counter family.
+	cppObjectsCreateMetricHelp = "Total number of created C++ objects."
+	// cppObjectsFinalizeMetricName identifies the counter family for C++ object release.
+	cppObjectsFinalizeMetricName = "prompp_cppbridge_cpp_objects_finalize_count"
+	// cppObjectsFinalizeMetricHelp is shared by all object types in the release counter family.
+	cppObjectsFinalizeMetricHelp = "Current number of finalized C++ objects."
 )
 
 var (
-	snapshotCreate = promauto.NewCounter(
+	// snapshotCreate counts newly created [LabelSetSnapshot] objects.
+	snapshotCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_create_count",
-			Help: "Current number of created snapshots.",
+			Name:        cppObjectsCreateMetricName,
+			Help:        cppObjectsCreateMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "label_set_snapshot"},
 		},
 	)
 
-	snapshotFinalize = promauto.NewCounter(
+	// snapshotFinalize counts [LabelSetSnapshot] objects released by the runtime cleanup.
+	snapshotFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_finalize_count",
-			Help: "Current number of finalized snapshots.",
+			Name:        cppObjectsFinalizeMetricName,
+			Help:        cppObjectsFinalizeMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "label_set_snapshot"},
+		},
+	)
+
+	// lsQueryResultCreate counts [LSSQueryResult] objects that own C++ buffers.
+	lsQueryResultCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        cppObjectsCreateMetricName,
+			Help:        cppObjectsCreateMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "lss_query_result"},
+		},
+	)
+
+	// lsQueryResultFinalize counts [LSSQueryResult] objects whose C++ buffers were released.
+	lsQueryResultFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        cppObjectsFinalizeMetricName,
+			Help:        cppObjectsFinalizeMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "lss_query_result"},
 		},
 	)
 )
@@ -40,11 +74,10 @@ type LabelSetSnapshot struct {
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(snapshotPtr uintptr) *LabelSetSnapshot {
 	lsst := &LabelSetSnapshot{pointer: snapshotPtr, gcDestroyDetector: &gcDestroyDetector}
-	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
-		primitivesSnapshotDtor(l.pointer)
-
+	runtime.AddCleanup(lsst, func(pointer uintptr) {
+		primitivesSnapshotDtor(pointer)
 		snapshotFinalize.Inc()
-	})
+	}, snapshotPtr)
 
 	snapshotCreate.Inc()
 
@@ -71,6 +104,8 @@ func (lss *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) 
 	return nil
 }
 
+// Serialize returns the label set for lsID as binary data with length-prefixed names and values.
+// The returned string remains valid after the snapshot is released.
 func (lss *LabelSetSnapshot) Serialize(lsID uint32) string {
 	length := labelSetSerializeFromSnapshotLength(lss.pointer, lsID)
 	if length == 0 {
@@ -80,7 +115,7 @@ func (lss *LabelSetSnapshot) Serialize(lsID uint32) string {
 	buf := make([]byte, length)
 	labelSetSerializeFromSnapshotToBuffer(lss.pointer, lsID, buf)
 	runtime.KeepAlive(lss)
-	return unsafe.String(unsafe.SliceData(buf), length)
+	return unsafe.String(unsafe.SliceData(buf), length) // #nosec G103 // it's meant to be that way
 }
 
 // Query returns a LSSQueryResult that matches the given selector.
@@ -101,19 +136,18 @@ func (lss *LabelSetSnapshot) GroupSeriesByLabelNames(seriesIDs, labelNameIDs []u
 	result := &SeriesGroups{
 		Groups: primitivesGroupSeriesByLabelNames(lss.pointer, seriesIDs, labelNameIDs),
 	}
-	runtime.SetFinalizer(result, func(result *SeriesGroups) {
-		primitivesGroupSeriesByLabelNamesFree(result.Groups)
-	})
-
+	runtime.AddCleanup(result, primitivesGroupSeriesByLabelNamesFree, result.Groups)
 	runtime.KeepAlive(lss)
 	return result
 }
 
+// IdsMapping maps destination series IDs to their source IDs after [LabelSetSnapshot.CopyAddedSeries].
 type IdsMapping struct {
 	pointer           uintptr
 	gcDestroyDetector *uint64
 }
 
+// IsEmpty reports whether there is no underlying C++ mapping.
 func (m *IdsMapping) IsEmpty() bool {
 	return m.pointer == uintptr(0)
 }
@@ -125,10 +159,7 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 		pointer:           primitivesSnapshotLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
 		gcDestroyDetector: &gcDestroyDetector,
 	}
-	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
-		primitivesFreeLsIdsMapping(idsMapping.pointer)
-	})
-
+	runtime.AddCleanup(idsMapping, primitivesFreeLsIdsMapping, idsMapping.pointer)
 	runtime.KeepAlive(lss)
 	runtime.KeepAlive(bitsetSeries)
 	runtime.KeepAlive(destination)
@@ -159,6 +190,12 @@ func newLSSQueryResult(
 		status:          status,
 	}
 
+	if !lqr.hasNativeBuffers() {
+		return lqr
+	}
+
+	lsQueryResultCreate.Inc()
+
 	if status != LSSQueryStatusMatch {
 		lqr.Close()
 
@@ -176,7 +213,7 @@ func newLSSQueryResult(
 // It is idempotent: subsequent calls (and the finalizer) are no-ops.
 // After Close the result must not be read anymore.
 func (r *LSSQueryResult) Close() {
-	if r.matches == nil && r.labelSetLengths == nil {
+	if !r.hasNativeBuffers() {
 		return
 	}
 
@@ -184,8 +221,10 @@ func (r *LSSQueryResult) Close() {
 	primitivesLabelSetMatchesFree(r)
 	r.matches = nil
 	r.labelSetLengths = nil
+	lsQueryResultFinalize.Inc()
 }
 
+// IndexOf returns the index of seriesID in the result, or -1 if the series does not match.
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
 	for i, match := range r.matches {
 		if match == seriesID {
@@ -195,6 +234,8 @@ func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
 	return -1
 }
 
+// LengthBySeriesID returns the label count and index for seriesID, searching from searchFrom.
+// It returns (0, -1) if the series is not found at or after that index.
 func (r *LSSQueryResult) LengthBySeriesID(seriesID uint32, searchFrom int) (length uint16, index int) {
 	for {
 		if searchFrom > len(r.matches)-1 {
@@ -232,4 +273,9 @@ func (r *LSSQueryResult) Len() int {
 // Status query execution.
 func (r *LSSQueryResult) Status() uint32 {
 	return r.status
+}
+
+// hasNativeBuffers reports whether the result owns any C++ buffer.
+func (r *LSSQueryResult) hasNativeBuffers() bool {
+	return r.matches != nil || r.labelSetLengths != nil
 }

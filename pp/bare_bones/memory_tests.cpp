@@ -1,4 +1,11 @@
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <barrier>
+#include <cstdint>
+#include <cstring>
 #include <numeric>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -192,8 +199,8 @@ TEST_F(SharedPtrFixture, Empty) {
   const SharedPtr<uint8_t> ptr;
 
   // Assert
-  EXPECT_TRUE(ptr.non_atomic_is_unique());
-  EXPECT_EQ(0U, ptr.non_atomic_ref_count());
+  EXPECT_TRUE(ptr.is_unique());
+  EXPECT_EQ(0U, ptr.use_count());
   EXPECT_EQ(nullptr, ptr.get());
 }
 
@@ -204,8 +211,8 @@ TEST_F(SharedPtrFixture, ConstructorWithSize) {
   const SharedPtr<uint8_t> ptr(16, 0);
 
   // Assert
-  EXPECT_TRUE(ptr.non_atomic_is_unique());
-  EXPECT_EQ(1U, ptr.non_atomic_ref_count());
+  EXPECT_TRUE(ptr.is_unique());
+  EXPECT_EQ(1U, ptr.use_count());
   EXPECT_NE(nullptr, ptr.get());
 }
 
@@ -218,8 +225,47 @@ TEST_F(SharedPtrFixture, Reallocate) {
   ptr.get()[31] = '\x00';
 
   // Assert
-  EXPECT_TRUE(ptr.non_atomic_is_unique());
-  EXPECT_EQ(1U, ptr.non_atomic_ref_count());
+  EXPECT_TRUE(ptr.is_unique());
+  EXPECT_EQ(1U, ptr.use_count());
+}
+
+template <size_t kOldAllocationSize>
+struct MovingReallocator : DefaultReallocator {
+  static void* reallocate(void* memory, size_t size) {
+    auto* result = allocate(size);
+    if (result != nullptr && memory != nullptr) {
+      std::memcpy(result, memory, std::min(size, kOldAllocationSize));
+      free(memory);
+    }
+    return result;
+  }
+};
+
+struct CountingControlBlock : BareBones::AtomicSharedPtrControlBlockWithItemCount {
+  static inline uint32_t constructions{};
+
+  explicit CountingControlBlock(ItemCounter items_count) noexcept : AtomicSharedPtrControlBlockWithItemCount(items_count) { ++constructions; }
+};
+
+TEST_F(SharedPtrFixture, MovingReallocatePreservesMetadataAndPayload) {
+  // Arrange
+  constexpr std::array<uint8_t, 4> kPayload{10, 20, 30, 40};
+  constexpr uint32_t kItemCount = 3;
+  using Reallocator = MovingReallocator<sizeof(CountingControlBlock) + kPayload.size()>;
+  BareBones::SharedPtr<uint8_t, CountingControlBlock, Reallocator> ptr(kPayload.size(), kItemCount);
+  const auto constructions_before = CountingControlBlock::constructions;
+  std::memcpy(ptr.get(), kPayload.data(), kPayload.size());
+  const auto original_address = reinterpret_cast<uintptr_t>(ptr.get());
+
+  // Act
+  ptr.reallocate(kPayload.size(), 32);
+
+  // Assert
+  EXPECT_NE(original_address, reinterpret_cast<uintptr_t>(ptr.get()));
+  ASSERT_EQ(constructions_before + 1, CountingControlBlock::constructions);
+  EXPECT_EQ(1U, ptr.use_count());
+  EXPECT_EQ(kItemCount, ptr.items_count());
+  EXPECT_TRUE(std::equal(kPayload.begin(), kPayload.end(), ptr.get()));
 }
 
 TEST_F(SharedPtrFixture, CopyConstructor) {
@@ -231,9 +277,9 @@ TEST_F(SharedPtrFixture, CopyConstructor) {
   const auto ptr2 = ptr;
 
   // Assert
-  EXPECT_FALSE(ptr.non_atomic_is_unique());
-  EXPECT_FALSE(ptr2.non_atomic_is_unique());
-  EXPECT_EQ(2U, ptr.non_atomic_ref_count());
+  EXPECT_FALSE(ptr.is_unique());
+  EXPECT_FALSE(ptr2.is_unique());
+  EXPECT_EQ(2U, ptr.use_count());
   EXPECT_EQ(ptr.get(), ptr2.get());
 }
 
@@ -246,10 +292,37 @@ TEST_F(SharedPtrFixture, CopyOperator) {
   ptr2 = ptr;
 
   // Assert
-  EXPECT_FALSE(ptr.non_atomic_is_unique());
-  EXPECT_FALSE(ptr2.non_atomic_is_unique());
-  EXPECT_EQ(2U, ptr.non_atomic_ref_count());
+  EXPECT_FALSE(ptr.is_unique());
+  EXPECT_FALSE(ptr2.is_unique());
+  EXPECT_EQ(2U, ptr.use_count());
   EXPECT_EQ(ptr.get(), ptr2.get());
+}
+
+struct CountingReallocator : DefaultReallocator {
+  static inline std::atomic_uint32_t frees{};
+
+  static void free(void* memory) {
+    ++frees;
+    DefaultReallocator::free(memory);
+  }
+};
+
+TEST_F(SharedPtrFixture, ConcurrentRelease) {
+  // Arrange
+  BareBones::SharedPtr<uint8_t, BareBones::AtomicSharedPtrControlBlockWithItemCount, CountingReallocator> ptr(16, 0);
+  std::barrier release(2);
+
+  // Act
+  std::jthread owner([copy = ptr, &release]() mutable {
+    release.arrive_and_wait();
+    copy.clear();
+  });
+  release.arrive_and_wait();
+  ptr.clear();
+  owner.join();
+
+  // Assert
+  EXPECT_EQ(1U, CountingReallocator::frees.exchange(0));
 }
 
 TEST_F(SharedPtrFixture, MoveConstructor) {
@@ -260,7 +333,7 @@ TEST_F(SharedPtrFixture, MoveConstructor) {
   const auto ptr2 = std::move(ptr);
 
   // Assert
-  EXPECT_EQ(1U, ptr2.non_atomic_ref_count());
+  EXPECT_EQ(1U, ptr2.use_count());
   EXPECT_NE(nullptr, ptr2.get());
 }
 
@@ -274,7 +347,7 @@ TEST_F(SharedPtrFixture, MoveOperator) {
   ptr2 = std::move(ptr);
 
   // Assert
-  EXPECT_EQ(1U, ptr2.non_atomic_ref_count());
+  EXPECT_EQ(1U, ptr2.use_count());
   EXPECT_EQ(ptr_memory, ptr2.get());
 }
 
@@ -301,7 +374,7 @@ TEST_F(SharedPtrFixture, ReallocateToZeroSize) {
   ptr.reallocate(1, 0);
 
   // Assert
-  EXPECT_TRUE(ptr.non_atomic_is_unique());
+  EXPECT_TRUE(ptr.is_unique());
 }
 
 TEST_F(SharedPtrFixture, ReallocateToSmallerSize) {

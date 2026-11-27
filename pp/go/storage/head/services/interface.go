@@ -81,7 +81,7 @@ type Head[
 	// SetReadOnly sets the read-only flag for the [Head].
 	SetReadOnly()
 
-	// Close closes wals, query semaphore for the inability to get query and clear metrics.
+	// Close stops queries and closes the shard WALs.
 	Close() error
 }
 

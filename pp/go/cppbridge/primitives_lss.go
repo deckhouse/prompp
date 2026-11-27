@@ -5,7 +5,30 @@ import (
 	"runtime"
 	"unsafe"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/util"
+)
+
+var (
+	// lssStorageCreate counts newly created [LabelSetStorage] objects.
+	lssStorageCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        cppObjectsCreateMetricName,
+			Help:        cppObjectsCreateMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "label_set_storage"},
+		},
+	)
+
+	// lssStorageFinalize counts [LabelSetStorage] objects released by the runtime cleanup.
+	lssStorageFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        cppObjectsFinalizeMetricName,
+			Help:        cppObjectsFinalizeMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "label_set_storage"},
+		},
+	)
 )
 
 const (
@@ -52,9 +75,12 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 // newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss.
 func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
 	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
-	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
-		primitivesLSSDtor(lss.pointer)
-	})
+	runtime.AddCleanup(lss, func(pointer uintptr) {
+		primitivesLSSDtor(pointer)
+		lssStorageFinalize.Inc()
+	}, lss.pointer)
+
+	lssStorageCreate.Inc()
 
 	return lss
 }
@@ -114,11 +140,12 @@ func (lss *LabelSetStorage) QueryLabelNames(matchers []model.LabelMatcher) *LSSQ
 	result := &LSSQueryLabelNamesResult{}
 
 	result.status, result.names = primitivesLSSQueryLabelNames(lss.pointer, matchers)
-
-	runtime.SetFinalizer(result, func(result *LSSQueryLabelNamesResult) {
-		freeBytes(*(*[]byte)(unsafe.Pointer(&result.names))) // #nosec G103 // it's meant to be that way
-	})
 	runtime.KeepAlive(lss)
+
+	runtime.AddCleanup(result, func(names []string) {
+		freeBytes(*(*[]byte)(unsafe.Pointer(&names))) // #nosec G103 // it's meant to be that way
+	}, result.names)
+
 	return result
 }
 
@@ -130,11 +157,12 @@ func (lss *LabelSetStorage) QueryLabelValues(
 	result := &LSSQueryLabelValuesResult{}
 
 	result.status, result.values = primitivesLSSQueryLabelValues(lss.pointer, labelName, matchers)
-
-	runtime.SetFinalizer(result, func(result *LSSQueryLabelValuesResult) {
-		freeBytes(*(*[]byte)(unsafe.Pointer(&result.values))) // #nosec G103 // it's meant to be that way
-	})
 	runtime.KeepAlive(lss)
+
+	runtime.AddCleanup(result, func(values []string) {
+		freeBytes(*(*[]byte)(unsafe.Pointer(&values))) // #nosec G103 // it's meant to be that way
+	}, result.values)
+
 	return result
 }
 
@@ -152,10 +180,8 @@ func (lss *LabelSetStorage) LabelNameToIDs(names []string, namesIDs []uint32) {
 func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageGetLabelSetsResult {
 	result := &LabelSetStorageGetLabelSetsResult{labelSets: primitivesLSSGetLabelSets(lss.pointer, labelSetIDs)}
 	runtime.KeepAlive(lss)
+	runtime.AddCleanup(result, primitivesLSSFreeLabelSets, result.labelSets)
 
-	runtime.SetFinalizer(result, func(result *LabelSetStorageGetLabelSetsResult) {
-		primitivesLSSFreeLabelSets(result.labelSets)
-	})
 	return result
 }
 
@@ -274,9 +300,7 @@ type BitsetSeries struct {
 // newBitsetSeriesFromPointer init new [BitsetSeries].
 func newBitsetSeriesFromPointer(bitsetSeriesPointer uintptr) *BitsetSeries {
 	bitsetSeries := &BitsetSeries{pointer: bitsetSeriesPointer, gcDestroyDetector: &gcDestroyDetector}
-	runtime.SetFinalizer(bitsetSeries, func(bs *BitsetSeries) {
-		primitivesLSSBitsetDtor(bs.pointer)
-	})
+	runtime.AddCleanup(bitsetSeries, primitivesLSSBitsetDtor, bitsetSeries.pointer)
 
 	return bitsetSeries
 }

@@ -5,6 +5,30 @@ import (
 	"slices"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/pp/go/util"
+)
+
+var (
+	// dsCreate counts newly created [DataStorage] objects.
+	dsCreate = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        cppObjectsCreateMetricName,
+			Help:        cppObjectsCreateMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "data_storage"},
+		},
+	)
+
+	// dsFinalize counts [DataStorage] objects released by the runtime cleanup.
+	dsFinalize = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        cppObjectsFinalizeMetricName,
+			Help:        cppObjectsFinalizeMetricHelp,
+			ConstLabels: prometheus.Labels{metricObjectLabel: "data_storage"},
+		},
+	)
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
@@ -21,9 +45,12 @@ func NewDataStorage(collectMetrics, useArenas bool) *DataStorage {
 	}
 	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 
-	runtime.SetFinalizer(ds, func(ds *DataStorage) {
-		seriesDataDataStorageDtor(ds.dataStorage)
-	})
+	runtime.AddCleanup(ds, func(pointer uintptr) {
+		seriesDataDataStorageDtor(pointer)
+		dsFinalize.Inc()
+	}, ds.dataStorage)
+
+	dsCreate.Inc()
 
 	return ds
 }
@@ -131,10 +158,8 @@ func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *UnusedSeriesDataUnloade
 		unloader: seriesDataUnusedSeriesDataUnloaderCtor(ds.dataStorage),
 		ds:       ds,
 	}
-
-	runtime.SetFinalizer(unloader, func(u *UnusedSeriesDataUnloader) {
-		seriesDataUnusedSeriesDataUnloaderDtor(u.unloader)
-	})
+	runtime.KeepAlive(ds)
+	runtime.AddCleanup(unloader, seriesDataUnusedSeriesDataUnloaderDtor, unloader.unloader)
 
 	return unloader
 }
@@ -148,6 +173,7 @@ type DataStorageQuery struct {
 func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selectHints unsafe.Pointer) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData(ds)
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs, selectHints)
+	runtime.KeepAlive(ds)
 	runtime.KeepAlive(selectHints)
 	return DataStorageQueryResult{
 		Querier:        querier,
@@ -159,9 +185,9 @@ func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64, selec
 // InstantQuery finds, for each series in labelSetIDs, the sample closest to (at or before) targetTimestamp
 // and writes it into the C-shared samples slice (pointed to by samples), in the same order as labelSetIDs.
 func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
-	r := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
+	result := seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 	runtime.KeepAlive(ds)
-	return r
+	return result
 }
 
 // QueryStaleNaNSeries fills the first sample timestamp (Prometheus ms) and the series id for each

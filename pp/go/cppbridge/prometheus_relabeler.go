@@ -329,10 +329,8 @@ func NewStatelessRelabeler(rCfgs []*RelabelConfig) (*StatelessRelabeler, error) 
 		rCfgs:      rCfgs,
 		generation: ToHash(rCfgs),
 	}
-	runtime.SetFinalizer(sr, func(cr *StatelessRelabeler) {
-		prometheusStatelessRelabelerDtor(cr.cptr)
-		cr.rCfgs = nil
-	})
+	runtime.AddCleanup(sr, prometheusStatelessRelabelerDtor, sr.cptr)
+
 	return sr, nil
 }
 
@@ -366,6 +364,7 @@ func (sr *StatelessRelabeler) ResetTo(relabelingCfgs []*RelabelConfig) error {
 	sr.rCfgs = relabelingCfgs
 	sr.generation = ToHash(relabelingCfgs)
 	exception := prometheusStatelessRelabelerResetTo(sr.cptr, sr.rCfgs)
+	runtime.KeepAlive(sr)
 	return handleException(exception)
 }
 
@@ -467,9 +466,7 @@ func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
 	}
 
 	prometheusInnerSeriesCtor(series.series)
-	runtime.SetFinalizer(series, func(series *ShardedInnerSeries) {
-		prometheusInnerSeriesDtor(series.series)
-	})
+	runtime.AddCleanup(series, prometheusInnerSeriesDtor, series.series)
 
 	return series
 }
@@ -477,6 +474,7 @@ func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
 // Reset clears all inner series data for reuse.
 func (s *ShardedInnerSeries) Reset() {
 	prometheusInnerSeriesReset(s.series)
+	runtime.KeepAlive(s)
 }
 
 //
@@ -494,9 +492,7 @@ func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
 	}
 
 	prometheusRelabeledSeriesCtor(series.series)
-	runtime.SetFinalizer(series, func(series *ShardedRelabeledSeries) {
-		prometheusRelabeledSeriesDtor(series.series)
-	})
+	runtime.AddCleanup(series, prometheusRelabeledSeriesDtor, series.series)
 
 	return series
 }
@@ -515,6 +511,7 @@ func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 // Reset clears all relabeled series data for reuse.
 func (sd *ShardedRelabeledSeries) Reset() {
 	prometheusRelabeledSeriesReset(sd.series)
+	runtime.KeepAlive(sd)
 }
 
 //
@@ -532,9 +529,7 @@ func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
 	}
 
 	prometheusRelabelerStateUpdateCtor(series.series)
-	runtime.SetFinalizer(series, func(series *ShardedStateUpdates) {
-		prometheusRelabelerStateUpdateDtor(series.series)
-	})
+	runtime.AddCleanup(series, prometheusRelabelerStateUpdateDtor, series.series)
 
 	return series
 }
@@ -542,6 +537,7 @@ func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
 // Reset clears all state updates data for reuse.
 func (sd *ShardedStateUpdates) Reset() {
 	prometheusRelabelerStateUpdateReset(sd.series)
+	runtime.KeepAlive(sd)
 }
 
 // incomingAndRelabeledLsID to update cache data.
@@ -599,9 +595,7 @@ func NewStaleNansState() *StaleNansState {
 		state:             prometheusRelabelStaleNansStateCtor(),
 		gcDestroyDetector: &gcDestroyDetector,
 	}
-	runtime.SetFinalizer(s, func(s *StaleNansState) {
-		prometheusRelabelStaleNansStateDtor(s.state)
-	})
+	runtime.AddCleanup(s, prometheusRelabelStaleNansStateDtor, s.state)
 
 	return s
 }
@@ -677,10 +671,7 @@ func NewOutputPerShardRelabeler(
 		numberOfShards:               numberOfShards,
 		shardID:                      shardID,
 	}
-	runtime.SetFinalizer(opsr, func(psr *OutputPerShardRelabeler) {
-		prometheusPerShardRelabelerDtor(psr.cptr)
-		psr.statelessRelabeler = nil
-	})
+	runtime.AddCleanup(opsr, prometheusPerShardRelabelerDtor, opsr.cptr)
 	return opsr, nil
 }
 
@@ -704,6 +695,10 @@ func (opsr *OutputPerShardRelabeler) OutputRelabeling(
 		encodersInnerSeries,
 		relabeledSeries,
 	)
+	runtime.KeepAlive(opsr)
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(opsr.cache)
+	runtime.KeepAlive(relabeledSeries)
 
 	return handleException(exception)
 }
@@ -729,6 +724,7 @@ func (opsr *OutputPerShardRelabeler) ResetTo(
 	opsr.generationManagerKeeper = generationManagerKeeper
 	opsr.externalLabels = externalLabels
 	prometheusPerShardRelabelerResetTo(opsr.externalLabels, opsr.cptr, opsr.numberOfShards)
+	runtime.KeepAlive(opsr)
 }
 
 // StatelessRelabeler return current *StatelessRelabeler.
@@ -752,6 +748,9 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 		opsr.cache.cPointer,
 		relabeledShardID,
 	)
+	runtime.KeepAlive(opsr)
+	runtime.KeepAlive(opsr.cache)
+	runtime.KeepAlive(relabelerStateUpdate)
 
 	return handleException(exception)
 }
@@ -779,9 +778,7 @@ func NewCache() *Cache {
 	cache := &Cache{
 		cPointer: prometheusCacheCtor(),
 	}
-	runtime.SetFinalizer(cache, func(c *Cache) {
-		prometheusCacheDtor(c.cPointer)
-	})
+	runtime.AddCleanup(cache, prometheusCacheDtor, cache.cPointer)
 	return cache
 }
 
@@ -846,10 +843,7 @@ func NewPerGoroutineRelabeler(
 		gcDestroyDetector: &gcDestroyDetector,
 		shardID:           shardID,
 	}
-	runtime.SetFinalizer(pgr, func(r *PerGoroutineRelabeler) {
-		prometheusPerGoroutineRelabelerDtor(r.cptr)
-	})
-
+	runtime.AddCleanup(pgr, prometheusPerGoroutineRelabelerDtor, pgr.cptr)
 	return pgr
 }
 
@@ -872,6 +866,8 @@ func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
 		shardsRelabeledSeries,
 		shardsRelabelerStateUpdate,
 	)
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(targetLss)
 
 	return hasReallocations, handleException(exception)
 }

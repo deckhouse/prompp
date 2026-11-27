@@ -61,8 +61,6 @@ type Head[TShard Shard, TGShard Shard] struct {
 
 	readOnly uint32
 
-	// for clearing [Head] metrics
-	memoryInUse *prometheus.GaugeVec
 	// for tasks metrics
 	tasksCreated *prometheus.CounterVec
 	tasksDone    *prometheus.CounterVec
@@ -106,11 +104,6 @@ func NewHead[TShard, TGShard Shard](
 		wg:             sync.WaitGroup{},
 		closeOnce:      sync.Once{},
 
-		// for clearing [Head] metrics
-		memoryInUse: factory.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "prompp_head_cgo_memory_bytes",
-			Help: "Current value memory in use in bytes.",
-		}, []string{"head_id", "allocator", "shard_id"}),
 		// for tasks metrics
 		tasksCreated: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "prompp_head_task_created_count",
@@ -127,10 +120,14 @@ func NewHead[TShard, TGShard Shard](
 
 	h.run()
 
-	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
-		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
-		logger.Debugf("[Head] %s destroyed", h.String())
-	})
+	memoryInUse := factory.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "prompp_head_cgo_memory_bytes",
+		Help: "Current value memory in use in bytes.",
+	}, []string{"head_id", "allocator", "shard_id"})
+	runtime.AddCleanup(h, func(description string) {
+		memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": id})
+		logger.Debugf("[Head] %s destroyed", description)
+	}, h.String())
 
 	logger.Debugf("[Head] %s created", h.String())
 
@@ -144,7 +141,7 @@ func (h *Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (release func(
 	return h.querySemaphore.RLock(ctx)
 }
 
-// Close closes wals, query semaphore for the inability to get query and clear metrics.
+// Close blocks new queries, drains in-flight readers, and closes the shard WALs.
 func (h *Head[TShard, TGShard]) Close() (err error) {
 	h.closeOnce.Do(func() {
 		if err = h.querySemaphore.Close(); err != nil {

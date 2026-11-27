@@ -71,7 +71,7 @@ type Head[T any] interface {
 	// ID returns id [Head].
 	ID() string
 
-	// Close closes wals, query semaphore for the inability to get query and clear metrics.
+	// Close stops queries and closes the shard WALs.
 	Close() error
 
 	// for use as a pointer

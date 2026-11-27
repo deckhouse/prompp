@@ -255,7 +255,7 @@ class CompactBitSequenceBase {
       return;
     }
 
-    if (memory_.non_atomic_is_unique()) [[likely]] {
+    if (memory_.is_unique()) [[likely]] {
       memset(memory_.get(), '\0', stream_allocated_memory());
     } else {
       memory_.clear();

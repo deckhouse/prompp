@@ -5,7 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/model"
 )
 
 type CppMetricsSuite struct {
@@ -115,4 +119,40 @@ func (s *CppMetricsSuite) TestDeactivateMetricsAtGc() {
 	s.Equal(uint32(0), sourceMetrics[1].active.Load())
 	s.Equal(uint32(0), sourceMetrics[2].active.Load())
 	s.Equal(uint32(0), sourceMetrics[3].active.Load())
+}
+
+func TestLSSQueryResultMetrics(t *testing.T) {
+	t.Run("without buffers", func(t *testing.T) {
+		// Arrange
+		created := testutil.ToFloat64(lsQueryResultCreate)
+
+		// Act
+		result := newLSSQueryResult(nil, nil, LSSQueryStatusNoMatch)
+		result.Close()
+
+		// Assert
+		require.Equal(t, created, testutil.ToFloat64(lsQueryResultCreate))
+	})
+
+	t.Run("with buffers", func(t *testing.T) {
+		// Arrange
+		lss := NewQueryableLssStorage()
+		lss.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "test").Build())
+		selector, status := lss.QuerySelector([]model.LabelMatcher{
+			{Name: "job", Value: "test", MatcherType: model.MatcherTypeExactMatch},
+		})
+		require.Equal(t, LSSQueryStatusMatch, status)
+		snapshot := lss.CreateLabelSetSnapshot()
+		created := testutil.ToFloat64(lsQueryResultCreate)
+
+		// Act
+		result := snapshot.Query(selector, false)
+		finalized := testutil.ToFloat64(lsQueryResultFinalize)
+		result.Close()
+
+		// Assert
+		require.Equal(t, created+1, testutil.ToFloat64(lsQueryResultCreate))
+		// Pending finalizers from other tests may also increment the global counter.
+		require.Greater(t, testutil.ToFloat64(lsQueryResultFinalize), finalized)
+	})
 }
