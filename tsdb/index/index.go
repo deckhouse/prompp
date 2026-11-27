@@ -56,6 +56,9 @@ const (
 
 	// checkContextEveryNIterations is used in some tight loops to check if the context is done.
 	checkContextEveryNIterations = 128
+
+	// maxDensePostingsNameSymbols limits the one-byte-per-symbol table to 256 KiB per writer.
+	maxDensePostingsNameSymbols = 256 << 10
 )
 
 type indexWriterSeries struct {
@@ -897,6 +900,12 @@ func (w *Writer) writePostingsToTmpFiles() error {
 	}
 	maxPostings := uint64(len(offsets)) // No label name can have more postings than this.
 
+	// Most symbol IDs are label values. Bound the dense table even when there are few label names.
+	var nameInBatch []bool
+	if len(names) > 0 && w.symbols.seen <= maxDensePostingsNameSymbols {
+		nameInBatch = make([]bool, w.symbols.seen)
+	}
+
 	for len(names) > 0 {
 		batchNames := []string{}
 		var c uint64
@@ -914,13 +923,21 @@ func (w *Writer) writePostingsToTmpFiles() error {
 			names = names[1:]
 		}
 
-		nameSymbols := map[uint32]string{}
+		var sparseNames map[uint32]struct{}
+		if nameInBatch == nil {
+			sparseNames = make(map[uint32]struct{}, len(batchNames))
+		}
+
 		for _, name := range batchNames {
 			sid, err := w.symbols.ReverseLookup(name)
 			if err != nil {
 				return err
 			}
-			nameSymbols[sid] = name
+			if nameInBatch != nil {
+				nameInBatch[sid] = true
+			} else {
+				sparseNames[sid] = struct{}{}
+			}
 		}
 		// Label name -> label value -> positions.
 		postings := map[uint32]map[uint32][]uint32{}
@@ -939,12 +956,18 @@ func (w *Writer) writePostingsToTmpFiles() error {
 				lno := uint32(d.Uvarint()) // #nosec G115 // no overflow
 				lvo := uint32(d.Uvarint()) // #nosec G115 // no overflow
 
-				if _, ok := nameSymbols[lno]; ok {
-					if _, ok := postings[lno]; !ok {
-						postings[lno] = map[uint32][]uint32{}
+				if uint(lno) < uint(len(nameInBatch)) {
+					if !nameInBatch[lno] {
+						continue
 					}
-					postings[lno][lvo] = append(postings[lno][lvo], uint32(startPos/seriesByteAlign)) // #nosec G115 // no overflow
+				} else if _, ok := sparseNames[lno]; !ok {
+					continue
 				}
+
+				if _, ok := postings[lno]; !ok {
+					postings[lno] = map[uint32][]uint32{}
+				}
+				postings[lno][lvo] = append(postings[lno][lvo], uint32(startPos/seriesByteAlign)) // #nosec G115 // no overflow
 			}
 			// Skip to next series.
 			d.Skip(l - (startLen - d.Len()) + crc32.Size)
@@ -959,6 +982,10 @@ func (w *Writer) writePostingsToTmpFiles() error {
 			if err != nil {
 				return err
 			}
+			if nameInBatch != nil {
+				nameInBatch[sid] = false
+			}
+
 			values := make([]uint32, 0, len(postings[sid]))
 			for v := range postings[sid] {
 				values = append(values, v)
