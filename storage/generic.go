@@ -53,6 +53,25 @@ func (a *genericChunkSeriesSetAdapter) At() Labels {
 	return a.ChunkSeriesSet.At()
 }
 
+// chunkSeriesCursor reuses a [ChunkSeriesSet.At] result until the input advances.
+type chunkSeriesCursor struct {
+	ChunkSeriesSet
+	current ChunkSeries
+}
+
+func (c *chunkSeriesCursor) At() Labels {
+	return c.current
+}
+
+func (c *chunkSeriesCursor) Next() bool {
+	if !c.ChunkSeriesSet.Next() {
+		c.current = nil
+		return false
+	}
+	c.current = c.ChunkSeriesSet.At()
+	return true
+}
+
 type genericQuerierAdapter struct {
 	LabelQuerier
 
