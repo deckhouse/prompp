@@ -787,6 +787,9 @@ type compactChunkIterator struct {
 
 	h           chunkIteratorHeap
 	initialized bool
+	nextInRun   chunks.Iterator
+	samples     chunkenc.Iterator
+	encoded     *listChunkSeriesIterator
 
 	err  error
 	curr chunks.Meta
@@ -805,13 +808,51 @@ func (c *compactChunkIterator) Next() bool {
 			}
 		}
 	}
-	if len(c.h) == 0 {
-		return false
+	iter := c.nextInRun
+	if iter == nil {
+		if len(c.h) == 0 {
+			c.releaseSeriesData()
+			return false
+		}
+		iter = heap.Pop(&c.h).(chunks.Iterator)
 	}
-
-	iter := heap.Pop(&c.h).(chunks.Iterator)
+	c.nextInRun = nil
 	c.curr = iter.At()
 	if iter.Next() {
+		if len(c.h) <= 3 {
+			nextMinTime := iter.At().MinTime
+			if nextMinTime > c.curr.MaxTime {
+				if len(c.h) == 0 {
+					c.nextInRun = iter
+					return true
+				}
+				root := c.h[0].At()
+				if nextMinTime < root.MinTime {
+					// Pushing and popping a strict minimum restores the peer heap,
+					// except with three peers and a tie between the root and left child.
+					// The old left child moves to the root when the new minimum is popped.
+					if len(c.h) == 3 {
+						left := c.h[1].At()
+						if left.MinTime == root.MinTime && left.MaxTime == root.MaxTime {
+							c.h.Swap(0, 1)
+						}
+					}
+					c.nextInRun = iter
+					return true
+				}
+				if root.MinTime > c.curr.MaxTime {
+					// Neither the advanced iterator nor any peer overlaps the current chunk.
+					// With three peers the new leaf's parent is the left child.
+					// A strictly later start means it cannot sift up.
+					if len(c.h) == 3 && nextMinTime > c.h[1].At().MinTime {
+						c.h = append(c.h, iter)
+					} else {
+						heap.Push(&c.h, iter)
+					}
+					return true
+				}
+			}
+		}
 		heap.Push(&c.h, iter)
 	}
 
@@ -851,7 +892,7 @@ func (c *compactChunkIterator) Next() bool {
 	}
 
 	// Add last as it's not yet included in overlap. We operate on same series, so labels does not matter here.
-	iter = NewSeriesToChunkEncoder(c.mergeFunc(append(overlapping, newChunkToSeriesDecoder(labels.EmptyLabels(), c.curr))...)).Iterator(nil)
+	iter = c.encodeOverlap(append(overlapping, newChunkToSeriesDecoder(labels.EmptyLabels(), c.curr)))
 	if !iter.Next() {
 		if c.err = iter.Err(); c.err != nil {
 			return false
@@ -874,14 +915,40 @@ func (c *compactChunkIterator) Err() error {
 	return errs.Err()
 }
 
+// encodeOverlap reuses decoded iterators and an exhausted output iterator without reusing chunk data.
+func (c *compactChunkIterator) encodeOverlap(series []Series) chunks.Iterator {
+	c.samples = c.mergeFunc(series...).Iterator(c.samples)
+	var reuse chunks.Iterator
+	// A previous encoding may still have unread chunks on the heap.
+	if out := c.encoded; out != nil && out.idx >= len(out.chks) {
+		clear(out.chks)
+		reuse = out
+	}
+	iter := encodeChunks(reuse, c.samples)
+	c.encoded, _ = iter.(*listChunkSeriesIterator)
+	return iter
+}
+
+// releaseSeriesData drops the current and re-encoded chunk references without discarding metadata capacity.
+func (c *compactChunkIterator) releaseSeriesData() {
+	c.curr = chunks.Meta{}
+	c.samples = nil
+	if out := c.encoded; out != nil {
+		clear(out.chks)
+		out.chks = out.chks[:0]
+		out.idx = 0
+	}
+}
+
 // reset discards the previous merge state while retaining storage for the next series.
 func (c *compactChunkIterator) reset(mergeFunc VerticalSeriesMergeFunc, series []ChunkSeries) {
 	c.mergeFunc = mergeFunc
-	c.curr = chunks.Meta{}
 	c.err = nil
 	c.initialized = false
+	c.nextInRun = nil
 	clear(c.h)
 	c.h = c.h[:0]
+	c.releaseSeriesData()
 
 	if len(series) < len(c.iterators) {
 		clear(c.iterators[len(series):])

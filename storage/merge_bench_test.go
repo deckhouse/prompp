@@ -9,6 +9,20 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunks"
 )
 
+// benchmarkOverlapLayout describes how the input chunks overlap.
+type benchmarkOverlapLayout uint8
+
+const (
+	// benchmarkDenseOverlap overlaps adjacent inputs by half a block.
+	benchmarkDenseOverlap benchmarkOverlapLayout = iota
+	// benchmarkSparseOverlap overlaps adjacent inputs by one chunk.
+	benchmarkSparseOverlap
+	// benchmarkFourActive interleaves four inputs before a shared final chunk.
+	benchmarkFourActive
+	// benchmarkFourActiveRuns interleaves runs of disjoint chunks before a shared final chunk.
+	benchmarkFourActiveRuns
+)
+
 // BenchmarkCompactingChunkSeriesMerger measures chunk iteration with and without single-input rows.
 func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
@@ -16,14 +30,21 @@ func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 		name            string
 		differentValues bool
 		alternate       bool
+		layout          benchmarkOverlapLayout
 	}{
-		{name: "duplicates"},
-		{name: "reencode", differentValues: true},
-		{name: "mixed_duplicates", alternate: true},
-		{name: "mixed_reencode", differentValues: true, alternate: true},
+		{name: "duplicates", layout: benchmarkDenseOverlap},
+		{name: "reencode", differentValues: true, layout: benchmarkDenseOverlap},
+		{name: "mixed_duplicates", alternate: true, layout: benchmarkDenseOverlap},
+		{name: "mixed_reencode", differentValues: true, alternate: true, layout: benchmarkDenseOverlap},
+		{name: "sparse_duplicates", layout: benchmarkSparseOverlap},
+		{name: "sparse_reencode", differentValues: true, layout: benchmarkSparseOverlap},
+		{name: "four_active_duplicates", layout: benchmarkFourActive},
+		{name: "four_active_reencode", differentValues: true, layout: benchmarkFourActive},
+		{name: "four_active_runs_duplicates", layout: benchmarkFourActiveRuns},
+		{name: "four_active_runs_reencode", differentValues: true, layout: benchmarkFourActiveRuns},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
-			inputs := benchmarkOverlappingChunkInputs(b, tc.differentValues)
+			inputs := benchmarkOverlappingChunkInputs(b, tc.differentValues, tc.layout)
 			var reuse ChunkIteratorReuse
 			singleNext := false
 			b.ReportAllocs()
@@ -50,21 +71,51 @@ func BenchmarkCompactingChunkSeriesMerger(b *testing.B) {
 	}
 }
 
-// benchmarkOverlappingChunkInputs builds three blocks with half of each block overlapping its neighbor.
-func benchmarkOverlappingChunkInputs(b *testing.B, differentValues bool) []ChunkSeries {
+// benchmarkOverlappingChunkInputs builds input chunks with the requested overlap layout.
+func benchmarkOverlappingChunkInputs(b *testing.B, differentValues bool, layout benchmarkOverlapLayout) []ChunkSeries {
 	const (
-		blockCount      = 3
-		chunksPerBlock  = 4
-		chunksPerStep   = chunksPerBlock / 2
-		samplesPerChunk = 120
+		defaultBlockCount    = 3
+		fourActiveBlockCount = 4
+		denseChunksPerBlock  = 4
+		sparseChunksPerBlock = 32
+		samplesPerChunk      = 120
+
+		// fourActiveRunLength is the number of consecutive chunks emitted from one input.
+		fourActiveRunLength = 8
 	)
+	blockCount := defaultBlockCount
+	chunksPerBlock := denseChunksPerBlock
+	chunksPerStep := chunksPerBlock / 2
+	runLength := 1
+	switch layout {
+	case benchmarkSparseOverlap:
+		chunksPerBlock = sparseChunksPerBlock
+		chunksPerStep = chunksPerBlock - 1
+	case benchmarkFourActive, benchmarkFourActiveRuns:
+		blockCount = fourActiveBlockCount
+		chunksPerBlock = sparseChunksPerBlock
+		if layout == benchmarkFourActiveRuns {
+			runLength = fourActiveRunLength
+		}
+	}
+
 	inputs := make([]ChunkSeries, blockCount)
 	lset := labels.FromStrings("job", "overlap")
 	samples := make([]chunks.Sample, samplesPerChunk)
 	for blockIdx := range inputs {
 		metas := make([]chunks.Meta, chunksPerBlock)
 		for chunkIdx := range metas {
-			mint := int64((blockIdx*chunksPerStep + chunkIdx) * samplesPerChunk)
+			position := blockIdx*chunksPerStep + chunkIdx
+			if blockCount == fourActiveBlockCount {
+				// All four inputs stay active until the shared final chunk.
+				if chunkIdx == chunksPerBlock-1 {
+					position = chunksPerBlock * blockCount
+				} else {
+					run := chunkIdx / runLength
+					position = (run*blockCount+blockIdx)*runLength + chunkIdx%runLength
+				}
+			}
+			mint := int64(position * samplesPerChunk)
 			for i := range samples {
 				ts := mint + int64(i)
 				value := float64(ts)

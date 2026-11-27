@@ -498,6 +498,65 @@ func TestCompactingChunkSeriesMerger(t *testing.T) {
 			),
 		},
 		{
+			name: "disjoint run before tied overlapping chunks",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1), chunks.GenerateSamples(5, 3)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 50}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 500}, fSample{6, 6}, fSample{7, 7}}),
+			},
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1),
+				[]chunks.Sample{fSample{5, 50}, fSample{6, 6}, fSample{7, 7}}),
+		},
+		{
+			name: "four inputs preserve heap tie order",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 20}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 30}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 40}, fSample{6, 6}, fSample{7, 7}}),
+			},
+			// The strict minimum moves the tied left child to the root before the overlap.
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1),
+				[]chunks.Sample{fSample{5, 40}, fSample{6, 6}, fSample{7, 7}}),
+		},
+		{
+			name: "four inputs order equal starts by end time",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 20}, fSample{6, 6}, fSample{7, 7}, fSample{8, 8}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 30}, fSample{6, 6}, fSample{7, 7}}),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					[]chunks.Sample{fSample{5, 40}, fSample{6, 6}}),
+			},
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(1, 1), chunks.GenerateSamples(2, 1),
+				[]chunks.Sample{fSample{5, 20}, fSample{6, 6}, fSample{7, 7}, fSample{8, 8}}),
+		},
+		{
+			name: "two separate overlaps with split output",
+			input: []ChunkSeries{
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(0, 120), chunks.GenerateSamples(240, 120)),
+				NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+					chunks.GenerateSamples(119, 3), chunks.GenerateSamples(359, 3)),
+			},
+			expected: NewListChunkSeriesFromSamples(labels.EmptyLabels(),
+				chunks.GenerateSamples(0, 120), chunks.GenerateSamples(120, 2),
+				chunks.GenerateSamples(240, 120), chunks.GenerateSamples(360, 2)),
+		},
+		{
 			name: "110 overlapping",
 			input: []ChunkSeries{
 				NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"), chunks.GenerateSamples(0, 110)), // [0 - 110)
@@ -673,15 +732,18 @@ func TestCompactingChunkSeriesMergerHistogramCounterResetHint(t *testing.T) {
 					NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"),
 						[]chunks.Sample{sampleFunc(0, cr), sampleFunc(5, uk)},
 						[]chunks.Sample{sampleFunc(10, cr), sampleFunc(15, uk)},
+						[]chunks.Sample{sampleFunc(20, cr), sampleFunc(25, uk)},
 					),
 					NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"),
 						[]chunks.Sample{sampleFunc(0, cr), sampleFunc(5, uk)},
 						[]chunks.Sample{sampleFunc(10, cr), sampleFunc(12, uk), sampleFunc(15, uk)},
+						[]chunks.Sample{sampleFunc(20, cr), sampleFunc(22, uk), sampleFunc(25, uk)},
 					),
 				},
 				expected: NewListChunkSeriesFromSamples(labels.FromStrings("bar", "baz"),
 					[]chunks.Sample{sampleFunc(0, cr), sampleFunc(5, uk)},
 					[]chunks.Sample{sampleFunc(10, uk), sampleFunc(12, uk), sampleFunc(15, uk)},
+					[]chunks.Sample{sampleFunc(20, uk), sampleFunc(22, uk), sampleFunc(25, uk)},
 				),
 			},
 			"histogram counter not reset hint dropped from differing series": {
@@ -718,6 +780,38 @@ func TestCompactingChunkSeriesMergerHistogramCounterResetHint(t *testing.T) {
 	}
 }
 
+// TestCompactingChunkSeriesMergerReleasesEncodedChunks checks cleanup before the iterator is reused.
+func TestCompactingChunkSeriesMergerReleasesEncodedChunks(t *testing.T) {
+	lset := labels.FromStrings("job", "overlap")
+	merge := NewCompactingChunkSeriesMerger(ChainedSeriesMerge)
+	merged := merge(
+		NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(10, 120)),
+		NewListChunkSeriesFromSamples(lset, chunks.GenerateSamples(129, 3)),
+	)
+	iter, ok := merged.Iterator(nil).(*compactChunkIterator)
+	require.True(t, ok)
+	require.True(t, iter.Next())
+	first := iter.At()
+	require.NotNil(t, iter.encoded)
+	encoded := iter.encoded.chks
+	require.True(t, iter.Next())
+	last := iter.At()
+
+	require.False(t, iter.Next())
+	require.NoError(t, iter.Err())
+	require.Nil(t, iter.samples)
+	require.Nil(t, iter.curr.Chunk)
+	require.Empty(t, iter.encoded.chks)
+	wantCapacity := cap(encoded)
+	require.Equal(t, wantCapacity, cap(iter.encoded.chks))
+	for _, meta := range encoded {
+		require.Nil(t, meta.Chunk)
+	}
+
+	got := chunks.ChunkMetasToSamples([]chunks.Meta{first, last})
+	require.Equal(t, chunks.GenerateSamples(10, 122), got)
+}
+
 // TestCompactingChunkSeriesMergerReuse discards unread chunks and errors from the preceding series.
 func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
 	lset := labels.FromStrings("job", "overlap")
@@ -730,7 +824,7 @@ func TestCompactingChunkSeriesMergerReuse(t *testing.T) {
 		},
 	}
 	previous := merge(
-		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{1, 1}}),
+		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{1, 1}}, []chunks.Sample{fSample{2, 2}}),
 		NewListChunkSeriesFromSamples(lset, []chunks.Sample{fSample{100, 100}}),
 		failingInput,
 	).Iterator(nil)
