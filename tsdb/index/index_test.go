@@ -456,7 +456,38 @@ func TestWriter_ShouldReturnErrorOnSeriesWithDuplicatedLabelNames(t *testing.T) 
 
 	err = w.Close()
 	require.Error(t, err)
-	require.ErrorContains(t, err, "corruption detected when writing postings to index")
+	require.ErrorContains(t, err, `label "__name__" occurs 2 times in a block with 1 series`)
+}
+
+func TestWriterStopsPostingsBetweenLabelNames(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	const firstLabelPosting = 2 // The all-series posting is encoded first.
+	var encoded int
+	encoder := func(buf *encoding.Encbuf, offsets []uint32) error {
+		encoded++
+		if encoded == firstLabelPosting {
+			cancel()
+		}
+
+		return EncodePostingsRaw(buf, offsets)
+	}
+	w, err := NewWriterWithEncoder(ctx, filepath.Join(t.TempDir(), indexFilename), encoder)
+	require.NoError(t, err)
+	const firstName, secondName, value = "a", "b", "v"
+	for _, sym := range []string{firstName, secondName, value} {
+		require.NoError(t, w.AddSymbol(sym))
+	}
+	// Both label names have one posting, so they fit in the same doubled batch.
+	require.NoError(t, w.AddSeries(0, labels.FromStrings(firstName, value, secondName, value)))
+
+	// Act
+	err = w.Close()
+
+	// Assert
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, firstLabelPosting, encoded, "must not encode postings for the second label name")
 }
 
 func TestDecbufUvarintWithInvalidBuffer(t *testing.T) {
