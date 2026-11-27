@@ -31,6 +31,9 @@ import (
 // It is used to create a temporary block directory for the creation of a new block.
 const tmpForCreationBlockDirSuffix = ".tmp-for-creation"
 
+// maxDenseSymbolOffsetsBytes limits the combined dense tables of all inputs to one compaction.
+const maxDenseSymbolOffsetsBytes uint64 = 64 << 20
+
 // ExponentialBlockRanges returns the time ranges based on the stepSize.
 func ExponentialBlockRanges(minSize int64, steps, stepSize int) []int64 {
 	ranges := make([]int64, 0, steps)
@@ -128,6 +131,7 @@ func (DefaultBlockPopulator) PopulateBlock(
 	metrics.PopulatingBlocks.Set(1)
 
 	globalMaxt := blocks[0].Meta().MaxTime
+	denseBytesLeft := maxDenseSymbolOffsetsBytes
 	for i, b := range blocks {
 		select {
 		case <-ctx.Done():
@@ -148,7 +152,7 @@ func (DefaultBlockPopulator) PopulateBlock(
 			}
 		}
 
-		indexr, err := b.Index()
+		indexr, err := openCompactionIndex(ctx, b, &denseBytesLeft)
 		if err != nil {
 			return fmt.Errorf("open index reader for block %+v: %w", bMeta, err)
 		}
@@ -1042,4 +1046,19 @@ func AllSortedPostings(ctx context.Context, reader tsdb.IndexReader) index.Posti
 	}
 
 	return reader.SortedPostings(all)
+}
+
+// openCompactionIndex debits the remaining budget only for dense tables used by persisted blocks.
+func openCompactionIndex(ctx context.Context, b tsdb.BlockReader, denseBytesLeft *uint64) (tsdb.IndexReader, error) {
+	if persisted, ok := b.(*block.Block); ok {
+		reader, denseBytes, err := persisted.IndexForCompaction(ctx, *denseBytesLeft)
+		if err != nil {
+			return nil, err
+		}
+		*denseBytesLeft -= denseBytes
+
+		return reader, nil
+	}
+
+	return b.Index()
 }

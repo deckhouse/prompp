@@ -56,6 +56,9 @@ const (
 
 	// checkContextEveryNIterations is used in some tight loops to check if the context is done.
 	checkContextEveryNIterations = 128
+
+	// denseSymbolOffsetBytes is the size of one offset in the dense table.
+	denseSymbolOffsetBytes = 4
 )
 
 type indexWriterSeries struct {
@@ -1312,13 +1315,15 @@ func (r *Reader) PostingsRanges() (map[labels.Label]Range, error) {
 	return m, nil
 }
 
+// Symbols provides forward and reverse lookups against an immutable symbol table.
 type Symbols struct {
 	bs      ByteSlice
 	version int
 	off     int
 
-	offsets []int
-	seen    int
+	offsets      []int
+	seen         int
+	denseOffsets []uint32 // Relative to the start of the table payload, after its length field.
 }
 
 const symbolFactor = 32
@@ -1336,6 +1341,14 @@ func NewSymbols(bs ByteSlice, version, off int) (*Symbols, error) {
 		cnt     = d.Be32int()
 		basePos = off + 4
 	)
+	if d.Err() != nil {
+		return nil, d.Err()
+	}
+	// Every symbol needs at least one byte for its encoded length.
+	if cnt < 0 || cnt > d.Len() {
+		return nil, encoding.ErrInvalidSize
+	}
+
 	s.offsets = make([]int, 0, 1+cnt/symbolFactor)
 	for d.Err() == nil && s.seen < cnt {
 		if s.seen%symbolFactor == 0 {
@@ -1358,13 +1371,17 @@ func (s Symbols) Lookup(o uint32) (string, error) {
 	if s.version == FormatV1 {
 		d.Skip(int(o))
 	} else {
-		if int(o) >= s.seen {
+		if uint64(o) >= uint64(s.seen) { // #nosec G115 -- seen counts decoded symbols and is non-negative.
 			return "", fmt.Errorf("unknown symbol offset %d", o)
 		}
-		d.Skip(s.offsets[int(o/symbolFactor)])
-		// Walk until we find the one we want.
-		for i := o - (o / symbolFactor * symbolFactor); i > 0; i-- {
-			d.UvarintBytes()
+		if s.denseOffsets != nil {
+			d.Skip(s.off + 4 + int(s.denseOffsets[o]))
+		} else {
+			d.Skip(s.offsets[int(o/symbolFactor)])
+			// Walk until we find the one we want.
+			for i := o - (o / symbolFactor * symbolFactor); i > 0; i-- {
+				d.UvarintBytes()
+			}
 		}
 	}
 	sym := yoloString(d.UvarintBytes())
@@ -1417,8 +1434,9 @@ func (s Symbols) ReverseLookup(sym string) (uint32, error) {
 	return uint32(res), nil // #nosec G115 // no overflow
 }
 
+// Size reports the bytes used by the offset tables.
 func (s Symbols) Size() int {
-	return len(s.offsets) * 8
+	return len(s.offsets)*8 + len(s.denseOffsets)*denseSymbolOffsetBytes
 }
 
 func (s Symbols) Iter() StringIter {
@@ -1428,6 +1446,43 @@ func (s Symbols) Iter() StringIter {
 		d:   d,
 		cnt: cnt,
 	}
+}
+
+// withDenseOffsets builds a dense lookup table for formats with ordinal symbol IDs.
+// The view shares the immutable symbol data and sparse offsets with the original.
+func (s *Symbols) withDenseOffsets(ctx context.Context) (*Symbols, error) {
+	if s.denseOffsets != nil {
+		return s, nil
+	}
+
+	// [NewSymbols] already validated the checksum of the immutable symbol table.
+	d := encoding.NewDecbufAt(s.bs, s.off, nil)
+	origLen := d.Len()
+	d.Skip(4) // Symbol count.
+	if d.Err() != nil {
+		return nil, d.Err()
+	}
+
+	dense := *s
+	dense.denseOffsets = make([]uint32, s.seen)
+	for i := range dense.denseOffsets {
+		// The table length is encoded as a uint32.
+		dense.denseOffsets[i] = uint32(origLen - d.Len()) // #nosec G115 -- offset is bounded by the table length.
+		d.UvarintBytes()
+		if (i+1)%checkContextEveryNIterations == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if d.Err() != nil {
+		return nil, d.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	return &dense, nil
 }
 
 // symbolsIter implements StringIter.
@@ -1504,6 +1559,40 @@ func (r *Reader) Symbols() StringIter {
 // SymbolTableSize returns the symbol table size in bytes.
 func (r *Reader) SymbolTableSize() uint64 {
 	return uint64(r.symbols.Size()) // #nosec G115 // no overflow
+}
+
+// WithDenseSymbolOffsets returns a compaction view with a dense lookup table for
+// formats with ordinal symbol IDs ([FormatV2] and [FormatV3]), and its size in bytes.
+// It returns a nil view and zero bytes for [FormatV1], which already uses byte
+// offsets as symbol IDs, for an empty table, or when the dense table exceeds maxBytes.
+// Cancellation aborts construction without returning a view.
+// The original reader must remain open until the view is no longer used.
+// Closing the view does not close the original reader.
+func (r *Reader) WithDenseSymbolOffsets(ctx context.Context, maxBytes uint64) (*Reader, uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	if r.version == FormatV1 || r.symbols.seen == 0 {
+		return nil, 0, nil
+	}
+
+	size := uint64(r.symbols.seen) * denseSymbolOffsetBytes // #nosec G115 -- seen is a non-negative symbol count.
+	if size > maxBytes {
+		return nil, 0, nil
+	}
+
+	symbols, err := r.symbols.withDenseOffsets(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	view := *r
+	view.c = io.NopCloser(nil)
+	view.symbols = symbols
+	view.dec = &Decoder{LookupSymbol: view.lookupSymbol}
+
+	return &view, size, nil
 }
 
 // SortedLabelValues returns value tuples that exist for the given label name.

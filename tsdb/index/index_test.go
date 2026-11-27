@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -533,6 +534,55 @@ func TestSymbols(t *testing.T) {
 		i++
 	}
 	require.NoError(t, iter.Err())
+}
+
+func TestReaderWithDenseSymbolOffsets(t *testing.T) {
+	// Arrange
+	ctx := t.Context()
+	const (
+		labelName = "value"
+		count     = 2*checkContextEveryNIterations + 44
+	)
+	suffix := strings.Repeat("x", 256)
+	input := make(indexWriterSeriesSlice, count)
+	for i := range input {
+		input[i] = &indexWriterSeries{labels: labels.FromStrings(labelName, fmt.Sprintf("%03d%s", i, suffix))}
+	}
+	ir, _, _ := createFileReader(ctx, t, input)
+	sparseBytes := ir.SymbolTableSize()
+	lastLabels := input[count-1].labels
+	p, err := ir.Postings(ctx, labelName, lastLabels.Get(labelName))
+	require.NoError(t, err)
+	require.True(t, p.Next())
+	ref := p.At()
+
+	// Act
+	const denseBytes = uint64(count+1) * 4
+	sparse, used, err := ir.WithDenseSymbolOffsets(ctx, denseBytes-1)
+	require.NoError(t, err)
+	require.Nil(t, sparse)
+	require.Zero(t, used)
+
+	// Cancel on the second check inside the decode loop, before the short final batch.
+	cancelDuringDecode := &testutil.MockContextErrAfter{FailAfter: 3}
+	canceledView, used, err := ir.WithDenseSymbolOffsets(cancelDuringDecode, denseBytes)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, canceledView)
+	require.Zero(t, used)
+
+	view, used, err := ir.WithDenseSymbolOffsets(ctx, denseBytes)
+	require.NoError(t, err)
+	require.Equal(t, denseBytes, used)
+	builder := labels.NewScratchBuilder(1)
+	require.NoError(t, view.Series(ref, &builder, nil))
+
+	// Assert
+	require.Equal(t, sparseBytes+denseBytes, view.SymbolTableSize())
+	require.Equal(t, sparseBytes, ir.SymbolTableSize())
+	require.Equal(t, lastLabels, builder.Labels())
+	require.NoError(t, view.Close())
+	require.NoError(t, ir.Series(ref, &builder, nil))
+	require.Equal(t, lastLabels, builder.Labels())
 }
 
 func BenchmarkReader_ShardedPostings(b *testing.B) {
